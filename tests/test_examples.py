@@ -5,8 +5,9 @@ import pytest
 from example_models import HierarchicalForecaster, UnivariateForecaster
 from jax import Array, random
 
-from numpyro_forecast import Forecaster, eval_crps
 from numpyro_forecast.datasets import bart_available, load_bart_hierarchical, load_bart_weekly
+from numpyro_forecast.evaluate import eval_crps
+from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.util import fourier_features
 
 
