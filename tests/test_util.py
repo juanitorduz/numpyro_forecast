@@ -52,6 +52,17 @@ def test_shift_loc_unsupported_raises() -> None:
         shift_loc(dist.Poisson(rate=1.0), jnp.zeros(()))
 
 
+def test_shift_loc_independent_shifts_base() -> None:
+    base = dist.Normal(loc=jnp.zeros((4, 2)), scale=1.0)
+    noise = dist.Independent(base, reinterpreted_batch_ndims=1)
+    prediction = jnp.arange(8.0).reshape(4, 2)
+    shifted = shift_loc(noise, prediction)
+    assert isinstance(shifted, dist.Independent)
+    assert shifted.reinterpreted_batch_ndims == 1
+    assert isinstance(shifted.base_dist, dist.Normal)
+    assert jnp.allclose(shifted.base_dist.loc, prediction)
+
+
 def test_slice_time_prefix_and_suffix() -> None:
     loc = jnp.arange(6.0)[:, None]  # (6, 1)
     d = dist.Normal(loc=loc, scale=1.0)
@@ -63,6 +74,25 @@ def test_slice_time_prefix_and_suffix() -> None:
     assert suffix.batch_shape == (2, 1)
     assert jnp.allclose(prefix.loc, loc[:4])
     assert jnp.allclose(suffix.loc, loc[4:])
+
+
+def test_slice_time_independent_slices_base() -> None:
+    loc = jnp.arange(6.0)[:, None]  # (6, 1)
+    noise = dist.Independent(dist.Normal(loc=loc, scale=1.0), reinterpreted_batch_ndims=1)
+    sliced = slice_time(noise, slice(None, 4))
+    assert isinstance(sliced, dist.Independent)
+    assert sliced.reinterpreted_batch_ndims == 1
+    assert isinstance(sliced.base_dist, dist.Normal)
+    assert sliced.base_dist.batch_shape == (4, 1)
+    assert jnp.allclose(sliced.base_dist.loc, loc[:4])
+
+
+def test_slice_time_non_empty_event_shape_raises() -> None:
+    # MultivariateNormal has a non-empty event_shape, which the default
+    # element-wise slicer cannot handle.
+    mvn = dist.MultivariateNormal(loc=jnp.zeros((5, 2)), covariance_matrix=jnp.eye(2))
+    with pytest.raises(NotImplementedError, match="slice_time"):
+        slice_time(mvn, slice(None, 3))
 
 
 def test_prefix_condition_iid_returns_future_slice() -> None:

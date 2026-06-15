@@ -75,7 +75,8 @@ import numpyro.distributions as dist
 from jax import random
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast import Forecaster, ForecastingModel, eval_crps
+from numpyro_forecast.evaluate import eval_crps
+from numpyro_forecast.forecaster import Forecaster, ForecastingModel
 from numpyro_forecast.util import fourier_features
 
 
