@@ -127,17 +127,6 @@ print("forecast samples:", samples.shape)
 print("CRPS:", eval_crps(samples, truth[t_obs:]))
 ```
 
-## Examples
-
-End-to-end notebooks live in [`examples/`](examples/):
-
-- [`forecasting_univariate.ipynb`](examples/forecasting_univariate.ipynb) —
-  a univariate local-level + seasonality model on BART weekly ridership.
-- [`hierarchical_forecasting_1.ipynb`](examples/hierarchical_forecasting_1.ipynb) —
-  hierarchical origin–destination forecasting (part 1).
-- [`hierarchical_forecasting_2.ipynb`](examples/hierarchical_forecasting_2.ipynb) —
-  hierarchical forecasting (part 2).
-
 ## Status
 
 Early development (alpha). The public API mirrors Pyro's `pyro.contrib.forecast`.
