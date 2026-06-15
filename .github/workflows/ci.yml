@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --all-extras
+      - run: make setup
       - name: prek check
         uses: j178/prek-action@v1
         env:
@@ -29,5 +29,5 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --all-extras
-      - run: uv run pytest tests/ -x --tb=short
+      - run: make setup
+      - run: make tests
