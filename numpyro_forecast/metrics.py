@@ -44,7 +44,7 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    if pred.shape[1:] != truth.shape:  # pragma: no cover - shadowed by the jaxtyping hook
+    if pred.shape[1:] != truth.shape:
         msg = (
             "pred and truth shapes mismatch: "
             f"pred.shape[1:]={pred.shape[1:]} vs truth.shape={truth.shape}"
