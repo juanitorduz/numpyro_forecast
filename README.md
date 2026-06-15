@@ -1,4 +1,4 @@
-# numpyro_forecast
+# NumPyro Forecast
 
 A JAX/NumPyro port of [Pyro's forecasting module](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast).
 
