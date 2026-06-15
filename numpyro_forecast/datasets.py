@@ -81,12 +81,24 @@ def load_bart_hierarchical(
         Index along the time axis separating train from test.
     stations : list[str]
         Station names.
+
+    Raises
+    ------
+    ValueError
+        If the requested ``train_days`` + ``test_weeks`` window exceeds the
+        available history (which would otherwise wrap a negative slice index).
     """
     counts, stations = _load_counts()
     log_counts = jnp.log1p(jnp.transpose(counts, (1, 0, 2)))
     t_total = log_counts.shape[1]
     t1 = t_total - test_weeks * HOURS_PER_WEEK
     t0 = t1 - train_days * 24
+    if t0 < 0 or t1 <= t0:
+        msg = (
+            f"requested window (train_days={train_days}, test_weeks={test_weeks}) "
+            f"exceeds available history of {t_total} hours"
+        )
+        raise ValueError(msg)
     y = log_counts[:, t0:t_total, :]
     split = t1 - t0
     return y, split, stations

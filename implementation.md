@@ -2,7 +2,7 @@
 
 ## Context
 
-`numpyro_forecast` is a greenfield repo (only `README.md`, `LICENSE`, `.gitignore`, GitHub remote at `juanitorduz/numpyro_forecast`). The goal is a **JAX/NumPyro port of Pyro's `pyro.contrib.forecast` module** (`ForecastingModel`, `Forecaster`, `backtest`, evaluation metrics), keeping the public API close to Pyro while implementing the train-vs-forecast mechanism the idiomatic NumPyro way (`jax.lax.scan` + a `future`-horizon argument with separate in-sample/forecast latent sites + `Predictive`) instead of porting Pyro's poutine messengers.
+`numpyro_forecast` is a greenfield repo (only `README.md`, `LICENSE`, `.gitignore`, GitHub remote at `juanitorduz/numpyro_forecast`). The goal is a **JAX/NumPyro port of Pyro's `pyro.contrib.forecast` module** (`ForecastingModel`, `Forecaster`, `backtest`, evaluation metrics), keeping the public API close to Pyro while implementing the train-vs-forecast mechanism the idiomatic NumPyro way (a random-walk cumulative sum + a `future`-horizon argument with separate in-sample/forecast latent sites + `Predictive`) instead of porting Pyro's poutine messengers.
 
 Success = reproducing two examples:
 1. Pyro's univariate forecasting tutorial (already ported by the user at juanitorduz.github.io/numpyro_forecasting-univariate) — BART weekly ridership, Fourier seasonality, StudentT likelihood, random-walk level, SVI, CRPS.
@@ -62,10 +62,10 @@ I read Pyro's actual source (`forecaster.py`, `util.py`, `evaluate.py`, `__init_
 
 - **Why Pyro needs its machinery, and what dissolves.** `predict()`'s `reshape_batch`/unsqueeze exists only because (Pyro's own comment) "Pyro [does not use] name dimensions internally" — NumPyro's plate stack removes the need, so it is **dropped**. `PrefixReplayMessenger` (posterior on the in-sample latent prefix + prior on the forecast suffix) and `PrefixConditionMessenger`/`prefix_condition` (condition `(t+f)`-noise on the `t`-prefix) exist to support **fit-once / forecast-any-`f`** plus marginalized `GaussianHMM` noise.
 - **The loophole (and why the examples' literal pattern is fragile).** Training at length `t` then re-running the guide/model at length `t+f` makes the in-sample `drift`/`time` plate **resize**, which `AutoNormal` does not support (its variational-param shapes are frozen from the training trace). If a framework silently re-sampled the whole `drift` trajectory from the prior at predict time, forecasts would **not condition on the data**. So the literal "train short, predict long" relies on autoguide/`Predictive` resize behavior we will not depend on.
-- **Loophole closed — the robust, faithful, idiomatic mechanism (a `future` argument + separate in-sample/forecast latent sites + `scan` continuation).** This is the pattern NumPyro's own SGT / Holt-Winters time-series tutorials use, and it reproduces Pyro's `PrefixReplay` semantics exactly with plain site-name separation:
+- **Loophole closed — the robust, faithful, idiomatic mechanism (a `future` argument + separate in-sample/forecast latent sites + cumulative-sum continuation).** This is the pattern NumPyro's own SGT / Holt-Winters time-series tutorials use, and it reproduces Pyro's `PrefixReplay` semantics exactly with plain site-name separation:
   - in-sample time latents are sampled under `numpyro.plate("time", t)` with the **fixed** name (e.g. `drift`) → identical shape in train and predict, so **`AutoNormal` never resizes**;
   - when `future > 0`, the forecast-horizon latents are sampled under a **separate** site (e.g. `drift_future`, plate size `future`); this site is **not in the guide**, so `Predictive` draws it from the **prior** — i.e. posterior prefix + prior suffix, exactly like `PrefixReplay`;
-  - `jax.lax.scan` runs over the concatenated `[drift, drift_future]` so the forecast level **continues from the inferred end-level** → forecasts are correctly conditioned on the data;
+  - a cumulative sum runs over the concatenated `[drift, drift_future]` so the forecast level **continues from the inferred end-level** → forecasts are correctly conditioned on the data (a `jnp.cumsum` over the time axis; mathematically identical to a `jax.lax.scan` random-walk accumulation, and the form the shipped models use);
   - this restores Pyro's **fit-once / forecast-any-`f` UX** (pass `future=f` at call time; no refit) while staying pure/functional.
 
 ## Core library design
@@ -81,7 +81,7 @@ Keeps Pyro's contract: subclass and implement `model(self, zero_data, covariates
 - `zero_data: Array = util.zero_data_like(data, covariates)` → zeros of shape `(*batch, duration, obs)`; exposes shape/dtype only (so `prediction` can't depend on observed values, matching Pyro). Tolerates an empty covariate channel (`cov == 0`, Pyro's `empty(duration, 0)` convention).
 - **In-sample vs forecast latents** — `self.time_series(name: str, dist_fn: Callable[[], dist.Distribution], *, reparam: Reparam | None = None) -> Array`: samples `name` under `numpyro.plate("time", self.t_obs, dim=-2)` and, when `self.future > 0`, `f"{name}_future"` under a size-`future` plate; applies `reparam` (e.g. `LocScaleReparam`) to **both** sites via `numpyro.handlers.reparam`; returns the concatenation along axis `-2`. This is the crux that keeps guide shapes fixed and makes `Predictive` draw the suffix from the prior. (No `future` parameter — read from state.)
 - `self.predict(noise_dist: dist.Distribution, prediction: Array) -> None`: `noise_dist` is **zero-centered** (model passes `loc=0`), `prediction` the deterministic mean over `duration`. We **drop Pyro's event_dim 0/1/2 + `reshape_batch` logic** (plates align dims). Behavior:
-  - re-center to `obs_dist` via `util.shift_loc` (single-dispatch over Normal/StudentT/Independent/TransformedDistribution);
+  - re-center to `obs_dist` via `util.shift_loc` (single-dispatch over Normal/StudentT/Independent; TransformedDistribution is Future work);
   - **training** (`future == 0`): `numpyro.sample("obs", obs_dist, obs=data)`;
   - **forecasting** (`future > 0`): observe prefix `numpyro.sample("obs", obs_dist[..., :t, :], obs=data)` and sample suffix `numpyro.sample("obs_future", prefix_condition(obs_dist, data))`, exposed as `numpyro.deterministic("forecast", ...)`.
 - `prefix_condition` (single-dispatch, `util.py`): for i.i.d.-in-time noise = the trivial future-slice (`obs_dist[..., t:, :]`); for time-correlated noise (MultivariateNormal/Independent/Transformed) = the genuine Gaussian conditional. `GaussianHMM` is the documented v2 path.
@@ -103,7 +103,7 @@ Thin subclasses of a shared `_BaseForecaster`, mirroring Pyro's two-class split 
 Port `pyro.ops.stats.crps_empirical` to JAX. Public, exported, jit/vmap-friendly: `crps_empirical(pred: Float[Array, "sample *batch"], truth: Float[Array, "*batch"]) -> Float[Array, "*batch"]` = `E|X − y| − ½·E|X − X'|` via the sorted-sample O(n log n) form (`jnp.sort` + weighted diffs). `eval_crps` (in `evaluate.py`) = `float(crps_empirical(pred, truth).mean())`.
 
 ### `util.py`, `typing.py`, `datasets.py`
-- `util.py`: `zero_data_like`, `shift_loc` (single-dispatch), `prefix_condition` (single-dispatch), `concat_future` (the low-level prefix/suffix concat used by `ForecastingModel.time_series`), `pad_to`/`time_mask`, `fourier_features` (52 terms) and `periodic_repeat` (repeat a `24×7` season to `t_max`), all `jaxtyping`-typed. (`time_series` itself is a **method** of `ForecastingModel`, since it reads model state.)
+- `util.py`: `zero_data_like`, `shift_loc` (single-dispatch), `slice_time` (single-dispatch), `prefix_condition` (single-dispatch), `concat_future` (the low-level prefix/suffix concat used by `ForecastingModel.time_series`), `fourier_features` and `periodic_repeat` (repeat a `24×7` season to `t_max`), all `jaxtyping`-typed. (`time_series` itself is a **method** of `ForecastingModel`, since it reads model state.) (`pad_to`/`time_mask` are not shipped — neither target example needs masking; see Future work.)
 - `typing.py`: the `Array`/`Metric`/`ModelFactory`/`ForecasterFactory` aliases (avoids import cycles between `forecaster.py` and `evaluate.py`).
 - `datasets.py`: thin `load_bart_od()` wrapper returning typed arrays + the two splits, **arranged to the `(*, time, obs)` convention** — univariate weekly `log` totals shaped `(t, 1)` (417/52); hierarchical `jnp.log1p(permute_dims(counts, (1, 0, 2)))` → `(origin, time, destin)` with `T0 = T1 − 24*90`, `T1 = T2 − 24*7*2`.
 
@@ -115,8 +115,8 @@ Port `pyro.ops.stats.crps_empirical` to JAX. Public, exported, jit/vmap-friendly
 | --- | --- |
 | `torch.Tensor` ops, `.cpu().item()` | `jnp` ops, `float(...)` |
 | `pyro.plate("time", T, dim=-1)` | `numpyro.plate("time", T)` |
-| `GaussianHMM` noise + `.prefix_condition` | `jax.lax.scan` latent level + i.i.d. obs noise |
-| `PrefixReplayMessenger` (posterior prefix + prior suffix) | **separate `name`/`name_future` sites** (horizon derived from shapes) — guide covers prefix, `Predictive` draws suffix from prior; `scan` concatenates |
+| `GaussianHMM` noise + `.prefix_condition` | cumulative-sum (random-walk) latent level + i.i.d. obs noise (a `jnp.cumsum`, equivalent to a `jax.lax.scan` accumulation) |
+| `PrefixReplayMessenger` (posterior prefix + prior suffix) | **separate `name`/`name_future` sites** (horizon derived from shapes) — guide covers prefix, `Predictive` draws suffix from prior; cumulative sum concatenates |
 | `PrefixConditionMessenger` + `prefix_condition` | separate `obs`/`obs_future` sites (i.i.d. ⇒ trivial time-slice); `singledispatch prefix_condition` kept for correlated noise (v2) |
 | `predict()` `reshape_batch`/unsqueeze (no named dims) | **dropped** — plate stack aligns dims |
 | `DCTAdam`, Haar/DCT `time_reparam` | `LocScaleReparam` (as both examples use); DCTAdam out of scope |
@@ -130,7 +130,7 @@ Port `pyro.ops.stats.crps_empirical` to JAX. Public, exported, jit/vmap-friendly
 ## Functional / JAX idioms (the "FP flavor")
 - **Pure model functions**, explicit immutable SVI/MCMC state, no global param store.
 - **Explicit `PRNGKey` threading** everywhere via `jax.random.split`; forecasters take `rng_key`.
-- **`jax.lax.scan`** for the latent level/drift (both examples); **`jax.vmap`** for batched forecast sampling and for vectorizing `eval_crps` over trailing dims; optional **`vmap`/`lax.map` over equal-length backtest windows** as a JAX-native alternative to Pyro's Python loop.
+- **`jnp.cumsum`** for the random-walk latent level/drift (both examples; equivalent to a `jax.lax.scan` accumulation); **`jax.vmap`** for batched forecast sampling and for vectorizing `eval_crps` over trailing dims; optional **`vmap`/`lax.map` over equal-length backtest windows** as a JAX-native alternative to Pyro's Python loop.
 - **`jax.jit`** on hot pure helpers (CRPS, transition fns); **`functools.singledispatch`** for `shift_loc`/`prefix_condition` (functional dispatch instead of messenger subclassing).
 - **`jaxtyping`** annotations (`Float[Array, "time feature"]`) on array params, consistent with the examples and enforcing the type-hint standard.
 
@@ -139,8 +139,8 @@ Port `pyro.ops.stats.crps_empirical` to JAX. Public, exported, jit/vmap-friendly
 ## Example models — `numpyro_forecast/models/` (reused by notebooks + tests)
 
 Ship the two validated models as library code (so both notebooks and smoke tests import them), each expressed through the `ForecastingModel`/`predict` API and using `self.time_series("drift", ...)` so they forecast via the `future` mechanism (no plate resize):
-- **`univariate`** (reproduces the blog): `bias + level_t + (weight·covariates)`, random-walk `drift`→`level` via `scan` + `LocScaleReparam(centered)`, `StudentT(df=nu, loc=mu, scale=sigma)`; priors exactly as verified (`bias~N(0,10)`, `weight~N(0,0.1)`, `drift_scale~LogNormal(-20,5)`, `nu~Gamma(10,2)`, `sigma~LogNormal(-5,5)`, `centered~U(0,1)`). Covariates = `fourier_features` (52 terms). SVI/`AutoNormal`/`Adam(5e-3)`; CRPS on weekly BART totals (417/52).
-- **`hierarchical`** (reproduces the tutorial, re-expressed in `(origin, time, destin)` layout so time is `-2`): `origin` (dim −3) / `destin` (dim −1) / `hour_of_week` plates, per-destination `drift` (reparam'd) via `self.time_series` → `scan` level, `origin_seasonal+destin_seasonal` via `periodic_repeat`, `pairwise` affinity, `scale=origin_scale+destin_scale`, `Normal` likelihood; SVI; CRPS across station pairs (90-day/2-week). Same generative structure/results as the tutorial.
+- **`univariate`** (reproduces the blog): `bias + level_t + (weight·covariates)`, random-walk `drift`→`level` via a cumulative sum + `LocScaleReparam(centered)`, `StudentT(df=nu, loc=mu, scale=sigma)`; priors exactly as verified (`bias~N(0,10)`, `weight~N(0,0.1)`, `drift_scale~LogNormal(-20,5)`, `nu~Gamma(10,2)`, `sigma~LogNormal(-5,5)`, `centered~U(0,1)`). Covariates = `fourier_features` (52 terms). SVI/`AutoNormal`/`Adam(5e-3)`; CRPS on weekly BART totals (417/52).
+- **`hierarchical`** (reproduces the tutorial, re-expressed in `(origin, time, destin)` layout so time is `-2`): `origin` (dim −3) / `destin` (dim −1) / `hour_of_week` plates, per-destination `drift` (reparam'd) via `self.time_series` → cumulative-sum level, `origin_seasonal+destin_seasonal` via `periodic_repeat`, `pairwise` affinity, `scale=origin_scale+destin_scale`, `Normal` likelihood; SVI; CRPS across station pairs (90-day/2-week). Same generative structure/results as the tutorial.
 
 ---
 
@@ -175,7 +175,7 @@ Ship the two validated models as library code (so both notebooks and smoke tests
 
 ## Resolved design risks (loopholes closed)
 - **AutoNormal shape resize** (guide trained on `t` cannot be re-run at `t+f`) → in-sample latents keep a fixed site name/shape (`plate("time", t)`); the forecast horizon uses **separate `_future` sites** → the guide is never resized. Pyro's fit-once / forecast-any-`f` UX is **preserved**.
-- **In-sample latent trajectory must inform the forecast** → `Predictive` substitutes the guide's posterior for the prefix sites and draws the `_future` sites from the prior; `scan` concatenates so the forecast continues from the inferred end-level (≡ Pyro `PrefixReplay`). Forecasts are provably conditioned on the data — not re-sampled from the prior.
+- **In-sample latent trajectory must inform the forecast** → `Predictive` substitutes the guide's posterior for the prefix sites and draws the `_future` sites from the prior; a cumulative sum concatenates so the forecast continues from the inferred end-level (≡ Pyro `PrefixReplay`). Forecasts are provably conditioned on the data — not re-sampled from the prior.
 - **Partial / autoregressive observation noise** → i.i.d. case via separate `obs`/`obs_future` sites (trivial slice); time-correlated case via the ported single-dispatch `prefix_condition` (genuine Gaussian conditional).
 - **No global param store** → backtest windows and forecasters are pure; nothing to `clear`.
 - **`covariates = jnp.zeros_like(y)` in the examples** is a dummy placeholder (models without real covariates) — `predict`/`zero_data_like` must tolerate a zero/empty covariate channel, matching Pyro's `torch.empty(duration, 0)` convention.
@@ -184,5 +184,7 @@ Ship the two validated models as library code (so both notebooks and smoke tests
 Export the exact Pyro surface for drop-in familiarity — `ForecastingModel`, `Forecaster`, `HMCForecaster`, `backtest`, `eval_crps`, `eval_mae`, `eval_rmse` — plus our additions `BacktestResult`, `DEFAULT_METRICS`, `prefix_condition`, `crps_empirical`, and the `models`/`datasets` submodules. `__all__` is set explicitly.
 
 ## Future work
-- Marginalized `GaussianHMM`/correlated observation noise via the ported `prefix_condition` + an explicit NumPyro `PrefixReplay`-style messenger (only needed for non-i.i.d. observation noise). The `scan` random-walk + `future` mechanism covers both target examples.
+- Marginalized `GaussianHMM`/correlated observation noise via the ported `prefix_condition` + an explicit NumPyro `PrefixReplay`-style messenger (only needed for non-i.i.d. observation noise). The cumulative-sum random-walk + `future` mechanism covers both target examples.
 - DCTAdam / Haar–DCT time reparameterization (use `LocScaleReparam` as the examples do).
+- `TransformedDistribution` support in `shift_loc`/`slice_time`/`prefix_condition` (the shipped single-dispatch covers `Normal`/`StudentT`/`Independent`, which both target examples use).
+- `pad_to`/`time_mask` masking helpers (not needed by either target example).
