@@ -3,7 +3,7 @@
 from jaxtyping import install_import_hook
 
 with install_import_hook("numpyro_forecast", "beartype.beartype"):
-    from numpyro_forecast import datasets, models
+    from numpyro_forecast import datasets
     from numpyro_forecast.evaluate import (
         DEFAULT_METRICS,
         BacktestResult,
@@ -31,6 +31,5 @@ __all__ = [
     "eval_crps",
     "eval_mae",
     "eval_rmse",
-    "models",
     "prefix_condition",
 ]
