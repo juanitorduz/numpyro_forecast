@@ -16,7 +16,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: lint
+    needs: prek
     strategy:
       matrix:
         python-version: ["3.14"]
