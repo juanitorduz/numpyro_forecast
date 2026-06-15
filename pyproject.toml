@@ -1,0 +1,126 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "numpyro_forecast"
+version = "0.1.0"
+description = "A JAX/NumPyro port of Pyro's forecasting module."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Juan Orduz", email = "juanitorduz@gmail.com" },
+]
+keywords = [
+    "bayesian",
+    "forecasting",
+    "jax",
+    "numpyro",
+    "probabilistic-programming",
+    "time-series",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "jax>=0.4.30",
+    "numpyro>=0.16",
+    "jaxtyping>=0.2",
+    "arviz>=1.0.0",
+    "matplotlib>=3.8",
+    "tqdm>=4.60",
+]
+
+[project.optional-dependencies]
+dataframes = [
+    "pandas>=2.2",
+    "polars>=1.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-xdist",
+    "nbmake>=1.5",
+    "ipykernel>=6.29",
+    "ruff>=0.4",
+    "prek>=0.0.1",
+    "ty>=0.0.1a1",
+]
+all = ["numpyro_forecast[dataframes,dev]"]
+
+[project.urls]
+Homepage = "https://juanitorduz.github.io"
+Repository = "https://github.com/juanitorduz/numpyro_forecast"
+Issues = "https://github.com/juanitorduz/numpyro_forecast/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["numpyro_forecast"]
+
+[tool.uv]
+default-groups = []
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
+line-length = 99
+target-version = "py312"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["B", "D", "DOC", "E", "F", "I", "RUF", "S", "UP", "W"]
+ignore = [
+    "B008",
+    "B904",
+    "RUF001",
+    "RUF002",
+    "RUF012",
+    # jaxtyping shape strings are parsed by ruff as forward annotations. Per the
+    # jaxtyping FAQ we disable only F722 globally and prepend a leading space to
+    # each shape string (e.g. Float[Array, " sample *batch"]) so the residual
+    # F821 "undefined name" check stays active for real bugs.
+    "F722",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D",
+    "S101",
+]
+"examples/*" = [
+    "B018",
+    "D103",
+    "E402",
+    "E702",
+    "E703",
+]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=numpyro_forecast",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--no-cov-on-fail",
+    "--durations=50",
+    "--color=yes",
+]
+
+[tool.ty.environment]
+python-version = "3.12"
