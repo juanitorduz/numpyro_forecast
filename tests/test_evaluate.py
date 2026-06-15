@@ -1,8 +1,8 @@
 """Tests for backtesting and evaluation metrics."""
 
 import jax.numpy as jnp
-import numpyro
-import numpyro.distributions as dist
+import pytest
+from conftest import RandomWalkModel
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
@@ -13,16 +13,7 @@ from numpyro_forecast.evaluate import (
     eval_mae,
     eval_rmse,
 )
-from numpyro_forecast.forecaster import ForecastingModel
-
-
-class _RandomWalkModel(ForecastingModel):
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
-        level = jnp.cumsum(drift, axis=-2)
-        self.predict(dist.Normal(0.0, sigma), level)
+from numpyro_forecast.forecaster import HMCForecaster
 
 
 def test_eval_mae_uses_median() -> None:
@@ -55,7 +46,7 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
     results = backtest(
         data,
         covariates,
-        _RandomWalkModel,
+        RandomWalkModel,
         test_window=4,
         min_train_window=12,
         stride=4,
@@ -71,3 +62,89 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
         assert r.train_walltime >= 0.0
         # AutoNormal exposes per-site variational params (e.g. *_auto_loc).
         assert any("drift_scale" in name for name in r.params)
+
+
+def test_backtest_result_to_dict() -> None:
+    result = BacktestResult(
+        t0=0,
+        t1=10,
+        t2=14,
+        seed=1,
+        num_samples=20,
+        train_walltime=0.5,
+        test_walltime=0.25,
+        metrics={"mae": 1.0},
+        params={"sigma": 0.3},
+    )
+    flat = result.to_dict()
+    assert flat["t0"] == 0
+    assert flat["t1"] == 10
+    assert flat["metrics"] == {"mae": 1.0}
+    assert flat["params"] == {"sigma": 0.3}
+    assert set(flat) == {
+        "t0",
+        "t1",
+        "t2",
+        "seed",
+        "num_samples",
+        "train_walltime",
+        "test_walltime",
+        "metrics",
+        "params",
+    }
+
+
+def test_backtest_hmc_has_no_scalar_params(rng_key: Array) -> None:
+    # HMCForecaster has no ``params`` mapping, so ``_scalar_params`` returns {}.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (20, 1)), axis=-2)
+    covariates = jnp.zeros((20, 0))
+    results = backtest(
+        data,
+        covariates,
+        RandomWalkModel,
+        forecaster_fn=HMCForecaster,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=10,
+        forecaster_options={"num_warmup": 10, "num_samples": 10},
+    )
+    assert results
+    for r in results:
+        assert r.params == {}
+
+
+def test_backtest_rejects_length_mismatch() -> None:
+    with pytest.raises(ValueError, match="share the time axis length"):
+        backtest(jnp.zeros((20, 1)), jnp.zeros((18, 0)), RandomWalkModel)
+
+
+def test_backtest_callable_options_and_transform(rng_key: Array) -> None:
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    seen_windows: list[tuple[int, int, int]] = []
+
+    def options_for(t0: int, t1: int, t2: int) -> dict[str, int]:
+        seen_windows.append((t0, t1, t2))
+        return {"num_steps": 30}
+
+    transform_calls = {"count": 0}
+
+    def transform(pred: Array, truth: Array) -> tuple[Array, Array]:
+        transform_calls["count"] += 1
+        return jnp.exp(pred), jnp.exp(truth)
+
+    results = backtest(
+        data,
+        covariates,
+        RandomWalkModel,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options=options_for,
+        transform=transform,
+    )
+    assert len(results) == 3
+    assert seen_windows == [(0, 12, 16), (0, 16, 20), (0, 20, 24)]
+    assert transform_calls["count"] == 3

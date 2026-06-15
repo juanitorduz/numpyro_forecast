@@ -1,8 +1,30 @@
 """Shared fixtures for numpyro_forecast tests."""
 
+from collections.abc import Callable
+
 import jax.numpy as jnp
+import numpyro
+import numpyro.distributions as dist
 import pytest
 from jax import Array, random
+
+from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
+
+
+class RandomWalkModel(ForecastingModel):
+    """Local-level random walk with Normal observation noise (shared by tests)."""
+
+    def model(self, zero_data: Array | None, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
+        level = jnp.cumsum(drift, axis=-2)
+        self.predict(dist.Normal(0.0, sigma), level)
+
+
+def empty_covariates(duration: int) -> Array:
+    """Return a ``(duration, 0)`` covariate array (no exogenous features)."""
+    return jnp.zeros((duration, 0))
 
 
 @pytest.fixture
@@ -20,13 +42,6 @@ def sample_univariate() -> Array:
 
 
 @pytest.fixture
-def sample_panel() -> Array:
-    """Short synthetic panel series shaped ``(time, n_series)``."""
-    t = jnp.linspace(0, 4 * jnp.pi, 60)[:, None]
-    return jnp.sin(t) + 0.1 * random.normal(random.PRNGKey(1), (60, 4))
-
-
-@pytest.fixture
 def fast_svi() -> dict[str, int]:
     """Minimal SVI settings for fast tests."""
     return {"num_steps": 50}
@@ -36,3 +51,31 @@ def fast_svi() -> dict[str, int]:
 def fast_mcmc() -> dict[str, int]:
     """Minimal MCMC settings for fast tests."""
     return {"num_warmup": 50, "num_samples": 50, "num_chains": 1}
+
+
+@pytest.fixture(params=["svi", "nuts"])
+def forecaster_factory(
+    request: pytest.FixtureRequest,
+    fast_svi: dict[str, int],
+    fast_mcmc: dict[str, int],
+) -> Callable[..., object]:
+    """Build a fitted forecaster with either SVI or NUTS, using fast settings.
+
+    Parametrized over both inference backends so a single test exercises a model
+    under ``Forecaster`` (SVI) and ``HMCForecaster`` (NUTS).
+    """
+    if request.param == "svi":
+
+        def make_svi(
+            model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
+        ) -> Forecaster:
+            return Forecaster(model, data, covariates, rng_key=rng_key, **fast_svi)
+
+        return make_svi
+
+    def make_nuts(
+        model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
+    ) -> HMCForecaster:
+        return HMCForecaster(model, data, covariates, rng_key=rng_key, **fast_mcmc)
+
+    return make_nuts
