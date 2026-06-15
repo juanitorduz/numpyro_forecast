@@ -57,6 +57,8 @@ def test_slice_time_prefix_and_suffix() -> None:
     d = dist.Normal(loc=loc, scale=1.0)
     prefix = slice_time(d, slice(None, 4))
     suffix = slice_time(d, slice(4, None))
+    assert isinstance(prefix, dist.Normal)
+    assert isinstance(suffix, dist.Normal)
     assert prefix.batch_shape == (4, 1)
     assert suffix.batch_shape == (2, 1)
     assert jnp.allclose(prefix.loc, loc[:4])
@@ -68,6 +70,7 @@ def test_prefix_condition_iid_returns_future_slice() -> None:
     d = dist.Normal(loc=loc, scale=1.0)
     data = jnp.zeros((4, 1))  # t = 4
     future = prefix_condition(d, data)
+    assert isinstance(future, dist.Normal)
     assert future.batch_shape == (2, 1)
     assert jnp.allclose(future.loc, loc[4:])
 

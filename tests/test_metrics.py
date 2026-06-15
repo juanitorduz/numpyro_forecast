@@ -3,6 +3,7 @@
 import jax.numpy as jnp
 import pytest
 from jax import Array, random
+from jaxtyping import TypeCheckError
 
 from numpyro_forecast.metrics import crps_empirical
 
@@ -38,7 +39,9 @@ def test_crps_is_nonnegative(rng_key: Array) -> None:
 
 
 def test_crps_shape_mismatch_raises() -> None:
-    with pytest.raises(ValueError, match="shapes mismatch"):
+    # The jaxtyping/beartype import hook enforces the shared ``*batch`` axis
+    # between ``pred`` and ``truth`` at call time, before the manual check.
+    with pytest.raises(TypeCheckError):
         crps_empirical(jnp.zeros((10, 3)), jnp.zeros((4,)))
 
 

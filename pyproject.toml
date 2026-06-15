@@ -33,6 +33,7 @@ dependencies = [
     "jax>=0.4.30",
     "numpyro>=0.16",
     "jaxtyping>=0.2",
+    "beartype>=0.22",
     "arviz>=1.0.0",
     "matplotlib>=3.8",
     "tqdm>=4.60",
