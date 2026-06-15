@@ -7,7 +7,7 @@ activate:
 	@echo "Run: source .venv/bin/activate"
 
 tests:
-	uv run pytest tests/ -x --tb=short
+	uv run pytest
 
 prek:
 	uv run prek run --all-files
