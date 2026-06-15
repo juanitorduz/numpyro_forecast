@@ -2,9 +2,9 @@
 
 A JAX/NumPyro port of [Pyro's forecasting module](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast).
 
-`numpyro_forecast` keeps Pyro's familiar API — `ForecastingModel`, `Forecaster`,
+`numpyro_forecast` keeps Pyro's familiar API:`ForecastingModel`, `Forecaster`,
 `HMCForecaster`, `backtest`, and the `eval_crps` / `eval_mae` / `eval_rmse`
-metrics — while embracing the functional style of JAX and NumPyro
+metrics, while embracing the functional style of JAX and NumPyro
 (`jax.lax.scan`, explicit `PRNGKey` threading, `Predictive`, no global parameter
 store).
 
@@ -17,7 +17,7 @@ the train/forecast plumbing, inference, and evaluation:
 - A single model both trains and forecasts. In-sample time latents use a fixed
   site name (`drift`); the forecast horizon uses a separate `_future` site so the
   variational guide is never resized and the forecast suffix is drawn from the
-  prior. The horizon is inferred from shapes — `covariates` longer than `data`.
+  prior. The horizon is inferred from shapes, `covariates` longer than `data`.
 - Two inference backends: stochastic variational inference (`Forecaster`, via
   `AutoNormal`) and Hamiltonian Monte Carlo / NUTS (`HMCForecaster`).
 - Backtesting over rolling windows plus probabilistic and point metrics.
@@ -32,17 +32,17 @@ package gives you a clean path from model to forecasts and scores.
 
 ## What's included
 
-- **`ForecastingModel`** — abstract base class. Subclass it and implement
+- **`ForecastingModel`**: abstract base class. Subclass it and implement
   `model(self, zero_data, covariates)`, calling `self.time_series(...)` for latent
   random walks and `self.predict(noise_dist, prediction)` exactly once.
-- **`Forecaster`** — fit a model with SVI (`AutoNormal` guide by default).
-- **`HMCForecaster`** — fit a model with NUTS.
-- **`backtest`** / **`BacktestResult`** — evaluate forecasts over rolling windows.
-- **Metrics** — `eval_crps`, `eval_mae`, `eval_rmse`, `DEFAULT_METRICS`, and the
+- **`Forecaster`**: fit a model with SVI (`AutoNormal` guide by default).
+- **`HMCForecaster`**: fit a model with NUTS.
+- **`backtest`** / **`BacktestResult`**: evaluate forecasts over rolling windows.
+- **Metrics**: `eval_crps`, `eval_mae`, `eval_rmse`, `DEFAULT_METRICS`, and the
   lower-level `crps_empirical`.
-- **Seasonality helpers** — `fourier_features`, `periodic_repeat`,
+- **Seasonality helpers**: `fourier_features`, `periodic_repeat`,
   `prefix_condition`, and friends in `numpyro_forecast.util`.
-- **Example datasets** — `datasets.load_bart_weekly` and
+- **Example datasets**: `datasets.load_bart_weekly` and
   `datasets.load_bart_hierarchical` (BART ridership).
 
 ## Installation
