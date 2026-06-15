@@ -9,16 +9,18 @@ from jax import Array, random
 
 from numpyro_forecast.datasets import bart_available, load_bart_hierarchical, load_bart_weekly
 from numpyro_forecast.evaluate import eval_crps
-from numpyro_forecast.forecaster import Forecaster, ForecastingModel
+from numpyro_forecast.forecaster import Forecaster, ForecastingModel, _BaseForecaster
 from numpyro_forecast.util import fourier_features
 
-MakeForecaster = Callable[..., object]
+MakeForecaster = Callable[..., _BaseForecaster]
 
 
 def _svi_factory(num_steps: int) -> MakeForecaster:
     """SVI forecaster factory with a fixed step count (for the BART smoke tests)."""
 
-    def make(model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array) -> object:
+    def make(
+        model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
+    ) -> _BaseForecaster:
         return Forecaster(model, data, covariates, num_steps=num_steps, rng_key=rng_key)
 
     return make

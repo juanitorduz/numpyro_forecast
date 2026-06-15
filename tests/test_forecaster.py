@@ -9,7 +9,12 @@ from conftest import RandomWalkModel, empty_covariates
 from jax import Array, random
 from numpyro.handlers import seed, trace
 
-from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
+from numpyro_forecast.forecaster import (
+    Forecaster,
+    ForecastingModel,
+    HMCForecaster,
+    _BaseForecaster,
+)
 
 
 def test_predict_sites_training(rng_key: Array) -> None:
@@ -106,7 +111,7 @@ def test_forecaster_conditions_on_data(rng_key: Array) -> None:
 
 
 def test_forecaster_shape_both_backends(
-    forecaster_factory: Callable[..., object],
+    forecaster_factory: Callable[..., _BaseForecaster],
     sample_univariate: Array,
     rng_key: Array,
 ) -> None:

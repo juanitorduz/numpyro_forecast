@@ -82,6 +82,7 @@ def test_slice_time_independent_slices_base() -> None:
     sliced = slice_time(noise, slice(None, 4))
     assert isinstance(sliced, dist.Independent)
     assert sliced.reinterpreted_batch_ndims == 1
+    assert isinstance(sliced.base_dist, dist.Normal)
     assert sliced.base_dist.batch_shape == (4, 1)
     assert jnp.allclose(sliced.base_dist.loc, loc[:4])
 

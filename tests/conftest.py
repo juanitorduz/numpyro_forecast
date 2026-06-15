@@ -8,7 +8,12 @@ import numpyro.distributions as dist
 import pytest
 from jax import Array, random
 
-from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
+from numpyro_forecast.forecaster import (
+    Forecaster,
+    ForecastingModel,
+    HMCForecaster,
+    _BaseForecaster,
+)
 
 
 class RandomWalkModel(ForecastingModel):
@@ -58,7 +63,7 @@ def forecaster_factory(
     request: pytest.FixtureRequest,
     fast_svi: dict[str, int],
     fast_mcmc: dict[str, int],
-) -> Callable[..., object]:
+) -> Callable[..., _BaseForecaster]:
     """Build a fitted forecaster with either SVI or NUTS, using fast settings.
 
     Parametrized over both inference backends so a single test exercises a model
@@ -68,14 +73,24 @@ def forecaster_factory(
 
         def make_svi(
             model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
-        ) -> Forecaster:
-            return Forecaster(model, data, covariates, rng_key=rng_key, **fast_svi)
+        ) -> _BaseForecaster:
+            return Forecaster(
+                model, data, covariates, rng_key=rng_key, num_steps=fast_svi["num_steps"]
+            )
 
         return make_svi
 
     def make_nuts(
         model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
-    ) -> HMCForecaster:
-        return HMCForecaster(model, data, covariates, rng_key=rng_key, **fast_mcmc)
+    ) -> _BaseForecaster:
+        return HMCForecaster(
+            model,
+            data,
+            covariates,
+            rng_key=rng_key,
+            num_warmup=fast_mcmc["num_warmup"],
+            num_samples=fast_mcmc["num_samples"],
+            num_chains=fast_mcmc["num_chains"],
+        )
 
     return make_nuts
