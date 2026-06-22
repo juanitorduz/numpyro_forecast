@@ -73,22 +73,20 @@ def forecaster_factory(
     if request.param == "svi":
 
         def make_svi(
-            model: ForecastModel, data: Array, covariates: Array, *, rng_key: Array
+            rng_key: Array, model: ForecastModel, data: Array, covariates: Array
         ) -> _BaseForecaster:
-            return Forecaster(
-                model, data, covariates, rng_key=rng_key, num_steps=fast_svi["num_steps"]
-            )
+            return Forecaster(rng_key, model, data, covariates, num_steps=fast_svi["num_steps"])
 
         return make_svi
 
     def make_nuts(
-        model: ForecastModel, data: Array, covariates: Array, *, rng_key: Array
+        rng_key: Array, model: ForecastModel, data: Array, covariates: Array
     ) -> _BaseForecaster:
         return HMCForecaster(
+            rng_key,
             model,
             data,
             covariates,
-            rng_key=rng_key,
             num_warmup=fast_mcmc["num_warmup"],
             num_samples=fast_mcmc["num_samples"],
             num_chains=fast_mcmc["num_chains"],

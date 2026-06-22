@@ -181,9 +181,7 @@ def test_forecasting_model_prior_sampling() -> None:
 def _svi_fit(t: int, num_steps: int = 40) -> SVIFit:
     model = forecasting_model(_rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    return fit_svi(
-        model, data, empty_covariates(t), num_steps=num_steps, rng_key=random.PRNGKey(1)
-    )
+    return fit_svi(random.PRNGKey(1), model, data, empty_covariates(t), num_steps=num_steps)
 
 
 def test_fit_svi_returns_populated_fit() -> None:
@@ -197,31 +195,31 @@ def test_fit_svi_rejects_unequal_duration() -> None:
     model = forecasting_model(_rw_body)
     data = jnp.zeros((30, 1))
     with pytest.raises(ValueError, match="equal duration"):
-        fit_svi(model, data, empty_covariates(25), num_steps=10, rng_key=random.PRNGKey(0))
+        fit_svi(random.PRNGKey(0), model, data, empty_covariates(25), num_steps=10)
 
 
 def test_draw_posterior_svi_leading_sample_axis() -> None:
     fit = _svi_fit(t=30)
-    post = draw_posterior(fit, 8, rng_key=random.PRNGKey(2))
+    post = draw_posterior(random.PRNGKey(2), fit, 8)
     assert post["drift"].shape == (8, 30, 1)
 
 
 def test_draw_posterior_rejects_non_positive() -> None:
     fit = _svi_fit(t=30, num_steps=20)
     with pytest.raises(ValueError, match="num_samples must be positive"):
-        draw_posterior(fit, 0, rng_key=random.PRNGKey(2))
+        draw_posterior(random.PRNGKey(2), fit, 0)
 
 
 def _mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
     model = forecasting_model(_rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     return fit_mcmc(
+        random.PRNGKey(1),
         model,
         data,
         empty_covariates(t),
         num_warmup=num_warmup,
         num_samples=num_samples,
-        rng_key=random.PRNGKey(1),
     )
 
 
@@ -237,49 +235,49 @@ def test_fit_mcmc_rejects_unequal_duration() -> None:
     data = jnp.zeros((20, 1))
     with pytest.raises(ValueError, match="equal duration"):
         fit_mcmc(
+            random.PRNGKey(0),
             model,
             data,
             empty_covariates(15),
             num_warmup=5,
             num_samples=5,
-            rng_key=random.PRNGKey(0),
         )
 
 
 def test_draw_posterior_mcmc_leading_sample_axis() -> None:
     fit = _mcmc_fit(t=20)
-    post = draw_posterior(fit, 7, rng_key=random.PRNGKey(2))
+    post = draw_posterior(random.PRNGKey(2), fit, 7)
     assert post["drift"].shape == (7, 20, 1)
 
 
 def _fit_data(t: int = 30, num_steps: int = 40) -> tuple[ForecastModel, Array, SVIFit]:
     model = forecasting_model(_rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    fit = fit_svi(model, data, empty_covariates(t), num_steps=num_steps, rng_key=random.PRNGKey(1))
+    fit = fit_svi(random.PRNGKey(1), model, data, empty_covariates(t), num_steps=num_steps)
     return model, data, fit
 
 
 def test_forecast_shape_and_finite() -> None:
     model, data, fit = _fit_data()
-    post = draw_posterior(fit, 10, rng_key=random.PRNGKey(2))
-    fc = forecast(model, post, data, empty_covariates(36), rng_key=random.PRNGKey(3))
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     assert fc.shape == (10, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
 
 def test_forecast_batched_shape_and_finite() -> None:
     model, data, fit = _fit_data()
-    post = draw_posterior(fit, 10, rng_key=random.PRNGKey(2))
-    fc = forecast(model, post, data, empty_covariates(36), rng_key=random.PRNGKey(3), batch_size=3)
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
     assert fc.shape == (10, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
 
 def test_forecast_rejects_covariates_not_longer() -> None:
     model, data, fit = _fit_data(num_steps=20)
-    post = draw_posterior(fit, 5, rng_key=random.PRNGKey(2))
+    post = draw_posterior(random.PRNGKey(2), fit, 5)
     with pytest.raises(ValueError, match="covariates must extend beyond data"):
-        forecast(model, post, data, empty_covariates(30), rng_key=random.PRNGKey(3))
+        forecast(random.PRNGKey(3), model, post, data, empty_covariates(30))
 
 
 # --- Interchangeability between the functional and OOP APIs -------------------
@@ -289,9 +287,9 @@ def test_functional_model_through_oop_forecaster() -> None:
     func_model = forecasting_model(_rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (30, 1)), axis=-2)
     forecaster = Forecaster(
-        func_model, data, empty_covariates(30), num_steps=30, rng_key=random.PRNGKey(1)
+        random.PRNGKey(1), func_model, data, empty_covariates(30), num_steps=30
     )
-    fc = forecaster(data, empty_covariates(36), num_samples=8, rng_key=random.PRNGKey(2))
+    fc = forecaster(random.PRNGKey(2), data, empty_covariates(36), num_samples=8)
     assert fc.shape == (8, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
@@ -300,14 +298,14 @@ def test_functional_model_through_hmc_forecaster() -> None:
     func_model = forecasting_model(_rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (20, 1)), axis=-2)
     forecaster = HMCForecaster(
+        random.PRNGKey(1),
         func_model,
         data,
         empty_covariates(20),
         num_warmup=15,
         num_samples=15,
-        rng_key=random.PRNGKey(1),
     )
-    fc = forecaster(data, empty_covariates(26), num_samples=8, rng_key=random.PRNGKey(2))
+    fc = forecaster(random.PRNGKey(2), data, empty_covariates(26), num_samples=8)
     assert fc.shape == (8, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
@@ -315,9 +313,9 @@ def test_functional_model_through_hmc_forecaster() -> None:
 def test_oop_model_through_functional_fit_and_forecast() -> None:
     oop_model = RandomWalkModel()
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (30, 1)), axis=-2)
-    fit = fit_svi(oop_model, data, empty_covariates(30), num_steps=30, rng_key=random.PRNGKey(1))
-    post = draw_posterior(fit, 8, rng_key=random.PRNGKey(2))
-    fc = forecast(oop_model, post, data, empty_covariates(36), rng_key=random.PRNGKey(3))
+    fit = fit_svi(random.PRNGKey(1), oop_model, data, empty_covariates(30), num_steps=30)
+    post = draw_posterior(random.PRNGKey(2), fit, 8)
+    fc = forecast(random.PRNGKey(3), oop_model, post, data, empty_covariates(36))
     assert fc.shape == (8, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
@@ -326,6 +324,7 @@ def test_functional_model_in_backtest() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     results = backtest(
+        random.PRNGKey(1),
         data,
         covariates,
         lambda: forecasting_model(_rw_body),
@@ -347,15 +346,15 @@ def test_oop_and_functional_fits_and_forecasts_are_identical() -> None:
     cov_train, cov_full = empty_covariates(30), empty_covariates(36)
     key_fit, key_fc = random.PRNGKey(7), random.PRNGKey(9)
 
-    oop = Forecaster(RandomWalkModel(), data, cov_train, num_steps=40, rng_key=key_fit)
-    fc_oop = oop(data, cov_full, num_samples=8, rng_key=key_fc)
+    oop = Forecaster(key_fit, RandomWalkModel(), data, cov_train, num_steps=40)
+    fc_oop = oop(key_fc, data, cov_full, num_samples=8)
 
     func_model = forecasting_model(_rw_body)
-    fit = fit_svi(func_model, data, cov_train, num_steps=40, rng_key=key_fit)
+    fit = fit_svi(key_fit, func_model, data, cov_train, num_steps=40)
     for name, value in oop.params.items():
         assert jnp.array_equal(value, fit.params[name]), name
 
     key_post, key_pred = random.split(key_fc)  # mirror _BaseForecaster.__call__
-    post = draw_posterior(fit, 8, rng_key=key_post)
-    fc_func = forecast(func_model, post, data, cov_full, rng_key=key_pred)
+    post = draw_posterior(key_post, fit, 8)
+    fc_func = forecast(key_pred, func_model, post, data, cov_full)
     assert jnp.array_equal(fc_oop, fc_func)

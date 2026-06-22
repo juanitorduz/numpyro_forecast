@@ -281,21 +281,23 @@ def _index_tree(tree: dict[str, Array], index: Array | slice) -> dict[str, Array
 
 
 def fit_svi(
+    rng_key: Array,
     model: ForecastModel,
     data: Array,
     covariates: Array,
     *,
     guide: AutoGuide | None = None,
     optim: _NumPyroOptim | None = None,
-    num_steps: int = 1001,
+    num_steps: int = 1_001,
     num_particles: int = 1,
-    rng_key: Array,
     progress_bar: bool = False,
 ) -> SVIFit:
     """Fit a forecasting model with stochastic variational inference.
 
     Parameters
     ----------
+    rng_key
+        PRNG key for inference.
     model
         The forecasting model callable (OOP instance or functional model).
     data
@@ -310,8 +312,6 @@ def fit_svi(
         Number of SVI steps.
     num_particles
         Number of ELBO particles.
-    rng_key
-        PRNG key for inference.
     progress_bar
         Whether to display the SVI progress bar.
 
@@ -334,7 +334,19 @@ def fit_svi(
 
 
 @singledispatch
-def draw_posterior(fit: object, num_samples: int, *, rng_key: Array) -> dict[str, Array]:
+def _draw_posterior_impl(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
+    """Dispatch on the fit type to draw posterior samples (see :func:`draw_posterior`)."""
+    msg = f"draw_posterior() does not support {type(fit).__name__}"
+    raise NotImplementedError(msg)
+
+
+@_draw_posterior_impl.register
+def _(fit: SVIFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
+    _require_positive_num_samples(num_samples)
+    return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+
+
+def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, Array]:
     """Draw ``num_samples`` posterior samples of the latent sites from a fit.
 
     Dispatches on the fit type (e.g. :class:`SVIFit`, :class:`MCMCFit`). The
@@ -343,12 +355,12 @@ def draw_posterior(fit: object, num_samples: int, *, rng_key: Array) -> dict[str
 
     Parameters
     ----------
+    rng_key
+        PRNG key.
     fit
         A fit result produced by :func:`fit_svi` or :func:`fit_mcmc`.
     num_samples
         Number of posterior draws.
-    rng_key
-        PRNG key.
 
     Returns
     -------
@@ -360,14 +372,7 @@ def draw_posterior(fit: object, num_samples: int, *, rng_key: Array) -> dict[str
     NotImplementedError
         If ``fit`` is of an unsupported type.
     """
-    msg = f"draw_posterior() does not support {type(fit).__name__}"
-    raise NotImplementedError(msg)
-
-
-@draw_posterior.register
-def _(fit: SVIFit, num_samples: int, *, rng_key: Array) -> dict[str, Array]:
-    _require_positive_num_samples(num_samples)
-    return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+    return _draw_posterior_impl(fit, num_samples, rng_key)
 
 
 @dataclass(frozen=True)
@@ -384,20 +389,22 @@ class MCMCFit:
 
 
 def fit_mcmc(
+    rng_key: Array,
     model: ForecastModel,
     data: Array,
     covariates: Array,
     *,
-    num_warmup: int = 1000,
-    num_samples: int = 1000,
+    num_warmup: int = 1_000,
+    num_samples: int = 1_000,
     num_chains: int = 1,
-    rng_key: Array,
     progress_bar: bool = False,
 ) -> MCMCFit:
     """Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
 
     Parameters
     ----------
+    rng_key
+        PRNG key for inference.
     model
         The forecasting model callable (OOP instance or functional model).
     data
@@ -410,8 +417,6 @@ def fit_mcmc(
         Number of posterior samples.
     num_chains
         Number of MCMC chains.
-    rng_key
-        PRNG key for inference.
     progress_bar
         Whether to display the MCMC progress bar.
 
@@ -437,8 +442,8 @@ def fit_mcmc(
     return MCMCFit(samples=mcmc.get_samples())
 
 
-@draw_posterior.register
-def _(fit: MCMCFit, num_samples: int, *, rng_key: Array) -> dict[str, Array]:
+@_draw_posterior_impl.register
+def _(fit: MCMCFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     _require_positive_num_samples(num_samples)
     leaves = list(fit.samples.values())
     available = leaves[0].shape[0]
@@ -447,11 +452,11 @@ def _(fit: MCMCFit, num_samples: int, *, rng_key: Array) -> dict[str, Array]:
 
 
 def _predict(
+    rng_key: Array,
     model: ForecastModel,
     posterior: dict[str, Array],
     data: Array,
     covariates: Array,
-    rng_key: Array,
 ) -> Array:
     """Run ``Predictive`` over the full horizon and return the ``forecast`` site."""
     predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
@@ -459,12 +464,12 @@ def _predict(
 
 
 def forecast(
+    rng_key: Array,
     model: ForecastModel,
     posterior: dict[str, Array],
     data: Array,
     covariates: Array,
     *,
-    rng_key: Array,
     batch_size: int | None = None,
 ) -> Float[Array, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
@@ -477,6 +482,8 @@ def forecast(
 
     Parameters
     ----------
+    rng_key
+        PRNG key.
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
@@ -485,8 +492,6 @@ def forecast(
         Observed data with time at axis ``-2`` and length ``t``.
     covariates
         Covariates with time at axis ``-2`` and length ``duration > t``.
-    rng_key
-        PRNG key.
     batch_size
         Optional chunk size for sampling (caps peak memory).
 
@@ -505,12 +510,12 @@ def forecast(
         raise ValueError(msg)
     num_samples = next(iter(posterior.values())).shape[0]
     if batch_size is None or batch_size >= num_samples:
-        return _predict(model, posterior, data, covariates, rng_key)
+        return _predict(rng_key, model, posterior, data, covariates)
     outputs = []
     key = rng_key
     for start in range(0, num_samples, batch_size):
         stop = min(start + batch_size, num_samples)
         key, sub_key = random.split(key)
         chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict(model, chunk, data, covariates, sub_key))
+        outputs.append(_predict(sub_key, model, chunk, data, covariates))
     return jnp.concatenate(outputs, axis=0)

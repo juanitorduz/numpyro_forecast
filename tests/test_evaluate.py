@@ -44,6 +44,7 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     results = backtest(
+        rng_key,
         data,
         covariates,
         RandomWalkModel,
@@ -69,7 +70,6 @@ def test_backtest_result_to_dict() -> None:
         t0=0,
         t1=10,
         t2=14,
-        seed=1,
         num_samples=20,
         train_walltime=0.5,
         test_walltime=0.25,
@@ -85,7 +85,6 @@ def test_backtest_result_to_dict() -> None:
         "t0",
         "t1",
         "t2",
-        "seed",
         "num_samples",
         "train_walltime",
         "test_walltime",
@@ -99,6 +98,7 @@ def test_backtest_hmc_has_no_scalar_params(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (20, 1)), axis=-2)
     covariates = jnp.zeros((20, 0))
     results = backtest(
+        rng_key,
         data,
         covariates,
         RandomWalkModel,
@@ -116,7 +116,7 @@ def test_backtest_hmc_has_no_scalar_params(rng_key: Array) -> None:
 
 def test_backtest_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="share the time axis length"):
-        backtest(jnp.zeros((20, 1)), jnp.zeros((18, 0)), RandomWalkModel)
+        backtest(random.PRNGKey(0), jnp.zeros((20, 1)), jnp.zeros((18, 0)), RandomWalkModel)
 
 
 def test_backtest_callable_options_and_transform(rng_key: Array) -> None:
@@ -135,6 +135,7 @@ def test_backtest_callable_options_and_transform(rng_key: Array) -> None:
         return jnp.exp(pred), jnp.exp(truth)
 
     results = backtest(
+        rng_key,
         data,
         covariates,
         RandomWalkModel,
