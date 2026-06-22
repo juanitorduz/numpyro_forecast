@@ -154,8 +154,10 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     """Condition a ``(t+f)``-length distribution on a ``t``-length data prefix.
 
     For independent-over-time noise (the default) the conditional reduces to the
-    forecast-horizon marginal, i.e. a time slice ``[t:]``. Correlated families
-    (e.g. ``MultivariateNormal``) can register a genuine Gaussian conditional.
+    forecast-horizon marginal, i.e. a time slice ``[t:]``. Only independent
+    families are supported today; correlated families (e.g. ``MultivariateNormal``)
+    would need a registered dispatch implementing a genuine Gaussian conditional,
+    which is not yet provided.
 
     Parameters
     ----------

@@ -17,7 +17,7 @@ the train/forecast plumbing, inference, and evaluation:
 - Two inference backends: stochastic variational inference (`Forecaster`, via
   `AutoNormal`) and Hamiltonian Monte Carlo / NUTS (`HMCForecaster`).
 - Backtesting over rolling windows plus probabilistic and point metrics.
-- Works for univariate, multivariate, and hierarchical models.
+- Works for univariate, multivariate and hierarchical models.
 
 Arrays follow Pyro's layout: **time at axis `-2`**, the observation/event
 dimension at `-1`, and batch dimensions to the left.
