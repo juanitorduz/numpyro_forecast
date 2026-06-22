@@ -33,7 +33,7 @@ ModelFactory = Callable[[], ForecastModel]
 """A zero-argument callable returning a fresh forecasting model (OOP or functional)."""
 
 ForecasterFactory = Callable[..., "_BaseForecaster"]
-"""Callable ``(model, data, covariates, *, rng_key, **options)`` returning a forecaster.
+"""Callable ``(rng_key, model, data, covariates, **options)`` returning a forecaster.
 
 Typed loosely (like Pyro's ``forecaster_fn``) because per-backend options differ;
 the concrete classes are :class:`Forecaster` and :class:`HMCForecaster`.
