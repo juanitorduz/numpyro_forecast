@@ -2,12 +2,6 @@
 
 A JAX/NumPyro port of [Pyro's forecasting module](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast).
 
-`numpyro_forecast` keeps Pyro's familiar API:`ForecastingModel`, `Forecaster`,
-`HMCForecaster`, `backtest`, and the `eval_crps` / `eval_mae` / `eval_rmse`
-metrics, while embracing the functional style of JAX and NumPyro
-(`jax.lax.scan`, explicit `PRNGKey` threading, `Predictive`, no global parameter
-store).
-
 ## Scope
 
 `numpyro_forecast` is a small, focused toolkit for **Bayesian time-series
@@ -29,21 +23,6 @@ dimension at `-1`, and batch dimensions to the left.
 It is **not** an AutoML or "fit-any-series" library — there are no pre-built
 model zoo or automatic feature pipelines. You define the NumPyro model; the
 package gives you a clean path from model to forecasts and scores.
-
-## What's included
-
-- **`ForecastingModel`**: abstract base class. Subclass it and implement
-  `model(self, zero_data, covariates)`, calling `self.time_series(...)` for latent
-  random walks and `self.predict(noise_dist, prediction)` exactly once.
-- **`Forecaster`**: fit a model with SVI (`AutoNormal` guide by default).
-- **`HMCForecaster`**: fit a model with NUTS.
-- **`backtest`** / **`BacktestResult`**: evaluate forecasts over rolling windows.
-- **Metrics**: `eval_crps`, `eval_mae`, `eval_rmse`, `DEFAULT_METRICS`, and the
-  lower-level `crps_empirical`.
-- **Seasonality helpers**: `fourier_features`, `periodic_repeat`,
-  `prefix_condition`, and friends in `numpyro_forecast.util`.
-- **Example datasets**: `datasets.load_bart_weekly` and
-  `datasets.load_bart_hierarchical` (BART ridership).
 
 ## Installation
 
@@ -127,13 +106,6 @@ samples = forecaster(data, covariates, num_samples=100, rng_key=key_pred)
 print("forecast samples:", samples.shape)
 print("CRPS:", eval_crps(samples, truth[t_obs:]))
 ```
-
-## Status
-
-Early development (alpha). The public API mirrors Pyro's `pyro.contrib.forecast`.
-For design context, read the module docstrings (`forecaster.py`, `evaluate.py`,
-`util.py`) and the example notebooks. Contributor conventions live in
-[`AGENTS.md`](AGENTS.md).
 
 ## Development
 

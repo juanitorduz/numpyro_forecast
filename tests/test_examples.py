@@ -20,27 +20,27 @@ def _svi_factory(num_steps: int) -> MakeForecaster:
     """SVI forecaster factory with a fixed step count (for the BART smoke tests)."""
 
     def make(
-        model: ForecastModel, data: Array, covariates: Array, *, rng_key: Array
+        rng_key: Array, model: ForecastModel, data: Array, covariates: Array
     ) -> _BaseForecaster:
-        return Forecaster(model, data, covariates, num_steps=num_steps, rng_key=rng_key)
+        return Forecaster(rng_key, model, data, covariates, num_steps=num_steps)
 
     return make
 
 
 def _fit_and_forecast_univariate(
+    rng_key: Array,
     y: Array,
     period: float,
     num_terms: int,
     future: int,
-    rng_key: Array,
     make_forecaster: MakeForecaster,
 ) -> Array:
     duration = y.shape[0]
     covariates = fourier_features(duration, period, num_terms)
     t = duration - future
     key_fit, key_forecast = random.split(rng_key)
-    forecaster = make_forecaster(UnivariateForecaster(), y[:t], covariates[:t], rng_key=key_fit)
-    return forecaster(y[:t], covariates, num_samples=100, rng_key=key_forecast)
+    forecaster = make_forecaster(key_fit, UnivariateForecaster(), y[:t], covariates[:t])
+    return forecaster(key_forecast, y[:t], covariates, num_samples=100)
 
 
 def test_univariate_synthetic(forecaster_factory: MakeForecaster, rng_key: Array) -> None:
@@ -48,7 +48,7 @@ def test_univariate_synthetic(forecaster_factory: MakeForecaster, rng_key: Array
     season = jnp.sin(2 * jnp.pi * t / 52.0)
     y = (5.0 + season)[:, None] + 0.1 * random.normal(rng_key, (120, 1))
     pred = _fit_and_forecast_univariate(
-        y, period=52.0, num_terms=5, future=12, rng_key=rng_key, make_forecaster=forecaster_factory
+        rng_key, y, period=52.0, num_terms=5, future=12, make_forecaster=forecaster_factory
     )
     assert pred.shape == (100, 12, 1)
     crps = eval_crps(pred, y[-12:])
@@ -59,11 +59,11 @@ def test_univariate_synthetic(forecaster_factory: MakeForecaster, rng_key: Array
 def test_univariate_bart_smoke(rng_key: Array) -> None:
     y = load_bart_weekly()[-120:]  # last 120 weeks keeps the smoke test fast
     pred = _fit_and_forecast_univariate(
+        rng_key,
         y,
         period=52.18,
         num_terms=10,
         future=12,
-        rng_key=rng_key,
         make_forecaster=_svi_factory(200),
     )
     assert pred.shape == (100, 12, 1)
@@ -73,10 +73,10 @@ def test_univariate_bart_smoke(rng_key: Array) -> None:
 
 
 def _fit_and_forecast_hierarchical(
+    rng_key: Array,
     y: Array,
     period: int,
     future: int,
-    rng_key: Array,
     make_forecaster: MakeForecaster,
 ) -> Array:
     n_origin, duration, n_destin = y.shape
@@ -84,9 +84,9 @@ def _fit_and_forecast_hierarchical(
     t = duration - future
     key_fit, key_forecast = random.split(rng_key)
     forecaster = make_forecaster(
-        HierarchicalForecaster(period=period), y[:, :t, :], covariates[:, :t, :], rng_key=key_fit
+        key_fit, HierarchicalForecaster(period=period), y[:, :t, :], covariates[:, :t, :]
     )
-    return forecaster(y[:, :t, :], covariates, num_samples=50, rng_key=key_forecast)
+    return forecaster(key_forecast, y[:, :t, :], covariates, num_samples=50)
 
 
 def test_hierarchical_synthetic(forecaster_factory: MakeForecaster, rng_key: Array) -> None:
@@ -94,7 +94,7 @@ def test_hierarchical_synthetic(forecaster_factory: MakeForecaster, rng_key: Arr
     season = jnp.sin(2 * jnp.pi * jnp.arange(duration) / 12.0)
     y = 2.0 + season[None, :, None] + 0.1 * random.normal(rng_key, (n_origin, duration, n_destin))
     pred = _fit_and_forecast_hierarchical(
-        y, period=12, future=6, rng_key=rng_key, make_forecaster=forecaster_factory
+        rng_key, y, period=12, future=6, make_forecaster=forecaster_factory
     )
     assert pred.shape == (50, 3, 6, 3)
     assert jnp.isfinite(jnp.asarray(eval_crps(pred, y[:, -6:, :])))
@@ -105,7 +105,7 @@ def test_hierarchical_bart_smoke(rng_key: Array) -> None:
     y, _split, _stations = load_bart_hierarchical()
     y = y[:4, -120:, :4]  # subsample stations and hours to keep the smoke test fast
     pred = _fit_and_forecast_hierarchical(
-        y, period=24 * 7, future=24, rng_key=rng_key, make_forecaster=_svi_factory(80)
+        rng_key, y, period=24 * 7, future=24, make_forecaster=_svi_factory(80)
     )
     assert pred.shape == (50, 4, 24, 4)
     assert jnp.isfinite(jnp.asarray(eval_crps(pred, y[:, -24:, :])))

@@ -90,8 +90,6 @@ class BacktestResult:
     ----------
     t0, t1, t2
         Train-begin, train/test split, and test-end time indices.
-    seed
-        Random seed used for the window.
     num_samples
         Number of forecast samples drawn.
     train_walltime, test_walltime
@@ -105,7 +103,6 @@ class BacktestResult:
     t0: int
     t1: int
     t2: int
-    seed: int
     num_samples: int
     train_walltime: float
     test_walltime: float
@@ -132,6 +129,7 @@ def _scalar_params(forecaster: object) -> dict[str, float]:
 
 
 def backtest(
+    rng_key: Array,
     data: Array,
     covariates: Array,
     model_fn: ModelFactory,
@@ -144,7 +142,6 @@ def backtest(
     test_window: int | None = None,
     min_test_window: int = 1,
     stride: int = 1,
-    seed: int = 1234567890,
     num_samples: int = 100,
     batch_size: int | None = None,
     forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None = None,
@@ -153,6 +150,8 @@ def backtest(
 
     Parameters
     ----------
+    rng_key
+        Base PRNG key (used for every window, matching Pyro).
     data
         Dataset with time at axis ``-2``.
     covariates
@@ -175,8 +174,6 @@ def backtest(
         Minimum test window size when ``test_window`` is ``None``.
     stride
         Step between successive train/test splits.
-    seed
-        Base random seed (used for every window, matching Pyro).
     num_samples
         Number of forecast samples per window.
     batch_size
@@ -216,20 +213,20 @@ def backtest(
         test_covariates = covariates[..., t0:t2, :]
         truth = data[..., t1:t2, :]
 
-        key_fit, key_forecast = random.split(random.PRNGKey(seed))
+        key_fit, key_forecast = random.split(rng_key)
         options = options_for(t0, t1, t2)
 
         fit_start = perf_counter()
         model = model_fn()
-        forecaster = forecaster_fn(model, train_data, train_covariates, rng_key=key_fit, **options)
+        forecaster = forecaster_fn(key_fit, model, train_data, train_covariates, **options)
         train_walltime = perf_counter() - fit_start
 
         forecast_start = perf_counter()
         pred = forecaster(
+            key_forecast,
             train_data,
             test_covariates,
             num_samples,
-            rng_key=key_forecast,
             batch_size=batch_size,
         )
         test_walltime = perf_counter() - forecast_start
@@ -242,7 +239,6 @@ def backtest(
                 t0=t0,
                 t1=t1,
                 t2=t2,
-                seed=seed,
                 num_samples=num_samples,
                 train_walltime=train_walltime,
                 test_walltime=test_walltime,

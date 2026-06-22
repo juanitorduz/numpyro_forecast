@@ -154,31 +154,31 @@ class _BaseForecaster(abc.ABC):
         self.model = model
 
     @abc.abstractmethod
-    def _draw_posterior(self, num_samples: int, rng_key: Array) -> dict[str, Array]:
+    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
         """Return ``num_samples`` posterior draws of the latent sites."""
         raise NotImplementedError
 
     def __call__(
         self,
+        rng_key: Array,
         data: Array,
         covariates: Array,
         num_samples: int,
         *,
-        rng_key: Array,
         batch_size: int | None = None,
     ) -> Float[Array, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
         Parameters
         ----------
+        rng_key
+            PRNG key.
         data
             Observed data with time at axis ``-2`` and length ``t``.
         covariates
             Covariates with time at axis ``-2`` and length ``duration > t``.
         num_samples
             Number of forecast samples to draw.
-        rng_key
-            PRNG key.
         batch_size
             Optional chunk size for sampling (caps peak memory).
 
@@ -194,10 +194,8 @@ class _BaseForecaster(abc.ABC):
             msg = "num_samples must be positive"
             raise ValueError(msg)
         key_post, key_pred = random.split(rng_key)
-        posterior = self._draw_posterior(num_samples, key_post)
-        return _forecast(
-            self.model, posterior, data, covariates, rng_key=key_pred, batch_size=batch_size
-        )
+        posterior = self._draw_posterior(key_post, num_samples)
+        return _forecast(key_pred, self.model, posterior, data, covariates, batch_size=batch_size)
 
 
 class Forecaster(_BaseForecaster):
@@ -205,6 +203,8 @@ class Forecaster(_BaseForecaster):
 
     Parameters
     ----------
+    rng_key
+        PRNG key for inference.
     model
         The forecasting model to fit (OOP instance or functional model).
     data
@@ -219,27 +219,26 @@ class Forecaster(_BaseForecaster):
         Number of SVI steps.
     num_particles
         Number of ELBO particles.
-    rng_key
-        PRNG key for inference.
     progress_bar
         Whether to display the SVI progress bar.
     """
 
     def __init__(
         self,
+        rng_key: Array,
         model: ForecastModel,
         data: Array,
         covariates: Array,
         *,
         guide: AutoGuide | None = None,
         optim: _NumPyroOptim | None = None,
-        num_steps: int = 1001,
+        num_steps: int = 1_001,
         num_particles: int = 1,
-        rng_key: Array,
         progress_bar: bool = False,
     ) -> None:
         super().__init__(model)
         self._fit = fit_svi(
+            rng_key,
             model,
             data,
             covariates,
@@ -247,15 +246,14 @@ class Forecaster(_BaseForecaster):
             optim=optim,
             num_steps=num_steps,
             num_particles=num_particles,
-            rng_key=rng_key,
             progress_bar=progress_bar,
         )
         self.guide: AutoGuide = self._fit.guide
         self.params: dict[str, Array] = self._fit.params
         self.losses: Array = self._fit.losses
 
-    def _draw_posterior(self, num_samples: int, rng_key: Array) -> dict[str, Array]:
-        return draw_posterior(self._fit, num_samples, rng_key=rng_key)
+    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
+        return draw_posterior(rng_key, self._fit, num_samples)
 
 
 class HMCForecaster(_BaseForecaster):
@@ -263,6 +261,8 @@ class HMCForecaster(_BaseForecaster):
 
     Parameters
     ----------
+    rng_key
+        PRNG key for inference.
     model
         The forecasting model to fit (OOP instance or functional model).
     data
@@ -275,36 +275,34 @@ class HMCForecaster(_BaseForecaster):
         Number of posterior samples.
     num_chains
         Number of MCMC chains.
-    rng_key
-        PRNG key for inference.
     progress_bar
         Whether to display the MCMC progress bar.
     """
 
     def __init__(
         self,
+        rng_key: Array,
         model: ForecastModel,
         data: Array,
         covariates: Array,
         *,
-        num_warmup: int = 1000,
-        num_samples: int = 1000,
+        num_warmup: int = 1_000,
+        num_samples: int = 1_000,
         num_chains: int = 1,
-        rng_key: Array,
         progress_bar: bool = False,
     ) -> None:
         super().__init__(model)
         self._fit = fit_mcmc(
+            rng_key,
             model,
             data,
             covariates,
             num_warmup=num_warmup,
             num_samples=num_samples,
             num_chains=num_chains,
-            rng_key=rng_key,
             progress_bar=progress_bar,
         )
         self.posterior_samples: dict[str, Array] = self._fit.samples
 
-    def _draw_posterior(self, num_samples: int, rng_key: Array) -> dict[str, Array]:
-        return draw_posterior(self._fit, num_samples, rng_key=rng_key)
+    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
+        return draw_posterior(rng_key, self._fit, num_samples)
