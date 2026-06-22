@@ -336,7 +336,7 @@ def test_functional_model_in_backtest() -> None:
     )
     assert len(results) == 3
     for r in results:
-        assert set(r.metrics) == {"mae", "rmse", "crps"}
+        assert set(r.metrics) == {"mae", "rmse", "crps", "coverage"}
 
 
 def test_oop_and_functional_fits_and_forecasts_are_identical() -> None:
