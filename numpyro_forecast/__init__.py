@@ -7,6 +7,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         datasets,
         evaluate,
         forecaster,
+        functional,
         metrics,
         util,
     )
