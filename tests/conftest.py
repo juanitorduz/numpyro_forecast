@@ -14,6 +14,7 @@ from numpyro_forecast.forecaster import (
     HMCForecaster,
     _BaseForecaster,
 )
+from numpyro_forecast.typing import ForecastModel
 
 
 class RandomWalkModel(ForecastingModel):
@@ -72,7 +73,7 @@ def forecaster_factory(
     if request.param == "svi":
 
         def make_svi(
-            model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
+            model: ForecastModel, data: Array, covariates: Array, *, rng_key: Array
         ) -> _BaseForecaster:
             return Forecaster(
                 model, data, covariates, rng_key=rng_key, num_steps=fast_svi["num_steps"]
@@ -81,7 +82,7 @@ def forecaster_factory(
         return make_svi
 
     def make_nuts(
-        model: ForecastingModel, data: Array, covariates: Array, *, rng_key: Array
+        model: ForecastModel, data: Array, covariates: Array, *, rng_key: Array
     ) -> _BaseForecaster:
         return HMCForecaster(
             model,

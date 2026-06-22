@@ -19,7 +19,9 @@ def zero_data_like(data: Array, covariates: Array) -> Array:
     """Return zeros shaped like ``data`` but extended to the covariate duration.
 
     Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
-    full forecast horizon without leaking observed values into the model.
+    full forecast horizon without leaking observed values into the model. The
+    functional API exposes the equivalent value as
+    :attr:`numpyro_forecast.functional.Horizon.zero_data`.
 
     Parameters
     ----------
