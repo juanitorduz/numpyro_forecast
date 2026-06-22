@@ -62,6 +62,15 @@ class Horizon:
     future: int
     duration: int
 
+    def __post_init__(self) -> None:
+        """Validate that the horizon fields are internally consistent."""
+        if self.t_obs < 0 or self.future < 0:
+            msg = "t_obs and future must be non-negative"
+            raise ValueError(msg)
+        if self.duration != self.t_obs + self.future:
+            msg = "duration must equal t_obs + future"
+            raise ValueError(msg)
+
     @property
     def zero_data(self) -> Array | None:
         """Zeros shaped like ``data`` extended to the full horizon.

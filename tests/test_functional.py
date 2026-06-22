@@ -26,7 +26,7 @@ from numpyro_forecast.functional import (
 from numpyro_forecast.typing import Array, ForecastModel
 
 
-def _rw_body(h: Horizon, covariates: jnp.ndarray) -> None:
+def _rw_body(h: Horizon, covariates: Array) -> None:
     """Random-walk model body using the functional primitives (test helper)."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
@@ -81,6 +81,16 @@ def test_horizon_zero_data_none_for_prior() -> None:
     covariates = jnp.zeros((20, 0))
     h = Horizon.from_data(covariates, None)
     assert h.zero_data is None
+
+
+def test_horizon_rejects_inconsistent_duration() -> None:
+    with pytest.raises(ValueError, match="duration must equal t_obs \\+ future"):
+        Horizon(data=None, t_obs=5, future=10, duration=20)
+
+
+def test_horizon_rejects_negative_future() -> None:
+    with pytest.raises(ValueError, match="t_obs and future must be non-negative"):
+        Horizon(data=None, t_obs=5, future=-1, duration=4)
 
 
 def test_time_series_predict_training_sites() -> None:
@@ -155,6 +165,17 @@ def test_forecasting_model_matches_oop_forecast_trace() -> None:
     func_model = forecasting_model(_rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (20, 1)), axis=-2)
     _assert_traces_equal(func_model, RandomWalkModel(), empty_covariates(25), data)
+
+
+def test_forecasting_model_prior_sampling() -> None:
+    # data=None: pure prior sampling. The whole horizon is in-sample, so "obs" is
+    # sampled (not observed) and there are no forecast-horizon sites.
+    func_model = forecasting_model(_rw_body)
+    tr = trace(seed(func_model, random.PRNGKey(0))).get_trace(empty_covariates(15))
+    assert tr["drift"]["value"].shape == (15, 1)
+    assert tr["obs"]["is_observed"] is False
+    assert "drift_future" not in tr
+    assert "forecast" not in tr
 
 
 def _svi_fit(t: int, num_steps: int = 40) -> SVIFit:

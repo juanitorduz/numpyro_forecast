@@ -187,6 +187,12 @@ class _BaseForecaster(abc.ABC):
         Float[Array, " sample *batch future obs"]
             Forecast samples over the ``future = duration - t`` horizon.
         """
+        if data.shape[-2] >= covariates.shape[-2]:
+            msg = "covariates must extend beyond data along the time axis"
+            raise ValueError(msg)
+        if num_samples <= 0:
+            msg = "num_samples must be positive"
+            raise ValueError(msg)
         key_post, key_pred = random.split(rng_key)
         posterior = self._draw_posterior(num_samples, key_post)
         return _forecast(
