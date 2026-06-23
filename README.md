@@ -1,6 +1,6 @@
 # NumPyro Forecast
 
-[![ci](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml?query=branch%3Amain) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![PyPI version](https://img.shields.io/pypi/v/numpyro_forecast.svg)](https://pypi.org/project/numpyro_forecast/) [![ci](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml?query=branch%3Amain) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A JAX/NumPyro port of [Pyro's forecasting module](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast).
 
@@ -28,8 +28,15 @@ package gives you a clean path from model to forecasts and scores.
 
 ## Installation
 
-Requires Python >= 3.12. The package is not yet published on PyPI; install it
-from source:
+Requires Python >= 3.12. Install from PyPI:
+
+```bash
+uv add numpyro_forecast
+# or, with pip:
+pip install numpyro_forecast
+```
+
+To install the latest development version from source:
 
 ```bash
 uv add "numpyro_forecast @ git+https://github.com/juanitorduz/numpyro_forecast"
