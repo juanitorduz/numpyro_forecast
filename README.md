@@ -1,6 +1,6 @@
 # NumPyro Forecast
 
-![Build](https://github.com/juanitorduz/numpyro_forecast/workflows/ci/badge.svg) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![ci](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml/badge.svg)](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A JAX/NumPyro port of [Pyro's forecasting module](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast).
 
@@ -17,7 +17,7 @@ the train/forecast plumbing, inference, and evaluation:
 - Two inference backends: stochastic variational inference (`Forecaster`, via
   `AutoNormal`) and Hamiltonian Monte Carlo / NUTS (`HMCForecaster`).
 - Backtesting over rolling windows plus probabilistic and point metrics.
-- Works for univariate, multivariate, and hierarchical models.
+- Works for univariate, multivariate and hierarchical models.
 
 Arrays follow Pyro's layout: **time at axis `-2`**, the observation/event
 dimension at `-1`, and batch dimensions to the left.
@@ -108,11 +108,6 @@ samples = forecaster(key_pred, data, covariates, num_samples=100)
 print("forecast samples:", samples.shape)
 print("CRPS:", eval_crps(samples, truth[t_obs:]))
 ```
-
-> **`rng_key` comes first.** Following the JAX/NumPyro convention, every function
-> that consumes randomness (`Forecaster`, `HMCForecaster`, `fit_svi`, `fit_mcmc`,
-> `forecast`, `draw_posterior`, `backtest`, ...) takes the `PRNGKey` as its first
-> argument.
 
 ## Two APIs: functional core and OOP shim
 

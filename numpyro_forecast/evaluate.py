@@ -74,10 +74,39 @@ def eval_crps(pred: Array, truth: Array) -> float:
     return float(crps_empirical(pred, truth).mean())
 
 
+def eval_coverage(pred: Array, truth: Array, *, alpha: float = 0.9) -> float:
+    """Empirical coverage of the central ``alpha`` prediction interval.
+
+    The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
+    ``1 - (1 - alpha) / 2`` quantiles of the forecast samples; the metric is the
+    fraction of ground-truth values that fall inside it. A well-calibrated
+    forecast has coverage close to ``alpha``.
+
+    Parameters
+    ----------
+    pred
+        Forecast samples with the sample axis first.
+    truth
+        Ground-truth values (matching ``pred`` without the sample axis).
+    alpha
+        Nominal interval level in ``(0, 1)`` (defaults to ``0.9``).
+
+    Returns
+    -------
+    float
+        The fraction of ground-truth values inside the central ``alpha`` interval.
+    """
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    return float(((truth >= lo) & (truth <= hi)).mean())
+
+
 DEFAULT_METRICS: dict[str, Metric] = {
     "mae": eval_mae,
     "rmse": eval_rmse,
     "crps": eval_crps,
+    "coverage": eval_coverage,
 }
 """Default metrics used by :func:`backtest`."""
 

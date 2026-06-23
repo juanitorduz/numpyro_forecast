@@ -9,6 +9,7 @@ from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
     backtest,
+    eval_coverage,
     eval_crps,
     eval_mae,
     eval_rmse,
@@ -36,8 +37,24 @@ def test_eval_crps_returns_float() -> None:
     assert value >= 0.0
 
 
+def test_eval_coverage_perfect_and_zero() -> None:
+    # Samples spread symmetrically around 0; truth at 0 is inside any central band.
+    pred = jnp.linspace(-1.0, 1.0, 101).reshape(101, 1)
+    assert eval_coverage(pred, jnp.array([0.0])) == 1.0
+    # Truth far outside the sample support falls outside the band.
+    assert eval_coverage(pred, jnp.array([100.0])) == 0.0
+
+
+def test_eval_coverage_returns_float() -> None:
+    pred = random.normal(random.PRNGKey(0), (200, 4))
+    truth = random.normal(random.PRNGKey(1), (4,))
+    value = eval_coverage(pred, truth, alpha=0.8)
+    assert isinstance(value, float)
+    assert 0.0 <= value <= 1.0
+
+
 def test_default_metrics_keys() -> None:
-    assert set(DEFAULT_METRICS) == {"mae", "rmse", "crps"}
+    assert set(DEFAULT_METRICS) == {"mae", "rmse", "crps", "coverage"}
 
 
 def test_backtest_expanding_window(rng_key: Array) -> None:
@@ -59,7 +76,7 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
     for r in results:
         assert isinstance(r, BacktestResult)
         assert r.t0 == 0  # expanding window
-        assert set(r.metrics) == {"mae", "rmse", "crps"}
+        assert set(r.metrics) == {"mae", "rmse", "crps", "coverage"}
         assert r.train_walltime >= 0.0
         # AutoNormal exposes per-site variational params (e.g. *_auto_loc).
         assert any("drift_scale" in name for name in r.params)
