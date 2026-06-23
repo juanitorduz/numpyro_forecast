@@ -1,0 +1,77 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: build sdist and wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Check the sdist installs, imports, and reports the release version
+        run: |
+          python -m venv venv-sdist
+          venv-sdist/bin/python -m pip install dist/numpyro_forecast-*.tar.gz
+          venv-sdist/bin/python -c "import numpyro_forecast as nf; assert nf.__version__ == '${{ github.ref_name }}', nf.__version__; print(nf.__version__)"
+      - name: Check the wheel installs, imports, and reports the release version
+        run: |
+          python -m venv venv-wheel
+          venv-wheel/bin/python -m pip install dist/numpyro_forecast-*.whl
+          venv-wheel/bin/python -c "import numpyro_forecast as nf; assert nf.__version__ == '${{ github.ref_name }}', nf.__version__; print(nf.__version__)"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*
+
+  testpypi:
+    name: upload to TestPyPI
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          repository-url: https://test.pypi.org/legacy/
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install from TestPyPI and verify version
+        run: |
+          python -m venv venv-testpypi
+          # TestPyPI's index can lag a few seconds behind the upload, so retry.
+          for attempt in 1 2 3 4 5; do
+            venv-testpypi/bin/python -m pip install \
+              --index-url https://test.pypi.org/simple/ \
+              --extra-index-url https://pypi.org/simple \
+              "numpyro_forecast==${{ github.ref_name }}" && break
+            echo "Not on TestPyPI yet (attempt $attempt); retrying in 15s..."
+            sleep 15
+          done
+          venv-testpypi/bin/python -c "import numpyro_forecast as nf; assert nf.__version__ == '${{ github.ref_name }}', nf.__version__; print(nf.__version__)"
+
+  publish:
+    name: upload to PyPI
+    needs: [build, testpypi]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
