@@ -109,11 +109,6 @@ print("forecast samples:", samples.shape)
 print("CRPS:", eval_crps(samples, truth[t_obs:]))
 ```
 
-> **`rng_key` comes first.** Following the JAX/NumPyro convention, every function
-> that consumes randomness (`Forecaster`, `HMCForecaster`, `fit_svi`, `fit_mcmc`,
-> `forecast`, `draw_posterior`, `backtest`, ...) takes the `PRNGKey` as its first
-> argument.
-
 ## Two APIs: functional core and OOP shim
 
 The package is built around a **pure functional core** (`numpyro_forecast.functional`)
