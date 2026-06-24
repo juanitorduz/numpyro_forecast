@@ -55,7 +55,10 @@ dev = [
     "prek>=0.4.5",
     "ty>=0.0.49",
 ]
-all = ["numpyro_forecast[dataframes,dev]"]
+docs = [
+    "great-docs>=0.14",
+]
+all = ["numpyro_forecast[dataframes,dev,docs]"]
 
 [project.urls]
 Homepage = "https://juanitorduz.github.io"
@@ -99,7 +102,7 @@ convention = "numpy"
     "D",
     "S101",
 ]
-"examples/*" = [
+"docs/examples/*" = [
     "B018",
     "D103",
     "E402",

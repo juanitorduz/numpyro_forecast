@@ -1,0 +1,178 @@
+# Great Docs Configuration
+# See https://posit-dev.github.io/great-docs/user-guide/configuration.html
+
+# Module Name (optional)
+# ----------------------
+# Set this if your importable module name differs from the project name.
+# Example: project 'py-yaml12' with module name 'yaml12'
+# module: yaml12
+
+# Docstring Parser
+# ----------------
+# The docstring format used in your package (numpy, google, or sphinx)
+parser: numpy
+
+# Dynamic Introspection
+# ---------------------
+# Use runtime introspection for more accurate documentation (default: true)
+# Set to false if your package has cyclic alias issues (e.g., PyO3/Rust bindings)
+dynamic: true
+
+# API Discovery Settings
+# ----------------------
+# Exclude items from auto-documentation
+exclude:
+  - __version__
+
+# Logo & Favicon
+# ---------------
+# Point to a single logo file (replaces the text title in the navbar):
+# logo: assets/logo.svg
+#
+# For light/dark variants:
+# logo:
+#   light: assets/logo-light.svg
+#   dark: assets/logo-dark.svg
+#
+# To show the text title alongside the logo, add: show_title: true
+
+# Author Information
+# ------------------
+# Author metadata for display in the landing page sidebar
+# You can add additional fields: github, orcid, affiliation, homepage
+authors:
+  - name: Juan Orduz
+    role: Author
+    # affiliation:
+    email: juanitorduz@gmail.com
+    # github:
+    # orcid:
+    # homepage:
+
+# Funding / Copyright Holder
+# --------------------------
+# Credit the organization that funds or holds copyright for this package.
+# Displays in sidebar and footer. Homepage and ROR provide links.
+# funding:
+#   name: "Posit Software, PBC"
+#   roles:
+#     - Copyright holder
+#     - funder
+#   homepage: https://posit.co
+#   ror: https://ror.org/03wc8by49
+
+# API Reference Structure
+# -----------------------
+# Customize the sections below to organize your API documentation.
+# - Reorder items within a section to change their display order
+# - Move items between sections or create new sections
+# - Use 'members: false' to exclude methods from documentation
+# - Add 'desc:' to sections for descriptions
+
+reference:
+  - title: Forecasters
+    desc: High-level interfaces for fitting and forecasting.
+    contents:
+      - forecaster.Forecaster
+      - forecaster.HMCForecaster
+
+  - title: Models
+    desc: Building forecasting models (object-oriented and functional).
+    contents:
+      - forecaster.ForecastingModel
+      - functional.forecasting_model
+
+  - title: Functional core
+    desc: Pure functional primitives for the train/forecast split.
+    contents:
+      - functional.Horizon
+      - functional.time_series
+      - functional.predict
+      - functional.fit_svi
+      - functional.draw_posterior
+      - functional.fit_mcmc
+      - functional.forecast
+      - functional.SVIFit
+      - functional.MCMCFit
+
+  - title: Backtesting & evaluation
+    desc: Rolling-window backtesting and forecast metrics.
+    contents:
+      - evaluate.backtest
+      - evaluate.BacktestResult
+      - evaluate.eval_crps
+      - evaluate.eval_mae
+      - evaluate.eval_rmse
+      - evaluate.eval_coverage
+      - metrics.crps_empirical
+
+  - title: Utilities
+    desc: Array helpers and feature builders.
+    contents:
+      - util.fourier_features
+      - util.periodic_repeat
+      - util.zero_data_like
+      - util.concat_future
+      - util.shift_loc
+      - util.slice_time
+      - util.prefix_condition
+
+  - title: Datasets
+    desc: Example datasets used in the tutorials.
+    contents:
+      - datasets.load_bart_weekly
+      - datasets.load_bart_hierarchical
+      - datasets.bart_available
+
+# Example notebooks live in docs/examples/. The .qmd wrapper pages that embed
+# their stored outputs are generated at build time by scripts/build_docs.py
+# (no re-execution), so only the notebooks themselves are committed.
+sections:
+  - title: Examples
+    dir: docs/examples
+    index: true
+    index_columns: 2
+
+# GitHub Integration
+# ------------------
+# Repository URL is auto-detected from the git remote / pyproject URLs.
+github_style: widget
+
+# Site URL
+# --------
+# Canonical address of the deployed documentation site.
+# Required for subdirectory deployments, skills page install commands,
+# .well-known/ discovery, and sitemaps.
+site_url: "https://juanitorduz.github.io/numpyro_forecast/"
+
+# Make embedded notebook output images responsive so wide matplotlib figures
+# fit the content column instead of overflowing (they carry explicit
+# width/height attributes and lack Bootstrap's .img-fluid class).
+include_in_header:
+  - text: |
+      <style>
+      .cell-output-display img { max-width: 100%; height: auto; }
+      </style>
+
+# Site Settings
+# -------------
+# site:
+#   theme: flatly              # Quarto theme (default: flatly)
+#   toc: true                  # Show table of contents (default: true)
+#   toc-depth: 2               # TOC heading depth (default: 2)
+#   toc-title: On this page    # TOC title (default: "On this page")
+
+# Jupyter Kernel
+# --------------
+# Jupyter kernel to use for executing code cells in .qmd files.
+# This is set at the project level so it applies to all pages, including
+# auto-generated API reference pages. Can be overridden in individual .qmd
+# file frontmatter if needed for special cases.
+jupyter: python3
+
+# CLI Documentation
+# -----------------
+# cli:
+#   enabled: true              # Enable CLI documentation
+#   module: my_package.cli     # Module containing Click commands
+#   name: cli                  # Name of the Click command object
