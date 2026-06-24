@@ -43,7 +43,7 @@ jobs:
 
   # Production site: publish to the root of gh-pages on pushes to main.
   deploy-main:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     steps:
