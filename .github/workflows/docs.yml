@@ -14,7 +14,7 @@ permissions:
 
 # Allow one concurrent deployment; don't cancel an in-progress publish.
 concurrency:
-  group: pages
+  group: github-pages
   cancel-in-progress: false
 
 jobs:

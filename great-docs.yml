@@ -124,9 +124,9 @@ reference:
       - datasets.load_bart_hierarchical
       - datasets.bart_available
 
-# Example notebooks. They live under docs/examples/_notebooks/; each is shown
-# via a thin .qmd wrapper that embeds the notebook's stored outputs (no
-# re-execution at build time).
+# Example notebooks live in docs/examples/. The .qmd wrapper pages that embed
+# their stored outputs are generated at build time by scripts/build_docs.py
+# (no re-execution), so only the notebooks themselves are committed.
 sections:
   - title: Examples
     dir: docs/examples

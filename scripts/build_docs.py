@@ -76,7 +76,7 @@ def generate_pages() -> list[Path]:
         wrapper = EXAMPLES_DIR / f"{notebook.stem}.qmd"
         title = notebook_title(notebook)
         wrapper.write_text(
-            f"---\ntitle: {title}\n---\n\n{{{{< embed _src/{notebook.name} echo=true >}}}}\n",
+            f"---\ntitle: {json.dumps(title)}\n---\n\n{{{{< embed _src/{notebook.name} echo=true >}}}}\n",
             encoding="utf-8",
         )
         created.append(wrapper)
