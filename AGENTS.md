@@ -41,6 +41,12 @@ For the tests, we use `pytest`.
 
 We use Numpy-like docstrings: https://numpydoc.readthedocs.io/en/latest/format.html
 
+## Documentation
+
+The docs site is built with [great-docs](https://github.com/posit-dev/great-docs) (config in `great-docs.yml`) and published to https://juanitorduz.github.io/numpyro_forecast/. Build it locally with `make docs` (or `make docs-preview`).
+
+The API reference is a curated list under the `reference:` section of `great-docs.yml`. **When you add (or rename/remove) a public function or class in any module, update `reference:` accordingly** by adding its `module.name` to the right section. `tests/test_docs_reference.py` enforces this: it fails if a public symbol is missing from the reference, or if a listed name no longer exists. New example notebooks just go in `docs/examples/` (the `.qmd` wrappers are generated at build time by `scripts/build_docs.py`).
+
 ## Writing
 
 ### No em-dashes
@@ -75,4 +81,10 @@ uv run ruff check . && uv run ruff format --check .
 uv run ty check numpyro_forecast/
 # Run tests
 uv run pytest
+# Build the documentation site (output in great-docs/_site/)
+make docs
+# Preview the documentation locally with live reload
+make docs-preview
 ```
+
+Building the docs requires [Quarto](https://quarto.org/docs/get-started/) to be installed (a system binary, separate from the Python dependencies).
