@@ -58,6 +58,11 @@ jobs:
         with:
           name: docs-site
           path: great-docs/_site
+      # GitHub Pages runs Jekyll on branch deploys, which drops files whose
+      # names start with "_" (e.g. the embedded-notebook figures named
+      # _src-*.png). .nojekyll at the site root disables Jekyll branch-wide.
+      - name: Disable Jekyll
+        run: touch great-docs/_site/.nojekyll
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
