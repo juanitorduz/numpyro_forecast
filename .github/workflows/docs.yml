@@ -12,9 +12,12 @@ on:
 permissions:
   contents: read
 
-# Serialize writes to gh-pages so jobs never race the branch.
+# Scope concurrency per PR (and per branch for pushes) so the production deploy
+# on a merge's push event is never cancelled by the same PR's "closed" run.
+# Both deploy actions retry on a rejected push, so this won't cause gh-pages
+# races. cancel-in-progress stays false so an in-flight publish always finishes.
 concurrency:
-  group: gh-pages-deploy
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
