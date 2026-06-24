@@ -1,5 +1,0 @@
----
-title: Univariate forecasting
----
-
-{{< embed _notebooks/forecasting_univariate.ipynb echo=true >}}
