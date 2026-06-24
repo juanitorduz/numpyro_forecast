@@ -1,0 +1,49 @@
+name: prune-deployments
+
+# GitHub creates a `github-pages` deployment record on every push to the
+# gh-pages branch (each PR preview and each production publish), and never
+# deletes them. This workflow prunes the old ones, keeping the most recent few.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # weekly, Monday 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  deployments: write
+
+concurrency:
+  group: prune-deployments
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete stale github-pages deployments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP: "10" # number of most-recent deployments to retain
+        run: |
+          set -euo pipefail
+          ids=$(gh api --paginate \
+            "repos/$REPO/deployments?environment=github-pages&per_page=100" \
+            --jq '.[].id' | sort -rn)
+          n=0
+          while read -r id; do
+            [ -z "$id" ] && continue
+            n=$((n + 1))
+            if [ "$n" -le "$KEEP" ]; then
+              continue
+            fi
+            # A deployment must be inactive before it can be deleted.
+            gh api -X POST "repos/$REPO/deployments/$id/statuses" \
+              -f state=inactive >/dev/null 2>&1 || true
+            if gh api -X DELETE "repos/$REPO/deployments/$id" >/dev/null 2>&1; then
+              echo "deleted deployment $id"
+            else
+              echo "could not delete $id (skipped)"
+            fi
+          done <<< "$ids"
+          echo "Kept the $KEEP most recent github-pages deployments."
