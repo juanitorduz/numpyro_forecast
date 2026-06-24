@@ -1,0 +1,51 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so great-docs can date pages
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - uses: quarto-dev/quarto-actions/setup@v2
+      # Installs the package + the docs extra (great-docs) so the API
+      # reference can import numpyro_forecast.
+      - run: make setup
+      # Notebooks render from their stored outputs, so MCMC does not run here.
+      - name: Build docs
+        run: make docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: great-docs/_site
+
+  # Deploy only on pushes to main; pull requests build as a smoke check.
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
