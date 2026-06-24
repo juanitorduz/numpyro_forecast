@@ -145,6 +145,15 @@ github_style: widget
 # .well-known/ discovery, and sitemaps.
 site_url: "https://juanitorduz.github.io/numpyro_forecast/"
 
+# Make embedded notebook output images responsive so wide matplotlib figures
+# fit the content column instead of overflowing (they carry explicit
+# width/height attributes and lack Bootstrap's .img-fluid class).
+include_in_header:
+  - text: |
+      <style>
+      .cell-output-display img { max-width: 100%; height: auto; }
+      </style>
+
 # Site Settings
 # -------------
 # site:
