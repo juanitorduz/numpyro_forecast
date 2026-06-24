@@ -5,20 +5,22 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write # push the built site to the gh-pages branch
+  pull-requests: write # post the sticky preview comment
 
-# Allow one concurrent deployment; don't cancel an in-progress publish.
+# Serialize writes to gh-pages so jobs never race the branch.
 concurrency:
-  group: github-pages
+  group: gh-pages-deploy
   cancel-in-progress: false
 
 jobs:
   build:
+    # No need to rebuild when a PR is merely closed (we only clean up then).
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -34,18 +36,52 @@ jobs:
       # Notebooks render from their stored outputs, so MCMC does not run here.
       - name: Build docs
         run: make docs
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
+          name: docs-site
           path: great-docs/_site
 
-  # Deploy only on pushes to main; pull requests build as a smoke check.
-  deploy:
-    needs: build
+  # Production site: publish to the root of gh-pages on pushes to main.
+  deploy-main:
     if: github.event_name != 'pull_request'
+    needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: great-docs/_site
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: great-docs/_site
+          # Never wipe open PR previews when refreshing the production site.
+          clean-exclude: |
+            pr-preview
+            pr-preview/**
+
+  # PR preview: publish to gh-pages/pr-preview/pr-<N>/ and comment the link.
+  preview:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: great-docs/_site
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./great-docs/_site
+
+  # Remove the preview folder when the PR is closed or merged.
+  preview-cleanup:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ./great-docs/_site
+          action: remove
