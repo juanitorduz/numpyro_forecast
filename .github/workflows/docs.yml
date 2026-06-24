@@ -8,9 +8,9 @@ on:
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
+# Read-only by default; each job opts into only the writes it needs.
 permissions:
-  contents: write # push the built site to the gh-pages branch
-  pull-requests: write # post the sticky preview comment
+  contents: read
 
 # Serialize writes to gh-pages so jobs never race the branch.
 concurrency:
@@ -46,6 +46,8 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the built site to the gh-pages branch
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -65,6 +67,9 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the preview to the gh-pages branch
+      pull-requests: write # post the sticky preview comment
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
@@ -79,6 +84,9 @@ jobs:
   preview-cleanup:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # remove the preview folder from the gh-pages branch
+      pull-requests: write # update the sticky comment to note removal
     steps:
       - uses: actions/checkout@v6
       - uses: rossjrw/pr-preview-action@v1
