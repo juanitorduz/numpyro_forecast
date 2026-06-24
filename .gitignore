@@ -226,6 +226,7 @@ uv.lock
 
 # great-docs ephemeral build output
 /great-docs/
-# Example wrappers are generated at build time by scripts/build_docs.py
+# Example pages are generated at build time by scripts/build_docs.py
 /docs/examples/*.qmd
+/docs/examples/_src/
 .DS_Store
