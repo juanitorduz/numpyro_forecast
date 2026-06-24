@@ -1,0 +1,5 @@
+---
+title: Hierarchical forecasting II
+---
+
+{{< embed _notebooks/hierarchical_forecasting_2.ipynb echo=true >}}

@@ -2,7 +2,7 @@
 
 These two models previously lived in the ``numpyro_forecast.models`` package. They
 were moved here when that module was removed in favour of defining models directly
-in the example notebooks (``examples/``). They are retained as a regression target
+in the example notebooks (``docs/examples/``). They are retained as a regression target
 for :mod:`tests.test_examples`.
 """
 

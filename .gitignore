@@ -220,3 +220,10 @@ __marimo__/
 #uv
 .venv/
 uv.lock
+
+**/.quarto/
+**/*.quarto_ipynb
+
+# great-docs ephemeral build output
+/great-docs/
+.DS_Store
