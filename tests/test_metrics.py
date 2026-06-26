@@ -1,6 +1,7 @@
 """Tests for the empirical CRPS implementation."""
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax import Array, random
 from jaxtyping import TypeCheckError
@@ -22,6 +23,29 @@ def test_crps_matches_brute_force(rng_key: Array) -> None:
     expected = _brute_force_crps(pred, truth)
     assert got.shape == (3, 4)
     assert jnp.allclose(got, expected, atol=1e-5)
+
+
+def test_crps_large_sample_no_int_overflow(rng_key: Array) -> None:
+    # With n past ~46k both the rank weight ``i * (n - i)`` and the ``n ** 2``
+    # normalization overflow int32 if computed as integers, which silently
+    # corrupts (or raises in) the CRPS. Compare against an overflow-free float64
+    # NumPy reference built from the same sorted-sample identity.
+    n = 100_001
+    pred = random.normal(rng_key, (n, 1))
+    truth = jnp.array([0.3])
+    got = crps_empirical(pred, truth)
+
+    pred_np = np.asarray(pred, dtype=np.float64)
+    truth_np = np.asarray(truth, dtype=np.float64)
+    pred_sorted = np.sort(pred_np, axis=0)
+    diff = pred_sorted[1:] - pred_sorted[:-1]
+    i = np.arange(1, n, dtype=np.float64)
+    weight = (i * (n - i))[:, None]
+    absolute_error = np.abs(pred_np - truth_np).mean(axis=0)
+    reference = absolute_error - (diff * weight).sum(axis=0) / n**2
+
+    assert bool(jnp.all(got >= 0.0))
+    assert jnp.allclose(got, jnp.asarray(reference), atol=1e-4)
 
 
 def test_crps_deterministic_prediction_is_absolute_error() -> None:

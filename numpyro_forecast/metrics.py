@@ -19,12 +19,16 @@ def _crps_empirical(
     num_samples = pred.shape[0]
     pred_sorted = jnp.sort(pred, axis=0)
     diff = pred_sorted[1:] - pred_sorted[:-1]
-    # Cast the integer rank weights to the data dtype: for large sample counts
-    # the i * (n - i) product would otherwise overflow int32.
-    weight = (jnp.arange(1, num_samples) * jnp.arange(num_samples - 1, 0, -1)).astype(pred.dtype)
-    weight = weight.reshape(weight.shape + (1,) * (diff.ndim - 1))
+    # Build the rank weights i * (n - i) in the data dtype. The cast must precede
+    # the multiply: an int32 * int32 product overflows (to negative values) for
+    # large sample counts, and casting the overflowed result would not recover it.
+    lower = jnp.arange(1, num_samples, dtype=pred.dtype)
+    upper = jnp.arange(num_samples - 1, 0, -1, dtype=pred.dtype)
+    weight = (lower * upper).reshape((num_samples - 1,) + (1,) * (diff.ndim - 1))
     absolute_error = jnp.abs(pred - truth).mean(axis=0)
-    return absolute_error - (diff * weight).sum(axis=0) / num_samples**2
+    # Normalize in the data dtype too: a Python ``num_samples ** 2`` constant
+    # overflows int32 inside the jitted kernel once ``num_samples`` exceeds ~46k.
+    return absolute_error - (diff * weight).sum(axis=0) / jnp.asarray(num_samples, pred.dtype) ** 2
 
 
 def crps_empirical(

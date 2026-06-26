@@ -186,7 +186,7 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     return slice_time(noise_dist, slice(t, None))
 
 
-@lru_cache
+@lru_cache(maxsize=128)
 def _fourier_features(
     duration: int,
     period: float,
