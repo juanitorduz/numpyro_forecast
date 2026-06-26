@@ -1,0 +1,63 @@
+# numpyro_forecast
+
+> A JAX/NumPyro port of Pyro's forecasting module.
+
+## Docs
+
+### API Reference
+
+#### Forecasters
+> High-level interfaces for fitting and forecasting.
+
+- [forecaster.Forecaster](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.Forecaster.html)
+- [forecaster.HMCForecaster](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.HMCForecaster.html)
+
+#### Models
+> Building forecasting models (object-oriented and functional).
+
+- [forecaster.ForecastingModel](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.ForecastingModel.html)
+- [functional.forecasting_model](https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecasting_model.html)
+
+#### Functional core
+> Pure functional primitives for the train/forecast split.
+
+- [functional.Horizon](https://juanitorduz.github.io/numpyro_forecast/reference/functional.Horizon.html)
+- [functional.time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.time_series.html)
+- [functional.predict](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict.html)
+- [functional.fit_svi](https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_svi.html)
+- [functional.draw_posterior](https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html)
+- [functional.fit_mcmc](https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_mcmc.html)
+- [functional.forecast](https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecast.html)
+- [functional.SVIFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.SVIFit.html)
+- [functional.MCMCFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.MCMCFit.html)
+
+#### Backtesting & evaluation
+> Rolling-window backtesting and forecast metrics.
+
+- [evaluate.backtest](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html)
+- [evaluate.BacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html)
+- [evaluate.evaluate_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html)
+- [evaluate.eval_crps](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html)
+- [evaluate.eval_mae](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_mae.html)
+- [evaluate.eval_rmse](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_rmse.html)
+- [evaluate.eval_coverage](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_coverage.html)
+- [metrics.crps_empirical](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.crps_empirical.html)
+
+#### Utilities
+> Array helpers and feature builders.
+
+- [util.fourier_features](https://juanitorduz.github.io/numpyro_forecast/reference/util.fourier_features.html)
+- [util.periodic_repeat](https://juanitorduz.github.io/numpyro_forecast/reference/util.periodic_repeat.html)
+- [util.zero_data_like](https://juanitorduz.github.io/numpyro_forecast/reference/util.zero_data_like.html)
+- [util.concat_future](https://juanitorduz.github.io/numpyro_forecast/reference/util.concat_future.html)
+- [util.shift_loc](https://juanitorduz.github.io/numpyro_forecast/reference/util.shift_loc.html)
+- [util.slice_time](https://juanitorduz.github.io/numpyro_forecast/reference/util.slice_time.html)
+- [util.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/util.prefix_condition.html)
+
+#### Datasets
+> Example datasets used in the tutorials.
+
+- [datasets.load_bart_weekly](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_weekly.html)
+- [datasets.load_bart_hierarchical](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_hierarchical.html)
+- [datasets.load_victoria_electricity](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_victoria_electricity.html)
+- [datasets.bart_available](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.bart_available.html)
