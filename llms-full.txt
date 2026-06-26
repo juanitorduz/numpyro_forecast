@@ -397,6 +397,30 @@ metrics
 params
     Mapping of scalar parameter name to value (when available).
 
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7fe0db248d50>, 'rmse': <function eval_rmse at 0x7fe0db249430>, 'crps': <function eval_crps at 0x7fe0db249b10>, 'coverage': <function eval_coverage at 0x7fe0db24a1f0>}) -> dict[str, float]
+
+Evaluate forecast samples against ground truth for several metrics at once.
+
+A one-call convenience that applies each metric in ``metrics`` to the same
+forecast samples and ground truth. It is the one-shot counterpart to
+:func:`backtest` and is also used internally by :func:`backtest` to score
+each rolling window.
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+truth
+    Ground-truth values with shape ``(*batch)``.
+metrics
+    Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`
+    (``mae``, ``rmse``, ``crps`` and ``coverage``).
+
+Returns
+-------
+dict[str, float]
+    Each metric name mapped to its value.
+
 eval_crps(pred: jax.Array, truth: jax.Array) -> float
 
 Empirical CRPS averaged over all data elements.
@@ -526,7 +550,7 @@ Returns
 Float[Array, "duration two_num_terms"]
     The design matrix of shape ``(duration, 2 * num_terms)``.
 
-periodic_repeat(x: jax.Array, duration: int, *, axis: int = -1) -> jax.Array
+periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int, *, axis: int = -1) -> jax.Array
 
 Tile a seasonal pattern to cover ``duration`` time steps.
 
@@ -534,6 +558,7 @@ Parameters
 ----------
 x
     Seasonal pattern; the repeated axis has length equal to the period.
+    Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
 duration
     Target length along ``axis``.
 axis
@@ -701,6 +726,25 @@ Raises
 ValueError
     If the requested ``train_days`` + ``test_weeks`` window exceeds the
     available history (which would otherwise wrap a negative slice index).
+
+load_victoria_electricity() -> tuple[jaxtyping.Float[Array, 'time 1'], jaxtyping.Float[Array, 'time']]
+
+Load hourly Victoria (Australia) electricity demand and temperature.
+
+The series covers the first eight weeks of 2014, sampled hourly, from the
+Victoria electricity demand dataset used in the TensorFlow Probability
+structural-time-series case study and in Hyndman and Athanasopoulos'
+*Forecasting: Principles and Practice*. The original half-hourly data is
+downsampled to hourly by taking every other step. The values are bundled as a
+small CSV next to this module.
+
+Returns
+-------
+demand : Float[Array, " time 1"]
+    Hourly electricity demand (GW) with time at axis ``-2`` and a single
+    observation dimension.
+temperature : Float[Array, " time"]
+    Hourly temperature (degrees Celsius), aligned with ``demand``.
 
 bart_available() -> bool
 

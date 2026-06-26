@@ -73,6 +73,9 @@ Backtest a forecasting model on a moving window of `(train, test)` data.
 [evaluate.BacktestResult](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult)  
 Per-window result of a `backtest()` run.
 
+[evaluate.evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)  
+Evaluate forecast samples against ground truth for several metrics at once.
+
 [evaluate.eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps)  
 Empirical CRPS averaged over all data elements.
 
@@ -128,6 +131,9 @@ Load total weekly BART ridership (log scale) for the univariate example.
 
 [datasets.load_bart_hierarchical()](datasets.load_bart_hierarchical.md#numpyro_forecast.datasets.load_bart_hierarchical)  
 Load the windowed hierarchical BART panel for the hierarchical example.
+
+[datasets.load_victoria_electricity()](datasets.load_victoria_electricity.md#numpyro_forecast.datasets.load_victoria_electricity)  
+Load hourly Victoria (Australia) electricity demand and temperature.
 
 [datasets.bart_available()](datasets.bart_available.md#numpyro_forecast.datasets.bart_available)  
 Return whether the BART dataset can be loaded (download succeeds).

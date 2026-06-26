@@ -36,6 +36,7 @@
 
 - [evaluate.backtest](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html)
 - [evaluate.BacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html)
+- [evaluate.evaluate_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html)
 - [evaluate.eval_crps](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html)
 - [evaluate.eval_mae](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_mae.html)
 - [evaluate.eval_rmse](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_rmse.html)
@@ -58,4 +59,5 @@
 
 - [datasets.load_bart_weekly](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_weekly.html)
 - [datasets.load_bart_hierarchical](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_hierarchical.html)
+- [datasets.load_victoria_electricity](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_victoria_electricity.html)
 - [datasets.bart_available](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.bart_available.html)

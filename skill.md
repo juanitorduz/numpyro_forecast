@@ -52,6 +52,7 @@ Rolling-window backtesting and forecast metrics.
 
 - `evaluate.backtest`
 - `evaluate.BacktestResult`
+- `evaluate.evaluate_forecast`
 - `evaluate.eval_crps`
 - `evaluate.eval_mae`
 - `evaluate.eval_rmse`
@@ -76,6 +77,7 @@ Example datasets used in the tutorials.
 
 - `datasets.load_bart_weekly`
 - `datasets.load_bart_hierarchical`
+- `datasets.load_victoria_electricity`
 - `datasets.bart_available`
 
 ## Resources
