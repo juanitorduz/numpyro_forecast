@@ -310,23 +310,17 @@ class ElectricityForecaster(ForecastingModel):
 
         # Hour-of-day effect, tiled over the horizon with periodic_repeat.
         scale_hour_of_day = numpyro.sample("scale_hour_of_day", dist.HalfNormal(scale=0.5))
-        hour_of_day_effect = cast(
-            "Array",
-            numpyro.sample(
-                "hour_of_day_effect",
-                dist.ZeroSumNormal(scale=scale_hour_of_day, event_shape=(24,)),
-            ),
+        hour_of_day_effect = numpyro.sample(
+            "hour_of_day_effect",
+            dist.ZeroSumNormal(scale=scale_hour_of_day, event_shape=(24,)),
         )
         hour_of_day_effect = periodic_repeat(hour_of_day_effect, duration, axis=-1)
 
         # Day-of-week effect, indexed by the calendar covariate.
         scale_day_of_week = numpyro.sample("scale_day_of_week", dist.HalfNormal(scale=0.5))
-        day_of_week_effect = cast(
-            "Array",
-            numpyro.sample(
-                "day_of_week_effect",
-                dist.ZeroSumNormal(scale=scale_day_of_week, event_shape=(7,)),
-            ),
+        day_of_week_effect = numpyro.sample(
+            "day_of_week_effect",
+            dist.ZeroSumNormal(scale=scale_day_of_week, event_shape=(7,)),
         )
 
         # Expected demand and a temperature-dependent Student-t noise scale.
@@ -334,7 +328,7 @@ class ElectricityForecaster(ForecastingModel):
             beta_temperature * temperature
             + intercept
             + hour_of_day_effect
-            + day_of_week_effect[day_of_week]
+            + jnp.take(day_of_week_effect, day_of_week)
         )
         scale = scale_factor * jnp.sqrt(temperature)
 
@@ -582,4 +576,4 @@ This effect plot coincides with the exploratory comment by Hyndman and Athanasop
 
 Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range \\15\\°C - 25\\°C\\.
 
-[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#03bbb4f7)
+[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#808b07f9)

@@ -397,7 +397,7 @@ metrics
 params
     Mapping of scalar parameter name to value (when available).
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7ff4afb2cd50>, 'rmse': <function eval_rmse at 0x7ff4afb2d430>, 'crps': <function eval_crps at 0x7ff4afb2db10>, 'coverage': <function eval_coverage at 0x7ff4afb2e1f0>}) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7ff2f3058d50>, 'rmse': <function eval_rmse at 0x7ff2f3059430>, 'crps': <function eval_crps at 0x7ff2f3059b10>, 'coverage': <function eval_coverage at 0x7ff2f305a1f0>}) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -549,7 +549,7 @@ Returns
 Float[Array, "duration two_num_terms"]
     The design matrix of shape ``(duration, 2 * num_terms)``.
 
-periodic_repeat(x: jax.Array, duration: int, *, axis: int = -1) -> jax.Array
+periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int, *, axis: int = -1) -> jax.Array
 
 Tile a seasonal pattern to cover ``duration`` time steps.
 
@@ -557,6 +557,7 @@ Parameters
 ----------
 x
     Seasonal pattern; the repeated axis has length equal to the period.
+    Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
 duration
     Target length along ``axis``.
 axis

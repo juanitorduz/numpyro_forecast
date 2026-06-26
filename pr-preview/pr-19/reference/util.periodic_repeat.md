@@ -19,8 +19,8 @@ util.periodic_repeat(
 ## Parameters
 
 
-`x: Array`  
-Seasonal pattern; the repeated axis has length equal to the period.
+`x: ArrayLike`  
+Seasonal pattern; the repeated axis has length equal to the period. Accepts any array-like (e.g. a raw `numpyro.sample` draw).
 
 `duration: int`  
 Target length along `axis`.
