@@ -3,6 +3,26 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.1.1
+
+*2026-06-26* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.1)
+
+
+## What's Changed
+
+- Add documentation site with great-docs by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/14
+- Fix production docs deploy + prune old deployments by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/15
+- Fix merge-time docs deploy cancellation + restore prune workflow by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/16
+- Add .nojekyll so notebook figures load on GitHub Pages by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/17
+- Add electricity demand forecasting example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/19
+- Add electricity forecasting calibration example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/20
+- Add coverage configuration to pyproject.toml by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/23
+- Overall improvements after the MVP phase by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/21
+- Bump version from 0.1.0 to 0.1.1 by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/24
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1](https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0...0.1.1)
+
+
 # 0.1.0
 
 *2026-06-23* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.0)
