@@ -11,6 +11,7 @@ from numpyro_forecast import (
     eval_crps,
     eval_mae,
     eval_rmse,
+    evaluate_forecast,
     forecasting_model,
 )
 
@@ -32,6 +33,7 @@ def test_public_api_is_importable() -> None:
         eval_crps,
         eval_mae,
         eval_rmse,
+        evaluate_forecast,
         forecasting_model,
     }
     assert all(obj is not None for obj in exported)
@@ -50,6 +52,7 @@ def test_all_matches_exported_names() -> None:
         "eval_crps",
         "eval_mae",
         "eval_rmse",
+        "evaluate_forecast",
         "forecasting_model",
     }
     for name in names:

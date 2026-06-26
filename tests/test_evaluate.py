@@ -77,6 +77,15 @@ def test_evaluate_forecast_honors_custom_metrics() -> None:
     assert report["mae"] == eval_mae(pred, truth)
 
 
+def test_evaluate_forecast_multidim_batch() -> None:
+    # Exercises the ``*batch`` part of the ``(sample, *batch)`` annotation.
+    pred = random.normal(random.PRNGKey(0), (200, 5, 2))  # (sample, time, obs)
+    truth = random.normal(random.PRNGKey(1), (5, 2))
+    report = evaluate_forecast(pred, truth)
+    assert set(report) == set(DEFAULT_METRICS)
+    assert all(isinstance(value, float) for value in report.values())
+
+
 def test_backtest_expanding_window(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
