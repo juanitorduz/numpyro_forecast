@@ -8,10 +8,7 @@ Usage
 
 ``` python
 evaluate.evaluate_forecast(
-    pred,
-    truth,
-    *,
-    metrics=None,
+    pred, truth, *, metrics=None, coverage_alpha=_DEFAULT_COVERAGE_ALPHA
 )
 ```
 
@@ -30,6 +27,9 @@ Ground-truth values with shape `(*batch)`.
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; when `None` defaults to `DEFAULT_METRICS` (`mae`, `rmse`, `crps` and `coverage`).
+
+`coverage_alpha: float = _DEFAULT_COVERAGE_ALPHA`    
+Nominal central-interval level for the default `coverage` metric (in `(0, 1)`, defaults to `0.9`). Only used on the default-metrics path; a custom `metrics` mapping controls its own coverage level.
 
 
 ## Returns

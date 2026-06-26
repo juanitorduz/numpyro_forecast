@@ -506,15 +506,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L139-L181" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L143-L190" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">evaluate_forecast</span>(
-    <span class="va">pred</span>,
-    <span class="va">truth</span>,
-    <span class="op">*</span>,
-    <span class="va">metrics</span><span class="op">=</span><span class="cn-none">None</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">evaluate_forecast</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">pred</span>, <span class="va">truth</span>, <span class="op">*</span>, <span class="va">metrics</span><span class="op">=</span><span class="cn-none">None</span>, <span class="va">coverage_alpha</span><span class="op">=</span><span class="va">_DEFAULT_COVERAGE_ALPHA</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>A one-call convenience that applies each metric in <code>metrics</code> to the same forecast samples and ground truth. It is the one-shot counterpart to <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> and is also used internally by <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> to score each rolling window.</p>
@@ -533,7 +530,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Mapping of metric name to function; when <code>None</code> defaults to <code>DEFAULT_METRICS</code> (<code>mae</code>, <code>rmse</code>, <code>crps</code> and <code>coverage</code>).
+<p>Mapping of metric name to function; when <code>None</code> defaults to <code>DEFAULT_METRICS</code> (<code>mae</code>, <code>rmse</code>, <code>crps</code> and <code>coverage</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">coverage_alpha</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">float</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">_DEFAULT_COVERAGE_ALPHA<br></span></code></dt>
+<dd>
+Nominal central-interval level for the default <code>coverage</code> metric (in <code>(0, 1)</code>, defaults to <code>0.9</code>). Only used on the default-metrics path; a custom <code>metrics</code> mapping controls its own coverage level.
 </dd>
 </dl>
 </div>

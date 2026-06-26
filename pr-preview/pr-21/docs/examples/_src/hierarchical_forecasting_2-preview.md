@@ -54,10 +54,6 @@ period = 24 * 7  # weekly seasonality (hours)
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
-
-
 # Read data
 
 We load the full windowed origin-destination panel (`log1p` counts, `90` training days plus `2` test weeks) in the package convention `(origin, time, destin)`, with time at axis `-2`. This is the same dataset as part I, but now we keep every destination instead of slicing one out.
@@ -259,7 +255,7 @@ fig.tight_layout();
     prior band shape: (500, 8, 504)
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_39442/3655919995.py:41: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68910/3655919995.py:41: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -377,7 +373,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_39442/2567810357.py:21: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68910/2567810357.py:21: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

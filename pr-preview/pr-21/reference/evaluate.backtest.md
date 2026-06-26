@@ -15,6 +15,7 @@ evaluate.backtest(
     *,
     forecaster_fn=Forecaster,
     metrics=None,
+    coverage_alpha=_DEFAULT_COVERAGE_ALPHA,
     transform=None,
     train_window=None,
     min_train_window=1,
@@ -48,6 +49,9 @@ Factory returning a fitted forecaster (defaults to [Forecaster](forecaster.Forec
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
+
+`coverage_alpha: float = _DEFAULT_COVERAGE_ALPHA`    
+Nominal central-interval level for the default `coverage` metric (in `(0, 1)`, defaults to `0.9`); forwarded to [evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast).
 
 `transform: Callable[[Array, Array], tuple[Array, Array]] | None = None`  
 Optional `(pred, truth) -> (pred, truth)` applied before metrics.

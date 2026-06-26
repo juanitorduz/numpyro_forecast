@@ -345,7 +345,7 @@ samples
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, coverage_alpha: float = 0.9, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -363,6 +363,9 @@ forecaster_fn
     Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
 metrics
     Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+coverage_alpha
+    Nominal central-interval level for the default ``coverage`` metric (in
+    ``(0, 1)``, defaults to ``0.9``); forwarded to :func:`evaluate_forecast`.
 transform
     Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
 train_window
@@ -405,7 +408,7 @@ metrics
 params
     Mapping of scalar parameter name to value (when available).
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, coverage_alpha: float = 0.9) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -423,6 +426,10 @@ truth
 metrics
     Mapping of metric name to function; when ``None`` defaults to
     :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
+coverage_alpha
+    Nominal central-interval level for the default ``coverage`` metric (in
+    ``(0, 1)``, defaults to ``0.9``). Only used on the default-metrics path;
+    a custom ``metrics`` mapping controls its own coverage level.
 
 Returns
 -------
