@@ -77,6 +77,18 @@ def test_evaluate_forecast_honors_custom_metrics() -> None:
     assert report["mae"] == eval_mae(pred, truth)
 
 
+def test_evaluate_forecast_honors_coverage_alpha() -> None:
+    # Samples symmetric on [-1, 1]; a truth at 0.85 sits inside the wide 0.9
+    # central band but outside the narrower 0.8 band, so coverage must differ.
+    pred = jnp.linspace(-1.0, 1.0, 101).reshape(101, 1)
+    truth = jnp.array([0.85])
+    report_80 = evaluate_forecast(pred, truth, coverage_alpha=0.8)
+    report_90 = evaluate_forecast(pred, truth, coverage_alpha=0.9)
+    assert report_80["coverage"] == eval_coverage(pred, truth, alpha=0.8)
+    assert report_90["coverage"] == eval_coverage(pred, truth, alpha=0.9)
+    assert report_80["coverage"] != report_90["coverage"]
+
+
 def test_evaluate_forecast_multidim_batch() -> None:
     # Exercises the ``*batch`` part of the ``(sample, *batch)`` annotation.
     pred = random.normal(random.PRNGKey(0), (200, 5, 2))  # (sample, time, obs)
