@@ -397,7 +397,7 @@ metrics
 params
     Mapping of scalar parameter name to value (when available).
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7f9b8a854bf0>, 'rmse': <function eval_rmse at 0x7f9b8a8552d0>, 'crps': <function eval_crps at 0x7f9b8a8559b0>, 'coverage': <function eval_coverage at 0x7f9b8a856090>}) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7ff4afb2cd50>, 'rmse': <function eval_rmse at 0x7ff4afb2d430>, 'crps': <function eval_crps at 0x7ff4afb2db10>, 'coverage': <function eval_coverage at 0x7ff4afb2e1f0>}) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 

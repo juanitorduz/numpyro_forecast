@@ -321,37 +321,29 @@ class ElectricityForecaster(ForecastingModel):
         temperature = covariates[..., 0]
         day_of_week = covariates[..., 1].astype("int32")
 
-        # Intercept. We ``cast`` the sampled sites so the static type checker sees
-        # arrays (``numpyro.sample`` is typed as a broad union).
-        intercept = cast("Array", numpyro.sample("intercept", dist.Normal(loc=0.0, scale=2.0)))
+        # Intercept.
+        intercept = numpyro.sample("intercept", dist.Normal(loc=0.0, scale=2.0))
 
         # GP parameters (amplitude and length-scale priors are the preliz maxent fits).
-        alpha = cast(
-            "float", numpyro.sample("alpha", dist.InverseGamma(concentration=6.66, rate=1.57))
-        )
-        length_scale = cast(
-            "float",
-            numpyro.sample("length_scale", dist.InverseGamma(concentration=11.0, rate=62.2)),
+        alpha = numpyro.sample("alpha", dist.InverseGamma(concentration=6.66, rate=1.57))
+        length_scale = numpyro.sample(
+            "length_scale", dist.InverseGamma(concentration=11.0, rate=62.2)
         )
         scale_factor = numpyro.sample("scale", dist.HalfNormal(scale=0.5))
         # Degrees of freedom for the Student-t likelihood.
         nu = numpyro.sample("nu", dist.Gamma(concentration=8.0, rate=3.0))
 
-        # Non-linear temperature effect as a Matérn 5/2 HSGP.
-        beta_temperature = cast(
-            "Array",
-            numpyro.deterministic(
-                "beta_temperature",
-                hsgp_matern(
-                    x=temperature,
-                    nu=5 / 2,
-                    alpha=alpha,
-                    length=length_scale,
-                    ell=self.ell,
-                    m=self.m,
-                ),
-            ),
+        # Non-linear temperature effect as a Matérn 5/2 HSGP. ``hsgp_matern`` is
+        # annotated for float hyperparameters, so we cast the sampled scalars.
+        beta_temperature = hsgp_matern(
+            x=temperature,
+            nu=5 / 2,
+            alpha=cast("float", alpha),
+            length=cast("float", length_scale),
+            ell=self.ell,
+            m=self.m,
         )
+        numpyro.deterministic("beta_temperature", beta_temperature)
 
         # Hour-of-day effect, tiled over the horizon with periodic_repeat.
         scale_hour_of_day = numpyro.sample("scale_hour_of_day", dist.HalfNormal(scale=0.5))
@@ -376,8 +368,8 @@ class ElectricityForecaster(ForecastingModel):
 
         # Expected demand and a temperature-dependent Student-t noise scale.
         mu = (
-            intercept
-            + beta_temperature * temperature
+            beta_temperature * temperature
+            + intercept
             + hour_of_day_effect
             + day_of_week_effect[day_of_week]
         )
