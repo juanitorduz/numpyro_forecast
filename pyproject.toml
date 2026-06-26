@@ -129,5 +129,16 @@ addopts = [
     "--color=yes",
 ]
 
+[tool.coverage.run]
+source = ["numpyro_forecast"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
 [tool.ty.environment]
 python-version = "3.12"
