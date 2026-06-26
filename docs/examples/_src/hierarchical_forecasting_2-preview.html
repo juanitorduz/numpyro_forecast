@@ -310,7 +310,7 @@
 <h1>Prepare notebook</h1>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [1]:</pre></div><div id="e32490cb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:24:25.017457Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:24:25.017315Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:24:26.347013Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:24:26.346601Z&quot;}}" data-execution_count="1">
+<div class="cell-container"><div class="cell-decorator"><pre>In [1]:</pre></div><div id="e32490cb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:57:38.656965Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:57:38.656798Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T17:57:40.004236Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T17:57:40.003629Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
@@ -347,10 +347,6 @@
 <span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
 <span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>period <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span>  <span class="co"># weekly seasonality (hours)</span></span></code></pre></div>
-<div class="cell-output cell-output-stderr">
-<pre><code>/Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-  from .autonotebook import tqdm as notebook_tqdm</code></pre>
-</div>
 </div></div>
 <div id="7652e333" class="cell markdown">
 <section id="read-data" class="level1">
@@ -358,17 +354,17 @@
 <p>We load the full windowed origin-destination panel (<code>log1p</code> counts, <code>90</code> training days plus <code>2</code> test weeks) in the package convention <code>(origin, time, destin)</code>, with time at axis <code>-2</code>. This is the same dataset as part I, but now we keep every destination instead of slicing one out.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="05603cea" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:24:26.348182Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:24:26.348065Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:24:27.271302Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:24:27.270880Z&quot;}}" data-execution_count="2">
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>y, split, stations <span class="op">=</span> load_bart_hierarchical()</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>n_origin, _, n_destin <span class="op">=</span> y.shape</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"data shape:"</span>, y.shape, <span class="st">"| split:"</span>, split)</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>antc <span class="op">=</span> stations.index(<span class="st">"ANTC"</span>)</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">8</span>):</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    ax.plot(np.asarray(y[i, :, antc]), lw<span class="op">=</span><span class="fl">0.8</span>, label<span class="op">=</span>stations[i])</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>ax.legend(ncol<span class="op">=</span><span class="dv">4</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Arrivals to ANTC (log1p), 8 origins"</span>, xlabel<span class="op">=</span><span class="st">"hour"</span>, ylabel<span class="op">=</span><span class="st">"log1p(# rides)"</span>)<span class="op">;</span></span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="05603cea" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:57:40.005870Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:57:40.005719Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T17:57:41.000728Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T17:57:41.000307Z&quot;}}" data-execution_count="2">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>y, split, stations <span class="op">=</span> load_bart_hierarchical()</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>n_origin, _, n_destin <span class="op">=</span> y.shape</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"data shape:"</span>, y.shape, <span class="st">"| split:"</span>, split)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>antc <span class="op">=</span> stations.index(<span class="st">"ANTC"</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">8</span>):</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    ax.plot(np.asarray(y[i, :, antc]), lw<span class="op">=</span><span class="fl">0.8</span>, label<span class="op">=</span>stations[i])</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>ax.legend(ncol<span class="op">=</span><span class="dv">4</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Arrivals to ANTC (log1p), 8 origins"</span>, xlabel<span class="op">=</span><span class="st">"hour"</span>, ylabel<span class="op">=</span><span class="st">"log1p(# rides)"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>data shape: (50, 2496, 50) | split: 2160</code></pre>
 </div>
@@ -386,26 +382,26 @@
 <p>As before, the last two weeks (<code>336</code> hours) are held out for testing. The covariates are dummy zeros over the whole panel: only their shape is read, to separate the in-sample window from the forecast horizon.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="a1f9d98b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:24:27.274406Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:24:27.274322Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:24:27.436543Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:24:27.435946Z&quot;}}" data-execution_count="3">
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>T0 <span class="op">=</span> <span class="dv">0</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>T1 <span class="op">=</span> split  <span class="co"># 2_160</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>T2 <span class="op">=</span> y.shape[<span class="dv">1</span>]  <span class="co"># 2_496</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>y_train <span class="op">=</span> y[:, T0:T1, :]</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>y_test <span class="op">=</span> y[:, T1:T2, :]</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>covariates <span class="op">=</span> jnp.zeros((n_origin, T2, n_destin))</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>covariates_train <span class="op">=</span> covariates[:, T0:T1, :]</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>time <span class="op">=</span> np.arange(T2)</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>time_train <span class="op">=</span> time[T0:T1]</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>time_test <span class="op">=</span> time[T1:T2]</span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"train:"</span>, y_train.shape, <span class="st">"test:"</span>, y_test.shape)</span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Christmas anomaly index (BART series starts 2011-01-01, hourly).</span></span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>dates <span class="op">=</span> pd.date_range(<span class="st">"2011-01-01"</span>, periods<span class="op">=</span><span class="dv">78_888</span>, freq<span class="op">=</span><span class="st">"h"</span>)[<span class="op">-</span>T2:]</span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>christmas <span class="op">=</span> np.flatnonzero((dates.month <span class="op">==</span> <span class="dv">12</span>) <span class="op">&amp;</span> (dates.day <span class="op">==</span> <span class="dv">25</span>))</span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>christmas_index <span class="op">=</span> <span class="bu">int</span>(christmas[<span class="dv">0</span>]) <span class="cf">if</span> <span class="bu">len</span>(christmas) <span class="cf">else</span> <span class="va">None</span></span>
-<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"christmas index:"</span>, christmas_index)</span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="a1f9d98b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:57:41.002789Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:57:41.002701Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T17:57:41.154612Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T17:57:41.154147Z&quot;}}" data-execution_count="3">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>T0 <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>T1 <span class="op">=</span> split  <span class="co"># 2_160</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>T2 <span class="op">=</span> y.shape[<span class="dv">1</span>]  <span class="co"># 2_496</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>y_train <span class="op">=</span> y[:, T0:T1, :]</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>y_test <span class="op">=</span> y[:, T1:T2, :]</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>covariates <span class="op">=</span> jnp.zeros((n_origin, T2, n_destin))</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>covariates_train <span class="op">=</span> covariates[:, T0:T1, :]</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>time <span class="op">=</span> np.arange(T2)</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>time_train <span class="op">=</span> time[T0:T1]</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>time_test <span class="op">=</span> time[T1:T2]</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"train:"</span>, y_train.shape, <span class="st">"test:"</span>, y_test.shape)</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Christmas anomaly index (BART series starts 2011-01-01, hourly).</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>dates <span class="op">=</span> pd.date_range(<span class="st">"2011-01-01"</span>, periods<span class="op">=</span><span class="dv">78_888</span>, freq<span class="op">=</span><span class="st">"h"</span>)[<span class="op">-</span>T2:]</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>christmas <span class="op">=</span> np.flatnonzero((dates.month <span class="op">==</span> <span class="dv">12</span>) <span class="op">&amp;</span> (dates.day <span class="op">==</span> <span class="dv">25</span>))</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>christmas_index <span class="op">=</span> <span class="bu">int</span>(christmas[<span class="dv">0</span>]) <span class="cf">if</span> <span class="bu">len</span>(christmas) <span class="cf">else</span> <span class="va">None</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"christmas index:"</span>, christmas_index)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>train: (50, 2160, 50) test: (50, 336, 50)
 christmas index: 2328</code></pre>
@@ -423,61 +419,61 @@ y \sim \mathcal{N}(\mu,\ \text{origin\_scale} + \text{destin\_scale}).
 <p>We declare three plates, <code>origin</code> (dim <code>-3</code>), <code>hour_of_week</code> (dim <code>-2</code>) and <code>destin</code> (dim <code>-1</code>), and open each effect under the plates it depends on. The per-destination level is sampled with <code>self.time_series(...)</code> under the <code>destin</code> plate, and the seasonal effect is tiled across the full horizon with <a href="../../../reference/util.periodic_repeat.html#numpyro_forecast.util.periodic_repeat" class="gdls-link gdls-code">periodic_repeat</a>. Broadcasting over the three plate dimensions assembles the <code>(origin, time, destin)</code> mean.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [4]:</pre></div><div id="8b271628" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:24:27.437653Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:24:27.437568Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:24:27.452242Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:24:27.451763Z&quot;}}" data-execution_count="4">
-<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> HierarchicalForecaster(ForecastingModel):</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Hierarchical OD model with per-station seasonality, drift and pairwise term."""</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, period: <span class="bu">int</span> <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.period <span class="op">=</span> period</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> model(<span class="va">self</span>, zero_data: Array <span class="op">|</span> <span class="va">None</span>, covariates: Array) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Define the hierarchical forecasting model."""</span></span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        n_origin <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">3</span>]</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        n_destin <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">1</span>]</span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>        duration <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">2</span>]</span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        origin_plate <span class="op">=</span> numpyro.plate(<span class="st">"origin"</span>, n_origin, dim<span class="op">=-</span><span class="dv">3</span>)</span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>        destin_plate <span class="op">=</span> numpyro.plate(<span class="st">"destin"</span>, n_destin, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        hour_plate <span class="op">=</span> numpyro.plate(<span class="st">"hour_of_week"</span>, <span class="va">self</span>.period, dim<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        drift_scale <span class="op">=</span> numpyro.sample(<span class="st">"drift_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">20.0</span>, <span class="fl">5.0</span>))</span>
-<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        destin_centered <span class="op">=</span> numpyro.sample(<span class="st">"destin_centered"</span>, dist.Uniform(<span class="fl">0.0</span>, <span class="fl">1.0</span>))</span>
-<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> origin_plate, hour_plate:</span>
-<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>            origin_seasonal <span class="op">=</span> numpyro.sample(<span class="st">"origin_seasonal"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">5.0</span>))</span>
-<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> hour_plate, destin_plate:</span>
-<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>            destin_seasonal <span class="op">=</span> numpyro.sample(<span class="st">"destin_seasonal"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">5.0</span>))</span>
-<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> destin_plate:</span>
-<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>            drift <span class="op">=</span> <span class="va">self</span>.time_series(</span>
-<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>                <span class="st">"drift"</span>,</span>
-<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>                <span class="kw">lambda</span>: dist.Normal(<span class="fl">0.0</span>, drift_scale),</span>
-<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>                reparam<span class="op">=</span>LocScaleReparam(centered<span class="op">=</span>destin_centered),</span>
-<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>        level <span class="op">=</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> origin_plate, destin_plate:</span>
-<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>            pairwise <span class="op">=</span> numpyro.sample(<span class="st">"pairwise"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>))</span>
-<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> origin_plate:</span>
-<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>            origin_scale <span class="op">=</span> numpyro.sample(<span class="st">"origin_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">5.0</span>, <span class="fl">5.0</span>))</span>
-<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> destin_plate:</span>
-<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>            destin_scale <span class="op">=</span> numpyro.sample(<span class="st">"destin_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">5.0</span>, <span class="fl">5.0</span>))</span>
-<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>        scale <span class="op">=</span> origin_scale <span class="op">+</span> destin_scale</span>
-<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>        seasonal <span class="op">=</span> cast(<span class="st">"Array"</span>, origin_seasonal <span class="op">+</span> destin_seasonal)</span>
-<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>        seasonal_repeat <span class="op">=</span> periodic_repeat(seasonal, duration, axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a>        prediction <span class="op">=</span> level <span class="op">+</span> seasonal_repeat <span class="op">+</span> pairwise</span>
-<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.predict(dist.Normal(<span class="fl">0.0</span>, scale), prediction)</span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [4]:</pre></div><div id="8b271628" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:57:41.155947Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:57:41.155856Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T17:57:41.171456Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T17:57:41.171032Z&quot;}}" data-execution_count="4">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> HierarchicalForecaster(ForecastingModel):</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Hierarchical OD model with per-station seasonality, drift and pairwise term."""</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, period: <span class="bu">int</span> <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.period <span class="op">=</span> period</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> model(<span class="va">self</span>, zero_data: Array <span class="op">|</span> <span class="va">None</span>, covariates: Array) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Define the hierarchical forecasting model."""</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        n_origin <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">3</span>]</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        n_destin <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">1</span>]</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>        duration <span class="op">=</span> covariates.shape[<span class="op">-</span><span class="dv">2</span>]</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>        origin_plate <span class="op">=</span> numpyro.plate(<span class="st">"origin"</span>, n_origin, dim<span class="op">=-</span><span class="dv">3</span>)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>        destin_plate <span class="op">=</span> numpyro.plate(<span class="st">"destin"</span>, n_destin, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>        hour_plate <span class="op">=</span> numpyro.plate(<span class="st">"hour_of_week"</span>, <span class="va">self</span>.period, dim<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>        drift_scale <span class="op">=</span> numpyro.sample(<span class="st">"drift_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">20.0</span>, <span class="fl">5.0</span>))</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>        destin_centered <span class="op">=</span> numpyro.sample(<span class="st">"destin_centered"</span>, dist.Uniform(<span class="fl">0.0</span>, <span class="fl">1.0</span>))</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> origin_plate, hour_plate:</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>            origin_seasonal <span class="op">=</span> numpyro.sample(<span class="st">"origin_seasonal"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">5.0</span>))</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> hour_plate, destin_plate:</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>            destin_seasonal <span class="op">=</span> numpyro.sample(<span class="st">"destin_seasonal"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">5.0</span>))</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> destin_plate:</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>            drift <span class="op">=</span> <span class="va">self</span>.time_series(</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>                <span class="st">"drift"</span>,</span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>                <span class="kw">lambda</span>: dist.Normal(<span class="fl">0.0</span>, drift_scale),</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>                reparam<span class="op">=</span>LocScaleReparam(centered<span class="op">=</span>destin_centered),</span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>        level <span class="op">=</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> origin_plate, destin_plate:</span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>            pairwise <span class="op">=</span> numpyro.sample(<span class="st">"pairwise"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>))</span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> origin_plate:</span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a>            origin_scale <span class="op">=</span> numpyro.sample(<span class="st">"origin_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">5.0</span>, <span class="fl">5.0</span>))</span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> destin_plate:</span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a>            destin_scale <span class="op">=</span> numpyro.sample(<span class="st">"destin_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">5.0</span>, <span class="fl">5.0</span>))</span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>        scale <span class="op">=</span> origin_scale <span class="op">+</span> destin_scale</span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>        seasonal <span class="op">=</span> cast(<span class="st">"Array"</span>, origin_seasonal <span class="op">+</span> destin_seasonal)</span>
+<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>        seasonal_repeat <span class="op">=</span> periodic_repeat(seasonal, duration, axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a>        prediction <span class="op">=</span> level <span class="op">+</span> seasonal_repeat <span class="op">+</span> pairwise</span>
+<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.predict(dist.Normal(<span class="fl">0.0</span>, scale), prediction)</span></code></pre></div>
 </div></div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="255c1759" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:24:27.453392Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:24:27.453321Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:24:27.611543Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:24:27.611085Z&quot;}}" data-execution_count="5">
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    HierarchicalForecaster(period<span class="op">=</span>period),</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, y_train),</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    render_distributions<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="255c1759" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:57:41.172654Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:57:41.172590Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T17:57:41.336633Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T17:57:41.335971Z&quot;}}" data-execution_count="5">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    HierarchicalForecaster(period<span class="op">=</span>period),</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, y_train),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    render_distributions<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="5">
 <div class="">
 <figure class="figure">
@@ -492,53 +488,53 @@ y \sim \mathcal{N}(\mu,\ \text{origin\_scale} + \text{destin\_scale}).
 <p>As usual (highly recommended!), we run prior predictive checks. The full panel is large, so we draw the samples in memory-bounded batches with the <code>batched_obs</code> helper and keep only what we plot (eight origins arriving at <code>ANTC</code>, last three training weeks). The prior ranges look reasonable, if anything a touch too wide.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="31f1cde3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:24:27.612706Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:24:27.612623Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:25:11.987785Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:25:11.987335Z&quot;}}" data-execution_count="6">
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hdi_bounds(samples: Array <span class="op">|</span> np.ndarray, prob: <span class="bu">float</span>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[np.ndarray, np.ndarray]:</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    arr <span class="op">=</span> np.asarray(samples)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    da <span class="op">=</span> xr.DataArray(arr[<span class="va">None</span>], dims<span class="op">=</span>[<span class="st">"chain"</span>, <span class="st">"draw"</span>, <span class="st">"time"</span>])</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    band <span class="op">=</span> az.hdi(da, prob<span class="op">=</span>prob)</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> band.sel(ci_bound<span class="op">=</span><span class="st">"lower"</span>).values, band.sel(ci_bound<span class="op">=</span><span class="st">"upper"</span>).values</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> batched_obs(make_pred, key, covariates, num_samples, batch_size, select<span class="op">=</span><span class="va">None</span>):</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    chunks <span class="op">=</span> []</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> start <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">0</span>, num_samples, batch_size):</span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>        n <span class="op">=</span> <span class="bu">min</span>(batch_size, num_samples <span class="op">-</span> start)</span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>        key, sub <span class="op">=</span> random.split(key)</span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>        obs <span class="op">=</span> make_pred(start, n)(sub, covariates)[<span class="st">"obs"</span>]</span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>        chunks.append(np.asarray(obs <span class="cf">if</span> select <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> select(obs)))</span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.concatenate(chunks, axis<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> HierarchicalForecaster(period<span class="op">=</span>period)</span>
-<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>n_plot <span class="op">=</span> <span class="dv">8</span></span>
-<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>lo <span class="op">=</span> T1 <span class="op">-</span> <span class="dv">3</span> <span class="op">*</span> period  <span class="co"># last three train weeks</span></span>
-<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>prior_band <span class="op">=</span> batched_obs(</span>
-<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> start, n: Predictive(model, num_samples<span class="op">=</span>n, return_sites<span class="op">=</span>[<span class="st">"obs"</span>]),</span>
-<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
-<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
-<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span><span class="dv">500</span>,</span>
-<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>    batch_size<span class="op">=</span><span class="dv">100</span>,</span>
-<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>    select<span class="op">=</span><span class="kw">lambda</span> o: o[:, :n_plot, lo:T1, antc],</span>
-<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"prior band shape:"</span>, prior_band.shape)</span>
-<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">4</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">10</span>), sharex<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, ax <span class="kw">in</span> <span class="bu">enumerate</span>(axes.ravel()):</span>
-<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> prob <span class="kw">in</span> [<span class="fl">0.94</span>, <span class="fl">0.5</span>]:</span>
-<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>        lower, upper <span class="op">=</span> hdi_bounds(prior_band[:, i, :].clip(<span class="bu">min</span><span class="op">=</span><span class="dv">0</span>), prob)</span>
-<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>        ax.fill_between(time_train[lo:T1], lower, upper, color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>)</span>
-<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>    ax.plot(time_train[lo:T1], np.asarray(y_train[i, lo:T1, antc]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>    ax.set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; ANTC"</span>, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
-<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"Prior predictive check (last 3 train weeks)"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)</span>
-<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="31f1cde3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:57:41.337935Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:57:41.337847Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T17:58:27.598340Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T17:58:27.597963Z&quot;}}" data-execution_count="6">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hdi_bounds(samples: Array <span class="op">|</span> np.ndarray, prob: <span class="bu">float</span>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[np.ndarray, np.ndarray]:</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    arr <span class="op">=</span> np.asarray(samples)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    da <span class="op">=</span> xr.DataArray(arr[<span class="va">None</span>], dims<span class="op">=</span>[<span class="st">"chain"</span>, <span class="st">"draw"</span>, <span class="st">"time"</span>])</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    band <span class="op">=</span> az.hdi(da, prob<span class="op">=</span>prob)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> band.sel(ci_bound<span class="op">=</span><span class="st">"lower"</span>).values, band.sel(ci_bound<span class="op">=</span><span class="st">"upper"</span>).values</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> batched_obs(make_pred, key, covariates, num_samples, batch_size, select<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    chunks <span class="op">=</span> []</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> start <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">0</span>, num_samples, batch_size):</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        n <span class="op">=</span> <span class="bu">min</span>(batch_size, num_samples <span class="op">-</span> start)</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>        key, sub <span class="op">=</span> random.split(key)</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        obs <span class="op">=</span> make_pred(start, n)(sub, covariates)[<span class="st">"obs"</span>]</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>        chunks.append(np.asarray(obs <span class="cf">if</span> select <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> select(obs)))</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.concatenate(chunks, axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> HierarchicalForecaster(period<span class="op">=</span>period)</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>n_plot <span class="op">=</span> <span class="dv">8</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>lo <span class="op">=</span> T1 <span class="op">-</span> <span class="dv">3</span> <span class="op">*</span> period  <span class="co"># last three train weeks</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>prior_band <span class="op">=</span> batched_obs(</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> start, n: Predictive(model, num_samples<span class="op">=</span>n, return_sites<span class="op">=</span>[<span class="st">"obs"</span>]),</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span><span class="dv">500</span>,</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>    batch_size<span class="op">=</span><span class="dv">100</span>,</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>    select<span class="op">=</span><span class="kw">lambda</span> o: o[:, :n_plot, lo:T1, antc],</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"prior band shape:"</span>, prior_band.shape)</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">4</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">14</span>, <span class="dv">10</span>), sharex<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, ax <span class="kw">in</span> <span class="bu">enumerate</span>(axes.ravel()):</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> prob <span class="kw">in</span> [<span class="fl">0.94</span>, <span class="fl">0.5</span>]:</span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>        lower, upper <span class="op">=</span> hdi_bounds(prior_band[:, i, :].clip(<span class="bu">min</span><span class="op">=</span><span class="dv">0</span>), prob)</span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>        ax.fill_between(time_train[lo:T1], lower, upper, color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>)</span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>    ax.plot(time_train[lo:T1], np.asarray(y_train[i, lo:T1, antc]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a>    ax.set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; ANTC"</span>, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"Prior predictive check (last 3 train weeks)"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)</span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>prior band shape: (500, 8, 504)</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_39442/3655919995.py:41: UserWarning: The figure layout has changed to tight
+<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68910/3655919995.py:41: UserWarning: The figure layout has changed to tight
   fig.tight_layout();</code></pre>
 </div>
 <div class="cell-output cell-output-display">
@@ -555,21 +551,21 @@ y \sim \mathcal{N}(\mu,\ \text{origin\_scale} + \text{destin\_scale}).
 <p>We fit the model with SVI through <a href="../../../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> (an <code>AutoNormal</code> guide with <code>Adam</code>). The panel is much larger than in part I, so this step takes a few minutes; the ELBO on a log scale should still settle into a clear plateau.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="9889ab8e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:25:11.990764Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:25:11.990677Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:27:11.659588Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:27:11.659048Z&quot;}}" data-execution_count="7">
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> Forecaster(</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    model,</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    y_train,</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    optim<span class="op">=</span>Adam(step_size<span class="op">=</span><span class="fl">0.1</span>),</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    num_steps<span class="op">=</span><span class="dv">10_000</span>,</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>ax.plot(forecaster.losses)</span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>ax.set_yscale(<span class="st">"log"</span>)</span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"ELBO loss"</span>, xlabel<span class="op">=</span><span class="st">"SVI step"</span>, ylabel<span class="op">=</span><span class="st">"loss"</span>)<span class="op">;</span></span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="9889ab8e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T17:58:27.601266Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T17:58:27.601173Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T18:00:27.043161Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T18:00:27.042598Z&quot;}}" data-execution_count="7">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> Forecaster(</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    model,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    y_train,</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    optim<span class="op">=</span>Adam(step_size<span class="op">=</span><span class="fl">0.1</span>),</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    num_steps<span class="op">=</span><span class="dv">10_000</span>,</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>ax.plot(forecaster.losses)</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>ax.set_yscale(<span class="st">"log"</span>)</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"ELBO loss"</span>, xlabel<span class="op">=</span><span class="st">"SVI step"</span>, ylabel<span class="op">=</span><span class="st">"loss"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
@@ -584,36 +580,36 @@ y \sim \mathcal{N}(\mu,\ \text{origin\_scale} + \text{destin\_scale}).
 <p>We draw the in-sample posterior predictive and the forecast, both in memory-bounded batches: the in-sample draws through <code>batched_obs</code>, the forecast through <a href="../../../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a>’s own <code>batch_size</code> argument. The full-panel train CRPS is accumulated one origin at a time so the intermediate arrays never blow up host memory. As before, predictions are clipped at zero (the <code>log1p</code> scale is non-negative) before scoring.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="085a2110" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:27:11.660726Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:27:11.660634Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:28:37.920463Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:28:37.914053Z&quot;}}" data-execution_count="8">
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">4</span>)</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>num_post <span class="op">=</span> <span class="dv">200</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>posterior_samples <span class="op">=</span> forecaster.guide.sample_posterior(</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    key_post, forecaster.params, sample_shape<span class="op">=</span>(num_post,)</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>train_pp <span class="op">=</span> batched_obs(</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> start, n: Predictive(</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>        model,</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>        posterior_samples<span class="op">=</span>tree_map(<span class="kw">lambda</span> x: x[start : start <span class="op">+</span> n], posterior_samples),</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>        return_sites<span class="op">=</span>[<span class="st">"obs"</span>],</span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    key_pp,</span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
-<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span>num_post,</span>
-<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    batch_size<span class="op">=</span><span class="dv">50</span>,</span>
-<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>)  <span class="co"># (num_post, origin, train, destin) on host</span></span>
-<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>forecast <span class="op">=</span> forecaster(key_fc, y_train, covariates, num_samples<span class="op">=</span>num_post, batch_size<span class="op">=</span><span class="dv">50</span>)</span>
-<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>forecast <span class="op">=</span> jnp.clip(forecast, <span class="bu">min</span><span class="op">=</span><span class="fl">0.0</span>)</span>
-<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Full-panel train CRPS, accumulated per origin to bound memory.</span></span>
-<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>train_crps_per_origin <span class="op">=</span> [</span>
-<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>    eval_crps(jnp.clip(jnp.asarray(train_pp[:, i]), <span class="bu">min</span><span class="op">=</span><span class="fl">0.0</span>), y_train[i]) <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(n_origin)</span>
-<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> <span class="bu">float</span>(np.mean(train_crps_per_origin))</span>
-<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast, y_test)</span>
-<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
-<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Test CRPS:  </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="085a2110" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T18:00:27.044477Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T18:00:27.044379Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T18:01:54.108889Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T18:01:54.108224Z&quot;}}" data-execution_count="8">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">4</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>num_post <span class="op">=</span> <span class="dv">200</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>posterior_samples <span class="op">=</span> forecaster.guide.sample_posterior(</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    key_post, forecaster.params, sample_shape<span class="op">=</span>(num_post,)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>train_pp <span class="op">=</span> batched_obs(</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> start, n: Predictive(</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>        model,</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>        posterior_samples<span class="op">=</span>tree_map(<span class="kw">lambda</span> x: x[start : start <span class="op">+</span> n], posterior_samples),</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>        return_sites<span class="op">=</span>[<span class="st">"obs"</span>],</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    key_pp,</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span>num_post,</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    batch_size<span class="op">=</span><span class="dv">50</span>,</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>)  <span class="co"># (num_post, origin, train, destin) on host</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>forecast <span class="op">=</span> forecaster(key_fc, y_train, covariates, num_samples<span class="op">=</span>num_post, batch_size<span class="op">=</span><span class="dv">50</span>)</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>forecast <span class="op">=</span> jnp.clip(forecast, <span class="bu">min</span><span class="op">=</span><span class="fl">0.0</span>)</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Full-panel train CRPS, accumulated per origin to bound memory.</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>train_crps_per_origin <span class="op">=</span> [</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>    eval_crps(jnp.clip(jnp.asarray(train_pp[:, i]), <span class="bu">min</span><span class="op">=</span><span class="fl">0.0</span>), y_train[i]) <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(n_origin)</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> <span class="bu">float</span>(np.mean(train_crps_per_origin))</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast, y_test)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Test CRPS:  </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Train CRPS: 0.2375
 Test CRPS:  0.2786</code></pre>
@@ -625,30 +621,30 @@ Test CRPS:  0.2786</code></pre>
 <p>Eight origins arriving at <code>ANTC</code>: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50% and 94% HDI bands, against the observed series, with the train/test split and the Christmas day band marked. With origin, destination and pairwise effects in play, the full panel is fit jointly, yet each individual origin-to-destination forecast still tracks its own weekly pattern. As in part I, Christmas is the visible soft spot, since the model has no holiday feature.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="89559c08" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-23T10:28:37.922661Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-23T10:28:37.922486Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-23T10:28:38.857481Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-23T10:28:38.857029Z&quot;}}" data-execution_count="9">
-<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>train_plot <span class="op">=</span> np.clip(train_pp[:, :n_plot, lo:T1, antc], <span class="dv">0</span>, <span class="va">None</span>)</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>forecast_plot <span class="op">=</span> np.asarray(forecast[:, :n_plot, :, antc])</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">8</span>, ncols<span class="op">=</span><span class="dv">1</span>, figsize<span class="op">=</span>(<span class="dv">15</span>, <span class="dv">18</span>), sharex<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, ax <span class="kw">in</span> <span class="bu">enumerate</span>(axes):</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> prob <span class="kw">in</span> [<span class="fl">0.94</span>, <span class="fl">0.5</span>]:</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>        lower, upper <span class="op">=</span> hdi_bounds(train_plot[:, i], prob)</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>        ax.fill_between(time_train[lo:T1], lower, upper, color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>)</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>        lower, upper <span class="op">=</span> hdi_bounds(forecast_plot[:, i], prob)</span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>        ax.fill_between(time_test, lower, upper, color<span class="op">=</span><span class="st">"C1"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>)</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    ax.plot(time[lo:T2], np.asarray(y[i, lo:T2, antc]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"truth"</span>)</span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    ax.axvline(T1, color<span class="op">=</span><span class="st">"C3"</span>, ls<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"train/test split"</span>)</span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> christmas_index <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>        ax.axvline(christmas_index, color<span class="op">=</span><span class="st">"C2"</span>, lw<span class="op">=</span><span class="dv">12</span>, alpha<span class="op">=</span><span class="fl">0.2</span>, label<span class="op">=</span><span class="st">"Christmas"</span>)</span>
-<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    ax.set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; ANTC"</span>, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
-<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].legend(loc<span class="op">=</span><span class="st">"upper left"</span>, fontsize<span class="op">=</span><span class="dv">9</span>)</span>
-<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>fig.suptitle(</span>
-<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">)"</span>,</span>
-<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">16</span>,</span>
-<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
+<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="89559c08" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T18:01:54.111177Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T18:01:54.111055Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T18:01:55.034582Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T18:01:55.034046Z&quot;}}" data-execution_count="9">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>train_plot <span class="op">=</span> np.clip(train_pp[:, :n_plot, lo:T1, antc], <span class="dv">0</span>, <span class="va">None</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>forecast_plot <span class="op">=</span> np.asarray(forecast[:, :n_plot, :, antc])</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">8</span>, ncols<span class="op">=</span><span class="dv">1</span>, figsize<span class="op">=</span>(<span class="dv">15</span>, <span class="dv">18</span>), sharex<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, ax <span class="kw">in</span> <span class="bu">enumerate</span>(axes):</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> prob <span class="kw">in</span> [<span class="fl">0.94</span>, <span class="fl">0.5</span>]:</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>        lower, upper <span class="op">=</span> hdi_bounds(train_plot[:, i], prob)</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>        ax.fill_between(time_train[lo:T1], lower, upper, color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>)</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>        lower, upper <span class="op">=</span> hdi_bounds(forecast_plot[:, i], prob)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        ax.fill_between(time_test, lower, upper, color<span class="op">=</span><span class="st">"C1"</span>, alpha<span class="op">=</span><span class="fl">0.2</span>)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    ax.plot(time[lo:T2], np.asarray(y[i, lo:T2, antc]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"truth"</span>)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    ax.axvline(T1, color<span class="op">=</span><span class="st">"C3"</span>, ls<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"train/test split"</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> christmas_index <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>        ax.axvline(christmas_index, color<span class="op">=</span><span class="st">"C2"</span>, lw<span class="op">=</span><span class="dv">12</span>, alpha<span class="op">=</span><span class="fl">0.2</span>, label<span class="op">=</span><span class="st">"Christmas"</span>)</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    ax.set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; ANTC"</span>, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].legend(loc<span class="op">=</span><span class="st">"upper left"</span>, fontsize<span class="op">=</span><span class="dv">9</span>)</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>fig.suptitle(</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">)"</span>,</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">16</span>,</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_39442/2567810357.py:21: UserWarning: The figure layout has changed to tight
+<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68910/2567810357.py:21: UserWarning: The figure layout has changed to tight
   fig.tight_layout();</code></pre>
 </div>
 <div class="cell-output cell-output-display">

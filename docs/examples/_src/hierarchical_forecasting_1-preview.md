@@ -53,10 +53,6 @@ period = 24 * 7  # weekly seasonality (hours)
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
-      from .autonotebook import tqdm as notebook_tqdm
-
-
 # Read data
 
 We load the windowed origin-destination panel (`log1p` counts, `90` training days plus `2` test weeks) and select arrivals to `EMBR` from every origin. The `log1p` transform tames the multiplicative growth while staying defined at zero rides, which matters for hourly counts. The result is a `(time, n_series)` array where each of the `50` origins is one series, time is at axis `-2`, and the series dimension is at axis `-1`.
@@ -220,7 +216,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_38920/814384823.py:23: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68824/814384823.py:23: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -327,7 +323,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_38920/1357336746.py:18: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68824/1357336746.py:18: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

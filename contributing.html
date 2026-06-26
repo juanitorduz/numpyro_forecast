@@ -233,7 +233,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li>Every function (public and private) must have complete input and return type hints. Type checking is enforced with <code>ty</code>.</li>
 <li>Every public function and class must have a NumPy-style docstring.</li>
-<li>Array shapes are annotated with <code>jaxtyping</code> (e.g.&nbsp;<code>Float[Array, "time obs"]</code>).</li>
+<li>Array shapes are annotated with <code>jaxtyping</code>, with a leading space in the shape string (e.g.&nbsp;<code>Float[Array, " time obs"]</code>).</li>
 <li>Follow the array convention: time at axis <code>-2</code>, the observation dim at <code>-1</code>, batch dims to the left.</li>
 <li>Add tests for new functionality. Keep one logical change per pull request.</li>
 </ul>

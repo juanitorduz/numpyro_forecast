@@ -11,7 +11,7 @@ evaluate.eval_coverage(
     pred,
     truth,
     *,
-    alpha=0.9,
+    alpha=_DEFAULT_COVERAGE_ALPHA,
 )
 ```
 
@@ -28,8 +28,8 @@ Forecast samples with the sample axis first.
 `truth: Array`  
 Ground-truth values (matching `pred` without the sample axis).
 
-`alpha: float = ``0.9`  
-Nominal interval level in `(0, 1)` (defaults to `0.9`).
+`alpha: float = _DEFAULT_COVERAGE_ALPHA`    
+Nominal interval level in `(0, 1)`; when omitted, uses the module default `_DEFAULT_COVERAGE_ALPHA`.
 
 
 ## Returns

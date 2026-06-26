@@ -43,3 +43,8 @@ Posterior samples of the latent sites, sample axis leading.
 
 `NotImplementedError`  
 If `fit` is of an unsupported type.
+
+
+## Notes
+
+For an [MCMCFit](functional.MCMCFit.md#numpyro_forecast.functional.MCMCFit), when `num_samples` does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an [SVIFit](functional.SVIFit.md#numpyro_forecast.functional.SVIFit) the draws are sampled afresh from the fitted guide.

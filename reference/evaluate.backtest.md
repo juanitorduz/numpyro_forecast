@@ -47,7 +47,7 @@ Factory returning a fresh [ForecastingModel](forecaster.ForecastingModel.md#nump
 Factory returning a fitted forecaster (defaults to [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster)).
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
+Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each function takes `(pred, truth)` and returns a float; bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
 
 `transform: Callable[[Array, Array], tuple[Array, Array]] | None = None`  
 Optional `(pred, truth) -> (pred, truth)` applied before metrics.
