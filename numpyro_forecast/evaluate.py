@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import jax.numpy as jnp
 from jax import random
+from jaxtyping import Float
 
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.metrics import crps_empirical
@@ -109,6 +110,37 @@ DEFAULT_METRICS: dict[str, Metric] = {
     "coverage": eval_coverage,
 }
 """Default metrics used by :func:`backtest`."""
+
+
+def evaluate_forecast(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+    *,
+    metrics: Mapping[str, Metric] = DEFAULT_METRICS,
+) -> dict[str, float]:
+    """Evaluate forecast samples against ground truth for several metrics at once.
+
+    A one-call convenience that applies each metric in ``metrics`` to the same
+    forecast samples and ground truth. It is the one-shot counterpart to
+    :func:`backtest` and is also used internally by :func:`backtest` to score
+    each rolling window.
+
+    Parameters
+    ----------
+    pred
+        Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+    truth
+        Ground-truth values with shape ``(*batch)``.
+    metrics
+        Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`
+        (``mae``, ``rmse``, ``crps`` and ``coverage``).
+
+    Returns
+    -------
+    dict[str, float]
+        Each metric name mapped to its value.
+    """
+    return {name: fn(pred, truth) for name, fn in metrics.items()}
 
 
 @dataclass(frozen=True)
@@ -271,7 +303,7 @@ def backtest(
                 num_samples=num_samples,
                 train_walltime=train_walltime,
                 test_walltime=test_walltime,
-                metrics={name: fn(pred, truth) for name, fn in metrics.items()},
+                metrics=evaluate_forecast(pred, truth, metrics=metrics),
                 params=_scalar_params(forecaster),
             )
         )

@@ -21,6 +21,7 @@ from numpyro_forecast.evaluate import (
     eval_crps,
     eval_mae,
     eval_rmse,
+    evaluate_forecast,
 )
 from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
 from numpyro_forecast.functional import forecasting_model
@@ -41,5 +42,6 @@ __all__ = [
     "eval_crps",
     "eval_mae",
     "eval_rmse",
+    "evaluate_forecast",
     "forecasting_model",
 ]

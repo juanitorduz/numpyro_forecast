@@ -1,10 +1,15 @@
-"""BART ridership dataset helpers.
+"""Dataset helpers for the example notebooks.
 
-Thin wrappers around :func:`numpyro.examples.datasets.load_bart_od` that return
-arrays in the package convention (time at axis ``-2``) for the two examples.
+The BART loaders are thin wrappers around
+:func:`numpyro.examples.datasets.load_bart_od`; :func:`load_victoria_electricity`
+reads a small bundled CSV. All return arrays in the package convention (time at
+axis ``-2``).
 """
 
+import importlib.resources
+
 import jax.numpy as jnp
+import numpy as np
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array
@@ -102,3 +107,31 @@ def load_bart_hierarchical(
     y = log_counts[:, t0:t_total, :]
     split = t1 - t0
     return y, split, stations
+
+
+def load_victoria_electricity() -> tuple[Float[Array, " time 1"], Float[Array, " time"]]:
+    """Load hourly Victoria (Australia) electricity demand and temperature.
+
+    The series covers the first eight weeks of 2014, sampled hourly, from the
+    Victoria electricity demand dataset used in the TensorFlow Probability
+    structural-time-series case study and in Hyndman and Athanasopoulos'
+    *Forecasting: Principles and Practice*. The original half-hourly data is
+    downsampled to hourly by taking every other step. The values are bundled as a
+    small CSV next to this module.
+
+    Returns
+    -------
+    demand : Float[Array, " time 1"]
+        Hourly electricity demand (GW) with time at axis ``-2`` and a single
+        observation dimension.
+    temperature : Float[Array, " time"]
+        Hourly temperature (degrees Celsius), aligned with ``demand``.
+    """
+    source = importlib.resources.files("numpyro_forecast").joinpath(
+        "data", "victoria_electricity.csv"
+    )
+    with source.open("r", encoding="utf-8") as handle:
+        table = np.loadtxt(handle, delimiter=",", skiprows=1, dtype=np.float32)
+    demand = jnp.asarray(table[:, 0])[:, None]
+    temperature = jnp.asarray(table[:, 1])
+    return demand, temperature

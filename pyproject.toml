@@ -50,6 +50,8 @@ dev = [
     "pytest-xdist",
     "nbmake>=1.5",
     "ipykernel>=6.29",
+    "jupytext>=1.16",
+    "preliz>=0.16",
     "graphviz>=0.20",
     "ruff>=0.4",
     "prek>=0.4.5",

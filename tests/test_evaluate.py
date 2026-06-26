@@ -13,6 +13,7 @@ from numpyro_forecast.evaluate import (
     eval_crps,
     eval_mae,
     eval_rmse,
+    evaluate_forecast,
 )
 from numpyro_forecast.forecaster import HMCForecaster
 
@@ -55,6 +56,34 @@ def test_eval_coverage_returns_float() -> None:
 
 def test_default_metrics_keys() -> None:
     assert set(DEFAULT_METRICS) == {"mae", "rmse", "crps", "coverage"}
+
+
+def test_evaluate_forecast_matches_individual_metrics() -> None:
+    pred = random.normal(random.PRNGKey(0), (200, 4))
+    truth = random.normal(random.PRNGKey(1), (4,))
+    report = evaluate_forecast(pred, truth)
+    assert set(report) == set(DEFAULT_METRICS)
+    assert report["mae"] == eval_mae(pred, truth)
+    assert report["rmse"] == eval_rmse(pred, truth)
+    assert report["crps"] == eval_crps(pred, truth)
+    assert report["coverage"] == eval_coverage(pred, truth)
+
+
+def test_evaluate_forecast_honors_custom_metrics() -> None:
+    pred = random.normal(random.PRNGKey(0), (50, 3))
+    truth = random.normal(random.PRNGKey(1), (3,))
+    report = evaluate_forecast(pred, truth, metrics={"mae": eval_mae})
+    assert set(report) == {"mae"}
+    assert report["mae"] == eval_mae(pred, truth)
+
+
+def test_evaluate_forecast_multidim_batch() -> None:
+    # Exercises the ``*batch`` part of the ``(sample, *batch)`` annotation.
+    pred = random.normal(random.PRNGKey(0), (200, 5, 2))  # (sample, time, obs)
+    truth = random.normal(random.PRNGKey(1), (5, 2))
+    report = evaluate_forecast(pred, truth)
+    assert set(report) == set(DEFAULT_METRICS)
+    assert all(isinstance(value, float) for value in report.values())
 
 
 def test_backtest_expanding_window(rng_key: Array) -> None:

@@ -10,6 +10,7 @@ from functools import singledispatch
 
 import jax.numpy as jnp
 import numpyro.distributions as dist
+from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array
@@ -203,13 +204,14 @@ def fourier_features(
     return jnp.concatenate([jnp.sin(angles), jnp.cos(angles)], axis=-1)
 
 
-def periodic_repeat(x: Array, duration: int, *, axis: int = -1) -> Array:
+def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:
     """Tile a seasonal pattern to cover ``duration`` time steps.
 
     Parameters
     ----------
     x
         Seasonal pattern; the repeated axis has length equal to the period.
+        Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
     duration
         Target length along ``axis``.
     axis
@@ -220,6 +222,7 @@ def periodic_repeat(x: Array, duration: int, *, axis: int = -1) -> Array:
     Array
         ``x`` periodically repeated to length ``duration`` along ``axis``.
     """
-    period = x.shape[axis]
+    array = jnp.asarray(x)
+    period = array.shape[axis]
     indices = jnp.arange(duration) % period
-    return jnp.take(x, indices, axis=axis)
+    return jnp.take(array, indices, axis=axis)
