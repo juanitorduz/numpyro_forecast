@@ -37,9 +37,8 @@ from numpyro.infer import Predictive, init_to_feasible
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel
+from numpyro_forecast import Forecaster, ForecastingModel, evaluate_forecast
 from numpyro_forecast.datasets import load_victoria_electricity
-from numpyro_forecast.evaluate import evaluate_forecast
 from numpyro_forecast.typing import Array
 from numpyro_forecast.util import periodic_repeat
 

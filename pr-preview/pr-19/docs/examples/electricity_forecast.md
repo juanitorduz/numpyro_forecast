@@ -36,9 +36,8 @@ from numpyro.infer import Predictive, init_to_feasible
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel
+from numpyro_forecast import Forecaster, ForecastingModel, evaluate_forecast
 from numpyro_forecast.datasets import load_victoria_electricity
-from numpyro_forecast.evaluate import evaluate_forecast
 from numpyro_forecast.typing import Array
 from numpyro_forecast.util import periodic_repeat
 
@@ -576,4 +575,4 @@ This effect plot coincides with the exploratory comment by Hyndman and Athanasop
 
 Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range \\15\\°C - 25\\°C\\.
 
-[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#808b07f9)
+[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#7639cf40)
