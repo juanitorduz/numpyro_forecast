@@ -121,7 +121,8 @@ def eval_coverage(pred: Array, truth: Array, *, alpha: float = _DEFAULT_COVERAGE
     truth
         Ground-truth values (matching ``pred`` without the sample axis).
     alpha
-        Nominal interval level in ``(0, 1)`` (defaults to ``0.9``).
+        Nominal interval level in ``(0, 1)``; when omitted, uses the module
+        default ``_DEFAULT_COVERAGE_ALPHA``.
 
     Returns
     -------

@@ -6,9 +6,8 @@ so new distribution families can be registered without modifying call sites —
 the functional analogue of Pyro's messenger-based dispatch.
 """
 
-from functools import partial, singledispatch
+from functools import lru_cache, singledispatch
 
-import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
@@ -187,13 +186,18 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     return slice_time(noise_dist, slice(t, None))
 
 
-@partial(jax.jit, static_argnums=(0, 1, 2))
+@lru_cache
 def _fourier_features(
     duration: int,
     period: float,
     num_terms: int,
 ) -> Float[Array, " duration two_num_terms"]:
-    """Jitted Fourier-feature core (all args static; see :func:`fourier_features`)."""
+    """Memoized Fourier-feature core.
+
+    The design matrix is fully determined by ``(duration, period, num_terms)``
+    and is built host-side, never inside a trace, so the result is cached per
+    argument tuple rather than recomputed (see :func:`fourier_features`).
+    """
     time = jnp.arange(duration)[:, None]
     harmonics = jnp.arange(1, num_terms + 1)[None, :]
     angles = 2.0 * jnp.pi * harmonics * time / period
