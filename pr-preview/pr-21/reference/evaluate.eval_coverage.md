@@ -29,7 +29,7 @@ Forecast samples with the sample axis first.
 Ground-truth values (matching `pred` without the sample axis).
 
 `alpha: float = _DEFAULT_COVERAGE_ALPHA`    
-Nominal interval level in `(0, 1)` (defaults to `0.9`).
+Nominal interval level in `(0, 1)`; when omitted, uses the module default `_DEFAULT_COVERAGE_ALPHA`.
 
 
 ## Returns
