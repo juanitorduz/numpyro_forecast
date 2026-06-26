@@ -121,8 +121,9 @@ def evaluate_forecast(
     """Evaluate forecast samples against ground truth for several metrics at once.
 
     A one-call convenience that applies each metric in ``metrics`` to the same
-    forecast samples and ground truth. This is the one-shot counterpart to
-    :func:`backtest`, which reports the same metrics for each rolling window.
+    forecast samples and ground truth. It is the one-shot counterpart to
+    :func:`backtest` and is also used internally by :func:`backtest` to score
+    each rolling window.
 
     Parameters
     ----------

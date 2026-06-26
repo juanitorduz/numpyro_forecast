@@ -1,6 +1,7 @@
 """Tests for array/distribution/seasonality utilities."""
 
 import jax.numpy as jnp
+import numpy as np
 import numpyro.distributions as dist
 import pytest
 
@@ -124,3 +125,11 @@ def test_periodic_repeat_along_axis() -> None:
     repeated = periodic_repeat(season, 5, axis=-1)
     assert repeated.shape == (2, 5)
     assert jnp.allclose(repeated[0], jnp.array([0.0, 1.0, 2.0, 0.0, 1.0]))
+
+
+def test_periodic_repeat_accepts_array_like() -> None:
+    # ArrayLike inputs (here a NumPy array, not a traced jax.Array) are accepted
+    # and converted internally, so callers need no explicit cast.
+    repeated = periodic_repeat(np.array([1.0, 2.0, 3.0]), 7)
+    assert repeated.shape == (7,)
+    assert jnp.allclose(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
