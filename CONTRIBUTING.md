@@ -23,7 +23,8 @@ prek install
 - Every function (public and private) must have complete input and return type
   hints. Type checking is enforced with `ty`.
 - Every public function and class must have a NumPy-style docstring.
-- Array shapes are annotated with `jaxtyping` (e.g. `Float[Array, "time obs"]`).
+- Array shapes are annotated with `jaxtyping`, with a leading space in the shape
+  string (e.g. `Float[Array, " time obs"]`).
 - Follow the array convention: time at axis `-2`, the observation dim at `-1`,
   batch dims to the left.
 - Add tests for new functionality. Keep one logical change per pull request.

@@ -114,6 +114,15 @@ def test_fourier_features_shape_and_values() -> None:
     assert jnp.allclose(feats[3, 0], 1.0, atol=1e-6)
 
 
+def test_fourier_features_memoizes_identical_calls() -> None:
+    # The design matrix is cached per (duration, period, num_terms) tuple, so an
+    # identical call is served from the cache (same object), while different
+    # arguments produce a distinct array.
+    first = fourier_features(duration=12, period=12.0, num_terms=3)
+    assert fourier_features(duration=12, period=12.0, num_terms=3) is first
+    assert fourier_features(duration=12, period=12.0, num_terms=2) is not first
+
+
 def test_periodic_repeat_tiles_pattern() -> None:
     season = jnp.array([1.0, 2.0, 3.0])
     repeated = periodic_repeat(season, 7)

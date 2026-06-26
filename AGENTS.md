@@ -18,7 +18,8 @@ the relevant ones before making non-trivial changes.
   site so `AutoNormal` never resizes and `Predictive` draws the suffix from the
   prior. The horizon is derived from shapes (`covariates` longer than `data`).
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
-  `jax.lax.scan` for latent levels, no global parameter store.
+  vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
+  drift), no global parameter store.
 - **`rng_key` first:** every JAX/NumPyro function that consumes randomness takes `rng_key: Array` as its first parameter (first after `self` for methods), required and positional (not keyword-only). The one exception is `functools.singledispatch` generics, which must dispatch on their type argument: keep the dispatched generic private (dispatching on its type arg) and expose a thin public wrapper with `rng_key` first (see `draw_posterior` / `_draw_posterior_impl` in `functional.py`).
 - **Integer literals:** write integers with four or more digits using underscore separators so zeros are easy to count: `1_000`, `10_000`, `1_234_567_890` (not `1000`, `1234567890`).
 

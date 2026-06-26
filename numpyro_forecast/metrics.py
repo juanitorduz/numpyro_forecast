@@ -3,10 +3,32 @@
 This module ports :func:`pyro.ops.stats.crps_empirical` to JAX.
 """
 
+import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array
+
+
+@jax.jit
+def _crps_empirical(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+) -> Float[Array, " *batch"]:
+    """Jitted CRPS core; the ``>= 2`` samples guard lives in :func:`crps_empirical`."""
+    num_samples = pred.shape[0]
+    pred_sorted = jnp.sort(pred, axis=0)
+    diff = pred_sorted[1:] - pred_sorted[:-1]
+    # Build the rank weights i * (n - i) in the data dtype. The cast must precede
+    # the multiply: an int32 * int32 product overflows (to negative values) for
+    # large sample counts, and casting the overflowed result would not recover it.
+    lower = jnp.arange(1, num_samples, dtype=pred.dtype)
+    upper = jnp.arange(num_samples - 1, 0, -1, dtype=pred.dtype)
+    weight = (lower * upper).reshape((num_samples - 1,) + (1,) * (diff.ndim - 1))
+    absolute_error = jnp.abs(pred - truth).mean(axis=0)
+    # Normalize in the data dtype too: a Python ``num_samples ** 2`` constant
+    # overflows int32 inside the jitted kernel once ``num_samples`` exceeds ~46k.
+    return absolute_error - (diff * weight).sum(axis=0) / jnp.asarray(num_samples, pred.dtype) ** 2
 
 
 def crps_empirical(
@@ -44,22 +66,8 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    if pred.shape[1:] != truth.shape:
-        msg = (
-            "pred and truth shapes mismatch: "
-            f"pred.shape[1:]={pred.shape[1:]} vs truth.shape={truth.shape}"
-        )
-        raise ValueError(msg)
-
     num_samples = pred.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-
-    pred_sorted = jnp.sort(pred, axis=0)
-    diff = pred_sorted[1:] - pred_sorted[:-1]
-    weight = jnp.arange(1, num_samples) * jnp.arange(num_samples - 1, 0, -1)
-    weight = weight.reshape(weight.shape + (1,) * (diff.ndim - 1))
-
-    absolute_error = jnp.abs(pred - truth).mean(axis=0)
-    return absolute_error - (diff * weight).sum(axis=0) / num_samples**2
+    return _crps_empirical(pred, truth)

@@ -23,6 +23,8 @@ from numpyro.optim import _NumPyroOptim
 
 from numpyro_forecast.functional import (
     Horizon,
+    _require_covariates_extend_data,
+    _require_positive_num_samples,
     draw_posterior,
     fit_mcmc,
     fit_svi,
@@ -187,12 +189,8 @@ class _BaseForecaster(abc.ABC):
         Float[Array, " sample *batch future obs"]
             Forecast samples over the ``future = duration - t`` horizon.
         """
-        if data.shape[-2] >= covariates.shape[-2]:
-            msg = "covariates must extend beyond data along the time axis"
-            raise ValueError(msg)
-        if num_samples <= 0:
-            msg = "num_samples must be positive"
-            raise ValueError(msg)
+        _require_covariates_extend_data(data, covariates)
+        _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
         posterior = self._draw_posterior(key_post, num_samples)
         return _forecast(key_pred, self.model, posterior, data, covariates, batch_size=batch_size)
