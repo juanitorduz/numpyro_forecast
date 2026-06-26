@@ -7,9 +7,11 @@ fits its own forecaster.
 
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
+from functools import partial
 from time import perf_counter
 from typing import Any, cast
 
+import jax
 import jax.numpy as jnp
 from jax import random
 from jaxtyping import Float
@@ -17,6 +19,33 @@ from jaxtyping import Float
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.typing import Array, ForecasterFactory, Metric, ModelFactory
+
+
+@jax.jit
+def _mae(pred: Array, truth: Array) -> Array:
+    """Jitted scalar MAE kernel (sample median as point estimate)."""
+    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+
+
+@jax.jit
+def _rmse(pred: Array, truth: Array) -> Array:
+    """Jitted scalar RMSE kernel (sample mean as point estimate)."""
+    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+
+
+@jax.jit
+def _crps(pred: Array, truth: Array) -> Array:
+    """Jitted scalar mean-CRPS kernel."""
+    return crps_empirical(pred, truth).mean()
+
+
+@partial(jax.jit, static_argnums=(2,))
+def _coverage(pred: Array, truth: Array, alpha: float) -> Array:
+    """Jitted scalar coverage kernel for the central ``alpha`` interval."""
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    return ((truth >= lo) & (truth <= hi)).mean()
 
 
 def eval_mae(pred: Array, truth: Array) -> float:
@@ -34,8 +63,7 @@ def eval_mae(pred: Array, truth: Array) -> float:
     float
         The mean absolute error.
     """
-    point = jnp.median(pred, axis=0)
-    return float(jnp.abs(point - truth).mean())
+    return float(_mae(pred, truth))
 
 
 def eval_rmse(pred: Array, truth: Array) -> float:
@@ -53,8 +81,7 @@ def eval_rmse(pred: Array, truth: Array) -> float:
     float
         The root mean squared error.
     """
-    point = pred.mean(axis=0)
-    return float(jnp.sqrt(jnp.square(point - truth).mean()))
+    return float(_rmse(pred, truth))
 
 
 def eval_crps(pred: Array, truth: Array) -> float:
@@ -72,7 +99,7 @@ def eval_crps(pred: Array, truth: Array) -> float:
     float
         The mean empirical CRPS.
     """
-    return float(crps_empirical(pred, truth).mean())
+    return float(_crps(pred, truth))
 
 
 def eval_coverage(pred: Array, truth: Array, *, alpha: float = 0.9) -> float:
@@ -97,10 +124,7 @@ def eval_coverage(pred: Array, truth: Array, *, alpha: float = 0.9) -> float:
     float
         The fraction of ground-truth values inside the central ``alpha`` interval.
     """
-    tail = (1.0 - alpha) / 2.0
-    lo = jnp.quantile(pred, tail, axis=0)
-    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    return float(((truth >= lo) & (truth <= hi)).mean())
+    return float(_coverage(pred, truth, alpha))
 
 
 DEFAULT_METRICS: dict[str, Metric] = {
@@ -116,7 +140,7 @@ def evaluate_forecast(
     pred: Float[Array, " sample *batch"],
     truth: Float[Array, " *batch"],
     *,
-    metrics: Mapping[str, Metric] = DEFAULT_METRICS,
+    metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
     """Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -132,14 +156,28 @@ def evaluate_forecast(
     truth
         Ground-truth values with shape ``(*batch)``.
     metrics
-        Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`
-        (``mae``, ``rmse``, ``crps`` and ``coverage``).
+        Mapping of metric name to function; when ``None`` defaults to
+        :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
 
     Returns
     -------
     dict[str, float]
         Each metric name mapped to its value.
     """
+    if metrics is None or metrics is DEFAULT_METRICS:
+        # Default path: evaluate the four jitted kernels, then pull the whole
+        # batch across the device boundary in a single host transfer instead of
+        # one ``float(...)`` sync per metric.
+        stacked = jnp.stack(
+            [
+                _mae(pred, truth),
+                _rmse(pred, truth),
+                _crps(pred, truth),
+                _coverage(pred, truth, 0.9),
+            ]
+        )
+        mae, rmse, crps, coverage = stacked.tolist()
+        return {"mae": mae, "rmse": rmse, "crps": crps, "coverage": coverage}
     return {name: fn(pred, truth) for name, fn in metrics.items()}
 
 

@@ -6,14 +6,27 @@ so new distribution families can be registered without modifying call sites —
 the functional analogue of Pyro's messenger-based dispatch.
 """
 
-from functools import singledispatch
+from functools import partial, singledispatch
 
+import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array
+
+
+def _zeros_like_data(data: Array, duration: int) -> Array:
+    """Return zeros shaped like ``data`` with the time axis ``-2`` set to ``duration``.
+
+    Shared core of :func:`zero_data_like` and
+    :attr:`numpyro_forecast.functional.Horizon.zero_data`: it exposes the
+    shape/dtype of the data over the full forecast horizon without leaking
+    observed values into the model.
+    """
+    shape = (*data.shape[:-2], duration, data.shape[-1])
+    return jnp.zeros(shape, dtype=data.dtype)
 
 
 def zero_data_like(data: Array, covariates: Array) -> Array:
@@ -36,9 +49,7 @@ def zero_data_like(data: Array, covariates: Array) -> Array:
     Array
         Zeros of shape ``(*batch, duration, obs)``.
     """
-    duration = covariates.shape[-2]
-    shape = (*data.shape[:-2], duration, data.shape[-1])
-    return jnp.zeros(shape, dtype=data.dtype)
+    return _zeros_like_data(data, covariates.shape[-2])
 
 
 def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:
@@ -176,6 +187,19 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     return slice_time(noise_dist, slice(t, None))
 
 
+@partial(jax.jit, static_argnums=(0, 1, 2))
+def _fourier_features(
+    duration: int,
+    period: float,
+    num_terms: int,
+) -> Float[Array, " duration two_num_terms"]:
+    """Jitted Fourier-feature core (all args static; see :func:`fourier_features`)."""
+    time = jnp.arange(duration)[:, None]
+    harmonics = jnp.arange(1, num_terms + 1)[None, :]
+    angles = 2.0 * jnp.pi * harmonics * time / period
+    return jnp.concatenate([jnp.sin(angles), jnp.cos(angles)], axis=-1)
+
+
 def fourier_features(
     duration: int,
     period: float,
@@ -198,10 +222,7 @@ def fourier_features(
     Float[Array, "duration two_num_terms"]
         The design matrix of shape ``(duration, 2 * num_terms)``.
     """
-    time = jnp.arange(duration)[:, None]
-    harmonics = jnp.arange(1, num_terms + 1)[None, :]
-    angles = 2.0 * jnp.pi * harmonics * time / period
-    return jnp.concatenate([jnp.sin(angles), jnp.cos(angles)], axis=-1)
+    return _fourier_features(duration, float(period), num_terms)
 
 
 def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:

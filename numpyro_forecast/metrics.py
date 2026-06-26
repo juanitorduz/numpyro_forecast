@@ -3,10 +3,28 @@
 This module ports :func:`pyro.ops.stats.crps_empirical` to JAX.
 """
 
+import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array
+
+
+@jax.jit
+def _crps_empirical(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+) -> Float[Array, " *batch"]:
+    """Jitted CRPS core; the ``>= 2`` samples guard lives in :func:`crps_empirical`."""
+    num_samples = pred.shape[0]
+    pred_sorted = jnp.sort(pred, axis=0)
+    diff = pred_sorted[1:] - pred_sorted[:-1]
+    # Cast the integer rank weights to the data dtype: for large sample counts
+    # the i * (n - i) product would otherwise overflow int32.
+    weight = (jnp.arange(1, num_samples) * jnp.arange(num_samples - 1, 0, -1)).astype(pred.dtype)
+    weight = weight.reshape(weight.shape + (1,) * (diff.ndim - 1))
+    absolute_error = jnp.abs(pred - truth).mean(axis=0)
+    return absolute_error - (diff * weight).sum(axis=0) / num_samples**2
 
 
 def crps_empirical(
@@ -44,22 +62,8 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    if pred.shape[1:] != truth.shape:
-        msg = (
-            "pred and truth shapes mismatch: "
-            f"pred.shape[1:]={pred.shape[1:]} vs truth.shape={truth.shape}"
-        )
-        raise ValueError(msg)
-
     num_samples = pred.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-
-    pred_sorted = jnp.sort(pred, axis=0)
-    diff = pred_sorted[1:] - pred_sorted[:-1]
-    weight = jnp.arange(1, num_samples) * jnp.arange(num_samples - 1, 0, -1)
-    weight = weight.reshape(weight.shape + (1,) * (diff.ndim - 1))
-
-    absolute_error = jnp.abs(pred - truth).mean(axis=0)
-    return absolute_error - (diff * weight).sum(axis=0) / num_samples**2
+    return _crps_empirical(pred, truth)

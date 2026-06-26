@@ -12,9 +12,10 @@ styles are fully interchangeable: both produce a NumPyro model callable
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
-from functools import singledispatch
+from functools import partial, singledispatch
 from typing import cast
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -28,6 +29,7 @@ from numpyro.optim import Adam, _NumPyroOptim
 
 from numpyro_forecast.typing import Array, ForecastModel
 from numpyro_forecast.util import (
+    _zeros_like_data,
     concat_future,
     prefix_condition,
     shift_loc,
@@ -86,8 +88,7 @@ class Horizon:
         """
         if self.data is None:
             return None
-        shape = (*self.data.shape[:-2], self.duration, self.data.shape[-1])
-        return jnp.zeros(shape, dtype=self.data.dtype)
+        return _zeros_like_data(self.data, self.duration)
 
     @classmethod
     def from_data(cls, covariates: Array, data: Array | None) -> "Horizon":
@@ -275,6 +276,13 @@ def _require_equal_duration(data: Array, covariates: Array) -> None:
         raise ValueError(msg)
 
 
+def _require_covariates_extend_data(data: Array, covariates: Array) -> None:
+    """Raise ``ValueError`` unless ``covariates`` is longer than ``data`` in time."""
+    if data.shape[-2] >= covariates.shape[-2]:
+        msg = "covariates must extend beyond data along the time axis"
+        raise ValueError(msg)
+
+
 def _index_tree(tree: dict[str, Array], index: Array | slice) -> dict[str, Array]:
     """Index every leaf of a posterior-sample pytree along its sample axis."""
     return tree_map(lambda leaf: leaf[index], tree)
@@ -371,6 +379,14 @@ def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, A
     ------
     NotImplementedError
         If ``fit`` is of an unsupported type.
+
+    Notes
+    -----
+    For an :class:`MCMCFit`, when ``num_samples`` does not exceed the number of
+    draws in the chain the draws are thinned on an evenly spaced grid (no
+    duplicates); only when more samples are requested than the chain holds are
+    they resampled with replacement. For an :class:`SVIFit` the draws are sampled
+    afresh from the fitted guide.
     """
     return _draw_posterior_impl(fit, num_samples, rng_key)
 
@@ -447,10 +463,19 @@ def _(fit: MCMCFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     _require_positive_num_samples(num_samples)
     leaves = list(fit.samples.values())
     available = leaves[0].shape[0]
-    indices = random.choice(rng_key, available, shape=(num_samples,), replace=True)
+    if num_samples <= available:
+        # Thin the genuine posterior draws on an evenly spaced grid: this is
+        # deterministic, order-preserving, and free of the duplicate draws that
+        # sampling with replacement would otherwise inject.
+        indices = jnp.linspace(0, available - 1, num_samples).round().astype(int)
+    else:
+        # More draws requested than the chain holds: fall back to resampling
+        # with replacement (the only way to grow the sample count).
+        indices = random.choice(rng_key, available, shape=(num_samples,), replace=True)
     return _index_tree(fit.samples, indices)
 
 
+@partial(jax.jit, static_argnums=(1,))
 def _predict(
     rng_key: Array,
     model: ForecastModel,
@@ -458,7 +483,12 @@ def _predict(
     data: Array,
     covariates: Array,
 ) -> Array:
-    """Run ``Predictive`` over the full horizon and return the ``forecast`` site."""
+    """Run ``Predictive`` over the full horizon and return the ``forecast`` site.
+
+    Jitted with ``model`` static: each ``(model, shape)`` combination compiles
+    once and is reused, which is what makes the chunked :func:`forecast` loop
+    cheap (the per-call ``Predictive`` tracing cost is paid a single time).
+    """
     predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
     return predictive(rng_key, covariates, data)["forecast"]
 
@@ -505,9 +535,7 @@ def forecast(
     ValueError
         If ``covariates`` does not extend beyond ``data`` along the time axis.
     """
-    if data.shape[-2] >= covariates.shape[-2]:
-        msg = "covariates must extend beyond data along the time axis"
-        raise ValueError(msg)
+    _require_covariates_extend_data(data, covariates)
     num_samples = next(iter(posterior.values())).shape[0]
     if batch_size is None or batch_size >= num_samples:
         return _predict(rng_key, model, posterior, data, covariates)
