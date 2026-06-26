@@ -16,7 +16,7 @@ evaluate.evaluate_forecast(
 ```
 
 
-A one-call convenience that applies each metric in `metrics` to the same forecast samples and ground truth. This is the one-shot counterpart to [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which reports the same metrics for each rolling window.
+A one-call convenience that applies each metric in `metrics` to the same forecast samples and ground truth. It is the one-shot counterpart to [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and is also used internally by [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) to score each rolling window.
 
 
 ## Parameters

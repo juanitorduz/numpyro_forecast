@@ -397,13 +397,14 @@ metrics
 params
     Mapping of scalar parameter name to value (when available).
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7fbdb4e50d50>, 'rmse': <function eval_rmse at 0x7fbdb4e51430>, 'crps': <function eval_crps at 0x7fbdb4e51b10>, 'coverage': <function eval_coverage at 0x7fbdb4e521f0>}) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] = {'mae': <function eval_mae at 0x7f3a29a2cd50>, 'rmse': <function eval_rmse at 0x7f3a29a2d430>, 'crps': <function eval_crps at 0x7f3a29a2db10>, 'coverage': <function eval_coverage at 0x7f3a29a2e1f0>}) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
 A one-call convenience that applies each metric in ``metrics`` to the same
-forecast samples and ground truth. This is the one-shot counterpart to
-:func:`backtest`, which reports the same metrics for each rolling window.
+forecast samples and ground truth. It is the one-shot counterpart to
+:func:`backtest` and is also used internally by :func:`backtest` to score
+each rolling window.
 
 Parameters
 ----------
