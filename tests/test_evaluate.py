@@ -1,6 +1,7 @@
 """Tests for backtesting and evaluation metrics."""
 
 from functools import partial
+from typing import cast
 
 import jax.numpy as jnp
 import pytest
@@ -10,6 +11,12 @@ from jax import Array, random
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
+    _iter_windows,
+    _resolve_options,
+    _run_window,
+    _scalar_params,
+    _slice_window,
+    _timed,
     backtest,
     eval_coverage,
     eval_crps,
@@ -18,6 +25,7 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.forecaster import HMCForecaster
+from numpyro_forecast.typing import ForecasterFactory
 
 
 def test_eval_mae_uses_median() -> None:
@@ -239,3 +247,176 @@ def test_backtest_callable_options_and_transform(rng_key: Array) -> None:
     assert len(results) == 3
     assert seen_windows == [(0, 12, 16), (0, 16, 20), (0, 20, 24)]
     assert transform_calls["count"] == 3
+
+
+# --- unit tests for the private backtest sub-components ------------------------
+
+
+def test_iter_windows_expanding() -> None:
+    # train_window=None -> t0 stays 0 and the window expands from the start.
+    windows = list(
+        _iter_windows(
+            24,
+            train_window=None,
+            min_train_window=12,
+            test_window=4,
+            min_test_window=1,
+            stride=4,
+        )
+    )
+    assert windows == [(0, 12, 16), (0, 16, 20), (0, 20, 24)]
+
+
+def test_iter_windows_fixed_train_window_rolls() -> None:
+    # A fixed train_window makes t0 track t1 (rolling, not expanding).
+    windows = list(
+        _iter_windows(
+            24,
+            train_window=6,
+            min_train_window=1,
+            test_window=4,
+            min_test_window=1,
+            stride=4,
+        )
+    )
+    assert windows == [(0, 6, 10), (4, 10, 14), (8, 14, 18), (12, 18, 22)]
+    assert all(t1 - t0 == 6 for t0, t1, _ in windows)
+
+
+def test_iter_windows_test_window_none_forecasts_to_end() -> None:
+    # test_window=None -> every window forecasts to the end of the series.
+    windows = list(
+        _iter_windows(
+            10,
+            train_window=None,
+            min_train_window=8,
+            test_window=None,
+            min_test_window=1,
+            stride=1,
+        )
+    )
+    assert windows == [(0, 8, 10), (0, 9, 10)]
+    assert all(t2 == 10 for _, _, t2 in windows)
+
+
+def test_iter_windows_default_stride_steps_by_one() -> None:
+    windows = list(
+        _iter_windows(
+            8,
+            train_window=None,
+            min_train_window=4,
+            test_window=2,
+            min_test_window=1,
+            stride=1,
+        )
+    )
+    assert [t1 for _, t1, _ in windows] == [4, 5, 6]
+
+
+def test_resolve_options_none_is_empty() -> None:
+    assert _resolve_options(None, 0, 1, 2) == {}
+
+
+def test_resolve_options_passes_mapping_through() -> None:
+    opts = {"num_steps": 30}
+    assert _resolve_options(opts, 0, 1, 2) is opts
+
+
+def test_resolve_options_invokes_callable_with_window() -> None:
+    seen: list[tuple[int, int, int]] = []
+
+    def options_for(t0: int, t1: int, t2: int) -> dict[str, int]:
+        seen.append((t0, t1, t2))
+        return {"num_steps": 7}
+
+    assert _resolve_options(options_for, 3, 5, 9) == {"num_steps": 7}
+    assert seen == [(3, 5, 9)]
+
+
+def test_slice_window_returns_train_test_truth() -> None:
+    data = jnp.arange(10, dtype=jnp.float32).reshape(10, 1)
+    covariates = jnp.arange(20, dtype=jnp.float32).reshape(10, 2)
+    train_data, train_covariates, test_covariates, truth = _slice_window(data, covariates, 2, 6, 8)
+    assert jnp.array_equal(train_data, data[2:6])
+    assert jnp.array_equal(train_covariates, covariates[2:6])
+    assert jnp.array_equal(test_covariates, covariates[2:8])
+    assert jnp.array_equal(truth, data[6:8])
+
+
+def test_timed_returns_result_and_nonnegative_seconds() -> None:
+    result, seconds = _timed(lambda: 42)
+    assert result == 42
+    assert isinstance(seconds, float)
+    assert seconds >= 0.0
+
+
+def test_scalar_params_keeps_only_scalars() -> None:
+    class _Fitted:
+        params = {"sigma": jnp.array(0.5), "loc_vec": jnp.arange(3)}
+
+    assert _scalar_params(_Fitted()) == {"sigma": 0.5}
+
+
+def test_scalar_params_without_params_is_empty() -> None:
+    assert _scalar_params(object()) == {}
+
+
+def test_scalar_params_non_mapping_is_empty() -> None:
+    class _Fitted:
+        params = "not a mapping"
+
+    assert _scalar_params(_Fitted()) == {}
+
+
+class _FakeForecaster:
+    """Deterministic stand-in forecaster for ``_run_window`` unit tests."""
+
+    def __init__(self) -> None:
+        self.params = {"sigma": jnp.array(0.3), "level_vec": jnp.arange(4)}
+
+    def __call__(
+        self,
+        rng_key: Array,
+        data: Array,
+        covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        # Forecast horizon is the suffix of ``covariates`` beyond ``data``.
+        horizon = covariates.shape[-2] - data.shape[-2]
+        return jnp.ones((num_samples, horizon, data.shape[-1]))
+
+
+def test_run_window_builds_result_and_applies_transform() -> None:
+    data = jnp.arange(8, dtype=jnp.float32).reshape(8, 1)
+    covariates = jnp.zeros((8, 0))
+    transform_calls = {"count": 0}
+
+    def transform(pred: Array, truth: Array) -> tuple[Array, Array]:
+        transform_calls["count"] += 1
+        return 2.0 * pred, 2.0 * truth
+
+    result = _run_window(
+        random.PRNGKey(0),
+        2,
+        6,
+        8,
+        data=data,
+        covariates=covariates,
+        model_fn=RandomWalkModel,
+        forecaster_fn=cast("ForecasterFactory", lambda *args, **kwargs: _FakeForecaster()),
+        options={},
+        num_samples=16,
+        batch_size=None,
+        metrics=DEFAULT_METRICS,
+        transform=transform,
+    )
+    assert isinstance(result, BacktestResult)
+    assert (result.t0, result.t1, result.t2) == (2, 6, 8)
+    assert result.num_samples == 16
+    assert set(result.metrics) == {"mae", "rmse", "crps", "coverage"}
+    assert result.params == {"sigma": pytest.approx(0.3)}  # the vector param is dropped
+    assert result.train_walltime >= 0.0
+    assert result.test_walltime >= 0.0
+    assert transform_calls["count"] == 1

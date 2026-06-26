@@ -5,7 +5,7 @@ there is no global parameter store, so each backtest window is a pure call that
 fits its own forecaster.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
@@ -242,6 +242,102 @@ def _scalar_params(forecaster: object) -> dict[str, float]:
     return {name: float(value) for name, value in params.items() if jnp.size(value) == 1}
 
 
+def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
+    """Run ``fn`` and return its result alongside the wall-clock seconds it took."""
+    start = perf_counter()
+    result = fn()
+    return result, perf_counter() - start
+
+
+def _iter_windows(
+    duration: int,
+    *,
+    train_window: int | None,
+    min_train_window: int,
+    test_window: int | None,
+    min_test_window: int,
+    stride: int,
+) -> Iterator[tuple[int, int, int]]:
+    """Yield ``(t0, t1, t2)`` train-begin/split/test-end indices for each window."""
+    stop = duration - (min_test_window if test_window is None else test_window) + 1
+    start = min_train_window if train_window is None else train_window
+    for t1 in range(start, stop, stride):
+        t0 = 0 if train_window is None else t1 - train_window
+        t2 = duration if test_window is None else t1 + test_window
+        yield t0, t1, t2
+
+
+def _resolve_options(
+    forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None,
+    t0: int,
+    t1: int,
+    t2: int,
+) -> Mapping[str, Any]:
+    """Resolve per-window forecaster options from a mapping or a ``(t0, t1, t2)`` callable."""
+    if forecaster_options is None:
+        return {}
+    if callable(forecaster_options) and not isinstance(forecaster_options, Mapping):
+        return forecaster_options(t0=t0, t1=t1, t2=t2)
+    return cast("Mapping[str, Any]", forecaster_options)
+
+
+def _slice_window(
+    data: Array, covariates: Array, t0: int, t1: int, t2: int
+) -> tuple[Array, Array, Array, Array]:
+    """Slice ``(train_data, train_covariates, test_covariates, truth)`` for one window."""
+    train_data = data[..., t0:t1, :]
+    train_covariates = covariates[..., t0:t1, :]
+    test_covariates = covariates[..., t0:t2, :]
+    truth = data[..., t1:t2, :]
+    return train_data, train_covariates, test_covariates, truth
+
+
+def _run_window(
+    rng_key: Array,
+    t0: int,
+    t1: int,
+    t2: int,
+    *,
+    data: Array,
+    covariates: Array,
+    model_fn: ModelFactory,
+    forecaster_fn: ForecasterFactory,
+    options: Mapping[str, Any],
+    num_samples: int,
+    batch_size: int | None,
+    metrics: Mapping[str, Metric],
+    transform: Callable[[Array, Array], tuple[Array, Array]] | None,
+) -> BacktestResult:
+    """Fit, forecast, and score a single backtest window into a :class:`BacktestResult`."""
+    train_data, train_covariates, test_covariates, truth = _slice_window(
+        data, covariates, t0, t1, t2
+    )
+    key_fit, key_forecast = random.split(rng_key)
+
+    forecaster, train_walltime = _timed(
+        lambda: forecaster_fn(key_fit, model_fn(), train_data, train_covariates, **options)
+    )
+    pred, test_walltime = _timed(
+        lambda: forecaster(
+            key_forecast, train_data, test_covariates, num_samples, batch_size=batch_size
+        )
+    )
+
+    if transform is not None:
+        pred, truth = transform(pred, truth)
+
+    return BacktestResult(
+        t0=t0,
+        t1=t1,
+        t2=t2,
+        num_samples=num_samples,
+        train_walltime=train_walltime,
+        test_walltime=test_walltime,
+        metrics=evaluate_forecast(pred, truth, metrics=metrics),
+        params=_scalar_params(forecaster),
+    )
+
+
 def backtest(
     rng_key: Array,
     data: Array,
@@ -308,59 +404,32 @@ def backtest(
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
     metrics = DEFAULT_METRICS if metrics is None else metrics
-
-    def options_for(t0: int, t1: int, t2: int) -> Mapping[str, Any]:
-        if forecaster_options is None:
-            return {}
-        if callable(forecaster_options) and not isinstance(forecaster_options, Mapping):
-            return forecaster_options(t0=t0, t1=t1, t2=t2)
-        return cast("Mapping[str, Any]", forecaster_options)
-
     duration = data.shape[-2]
-    stop = duration - (min_test_window if test_window is None else test_window) + 1
-    start = min_train_window if train_window is None else train_window
 
     results: list[BacktestResult] = []
-    for t1 in range(start, stop, stride):
-        t0 = 0 if train_window is None else t1 - train_window
-        t2 = duration if test_window is None else t1 + test_window
-
-        train_data = data[..., t0:t1, :]
-        train_covariates = covariates[..., t0:t1, :]
-        test_covariates = covariates[..., t0:t2, :]
-        truth = data[..., t1:t2, :]
-
-        key_fit, key_forecast = random.split(rng_key)
-        options = options_for(t0, t1, t2)
-
-        fit_start = perf_counter()
-        model = model_fn()
-        forecaster = forecaster_fn(key_fit, model, train_data, train_covariates, **options)
-        train_walltime = perf_counter() - fit_start
-
-        forecast_start = perf_counter()
-        pred = forecaster(
-            key_forecast,
-            train_data,
-            test_covariates,
-            num_samples,
-            batch_size=batch_size,
-        )
-        test_walltime = perf_counter() - forecast_start
-
-        if transform is not None:
-            pred, truth = transform(pred, truth)
-
+    for t0, t1, t2 in _iter_windows(
+        duration,
+        train_window=train_window,
+        min_train_window=min_train_window,
+        test_window=test_window,
+        min_test_window=min_test_window,
+        stride=stride,
+    ):
         results.append(
-            BacktestResult(
-                t0=t0,
-                t1=t1,
-                t2=t2,
+            _run_window(
+                rng_key,
+                t0,
+                t1,
+                t2,
+                data=data,
+                covariates=covariates,
+                model_fn=model_fn,
+                forecaster_fn=forecaster_fn,
+                options=_resolve_options(forecaster_options, t0, t1, t2),
                 num_samples=num_samples,
-                train_walltime=train_walltime,
-                test_walltime=test_walltime,
-                metrics=evaluate_forecast(pred, truth, metrics=metrics),
-                params=_scalar_params(forecaster),
+                batch_size=batch_size,
+                metrics=metrics,
+                transform=transform,
             )
         )
 
