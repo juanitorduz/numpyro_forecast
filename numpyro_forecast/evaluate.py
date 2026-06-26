@@ -145,7 +145,6 @@ def evaluate_forecast(
     truth: Float[Array, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
-    coverage_alpha: float = _DEFAULT_COVERAGE_ALPHA,
 ) -> dict[str, float]:
     """Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -153,6 +152,15 @@ def evaluate_forecast(
     forecast samples and ground truth. It is the one-shot counterpart to
     :func:`backtest` and is also used internally by :func:`backtest` to score
     each rolling window.
+
+    Metric-specific parameters live with the metric in the ``metrics`` mapping,
+    not on this function. To tune a metric, bind its keyword with
+    :func:`functools.partial`; for example, to score coverage at the 80% level::
+
+        from functools import partial
+
+        metrics = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}
+        evaluate_forecast(pred, truth, metrics=metrics)
 
     Parameters
     ----------
@@ -163,10 +171,8 @@ def evaluate_forecast(
     metrics
         Mapping of metric name to function; when ``None`` defaults to
         :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-    coverage_alpha
-        Nominal central-interval level for the default ``coverage`` metric (in
-        ``(0, 1)``, defaults to ``0.9``). Only used on the default-metrics path;
-        a custom ``metrics`` mapping controls its own coverage level.
+        Each function takes ``(pred, truth)`` and returns a float; bind any extra
+        parameters with :func:`functools.partial` (see above).
 
     Returns
     -------
@@ -182,7 +188,7 @@ def evaluate_forecast(
                 _mae(pred, truth),
                 _rmse(pred, truth),
                 _crps(pred, truth),
-                _coverage(pred, truth, coverage_alpha),
+                _coverage(pred, truth, _DEFAULT_COVERAGE_ALPHA),
             ]
         )
         mae, rmse, crps, coverage = stacked.tolist()
@@ -244,7 +250,6 @@ def backtest(
     *,
     forecaster_fn: ForecasterFactory = Forecaster,
     metrics: Mapping[str, Metric] | None = None,
-    coverage_alpha: float = _DEFAULT_COVERAGE_ALPHA,
     transform: Callable[[Array, Array], tuple[Array, Array]] | None = None,
     train_window: int | None = None,
     min_train_window: int = 1,
@@ -271,9 +276,9 @@ def backtest(
         Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
     metrics
         Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
-    coverage_alpha
-        Nominal central-interval level for the default ``coverage`` metric (in
-        ``(0, 1)``, defaults to ``0.9``); forwarded to :func:`evaluate_forecast`.
+        Each function takes ``(pred, truth)`` and returns a float; bind any
+        metric-specific parameters with :func:`functools.partial`, e.g.
+        ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
     transform
         Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
     train_window
@@ -354,9 +359,7 @@ def backtest(
                 num_samples=num_samples,
                 train_walltime=train_walltime,
                 test_walltime=test_walltime,
-                metrics=evaluate_forecast(
-                    pred, truth, metrics=metrics, coverage_alpha=coverage_alpha
-                ),
+                metrics=evaluate_forecast(pred, truth, metrics=metrics),
                 params=_scalar_params(forecaster),
             )
         )

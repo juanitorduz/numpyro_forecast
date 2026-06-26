@@ -1,5 +1,7 @@
 """Tests for backtesting and evaluation metrics."""
 
+from functools import partial
+
 import jax.numpy as jnp
 import pytest
 from conftest import RandomWalkModel
@@ -77,13 +79,15 @@ def test_evaluate_forecast_honors_custom_metrics() -> None:
     assert report["mae"] == eval_mae(pred, truth)
 
 
-def test_evaluate_forecast_honors_coverage_alpha() -> None:
+def test_evaluate_forecast_honors_partial_coverage_metric() -> None:
     # Samples symmetric on [-1, 1]; a truth at 0.85 sits inside the wide 0.9
     # central band but outside the narrower 0.8 band, so coverage must differ.
+    # The 0.8 level is supplied via a partial-bound metric in the mapping.
     pred = jnp.linspace(-1.0, 1.0, 101).reshape(101, 1)
     truth = jnp.array([0.85])
-    report_80 = evaluate_forecast(pred, truth, coverage_alpha=0.8)
-    report_90 = evaluate_forecast(pred, truth, coverage_alpha=0.9)
+    metrics_80 = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}
+    report_80 = evaluate_forecast(pred, truth, metrics=metrics_80)
+    report_90 = evaluate_forecast(pred, truth)  # default coverage at 0.9
     assert report_80["coverage"] == eval_coverage(pred, truth, alpha=0.8)
     assert report_90["coverage"] == eval_coverage(pred, truth, alpha=0.9)
     assert report_80["coverage"] != report_90["coverage"]
@@ -121,6 +125,34 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
         assert r.train_walltime >= 0.0
         # AutoNormal exposes per-site variational params (e.g. *_auto_loc).
         assert any("drift_scale" in name for name in r.params)
+
+
+def test_backtest_honors_partial_coverage_metric(rng_key: Array) -> None:
+    # A metric-specific parameter (coverage's alpha) is supplied through the
+    # ``metrics`` mapping via ``partial``, so ``backtest`` needs no dedicated
+    # parameter. With the same rng key both runs draw identical forecast
+    # samples, so a wider central band can only cover more: per-window coverage
+    # is monotonically non-decreasing in alpha.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    run = partial(
+        backtest,
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=50,
+        forecaster_options={"num_steps": 30},
+    )
+    narrow = run(metrics={**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)})
+    wide = run()  # default coverage at 0.9
+    assert narrow and len(narrow) == len(wide)
+    for r_narrow, r_wide in zip(narrow, wide, strict=True):
+        assert set(r_wide.metrics) == {"mae", "rmse", "crps", "coverage"}
+        assert r_wide.metrics["coverage"] >= r_narrow.metrics["coverage"]
 
 
 def test_backtest_result_to_dict() -> None:

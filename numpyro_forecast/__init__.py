@@ -15,6 +15,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
     )
 
 from numpyro_forecast.evaluate import (
+    DEFAULT_METRICS,
     BacktestResult,
     backtest,
     eval_coverage,
@@ -32,6 +33,7 @@ except PackageNotFoundError:  # pragma: no cover - package not installed
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "DEFAULT_METRICS",
     "BacktestResult",
     "Forecaster",
     "ForecastingModel",
