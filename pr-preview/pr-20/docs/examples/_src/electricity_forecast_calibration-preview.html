@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-    <title>Electricity demand forecasting with prior calibration with numpyro_forecast – numpyro_forecast | numpyro_forecast</title>
+    <title>Electricity demand forecasting: prior calibration with numpyro_forecast – numpyro_forecast | numpyro_forecast</title>
     <style>
       /* Default styles provided by pandoc.
       ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -200,12 +200,12 @@
         <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/electricity_forecast_calibration-preview.html">
   <meta name="description" content="This notebook ports the blog post Electricity Demand Forecast: Prior Calibration to the numpyro_forecast package. It is a direct continuation of the...">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Electricity demand forecasting with prior calibration with numpyro_forecast – numpyro_forecast | numpyro_forecast">
+  <meta property="og:title" content="Electricity demand forecasting: prior calibration with numpyro_forecast – numpyro_forecast | numpyro_forecast">
   <meta property="og:description" content="This notebook ports the blog post Electricity Demand Forecast: Prior Calibration to the numpyro_forecast package. It is a direct continuation of the...">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/electricity_forecast_calibration-preview.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Electricity demand forecasting with prior calibration with numpyro_forecast – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:title" content="Electricity demand forecasting: prior calibration with numpyro_forecast – numpyro_forecast | numpyro_forecast">
   <meta name="twitter:description" content="This notebook ports the blog post Electricity Demand Forecast: Prior Calibration to the numpyro_forecast package. It is a direct continuation of the...">
 </head>
 
@@ -213,7 +213,7 @@
     <div id="quarto-embed-header" class="headroom fixed-top bg-primary">
       
       <a onclick="window.quartoBackToArticle(); return false;" class="btn btn-primary quarto-back-link"><i class="bi bi-caret-left"></i> Back to Article</a>
-      <h6><i class="bi bi-journal-code"></i> Electricity demand forecasting with prior calibration with <code>numpyro_forecast</code></h6>
+      <h6><i class="bi bi-journal-code"></i> Electricity demand forecasting: prior calibration with <code>numpyro_forecast</code></h6>
 
             <a href="../../../docs/examples/_src/electricity_forecast_calibration.ipynb" class="btn btn-primary quarto-download-embed" download="electricity_forecast_calibration.ipynb">Download Notebook</a>
           </div>
@@ -288,7 +288,7 @@
 <!-- main -->
 <main class="content" id="quarto-document-content">      <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Electricity demand forecasting with prior calibration with <code>numpyro_forecast</code></h1>
+<h1 class="title">Electricity demand forecasting: prior calibration with <code>numpyro_forecast</code></h1>
 </div>
 
 
@@ -489,7 +489,7 @@ covariates shape: (1344, 2)</code></pre>
 <div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="7aa8360e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T12:17:56.509321Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T12:17:56.509257Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T12:17:57.122322Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T12:17:57.121704Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For the amplitude, we set the values inspired on the range of the demand / temperature</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio.</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>amplitude_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>_ <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
@@ -502,7 +502,7 @@ covariates shape: (1344, 2)</code></pre>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># As we want to use the GP to model the temperature effect, we need to set the length</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># scale parameter. We expect these effects to be seen at the order of units or tens of</span></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># units, so we expect the length scale to be between 3 and 10.</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>length_scale_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="dv">3</span>, upper<span class="op">=</span><span class="dv">10</span>)</span></code></pre></div>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>_ <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="dv">3</span>, upper<span class="op">=</span><span class="dv">10</span>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">

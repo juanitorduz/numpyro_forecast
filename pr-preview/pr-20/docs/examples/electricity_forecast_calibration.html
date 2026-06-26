@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Electricity demand forecasting with prior calibration – numpyro_forecast | numpyro_forecast</title>
+<title>Electricity demand forecasting: prior calibration – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -125,15 +125,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast_calibration.html">
-  <meta name="description" content="Electricity demand forecasting with prior calibration with numpyro_forecast">
+  <meta name="description" content="Electricity demand forecasting: prior calibration with numpyro_forecast">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Electricity demand forecasting with prior calibration – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Electricity demand forecasting with prior calibration with numpyro_forecast">
+  <meta property="og:title" content="Electricity demand forecasting: prior calibration – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Electricity demand forecasting: prior calibration with numpyro_forecast">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast_calibration.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Electricity demand forecasting with prior calibration – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Electricity demand forecasting with prior calibration with numpyro_forecast">
+  <meta name="twitter:title" content="Electricity demand forecasting: prior calibration – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Electricity demand forecasting: prior calibration with numpyro_forecast">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -183,7 +183,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs">Electricity demand forecasting with prior calibration</h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs">Electricity demand forecasting: prior calibration</h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -210,7 +210,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../../docs/examples/electricity_forecast_calibration.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text">Electricity demand forecasting with prior calibration</span></a>
+ <span class="menu-text">Electricity demand forecasting: prior calibration</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -238,13 +238,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/electricity_forecast_calibration-preview.html"><i class="bi bi-journal-code"></i>Electricity demand forecasting with prior calibration with `numpyro_forecast`</a></li></ul></div></div>
+    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/electricity_forecast_calibration-preview.html"><i class="bi bi-journal-code"></i>Electricity demand forecasting: prior calibration with `numpyro_forecast`</a></li></ul></div></div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title d-none d-lg-block">Electricity demand forecasting with prior calibration</h1>
+<h1 class="title d-none d-lg-block">Electricity demand forecasting: prior calibration</h1>
 </div>
 
 
@@ -262,7 +262,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="quarto-embed-nb-cell">
-<p>Electricity demand forecasting with prior calibration with <code>numpyro_forecast</code></p>
+<p>Electricity demand forecasting: prior calibration with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/electricity_forecast_with_priors/"><strong>Electricity Demand Forecast: Prior Calibration</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It is a direct continuation of the <a href="electricity_forecast.ipynb">electricity demand forecasting example</a>: we keep the exact same model (a varying-coefficient temperature effect via a Hilbert Space Gaussian Process, plus hour-of-day and day-of-week seasonality and a Student-t likelihood) and add a single new ingredient, a <em>calibration likelihood</em>.</p>
 <p>The idea of calibration is to inject domain knowledge into the model as an extra likelihood term. Suppose that, from experimental or observational data, we believe the effect of temperature on demand stabilizes at a known value once it gets hot enough, say around <code>0.13</code> for temperatures above <code>32 °C</code>. Instead of only encoding this through priors, we observe the latent temperature effect directly in that regime. The <code>obs=</code> argument turns a <code>sample</code> statement into a likelihood, so the posterior now has to explain both the demand data <em>and</em> this belief about the temperature effect at extreme values.</p>
 <p>Throughout the package, time lives at axis <code>-2</code> and the observation dimension at <code>-1</code>, and the forecast horizon is inferred from the covariates being longer than the data.</p>
@@ -424,7 +424,7 @@ covariates shape: (1344, 2)</code></pre>
 <div id="7aa8360e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-26T12:17:56.509321Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-26T12:17:56.509257Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-26T12:17:57.122322Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-26T12:17:57.121704Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># For the amplitude, we set the values inspired on the range of the demand / temperature</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ratio.</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>amplitude_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>_ <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="fl">0.1</span>, upper<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -437,7 +437,7 @@ covariates shape: (1344, 2)</code></pre>
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># As we want to use the GP to model the temperature effect, we need to set the length</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># scale parameter. We expect these effects to be seen at the order of units or tens of</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># units, so we expect the length scale to be between 3 and 10.</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>length_scale_params, ax <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="dv">3</span>, upper<span class="op">=</span><span class="dv">10</span>)</span></code></pre></div>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>_ <span class="op">=</span> pz.maxent(pz.InverseGamma(), lower<span class="op">=</span><span class="dv">3</span>, upper<span class="op">=</span><span class="dv">10</span>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -790,7 +790,7 @@ covariates shape: (1344, 2)</code></pre>
 <p>This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a <a href="../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> can be anchored with an extra observed <code>numpyro.sample</code> site, optionally masked to the region where the domain knowledge applies.</p>
 </section>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/electricity_forecast_calibration-preview.html#43a4ac34">Source: Electricity demand forecasting with prior calibration with `numpyro_forecast`</a></div>
+<a class="quarto-notebook-link" id="nblink-1" href="_src/electricity_forecast_calibration-preview.html#43a4ac34">Source: Electricity demand forecasting: prior calibration with `numpyro_forecast`</a></div>
 
 
 

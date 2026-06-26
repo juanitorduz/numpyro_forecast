@@ -1,7 +1,7 @@
-# Electricity demand forecasting with prior calibration
+# Electricity demand forecasting: prior calibration
 
 
-Electricity demand forecasting with prior calibration with `numpyro_forecast`
+Electricity demand forecasting: prior calibration with `numpyro_forecast`
 
 This notebook ports the blog post [**Electricity Demand Forecast: Prior Calibration**](https://juanitorduz.github.io/electricity_forecast_with_priors/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It is a direct continuation of the [electricity demand forecasting example](electricity_forecast.ipynb): we keep the exact same model (a varying-coefficient temperature effect via a Hilbert Space Gaussian Process, plus hour-of-day and day-of-week seasonality and a Student-t likelihood) and add a single new ingredient, a *calibration likelihood*.
 
@@ -189,7 +189,7 @@ As in the baseline example, we set the Gaussian Process amplitude and length-sca
 ``` python
 # For the amplitude, we set the values inspired on the range of the demand / temperature
 # ratio.
-amplitude_params, ax = pz.maxent(pz.InverseGamma(), lower=0.1, upper=0.5)
+_ = pz.maxent(pz.InverseGamma(), lower=0.1, upper=0.5)
 ```
 
 
@@ -202,7 +202,7 @@ amplitude_params, ax = pz.maxent(pz.InverseGamma(), lower=0.1, upper=0.5)
 # As we want to use the GP to model the temperature effect, we need to set the length
 # scale parameter. We expect these effects to be seen at the order of units or tens of
 # units, so we expect the length scale to be between 3 and 10.
-length_scale_params, ax = pz.maxent(pz.InverseGamma(), lower=3, upper=10)
+_ = pz.maxent(pz.InverseGamma(), lower=3, upper=10)
 ```
 
 
@@ -544,4 +544,4 @@ The overall shape of the curve resembles the one in the baseline uncalibrated [e
 
 This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) can be anchored with an extra observed `numpyro.sample` site, optionally masked to the region where the domain knowledge applies.
 
-[Source: Electricity demand forecasting with prior calibration with `numpyro_forecast`](_src/electricity_forecast_calibration-preview.html#43a4ac34)
+[Source: Electricity demand forecasting: prior calibration with `numpyro_forecast`](_src/electricity_forecast_calibration-preview.html#43a4ac34)
