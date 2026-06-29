@@ -153,8 +153,9 @@ class ForecastingModel(abc.ABC):
 class _BaseForecaster(abc.ABC):
     """Shared forecasting logic over a fitted posterior."""
 
-    def __init__(self, model: ForecastModel) -> None:
+    def __init__(self, model: ForecastModel, t_obs: int) -> None:
         self.model = model
+        self._t_obs = t_obs
 
     @abc.abstractmethod
     def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
@@ -231,8 +232,15 @@ class _BaseForecaster(abc.ABC):
         Raises
         ------
         ValueError
-            If ``num_samples`` is not positive.
+            If ``num_samples`` is not positive, or if ``covariates`` does not
+            match the in-sample duration the forecaster was fit on.
         """
+        if covariates.shape[-2] != self._t_obs:
+            msg = (
+                "predict_in_sample expects covariates of the same duration as the "
+                f"fitted data ({self._t_obs}), got {covariates.shape[-2]}"
+            )
+            raise ValueError(msg)
         _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
         posterior = self._draw_posterior(key_post, num_samples)
@@ -279,7 +287,7 @@ class Forecaster(_BaseForecaster):
         num_particles: int = 1,
         progress_bar: bool = False,
     ) -> None:
-        super().__init__(model)
+        super().__init__(model, data.shape[-2])
         self._fit = fit_svi(
             rng_key,
             model,
@@ -334,7 +342,7 @@ class HMCForecaster(_BaseForecaster):
         num_chains: int = 1,
         progress_bar: bool = False,
     ) -> None:
-        super().__init__(model)
+        super().__init__(model, data.shape[-2])
         self._fit = fit_mcmc(
             rng_key,
             model,

@@ -314,8 +314,8 @@ def _eval_train_window(
 ) -> dict[str, float]:
     """Score the in-sample posterior predictive over one training window.
 
-    ``forecaster`` is typed loosely (``object``) so the package's runtime
-    type-check hook does not reject duck-typed forecasters; the explicit guard
+    ``forecaster`` is typed loosely (``object``) so ``ty`` does not reject
+    duck-typed forecasters at the ``forecaster`` boundary; the explicit guard
     below raises a clear :class:`TypeError` when ``predict_in_sample`` is missing.
 
     Raises
@@ -362,7 +362,7 @@ def _run_window(
     train_data, train_covariates, test_covariates, truth = _slice_window(
         data, covariates, t0, t1, t2
     )
-    key_fit, key_forecast, key_train = random.split(rng_key, 3)
+    key_fit, key_forecast = random.split(rng_key)
 
     forecaster, train_walltime = _timed(
         lambda: forecaster_fn(key_fit, model_fn(), train_data, train_covariates, **options)
@@ -378,8 +378,11 @@ def _run_window(
 
     train_metrics: dict[str, float] = {}
     if eval_train:
+        # In-sample scoring is an optional diagnostic: derive its key as an
+        # independent substream via fold_in so enabling it never shifts the
+        # fit/forecast keys above.
         train_metrics = _eval_train_window(
-            key_train,
+            random.fold_in(rng_key, 2),
             forecaster,
             train_data,
             train_covariates,

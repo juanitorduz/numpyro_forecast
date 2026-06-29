@@ -296,6 +296,34 @@ def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
         assert isinstance(r.train_metrics["crps"], float)
 
 
+def test_backtest_eval_train_does_not_change_oos_metrics(rng_key: Array) -> None:
+    # Enabling the in-sample diagnostic must not perturb the fit/forecast keys,
+    # so the out-of-sample metrics are identical with eval_train off and on.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+
+    def run(*, eval_train: bool) -> list[BacktestResult]:
+        return backtest(
+            rng_key,
+            data,
+            covariates,
+            RandomWalkModel,
+            metrics={"crps": eval_crps},
+            test_window=4,
+            min_train_window=12,
+            stride=4,
+            num_samples=20,
+            forecaster_options={"num_steps": 30},
+            eval_train=eval_train,
+        )
+
+    without_train = run(eval_train=False)
+    with_train = run(eval_train=True)
+    assert without_train and len(without_train) == len(with_train)
+    for a, b in zip(without_train, with_train, strict=True):
+        assert a.metrics == b.metrics
+
+
 def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
