@@ -296,43 +296,45 @@ window.Quarto = {
 </blockquote>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="a11def61" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:46.053874Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:46.053729Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:47.417699Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:47.417151Z&quot;}}" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> Predictive</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> Forecaster, ForecastingModel, backtest, eval_crps</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.datasets <span class="im">import</span> load_bart_weekly</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.util <span class="im">import</span> fourier_features</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<div id="8969c758" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:45.685866Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:45.685800Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:47.244190Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:47.243714Z&quot;}}" data-execution_count="1">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> Predictive</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> Forecaster, ForecastingModel, backtest, eval_coverage, eval_crps</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.datasets <span class="im">import</span> load_bart_weekly</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.util <span class="im">import</span> fourier_features</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
 <span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
 <span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 </div>
 </section>
 <section id="read-data" class="level1">
 <h1>Read data</h1>
 <p>We work with total <strong>weekly</strong> BART ridership: hourly counts summed over all origin-destination pairs and aggregated into non-overlapping weeks. The series grows roughly multiplicatively, so we model it on the log scale, where the trend and the seasonal swings are closer to additive. Throughout the package, time lives at axis <code>-2</code> and the observation dimension at axis <code>-1</code>, so a single series has shape <code>(weeks, 1)</code>.</p>
-<div id="5bf00e0c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:47.419018Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:47.418894Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:48.286930Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:48.286422Z&quot;}}" data-execution_count="2">
+<div id="46764b4b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:47.245553Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:47.245420Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:48.094641Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:48.094141Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>data <span class="op">=</span> load_bart_weekly()  <span class="co"># (weeks, 1), log scale</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>duration <span class="op">=</span> data.shape[<span class="dv">0</span>]</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"data shape:"</span>, data.shape)</span>
@@ -350,7 +352,7 @@ window.Quarto = {
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-3-output-2.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-3-output-2.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -359,7 +361,7 @@ window.Quarto = {
 <section id="train-test-split" class="level1">
 <h1>Train-test split</h1>
 <p>We hold out the last <code>52</code> weeks (one full year) as the test set and train on the preceding <code>417</code> weeks. Keeping a whole year out means the test window covers a complete seasonal cycle, which is exactly where a seasonal model can over- or under-fit.</p>
-<div id="dff2388d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:48.288638Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:48.288550Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:48.436969Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:48.436568Z&quot;}}" data-execution_count="3">
+<div id="1ea38358" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:48.095744Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:48.095682Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:48.242831Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:48.241824Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>T0 <span class="op">=</span> <span class="dv">0</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>T2 <span class="op">=</span> duration  <span class="co"># 469</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>T1 <span class="op">=</span> T2 <span class="op">-</span> <span class="dv">52</span>  <span class="co"># 417: train / test split</span></span>
@@ -384,7 +386,7 @@ window.Quarto = {
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-4-output-2.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-4-output-2.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -393,7 +395,7 @@ window.Quarto = {
 <section id="seasonal-features" class="level1">
 <h1>Seasonal features</h1>
 <p>To capture the annual cycle we use a <strong>Fourier</strong> design matrix: <code>26</code> harmonics (so <code>52</code> sine and cosine columns) at a period of <code>365.25 / 7</code> weeks. Each harmonic is a sine/cosine pair at a multiple of the base frequency, and a weighted sum of them can approximate any smooth periodic shape. This spans the same subspace as the blog’s <code>periodic_features</code>, so paired with the <code>Normal(0, 0.1)</code> weight prior the regression is equivalent. The plot below shows the first few low-frequency modes.</p>
-<div id="331f9476" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:48.438178Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:48.438099Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:48.732412Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:48.731910Z&quot;}}" data-execution_count="4">
+<div id="06ce403e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:48.243979Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:48.243892Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:48.560772Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:48.560357Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>num_terms <span class="op">=</span> <span class="dv">26</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>covariates <span class="op">=</span> fourier_features(duration, period<span class="op">=</span><span class="fl">365.25</span> <span class="op">/</span> <span class="dv">7</span>, num_terms<span class="op">=</span>num_terms)</span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>covariates_train <span class="op">=</span> covariates[T0:T1]</span>
@@ -410,7 +412,7 @@ window.Quarto = {
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-5-output-2.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-5-output-2.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -426,7 +428,7 @@ window.Quarto = {
 y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 \end{align*}\]</span></p>
 <p>We subclass <a href="../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> and write the generative story in <a href="../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel.model" class="gdls-link gdls-code">model</a>. The level is the cumulative sum of <code>drift</code>, which we sample with <code>self.time_series(...)</code> (the package’s equivalent of the blog’s <code>scan</code> over time). The single call to <code>self.predict(...)</code> registers the zero-centered Student-T noise around the predicted mean, and it is also what wires up the train-vs-forecast machinery: in-sample steps are observed, while the forecast horizon is drawn from separate <code>_future</code> latent sites so the variational guide never changes shape. Finally, a <code>LocScaleReparam</code> on the drift switches between centered and non-centered parameterizations, which helps the SVI geometry quite a lot.</p>
-<div id="8f138dfe" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:48.734157Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:48.734091Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:48.748018Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:48.747619Z&quot;}}" data-execution_count="5">
+<div id="442bee3c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:48.562675Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:48.562605Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:48.578040Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:48.577700Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> UnivariateForecaster(ForecastingModel):</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Local level + Fourier regression with Student-T observations."""</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -453,13 +455,13 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.predict(dist.StudentT(df<span class="op">=</span>nu, loc<span class="op">=</span><span class="fl">0.0</span>, scale<span class="op">=</span>sigma), prediction)</span></code></pre></div>
 </div>
 <p>Let’s visualize the model:</p>
-<div id="fea8ed2d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:48.749344Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:48.749270Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:48.915804Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:48.915218Z&quot;}}" data-execution_count="6">
+<div id="159c7c84" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:48.579383Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:48.579318Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:48.752984Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:48.752454Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    UnivariateForecaster(),</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, y_train),</span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    render_distributions<span class="op">=</span><span class="va">True</span>,</span>
 <span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
-<div class="cell-output cell-output-display">
+<div class="cell-output cell-output-display" data-execution_count="6">
 <div>
 <figure class="figure">
 <p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-7-output-1.svg" class="img-fluid figure-img"></p>
@@ -471,7 +473,7 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <section id="prior-predictive-checks" class="level1">
 <h1>Prior predictive checks</h1>
 <p>As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (<code>data=None</code>, so the horizon is zero and the <code>obs</code> site spans the train period) and plot the 50% and 94% HDI bands against the training series with ArviZ <code>plot_lm</code>. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.</p>
-<div id="215b4d1b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:48.916986Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:48.916906Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:49.917621Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:49.917176Z&quot;}}" data-execution_count="7">
+<div id="9b3ea698" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:48.754221Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:48.754136Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:49.770225Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:49.769804Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>prior_predictive <span class="op">=</span> Predictive(UnivariateForecaster(), num_samples<span class="op">=</span><span class="dv">2_000</span>, return_sites<span class="op">=</span>[<span class="st">"obs"</span>])</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>prior_obs <span class="op">=</span> prior_predictive(rng_subkey, covariates_train)[<span class="st">"obs"</span>][..., <span class="dv">0</span>]</span>
@@ -510,7 +512,7 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-8-output-1.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-8-output-1.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -519,7 +521,7 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <section id="inference-with-svi" class="level1">
 <h1>Inference with SVI</h1>
 <p>We fit the model with stochastic variational inference. Passing the model and data to <a href="../../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> runs SVI under the hood (an <code>AutoNormal</code> guide with <code>Adam</code>) and stores the fitted <code>guide</code>, <code>params</code> and the ELBO <code>losses</code>. The loss curve should decrease and flatten out, a quick sanity check that the optimization converged.</p>
-<div id="a4716538" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:49.918874Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:49.918796Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:56.516890Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:56.516526Z&quot;}}" data-execution_count="8">
+<div id="1d955a42" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:49.771348Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:49.771260Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:56.483889Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:56.483180Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> UnivariateForecaster()</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> Forecaster(</span>
@@ -537,7 +539,7 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-9-output-1.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-9-output-1.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -547,7 +549,7 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <h1>Posterior predictive check</h1>
 <p>We now look at two things. First the <strong>in-sample</strong> posterior predictive over the training window: here the horizon is zero, so the guide is not resized and we just sample the <code>obs</code> site. Then the <strong>forecast</strong> over the test horizon with <code>forecaster(...)</code>, which continues the level from its inferred endpoint and draws the future random-walk increments from the prior.</p>
 <p>To score both we use the <strong>continuous ranked probability score</strong> (CRPS), a proper scoring rule that compares a single ground-truth value to the whole forecast distribution rather than just a point estimate. It rewards forecasts that are both sharp and calibrated, and lower is better.</p>
-<div id="4af64953" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:56.518171Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:56.518093Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:58.415388Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:58.414874Z&quot;}}" data-execution_count="9">
+<div id="586964ae" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:56.485090Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:56.485007Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:58.535013Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:58.534566Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co"># In-sample posterior predictive over the training window.</span></span>
@@ -559,17 +561,21 @@ y_t &amp; \sim \text{StudentT}(\nu, \mu_t, \sigma).
 <span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> eval_crps(train_pp, y_train)</span>
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast, y_test)</span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Test CRPS:  </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Test CRPS:  </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Test 50% coverage: </span><span class="sc">{</span>eval_coverage(forecast, y_test, alpha<span class="op">=</span><span class="fl">0.5</span>)<span class="sc">:.2f}</span><span class="ss">  (nominal 0.50)"</span>)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Test 94% coverage: </span><span class="sc">{</span>eval_coverage(forecast, y_test, alpha<span class="op">=</span><span class="fl">0.94</span>)<span class="sc">:.2f}</span><span class="ss">  (nominal 0.94)"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Train CRPS: 0.0284
-Test CRPS:  0.0347</code></pre>
+Test CRPS:  0.0347
+Test 50% coverage: 0.63  (nominal 0.50)
+Test 94% coverage: 0.92  (nominal 0.94)</code></pre>
 </div>
 </div>
 </section>
 <section id="forecast-visualization" class="level1">
 <h1>Forecast visualization</h1>
-<p>The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with 50% and 94% HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.</p>
-<div id="b8d73fb2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:58.416679Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:58.416587Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:11:58.660018Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:11:58.659482Z&quot;}}" data-execution_count="10">
+<p>The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.</p>
+<div id="d0541ee4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:58.536398Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:58.536309Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:36:58.786980Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:36:58.786563Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>train_obs <span class="op">=</span> train_pp[..., <span class="dv">0</span>]</span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>forecast_obs <span class="op">=</span> forecast[..., <span class="dv">0</span>]</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -634,7 +640,7 @@ Test CRPS:  0.0347</code></pre>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-11-output-1.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-11-output-1.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -645,42 +651,54 @@ Test CRPS:  0.0347</code></pre>
 <p>A single train/test split tells us how the model did on one held-out year. A more honest picture of generalization comes from <em>rolling-origin</em> backtesting: we repeatedly move the train/test boundary forward, refit, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. <code>numpyro_forecast.backtest</code> runs this loop on the full series for us, refitting a fresh <code>UnivariateForecaster</code> per fold.</p>
 <p>We use an expanding window: each fold trains on everything up to its split point and forecasts the next <code>52</code> weeks (<code>test_window=52</code>), stepping forward a full year at a time (<code>stride=52</code>) so the folds do not overlap and the forecast overlay stays readable. The first <code>min_train_window=104</code> weeks (two years) seed the initial training window, matching Pyro’s tutorial. With <code>eval_train=True</code> we also score the in-sample posterior predictive of each fold with the same CRPS metric, and <code>keep_predictions=True</code> retains each fold’s out-of-sample forecast samples so we can plot them. Both options default to off, keeping the default <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> API faithful to Pyro.</p>
 <p>One practical point: because every fold is refit from scratch, each one needs enough optimization to converge. We give SVI <code>num_steps=50_000</code> per fold (the same budget as the main fit) so that the larger expanding windows are fit just as well as the small early ones, which keeps the inferred drift volatility stable and the per-fold scores comparable. With too small a budget the later windows would be under-fit, inflating <code>drift_scale</code> so that both the forecast bands and the in-sample CRPS grow spuriously with window length.</p>
-<div id="58fc75ba" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:11:58.661283Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:11:58.661206Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:12:20.290801Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:12:20.290406Z&quot;}}" data-execution_count="11">
+<div id="4e367024" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:36:58.788435Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:36:58.788348Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:37:36.777474Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:37:36.776965Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>num_backtest_samples <span class="op">=</span> <span class="dv">2_000</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> backtest(</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    data,  <span class="co"># full dataset, no train/test split</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    covariates,  <span class="co"># full covariates</span></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    UnivariateForecaster,</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    metrics<span class="op">=</span>{<span class="st">"crps"</span>: eval_crps},</span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    test_window<span class="op">=</span><span class="dv">52</span>,  <span class="co"># 1-year horizon per fold</span></span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    stride<span class="op">=</span><span class="dv">52</span>,  <span class="co"># non-overlapping folds for a clean plot_lm panel</span></span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    min_train_window<span class="op">=</span><span class="dv">104</span>,  <span class="co"># 2 years before the first fold, matching Pyro's start</span></span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span>num_backtest_samples,</span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    eval_train<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    keep_predictions<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    forecaster_options<span class="op">=</span>{<span class="st">"optim"</span>: Adam(step_size<span class="op">=</span><span class="fl">0.005</span>), <span class="st">"num_steps"</span>: <span class="dv">50_000</span>},</span>
-<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>split_weeks <span class="op">=</span> [r.t1 <span class="cf">for</span> r <span class="kw">in</span> results]</span>
-<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>insample_crps <span class="op">=</span> [r.train_metrics[<span class="st">"crps"</span>] <span class="cf">for</span> r <span class="kw">in</span> results]</span>
-<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>oos_crps <span class="op">=</span> [r.metrics[<span class="st">"crps"</span>] <span class="cf">for</span> r <span class="kw">in</span> results]</span>
-<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"folds: </span><span class="sc">{</span><span class="bu">len</span>(results)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"mean in-sample CRPS:     </span><span class="sc">{</span>np<span class="sc">.</span>mean(insample_crps)<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
-<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"mean out-of-sample CRPS: </span><span class="sc">{</span>np<span class="sc">.</span>mean(oos_crps)<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"crps"</span>: eval_crps,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"coverage_50"</span>: partial(eval_coverage, alpha<span class="op">=</span><span class="fl">0.5</span>),</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"coverage_94"</span>: partial(eval_coverage, alpha<span class="op">=</span><span class="fl">0.94</span>),</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> backtest(</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    data,  <span class="co"># full dataset, no train/test split</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    covariates,  <span class="co"># full covariates</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    UnivariateForecaster,</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    metrics<span class="op">=</span>metrics,</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    test_window<span class="op">=</span><span class="dv">52</span>,  <span class="co"># 1-year horizon per fold</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>    stride<span class="op">=</span><span class="dv">52</span>,  <span class="co"># non-overlapping folds for a clean plot_lm panel</span></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>    min_train_window<span class="op">=</span><span class="dv">104</span>,  <span class="co"># 2 years before the first fold, matching Pyro's start</span></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span>num_backtest_samples,</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>    eval_train<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>    keep_predictions<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>    forecaster_options<span class="op">=</span>{<span class="st">"optim"</span>: Adam(step_size<span class="op">=</span><span class="fl">0.005</span>), <span class="st">"num_steps"</span>: <span class="dv">50_000</span>},</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>split_weeks <span class="op">=</span> [r.t1 <span class="cf">for</span> r <span class="kw">in</span> results]</span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>insample_crps <span class="op">=</span> [r.train_metrics[<span class="st">"crps"</span>] <span class="cf">for</span> r <span class="kw">in</span> results]</span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>oos_crps <span class="op">=</span> [r.metrics[<span class="st">"crps"</span>] <span class="cf">for</span> r <span class="kw">in</span> results]</span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>oos_cov_50 <span class="op">=</span> [r.metrics[<span class="st">"coverage_50"</span>] <span class="cf">for</span> r <span class="kw">in</span> results]</span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a>oos_cov_94 <span class="op">=</span> [r.metrics[<span class="st">"coverage_94"</span>] <span class="cf">for</span> r <span class="kw">in</span> results]</span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"folds: </span><span class="sc">{</span><span class="bu">len</span>(results)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"mean in-sample CRPS:     </span><span class="sc">{</span>np<span class="sc">.</span>mean(insample_crps)<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb15-33"><a href="#cb15-33" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"mean out-of-sample CRPS: </span><span class="sc">{</span>np<span class="sc">.</span>mean(oos_crps)<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb15-34"><a href="#cb15-34" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"mean out-of-sample 50% coverage: </span><span class="sc">{</span>np<span class="sc">.</span>mean(oos_cov_50)<span class="sc">:.2f}</span><span class="ss">  (nominal 0.50)"</span>)</span>
+<span id="cb15-35"><a href="#cb15-35" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"mean out-of-sample 94% coverage: </span><span class="sc">{</span>np<span class="sc">.</span>mean(oos_cov_94)<span class="sc">:.2f}</span><span class="ss">  (nominal 0.94)"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>folds: 7
 mean in-sample CRPS:     0.0287
-mean out-of-sample CRPS: 0.0375</code></pre>
+mean out-of-sample CRPS: 0.0375
+mean out-of-sample 50% coverage: 0.57  (nominal 0.50)
+mean out-of-sample 94% coverage: 0.95  (nominal 0.94)</code></pre>
 </div>
 </div>
 <section id="rolling-forecasts" class="level2">
 <h2 class="anchored" data-anchor-id="rolling-forecasts">Rolling forecasts</h2>
-<p>Overlaying every fold’s out-of-sample forecast (orange 50% and 94% HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold’s training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.</p>
-<div id="641398d3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:12:20.292008Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:12:20.291920Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:12:20.510496Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:12:20.510106Z&quot;}}" data-execution_count="12">
+<p>Overlaying every fold’s out-of-sample forecast (orange <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold’s training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.</p>
+<div id="88e1ccf7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:37:36.778720Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:37:36.778638Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:37:37.003429Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:37:37.002980Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> <span class="va">None</span></span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> results:</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    prediction <span class="op">=</span> r.prediction</span>
@@ -736,29 +754,54 @@ mean out-of-sample CRPS: 0.0375</code></pre>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-13-output-1.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-13-output-1.png" width="1211" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>Within each fold the band fans out gently from its train/test split toward the right. That is the random-walk level diffusing: the level is a cumulative sum of drift increments (<code>level = jnp.cumsum(drift, axis=-2)</code>), and over the forecast horizon those future increments are drawn from the prior, so the predictive standard deviation grows like the square root of the horizon. The seasonal Fourier term is periodic and the Student-T observation noise is roughly constant, so this within-fold growth is dominated by the level diffusing. It is irreducible: more training data cannot make next year’s random increments knowable.</p>
 <p>Across folds the bands reset at each dashed split, where the model is refit and re-conditioned on all data up to that point, and their width stays stable from fold to fold. Each fold is fit with <code>num_steps=50_000</code> (the same budget as the main fit), so every expanding window converges and the inferred drift volatility is consistent. The bands therefore do not balloon as the series lengthens; under-training would leave the larger windows under-fit, inflate <code>drift_scale</code>, and widen the later folds spuriously.</p>
-<p>The fit looks well calibrated: the observed series stays inside the 94% band almost everywhere and inside the 50% band roughly half the time. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.</p>
+<p>The fit looks well calibrated, and the coverage plot further below makes that claim precise: the observed series stays inside the 94% band almost everywhere and inside the 50% band roughly half the time, close to the nominal levels. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.</p>
 </section>
 <section id="crps-per-fold" class="level2">
 <h2 class="anchored" data-anchor-id="crps-per-fold">CRPS per fold</h2>
 <p>The per-fold CRPS shows the model generalizing better as it sees more history. The out-of-sample score is highest for the first, data-starved fold (trained on just the initial two years) and falls steeply as the expanding window grows, then flattens out near the in-sample level: more training data buys a sharper, better-calibrated one-year-ahead forecast, exactly as we would hope. The in-sample CRPS stays low and roughly flat across folds, because with <code>num_steps=50_000</code> each fold converges regardless of window length, so the fit quality does not drift.</p>
 <p>The train-versus-test gap is therefore widest early, when data is scarce, and closes as history accumulates (the two curves even cross near the middle of the series). That closing gap is the healthy signature of a model whose generalization improves with more data, rather than an under-fit whose error would instead grow with window length. If you shrink <code>num_steps</code> you will see that healthy pattern break: both curves climb with the window as the larger folds stop converging.</p>
-<div id="f6a47ddb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:12:20.511944Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:12:20.511848Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:12:20.621544Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:12:20.621174Z&quot;}}" data-execution_count="13">
+<div id="1acd7b62" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:37:37.004996Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:37:37.004918Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:37:37.099885Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:37:37.099521Z&quot;}}" data-execution_count="13">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>ax.plot(split_weeks, insample_crps, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="st">"in-sample CRPS"</span>)</span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>ax.plot(split_weeks, oos_crps, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"C1"</span>, label<span class="op">=</span><span class="st">"out-of-sample CRPS"</span>)</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(xlabel<span class="op">=</span><span class="st">"train/test split week"</span>, ylabel<span class="op">=</span><span class="st">"CRPS"</span>, title<span class="op">=</span><span class="st">"CRPS per backtest fold"</span>)</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>ax.legend()<span class="op">;</span></span></code></pre></div>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>ax.legend()</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(xlabel<span class="op">=</span><span class="st">"train/test split week"</span>, ylabel<span class="op">=</span><span class="st">"CRPS"</span>, title<span class="op">=</span><span class="st">"CRPS per backtest fold"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-14-output-1.png" class="img-fluid figure-img"></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-14-output-1.png" width="1011" height="611" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="forecast-calibration" class="level2">
+<h2 class="anchored" data-anchor-id="forecast-calibration">Forecast calibration</h2>
+<p>CRPS rewards sharp <em>and</em> calibrated forecasts but does not separate the two, so “the forecasts look calibrated” deserves its own number. We score the empirical <strong>coverage</strong> of each fold’s out-of-sample bands: the fraction of held-out weeks that actually fall inside the central 50% and 94% prediction intervals. A well-calibrated forecast covers close to its nominal level, so the points should track the dashed reference lines. Points above mean the bands are too wide (under-confident); points below mean they are too narrow (over-confident). This is the quantitative version of the “stays inside the bands” eyeball check from the rolling-forecast plot.</p>
+<p>A small caveat: <a href="../../reference/evaluate.eval_coverage.html#numpyro_forecast.evaluate.eval_coverage" class="gdls-link gdls-code">eval_coverage</a> measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.</p>
+<div id="7873b786" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-29T22:37:37.101201Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-29T22:37:37.101118Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-29T22:37:37.203319Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-29T22:37:37.202924Z&quot;}}">
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>ax.plot(split_weeks, oos_cov_50, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="st">"empirical 50</span><span class="sc">% c</span><span class="st">overage"</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>ax.plot(split_weeks, oos_cov_94, <span class="st">"o-"</span>, color<span class="op">=</span><span class="st">"C1"</span>, label<span class="op">=</span><span class="st">"empirical 94</span><span class="sc">% c</span><span class="st">overage"</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.5</span>, color<span class="op">=</span><span class="st">"C0"</span>, ls<span class="op">=</span><span class="st">"--"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"nominal 50%"</span>)</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>ax.axhline(<span class="fl">0.94</span>, color<span class="op">=</span><span class="st">"C1"</span>, ls<span class="op">=</span><span class="st">"--"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"nominal 94%"</span>)</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"center left"</span>, bbox_to_anchor<span class="op">=</span>(<span class="dv">1</span>, <span class="fl">0.5</span>))</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"train/test split week"</span>,</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"coverage"</span>,</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Out-of-sample interval coverage per fold"</span>,</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-15-output-1.png" width="1011" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -769,7 +812,7 @@ mean out-of-sample CRPS: 0.0375</code></pre>
 <h1>Next steps</h1>
 <p>This local level model with seasonality is a solid baseline. From here a few directions are natural: add holiday or special-event effects (dummy variables or Gaussian bump functions) for days the smooth seasonal basis cannot capture, or move to many related series at once. The last of these is the subject of the two companion notebooks, <a href="hierarchical_forecasting_1.html">hierarchical forecasting I</a> and <a href="hierarchical_forecasting_2.html">II</a>, which generalize this same model to a panel of BART stations. See also Pyro’s original <a href="https://pyro.ai/examples/forecasting_i.html">forecasting tutorial</a>.</p>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/forecasting_univariate-preview.html#8ab0950f">Source: Univariate forecasting with `numpyro_forecast`</a></div>
+<a class="quarto-notebook-link" id="nblink-1" href="_src/forecasting_univariate-preview.html#5948ec60">Source: Univariate forecasting with `numpyro_forecast`</a></div>
 
 
 

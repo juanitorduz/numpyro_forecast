@@ -14,6 +14,8 @@ Instead of hand-writing the NumPyro model and a bespoke prediction loop, we subc
 
 
 ``` python
+from functools import partial
+
 import arviz as az
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -25,7 +27,7 @@ from numpyro.infer import Predictive
 from numpyro.infer.reparam import LocScaleReparam
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel, backtest, eval_crps
+from numpyro_forecast import Forecaster, ForecastingModel, backtest, eval_coverage, eval_crps
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.typing import Array
 from numpyro_forecast.util import fourier_features
@@ -71,7 +73,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-3-output-2.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-3-output-2.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -106,7 +108,7 @@ ax.set(title="Train / test split", xlabel="week", ylabel="log(# rides)");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-4-output-2.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-4-output-2.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -133,7 +135,7 @@ ax.set(title="First Fourier modes", xlabel="week");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-5-output-2.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-5-output-2.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -236,7 +238,7 @@ ax.set(title="Prior predictive check", ylabel="log(# rides)");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-8-output-1.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-8-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -264,7 +266,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-9-output-1.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-9-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -288,16 +290,20 @@ crps_train = eval_crps(train_pp, y_train)
 crps_test = eval_crps(forecast, y_test)
 print(f"Train CRPS: {crps_train:.4f}")
 print(f"Test CRPS:  {crps_test:.4f}")
+print(f"Test 50% coverage: {eval_coverage(forecast, y_test, alpha=0.5):.2f}  (nominal 0.50)")
+print(f"Test 94% coverage: {eval_coverage(forecast, y_test, alpha=0.94):.2f}  (nominal 0.94)")
 ```
 
 
     Train CRPS: 0.0284
     Test CRPS:  0.0347
+    Test 50% coverage: 0.63  (nominal 0.50)
+    Test 94% coverage: 0.92  (nominal 0.94)
 
 
 # Forecast visualization
 
-The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with 50% and 94% HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.
+The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with \\50\\\\ and \\94\\\\ HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.
 
 
 ``` python
@@ -366,7 +372,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-11-output-1.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-11-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -382,13 +388,19 @@ One practical point: because every fold is refit from scratch, each one needs en
 ``` python
 num_backtest_samples = 2_000
 
+metrics = {
+    "crps": eval_crps,
+    "coverage_50": partial(eval_coverage, alpha=0.5),
+    "coverage_94": partial(eval_coverage, alpha=0.94),
+}
+
 rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
     data,  # full dataset, no train/test split
     covariates,  # full covariates
     UnivariateForecaster,
-    metrics={"crps": eval_crps},
+    metrics=metrics,
     test_window=52,  # 1-year horizon per fold
     stride=52,  # non-overlapping folds for a clean plot_lm panel
     min_train_window=104,  # 2 years before the first fold, matching Pyro's start
@@ -401,21 +413,27 @@ results = backtest(
 split_weeks = [r.t1 for r in results]
 insample_crps = [r.train_metrics["crps"] for r in results]
 oos_crps = [r.metrics["crps"] for r in results]
+oos_cov_50 = [r.metrics["coverage_50"] for r in results]
+oos_cov_94 = [r.metrics["coverage_94"] for r in results]
 
 print(f"folds: {len(results)}")
 print(f"mean in-sample CRPS:     {np.mean(insample_crps):.4f}")
 print(f"mean out-of-sample CRPS: {np.mean(oos_crps):.4f}")
+print(f"mean out-of-sample 50% coverage: {np.mean(oos_cov_50):.2f}  (nominal 0.50)")
+print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.94)")
 ```
 
 
     folds: 7
     mean in-sample CRPS:     0.0287
     mean out-of-sample CRPS: 0.0375
+    mean out-of-sample 50% coverage: 0.57  (nominal 0.50)
+    mean out-of-sample 94% coverage: 0.95  (nominal 0.94)
 
 
 ## Rolling forecasts
 
-Overlaying every fold's out-of-sample forecast (orange 50% and 94% HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
+Overlaying every fold's out-of-sample forecast (orange \\50\\\\ and \\94\\\\ HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
 
 
 ``` python
@@ -475,7 +493,7 @@ ax.legend(handles=[band_94, band_50, obs_line, split_lines[0]], loc="lower left"
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-13-output-1.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-13-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -483,7 +501,7 @@ Within each fold the band fans out gently from its train/test split toward the r
 
 Across folds the bands reset at each dashed split, where the model is refit and re-conditioned on all data up to that point, and their width stays stable from fold to fold. Each fold is fit with `num_steps=50_000` (the same budget as the main fit), so every expanding window converges and the inferred drift volatility is consistent. The bands therefore do not balloon as the series lengthens; under-training would leave the larger windows under-fit, inflate `drift_scale`, and widen the later folds spuriously.
 
-The fit looks well calibrated: the observed series stays inside the 94% band almost everywhere and inside the 50% band roughly half the time. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.
+The fit looks well calibrated, and the coverage plot further below makes that claim precise: the observed series stays inside the 94% band almost everywhere and inside the 50% band roughly half the time, close to the nominal levels. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.
 
 
 ## CRPS per fold
@@ -497,13 +515,40 @@ The train-versus-test gap is therefore widest early, when data is scarce, and cl
 fig, ax = plt.subplots()
 ax.plot(split_weeks, insample_crps, "o-", color="C0", label="in-sample CRPS")
 ax.plot(split_weeks, oos_crps, "o-", color="C1", label="out-of-sample CRPS")
-ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest fold")
-ax.legend();
+ax.legend()
+ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest fold");
 ```
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-14-output-1.png" class="img-fluid figure-img" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-14-output-1.png" class="figure-img" width="1011" height="611" /></p>
+</figure>
+
+
+## Forecast calibration
+
+CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so "the forecasts look calibrated" deserves its own number. We score the empirical **coverage** of each fold's out-of-sample bands: the fraction of held-out weeks that actually fall inside the central 50% and 94% prediction intervals. A well-calibrated forecast covers close to its nominal level, so the points should track the dashed reference lines. Points above mean the bands are too wide (under-confident); points below mean they are too narrow (over-confident). This is the quantitative version of the "stays inside the bands" eyeball check from the rolling-forecast plot.
+
+A small caveat: [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
+
+
+``` python
+fig, ax = plt.subplots()
+ax.plot(split_weeks, oos_cov_50, "o-", color="C0", label="empirical 50% coverage")
+ax.plot(split_weeks, oos_cov_94, "o-", color="C1", label="empirical 94% coverage")
+ax.axhline(0.5, color="C0", ls="--", lw=1, label="nominal 50%")
+ax.axhline(0.94, color="C1", ls="--", lw=1, label="nominal 94%")
+ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
+ax.set(
+    xlabel="train/test split week",
+    ylabel="coverage",
+    title="Out-of-sample interval coverage per fold",
+);
+```
+
+
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-15-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -511,4 +556,4 @@ ax.legend();
 
 This local level model with seasonality is a solid baseline. From here a few directions are natural: add holiday or special-event effects (dummy variables or Gaussian bump functions) for days the smooth seasonal basis cannot capture, or move to many related series at once. The last of these is the subject of the two companion notebooks, [hierarchical forecasting I](hierarchical_forecasting_1.md) and [II](hierarchical_forecasting_2.md), which generalize this same model to a panel of BART stations. See also Pyro's original [forecasting tutorial](https://pyro.ai/examples/forecasting_i.html).
 
-[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#8ab0950f)
+[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#5948ec60)
