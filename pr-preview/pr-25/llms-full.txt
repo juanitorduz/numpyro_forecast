@@ -317,6 +317,36 @@ Raises
 ValueError
     If ``covariates`` does not extend beyond ``data`` along the time axis.
 
+predict_in_sample(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], covariates: jax.Array, *, batch_size: int | None = None) -> jaxtyping.Float[Array, 'sample *batch time obs']
+
+Sample the in-sample posterior predictive of the ``obs`` site.
+
+Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
+latent draws. Unlike :func:`forecast` there is no forecast horizon: ``covariates``
+span only the observed window, so the model's ``obs`` site is sampled at every
+step. The number of predictive samples equals the leading (sample) axis of
+``posterior`` (see :func:`draw_posterior`).
+
+Parameters
+----------
+rng_key
+    PRNG key.
+model
+    The forecasting model callable (the same one that produced ``posterior``).
+posterior
+    Posterior samples of the latent sites, sample axis leading.
+covariates
+    Covariates with time at axis ``-2`` spanning the observed window. Its time
+    length must match the data the ``posterior`` was fit on, since the in-sample
+    latent sites are sized to that window.
+batch_size
+    Optional chunk size for sampling (caps peak memory).
+
+Returns
+-------
+Float[Array, " sample *batch time obs"]
+    In-sample posterior-predictive draws of the ``obs`` site.
+
 SVIFit(guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jax.Array], losses: jax.Array) -> None
 
 The result of fitting a forecasting model with SVI.
@@ -345,7 +375,7 @@ samples
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -385,13 +415,23 @@ batch_size
 forecaster_options
     Options dict passed to ``forecaster_fn``, or a callable
     ``(t0, t1, t2) -> dict`` returning per-window options.
+eval_train
+    If ``True``, also score the in-sample posterior predictive over each training
+    window with the same ``metrics`` and store them in
+    ``BacktestResult.train_metrics``. Requires a forecaster exposing
+    ``predict_in_sample`` (the built-in :class:`Forecaster` and
+    :class:`HMCForecaster` do).
+keep_predictions
+    If ``True``, store each window's out-of-sample forecast samples (after
+    ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
+    avoid retaining large Monte Carlo arrays.
 
 Returns
 -------
 list[BacktestResult]
     One result per backtest window.
 
-BacktestResult(t0: int, t1: int, t2: int, num_samples: int, train_walltime: float, test_walltime: float, metrics: dict[str, float], params: dict[str, float] = <factory>) -> None
+BacktestResult(t0: int, t1: int, t2: int, num_samples: int, train_walltime: float, test_walltime: float, metrics: dict[str, float], params: dict[str, float] = <factory>, train_metrics: dict[str, float] = <factory>, prediction: jax.Array | None = None) -> None
 
 Per-window result of a :func:`backtest` run.
 
@@ -407,6 +447,12 @@ metrics
     Mapping of metric name to value for the window.
 params
     Mapping of scalar parameter name to value (when available).
+train_metrics
+    Mapping of metric name to in-sample value for the window. Empty unless
+    ``backtest`` was called with ``eval_train=True``.
+prediction
+    Out-of-sample forecast samples for the window (sample axis leading), or
+    ``None`` unless ``backtest`` was called with ``keep_predictions=True``.
 
 evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None) -> dict[str, float]
 

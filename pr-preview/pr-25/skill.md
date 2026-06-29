@@ -43,6 +43,7 @@ Pure functional primitives for the train/forecast split.
 - `functional.draw_posterior`
 - `functional.fit_mcmc`
 - `functional.forecast`
+- `functional.predict_in_sample`
 - `functional.SVIFit`
 - `functional.MCMCFit`
 

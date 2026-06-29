@@ -26,7 +26,7 @@ from numpyro.infer import Predictive
 from numpyro.infer.reparam import LocScaleReparam
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel, eval_crps
+from numpyro_forecast import Forecaster, ForecastingModel, backtest, eval_crps
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.typing import Array
 from numpyro_forecast.util import fourier_features
@@ -75,7 +75,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-3-output-2.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-3-output-2.png" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -113,7 +113,7 @@ ax.set(title="Train / test split", xlabel="week", ylabel="log(# rides)");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-4-output-2.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-4-output-2.png" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -143,7 +143,7 @@ ax.set(title="First Fourier modes", xlabel="week");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-5-output-2.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-5-output-2.png" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -255,7 +255,7 @@ ax.set(title="Prior predictive check", ylabel="log(# rides)");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-8-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-8-output-1.png" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -286,7 +286,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-9-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-9-output-1.png" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -301,15 +301,10 @@ To score both we use the **continuous ranked probability score** (CRPS), a prope
 
 
 ``` python
-rng_key, key_post, key_pp, key_fc = random.split(rng_key, 4)
+rng_key, key_pp, key_fc = random.split(rng_key, 3)
 
 # In-sample posterior predictive over the training window.
-posterior_samples = forecaster.guide.sample_posterior(
-    key_post, forecaster.params, sample_shape=(5_000,)
-)
-train_pp = Predictive(model, posterior_samples=posterior_samples, return_sites=["obs"])(
-    key_pp, covariates_train
-)["obs"]
+train_pp = forecaster.predict_in_sample(key_pp, covariates_train, num_samples=5_000)
 
 # Forecast over the test horizon.
 forecast = forecaster(key_fc, y_train, covariates, num_samples=5_000)
@@ -321,8 +316,8 @@ print(f"Test CRPS:  {crps_test:.4f}")
 ```
 
 
-    Train CRPS: 0.0283
-    Test CRPS:  0.0349
+    Train CRPS: 0.0284
+    Test CRPS:  0.0347
 
 
 # Forecast visualization
@@ -399,10 +394,156 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-11-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-11-output-1.png" class="img-fluid figure-img" /></p>
+</figure>
+
+
+# Rolling-origin backtesting
+
+A single train/test split tells us how the model did on one held-out year. A more honest picture of generalization comes from *rolling-origin* backtesting: we repeatedly move the train/test boundary forward, refit, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop on the full series for us, refitting a fresh `UnivariateForecaster` per fold.
+
+We use an expanding window: each fold trains on everything up to its split point and forecasts the next `52` weeks (`test_window=52`), stepping forward a full year at a time (`stride=52`) so the folds do not overlap and the forecast overlay stays readable. The first `min_train_window=104` weeks (two years) seed the initial training window, matching Pyro's tutorial. With `eval_train=True` we also score the in-sample posterior predictive of each fold with the same CRPS metric, and `keep_predictions=True` retains each fold's out-of-sample forecast samples so we can plot them. Both options default to off, keeping the default [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) API faithful to Pyro.
+
+One practical point: because every fold is refit from scratch, each one needs enough optimization to converge. We give SVI `num_steps=50_000` per fold (the same budget as the main fit) so that the larger expanding windows are fit just as well as the small early ones, which keeps the inferred drift volatility stable and the per-fold scores comparable. With too small a budget the later windows would be under-fit, inflating `drift_scale` so that both the forecast bands and the in-sample CRPS grow spuriously with window length.
+
+
+    In [11]:
+
+
+``` python
+num_backtest_samples = 2_000
+
+rng_key, rng_subkey = random.split(rng_key)
+results = backtest(
+    rng_subkey,
+    data,  # full dataset, no train/test split
+    covariates,  # full covariates
+    UnivariateForecaster,
+    metrics={"crps": eval_crps},
+    test_window=52,  # 1-year horizon per fold
+    stride=52,  # non-overlapping folds for a clean plot_lm panel
+    min_train_window=104,  # 2 years before the first fold, matching Pyro's start
+    num_samples=num_backtest_samples,
+    eval_train=True,
+    keep_predictions=True,
+    forecaster_options={"optim": Adam(step_size=0.005), "num_steps": 50_000},
+)
+
+split_weeks = [r.t1 for r in results]
+insample_crps = [r.train_metrics["crps"] for r in results]
+oos_crps = [r.metrics["crps"] for r in results]
+
+print(f"folds: {len(results)}")
+print(f"mean in-sample CRPS:     {np.mean(insample_crps):.4f}")
+print(f"mean out-of-sample CRPS: {np.mean(oos_crps):.4f}")
+```
+
+
+    folds: 7
+    mean in-sample CRPS:     0.0287
+    mean out-of-sample CRPS: 0.0375
+
+
+## Rolling forecasts
+
+Overlaying every fold's out-of-sample forecast (orange 50% and 94% HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
+
+
+    In [12]:
+
+
+``` python
+pc = None
+for r in results:
+    prediction = r.prediction
+    if prediction is None:  # keep_predictions=True guarantees this never triggers
+        continue
+    weeks = time[r.t1 : r.t2].astype(float)
+    idata = az.from_dict(
+        {
+            "posterior_predictive": {"obs": np.asarray(prediction[..., 0])[None]},
+            "observed_data": {"obs": np.asarray(data[r.t1 : r.t2, 0])},
+            "constant_data": {"week": weeks},
+        },
+        coords={"time": weeks},
+        dims={"obs": ["time"], "week": ["time"]},
+    )
+    if pc is None:
+        pc = az.plot_lm(
+            idata,
+            y="obs",
+            x="week",
+            ci_kind="hdi",
+            ci_prob=(0.5, 0.94),
+            smooth=False,
+            visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+            figure_kwargs={"figsize": (12, 6)},
+        )
+    else:
+        az.plot_lm(
+            idata,
+            y="obs",
+            x="week",
+            plot_collection=pc,
+            ci_kind="hdi",
+            ci_prob=(0.5, 0.94),
+            smooth=False,
+            visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+        )
+
+if pc is None:
+    msg = "no folds were plotted"
+    raise ValueError(msg)
+ax = pc.viz["figure"].item().axes[0]
+# ax.collections holds the first fold's bands in ci_prob order: (0.5, 0.94).
+band_50, band_94 = ax.collections[:2]
+band_50.set_label(r"forecast $50\%$ HDI")
+band_94.set_label(r"forecast $94\%$ HDI")
+(obs_line,) = ax.plot(time, np.asarray(data[:, 0]), color="black", lw=1, label="observed")
+split_lines = [
+    ax.axvline(r.t1, color="gray", ls="--", lw=0.5, label="train/test split") for r in results
+]
+ax.set(title="Rolling-origin backtest forecasts", ylabel="log(# rides)")
+ax.legend(handles=[band_94, band_50, obs_line, split_lines[0]], loc="lower left");
+```
+
+
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/cell-13-output-1.png" class="img-fluid figure-img" /></p>
+</figure>
+
+
+Within each fold the band fans out gently from its train/test split toward the right. That is the random-walk level diffusing: the level is a cumulative sum of drift increments (`level = jnp.cumsum(drift, axis=-2)`), and over the forecast horizon those future increments are drawn from the prior, so the predictive standard deviation grows like the square root of the horizon. The seasonal Fourier term is periodic and the Student-T observation noise is roughly constant, so this within-fold growth is dominated by the level diffusing. It is irreducible: more training data cannot make next year's random increments knowable.
+
+Across folds the bands reset at each dashed split, where the model is refit and re-conditioned on all data up to that point, and their width stays stable from fold to fold. Each fold is fit with `num_steps=50_000` (the same budget as the main fit), so every expanding window converges and the inferred drift volatility is consistent. The bands therefore do not balloon as the series lengthens; under-training would leave the larger windows under-fit, inflate `drift_scale`, and widen the later folds spuriously.
+
+The fit looks well calibrated: the observed series stays inside the 94% band almost everywhere and inside the 50% band roughly half the time. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.
+
+
+## CRPS per fold
+
+The per-fold CRPS shows the model generalizing better as it sees more history. The out-of-sample score is highest for the first, data-starved fold (trained on just the initial two years) and falls steeply as the expanding window grows, then flattens out near the in-sample level: more training data buys a sharper, better-calibrated one-year-ahead forecast, exactly as we would hope. The in-sample CRPS stays low and roughly flat across folds, because with `num_steps=50_000` each fold converges regardless of window length, so the fit quality does not drift.
+
+The train-versus-test gap is therefore widest early, when data is scarce, and closes as history accumulates (the two curves even cross near the middle of the series). That closing gap is the healthy signature of a model whose generalization improves with more data, rather than an under-fit whose error would instead grow with window length. If you shrink `num_steps` you will see that healthy pattern break: both curves climb with the window as the larger folds stop converging.
+
+
+    In [13]:
+
+
+``` python
+fig, ax = plt.subplots()
+ax.plot(split_weeks, insample_crps, "o-", color="C0", label="in-sample CRPS")
+ax.plot(split_weeks, oos_crps, "o-", color="C1", label="out-of-sample CRPS")
+ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest fold")
+ax.legend();
+```
+
+
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/cell-14-output-1.png" class="img-fluid figure-img" /></p>
 </figure>
 
 
 # Next steps
 
-This local level model with seasonality is a solid baseline. From here a few directions are natural: add holiday or special-event effects (dummy variables or Gaussian bump functions) for days the smooth seasonal basis cannot capture, run a rolling-origin evaluation with `numpyro_forecast.backtest` to get a more honest picture of generalization, or move to many related series at once. The last of these is the subject of the two companion notebooks, [hierarchical forecasting I](hierarchical_forecasting_1.md) and [II](hierarchical_forecasting_2.md), which generalize this same model to a panel of BART stations. See also Pyro's original [forecasting tutorial](https://pyro.ai/examples/forecasting_i.html).
+This local level model with seasonality is a solid baseline. From here a few directions are natural: add holiday or special-event effects (dummy variables or Gaussian bump functions) for days the smooth seasonal basis cannot capture, or move to many related series at once. The last of these is the subject of the two companion notebooks, [hierarchical forecasting I](hierarchical_forecasting_1.md) and [II](hierarchical_forecasting_2.md), which generalize this same model to a panel of BART stations. See also Pyro's original [forecasting tutorial](https://pyro.ai/examples/forecasting_i.html).

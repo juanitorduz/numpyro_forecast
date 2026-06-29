@@ -192,7 +192,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="15" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="16" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -310,6 +310,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.forecast.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.forecast()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/functional.predict_in_sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.predict_in_sample()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -510,7 +516,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L200-L235" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L200-L243" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">BacktestResult</span>()</span></code></pre></div>
@@ -551,6 +557,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 
 </dd>
+<dt><code><span class="doc-parameter-name">train_metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, float]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">dict()<br></span></code></dt>
+<dd>
+
+</dd>
+<dt><code><span class="doc-parameter-name">prediction</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+
+</dd>
 </dl>
 </div>
 </section>
@@ -576,7 +590,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">params</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, float]</span></code></dt>
 <dd>
-Mapping of scalar parameter name to value (when available).
+<p>Mapping of scalar parameter name to value (when available).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">train_metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, float]</span></code></dt>
+<dd>
+<p>Mapping of metric name to in-sample value for the window. Empty unless <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> was called with <code>eval_train=True</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">prediction</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span></code></dt>
+<dd>
+Out-of-sample forecast samples for the window (sample axis leading), or <code>None</code> unless <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> was called with <code>keep_predictions=True</code>.
 </dd>
 </dl>
 </div>
@@ -613,7 +635,7 @@ Return a flat dictionary view (Pyro-style access).
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L227-L235" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L235-L243" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>to_dict()</span></code></pre></div>
