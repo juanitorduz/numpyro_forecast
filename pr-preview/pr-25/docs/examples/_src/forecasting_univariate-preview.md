@@ -11,7 +11,7 @@ Instead of hand-writing the NumPyro model and a bespoke prediction loop, we subc
 # Prepare notebook
 
 
-    In [14]:
+    In [1]:
 
 
 ``` python
@@ -51,18 +51,12 @@ rng_key = random.PRNGKey(seed=42)
 ```
 
 
-    The autoreload extension is already loaded. To reload it, use:
-      %reload_ext autoreload
-    The jaxtyping extension is already loaded. To reload it, use:
-      %reload_ext jaxtyping
-
-
 # Read data
 
 We work with total **weekly** BART ridership: hourly counts summed over all origin-destination pairs and aggregated into non-overlapping weeks. The series grows roughly multiplicatively, so we model it on the log scale, where the trend and the seasonal swings are closer to additive. Throughout the package, time lives at axis `-2` and the observation dimension at axis `-1`, so a single series has shape `(weeks, 1)`.
 
 
-    In [15]:
+    In [2]:
 
 
 ``` python
@@ -93,7 +87,7 @@ ax.set(
 We hold out the last `52` weeks (one full year) as the test set and train on the preceding `417` weeks. Keeping a whole year out means the test window covers a complete seasonal cycle, which is exactly where a seasonal model can over- or under-fit.
 
 
-    In [16]:
+    In [3]:
 
 
 ``` python
@@ -131,7 +125,7 @@ ax.set(title="Train / test split", xlabel="week", ylabel="log(# rides)");
 To capture the annual cycle we use a **Fourier** design matrix: `26` harmonics (so `52` sine and cosine columns) at a period of `365.25 / 7` weeks. Each harmonic is a sine/cosine pair at a multiple of the base frequency, and a weighted sum of them can approximate any smooth periodic shape. This spans the same subspace as the blog's `periodic_features`, so paired with the `Normal(0, 0.1)` weight prior the regression is equivalent. The plot below shows the first few low-frequency modes.
 
 
-    In [17]:
+    In [4]:
 
 
 ``` python
@@ -165,7 +159,7 @@ The idea is a *local level model with seasonality*. The mean has three parts: a 
 We subclass [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) and write the generative story in [model](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model). The level is the cumulative sum of `drift`, which we sample with `self.time_series(...)` (the package's equivalent of the blog's `scan` over time). The single call to `self.predict(...)` registers the zero-centered Student-T noise around the predicted mean, and it is also what wires up the train-vs-forecast machinery: in-sample steps are observed, while the forecast horizon is drawn from separate `_future` latent sites so the variational guide never changes shape. Finally, a `LocScaleReparam` on the drift switches between centered and non-centered parameterizations, which helps the SVI geometry quite a lot.
 
 
-    In [18]:
+    In [5]:
 
 
 ``` python
@@ -199,7 +193,7 @@ class UnivariateForecaster(ForecastingModel):
 Let's visualize the model:
 
 
-    In [19]:
+    In [6]:
 
 
 ``` python
@@ -218,10 +212,10 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (`data=None`, so the horizon is zero and the `obs` site spans the train period) and plot the 50% and 94% HDI bands against the training series with ArviZ `plot_lm`. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.
+As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (`data=None`, so the horizon is zero and the `obs` site spans the train period) and plot the \\50\\\\ and \\94\\\\ HDI bands against the training series with ArviZ `plot_lm`. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.
 
 
-    In [20]:
+    In [7]:
 
 
 ``` python
@@ -255,8 +249,8 @@ pc = az.plot_lm(
 )
 ax = pc.viz["figure"].item().axes[0]
 band_50, band_94 = ax.collections  # in ci_prob order: (0.5, 0.94)
-band_50.set_label("50% HDI")
-band_94.set_label("94% HDI")
+band_50.set_label(r"$50\%$ HDI")
+band_94.set_label(r"$94\%$ HDI")
 (train_line,) = ax.plot(time_train, np.asarray(y_train[:, 0]), color="black", lw=1, label="train")
 ax.legend(handles=[band_94, band_50, train_line], loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(title="Prior predictive check", ylabel="log(# rides)");
@@ -273,7 +267,7 @@ ax.set(title="Prior predictive check", ylabel="log(# rides)");
 We fit the model with stochastic variational inference. Passing the model and data to [Forecaster](../../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) runs SVI under the hood (an `AutoNormal` guide with `Adam`) and stores the fitted `guide`, `params` and the ELBO `losses`. The loss curve should decrease and flatten out, a quick sanity check that the optimization converged.
 
 
-    In [21]:
+    In [8]:
 
 
 ``` python
@@ -306,7 +300,7 @@ We now look at two things. First the **in-sample** posterior predictive over the
 To score both we use the **continuous ranked probability score** (CRPS), a proper scoring rule that compares a single ground-truth value to the whole forecast distribution rather than just a point estimate. It rewards forecasts that are both sharp and calibrated, and lower is better.
 
 
-    In [22]:
+    In [9]:
 
 
 ``` python
@@ -338,7 +332,7 @@ print(f"Test 94% coverage: {eval_coverage(forecast, y_test, alpha=0.94):.2f}  (n
 The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with \\50\\\\ and \\94\\\\ HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.
 
 
-    In [23]:
+    In [10]:
 
 
 ``` python
@@ -420,7 +414,7 @@ We use an expanding window: each fold trains on everything up to its split point
 One practical point: because every fold is refit from scratch, each one needs enough optimization to converge. We give SVI `num_steps=50_000` per fold (the same budget as the main fit) so that the larger expanding windows are fit just as well as the small early ones, which keeps the inferred drift volatility stable and the per-fold scores comparable. With too small a budget the later windows would be under-fit, inflating `drift_scale` so that both the forecast bands and the in-sample CRPS grow spuriously with window length.
 
 
-    In [24]:
+    In [11]:
 
 
 ``` python
@@ -474,7 +468,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.9
 Overlaying every fold's out-of-sample forecast (orange \\50\\\\ and \\94\\\\ HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
 
 
-    In [25]:
+    In [12]:
 
 
 ``` python
@@ -552,7 +546,7 @@ The per-fold CRPS shows the model generalizing better as it sees more history. T
 The train-versus-test gap is therefore widest early, when data is scarce, and closes as history accumulates (the two curves even cross near the middle of the series). That closing gap is the healthy signature of a model whose generalization improves with more data, rather than an under-fit whose error would instead grow with window length. If you shrink `num_steps` you will see that healthy pattern break: both curves climb with the window as the larger folds stop converging.
 
 
-    In [26]:
+    In [13]:
 
 
 ``` python
@@ -576,7 +570,7 @@ CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so 
 A small caveat: [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
 
-    In [27]:
+    In [14]:
 
 
 ``` python
@@ -606,7 +600,7 @@ Everything so far went through the object-oriented [ForecastingModel](../../../r
 `forecasting_model(...)` then wraps that body into the standard `(covariates, data=None)` NumPyro model, so the result is a drop-in replacement for a `UnivariateForecaster()` instance: it works with [Forecaster](../../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster), `Predictive`, and [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) just the same. We rewrite the model below and confirm the two are interchangeable.
 
 
-    In [28]:
+    In [15]:
 
 
 ``` python
@@ -641,7 +635,7 @@ functional_model = forecasting_model(univariate_model)
 To check the two are the same model, we draw a prior forward sample from each with the **same** `rng_subkey` and compare the `obs` site. Since `obs` sits downstream of every latent, matching `obs` draws imply the whole forward computation matched.
 
 
-    In [29]:
+    In [16]:
 
 
 ``` python

@@ -50,12 +50,6 @@ rng_key = random.PRNGKey(seed=42)
 ```
 
 
-    The autoreload extension is already loaded. To reload it, use:
-      %reload_ext autoreload
-    The jaxtyping extension is already loaded. To reload it, use:
-      %reload_ext jaxtyping
-
-
 # Read data
 
 We work with total **weekly** BART ridership: hourly counts summed over all origin-destination pairs and aggregated into non-overlapping weeks. The series grows roughly multiplicatively, so we model it on the log scale, where the trend and the seasonal swings are closer to additive. Throughout the package, time lives at axis `-2` and the observation dimension at axis `-1`, so a single series has shape `(weeks, 1)`.
@@ -202,7 +196,7 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (`data=None`, so the horizon is zero and the `obs` site spans the train period) and plot the 50% and 94% HDI bands against the training series with ArviZ `plot_lm`. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.
+As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (`data=None`, so the horizon is zero and the `obs` site spans the train period) and plot the \\50\\\\ and \\94\\\\ HDI bands against the training series with ArviZ `plot_lm`. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.
 
 
 ``` python
@@ -236,8 +230,8 @@ pc = az.plot_lm(
 )
 ax = pc.viz["figure"].item().axes[0]
 band_50, band_94 = ax.collections  # in ci_prob order: (0.5, 0.94)
-band_50.set_label("50% HDI")
-band_94.set_label("94% HDI")
+band_50.set_label(r"$50\%$ HDI")
+band_94.set_label(r"$94\%$ HDI")
 (train_line,) = ax.plot(time_train, np.asarray(y_train[:, 0]), color="black", lw=1, label="train")
 ax.legend(handles=[band_94, band_50, train_line], loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(title="Prior predictive check", ylabel="log(# rides)");
