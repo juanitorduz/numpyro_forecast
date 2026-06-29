@@ -29,6 +29,7 @@ from numpyro.optim import Adam
 
 from numpyro_forecast import Forecaster, ForecastingModel, backtest, eval_coverage, eval_crps
 from numpyro_forecast.datasets import load_bart_weekly
+from numpyro_forecast.functional import Horizon, forecasting_model, predict, time_series
 from numpyro_forecast.typing import Array
 from numpyro_forecast.util import fourier_features
 
@@ -47,6 +48,12 @@ rng_key = random.PRNGKey(seed=42)
 %jaxtyping.typechecker beartype.beartype
 %config InlineBackend.figure_format = "retina"
 ```
+
+
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+    The jaxtyping extension is already loaded. To reload it, use:
+      %reload_ext jaxtyping
 
 
 # Read data
@@ -527,7 +534,7 @@ ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest f
 
 ## Forecast calibration
 
-CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so "the forecasts look calibrated" deserves its own number. We score the empirical **coverage** of each fold's out-of-sample bands: the fraction of held-out weeks that actually fall inside the central 50% and 94% prediction intervals. A well-calibrated forecast covers close to its nominal level, so the points should track the dashed reference lines. Points above mean the bands are too wide (under-confident); points below mean they are too narrow (over-confident). This is the quantitative version of the "stays inside the bands" eyeball check from the rolling-forecast plot.
+CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so "the forecasts look calibrated" deserves its own number. We score the empirical **coverage** of each fold's out-of-sample bands: the fraction of held-out weeks that actually fall inside the central \\50\\\\ and \\94\\\\ prediction intervals. A well-calibrated forecast covers close to its nominal level, so the points should track the dashed reference lines. Points above mean the bands are too wide (under-confident); points below mean they are too narrow (over-confident). This is the quantitative version of the "stays inside the bands" eyeball check from the rolling-forecast plot.
 
 A small caveat: [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
@@ -552,8 +559,69 @@ ax.set(
 </figure>
 
 
+# Functional API
+
+Everything so far went through the object-oriented [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel), but that class is only a thin shim over a functional core in `numpyro_forecast.functional`. The same model can be written as a plain function `(Horizon, covariates) -> None` that calls the free functions [time_series](../../reference/functional.time_series.md#numpyro_forecast.functional.time_series) and [predict](../../reference/functional.predict.md#numpyro_forecast.functional.predict) (the exact counterparts of the `self.time_series(...)` and `self.predict(...)` methods used above). The [Horizon](../../reference/functional.Horizon.md#numpyro_forecast.functional.Horizon) carries the train/forecast split that the class otherwise tracks as mutable state.
+
+`forecasting_model(...)` then wraps that body into the standard `(covariates, data=None)` NumPyro model, so the result is a drop-in replacement for a `UnivariateForecaster()` instance: it works with [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster), `Predictive`, and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) just the same. We rewrite the model below and confirm the two are interchangeable.
+
+
+``` python
+def univariate_model(h: Horizon, covariates: Array) -> None:
+    """Functional twin of ``UnivariateForecaster.model``."""
+    num_features = covariates.shape[-1]
+
+    bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
+    weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-20.0, 5.0))
+    nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
+    centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
+
+    drift = time_series(
+        h,
+        "drift",
+        lambda: dist.Normal(0.0, drift_scale),
+        reparam=LocScaleReparam(centered=centered),
+    )
+    level = jnp.cumsum(drift, axis=-2)
+    regression = (weight * covariates).sum(axis=-1, keepdims=True)
+    prediction = level + bias + regression
+
+    predict(h, dist.StudentT(df=nu, loc=0.0, scale=sigma), prediction)
+
+
+functional_model = forecasting_model(univariate_model)
+```
+
+
+To check the two are the same model, we draw a prior forward sample from each with the **same** `rng_subkey` and compare the `obs` site. Since `obs` sits downstream of every latent, matching `obs` draws imply the whole forward computation matched.
+
+
+``` python
+rng_key, rng_subkey = random.split(rng_key)
+
+oop_obs = Predictive(UnivariateForecaster(), num_samples=100, return_sites=["obs"])(
+    rng_subkey, covariates_train
+)["obs"]
+func_obs = Predictive(functional_model, num_samples=100, return_sites=["obs"])(
+    rng_subkey, covariates_train
+)["obs"]
+
+print("identical forward samples:", bool(jnp.array_equal(oop_obs, func_obs)))
+print("max abs difference:", float(jnp.max(jnp.abs(oop_obs - func_obs))))
+```
+
+
+    identical forward samples: True
+    max abs difference: 0.0
+
+
+The forward samples are bit-identical (maximum difference `0.0`): both models issue the same sample statements in the same order, so the random-number stream lines up exactly. The object-oriented class and the functional model are fully interchangeable, and you can reach for whichever style fits the problem.
+
+
 # Next steps
 
 This local level model with seasonality is a solid baseline. From here a few directions are natural: add holiday or special-event effects (dummy variables or Gaussian bump functions) for days the smooth seasonal basis cannot capture, or move to many related series at once. The last of these is the subject of the two companion notebooks, [hierarchical forecasting I](hierarchical_forecasting_1.md) and [II](hierarchical_forecasting_2.md), which generalize this same model to a panel of BART stations. See also Pyro's original [forecasting tutorial](https://pyro.ai/examples/forecasting_i.html).
 
-[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#5948ec60)
+[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#2f6a3db4)
