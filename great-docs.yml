@@ -92,6 +92,7 @@ reference:
       - functional.draw_posterior
       - functional.fit_mcmc
       - functional.forecast
+      - functional.predict_in_sample
       - functional.SVIFit
       - functional.MCMCFit
 

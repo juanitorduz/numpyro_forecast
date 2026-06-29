@@ -31,6 +31,7 @@ from numpyro_forecast.functional import (
 )
 from numpyro_forecast.functional import forecast as _forecast
 from numpyro_forecast.functional import predict as _predict
+from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -152,8 +153,9 @@ class ForecastingModel(abc.ABC):
 class _BaseForecaster(abc.ABC):
     """Shared forecasting logic over a fitted posterior."""
 
-    def __init__(self, model: ForecastModel) -> None:
+    def __init__(self, model: ForecastModel, t_obs: int) -> None:
         self.model = model
+        self._t_obs = t_obs
 
     @abc.abstractmethod
     def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
@@ -195,6 +197,57 @@ class _BaseForecaster(abc.ABC):
         posterior = self._draw_posterior(key_post, num_samples)
         return _forecast(key_pred, self.model, posterior, data, covariates, batch_size=batch_size)
 
+    def predict_in_sample(
+        self,
+        rng_key: Array,
+        covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Float[Array, " sample *batch time obs"]:
+        """Sample the in-sample posterior predictive of the ``obs`` site.
+
+        Draws ``num_samples`` posterior latent samples from the fitted forecaster and
+        runs the model forward over ``covariates`` with no forecast horizon, returning
+        the ``obs`` site. This is the in-sample counterpart of :meth:`__call__`, which
+        instead forecasts the future horizon.
+
+        Parameters
+        ----------
+        rng_key
+            PRNG key.
+        covariates
+            Covariates with time at axis ``-2`` spanning the observed window. Its time
+            length must match the data the forecaster was fit on.
+        num_samples
+            Number of posterior-predictive samples to draw.
+        batch_size
+            Optional chunk size for sampling (caps peak memory).
+
+        Returns
+        -------
+        Float[Array, " sample *batch time obs"]
+            In-sample posterior-predictive draws of the ``obs`` site.
+
+        Raises
+        ------
+        ValueError
+            If ``num_samples`` is not positive, or if ``covariates`` does not
+            match the in-sample duration the forecaster was fit on.
+        """
+        if covariates.shape[-2] != self._t_obs:
+            msg = (
+                "predict_in_sample expects covariates of the same duration as the "
+                f"fitted data ({self._t_obs}), got {covariates.shape[-2]}"
+            )
+            raise ValueError(msg)
+        _require_positive_num_samples(num_samples)
+        key_post, key_pred = random.split(rng_key)
+        posterior = self._draw_posterior(key_post, num_samples)
+        return _predict_in_sample(
+            key_pred, self.model, posterior, covariates, batch_size=batch_size
+        )
+
 
 class Forecaster(_BaseForecaster):
     """Fit a forecasting model with stochastic variational inference.
@@ -234,7 +287,7 @@ class Forecaster(_BaseForecaster):
         num_particles: int = 1,
         progress_bar: bool = False,
     ) -> None:
-        super().__init__(model)
+        super().__init__(model, data.shape[-2])
         self._fit = fit_svi(
             rng_key,
             model,
@@ -289,7 +342,7 @@ class HMCForecaster(_BaseForecaster):
         num_chains: int = 1,
         progress_bar: bool = False,
     ) -> None:
-        super().__init__(model)
+        super().__init__(model, data.shape[-2])
         self._fit = fit_mcmc(
             rng_key,
             model,

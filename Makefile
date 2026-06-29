@@ -1,10 +1,7 @@
-.PHONY: setup activate tests prek docs docs-preview
+.PHONY: setup tests prek docs docs-preview
 
 setup:
 	uv sync --all-extras
-
-activate:
-	@echo "Run: source .venv/bin/activate"
 
 tests:
 	uv run pytest

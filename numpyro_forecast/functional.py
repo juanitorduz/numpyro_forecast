@@ -547,3 +547,69 @@ def forecast(
         chunk = _index_tree(posterior, slice(start, stop))
         outputs.append(_predict(sub_key, model, chunk, data, covariates))
     return jnp.concatenate(outputs, axis=0)
+
+
+@partial(jax.jit, static_argnums=(1,))
+def _predict_obs(
+    rng_key: Array,
+    model: ForecastModel,
+    posterior: dict[str, Array],
+    covariates: Array,
+) -> Array:
+    """Run ``Predictive`` over the observed window and return the ``obs`` site.
+
+    Jitted with ``model`` static (see :func:`_predict`): each ``(model, shape)``
+    combination compiles once and is reused, keeping the chunked
+    :func:`predict_in_sample` loop cheap.
+    """
+    predictive = Predictive(model, posterior_samples=posterior, return_sites=["obs"])
+    return predictive(rng_key, covariates)["obs"]
+
+
+def predict_in_sample(
+    rng_key: Array,
+    model: ForecastModel,
+    posterior: dict[str, Array],
+    covariates: Array,
+    *,
+    batch_size: int | None = None,
+) -> Float[Array, " sample *batch time obs"]:
+    """Sample the in-sample posterior predictive of the ``obs`` site.
+
+    Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
+    latent draws. Unlike :func:`forecast` there is no forecast horizon: ``covariates``
+    span only the observed window, so the model's ``obs`` site is sampled at every
+    step. The number of predictive samples equals the leading (sample) axis of
+    ``posterior`` (see :func:`draw_posterior`).
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key.
+    model
+        The forecasting model callable (the same one that produced ``posterior``).
+    posterior
+        Posterior samples of the latent sites, sample axis leading.
+    covariates
+        Covariates with time at axis ``-2`` spanning the observed window. Its time
+        length must match the data the ``posterior`` was fit on, since the in-sample
+        latent sites are sized to that window.
+    batch_size
+        Optional chunk size for sampling (caps peak memory).
+
+    Returns
+    -------
+    Float[Array, " sample *batch time obs"]
+        In-sample posterior-predictive draws of the ``obs`` site.
+    """
+    num_samples = next(iter(posterior.values())).shape[0]
+    if batch_size is None or batch_size >= num_samples:
+        return _predict_obs(rng_key, model, posterior, covariates)
+    outputs = []
+    key = rng_key
+    for start in range(0, num_samples, batch_size):
+        stop = min(start + batch_size, num_samples)
+        key, sub_key = random.split(key)
+        chunk = _index_tree(posterior, slice(start, stop))
+        outputs.append(_predict_obs(sub_key, model, chunk, covariates))
+    return jnp.concatenate(outputs, axis=0)

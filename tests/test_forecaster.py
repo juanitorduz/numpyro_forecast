@@ -124,6 +124,34 @@ def test_forecaster_shape_both_backends(
     assert bool(jnp.all(jnp.isfinite(fc)))
 
 
+def test_forecaster_predict_in_sample_shape_and_finite(rng_key: Array) -> None:
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+    obs = forecaster.predict_in_sample(rng_key, empty_covariates(40), num_samples=10)
+    assert obs.shape == (10, 40, 1)
+    assert bool(jnp.all(jnp.isfinite(obs)))
+
+
+def test_forecaster_predict_in_sample_rejects_non_positive_num_samples(rng_key: Array) -> None:
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (30, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(30), num_steps=20)
+    with pytest.raises(ValueError, match="num_samples must be positive"):
+        forecaster.predict_in_sample(rng_key, empty_covariates(30), num_samples=0)
+
+
+def test_forecaster_predict_in_sample_rejects_duration_mismatch(
+    forecaster_factory: Callable[..., _BaseForecaster],
+    rng_key: Array,
+) -> None:
+    t = 30
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (t, 1)), axis=-2)
+    forecaster = forecaster_factory(rng_key, RandomWalkModel(), data, empty_covariates(t))
+    with pytest.raises(ValueError, match="same duration as the fitted data"):
+        forecaster.predict_in_sample(rng_key, empty_covariates(t + 5), num_samples=10)
+
+
 def test_hmc_forecaster_shape(rng_key: Array) -> None:
     model = RandomWalkModel()
     data = jnp.cumsum(0.1 * random.normal(rng_key, (30, 1)), axis=-2)

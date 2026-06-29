@@ -213,6 +213,12 @@ class BacktestResult:
         Mapping of metric name to value for the window.
     params
         Mapping of scalar parameter name to value (when available).
+    train_metrics
+        Mapping of metric name to in-sample value for the window. Empty unless
+        ``backtest`` was called with ``eval_train=True``.
+    prediction
+        Out-of-sample forecast samples for the window (sample axis leading), or
+        ``None`` unless ``backtest`` was called with ``keep_predictions=True``.
     """
 
     t0: int
@@ -223,6 +229,8 @@ class BacktestResult:
     test_walltime: float
     metrics: dict[str, float]
     params: dict[str, float] = field(default_factory=dict)
+    train_metrics: dict[str, float] = field(default_factory=dict)
+    prediction: Array | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
@@ -293,6 +301,45 @@ def _slice_window(
     return train_data, train_covariates, test_covariates, truth
 
 
+def _eval_train_window(
+    rng_key: Array,
+    forecaster: object,
+    train_data: Array,
+    train_covariates: Array,
+    *,
+    num_samples: int,
+    batch_size: int | None,
+    metrics: Mapping[str, Metric],
+    transform: Callable[[Array, Array], tuple[Array, Array]] | None,
+) -> dict[str, float]:
+    """Score the in-sample posterior predictive over one training window.
+
+    ``forecaster`` is typed loosely (``object``) so ``ty`` does not reject
+    duck-typed forecasters at the ``forecaster`` boundary; the explicit guard
+    below raises a clear :class:`TypeError` when ``predict_in_sample`` is missing.
+
+    Raises
+    ------
+    TypeError
+        If ``forecaster`` does not expose ``predict_in_sample``.
+    """
+    predict_in_sample = getattr(forecaster, "predict_in_sample", None)
+    if not callable(predict_in_sample):
+        msg = (
+            "eval_train=True requires a forecaster exposing "
+            "predict_in_sample(rng_key, covariates, num_samples, *, batch_size=None); "
+            f"{type(forecaster).__name__} does not."
+        )
+        raise TypeError(msg)
+    train_pred = cast(
+        "Array", predict_in_sample(rng_key, train_covariates, num_samples, batch_size=batch_size)
+    )
+    train_truth = train_data
+    if transform is not None:
+        train_pred, train_truth = transform(train_pred, train_truth)
+    return evaluate_forecast(train_pred, train_truth, metrics=metrics)
+
+
 def _run_window(
     rng_key: Array,
     t0: int,
@@ -308,6 +355,8 @@ def _run_window(
     batch_size: int | None,
     metrics: Mapping[str, Metric],
     transform: Callable[[Array, Array], tuple[Array, Array]] | None,
+    eval_train: bool,
+    keep_predictions: bool,
 ) -> BacktestResult:
     """Fit, forecast, and score a single backtest window into a :class:`BacktestResult`."""
     train_data, train_covariates, test_covariates, truth = _slice_window(
@@ -327,6 +376,22 @@ def _run_window(
     if transform is not None:
         pred, truth = transform(pred, truth)
 
+    train_metrics: dict[str, float] = {}
+    if eval_train:
+        # In-sample scoring is an optional diagnostic: derive its key as an
+        # independent substream via fold_in so enabling it never shifts the
+        # fit/forecast keys above.
+        train_metrics = _eval_train_window(
+            random.fold_in(rng_key, 2),
+            forecaster,
+            train_data,
+            train_covariates,
+            num_samples=num_samples,
+            batch_size=batch_size,
+            metrics=metrics,
+            transform=transform,
+        )
+
     return BacktestResult(
         t0=t0,
         t1=t1,
@@ -336,6 +401,8 @@ def _run_window(
         test_walltime=test_walltime,
         metrics=evaluate_forecast(pred, truth, metrics=metrics),
         params=_scalar_params(forecaster),
+        train_metrics=train_metrics,
+        prediction=pred if keep_predictions else None,
     )
 
 
@@ -356,6 +423,8 @@ def backtest(
     num_samples: int = 100,
     batch_size: int | None = None,
     forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None = None,
+    eval_train: bool = False,
+    keep_predictions: bool = False,
 ) -> list[BacktestResult]:
     """Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -395,6 +464,16 @@ def backtest(
     forecaster_options
         Options dict passed to ``forecaster_fn``, or a callable
         ``(t0, t1, t2) -> dict`` returning per-window options.
+    eval_train
+        If ``True``, also score the in-sample posterior predictive over each training
+        window with the same ``metrics`` and store them in
+        ``BacktestResult.train_metrics``. Requires a forecaster exposing
+        ``predict_in_sample`` (the built-in :class:`Forecaster` and
+        :class:`HMCForecaster` do).
+    keep_predictions
+        If ``True``, store each window's out-of-sample forecast samples (after
+        ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
+        avoid retaining large Monte Carlo arrays.
 
     Returns
     -------
@@ -431,6 +510,8 @@ def backtest(
                 batch_size=batch_size,
                 metrics=metrics,
                 transform=transform,
+                eval_train=eval_train,
+                keep_predictions=keep_predictions,
             )
         )
 
