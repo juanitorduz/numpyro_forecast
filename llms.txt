@@ -28,6 +28,7 @@
 - [functional.draw_posterior](https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html)
 - [functional.fit_mcmc](https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_mcmc.html)
 - [functional.forecast](https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecast.html)
+- [functional.predict_in_sample](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_in_sample.html)
 - [functional.SVIFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.SVIFit.html)
 - [functional.MCMCFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.MCMCFit.html)
 

@@ -54,6 +54,9 @@ Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
 [functional.forecast()](functional.forecast.md#numpyro_forecast.functional.forecast)  
 Sample forecasts for the steps in `[t, duration)` from a posterior.
 
+[functional.predict_in_sample()](functional.predict_in_sample.md#numpyro_forecast.functional.predict_in_sample)  
+Sample the in-sample posterior predictive of the `obs` site.
+
 [functional.SVIFit](functional.SVIFit.md#numpyro_forecast.functional.SVIFit)  
 The result of fitting a forecasting model with SVI.
 

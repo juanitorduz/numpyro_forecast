@@ -23,7 +23,9 @@ evaluate.backtest(
     stride=1,
     num_samples=100,
     batch_size=None,
-    forecaster_options=None
+    forecaster_options=None,
+    eval_train=False,
+    keep_predictions=False
 )
 ```
 
@@ -75,6 +77,12 @@ Optional forecast-sampling chunk size.
 
 `forecaster_options: Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None = None`  
 Options dict passed to `forecaster_fn`, or a callable `(t0, t1, t2) -> dict` returning per-window options.
+
+`eval_train: bool = ``False`  
+If `True`, also score the in-sample posterior predictive over each training window with the same `metrics` and store them in `BacktestResult.train_metrics`. Requires a forecaster exposing [predict_in_sample](functional.predict_in_sample.md#numpyro_forecast.functional.predict_in_sample) (the built-in [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) and [HMCForecaster](forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) do).
+
+`keep_predictions: bool = ``False`  
+If `True`, store each window's out-of-sample forecast samples (after `transform`) on [BacktestResult.prediction](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult.prediction). Defaults to `False` to avoid retaining large Monte Carlo arrays.
 
 
 ## Returns

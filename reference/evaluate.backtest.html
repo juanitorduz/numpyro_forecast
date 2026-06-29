@@ -192,7 +192,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="14" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="16" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -310,6 +310,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.forecast.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.forecast()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/functional.predict_in_sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.predict_in_sample()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -506,7 +512,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/0.1.1/numpyro_forecast/evaluate.py#L342-L437" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L409-L518" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest</span>(</span>
@@ -525,8 +531,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">stride</span><span class="op">=</span><span class="dv">1</span>,</span>
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_samples</span><span class="op">=</span><span class="dv">100</span>,</span>
 <span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecaster_options</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecaster_options</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="va">eval_train</span><span class="op">=</span><span class="cn-bool">False</span>,</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="va">keep_predictions</span><span class="op">=</span><span class="cn-bool">False</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -590,7 +598,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">forecaster_options</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Options dict passed to <code>forecaster_fn</code>, or a callable <code>(t0, t1, t2) -&gt; dict</code> returning per-window options.
+<p>Options dict passed to <code>forecaster_fn</code>, or a callable <code>(t0, t1, t2) -&gt; dict</code> returning per-window options.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">eval_train</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
+<dd>
+<p>If <code>True</code>, also score the in-sample posterior predictive over each training window with the same <code>metrics</code> and store them in <code>BacktestResult.train_metrics</code>. Requires a forecaster exposing <a href="functional.predict_in_sample.html#numpyro_forecast.functional.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a> (the built-in <a href="forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> and <a href="forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> do).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">keep_predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
+<dd>
+If <code>True</code>, store each window’s out-of-sample forecast samples (after <code>transform</code>) on <a href="evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult.prediction" class="gdls-link gdls-code">BacktestResult.prediction</a>. Defaults to <code>False</code> to avoid retaining large Monte Carlo arrays.
 </dd>
 </dl>
 </div>

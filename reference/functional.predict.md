@@ -15,7 +15,7 @@ functional.predict(
 ```
 
 
-`noise_dist` is a zero-centered observation noise distribution and `prediction` the deterministic mean over the full horizon. While training the residual is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the `"forecast"` deterministic site.
+`noise_dist` is a zero-centered observation noise distribution and [prediction](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult.prediction) the deterministic mean over the full horizon. While training the residual is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the `"forecast"` deterministic site.
 
 
 ## Parameters

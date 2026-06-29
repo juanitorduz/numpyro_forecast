@@ -2,295 +2,301 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/datasets.bart_available.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_hierarchical.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_weekly.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_victoria_electricity.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_coverage.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_mae.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_rmse.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.Forecaster.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.ForecastingModel.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.HMCForecaster.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.Horizon.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.MCMCFit.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.SVIFit.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_mcmc.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_svi.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecast.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecasting_model.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_in_sample.html</loc>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.time_series.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/metrics.crps_empirical.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.concat_future.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.fourier_features.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.periodic_repeat.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.prefix_condition.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.shift_loc.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.slice_time.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/util.zero_data_like.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/changelog.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/contributing.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/electricity_forecast-preview.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/electricity_forecast_calibration-preview.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/forecasting_univariate-preview.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/hierarchical_forecasting_1-preview.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/hierarchical_forecasting_2-preview.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast_calibration.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_1.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_2.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/license.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/skills.html</loc>
-    <lastmod>2026-06-26</lastmod>
+    <lastmod>2026-06-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>

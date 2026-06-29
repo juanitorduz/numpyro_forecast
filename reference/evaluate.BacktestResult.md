@@ -30,6 +30,10 @@ evaluate.BacktestResult()
 
 `params: dict[str, float] = dict()`    
 
+`train_metrics: dict[str, float] = dict()`    
+
+`prediction: Array | None = None`  
+
 
 ## Attributes
 
@@ -48,6 +52,12 @@ Mapping of metric name to value for the window.
 
 `params: dict[str, float]`  
 Mapping of scalar parameter name to value (when available).
+
+`train_metrics: dict[str, float]`  
+Mapping of metric name to in-sample value for the window. Empty unless [backtest](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) was called with `eval_train=True`.
+
+`prediction: Array | None`  
+Out-of-sample forecast samples for the window (sample axis leading), or `None` unless [backtest](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) was called with `keep_predictions=True`.
 
 
 ## Methods
