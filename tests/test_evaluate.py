@@ -179,6 +179,8 @@ def test_backtest_result_to_dict() -> None:
     assert flat["t1"] == 10
     assert flat["metrics"] == {"mae": 1.0}
     assert flat["params"] == {"sigma": 0.3}
+    assert flat["train_metrics"] == {}
+    assert flat["prediction"] is None
     assert set(flat) == {
         "t0",
         "t1",
@@ -188,6 +190,8 @@ def test_backtest_result_to_dict() -> None:
         "test_walltime",
         "metrics",
         "params",
+        "train_metrics",
+        "prediction",
     }
 
 
@@ -247,6 +251,117 @@ def test_backtest_callable_options_and_transform(rng_key: Array) -> None:
     assert len(results) == 3
     assert seen_windows == [(0, 12, 16), (0, 16, 20), (0, 20, 24)]
     assert transform_calls["count"] == 3
+
+
+def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Array) -> None:
+    # Pyro-faithful defaults: no in-sample scoring, no retained predictions.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+    )
+    assert results
+    for r in results:
+        assert r.train_metrics == {}
+        assert r.prediction is None
+
+
+def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        metrics={"crps": eval_crps},
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+        eval_train=True,
+    )
+    assert results
+    for r in results:
+        assert set(r.train_metrics) == set(r.metrics) == {"crps"}
+        assert isinstance(r.train_metrics["crps"], float)
+
+
+def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+        keep_predictions=True,
+    )
+    assert results
+    for r in results:
+        assert r.prediction is not None
+        assert r.prediction.shape == (20, 4, 1)
+
+
+def test_backtest_eval_train_applies_transform_twice_per_window(rng_key: Array) -> None:
+    # With eval_train the same transform is applied to the OOS pair and the
+    # in-sample pair, so it runs twice per window.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    transform_calls = {"count": 0}
+
+    def transform(pred: Array, truth: Array) -> tuple[Array, Array]:
+        transform_calls["count"] += 1
+        return jnp.exp(pred), jnp.exp(truth)
+
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+        transform=transform,
+        eval_train=True,
+    )
+    assert len(results) == 3
+    assert transform_calls["count"] == 6
+
+
+def test_backtest_eval_train_requires_predict_in_sample(rng_key: Array) -> None:
+    # A custom forecaster without predict_in_sample cannot be scored in-sample.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    with pytest.raises(TypeError, match="predict_in_sample"):
+        backtest(
+            rng_key,
+            data,
+            covariates,
+            RandomWalkModel,
+            forecaster_fn=cast("ForecasterFactory", lambda *args, **kwargs: _FakeForecaster()),
+            test_window=4,
+            min_train_window=12,
+            stride=4,
+            num_samples=10,
+            eval_train=True,
+        )
 
 
 # --- unit tests for the private backtest sub-components ------------------------
@@ -411,6 +526,8 @@ def test_run_window_builds_result_and_applies_transform() -> None:
         batch_size=None,
         metrics=DEFAULT_METRICS,
         transform=transform,
+        eval_train=False,
+        keep_predictions=False,
     )
     assert isinstance(result, BacktestResult)
     assert (result.t0, result.t1, result.t2) == (2, 6, 8)
@@ -419,4 +536,6 @@ def test_run_window_builds_result_and_applies_transform() -> None:
     assert result.params == {"sigma": pytest.approx(0.3)}  # the vector param is dropped
     assert result.train_walltime >= 0.0
     assert result.test_walltime >= 0.0
+    assert result.train_metrics == {}
+    assert result.prediction is None
     assert transform_calls["count"] == 1

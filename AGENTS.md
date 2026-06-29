@@ -67,6 +67,15 @@ When writing text files (`.txt`, `.md`, `.qmd`, and similar), do **not** wrap pr
 
 Exceptions: code blocks, tables, YAML front matter, and anything where the newline is semantically meaningful (e.g. markdown lists, mermaid diagrams) — keep those formatted normally.
 
+### Latex Formulas
+
+Use explicit name distributions like $\text{Normal}(\mu, \sigma)$ instead of $\mathcal{N}(\mu, \sigma)$.
+
+### HDI Bands
+
+- Use latex format r"$94\%$ HDI" instead of "94% HDI" for matplotlib plots.
+- In the text, also use LaTex like $94\%$ HDI instead of "94% HDI".
+
 ### American English spelling
 
 Use American English spelling. Do not use British English spelling.
