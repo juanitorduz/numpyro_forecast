@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
+  # Rebuild after a release is published so the navbar version badge (fetched
+  # from the latest GitHub Release at build time) reflects the new release. A
+  # merge that bumps the version can otherwise build the docs moments before the
+  # release exists, leaving the badge stuck on the previous version.
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Read-only by default; each job opts into only the writes it needs.
@@ -44,9 +50,13 @@ jobs:
           name: docs-site
           path: great-docs/_site
 
-  # Production site: publish to the root of gh-pages on pushes to main.
+  # Production site: publish to the root of gh-pages on pushes to main and on
+  # published releases (release events run with github.ref set to the tag, so
+  # they are matched explicitly rather than via the refs/heads/main check).
   deploy-main:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:
