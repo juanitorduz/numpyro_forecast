@@ -1,9 +1,7 @@
 # Hierarchical forecasting I with `numpyro_forecast`
 
 
-This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part I)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It generalizes the [univariate notebook](forecasting_univariate.md) from a single series to many: we forecast hourly **BART arrivals to one destination** (`EMBR`, Embarcadero) from all `50` origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.
-
-We subclass `numpyro_forecast.ForecastingModel` and let [Forecaster](../../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) handle the *fit-once / forecast-any-horizon* mechanics. Visualizations use **ArviZ \>= 1.0** (`az.hdi` + `fill_between`).
+This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part I)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itelf a port of the first part of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). It generalizes the [univariate notebook](forecasting_univariate.md) from a single series to many: we forecast hourly **BART arrivals to one destination** (`EMBR`, Embarcadero) from all `50` origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.
 
 > **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism rather than re-running the guide over the full covariates.
 
@@ -15,12 +13,6 @@ We subclass `numpyro_forecast.ForecastingModel` and let [Forecaster](../../../re
 
 
 ``` python
-%load_ext autoreload
-%autoreload 2
-%load_ext jaxtyping
-%jaxtyping.typechecker beartype.beartype
-%config InlineBackend.figure_format = "retina"
-
 from typing import cast
 
 import arviz as az
@@ -49,7 +41,13 @@ plt.rcParams["figure.facecolor"] = "white"
 numpyro.set_host_device_count(n=4)
 
 rng_key = random.PRNGKey(seed=42)
-period = 24 * 7  # weekly seasonality (hours)
+
+
+%load_ext autoreload
+%autoreload 2
+%load_ext jaxtyping
+%jaxtyping.typechecker beartype.beartype
+%config InlineBackend.figure_format = "retina"
 ```
 
 
@@ -123,7 +121,7 @@ print("christmas index:", christmas_index)
 
 This is the univariate model lifted to a panel. Each series \\s\\ gets its own random-walk level \\\ell\_{t,s}\\ and its own weekly seasonal profile (one value per hour-of-week, `168` in total), and all series share the same global drift scale and observation scale \\\sigma\\:
 
-\\ \mu\_{t,s} = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s},\qquad \ell\_{t,s} = \ell\_{t-1,s} + \delta\_{t,s}, \\ \\ y\_{t,s} \sim \mathcal{N}(\mu\_{t,s}, \sigma). \\
+\\\begin{align\*} \mu\_{t,s} & = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s} \\ \ell\_{t,s} & = \ell\_{t-1,s} + \delta\_{t,s} \\ \delta\_{t,s} & \sim \text{Normal}(0, \sigma\_\text{drift}) \\ y\_{t,s} & \sim \text{Normal}(\mu\_{t,s}, \sigma). \end{align\*}\\
 
 The hierarchy is expressed with `numpyro.plate`. We wrap `self.time_series(...)` in an `n_series` plate so the drift (and its forecast `_future` companion) is sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../../reference/util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together.
 
@@ -164,10 +162,15 @@ class MultiSeriesForecaster(ForecastingModel):
 ```
 
 
+Let's visualize the model:
+
+
     In [5]:
 
 
 ``` python
+period = 24 * 7  # weekly seasonality (hours)
+
 numpyro.render_model(
     MultiSeriesForecaster(period=period),
     model_args=(covariates_train, y_train),
@@ -183,18 +186,37 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the 50% and 94% HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
+As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the \\50\\\\ and \\94\\\\ HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
 
 
     In [6]:
 
 
 ``` python
-def hdi_bounds(samples: Array | np.ndarray, prob: float) -> tuple[np.ndarray, np.ndarray]:
-    arr = np.asarray(samples)
-    da = xr.DataArray(arr[None], dims=["chain", "draw", "time"])
-    band = az.hdi(da, prob=prob)
-    return band.sel(ci_bound="lower").values, band.sel(ci_bound="upper").values
+n_plot = 8  # origins shown in the facet grid
+dest = "EMBR"
+series = list(range(n_plot))
+
+
+def faceted_idata(
+    obs: Array | np.ndarray, t: Array | np.ndarray, group: str = "posterior_predictive"
+) -> xr.DataTree:
+    """Pack ``(draws, time, series)`` predictions into a DataTree for `plot_lm` faceting.
+
+    The independent variable in ``constant_data`` carries the ``series`` dimension so that
+    `plot_lm` facets one panel per series (`plot_dim="time"`).
+    """
+    t = np.asarray(t, dtype=float)
+    x_grid = np.broadcast_to(t[:, None], (len(t), n_plot))
+    return az.from_dict(
+        {
+            group: {"obs": np.asarray(obs)[None]},
+            "observed_data": {"obs": np.zeros((len(t), n_plot))},
+            "constant_data": {"t": x_grid},
+        },
+        coords={"time": t, "series": series},
+        dims={"obs": ["time", "series"], "t": ["time", "series"]},
+    )
 
 
 prior_predictive = Predictive(
@@ -204,24 +226,62 @@ rng_key, rng_subkey = random.split(rng_key)
 prior_obs = prior_predictive(rng_subkey, covariates_train)["obs"]
 
 lo = T1 - 3 * period  # last three weeks of train
-fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(14, 10), sharex=True)
-for i, ax in enumerate(axes.ravel()):
-    for prob in [0.94, 0.5]:
-        lower, upper = hdi_bounds(prior_obs[:, lo:T1, i], prob)
-        ax.fill_between(time_train[lo:T1], lower, upper, color="C0", alpha=0.2)
-    ax.plot(time_train[lo:T1], np.asarray(y_train[lo:T1, i]), color="black", lw=1)
-    ax.set_title(f"{stations[i]} -> EMBR", fontsize=10)
+t_train = time_train[lo:T1].astype(float)
+
+pc = az.plot_lm(
+    faceted_idata(prior_obs[:, lo:T1, :n_plot], t_train, group="prior_predictive"),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    group="prior_predictive",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    col_wrap=2,
+    visuals={
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
+    figure_kwargs={"figsize": (14, 10)},
+)
+# Observed series on every facet in one call (subset per series by `pc.map`).
+truth_da = xr.DataArray(
+    np.asarray(y_train[lo:T1, :n_plot]),
+    dims=["time", "series"],
+    coords={"time": t_train, "series": series},
+    name="t",
+)
+x_da = xr.DataArray(t_train, dims=["time"], coords={"time": t_train})
+pc.map(
+    az.visuals.line_xy, "truth", data=truth_da, x=x_da, ignore_aes=pc.aes_set, color="black", lw=1
+)
+for i in series:
+    pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
+ax0 = pc.get_target("t", {"series": n_plot - 1})
+bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
+band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
+band_94.set_label(r"$94\%$ HDI")
+band_50.set_label(r"$50\%$ HDI")
+train_line = pc.viz["truth"]["t"].sel(series=n_plot - 1).item()
+train_line.set_label("training data")
+ax0.legend(handles=[band_94, band_50, train_line], loc="upper left", fontsize=8)
+fig = pc.viz["figure"].item()
+fig.supxlabel("hour")
+fig.supylabel("log1p(# rides)")
 fig.suptitle("Prior predictive check (last 3 train weeks)", fontsize=14)
 fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68824/814384823.py:23: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_88622/3516056338.py:80: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
 <figure class="figure">
-<p><img src="hierarchical_forecasting_1_files/figure-html/cell-7-output-2.png" class="figure-img" width="1390" height="985" /></p>
+<p><img src="hierarchical_forecasting_1_files/figure-html/cell-7-output-2.png" class="figure-img" width="1377" height="990" /></p>
 </figure>
 
 
@@ -302,33 +362,111 @@ The model does quite well on most of the test window, but it clearly struggles a
 
 
 ``` python
-fig, axes = plt.subplots(nrows=8, ncols=1, figsize=(15, 18), sharex=True)
-for i, ax in enumerate(axes):
-    for prob in [0.94, 0.5]:
-        lower, upper = hdi_bounds(train_pp[:, lo:T1, i], prob)
-        ax.fill_between(time_train[lo:T1], lower, upper, color="C0", alpha=0.2)
-        lower, upper = hdi_bounds(forecast[:, :, i], prob)
-        ax.fill_between(time_test, lower, upper, color="C1", alpha=0.2)
-    ax.plot(time[lo:T2], np.asarray(data[lo:T2, i]), color="black", lw=1, label="truth")
-    ax.axvline(T1, color="C3", ls="--", label="train/test split")
-    if christmas_index is not None:
-        ax.axvline(christmas_index, color="C2", lw=12, alpha=0.2, label="Christmas")
-    ax.set_title(f"{stations[i]} -> EMBR", fontsize=10)
-axes[0].legend(loc="upper left", fontsize=9)
+t_test = time_test.astype(float)
+t_full = time[lo:T2].astype(float)
+
+pc = az.plot_lm(
+    faceted_idata(train_pp[:, lo:T1, :n_plot], t_train),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    col_wrap=1,
+    visuals={
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
+    figure_kwargs={"figsize": (15, 18)},
+)
+train_bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
+band_train_94 = train_bands.sel(prob=0.94).item()
+band_train_50 = train_bands.sel(prob=0.5).item()
+az.plot_lm(
+    faceted_idata(forecast[:, :, :n_plot], t_test),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    plot_collection=pc,
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={
+        "ci_band": {"color": "C1"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
+)
+
+# Observed series and the split / Christmas markers on every facet, each in one call.
+truth_da = xr.DataArray(
+    np.asarray(data[lo:T2, :n_plot]),
+    dims=["time", "series"],
+    coords={"time": t_full, "series": series},
+    name="t",
+)
+x_da = xr.DataArray(t_full, dims=["time"], coords={"time": t_full})
+pc.map(
+    az.visuals.line_xy, "truth", data=truth_da, x=x_da, ignore_aes=pc.aes_set, color="black", lw=1
+)
+split_da = xr.DataArray(
+    np.full(n_plot, float(T1)), dims=["series"], coords={"series": series}, name="t"
+)
+pc.map(az.visuals.vline, "split", data=split_da, ignore_aes=pc.aes_set, color="C3", ls="--")
+if christmas_index is not None:
+    xmas_da = xr.DataArray(
+        np.full(n_plot, float(christmas_index)),
+        dims=["series"],
+        coords={"series": series},
+        name="t",
+    )
+    pc.map(
+        az.visuals.vline, "xmas", data=xmas_da, ignore_aes=pc.aes_set, color="C2", lw=12, alpha=0.2
+    )
+
+for i in series:
+    pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=12)
+
+# Build the legend once, on the first facet, from the real band and line artists.
+ax0 = pc.get_target("t", {"series": n_plot - 1})
+test_bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
+band_test_94 = test_bands.sel(prob=0.94).item()
+band_test_50 = test_bands.sel(prob=0.5).item()
+band_train_94.set_label(r"in-sample $94\%$ HDI")
+band_train_50.set_label(r"in-sample $50\%$ HDI")
+band_test_94.set_label(r"forecast $94\%$ HDI")
+band_test_50.set_label(r"forecast $50\%$ HDI")
+truth_line = pc.viz["truth"]["t"].sel(series=n_plot - 1).item()
+split_line = pc.viz["split"]["t"].sel(series=n_plot - 1).item()
+truth_line.set_label("truth")
+split_line.set_label("train/test split")
+handles = [band_train_94, band_train_50, band_test_94, band_test_50, truth_line, split_line]
+if christmas_index is not None:
+    xmas_line = pc.viz["xmas"]["t"].sel(series=n_plot - 1).item()
+    xmas_line.set_label("Christmas")
+    handles.append(xmas_line)
+
+fig = pc.viz["figure"].item()
+fig.supxlabel("hour")
+fig.supylabel("log1p(# rides)")
+ax0.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.15), ncols=4, fontsize=12)
 fig.suptitle(
     f"Forecast (train CRPS: {crps_train:.4f}, test CRPS: {crps_test:.4f})",
-    fontsize=16,
-)
-fig.tight_layout();
+    fontsize=18,
+    fontweight="bold",
+    y=1.03,
+);
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_68824/1357336746.py:18: UserWarning: The figure layout has changed to tight
-      fig.tight_layout();
-
-
 <figure class="figure">
-<p><img src="hierarchical_forecasting_1_files/figure-html/cell-10-output-2.png" class="figure-img" width="1489" height="1769" /></p>
+<p><img src="hierarchical_forecasting_1_files/figure-html/cell-10-output-1.png" class="figure-img" width="1511" height="1869" /></p>
 </figure>
 
 

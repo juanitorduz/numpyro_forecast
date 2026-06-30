@@ -29,7 +29,6 @@ import numpyro
 import numpyro.distributions as dist
 import pandas as pd
 import preliz as pz
-import xarray as xr
 from jax import random
 from numpyro.contrib.hsgp.approximation import hsgp_matern
 from numpyro.infer import Predictive, init_to_feasible
@@ -358,32 +357,48 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-Before we fit the model, let's visualize the prior predictive distribution. A [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) instance is a plain NumPyro model callable, so we can hand it to `Predictive` directly. We adapt the ArviZ band helper used across the other examples (ArviZ removed `plot_hdi`, so we build the bands with `az.hdi`).
+Before we fit the model, let's visualize the prior predictive distribution. A [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) instance is a plain NumPyro model callable, so we can hand it to `Predictive` directly. We draw the bands with ArviZ's `plot_lm`, which computes the \\50\\\\ and \\94\\\\ HDI internally; since the time axis is a `datetime64` array we pass it as matplotlib date numbers (`mdates.date2num`) and restore the date formatter on the returned axis.
 
 
 ``` python
-def hdi_bounds(samples: Array, prob: float) -> tuple[np.ndarray, np.ndarray]:
-    arr = np.asarray(samples)
-    da = xr.DataArray(arr[None], dims=["chain", "draw", "time"])
-    band = az.hdi(da, prob=prob)
-    return band.sel(ci_bound="lower").values, band.sel(ci_bound="upper").values
-
-
 prior_predictive = Predictive(model, num_samples=2_000, return_sites=["obs"])
 rng_key, rng_subkey = random.split(rng_key)
 prior_obs = prior_predictive(rng_subkey, covariates_train)["obs"][..., 0]
 
-fig, ax = plt.subplots()
-for prob, band_alpha in [(0.94, 0.3), (0.5, 0.5)]:
-    lower, upper = hdi_bounds(prior_obs, prob)
-    ax.fill_between(
-        dates_train, lower, upper, color="C0", alpha=band_alpha, label=f"{prob * 100:.0f}% HDI"
-    )
-ax.plot(dates_train, np.asarray(data_train[:, 0]), c="black", label="Training Data")
-ax.legend()
-ax.set(title="Prior Predictive Checks", ylabel="Demand (GW)", xlabel="Time")
+xnum_train = mdates.date2num(dates_train)
+
+idata_prior = az.from_dict(
+    {
+        "prior_predictive": {"obs": np.asarray(prior_obs)[None]},
+        "observed_data": {"obs": np.asarray(data_train[:, 0])},
+        "constant_data": {"date": xnum_train},
+    },
+    coords={"time": xnum_train},
+    dims={"obs": ["time"], "date": ["time"]},
+)
+pc = az.plot_lm(
+    idata_prior,
+    y="obs",
+    x="date",
+    group="prior_predictive",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
+    figure_kwargs={"figsize": (12, 7)},
+)
+ax = pc.viz["figure"].item().axes[0]
+bands = pc.viz["ci_band"]["date"]
+band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
+band_94.set_label(r"$94\%$ HDI")
+band_50.set_label(r"$50\%$ HDI")
+(train_line,) = ax.plot(
+    xnum_train, np.asarray(data_train[:, 0]), c="black", lw=1, label="Training Data"
+)
 ax.xaxis.set_major_locator(demand_loc)
 ax.xaxis.set_major_formatter(demand_fmt)
+ax.legend(handles=[band_94, band_50, train_line])
+ax.set(title="Prior Predictive Checks", ylabel="Demand (GW)", xlabel="Time");
 ```
 
 
@@ -480,31 +495,82 @@ The held-out scores land in the same ballpark as the in-sample ones (here even a
 train_obs = train_posterior["obs"][..., 0]
 forecast_obs = forecast[..., 0]
 
-fig, ax = plt.subplots()
-for prob, band_alpha in [(0.94, 0.2), (0.5, 0.4)]:
-    lower, upper = hdi_bounds(train_obs, prob)
-    ax.fill_between(dates_train, lower, upper, color="C0", alpha=band_alpha)
-    lower, upper = hdi_bounds(forecast_obs, prob)
-    ax.fill_between(dates_test, lower, upper, color="C1", alpha=band_alpha)
-ax.plot(dates_train, np.asarray(train_obs.mean(axis=0)), c="C0", label="Train Posterior Mean")
-ax.plot(dates_test, np.asarray(forecast_obs.mean(axis=0)), c="C1", label="Forecast Mean")
-ax.plot(dates_train, np.asarray(data_train[:, 0]), c="black", label="Training Data")
-ax.plot(dates_test, np.asarray(data_test[:, 0]), c="black", label="Test Data")
-ax.axvline(x=dates_train[-1], color="gray", linestyle="--", label="Train/Test Split")
-ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=5)
+xnum_test = mdates.date2num(dates_test)
+
+idata_train = az.from_dict(
+    {
+        "posterior_predictive": {"obs": np.asarray(train_obs)[None]},
+        "observed_data": {"obs": np.asarray(data_train[:, 0])},
+        "constant_data": {"date": xnum_train},
+    },
+    coords={"time": xnum_train},
+    dims={"obs": ["time"], "date": ["time"]},
+)
+idata_test = az.from_dict(
+    {
+        "posterior_predictive": {"obs": np.asarray(forecast_obs)[None]},
+        "observed_data": {"obs": np.asarray(data_test[:, 0])},
+        "constant_data": {"date": xnum_test},
+    },
+    coords={"time": xnum_test},
+    dims={"obs": ["time"], "date": ["time"]},
+)
+
+pc = az.plot_lm(
+    idata_train,
+    y="obs",
+    x="date",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
+    figure_kwargs={"figsize": (12, 7)},
+)
+train_bands = pc.viz["ci_band"]["date"]
+band_train_94 = train_bands.sel(prob=0.94).item()
+band_train_50 = train_bands.sel(prob=0.5).item()
+az.plot_lm(
+    idata_test,
+    y="obs",
+    x="date",
+    plot_collection=pc,
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+)
+test_bands = pc.viz["ci_band"]["date"]
+band_test_94 = test_bands.sel(prob=0.94).item()
+band_test_50 = test_bands.sel(prob=0.5).item()
+ax = pc.viz["figure"].item().axes[0]
+band_train_94.set_label(r"in-sample $94\%$ HDI")
+band_train_50.set_label(r"in-sample $50\%$ HDI")
+band_test_94.set_label(r"forecast $94\%$ HDI")
+band_test_50.set_label(r"forecast $50\%$ HDI")
+obs_dates = mdates.date2num(np.concatenate([dates_train, dates_test]))
+obs_values = np.concatenate([np.asarray(data_train[:, 0]), np.asarray(data_test[:, 0])])
+(obs_line,) = ax.plot(obs_dates, obs_values, c="black", lw=1, label="Observed Data")
+split_line = ax.axvline(x=xnum_train[-1], color="gray", linestyle="--", label="Train/Test Split")
+ax.xaxis.set_major_locator(demand_loc)
+ax.xaxis.set_major_formatter(demand_fmt)
+ax.legend(
+    handles=[band_train_94, band_train_50, band_test_94, band_test_50, obs_line, split_line],
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.1),
+    ncol=3,
+)
 ax.set(
     title=f"Train CRPS: {train_metrics['crps']:.3f}, Test CRPS: {test_metrics['crps']:.3f}",
     ylabel="Demand (GW)",
     xlabel="Time",
 )
-ax.xaxis.set_major_locator(demand_loc)
-ax.xaxis.set_major_formatter(demand_fmt)
+fig = pc.viz["figure"].item()
 fig.suptitle("Posterior Predictive Checks", fontsize=18, fontweight="bold");
 ```
 
 
 <figure class="figure">
-<p><img src="electricity_forecast_files/figure-html/_src-electricity_forecast-cell-18-output-1.png" class="figure-img" width="1197" height="711" /></p>
+<p><img src="electricity_forecast_files/figure-html/_src-electricity_forecast-cell-18-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -520,19 +586,30 @@ Being happy about the forecast performance, we can dig deeper into the temperatu
 temperature_train = np.asarray(temperature[:t_train])
 order = np.argsort(temperature_train)
 
-fig, ax = plt.subplots()
-for prob, band_alpha in [(0.94, 0.3), (0.5, 0.5)]:
-    lower, upper = hdi_bounds(train_obs[:, order], prob)
-    ax.fill_between(
-        temperature_train[order],
-        lower,
-        upper,
-        color="C0",
-        alpha=band_alpha,
-        label=f"{prob * 100:.0f}% HDI",
-    )
+idata_demand = az.from_dict(
+    {
+        "posterior_predictive": {"obs": np.asarray(train_obs[:, order])[None]},
+        "observed_data": {"obs": np.asarray(data_train[order, 0])},
+        "constant_data": {"temperature": temperature_train[order]},
+    },
+    dims={"obs": ["obs_dim"], "temperature": ["obs_dim"]},
+)
+pc = az.plot_lm(
+    idata_demand,
+    y="obs",
+    x="temperature",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
+    figure_kwargs={"figsize": (12, 7)},
+)
+ax = pc.viz["figure"].item().axes[0]
+bands = pc.viz["ci_band"]["temperature"]
+band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
+band_94.set_label(r"$94\%$ HDI")
+band_50.set_label(r"$50\%$ HDI")
 ax.scatter(temperature_train, np.asarray(data_train[:, 0]), c="black", s=10)
-ax.legend()
+ax.legend(handles=[band_94, band_50])
 ax.set(title="Demand vs Temperature", xlabel="Temperature (°C)", ylabel="Demand (GW)");
 ```
 
@@ -548,18 +625,29 @@ The non-linearity is clearly visible. Next we look at the latent relationship be
 ``` python
 beta_temperature = train_posterior["beta_temperature"]
 
-fig, ax = plt.subplots()
-for prob, band_alpha in [(0.94, 0.3), (0.5, 0.5)]:
-    lower, upper = hdi_bounds(beta_temperature[:, order], prob)
-    ax.fill_between(
-        temperature_train[order],
-        lower,
-        upper,
-        color="C1",
-        alpha=band_alpha,
-        label=f"{prob * 100:.0f}% HDI",
-    )
-ax.legend()
+idata_beta = az.from_dict(
+    {
+        "posterior_predictive": {"obs": np.asarray(beta_temperature[:, order])[None]},
+        "observed_data": {"obs": np.zeros_like(temperature_train[order])},
+        "constant_data": {"temperature": temperature_train[order]},
+    },
+    dims={"obs": ["obs_dim"], "temperature": ["obs_dim"]},
+)
+pc = az.plot_lm(
+    idata_beta,
+    y="obs",
+    x="temperature",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+    figure_kwargs={"figsize": (12, 7)},
+)
+ax = pc.viz["figure"].item().axes[0]
+bands = pc.viz["ci_band"]["temperature"]
+band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
+band_94.set_label(r"$94\%$ HDI")
+band_50.set_label(r"$50\%$ HDI")
+ax.legend(handles=[band_94, band_50])
 ax.set(title="Temperature Effect on Demand", xlabel="Temperature (°C)", ylabel="Effect on Demand");
 ```
 
@@ -575,4 +663,4 @@ This effect plot coincides with the exploratory comment by Hyndman and Athanasop
 
 Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range \\15\\°C - 25\\°C\\.
 
-[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#3e1e271e)
+[Source: Electricity demand forecasting with `numpyro_forecast`](_src/electricity_forecast-preview.html#da2f1520)
