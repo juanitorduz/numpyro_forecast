@@ -3,9 +3,7 @@
 
 Hierarchical forecasting I with `numpyro_forecast`
 
-This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part I)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It generalizes the [univariate notebook](forecasting_univariate.md) from a single series to many: we forecast hourly **BART arrivals to one destination** (`EMBR`, Embarcadero) from all `50` origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.
-
-We subclass `numpyro_forecast.ForecastingModel` and let [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) handle the *fit-once / forecast-any-horizon* mechanics. Visualizations use **ArviZ \>= 1.0** (`az.plot_lm`, faceting one panel per origin).
+This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part I)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itelf a port of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). It generalizes the [univariate notebook](forecasting_univariate.md) from a single series to many: we forecast hourly **BART arrivals to one destination** (`EMBR`, Embarcadero) from all `50` origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.
 
 > **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism rather than re-running the guide over the full covariates.
 
@@ -14,12 +12,6 @@ We subclass `numpyro_forecast.ForecastingModel` and let [Forecaster](../../refer
 
 
 ``` python
-%load_ext autoreload
-%autoreload 2
-%load_ext jaxtyping
-%jaxtyping.typechecker beartype.beartype
-%config InlineBackend.figure_format = "retina"
-
 from typing import cast
 
 import arviz as az
@@ -48,7 +40,13 @@ plt.rcParams["figure.facecolor"] = "white"
 numpyro.set_host_device_count(n=4)
 
 rng_key = random.PRNGKey(seed=42)
-period = 24 * 7  # weekly seasonality (hours)
+
+
+%load_ext autoreload
+%autoreload 2
+%load_ext jaxtyping
+%jaxtyping.typechecker beartype.beartype
+%config InlineBackend.figure_format = "retina"
 ```
 
 
@@ -116,7 +114,7 @@ print("christmas index:", christmas_index)
 
 This is the univariate model lifted to a panel. Each series \\s\\ gets its own random-walk level \\\ell\_{t,s}\\ and its own weekly seasonal profile (one value per hour-of-week, `168` in total), and all series share the same global drift scale and observation scale \\\sigma\\:
 
-\\ \mu\_{t,s} = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s},\qquad \ell\_{t,s} = \ell\_{t-1,s} + \delta\_{t,s}, \\ \\ y\_{t,s} \sim \mathcal{N}(\mu\_{t,s}, \sigma). \\
+\\\begin{align\*} \mu\_{t,s} & = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s} \\ \ell\_{t,s} & = \ell\_{t-1,s} + \delta\_{t,s} \\ \delta\_{t,s} & \sim \text{Normal}(0, \sigma\_\text{drift}) \\ y\_{t,s} & \sim \text{Normal}(\mu\_{t,s}, \sigma). \end{align\*}\\
 
 The hierarchy is expressed with `numpyro.plate`. We wrap `self.time_series(...)` in an `n_series` plate so the drift (and its forecast `_future` companion) is sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../reference/util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together.
 
@@ -154,7 +152,12 @@ class MultiSeriesForecaster(ForecastingModel):
 ```
 
 
+Let's visualize the model:
+
+
 ``` python
+period = 24 * 7  # weekly seasonality (hours)
+
 numpyro.render_model(
     MultiSeriesForecaster(period=period),
     model_args=(covariates_train, y_train),
@@ -170,7 +173,7 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the 50% and 94% HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
+As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the \\50\\\\ and \\94\\\\ HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
 
 
 ``` python
@@ -395,10 +398,10 @@ if christmas_index is not None:
     )
 
 for i in series:
-    pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
+    pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=12)
 
 # Build the legend once, on the first facet, from the real band and line artists.
-ax0 = pc.get_target("t", {"series": 0})
+ax0 = pc.get_target("t", {"series": n_plot - 1})
 band_train_50, band_train_94, band_test_50, band_test_94 = ax0.collections
 band_train_94.set_label(r"in-sample $94\%$ HDI")
 band_train_50.set_label(r"in-sample $50\%$ HDI")
@@ -409,21 +412,22 @@ labels = ["truth", "train/test split"] + (["Christmas"] if christmas_index is no
 for line, label in zip(ax0.lines, labels, strict=True):
     line.set_label(label)
     handles.append(line)
-ax0.legend(handles=handles, loc="upper left", fontsize=8)
 
 fig = pc.viz["figure"].item()
 fig.supxlabel("hour")
 fig.supylabel("log1p(# rides)")
+ax0.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.15), ncols=4, fontsize=12)
 fig.suptitle(
     f"Forecast (train CRPS: {crps_train:.4f}, test CRPS: {crps_test:.4f})",
-    fontsize=16,
-)
-fig.tight_layout();
+    fontsize=18,
+    fontweight="bold",
+    y=1.03,
+);
 ```
 
 
 <figure class="figure">
-<p><img src="hierarchical_forecasting_1_files/figure-html/_src-hierarchical_forecasting_1-cell-10-output-1.png" class="figure-img" width="1475" height="1766" /></p>
+<p><img src="hierarchical_forecasting_1_files/figure-html/_src-hierarchical_forecasting_1-cell-10-output-1.png" class="figure-img" width="1511" height="1869" /></p>
 </figure>
 
 
