@@ -3,6 +3,20 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.1.2
+
+*2026-06-30* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.2)
+
+
+## What's Changed
+
+- Improve the univariate forecasting notebook by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/25
+- Use better ArviZ functions by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/27
+- Bump version from 0.1.1 to 0.1.2 by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/28
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2](https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1...0.1.2)
+
+
 # 0.1.1
 
 *2026-06-26* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.1)
