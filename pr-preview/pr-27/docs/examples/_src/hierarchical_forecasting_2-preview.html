@@ -490,7 +490,7 @@ y &amp; \sim \text{Normal}(\mu,\ \text{origin\_scale} + \text{destin\_scale})
 <p>As usual (highly recommended!), we run prior predictive checks. The full panel is large, so we draw the samples in memory-bounded batches with the <code>batched_obs</code> helper and keep only what we plot (eight origins arriving at <code>ANTC</code>, last three training weeks). The prior ranges look reasonable, if anything a touch too wide.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="8dc4d277" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:58.017619Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:58.017535Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:19:49.593673Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:19:49.593106Z&quot;}}">
+<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="8dc4d277" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:58.017619Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:58.017535Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:19:49.593673Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:19:49.593106Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>n_plot <span class="op">=</span> <span class="dv">8</span>  <span class="co"># origins shown in the facet grid</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>dest <span class="op">=</span> <span class="st">"ANTC"</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>series <span class="op">=</span> <span class="bu">list</span>(<span class="bu">range</span>(n_plot))</span>
@@ -577,22 +577,23 @@ y &amp; \sim \text{Normal}(\mu,\ \text{origin\_scale} + \text{destin\_scale})
 <span id="cb8-84"><a href="#cb8-84" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> series:</span>
 <span id="cb8-85"><a href="#cb8-85" aria-hidden="true" tabindex="-1"></a>    pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: i}).set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span>dest<span class="sc">}</span><span class="ss">"</span>, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
 <span id="cb8-86"><a href="#cb8-86" aria-hidden="true" tabindex="-1"></a>ax0 <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: n_plot <span class="op">-</span> <span class="dv">1</span>})</span>
-<span id="cb8-87"><a href="#cb8-87" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax0.collections</span>
-<span id="cb8-88"><a href="#cb8-88" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb8-87"><a href="#cb8-87" aria-hidden="true" tabindex="-1"></a>bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>)</span>
+<span id="cb8-88"><a href="#cb8-88" aria-hidden="true" tabindex="-1"></a>band_94, band_50 <span class="op">=</span> bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item(), bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
 <span id="cb8-89"><a href="#cb8-89" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb8-90"><a href="#cb8-90" aria-hidden="true" tabindex="-1"></a>train_line <span class="op">=</span> ax0.lines[<span class="dv">0</span>]</span>
-<span id="cb8-91"><a href="#cb8-91" aria-hidden="true" tabindex="-1"></a>train_line.set_label(<span class="st">"training data"</span>)</span>
-<span id="cb8-92"><a href="#cb8-92" aria-hidden="true" tabindex="-1"></a>ax0.legend(handles<span class="op">=</span>[band_94, band_50, train_line], loc<span class="op">=</span><span class="st">"upper left"</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
-<span id="cb8-93"><a href="#cb8-93" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
-<span id="cb8-94"><a href="#cb8-94" aria-hidden="true" tabindex="-1"></a>fig.supxlabel(<span class="st">"hour"</span>)</span>
-<span id="cb8-95"><a href="#cb8-95" aria-hidden="true" tabindex="-1"></a>fig.supylabel(<span class="st">"log1p(# rides)"</span>)</span>
-<span id="cb8-96"><a href="#cb8-96" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"Prior predictive check (last 3 train weeks)"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)</span>
-<span id="cb8-97"><a href="#cb8-97" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
+<span id="cb8-90"><a href="#cb8-90" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb8-91"><a href="#cb8-91" aria-hidden="true" tabindex="-1"></a>train_line <span class="op">=</span> pc.viz[<span class="st">"truth"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>).item()</span>
+<span id="cb8-92"><a href="#cb8-92" aria-hidden="true" tabindex="-1"></a>train_line.set_label(<span class="st">"training data"</span>)</span>
+<span id="cb8-93"><a href="#cb8-93" aria-hidden="true" tabindex="-1"></a>ax0.legend(handles<span class="op">=</span>[band_94, band_50, train_line], loc<span class="op">=</span><span class="st">"upper left"</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb8-94"><a href="#cb8-94" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
+<span id="cb8-95"><a href="#cb8-95" aria-hidden="true" tabindex="-1"></a>fig.supxlabel(<span class="st">"hour"</span>)</span>
+<span id="cb8-96"><a href="#cb8-96" aria-hidden="true" tabindex="-1"></a>fig.supylabel(<span class="st">"log1p(# rides)"</span>)</span>
+<span id="cb8-97"><a href="#cb8-97" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="st">"Prior predictive check (last 3 train weeks)"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)</span>
+<span id="cb8-98"><a href="#cb8-98" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>prior band shape: (500, 8, 504)</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_81857/2962491600.py:97: UserWarning: The figure layout has changed to tight
+<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_88701/741911304.py:98: UserWarning: The figure layout has changed to tight
   fig.tight_layout();</code></pre>
 </div>
 <div class="cell-output cell-output-display">
@@ -679,7 +680,7 @@ Test CRPS:  0.2786</code></pre>
 <p>Eight origins arriving at <code>ANTC</code>: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50% and 94% HDI bands, against the observed series, with the train/test split and the Christmas day band marked. With origin, destination and pairwise effects in play, the full panel is fit jointly, yet each individual origin-to-destination forecast still tracks its own weekly pattern. As in part I, Christmas is the visible soft spot, since the model has no holiday feature.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [11]:</pre></div><div id="150eba80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:23:06.395125Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:23:06.395005Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:23:07.114739Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:23:07.114217Z&quot;}}" data-execution_count="11">
+<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="150eba80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:23:06.395125Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:23:06.395005Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:23:07.114739Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:23:07.114217Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Predictions arrive as (draws, origin, time); move time before the series facet dim.</span></span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>train_plot <span class="op">=</span> np.transpose(np.clip(train_pp[:, :n_plot, lo:T1, antc], <span class="dv">0</span>, <span class="va">None</span>), (<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">1</span>))</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>forecast_plot <span class="op">=</span> np.transpose(np.asarray(forecast[:, :n_plot, :, antc]), (<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">1</span>))</span>
@@ -706,79 +707,88 @@ Test CRPS:  0.2786</code></pre>
 <span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>    },</span>
 <span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">15</span>, <span class="dv">18</span>)},</span>
 <span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>az.plot_lm(</span>
-<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>    faceted_idata(forecast_plot, t_test),</span>
-<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"t"</span>,</span>
-<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>    plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>    plot_collection<span class="op">=</span>pc,</span>
-<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
-<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{</span>
-<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>},</span>
-<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_scatter"</span>: <span class="va">False</span>,</span>
-<span id="cb14-39"><a href="#cb14-39" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pe_line"</span>: <span class="va">False</span>,</span>
-<span id="cb14-40"><a href="#cb14-40" aria-hidden="true" tabindex="-1"></a>        <span class="st">"xlabel"</span>: <span class="va">False</span>,</span>
-<span id="cb14-41"><a href="#cb14-41" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ylabel"</span>: <span class="va">False</span>,</span>
-<span id="cb14-42"><a href="#cb14-42" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb14-43"><a href="#cb14-43" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-44"><a href="#cb14-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-45"><a href="#cb14-45" aria-hidden="true" tabindex="-1"></a><span class="co"># Observed series and the split / Christmas markers on every facet, each in one call.</span></span>
-<span id="cb14-46"><a href="#cb14-46" aria-hidden="true" tabindex="-1"></a>truth_da <span class="op">=</span> xr.DataArray(</span>
-<span id="cb14-47"><a href="#cb14-47" aria-hidden="true" tabindex="-1"></a>    np.asarray(y[:n_plot, lo:T2, antc]).T,</span>
-<span id="cb14-48"><a href="#cb14-48" aria-hidden="true" tabindex="-1"></a>    dims<span class="op">=</span>[<span class="st">"time"</span>, <span class="st">"series"</span>],</span>
-<span id="cb14-49"><a href="#cb14-49" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"time"</span>: t_full, <span class="st">"series"</span>: series},</span>
-<span id="cb14-50"><a href="#cb14-50" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"t"</span>,</span>
-<span id="cb14-51"><a href="#cb14-51" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-52"><a href="#cb14-52" aria-hidden="true" tabindex="-1"></a>x_da <span class="op">=</span> xr.DataArray(t_full, dims<span class="op">=</span>[<span class="st">"time"</span>], coords<span class="op">=</span>{<span class="st">"time"</span>: t_full})</span>
-<span id="cb14-53"><a href="#cb14-53" aria-hidden="true" tabindex="-1"></a>pc.<span class="bu">map</span>(</span>
-<span id="cb14-54"><a href="#cb14-54" aria-hidden="true" tabindex="-1"></a>    az.visuals.line_xy, <span class="st">"truth"</span>, data<span class="op">=</span>truth_da, x<span class="op">=</span>x_da, ignore_aes<span class="op">=</span>pc.aes_set, color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span></span>
-<span id="cb14-55"><a href="#cb14-55" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-56"><a href="#cb14-56" aria-hidden="true" tabindex="-1"></a>split_da <span class="op">=</span> xr.DataArray(</span>
-<span id="cb14-57"><a href="#cb14-57" aria-hidden="true" tabindex="-1"></a>    np.full(n_plot, <span class="bu">float</span>(T1)), dims<span class="op">=</span>[<span class="st">"series"</span>], coords<span class="op">=</span>{<span class="st">"series"</span>: series}, name<span class="op">=</span><span class="st">"t"</span></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>train_bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>)</span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>band_train_94 <span class="op">=</span> train_bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>band_train_50 <span class="op">=</span> train_bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>az.plot_lm(</span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>    faceted_idata(forecast_plot, t_test),</span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"t"</span>,</span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>    plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>    plot_collection<span class="op">=</span>pc,</span>
+<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
+<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb14-39"><a href="#cb14-39" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{</span>
+<span id="cb14-40"><a href="#cb14-40" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>},</span>
+<span id="cb14-41"><a href="#cb14-41" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_scatter"</span>: <span class="va">False</span>,</span>
+<span id="cb14-42"><a href="#cb14-42" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pe_line"</span>: <span class="va">False</span>,</span>
+<span id="cb14-43"><a href="#cb14-43" aria-hidden="true" tabindex="-1"></a>        <span class="st">"xlabel"</span>: <span class="va">False</span>,</span>
+<span id="cb14-44"><a href="#cb14-44" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ylabel"</span>: <span class="va">False</span>,</span>
+<span id="cb14-45"><a href="#cb14-45" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb14-46"><a href="#cb14-46" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-47"><a href="#cb14-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-48"><a href="#cb14-48" aria-hidden="true" tabindex="-1"></a><span class="co"># Observed series and the split / Christmas markers on every facet, each in one call.</span></span>
+<span id="cb14-49"><a href="#cb14-49" aria-hidden="true" tabindex="-1"></a>truth_da <span class="op">=</span> xr.DataArray(</span>
+<span id="cb14-50"><a href="#cb14-50" aria-hidden="true" tabindex="-1"></a>    np.asarray(y[:n_plot, lo:T2, antc]).T,</span>
+<span id="cb14-51"><a href="#cb14-51" aria-hidden="true" tabindex="-1"></a>    dims<span class="op">=</span>[<span class="st">"time"</span>, <span class="st">"series"</span>],</span>
+<span id="cb14-52"><a href="#cb14-52" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"time"</span>: t_full, <span class="st">"series"</span>: series},</span>
+<span id="cb14-53"><a href="#cb14-53" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"t"</span>,</span>
+<span id="cb14-54"><a href="#cb14-54" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-55"><a href="#cb14-55" aria-hidden="true" tabindex="-1"></a>x_da <span class="op">=</span> xr.DataArray(t_full, dims<span class="op">=</span>[<span class="st">"time"</span>], coords<span class="op">=</span>{<span class="st">"time"</span>: t_full})</span>
+<span id="cb14-56"><a href="#cb14-56" aria-hidden="true" tabindex="-1"></a>pc.<span class="bu">map</span>(</span>
+<span id="cb14-57"><a href="#cb14-57" aria-hidden="true" tabindex="-1"></a>    az.visuals.line_xy, <span class="st">"truth"</span>, data<span class="op">=</span>truth_da, x<span class="op">=</span>x_da, ignore_aes<span class="op">=</span>pc.aes_set, color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span></span>
 <span id="cb14-58"><a href="#cb14-58" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-59"><a href="#cb14-59" aria-hidden="true" tabindex="-1"></a>pc.<span class="bu">map</span>(az.visuals.vline, <span class="st">"split"</span>, data<span class="op">=</span>split_da, ignore_aes<span class="op">=</span>pc.aes_set, color<span class="op">=</span><span class="st">"C3"</span>, ls<span class="op">=</span><span class="st">"--"</span>)</span>
-<span id="cb14-60"><a href="#cb14-60" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> christmas_index <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb14-61"><a href="#cb14-61" aria-hidden="true" tabindex="-1"></a>    xmas_da <span class="op">=</span> xr.DataArray(</span>
-<span id="cb14-62"><a href="#cb14-62" aria-hidden="true" tabindex="-1"></a>        np.full(n_plot, <span class="bu">float</span>(christmas_index)),</span>
-<span id="cb14-63"><a href="#cb14-63" aria-hidden="true" tabindex="-1"></a>        dims<span class="op">=</span>[<span class="st">"series"</span>],</span>
-<span id="cb14-64"><a href="#cb14-64" aria-hidden="true" tabindex="-1"></a>        coords<span class="op">=</span>{<span class="st">"series"</span>: series},</span>
-<span id="cb14-65"><a href="#cb14-65" aria-hidden="true" tabindex="-1"></a>        name<span class="op">=</span><span class="st">"t"</span>,</span>
-<span id="cb14-66"><a href="#cb14-66" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb14-67"><a href="#cb14-67" aria-hidden="true" tabindex="-1"></a>    pc.<span class="bu">map</span>(</span>
-<span id="cb14-68"><a href="#cb14-68" aria-hidden="true" tabindex="-1"></a>        az.visuals.vline, <span class="st">"xmas"</span>, data<span class="op">=</span>xmas_da, ignore_aes<span class="op">=</span>pc.aes_set, color<span class="op">=</span><span class="st">"C2"</span>, lw<span class="op">=</span><span class="dv">12</span>, alpha<span class="op">=</span><span class="fl">0.2</span></span>
+<span id="cb14-59"><a href="#cb14-59" aria-hidden="true" tabindex="-1"></a>split_da <span class="op">=</span> xr.DataArray(</span>
+<span id="cb14-60"><a href="#cb14-60" aria-hidden="true" tabindex="-1"></a>    np.full(n_plot, <span class="bu">float</span>(T1)), dims<span class="op">=</span>[<span class="st">"series"</span>], coords<span class="op">=</span>{<span class="st">"series"</span>: series}, name<span class="op">=</span><span class="st">"t"</span></span>
+<span id="cb14-61"><a href="#cb14-61" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-62"><a href="#cb14-62" aria-hidden="true" tabindex="-1"></a>pc.<span class="bu">map</span>(az.visuals.vline, <span class="st">"split"</span>, data<span class="op">=</span>split_da, ignore_aes<span class="op">=</span>pc.aes_set, color<span class="op">=</span><span class="st">"C3"</span>, ls<span class="op">=</span><span class="st">"--"</span>)</span>
+<span id="cb14-63"><a href="#cb14-63" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> christmas_index <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb14-64"><a href="#cb14-64" aria-hidden="true" tabindex="-1"></a>    xmas_da <span class="op">=</span> xr.DataArray(</span>
+<span id="cb14-65"><a href="#cb14-65" aria-hidden="true" tabindex="-1"></a>        np.full(n_plot, <span class="bu">float</span>(christmas_index)),</span>
+<span id="cb14-66"><a href="#cb14-66" aria-hidden="true" tabindex="-1"></a>        dims<span class="op">=</span>[<span class="st">"series"</span>],</span>
+<span id="cb14-67"><a href="#cb14-67" aria-hidden="true" tabindex="-1"></a>        coords<span class="op">=</span>{<span class="st">"series"</span>: series},</span>
+<span id="cb14-68"><a href="#cb14-68" aria-hidden="true" tabindex="-1"></a>        name<span class="op">=</span><span class="st">"t"</span>,</span>
 <span id="cb14-69"><a href="#cb14-69" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb14-70"><a href="#cb14-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-71"><a href="#cb14-71" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> series:</span>
-<span id="cb14-72"><a href="#cb14-72" aria-hidden="true" tabindex="-1"></a>    pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: i}).set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span>dest<span class="sc">}</span><span class="ss">"</span>, fontsize<span class="op">=</span><span class="dv">12</span>)</span>
+<span id="cb14-70"><a href="#cb14-70" aria-hidden="true" tabindex="-1"></a>    pc.<span class="bu">map</span>(</span>
+<span id="cb14-71"><a href="#cb14-71" aria-hidden="true" tabindex="-1"></a>        az.visuals.vline, <span class="st">"xmas"</span>, data<span class="op">=</span>xmas_da, ignore_aes<span class="op">=</span>pc.aes_set, color<span class="op">=</span><span class="st">"C2"</span>, lw<span class="op">=</span><span class="dv">12</span>, alpha<span class="op">=</span><span class="fl">0.2</span></span>
+<span id="cb14-72"><a href="#cb14-72" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb14-73"><a href="#cb14-73" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-74"><a href="#cb14-74" aria-hidden="true" tabindex="-1"></a><span class="co"># Build the legend once, on the first facet, from the real band and line artists.</span></span>
-<span id="cb14-75"><a href="#cb14-75" aria-hidden="true" tabindex="-1"></a>ax0 <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: n_plot <span class="op">-</span> <span class="dv">1</span>})</span>
-<span id="cb14-76"><a href="#cb14-76" aria-hidden="true" tabindex="-1"></a>band_train_50, band_train_94, band_test_50, band_test_94 <span class="op">=</span> ax0.collections</span>
-<span id="cb14-77"><a href="#cb14-77" aria-hidden="true" tabindex="-1"></a>band_train_94.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb14-78"><a href="#cb14-78" aria-hidden="true" tabindex="-1"></a>band_train_50.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb14-79"><a href="#cb14-79" aria-hidden="true" tabindex="-1"></a>band_test_94.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb14-80"><a href="#cb14-80" aria-hidden="true" tabindex="-1"></a>band_test_50.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb14-81"><a href="#cb14-81" aria-hidden="true" tabindex="-1"></a>handles <span class="op">=</span> [band_train_94, band_train_50, band_test_94, band_test_50]</span>
-<span id="cb14-82"><a href="#cb14-82" aria-hidden="true" tabindex="-1"></a>labels <span class="op">=</span> [<span class="st">"truth"</span>, <span class="st">"train/test split"</span>] <span class="op">+</span> ([<span class="st">"Christmas"</span>] <span class="cf">if</span> christmas_index <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="cf">else</span> [])</span>
-<span id="cb14-83"><a href="#cb14-83" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> line, label <span class="kw">in</span> <span class="bu">zip</span>(ax0.lines, labels, strict<span class="op">=</span><span class="va">True</span>):</span>
-<span id="cb14-84"><a href="#cb14-84" aria-hidden="true" tabindex="-1"></a>    line.set_label(label)</span>
-<span id="cb14-85"><a href="#cb14-85" aria-hidden="true" tabindex="-1"></a>    handles.append(line)</span>
-<span id="cb14-86"><a href="#cb14-86" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-87"><a href="#cb14-87" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
-<span id="cb14-88"><a href="#cb14-88" aria-hidden="true" tabindex="-1"></a>fig.supxlabel(<span class="st">"hour"</span>)</span>
-<span id="cb14-89"><a href="#cb14-89" aria-hidden="true" tabindex="-1"></a>fig.supylabel(<span class="st">"log1p(# rides)"</span>)</span>
-<span id="cb14-90"><a href="#cb14-90" aria-hidden="true" tabindex="-1"></a>ax0.legend(handles<span class="op">=</span>handles, loc<span class="op">=</span><span class="st">"upper center"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.15</span>), ncols<span class="op">=</span><span class="dv">4</span>, fontsize<span class="op">=</span><span class="dv">12</span>)</span>
-<span id="cb14-91"><a href="#cb14-91" aria-hidden="true" tabindex="-1"></a>fig.suptitle(</span>
-<span id="cb14-92"><a href="#cb14-92" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">)"</span>,</span>
-<span id="cb14-93"><a href="#cb14-93" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">18</span>,</span>
-<span id="cb14-94"><a href="#cb14-94" aria-hidden="true" tabindex="-1"></a>    fontweight<span class="op">=</span><span class="st">"bold"</span>,</span>
-<span id="cb14-95"><a href="#cb14-95" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="fl">1.01</span>,</span>
-<span id="cb14-96"><a href="#cb14-96" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-97"><a href="#cb14-97" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
+<span id="cb14-74"><a href="#cb14-74" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> series:</span>
+<span id="cb14-75"><a href="#cb14-75" aria-hidden="true" tabindex="-1"></a>    pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: i}).set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span>dest<span class="sc">}</span><span class="ss">"</span>, fontsize<span class="op">=</span><span class="dv">12</span>)</span>
+<span id="cb14-76"><a href="#cb14-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-77"><a href="#cb14-77" aria-hidden="true" tabindex="-1"></a><span class="co"># Build the legend once, on the first facet, from the real band and line artists.</span></span>
+<span id="cb14-78"><a href="#cb14-78" aria-hidden="true" tabindex="-1"></a>ax0 <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: n_plot <span class="op">-</span> <span class="dv">1</span>})</span>
+<span id="cb14-79"><a href="#cb14-79" aria-hidden="true" tabindex="-1"></a>test_bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>)</span>
+<span id="cb14-80"><a href="#cb14-80" aria-hidden="true" tabindex="-1"></a>band_test_94 <span class="op">=</span> test_bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
+<span id="cb14-81"><a href="#cb14-81" aria-hidden="true" tabindex="-1"></a>band_test_50 <span class="op">=</span> test_bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
+<span id="cb14-82"><a href="#cb14-82" aria-hidden="true" tabindex="-1"></a>band_train_94.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb14-83"><a href="#cb14-83" aria-hidden="true" tabindex="-1"></a>band_train_50.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb14-84"><a href="#cb14-84" aria-hidden="true" tabindex="-1"></a>band_test_94.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb14-85"><a href="#cb14-85" aria-hidden="true" tabindex="-1"></a>band_test_50.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb14-86"><a href="#cb14-86" aria-hidden="true" tabindex="-1"></a>truth_line <span class="op">=</span> pc.viz[<span class="st">"truth"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>).item()</span>
+<span id="cb14-87"><a href="#cb14-87" aria-hidden="true" tabindex="-1"></a>split_line <span class="op">=</span> pc.viz[<span class="st">"split"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>).item()</span>
+<span id="cb14-88"><a href="#cb14-88" aria-hidden="true" tabindex="-1"></a>truth_line.set_label(<span class="st">"truth"</span>)</span>
+<span id="cb14-89"><a href="#cb14-89" aria-hidden="true" tabindex="-1"></a>split_line.set_label(<span class="st">"train/test split"</span>)</span>
+<span id="cb14-90"><a href="#cb14-90" aria-hidden="true" tabindex="-1"></a>handles <span class="op">=</span> [band_train_94, band_train_50, band_test_94, band_test_50, truth_line, split_line]</span>
+<span id="cb14-91"><a href="#cb14-91" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> christmas_index <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb14-92"><a href="#cb14-92" aria-hidden="true" tabindex="-1"></a>    xmas_line <span class="op">=</span> pc.viz[<span class="st">"xmas"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>n_plot <span class="op">-</span> <span class="dv">1</span>).item()</span>
+<span id="cb14-93"><a href="#cb14-93" aria-hidden="true" tabindex="-1"></a>    xmas_line.set_label(<span class="st">"Christmas"</span>)</span>
+<span id="cb14-94"><a href="#cb14-94" aria-hidden="true" tabindex="-1"></a>    handles.append(xmas_line)</span>
+<span id="cb14-95"><a href="#cb14-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-96"><a href="#cb14-96" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
+<span id="cb14-97"><a href="#cb14-97" aria-hidden="true" tabindex="-1"></a>fig.supxlabel(<span class="st">"hour"</span>)</span>
+<span id="cb14-98"><a href="#cb14-98" aria-hidden="true" tabindex="-1"></a>fig.supylabel(<span class="st">"log1p(# rides)"</span>)</span>
+<span id="cb14-99"><a href="#cb14-99" aria-hidden="true" tabindex="-1"></a>ax0.legend(handles<span class="op">=</span>handles, loc<span class="op">=</span><span class="st">"upper center"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.15</span>), ncols<span class="op">=</span><span class="dv">4</span>, fontsize<span class="op">=</span><span class="dv">12</span>)</span>
+<span id="cb14-100"><a href="#cb14-100" aria-hidden="true" tabindex="-1"></a>fig.suptitle(</span>
+<span id="cb14-101"><a href="#cb14-101" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">)"</span>,</span>
+<span id="cb14-102"><a href="#cb14-102" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">18</span>,</span>
+<span id="cb14-103"><a href="#cb14-103" aria-hidden="true" tabindex="-1"></a>    fontweight<span class="op">=</span><span class="st">"bold"</span>,</span>
+<span id="cb14-104"><a href="#cb14-104" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="fl">1.01</span>,</span>
+<span id="cb14-105"><a href="#cb14-105" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-106"><a href="#cb14-106" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_81857/2181997733.py:97: UserWarning: The figure layout has changed to tight
+<pre><code>/var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_88701/2085423411.py:106: UserWarning: The figure layout has changed to tight
   fig.tight_layout();</code></pre>
 </div>
 <div class="cell-output cell-output-display">

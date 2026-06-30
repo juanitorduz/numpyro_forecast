@@ -248,9 +248,10 @@ pc = az.plot_lm(
     figure_kwargs={"figsize": (10, 6)},
 )
 ax = pc.viz["figure"].item().axes[0]
-band_50, band_94 = ax.collections  # in ci_prob order: (0.5, 0.94)
-band_50.set_label(r"$50\%$ HDI")
+bands = pc.viz["ci_band"]["week"]
+band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
 band_94.set_label(r"$94\%$ HDI")
+band_50.set_label(r"$50\%$ HDI")
 (train_line,) = ax.plot(time_train, np.asarray(y_train[:, 0]), color="black", lw=1, label="train")
 ax.legend(handles=[band_94, band_50, train_line], loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(title="Prior predictive check", ylabel="log(# rides)");
@@ -368,6 +369,9 @@ pc = az.plot_lm(
     visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
     figure_kwargs={"figsize": (10, 6)},
 )
+train_bands = pc.viz["ci_band"]["week"]
+band_train_94 = train_bands.sel(prob=0.94).item()
+band_train_50 = train_bands.sel(prob=0.5).item()
 az.plot_lm(
     idata_test,
     y="obs",
@@ -378,9 +382,10 @@ az.plot_lm(
     smooth=False,
     visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
 )
+test_bands = pc.viz["ci_band"]["week"]
+band_test_94 = test_bands.sel(prob=0.94).item()
+band_test_50 = test_bands.sel(prob=0.5).item()
 ax = pc.viz["figure"].item().axes[0]
-# ax.collections holds the bands in plotting order: train (0.5, 0.94) then test (0.5, 0.94).
-band_train_50, band_train_94, band_test_50, band_test_94 = ax.collections
 band_train_94.set_label(r"in-sample $94\%$ HDI")
 band_train_50.set_label(r"in-sample $50\%$ HDI")
 band_test_94.set_label(r"forecast $94\%$ HDI")
@@ -498,6 +503,8 @@ for r in results:
             visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
             figure_kwargs={"figsize": (12, 6)},
         )
+        bands = pc.viz["ci_band"]["week"]
+        band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
     else:
         az.plot_lm(
             idata,
@@ -514,10 +521,8 @@ if pc is None:
     msg = "no folds were plotted"
     raise ValueError(msg)
 ax = pc.viz["figure"].item().axes[0]
-# ax.collections holds the first fold's bands in ci_prob order: (0.5, 0.94).
-band_50, band_94 = ax.collections[:2]
-band_50.set_label(r"forecast $50\%$ HDI")
 band_94.set_label(r"forecast $94\%$ HDI")
+band_50.set_label(r"forecast $50\%$ HDI")
 (obs_line,) = ax.plot(time, np.asarray(data[:, 0]), color="black", lw=1, label="observed")
 split_lines = [
     ax.axvline(r.t1, color="gray", ls="--", lw=0.5, label="train/test split") for r in results
@@ -570,15 +575,15 @@ CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so 
 A small caveat: [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
 
-    In [14]:
+    In [18]:
 
 
 ``` python
 fig, ax = plt.subplots()
-ax.plot(split_weeks, oos_cov_50, "o-", color="C0", label="empirical 50% coverage")
-ax.plot(split_weeks, oos_cov_94, "o-", color="C1", label="empirical 94% coverage")
-ax.axhline(0.5, color="C0", ls="--", lw=1, label="nominal 50%")
-ax.axhline(0.94, color="C1", ls="--", lw=1, label="nominal 94%")
+ax.plot(split_weeks, oos_cov_50, "o-", color="C0", label=r"empirical $50\%$ coverage")
+ax.plot(split_weeks, oos_cov_94, "o-", color="C1", label=r"empirical $94\%$ coverage")
+ax.axhline(0.5, color="C0", ls="--", lw=1, label=r"nominal $50\%$")
+ax.axhline(0.94, color="C1", ls="--", lw=1, label=r"nominal $94\%$")
 ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 ax.set(
     xlabel="train/test split week",

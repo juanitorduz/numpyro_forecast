@@ -189,7 +189,7 @@ numpyro.render_model(
 As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the \\50\\\\ and \\94\\\\ HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
 
 
-    In [8]:
+    In [6]:
 
 
 ``` python
@@ -261,10 +261,11 @@ pc.map(
 for i in series:
     pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
 ax0 = pc.get_target("t", {"series": n_plot - 1})
-band_50, band_94 = ax0.collections
-band_50.set_label(r"$50\%$ HDI")
+bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
+band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
 band_94.set_label(r"$94\%$ HDI")
-train_line = ax0.lines[0]
+band_50.set_label(r"$50\%$ HDI")
+train_line = pc.viz["truth"]["t"].sel(series=n_plot - 1).item()
 train_line.set_label("training data")
 ax0.legend(handles=[band_94, band_50, train_line], loc="upper left", fontsize=8)
 fig = pc.viz["figure"].item()
@@ -275,7 +276,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_81296/3841612553.py:79: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_88622/3516056338.py:80: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -357,7 +358,7 @@ Eight origins arriving at `EMBR`: the in-sample posterior predictive (blue, last
 The model does quite well on most of the test window, but it clearly struggles around Christmas: ridership collapses on the holiday and the forecast, which only knows about the weekly cycle, does not see it coming. This is the expected failure mode of a model without holiday information. The fixes are to feed it more history (so it has seen past Christmases) or to add explicit holiday features, for example dummy variables or Gaussian bump functions around special dates.
 
 
-    In [13]:
+    In [9]:
 
 
 ``` python
@@ -382,6 +383,9 @@ pc = az.plot_lm(
     },
     figure_kwargs={"figsize": (15, 18)},
 )
+train_bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
+band_train_94 = train_bands.sel(prob=0.94).item()
+band_train_50 = train_bands.sel(prob=0.5).item()
 az.plot_lm(
     faceted_idata(forecast[:, :, :n_plot], t_test),
     y="obs",
@@ -431,16 +435,22 @@ for i in series:
 
 # Build the legend once, on the first facet, from the real band and line artists.
 ax0 = pc.get_target("t", {"series": n_plot - 1})
-band_train_50, band_train_94, band_test_50, band_test_94 = ax0.collections
+test_bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
+band_test_94 = test_bands.sel(prob=0.94).item()
+band_test_50 = test_bands.sel(prob=0.5).item()
 band_train_94.set_label(r"in-sample $94\%$ HDI")
 band_train_50.set_label(r"in-sample $50\%$ HDI")
 band_test_94.set_label(r"forecast $94\%$ HDI")
 band_test_50.set_label(r"forecast $50\%$ HDI")
-handles = [band_train_94, band_train_50, band_test_94, band_test_50]
-labels = ["truth", "train/test split"] + (["Christmas"] if christmas_index is not None else [])
-for line, label in zip(ax0.lines, labels, strict=True):
-    line.set_label(label)
-    handles.append(line)
+truth_line = pc.viz["truth"]["t"].sel(series=n_plot - 1).item()
+split_line = pc.viz["split"]["t"].sel(series=n_plot - 1).item()
+truth_line.set_label("truth")
+split_line.set_label("train/test split")
+handles = [band_train_94, band_train_50, band_test_94, band_test_50, truth_line, split_line]
+if christmas_index is not None:
+    xmas_line = pc.viz["xmas"]["t"].sel(series=n_plot - 1).item()
+    xmas_line.set_label("Christmas")
+    handles.append(xmas_line)
 
 fig = pc.viz["figure"].item()
 fig.supxlabel("hour")
