@@ -863,17 +863,16 @@ covariates shape: (1344, 2)</code></pre>
 <span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"temperature"</span>,</span>
 <span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
 <span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
-<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C0"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
-<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
-<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
-<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax.collections</span>
-<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>ax.scatter(temperature_train, np.asarray(data_train[:, <span class="dv">0</span>]), c<span class="op">=</span><span class="st">"black"</span>, s<span class="op">=</span><span class="dv">10</span>)</span>
-<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[band_94, band_50])</span>
-<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Demand vs Temperature"</span>, xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>, ylabel<span class="op">=</span><span class="st">"Demand (GW)"</span>)<span class="op">;</span></span></code></pre></div>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C0"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax.collections</span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>ax.scatter(temperature_train, np.asarray(data_train[:, <span class="dv">0</span>]), c<span class="op">=</span><span class="st">"black"</span>, s<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[band_94, band_50])</span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Demand vs Temperature"</span>, xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>, ylabel<span class="op">=</span><span class="st">"Demand (GW)"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -900,16 +899,15 @@ covariates shape: (1344, 2)</code></pre>
 <span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"temperature"</span>,</span>
 <span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
 <span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
-<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
-<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
-<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
-<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax.collections</span>
-<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[band_94, band_50])</span>
-<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Temperature Effect on Demand"</span>, xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>, ylabel<span class="op">=</span><span class="st">"Effect on Demand"</span>)<span class="op">;</span></span></code></pre></div>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax.collections</span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[band_94, band_50])</span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Temperature Effect on Demand"</span>, xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>, ylabel<span class="op">=</span><span class="st">"Effect on Demand"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">

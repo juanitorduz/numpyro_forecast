@@ -3,9 +3,7 @@
 
 Hierarchical forecasting II with `numpyro_forecast`
 
-This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part II)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Where [part I](hierarchical_forecasting_1.md) fixed a single destination, here we model the **full `50x50` origin-destination panel** at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static **pairwise** term for the affinity of each origin-destination pair.
-
-We subclass `numpyro_forecast.ForecastingModel` and let [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) handle the *fit-once / forecast-any-horizon* mechanics. Visualizations use **ArviZ \>= 1.0** (`az.plot_lm`, faceting one panel per origin).
+This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part II)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itelf a port of the second part of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). Where [part I](hierarchical_forecasting_1.md) fixed a single destination, here we model the **full `50x50` origin-destination panel** at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static **pairwise** term for the affinity of each origin-destination pair.
 
 > **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism rather than re-running the guide over the full covariates. Because the full panel is large, predictive draws are done in memory-bounded batches.
 
@@ -14,12 +12,6 @@ We subclass `numpyro_forecast.ForecastingModel` and let [Forecaster](../../refer
 
 
 ``` python
-%load_ext autoreload
-%autoreload 2
-%load_ext jaxtyping
-%jaxtyping.typechecker beartype.beartype
-%config InlineBackend.figure_format = "retina"
-
 from typing import cast
 
 import arviz as az
@@ -49,7 +41,12 @@ plt.rcParams["figure.facecolor"] = "white"
 numpyro.set_host_device_count(n=4)
 
 rng_key = random.PRNGKey(seed=42)
-period = 24 * 7  # weekly seasonality (hours)
+
+%load_ext autoreload
+%autoreload 2
+%load_ext jaxtyping
+%jaxtyping.typechecker beartype.beartype
+%config InlineBackend.figure_format = "retina"
 ```
 
 
@@ -116,7 +113,7 @@ print("christmas index:", christmas_index)
 
 The structure mirrors part I but spreads the effects across two hierarchies, origin and destination, plus the hour-of-week. The random-walk `level` is indexed by destination: it captures how busy an arrival station is over time. The seasonal effect and the observation scale are each a **sum** of an origin part and a destination part, so a ride inherits the weekly rhythm and the noisiness of both its endpoints. On top of that, a static **pairwise** term models the affinity of each origin-destination pair, which absorbs structure the additive parts miss (for instance, people rarely travel from a station back to itself).
 
-\\ \mu = \text{level} + (\text{origin\\seasonal} + \text{destin\\seasonal}) + \text{pairwise}, \qquad y \sim \mathcal{N}(\mu,\\ \text{origin\\scale} + \text{destin\\scale}). \\
+\\\begin{align\*} \mu & = \text{level} + (\text{origin\\seasonal} + \text{destin\\seasonal}) + \text{pairwise} \\ y & \sim \text{Normal}(\mu,\\ \text{origin\\scale} + \text{destin\\scale}) \end{align\*}\\
 
 We declare three plates, `origin` (dim `-3`), `hour_of_week` (dim `-2`) and `destin` (dim `-1`), and open each effect under the plates it depends on. The per-destination level is sampled with `self.time_series(...)` under the `destin` plate, and the seasonal effect is tiled across the full horizon with [periodic_repeat](../../reference/util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat). Broadcasting over the three plate dimensions assembles the `(origin, time, destin)` mean.
 
@@ -172,7 +169,12 @@ class HierarchicalForecaster(ForecastingModel):
 ```
 
 
+Let's visialize the model:
+
+
 ``` python
+period = 24 * 7  # weekly seasonality (hours)
+
 numpyro.render_model(
     HierarchicalForecaster(period=period),
     model_args=(covariates_train, y_train),
@@ -447,10 +449,10 @@ if christmas_index is not None:
     )
 
 for i in series:
-    pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
+    pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=12)
 
 # Build the legend once, on the first facet, from the real band and line artists.
-ax0 = pc.get_target("t", {"series": 0})
+ax0 = pc.get_target("t", {"series": n_plot - 1})
 band_train_50, band_train_94, band_test_50, band_test_94 = ax0.collections
 band_train_94.set_label(r"in-sample $94\%$ HDI")
 band_train_50.set_label(r"in-sample $50\%$ HDI")
@@ -461,21 +463,23 @@ labels = ["truth", "train/test split"] + (["Christmas"] if christmas_index is no
 for line, label in zip(ax0.lines, labels, strict=True):
     line.set_label(label)
     handles.append(line)
-ax0.legend(handles=handles, loc="upper left", fontsize=8)
 
 fig = pc.viz["figure"].item()
 fig.supxlabel("hour")
 fig.supylabel("log1p(# rides)")
+ax0.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.15), ncols=4, fontsize=12)
 fig.suptitle(
     f"Forecast (train CRPS: {crps_train:.4f}, test CRPS: {crps_test:.4f})",
-    fontsize=16,
+    fontsize=18,
+    fontweight="bold",
+    y=1.01,
 )
 fig.tight_layout();
 ```
 
 
 <figure class="figure">
-<p><img src="hierarchical_forecasting_2_files/figure-html/_src-hierarchical_forecasting_2-cell-10-output-1.png" class="figure-img" width="1475" height="1766" /></p>
+<p><img src="hierarchical_forecasting_2_files/figure-html/_src-hierarchical_forecasting_2-cell-10-output-1.png" class="figure-img" width="1475" height="1820" /></p>
 </figure>
 
 

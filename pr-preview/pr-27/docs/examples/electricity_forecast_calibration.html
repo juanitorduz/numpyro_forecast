@@ -852,36 +852,35 @@ covariates shape: (1344, 2)</code></pre>
 <span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"temperature"</span>,</span>
 <span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
 <span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
-<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
-<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
-<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
-<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax.collections</span>
-<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>threshold_line <span class="op">=</span> ax.axvline(</span>
-<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span>threshold, color<span class="op">=</span><span class="st">"C3"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="ss">f"</span><span class="sc">{</span>threshold<span class="sc">:.0f}</span><span class="ss"> °C threshold"</span></span>
-<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>target_line <span class="op">=</span> ax.axhline(</span>
-<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span>prior_mean, color<span class="op">=</span><span class="st">"C0"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="ss">f"Calibration target </span><span class="sc">{</span>prior_mean<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>high_temp <span class="op">=</span> (temperature_train[order] <span class="op">&gt;</span> threshold).tolist()</span>
-<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>target_band <span class="op">=</span> ax.fill_between(</span>
-<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>    temperature_train[order],</span>
-<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>    prior_mean <span class="op">-</span> prior_scale,</span>
-<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>    prior_mean <span class="op">+</span> prior_scale,</span>
-<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span>high_temp,</span>
-<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C0"</span>,</span>
-<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.2</span>,</span>
-<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Calibration target ± 1 sd"</span>,</span>
-<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[band_94, band_50, threshold_line, target_line, target_band])</span>
-<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
-<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Calibrated Temperature Effect on Demand"</span>,</span>
-<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>,</span>
-<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Effect on Demand"</span>,</span>
-<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>band_50, band_94 <span class="op">=</span> ax.collections</span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>band_50.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>band_94.set_label(<span class="vs">r"</span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>threshold_line <span class="op">=</span> ax.axvline(</span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span>threshold, color<span class="op">=</span><span class="st">"C3"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="ss">f"</span><span class="sc">{</span>threshold<span class="sc">:.0f}</span><span class="ss"> °C threshold"</span></span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>target_line <span class="op">=</span> ax.axhline(</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span>prior_mean, color<span class="op">=</span><span class="st">"C0"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="ss">f"Calibration target </span><span class="sc">{</span>prior_mean<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>high_temp <span class="op">=</span> (temperature_train[order] <span class="op">&gt;</span> threshold).tolist()</span>
+<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>target_band <span class="op">=</span> ax.fill_between(</span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>    temperature_train[order],</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>    prior_mean <span class="op">-</span> prior_scale,</span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>    prior_mean <span class="op">+</span> prior_scale,</span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>    where<span class="op">=</span>high_temp,</span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"C0"</span>,</span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.2</span>,</span>
+<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"Calibration target ± 1 sd"</span>,</span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[band_94, band_50, threshold_line, target_line, target_band])</span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
+<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Calibrated Temperature Effect on Demand"</span>,</span>
+<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"Temperature (°C)"</span>,</span>
+<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"Effect on Demand"</span>,</span>
+<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">

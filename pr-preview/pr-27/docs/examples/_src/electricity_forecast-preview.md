@@ -653,7 +653,6 @@ pc = az.plot_lm(
     x="temperature",
     ci_kind="hdi",
     ci_prob=(0.5, 0.94),
-    smooth=False,
     visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
     figure_kwargs={"figsize": (12, 7)},
 )
@@ -695,7 +694,6 @@ pc = az.plot_lm(
     x="temperature",
     ci_kind="hdi",
     ci_prob=(0.5, 0.94),
-    smooth=False,
     visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
     figure_kwargs={"figsize": (12, 7)},
 )

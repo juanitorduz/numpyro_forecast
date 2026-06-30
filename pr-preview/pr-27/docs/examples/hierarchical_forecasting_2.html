@@ -288,50 +288,48 @@ window.Quarto = {
 
 <div class="quarto-embed-nb-cell">
 <p>Hierarchical forecasting II with <code>numpyro_forecast</code></p>
-<p>This notebook ports the blog post <a href="https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/"><strong>Hierarchical forecasting with NumPyro (part II)</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. Where <a href="hierarchical_forecasting_1.html">part I</a> fixed a single destination, here we model the <strong>full <code>50x50</code> origin-destination panel</strong> at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static <strong>pairwise</strong> term for the affinity of each origin-destination pair.</p>
-<p>We subclass <code>numpyro_forecast.ForecastingModel</code> and let <a href="../../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> handle the <em>fit-once / forecast-any-horizon</em> mechanics. Visualizations use <strong>ArviZ &gt;= 1.0</strong> (<code>az.plot_lm</code>, faceting one panel per origin).</p>
+<p>This notebook ports the blog post <a href="https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/"><strong>Hierarchical forecasting with NumPyro (part II)</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. This example is by itelf a port of the second part of the original Pyro example: <a href="https://pyro.ai/examples/forecasting_iii.html"><strong>Forecasting III: hierarchical models</strong></a>. Where <a href="hierarchical_forecasting_1.html">part I</a> fixed a single destination, here we model the <strong>full <code>50x50</code> origin-destination panel</strong> at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static <strong>pairwise</strong> term for the affinity of each origin-destination pair.</p>
 <blockquote class="blockquote">
 <p><strong>Note on reproducibility.</strong> We match the blog’s data, seed, optimizer and step counts. Results reproduce the blog’s behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package’s separate-<code>_future</code>-site mechanism rather than re-running the guide over the full covariates. Because the full panel is large, predictive draws are done in memory-bounded batches.</p>
 </blockquote>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
 <div id="9882c5a7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:55.619726Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:55.619645Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:56.663638Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:56.663087Z&quot;}}" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax.tree_util <span class="im">import</span> tree_map</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> Predictive</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> Forecaster, ForecastingModel, eval_crps</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.datasets <span class="im">import</span> load_bart_hierarchical</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.util <span class="im">import</span> periodic_repeat</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">7</span>]</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>period <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span>  <span class="co"># weekly seasonality (hours)</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax.tree_util <span class="im">import</span> tree_map</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> Predictive</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> Forecaster, ForecastingModel, eval_crps</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.datasets <span class="im">import</span> load_bart_hierarchical</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.util <span class="im">import</span> periodic_repeat</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">7</span>]</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 </div>
 </section>
 <section id="read-data" class="level1">
@@ -392,11 +390,10 @@ christmas index: 2328</code></pre>
 <section id="model-specification" class="level1">
 <h1>Model specification</h1>
 <p>The structure mirrors part I but spreads the effects across two hierarchies, origin and destination, plus the hour-of-week. The random-walk <code>level</code> is indexed by destination: it captures how busy an arrival station is over time. The seasonal effect and the observation scale are each a <strong>sum</strong> of an origin part and a destination part, so a ride inherits the weekly rhythm and the noisiness of both its endpoints. On top of that, a static <strong>pairwise</strong> term models the affinity of each origin-destination pair, which absorbs structure the additive parts miss (for instance, people rarely travel from a station back to itself).</p>
-<p><span class="math display">\[
-\mu = \text{level} + (\text{origin\_seasonal} + \text{destin\_seasonal}) + \text{pairwise},
-\qquad
-y \sim \mathcal{N}(\mu,\ \text{origin\_scale} + \text{destin\_scale}).
-\]</span></p>
+<p><span class="math display">\[\begin{align*}
+\mu &amp; = \text{level} + (\text{origin\_seasonal} + \text{destin\_seasonal}) + \text{pairwise} \\
+y &amp; \sim \text{Normal}(\mu,\ \text{origin\_scale} + \text{destin\_scale})
+\end{align*}\]</span></p>
 <p>We declare three plates, <code>origin</code> (dim <code>-3</code>), <code>hour_of_week</code> (dim <code>-2</code>) and <code>destin</code> (dim <code>-1</code>), and open each effect under the plates it depends on. The per-destination level is sampled with <code>self.time_series(...)</code> under the <code>destin</code> plate, and the seasonal effect is tiled across the full horizon with <a href="../../reference/util.periodic_repeat.html#numpyro_forecast.util.periodic_repeat" class="gdls-link gdls-code">periodic_repeat</a>. Broadcasting over the three plate dimensions assembles the <code>(origin, time, destin)</code> mean.</p>
 <div id="69d86a0e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:57.866974Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:57.866875Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:57.882511Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:57.882095Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> HierarchicalForecaster(ForecastingModel):</span>
@@ -447,12 +444,15 @@ y \sim \mathcal{N}(\mu,\ \text{origin\_scale} + \text{destin\_scale}).
 <span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.predict(dist.Normal(<span class="fl">0.0</span>, scale), prediction)</span></code></pre></div>
 </div>
+<p>Let’s visialize the model:</p>
 <div id="9966c00d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:57.884030Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:57.883942Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:58.016420Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:58.015851Z&quot;}}" data-execution_count="5">
-<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    HierarchicalForecaster(period<span class="op">=</span>period),</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, y_train),</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    render_distributions<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>period <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span>  <span class="co"># weekly seasonality (hours)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    HierarchicalForecaster(period<span class="op">=</span>period),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    model_args<span class="op">=</span>(covariates_train, y_train),</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    render_distributions<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="5">
 <div>
 <figure class="figure">
@@ -644,7 +644,7 @@ Test CRPS:  0.2786</code></pre>
 <section id="forecast-visualization" class="level1">
 <h1>Forecast visualization</h1>
 <p>Eight origins arriving at <code>ANTC</code>: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50% and 94% HDI bands, against the observed series, with the train/test split and the Christmas day band marked. With origin, destination and pairwise effects in play, the full panel is fit jointly, yet each individual origin-to-destination forecast still tracks its own weekly pattern. As in part I, Christmas is the visible soft spot, since the model has no holiday feature.</p>
-<div id="150eba80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:23:06.395125Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:23:06.395005Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:23:07.114739Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:23:07.114217Z&quot;}}" data-execution_count="9">
+<div id="150eba80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:23:06.395125Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:23:06.395005Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:23:07.114739Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:23:07.114217Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Predictions arrive as (draws, origin, time); move time before the series facet dim.</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>train_plot <span class="op">=</span> np.transpose(np.clip(train_pp[:, :n_plot, lo:T1, antc], <span class="dv">0</span>, <span class="va">None</span>), (<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">1</span>))</span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>forecast_plot <span class="op">=</span> np.transpose(np.asarray(forecast[:, :n_plot, :, antc]), (<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">1</span>))</span>
@@ -716,10 +716,10 @@ Test CRPS:  0.2786</code></pre>
 <span id="cb13-69"><a href="#cb13-69" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb13-70"><a href="#cb13-70" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-71"><a href="#cb13-71" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> series:</span>
-<span id="cb13-72"><a href="#cb13-72" aria-hidden="true" tabindex="-1"></a>    pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: i}).set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span>dest<span class="sc">}</span><span class="ss">"</span>, fontsize<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb13-72"><a href="#cb13-72" aria-hidden="true" tabindex="-1"></a>    pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: i}).set_title(<span class="ss">f"</span><span class="sc">{</span>stations[i]<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span>dest<span class="sc">}</span><span class="ss">"</span>, fontsize<span class="op">=</span><span class="dv">12</span>)</span>
 <span id="cb13-73"><a href="#cb13-73" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-74"><a href="#cb13-74" aria-hidden="true" tabindex="-1"></a><span class="co"># Build the legend once, on the first facet, from the real band and line artists.</span></span>
-<span id="cb13-75"><a href="#cb13-75" aria-hidden="true" tabindex="-1"></a>ax0 <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: <span class="dv">0</span>})</span>
+<span id="cb13-75"><a href="#cb13-75" aria-hidden="true" tabindex="-1"></a>ax0 <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: n_plot <span class="op">-</span> <span class="dv">1</span>})</span>
 <span id="cb13-76"><a href="#cb13-76" aria-hidden="true" tabindex="-1"></a>band_train_50, band_train_94, band_test_50, band_test_94 <span class="op">=</span> ax0.collections</span>
 <span id="cb13-77"><a href="#cb13-77" aria-hidden="true" tabindex="-1"></a>band_train_94.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
 <span id="cb13-78"><a href="#cb13-78" aria-hidden="true" tabindex="-1"></a>band_train_50.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
@@ -730,20 +730,22 @@ Test CRPS:  0.2786</code></pre>
 <span id="cb13-83"><a href="#cb13-83" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> line, label <span class="kw">in</span> <span class="bu">zip</span>(ax0.lines, labels, strict<span class="op">=</span><span class="va">True</span>):</span>
 <span id="cb13-84"><a href="#cb13-84" aria-hidden="true" tabindex="-1"></a>    line.set_label(label)</span>
 <span id="cb13-85"><a href="#cb13-85" aria-hidden="true" tabindex="-1"></a>    handles.append(line)</span>
-<span id="cb13-86"><a href="#cb13-86" aria-hidden="true" tabindex="-1"></a>ax0.legend(handles<span class="op">=</span>handles, loc<span class="op">=</span><span class="st">"upper left"</span>, fontsize<span class="op">=</span><span class="dv">8</span>)</span>
-<span id="cb13-87"><a href="#cb13-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-88"><a href="#cb13-88" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
-<span id="cb13-89"><a href="#cb13-89" aria-hidden="true" tabindex="-1"></a>fig.supxlabel(<span class="st">"hour"</span>)</span>
-<span id="cb13-90"><a href="#cb13-90" aria-hidden="true" tabindex="-1"></a>fig.supylabel(<span class="st">"log1p(# rides)"</span>)</span>
+<span id="cb13-86"><a href="#cb13-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-87"><a href="#cb13-87" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
+<span id="cb13-88"><a href="#cb13-88" aria-hidden="true" tabindex="-1"></a>fig.supxlabel(<span class="st">"hour"</span>)</span>
+<span id="cb13-89"><a href="#cb13-89" aria-hidden="true" tabindex="-1"></a>fig.supylabel(<span class="st">"log1p(# rides)"</span>)</span>
+<span id="cb13-90"><a href="#cb13-90" aria-hidden="true" tabindex="-1"></a>ax0.legend(handles<span class="op">=</span>handles, loc<span class="op">=</span><span class="st">"upper center"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.15</span>), ncols<span class="op">=</span><span class="dv">4</span>, fontsize<span class="op">=</span><span class="dv">12</span>)</span>
 <span id="cb13-91"><a href="#cb13-91" aria-hidden="true" tabindex="-1"></a>fig.suptitle(</span>
 <span id="cb13-92"><a href="#cb13-92" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"Forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.4f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.4f}</span><span class="ss">)"</span>,</span>
-<span id="cb13-93"><a href="#cb13-93" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">16</span>,</span>
-<span id="cb13-94"><a href="#cb13-94" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb13-95"><a href="#cb13-95" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
+<span id="cb13-93"><a href="#cb13-93" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">18</span>,</span>
+<span id="cb13-94"><a href="#cb13-94" aria-hidden="true" tabindex="-1"></a>    fontweight<span class="op">=</span><span class="st">"bold"</span>,</span>
+<span id="cb13-95"><a href="#cb13-95" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="fl">1.01</span>,</span>
+<span id="cb13-96"><a href="#cb13-96" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-97"><a href="#cb13-97" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="hierarchical_forecasting_2_files/figure-html/_src-hierarchical_forecasting_2-cell-10-output-1.png" width="1475" height="1766" class="figure-img"></p>
+<p><img src="hierarchical_forecasting_2_files/figure-html/_src-hierarchical_forecasting_2-cell-10-output-1.png" width="1475" height="1820" class="figure-img"></p>
 </figure>
 </div>
 </div>
