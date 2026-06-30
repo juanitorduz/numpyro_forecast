@@ -311,7 +311,7 @@ fig.tight_layout();
     prior band shape: (500, 8, 504)
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_61890/2962491600.py:97: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_62989/2962491600.py:97: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -413,20 +413,40 @@ t_train = time_train[lo:T1].astype(float)
 t_test = time_test.astype(float)
 t_full = time[lo:T2].astype(float)
 
-common = dict(y="obs", x="t", plot_dim="time", ci_kind="hdi", ci_prob=(0.5, 0.94), smooth=False)
-hide = {"observed_scatter": False, "pe_line": False, "xlabel": False, "ylabel": False}
 pc = az.plot_lm(
     faceted_idata(train_plot, t_train),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
     col_wrap=1,
+    visuals={
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
     figure_kwargs={"figsize": (15, 18)},
-    visuals={"ci_band": {"color": "C0"}, **hide},
-    **common,
 )
 az.plot_lm(
     faceted_idata(forecast_plot, t_test),
+    y="obs",
+    x="t",
+    plot_dim="time",
     plot_collection=pc,
-    visuals={"ci_band": {"color": "C1"}, **hide},
-    **common,
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={
+        "ci_band": {"color": "C1"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
 )
 
 # Observed series and the split / Christmas markers on every facet, each in one call.
@@ -483,7 +503,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_61890/1626670854.py:75: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_62989/2268551480.py:95: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

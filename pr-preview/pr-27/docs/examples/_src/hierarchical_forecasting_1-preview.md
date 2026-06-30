@@ -272,7 +272,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_61662/3841612553.py:79: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_62979/3841612553.py:79: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -361,20 +361,40 @@ The model does quite well on most of the test window, but it clearly struggles a
 t_test = time_test.astype(float)
 t_full = time[lo:T2].astype(float)
 
-common = dict(y="obs", x="t", plot_dim="time", ci_kind="hdi", ci_prob=(0.5, 0.94), smooth=False)
-hide = {"observed_scatter": False, "pe_line": False, "xlabel": False, "ylabel": False}
 pc = az.plot_lm(
     faceted_idata(train_pp[:, lo:T1, :n_plot], t_train),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
     col_wrap=1,
+    visuals={
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
     figure_kwargs={"figsize": (15, 18)},
-    visuals={"ci_band": {"color": "C0"}, **hide},
-    **common,
 )
 az.plot_lm(
     faceted_idata(forecast[:, :, :n_plot], t_test),
+    y="obs",
+    x="t",
+    plot_dim="time",
     plot_collection=pc,
-    visuals={"ci_band": {"color": "C1"}, **hide},
-    **common,
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={
+        "ci_band": {"color": "C1"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
 )
 
 # Observed series and the split / Christmas markers on every facet, each in one call.
@@ -431,7 +451,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_61662/2967049673.py:70: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_62979/2808682165.py:90: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

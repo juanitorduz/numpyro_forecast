@@ -384,20 +384,40 @@ t_train = time_train[lo:T1].astype(float)
 t_test = time_test.astype(float)
 t_full = time[lo:T2].astype(float)
 
-common = dict(y="obs", x="t", plot_dim="time", ci_kind="hdi", ci_prob=(0.5, 0.94), smooth=False)
-hide = {"observed_scatter": False, "pe_line": False, "xlabel": False, "ylabel": False}
 pc = az.plot_lm(
     faceted_idata(train_plot, t_train),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
     col_wrap=1,
+    visuals={
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
     figure_kwargs={"figsize": (15, 18)},
-    visuals={"ci_band": {"color": "C0"}, **hide},
-    **common,
 )
 az.plot_lm(
     faceted_idata(forecast_plot, t_test),
+    y="obs",
+    x="t",
+    plot_dim="time",
     plot_collection=pc,
-    visuals={"ci_band": {"color": "C1"}, **hide},
-    **common,
+    ci_kind="hdi",
+    ci_prob=(0.5, 0.94),
+    smooth=False,
+    visuals={
+        "ci_band": {"color": "C1"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    },
 )
 
 # Observed series and the split / Christmas markers on every facet, each in one call.
@@ -463,4 +483,4 @@ fig.tight_layout();
 
 This closes the three-part tour: a single series in the [univariate notebook](forecasting_univariate.md), one destination in [part I](hierarchical_forecasting_1.md), and the full origin-destination panel here. The same holiday caveat applies (special dates like Christmas still need explicit features), and richer pairwise or low-rank structure is a natural extension. For the original treatment, see Pyro's [hierarchical forecasting tutorial](https://pyro.ai/examples/forecasting_iii.html).
 
-[Source: Hierarchical forecasting II with `numpyro_forecast`](_src/hierarchical_forecasting_2-preview.html#eb8c732c)
+[Source: Hierarchical forecasting II with `numpyro_forecast`](_src/hierarchical_forecasting_2-preview.html#ea02cbb1)
