@@ -279,7 +279,7 @@ pc.map(
 )
 for i in series:
     pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
-ax0 = pc.get_target("t", {"series": 0})
+ax0 = pc.get_target("t", {"series": n_plot - 1})
 band_50, band_94 = ax0.collections
 band_50.set_label(r"$50\%$ HDI")
 band_94.set_label(r"$94\%$ HDI")

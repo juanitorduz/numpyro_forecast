@@ -189,7 +189,7 @@ numpyro.render_model(
 As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the \\50\\\\ and \\94\\\\ HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
 
 
-    In [6]:
+    In [8]:
 
 
 ``` python
@@ -260,7 +260,7 @@ pc.map(
 )
 for i in series:
     pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
-ax0 = pc.get_target("t", {"series": 0})
+ax0 = pc.get_target("t", {"series": n_plot - 1})
 band_50, band_94 = ax0.collections
 band_50.set_label(r"$50\%$ HDI")
 band_94.set_label(r"$94\%$ HDI")

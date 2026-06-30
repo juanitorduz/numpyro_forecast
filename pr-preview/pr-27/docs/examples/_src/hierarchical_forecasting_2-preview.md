@@ -206,7 +206,7 @@ numpyro.render_model(
 As usual (highly recommended!), we run prior predictive checks. The full panel is large, so we draw the samples in memory-bounded batches with the `batched_obs` helper and keep only what we plot (eight origins arriving at `ANTC`, last three training weeks). The prior ranges look reasonable, if anything a touch too wide.
 
 
-    In [6]:
+    In [8]:
 
 
 ``` python
@@ -295,7 +295,7 @@ pc.map(
 )
 for i in series:
     pc.get_target("t", {"series": i}).set_title(f"{stations[i]} -> {dest}", fontsize=10)
-ax0 = pc.get_target("t", {"series": 0})
+ax0 = pc.get_target("t", {"series": n_plot - 1})
 band_50, band_94 = ax0.collections
 band_50.set_label(r"$50\%$ HDI")
 band_94.set_label(r"$94\%$ HDI")
