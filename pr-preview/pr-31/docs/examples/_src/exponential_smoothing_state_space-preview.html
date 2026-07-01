@@ -301,17 +301,17 @@
   
 
 
-</header>     <div id="85565083" class="cell markdown">
+</header>     <div id="f484fcc8" class="cell markdown">
 <p>Exponential smoothing is one of the most widely used forecasting techniques. In its classical (component) form it is a set of recursive update equations for a <em>level</em>, a <em>trend</em>, and a <em>seasonal</em> component. A more powerful way to write the same idea is the <strong>innovations state space form</strong> (also known as the single source of error, or SSOE, model), which turns exponential smoothing into a proper generative stochastic process. The key consequence is that forecast uncertainty is propagated correctly: the prediction interval widens with the horizon instead of collapsing to the observation noise.</p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/"><em>Exponential Smoothing with NumPyro: State Space Form</em></a> (with material from its predecessor <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro/"><em>Notes on Exponential Smoothing with NumPyro</em></a>) into a <code>numpyro_forecast</code> example. We show how to write the damped Holt-Winters model in state space form as a <strong>custom forecasting model</strong> that plugs into the package’s <a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a>, forecasting, and evaluation machinery, and we introduce the JAX <code>scan</code> primitive that rolls the latent state forward.</p>
 <p>A practical note on the design: the built-in <a href="../../../reference/functional.time_series.html#numpyro_forecast.functional.time_series" class="gdls-link gdls-code">numpyro_forecast.functional.time_series</a> and <a href="../../../reference/functional.predict.html#numpyro_forecast.functional.predict" class="gdls-link gdls-code">predict</a> primitives assume a deterministic mean plus independent per-step Gaussian noise, which is not how an innovations model behaves. We therefore write the model body directly against the functional API’s <a href="../../../reference/functional.Horizon.html#numpyro_forecast.functional.Horizon" class="gdls-link gdls-code">Horizon</a> value, registering the framework’s <code>"obs"</code> and <code>"forecast"</code> sites ourselves, while still reusing everything downstream of the model.</p>
 </div>
-<div id="9cd24c3c" class="cell markdown">
+<div id="a3bf2e26" class="cell markdown">
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [1]:</pre></div><div id="a90dca5f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:07.981073Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:07.980886Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:10.273472Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:10.272989Z&quot;}}" data-execution_count="1">
+<div class="cell-container"><div class="cell-decorator"><pre>In [1]:</pre></div><div id="06f3163a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:13.537229Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:13.537130Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:15.928379Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:15.927737Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
@@ -319,35 +319,36 @@
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> Predictive</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    HMCForecaster,</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    eval_rmse,</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    forecasting_model,</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.functional <span class="im">import</span> Horizon</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> Predictive</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    HMCForecaster,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    eval_rmse,</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    forecasting_model,</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.functional <span class="im">import</span> Horizon</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
 <pre><code>/Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
   warnings.warn("PyMC not installed. PyMC related functions will not work.")
@@ -355,7 +356,7 @@
   warnings.warn("PyMC not installed. PyMC related functions will not work.")</code></pre>
 </div>
 </div></div>
-<div id="c63e9d8f" class="cell markdown">
+<div id="6eba2cd0" class="cell markdown">
 <section id="generate-synthetic-data" class="level1">
 <h1>Generate synthetic data</h1>
 <p>We use the same synthetic series as the source posts: a seasonal cosine wave with period <span class="math inline">\(m = 15\)</span>, a slow logarithmic trend, and additive Gaussian noise,</p>
@@ -363,7 +364,7 @@
 <p>This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last <span class="math inline">\(20\%\)</span> of the series as a test set.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="4f08d7fe" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:10.274863Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:10.274720Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:10.556637Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:10.556190Z&quot;}}" data-execution_count="2">
+<div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="4931557c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:15.929729Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:15.929577Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:16.232342Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:16.231929Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>n_seasons <span class="op">=</span> <span class="dv">15</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>t <span class="op">=</span> jnp.linspace(<span class="dv">0</span>, n_seasons <span class="op">+</span> <span class="dv">1</span>, (n_seasons <span class="op">+</span> <span class="dv">1</span>) <span class="op">*</span> n_seasons)</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -391,11 +392,11 @@
 <pre><code>total: 240, train: 192, test (forecast horizon): 48</code></pre>
 </div>
 </div></div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="598791e5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:10.557760Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:10.557694Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:10.702362Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:10.701862Z&quot;}}" data-execution_count="3">
+<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="35941327" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:16.233395Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:16.233335Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:16.362305Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:16.361880Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>ax.plot(t_train, y_train, color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="st">"train"</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>ax.plot(t_test, y_test, color<span class="op">=</span><span class="st">"C1"</span>, label<span class="op">=</span><span class="st">"test"</span>)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>ax.axvline(t_test[<span class="dv">0</span>], color<span class="op">=</span><span class="st">"gray"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"train/test split"</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>ax.axvline(<span class="bu">float</span>(t_test[<span class="dv">0</span>]), color<span class="op">=</span><span class="st">"gray"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"train/test split"</span>)</span>
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"upper left"</span>)</span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Synthetic time series"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"y"</span>)</span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
@@ -407,7 +408,7 @@
 </div>
 </div>
 </div></div>
-<div id="63896a6c" class="cell markdown">
+<div id="e1b4fbb3" class="cell markdown">
 <section id="a-short-detour-on-scan" class="level1">
 <h1>A short detour on <code>scan</code></h1>
 <p>Exponential smoothing is defined by a recursion: each state depends on the previous one. In JAX we express such recursions with <a href="https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html"><code>jax.lax.scan</code></a> rather than a Python <code>for</code> loop, because <code>scan</code> compiles to a single efficient, differentiable operation. Conceptually <code>scan</code> is equivalent to the following pure-Python function (from the JAX documentation):</p>
@@ -423,7 +424,7 @@
 <p>It threads a <em>carry</em> (the running state) through a step function <code>f</code>, and stacks the per-step outputs. As a warm-up, we use <code>scan</code> to compute the geometric damping sum <span class="math inline">\(\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\)</span> that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of <span class="math inline">\(\varphi\)</span>.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [4]:</pre></div><div id="0ea2d419" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:10.703513Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:10.703442Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:10.735210Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:10.734745Z&quot;}}" data-execution_count="4">
+<div class="cell-container"><div class="cell-decorator"><pre>In [4]:</pre></div><div id="0fe5f962" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:16.363346Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:16.363279Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:16.396541Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:16.396030Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> damping_sum(phi, h):</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> step(carry, _):</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        running_sum, power <span class="op">=</span> carry</span>
@@ -447,7 +448,7 @@ closed form:  2.68928
 partial sums: [0.8     1.44    1.952   2.3616  2.68928]</code></pre>
 </div>
 </div></div>
-<div id="271a226d" class="cell markdown">
+<div id="5f366e88" class="cell markdown">
 <section id="from-component-form-to-state-space-form" class="level1">
 <h1>From component form to state space form</h1>
 <p>The classical <strong>damped Holt-Winters</strong> method with additive seasonality of period <span class="math inline">\(m\)</span> is a set of recursive updates for the level <span class="math inline">\(\ell_t\)</span>, the trend <span class="math inline">\(b_t\)</span>, and the seasonal component <span class="math inline">\(s_t\)</span>, together with an <span class="math inline">\(h\)</span>-step forecast,</p>
@@ -472,7 +473,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>with the coefficient map <span class="math inline">\(\beta = \beta^{*} \alpha\)</span> and <span class="math inline">\(\gamma = \gamma^{*} (1 - \alpha)\)</span>. The two forms are mathematically equivalent, but the SSOE form is the one we want for probabilistic forecasting. In sample, the innovation is exactly the one-step-ahead forecast error <span class="math inline">\(\varepsilon_t = y_t - \mu_t\)</span>, so the whole state trajectory is a deterministic function of the observed data and the parameters. Out of sample there is no data, so <span class="math inline">\(\varepsilon_t\)</span> is <em>sampled</em> and fed back into the level, trend, and seasonal updates. Because a single innovation drives every component, the forecast uncertainty compounds and the prediction interval widens with the horizon, which is the behavior we expect from a genuine stochastic process.</p>
 </section>
 </div>
-<div id="afc3321d" class="cell markdown">
+<div id="6e5dcb37" class="cell markdown">
 <section id="the-model" class="level1">
 <h1>The model</h1>
 <p>We implement the SSOE model as a functional <code>numpyro_forecast</code> model body. A model body receives the per-call <a href="https://juanitorduz.github.io/numpyro_forecast/reference/functional.Horizon.html"><code>Horizon</code></a> (which exposes the observed data <code>h.data</code>, the number of in-sample steps <code>h.t_obs</code>, and the forecast length <code>h.future</code>) plus the covariates, and registers its sample sites. Wrapping it with <a href="../../../reference/functional.forecasting_model.html#numpyro_forecast.functional.forecasting_model" class="gdls-link gdls-code">forecasting_model</a> turns it into the standard <code>(covariates, data=None)</code> callable that <a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> and <code>Predictive</code> consume.</p>
@@ -484,7 +485,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>The priors follow the source post: <span class="math inline">\(\text{Beta}(5, 5)\)</span> on the level, trend, and seasonal smoothing parameters (flat enough near the boundaries to avoid a funnel-shaped posterior), <span class="math inline">\(\text{Beta}(2, 5)\)</span> on the damping factor (favoring some damping), a tight <span class="math inline">\(\text{HalfNormal}(0.5)\)</span> on the noise, and weakly informative priors on the initial states.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="c67a0c5c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:10.736388Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:10.736301Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:10.753634Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:10.753235Z&quot;}}" data-execution_count="5">
+<div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="c24394ac" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:16.397687Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:16.397601Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:16.415182Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:16.414727Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>N_SEASONS <span class="op">=</span> <span class="dv">15</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -546,13 +547,13 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-60"><a href="#cb9-60" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> forecasting_model(exponential_smoothing_ssm)</span></code></pre></div>
 </div></div>
-<div id="2e687858" class="cell markdown">
+<div id="202534f2" class="cell markdown">
 <section id="priors" class="level1">
 <h1>Priors</h1>
 <p>Before fitting, it is worth looking at the priors on the bounded parameters. The <span class="math inline">\(\text{Beta}(5, 5)\)</span> prior on the smoothing parameters is symmetric and concentrated away from <span class="math inline">\(0\)</span> and <span class="math inline">\(1\)</span>, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The <span class="math inline">\(\text{Beta}(2, 5)\)</span> prior on the damping factor <span class="math inline">\(\varphi\)</span> puts more mass below <span class="math inline">\(0.5\)</span>, encoding a mild preference for damped (non-explosive) trends.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="48c074b1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:10.754950Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:10.754879Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:11.259030Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:11.258623Z&quot;}}" data-execution_count="6">
+<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="130f5fcb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:16.416362Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:16.416300Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:16.945137Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:16.944725Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>fig, (ax_smoothing, ax_noise) <span class="op">=</span> plt.subplots(</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">5</span>), layout<span class="op">=</span><span class="st">"constrained"</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>)</span>
@@ -576,13 +577,13 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 </div>
 </div>
 </div></div>
-<div id="ea48e3af" class="cell markdown">
+<div id="b71c5678" class="cell markdown">
 <section id="inference" class="level1">
 <h1>Inference</h1>
 <p>We fit the model with the NUTS sampler through <a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a>, running <span class="math inline">\(4\)</span> chains of <span class="math inline">\(2{,}000\)</span> warmup and <span class="math inline">\(2{,}000\)</span> sampling steps each. <a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> takes the model, the in-sample data, and the covariates over the training window, and runs the No-U-Turn Sampler under the hood.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="76cfc7bd" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:11.260242Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:11.260166Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:12.653492Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:12.652968Z&quot;}}" data-execution_count="7">
+<div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="c3e02a3c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:16.946295Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:16.946215Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:18.324032Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:18.323513Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> HMCForecaster(</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
@@ -594,13 +595,13 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    num_chains<span class="op">=</span><span class="dv">4</span>,</span>
 <span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div></div>
-<div id="25f26f2f" class="cell markdown">
+<div id="fb9f2a86" class="cell markdown">
 <section id="diagnostics" class="level1">
 <h1>Diagnostics</h1>
 <p><a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> stores the posterior draws with the chains flattened together. NumPyro flattens the chains in order, so we can recover the <code>(chain, draw)</code> structure with a plain reshape and hand it to ArviZ for the standard convergence diagnostics.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="684c661f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:12.655408Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:12.655295Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:13.195587Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:13.195069Z&quot;}}" data-execution_count="8">
+<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="bd729506" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:18.325314Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:18.325237Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:18.842096Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:18.841675Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>num_chains <span class="op">=</span> <span class="dv">4</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>posterior <span class="op">=</span> {</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    name: np.asarray(value).reshape(num_chains, <span class="op">-</span><span class="dv">1</span>, <span class="op">*</span>value.shape[<span class="dv">1</span>:])</span>
@@ -617,7 +618,18 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"level_init"</span>,</span>
 <span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"trend_init"</span>,</span>
 <span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>az.summary(idata, var_names<span class="op">=</span>scalar_vars)</span></code></pre></div>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>rhat <span class="op">=</span> az.rhat(idata, var_names<span class="op">=</span>scalar_vars)</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>ess_bulk <span class="op">=</span> az.ess(idata, var_names<span class="op">=</span>scalar_vars)</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>ess_tail <span class="op">=</span> az.ess(idata, var_names<span class="op">=</span>scalar_vars, method<span class="op">=</span><span class="st">"tail"</span>)</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">"r_hat"</span>: [<span class="bu">float</span>(rhat[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ess_bulk"</span>: [<span class="bu">float</span>(ess_bulk[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ess_tail"</span>: [<span class="bu">float</span>(ess_tail[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>scalar_vars,</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>diagnostics.<span class="bu">round</span>({<span class="st">"r_hat"</span>: <span class="dv">3</span>, <span class="st">"ess_bulk"</span>: <span class="dv">0</span>, <span class="st">"ess_tail"</span>: <span class="dv">0</span>})</span></code></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="8">
 <div>
 
@@ -625,111 +637,63 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
   <thead>
     <tr>
       <th></th>
-      <th>mean</th>
-      <th>sd</th>
-      <th>eti89_lb</th>
-      <th>eti89_ub</th>
+      <th>r_hat</th>
       <th>ess_bulk</th>
       <th>ess_tail</th>
-      <th>r_hat</th>
-      <th>mcse_mean</th>
-      <th>mcse_sd</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <th>level_smoothing</th>
-      <td>0.228</td>
-      <td>0.044</td>
-      <td>0.16</td>
-      <td>0.3</td>
-      <td>3499</td>
-      <td>3836</td>
-      <td>1.00</td>
-      <td>0.00074</td>
-      <td>0.00056</td>
+      <td>1.001</td>
+      <td>3499.0</td>
+      <td>3837.0</td>
     </tr>
     <tr>
       <th>trend_smoothing</th>
-      <td>0.48</td>
-      <td>0.149</td>
-      <td>0.24</td>
-      <td>0.72</td>
-      <td>4186</td>
-      <td>5044</td>
-      <td>1.00</td>
-      <td>0.0023</td>
-      <td>0.0014</td>
+      <td>1.000</td>
+      <td>4187.0</td>
+      <td>5045.0</td>
     </tr>
     <tr>
       <th>seasonality_smoothing</th>
-      <td>0.245</td>
-      <td>0.076</td>
-      <td>0.13</td>
-      <td>0.37</td>
-      <td>2633</td>
-      <td>3289</td>
-      <td>1.00</td>
-      <td>0.0015</td>
-      <td>0.001</td>
+      <td>1.001</td>
+      <td>2634.0</td>
+      <td>3290.0</td>
     </tr>
     <tr>
       <th>phi</th>
-      <td>0.263</td>
-      <td>0.157</td>
-      <td>0.056</td>
-      <td>0.55</td>
-      <td>3574</td>
-      <td>3870</td>
-      <td>1.00</td>
-      <td>0.0026</td>
-      <td>0.0019</td>
+      <td>1.001</td>
+      <td>3574.0</td>
+      <td>3871.0</td>
     </tr>
     <tr>
       <th>noise</th>
-      <td>0.2331</td>
-      <td>0.0129</td>
-      <td>0.21</td>
-      <td>0.25</td>
-      <td>3358</td>
-      <td>4319</td>
-      <td>1.00</td>
-      <td>0.00022</td>
-      <td>0.00016</td>
+      <td>1.001</td>
+      <td>3358.0</td>
+      <td>4319.0</td>
     </tr>
     <tr>
       <th>level_init</th>
-      <td>0.27</td>
-      <td>0.29</td>
-      <td>-0.19</td>
-      <td>0.74</td>
-      <td>916</td>
-      <td>1570</td>
-      <td>1.00</td>
-      <td>0.0096</td>
-      <td>0.0067</td>
+      <td>1.003</td>
+      <td>917.0</td>
+      <td>1571.0</td>
     </tr>
     <tr>
       <th>trend_init</th>
-      <td>-0.003</td>
-      <td>0.099</td>
-      <td>-0.16</td>
-      <td>0.16</td>
-      <td>3784</td>
-      <td>4253</td>
-      <td>1.00</td>
-      <td>0.0016</td>
-      <td>0.0011</td>
+      <td>1.000</td>
+      <td>3785.0</td>
+      <td>4253.0</td>
     </tr>
   </tbody>
 </table>
 </div>
 </div>
 </div></div>
-<div id="fe07f009" class="cell markdown">
+<div id="4a3ddf7b" class="cell markdown">
 <p>The <span class="math inline">\(\hat{R}\)</span> values are close to <span class="math inline">\(1\)</span> and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.</p>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="54de7ac6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:13.196733Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:13.196636Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:13.938404Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:13.937936Z&quot;}}" data-execution_count="9">
+<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="35c8dc5c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:18.843136Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:18.843073Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:19.557297Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:19.556799Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>pc_trace <span class="op">=</span> az.plot_trace(idata, var_names<span class="op">=</span>scalar_vars, figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">10</span>, <span class="dv">14</span>)})</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>pc_trace.viz[<span class="st">"figure"</span>].item().suptitle(<span class="st">"Trace plots"</span>, fontsize<span class="op">=</span><span class="dv">16</span>)</span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
@@ -741,13 +705,13 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 </div>
 </div>
 </div></div>
-<div id="999138c1" class="cell markdown">
+<div id="88f2979b" class="cell markdown">
 <section id="forecast" class="level1">
 <h1>Forecast</h1>
 <p>We now generate the forecast over the test horizon. Calling the fitted forecaster with the full-horizon covariates returns forecast samples of shape <code>(sample, future, obs)</code>: for each posterior draw the model replays the in-sample filter, then rolls the state forward while sampling fresh innovations. For the in-sample fit we draw the one-step-ahead posterior predictive (the fitted mean plus observation noise).</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [10]:</pre></div><div id="efc292fc" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:13.940086Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:13.939996Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:14.525596Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:14.525198Z&quot;}}" data-execution_count="10">
+<div class="cell-container"><div class="cell-decorator"><pre>In [10]:</pre></div><div id="ec330674" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:19.558905Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:19.558839Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:20.098365Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:20.097915Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>num_forecast_samples <span class="op">=</span> <span class="dv">2_000</span></span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
@@ -771,10 +735,10 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 forecast samples: (2000, 48, 1)</code></pre>
 </div>
 </div></div>
-<div id="67eb8223" class="cell markdown">
+<div id="b26e2288" class="cell markdown">
 <p>We visualize both the in-sample fit and the forecast with <code>az.plot_lm</code>, showing the <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.</p>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [11]:</pre></div><div id="cbcea8e7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:14.526846Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:14.526775Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:14.783422Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:14.782899Z&quot;}}" data-execution_count="11">
+<div class="cell-container"><div class="cell-decorator"><pre>In [11]:</pre></div><div id="054f1440" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:20.099511Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:20.099431Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:20.349636Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:20.349191Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>crps <span class="op">=</span> eval_crps(forecast_samples, test_data)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>idata_in_sample <span class="op">=</span> az.from_dict(</span>
@@ -847,13 +811,13 @@ forecast samples: (2000, 48, 1)</code></pre>
 </div>
 </div>
 </div></div>
-<div id="6bc82881" class="cell markdown">
+<div id="e2f55b66" class="cell markdown">
 <section id="evaluation" class="level1">
 <h1>Evaluation</h1>
 <p>Finally, we score the forecast against the held-out test set with the package’s evaluation metrics: mean absolute error and root mean squared error (point-forecast accuracy), the continuous ranked probability score (a proper score for the whole predictive distribution), and the empirical coverage of the central <span class="math inline">\(90\%\)</span> interval (calibration).</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [12]:</pre></div><div id="0f73b49d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T18:44:14.785233Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T18:44:14.785140Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T18:44:14.951736Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T18:44:14.951361Z&quot;}}" data-execution_count="12">
+<div class="cell-container"><div class="cell-decorator"><pre>In [12]:</pre></div><div id="a9928f1e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T19:10:20.351087Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T19:10:20.351005Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T19:10:20.512105Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T19:10:20.511668Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"MAE"</span>: eval_mae(forecast_samples, test_data),</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"RMSE"</span>: eval_rmse(forecast_samples, test_data),</span>
@@ -869,7 +833,7 @@ forecast samples: (2000, 48, 1)</code></pre>
   coverage (90%): 0.9583</code></pre>
 </div>
 </div></div>
-<div id="1e4466f9" class="cell markdown">
+<div id="075edceb" class="cell markdown">
 <p>The coverage of the central <span class="math inline">\(90\%\)</span> interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for <code>numpyro_forecast.backtest</code>, which refits the model on a moving window; we omit it here because it retrains the full sampler for every window.</p>
 <section id="references" class="level1">
 <h1>References</h1>

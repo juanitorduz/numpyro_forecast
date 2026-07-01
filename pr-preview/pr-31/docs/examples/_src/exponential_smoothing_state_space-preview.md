@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+import pandas as pd
 import preliz as pz
 from jax import random
 from numpyro.infer import Predictive
@@ -109,7 +110,7 @@ print(f"total: {n}, train: {n_train}, test (forecast horizon): {future}")
 fig, ax = plt.subplots()
 ax.plot(t_train, y_train, color="C0", label="train")
 ax.plot(t_test, y_test, color="C1", label="test")
-ax.axvline(t_test[0], color="gray", linestyle="--", label="train/test split")
+ax.axvline(float(t_test[0]), color="gray", linestyle="--", label="train/test split")
 ax.legend(loc="upper left")
 ax.set(title="Synthetic time series", xlabel="time", ylabel="y")
 plt.show()
@@ -342,19 +343,30 @@ scalar_vars = [
     "level_init",
     "trend_init",
 ]
-az.summary(idata, var_names=scalar_vars)
+rhat = az.rhat(idata, var_names=scalar_vars)
+ess_bulk = az.ess(idata, var_names=scalar_vars)
+ess_tail = az.ess(idata, var_names=scalar_vars, method="tail")
+diagnostics = pd.DataFrame(
+    {
+        "r_hat": [float(rhat[name].item()) for name in scalar_vars],
+        "ess_bulk": [float(ess_bulk[name].item()) for name in scalar_vars],
+        "ess_tail": [float(ess_tail[name].item()) for name in scalar_vars],
+    },
+    index=scalar_vars,
+)
+diagnostics.round({"r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
 ```
 
 
-|  | mean | sd | eti89_lb | eti89_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
-|----|----|----|----|----|----|----|----|----|----|
-| level_smoothing | 0.228 | 0.044 | 0.16 | 0.3 | 3499 | 3836 | 1.00 | 0.00074 | 0.00056 |
-| trend_smoothing | 0.48 | 0.149 | 0.24 | 0.72 | 4186 | 5044 | 1.00 | 0.0023 | 0.0014 |
-| seasonality_smoothing | 0.245 | 0.076 | 0.13 | 0.37 | 2633 | 3289 | 1.00 | 0.0015 | 0.001 |
-| phi | 0.263 | 0.157 | 0.056 | 0.55 | 3574 | 3870 | 1.00 | 0.0026 | 0.0019 |
-| noise | 0.2331 | 0.0129 | 0.21 | 0.25 | 3358 | 4319 | 1.00 | 0.00022 | 0.00016 |
-| level_init | 0.27 | 0.29 | -0.19 | 0.74 | 916 | 1570 | 1.00 | 0.0096 | 0.0067 |
-| trend_init | -0.003 | 0.099 | -0.16 | 0.16 | 3784 | 4253 | 1.00 | 0.0016 | 0.0011 |
+|                       | r_hat | ess_bulk | ess_tail |
+|-----------------------|-------|----------|----------|
+| level_smoothing       | 1.001 | 3499.0   | 3837.0   |
+| trend_smoothing       | 1.000 | 4187.0   | 5045.0   |
+| seasonality_smoothing | 1.001 | 2634.0   | 3290.0   |
+| phi                   | 1.001 | 3574.0   | 3871.0   |
+| noise                 | 1.001 | 3358.0   | 4319.0   |
+| level_init            | 1.003 | 917.0    | 1571.0   |
+| trend_init            | 1.000 | 3785.0   | 4253.0   |
 
 
 The \\\hat{R}\\ values are close to \\1\\ and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
