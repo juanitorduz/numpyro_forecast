@@ -182,10 +182,8 @@ The priors follow the source post: \\\text{Beta}(5, 5)\\ on the level, trend, an
 
 
 ``` python
-N_SEASONS = 15
-
-
 def exponential_smoothing_ssm(h: Horizon, covariates: Array) -> None:
+    """Damped Holt-Winters exponential smoothing in innovations state space form."""
     if h.data is None:
         msg = "the exponential smoothing model requires observed data"
         raise ValueError(msg)
@@ -198,7 +196,7 @@ def exponential_smoothing_ssm(h: Horizon, covariates: Array) -> None:
     trend_init = numpyro.sample("trend_init", dist.Normal(0, 0.1))
     seasonality_smoothing = numpyro.sample("seasonality_smoothing", dist.Beta(5, 5))
     phi = numpyro.sample("phi", dist.Beta(2, 5))
-    with numpyro.plate("n_seasons", N_SEASONS):
+    with numpyro.plate("n_seasons", n_seasons):
         seasonality_init = numpyro.sample("seasonality_init", dist.Normal(0, 1))
     noise = numpyro.sample("noise", dist.HalfNormal(0.5))
 
@@ -206,15 +204,20 @@ def exponential_smoothing_ssm(h: Horizon, covariates: Array) -> None:
     beta = trend_smoothing * level_smoothing
     gamma = seasonality_smoothing * (1 - level_smoothing)
 
+    def advance(carry, innovation):
+        # Shared state update: one innovation drives level, trend, and seasonality.
+        level, trend, seasonality = carry
+        level = level + phi * trend + level_smoothing * innovation
+        trend = phi * trend + beta * innovation
+        new_season = seasonality[0] + gamma * innovation
+        seasonality = jnp.concatenate([seasonality[1:], new_season[None]])
+        return (level, trend, seasonality)
+
     def transition(carry, y_t):
         level, trend, seasonality = carry
         mu = level + phi * trend + seasonality[0]
         error = y_t - mu  # in-sample innovation = one-step-ahead forecast error
-        level = level + phi * trend + level_smoothing * error
-        trend = phi * trend + beta * error
-        new_season = seasonality[0] + gamma * error
-        seasonality = jnp.concatenate([seasonality[1:], new_season[None]])
-        return (level, trend, seasonality), mu
+        return advance(carry, error), mu
 
     init_state = (level_init, trend_init, seasonality_init)
     final_state, mu = jax.lax.scan(transition, init_state, y_obs)
@@ -231,11 +234,7 @@ def exponential_smoothing_ssm(h: Horizon, covariates: Array) -> None:
             level, trend, seasonality = carry
             mu = level + phi * trend + seasonality[0]
             y_hat = mu + eps  # sampled innovation is fed back into the state
-            level = level + phi * trend + level_smoothing * eps
-            trend = phi * trend + beta * eps
-            new_season = seasonality[0] + gamma * eps
-            seasonality = jnp.concatenate([seasonality[1:], new_season[None]])
-            return (level, trend, seasonality), y_hat
+            return advance(carry, eps), y_hat
 
         _, y_future = jax.lax.scan(forecast_step, final_state, eps_future)
         numpyro.deterministic("forecast", y_future[:, None])
@@ -501,4 +500,4 @@ The coverage of the central \\90\\\\ interval sits close to its nominal level, c
 - Orduz, J. [*Exponential Smoothing with NumPyro: State Space Form*](https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/).
 - Orduz, J. [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/).
 
-[Source: Exponential Smoothing in State Space Form with `numpyro_forecast`](_src/exponential_smoothing_state_space-preview.html#679730fa)
+[Source: Exponential Smoothing in State Space Form with `numpyro_forecast`](_src/exponential_smoothing_state_space-preview.html#064de378)
