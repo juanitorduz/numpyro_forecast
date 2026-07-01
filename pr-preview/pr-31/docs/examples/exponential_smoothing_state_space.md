@@ -391,7 +391,8 @@ We visualize both the in-sample fit and the forecast with `az.plot_lm`, showing 
 
 
 ``` python
-crps = eval_crps(forecast_samples, test_data)
+crps_train = eval_crps(in_sample_pp, train_data)
+crps_test = eval_crps(forecast_samples, test_data)
 
 idata_in_sample = az.from_dict(
     {
@@ -453,7 +454,11 @@ ax.legend(
     bbox_to_anchor=(0.5, -0.1),
     ncol=3,
 )
-ax.set(title=f"Exponential smoothing forecast (test CRPS: {crps:.3f})", xlabel="time", ylabel="y")
+ax.set(
+    title=f"Exponential smoothing forecast (train CRPS: {crps_train:.3f}, test CRPS: {crps_test:.3f})",
+    xlabel="time",
+    ylabel="y",
+)
 plt.show()
 ```
 
@@ -496,4 +501,4 @@ The coverage of the central \\90\\\\ interval sits close to its nominal level, c
 - Orduz, J. [*Exponential Smoothing with NumPyro: State Space Form*](https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/).
 - Orduz, J. [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/).
 
-[Source: Exponential Smoothing in State Space Form with `numpyro_forecast`](_src/exponential_smoothing_state_space-preview.html#f484fcc8)
+[Source: Exponential Smoothing in State Space Form with `numpyro_forecast`](_src/exponential_smoothing_state_space-preview.html#679730fa)

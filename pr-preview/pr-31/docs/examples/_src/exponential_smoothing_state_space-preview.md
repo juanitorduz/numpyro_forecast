@@ -428,7 +428,8 @@ We visualize both the in-sample fit and the forecast with `az.plot_lm`, showing 
 
 
 ``` python
-crps = eval_crps(forecast_samples, test_data)
+crps_train = eval_crps(in_sample_pp, train_data)
+crps_test = eval_crps(forecast_samples, test_data)
 
 idata_in_sample = az.from_dict(
     {
@@ -490,7 +491,11 @@ ax.legend(
     bbox_to_anchor=(0.5, -0.1),
     ncol=3,
 )
-ax.set(title=f"Exponential smoothing forecast (test CRPS: {crps:.3f})", xlabel="time", ylabel="y")
+ax.set(
+    title=f"Exponential smoothing forecast (train CRPS: {crps_train:.3f}, test CRPS: {crps_test:.3f})",
+    xlabel="time",
+    ylabel="y",
+)
 plt.show()
 ```
 
