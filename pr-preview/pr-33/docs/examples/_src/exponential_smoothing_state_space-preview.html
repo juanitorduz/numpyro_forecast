@@ -563,69 +563,33 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>Before fitting, it is worth looking at the priors on the bounded parameters. The <span class="math inline">\(\text{Beta}(5, 5)\)</span> prior on the smoothing parameters is symmetric and concentrated away from <span class="math inline">\(0\)</span> and <span class="math inline">\(1\)</span>, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The <span class="math inline">\(\text{Beta}(2, 5)\)</span> prior on the damping factor <span class="math inline">\(\varphi\)</span> puts more mass below <span class="math inline">\(0.5\)</span>, encoding a mild preference for damped (non-explosive) trends.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="57ca1da2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.780963Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.780882Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:17.191676Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:17.191060Z&quot;}}" data-execution_count="6">
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>fig, (ax_smoothing, ax_noise) <span class="op">=</span> plt.subplots(</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">5</span>), layout<span class="op">=</span><span class="st">"constrained"</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">5</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C0"</span>, legend<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">2</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C1"</span>, legend<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="co"># preliz's plot_pdf adds a dashed baseline artist per curve, so build the legend from</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co"># explicit proxy handles to keep each label matched to its curve color.</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>ax_smoothing.legend(</span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    handles<span class="op">=</span>[</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>        Line2D([], [], color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="vs">r"</span><span class="dv">$</span><span class="ch">\t</span><span class="vs">ext{Beta}</span><span class="kw">(</span><span class="vs">5, 5</span><span class="kw">)</span><span class="dv">$</span><span class="vs"> </span><span class="kw">(</span><span class="vs">smoothing</span><span class="kw">)</span><span class="vs">"</span>),</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>        Line2D([], [], color<span class="op">=</span><span class="st">"C1"</span>, label<span class="op">=</span><span class="vs">r"</span><span class="dv">$</span><span class="ch">\t</span><span class="vs">ext{Beta}</span><span class="kw">(</span><span class="vs">2, 5</span><span class="kw">)</span><span class="dv">$</span><span class="vs"> </span><span class="kw">(</span><span class="vs">damping </span><span class="dv">$</span><span class="ch">\v</span><span class="vs">arphi</span><span class="dv">$</span><span class="kw">)</span><span class="vs">"</span>),</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    ],</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    loc<span class="op">=</span><span class="st">"upper right"</span>,</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>ax_smoothing.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Priors on the bounded parameters"</span>, xlabel<span class="op">=</span><span class="st">"value"</span>, ylabel<span class="op">=</span><span class="st">"density"</span>)</span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="fl">0.5</span>).plot_pdf(ax<span class="op">=</span>ax_noise, color<span class="op">=</span><span class="st">"C0"</span>, legend<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>ax_noise.legend(</span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    handles<span class="op">=</span>[Line2D([], [], color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="vs">r"</span><span class="dv">$</span><span class="ch">\t</span><span class="vs">ext{HalfNormal}</span><span class="kw">(</span><span class="vs">0</span><span class="dv">.</span><span class="vs">5</span><span class="kw">)</span><span class="dv">$</span><span class="vs"> </span><span class="kw">(</span><span class="vs">noise </span><span class="dv">$\s</span><span class="vs">igma</span><span class="dv">$</span><span class="kw">)</span><span class="vs">"</span>)],</span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    loc<span class="op">=</span><span class="st">"upper right"</span>,</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>ax_noise.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Prior on the observation noise"</span>, xlabel<span class="op">=</span><span class="st">"value"</span>, ylabel<span class="op">=</span><span class="st">"density"</span>)</span></code></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="6">
-<pre><code>[Text(0.5, 1.0, 'Prior on the observation noise'),
- Text(0.5, 0, 'value'),
- Text(0, 0.5, 'density')]</code></pre>
-</div>
-<div class="cell-output cell-output-display">
-<div class="">
-<figure class="figure">
-<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-7-output-2.png" width="1211" height="511" class="figure-img"></p>
-</figure>
-</div>
-</div>
-</div></div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="e259a46d" class="cell" data-execution_count="7">
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>fig, (ax_smoothing, ax_noise) <span class="op">=</span> plt.subplots(</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">2</span>,</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    ncols<span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">9</span>),</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    sharex<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    sharey<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    layout<span class="op">=</span><span class="st">"constrained"</span>,</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">5</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C0"</span>)</span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">2</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C1"</span>)</span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>ax_smoothing.<span class="bu">set</span>(</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Priors on the bounded parameters"</span>,</span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="va">None</span>,</span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"density"</span>,</span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="fl">0.5</span>).plot_pdf(ax<span class="op">=</span>ax_noise, color<span class="op">=</span><span class="st">"C2"</span>)</span>
-<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>ax_noise.<span class="bu">set</span>(</span>
-<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Prior on the observation noise"</span>,</span>
-<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"value"</span>,</span>
-<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"density"</span>,</span>
-<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>fig, (ax_smoothing, ax_noise) <span class="op">=</span> plt.subplots(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    ncols<span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">9</span>),</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    sharex<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    sharey<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    layout<span class="op">=</span><span class="st">"constrained"</span>,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">5</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C0"</span>)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">2</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C1"</span>)</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>ax_smoothing.<span class="bu">set</span>(</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Priors on the bounded parameters"</span>,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"density"</span>,</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="fl">0.5</span>).plot_pdf(ax<span class="op">=</span>ax_noise, color<span class="op">=</span><span class="st">"C2"</span>)</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>ax_noise.<span class="bu">set</span>(</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Prior on the observation noise"</span>,</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"value"</span>,</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"density"</span>,</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
-<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-8-output-1.png" width="1131" height="788" class="figure-img"></p>
+<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-7-output-1.png" width="1131" height="788" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -637,16 +601,16 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="06a7c8ed" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:17.192986Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:17.192902Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:18.518623Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:18.518232Z&quot;}}" data-execution_count="8">
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> HMCForecaster(</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    model,</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    train_data,</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    num_warmup<span class="op">=</span><span class="dv">2_000</span>,</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span><span class="dv">2_000</span>,</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    num_chains<span class="op">=</span><span class="dv">4</span>,</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> HMCForecaster(</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    model,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    train_data,</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    covariates_train,</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    num_warmup<span class="op">=</span><span class="dv">2_000</span>,</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    num_samples<span class="op">=</span><span class="dv">2_000</span>,</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    num_chains<span class="op">=</span><span class="dv">4</span>,</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div></div>
 <div id="76fcd80a" class="cell markdown">
 <section id="diagnostics" class="level1">
@@ -655,34 +619,34 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="ed54060a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:18.519934Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:18.519857Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.029328Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.029001Z&quot;}}" data-execution_count="9">
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>num_chains <span class="op">=</span> <span class="dv">4</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>posterior <span class="op">=</span> {</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    name: np.asarray(value).reshape(num_chains, <span class="op">-</span><span class="dv">1</span>, <span class="op">*</span>value.shape[<span class="dv">1</span>:])</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, value <span class="kw">in</span> forecaster.posterior_samples.items()</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>idata <span class="op">=</span> az.from_dict({<span class="st">"posterior"</span>: posterior})</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>scalar_vars <span class="op">=</span> [</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"level_smoothing"</span>,</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"trend_smoothing"</span>,</span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"seasonality_smoothing"</span>,</span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"phi"</span>,</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">"noise"</span>,</span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"level_init"</span>,</span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"trend_init"</span>,</span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>]</span>
-<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>rhat <span class="op">=</span> az.rhat(idata, var_names<span class="op">=</span>scalar_vars)</span>
-<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>ess_bulk <span class="op">=</span> az.ess(idata, var_names<span class="op">=</span>scalar_vars)</span>
-<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>ess_tail <span class="op">=</span> az.ess(idata, var_names<span class="op">=</span>scalar_vars, method<span class="op">=</span><span class="st">"tail"</span>)</span>
-<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="op">=</span> pd.DataFrame(</span>
-<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">"r_hat"</span>: [<span class="bu">float</span>(rhat[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
-<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ess_bulk"</span>: [<span class="bu">float</span>(ess_bulk[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
-<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ess_tail"</span>: [<span class="bu">float</span>(ess_tail[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
-<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>scalar_vars,</span>
-<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>diagnostics.<span class="bu">round</span>({<span class="st">"r_hat"</span>: <span class="dv">3</span>, <span class="st">"ess_bulk"</span>: <span class="dv">0</span>, <span class="st">"ess_tail"</span>: <span class="dv">0</span>})</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>num_chains <span class="op">=</span> <span class="dv">4</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>posterior <span class="op">=</span> {</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    name: np.asarray(value).reshape(num_chains, <span class="op">-</span><span class="dv">1</span>, <span class="op">*</span>value.shape[<span class="dv">1</span>:])</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, value <span class="kw">in</span> forecaster.posterior_samples.items()</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>idata <span class="op">=</span> az.from_dict({<span class="st">"posterior"</span>: posterior})</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>scalar_vars <span class="op">=</span> [</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"level_smoothing"</span>,</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"trend_smoothing"</span>,</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"seasonality_smoothing"</span>,</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"phi"</span>,</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">"noise"</span>,</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"level_init"</span>,</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"trend_init"</span>,</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>rhat <span class="op">=</span> az.rhat(idata, var_names<span class="op">=</span>scalar_vars)</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>ess_bulk <span class="op">=</span> az.ess(idata, var_names<span class="op">=</span>scalar_vars)</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>ess_tail <span class="op">=</span> az.ess(idata, var_names<span class="op">=</span>scalar_vars, method<span class="op">=</span><span class="st">"tail"</span>)</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>diagnostics <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">"r_hat"</span>: [<span class="bu">float</span>(rhat[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ess_bulk"</span>: [<span class="bu">float</span>(ess_bulk[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ess_tail"</span>: [<span class="bu">float</span>(ess_tail[name].item()) <span class="cf">for</span> name <span class="kw">in</span> scalar_vars],</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>scalar_vars,</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>diagnostics.<span class="bu">round</span>({<span class="st">"r_hat"</span>: <span class="dv">3</span>, <span class="st">"ess_bulk"</span>: <span class="dv">0</span>, <span class="st">"ess_tail"</span>: <span class="dv">0</span>})</span></code></pre></div>
 <div class="cell-output cell-output-display" data-execution_count="9">
 <div>
 
@@ -747,23 +711,23 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>The <span class="math inline">\(\hat{R}\)</span> values are close to <span class="math inline">\(1\)</span> and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.</p>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [10]:</pre></div><div id="fd317770" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.030503Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.030420Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.810947Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.810474Z&quot;}}" data-execution_count="10">
-<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>pc_trace <span class="op">=</span> az.plot_trace_dist(</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    idata,</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>scalar_vars,</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">10</span>, <span class="dv">16</span>)},</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    compact<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>pc_trace.viz[<span class="st">"figure"</span>].item().suptitle(</span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Trace plots"</span>,</span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">18</span>,</span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    fontweight<span class="op">=</span><span class="st">"bold"</span>,</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="fl">1.03</span>,</span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>pc_trace <span class="op">=</span> az.plot_trace_dist(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    idata,</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>scalar_vars,</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">10</span>, <span class="dv">16</span>)},</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    compact<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>pc_trace.viz[<span class="st">"figure"</span>].item().suptitle(</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Trace plots"</span>,</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    fontsize<span class="op">=</span><span class="dv">18</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    fontweight<span class="op">=</span><span class="st">"bold"</span>,</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="fl">1.03</span>,</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
-<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-11-output-1.png" width="1011" height="1663" class="figure-img"></p>
+<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-10-output-1.png" width="1011" height="1663" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -775,24 +739,24 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [11]:</pre></div><div id="76d5b161" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.812483Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.812392Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.348963Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.348553Z&quot;}}" data-execution_count="11">
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>num_forecast_samples <span class="op">=</span> <span class="dv">2_000</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>forecast_samples <span class="op">=</span> forecaster(</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    rng_subkey, train_data, covariates_full, num_samples<span class="op">=</span>num_forecast_samples</span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="co"># In-sample one-step-ahead posterior predictive: fitted mean "mu" plus observation noise.</span></span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>mu_in_sample <span class="op">=</span> Predictive(</span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    model, posterior_samples<span class="op">=</span>forecaster.posterior_samples, return_sites<span class="op">=</span>[<span class="st">"mu"</span>]</span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>)(rng_subkey, covariates_train, train_data)[<span class="st">"mu"</span>]</span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>noise_samples <span class="op">=</span> forecaster.posterior_samples[<span class="st">"noise"</span>][:, <span class="va">None</span>, <span class="va">None</span>]</span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>in_sample_pp <span class="op">=</span> mu_in_sample <span class="op">+</span> noise_samples <span class="op">*</span> random.normal(rng_subkey, mu_in_sample.shape)</span>
-<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"in-sample posterior predictive: </span><span class="sc">{</span>in_sample_pp<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"forecast samples: </span><span class="sc">{</span>forecast_samples<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>num_forecast_samples <span class="op">=</span> <span class="dv">2_000</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>forecast_samples <span class="op">=</span> forecaster(</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    rng_subkey, train_data, covariates_full, num_samples<span class="op">=</span>num_forecast_samples</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="co"># In-sample one-step-ahead posterior predictive: fitted mean "mu" plus observation noise.</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>mu_in_sample <span class="op">=</span> Predictive(</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    model, posterior_samples<span class="op">=</span>forecaster.posterior_samples, return_sites<span class="op">=</span>[<span class="st">"mu"</span>]</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>)(rng_subkey, covariates_train, train_data)[<span class="st">"mu"</span>]</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>noise_samples <span class="op">=</span> forecaster.posterior_samples[<span class="st">"noise"</span>][:, <span class="va">None</span>, <span class="va">None</span>]</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>in_sample_pp <span class="op">=</span> mu_in_sample <span class="op">+</span> noise_samples <span class="op">*</span> random.normal(rng_subkey, mu_in_sample.shape)</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"in-sample posterior predictive: </span><span class="sc">{</span>in_sample_pp<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"forecast samples: </span><span class="sc">{</span>forecast_samples<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>in-sample posterior predictive: (8000, 192, 1)
 forecast samples: (2000, 48, 1)</code></pre>
@@ -802,79 +766,79 @@ forecast samples: (2000, 48, 1)</code></pre>
 <p>We visualize both the in-sample fit and the forecast with <code>az.plot_lm</code>, showing the <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.</p>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [12]:</pre></div><div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.350055Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.349980Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.695230Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.694891Z&quot;}}" data-execution_count="12">
-<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> eval_crps(in_sample_pp, train_data)</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast_samples, test_data)</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>idata_in_sample <span class="op">=</span> az.from_dict(</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>        <span class="st">"posterior_predictive"</span>: {<span class="st">"obs"</span>: np.asarray(in_sample_pp[..., <span class="dv">0</span>])[<span class="va">None</span>]},</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_data"</span>: {<span class="st">"obs"</span>: np.asarray(y_train)},</span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">"constant_data"</span>: {<span class="st">"time"</span>: np.asarray(t_train)},</span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"t"</span>: np.asarray(t_train)},</span>
-<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    dims<span class="op">=</span>{<span class="st">"obs"</span>: [<span class="st">"t"</span>], <span class="st">"time"</span>: [<span class="st">"t"</span>]},</span>
-<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>idata_forecast <span class="op">=</span> az.from_dict(</span>
-<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>    {</span>
-<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>        <span class="st">"posterior_predictive"</span>: {<span class="st">"obs"</span>: np.asarray(forecast_samples[..., <span class="dv">0</span>])[<span class="va">None</span>]},</span>
-<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_data"</span>: {<span class="st">"obs"</span>: np.asarray(y_test)},</span>
-<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">"constant_data"</span>: {<span class="st">"time"</span>: np.asarray(t_test)},</span>
-<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"t"</span>: np.asarray(t_test)},</span>
-<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>    dims<span class="op">=</span>{<span class="st">"obs"</span>: [<span class="st">"t"</span>], <span class="st">"time"</span>: [<span class="st">"t"</span>]},</span>
-<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_lm(</span>
-<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>    idata_in_sample,</span>
-<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
-<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C0"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
-<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
-<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>in_sample_bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"time"</span>]</span>
-<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>band_in_94 <span class="op">=</span> in_sample_bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
-<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>band_in_50 <span class="op">=</span> in_sample_bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
-<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>az.plot_lm(</span>
-<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>    idata_forecast,</span>
-<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>    plot_collection<span class="op">=</span>pc,</span>
-<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
-<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
-<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>forecast_bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"time"</span>]</span>
-<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>band_fc_94 <span class="op">=</span> forecast_bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
-<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>band_fc_50 <span class="op">=</span> forecast_bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
-<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
-<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a>band_in_94.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a>band_in_50.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a>band_fc_94.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a>band_fc_50.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
-<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a>(observed_line,) <span class="op">=</span> ax.plot(np.asarray(t), np.asarray(y), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"observed"</span>)</span>
-<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a>split_line <span class="op">=</span> ax.axvline(<span class="bu">float</span>(t_test[<span class="dv">0</span>]), color<span class="op">=</span><span class="st">"gray"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"train/test split"</span>)</span>
-<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>ax.legend(</span>
-<span id="cb18-59"><a href="#cb18-59" aria-hidden="true" tabindex="-1"></a>    handles<span class="op">=</span>[band_in_94, band_in_50, band_fc_94, band_fc_50, observed_line, split_line],</span>
-<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a>    loc<span class="op">=</span><span class="st">"upper center"</span>,</span>
-<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a>    bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.1</span>),</span>
-<span id="cb18-62"><a href="#cb18-62" aria-hidden="true" tabindex="-1"></a>    ncol<span class="op">=</span><span class="dv">3</span>,</span>
-<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
-<span id="cb18-65"><a href="#cb18-65" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="ss">f"Exponential smoothing forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.3f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.3f}</span><span class="ss">)"</span>,</span>
-<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb18-67"><a href="#cb18-67" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"y"</span>,</span>
-<span id="cb18-68"><a href="#cb18-68" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb18-69"><a href="#cb18-69" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> eval_crps(in_sample_pp, train_data)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast_samples, test_data)</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>idata_in_sample <span class="op">=</span> az.from_dict(</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>        <span class="st">"posterior_predictive"</span>: {<span class="st">"obs"</span>: np.asarray(in_sample_pp[..., <span class="dv">0</span>])[<span class="va">None</span>]},</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_data"</span>: {<span class="st">"obs"</span>: np.asarray(y_train)},</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">"constant_data"</span>: {<span class="st">"time"</span>: np.asarray(t_train)},</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"t"</span>: np.asarray(t_train)},</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    dims<span class="op">=</span>{<span class="st">"obs"</span>: [<span class="st">"t"</span>], <span class="st">"time"</span>: [<span class="st">"t"</span>]},</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>idata_forecast <span class="op">=</span> az.from_dict(</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>        <span class="st">"posterior_predictive"</span>: {<span class="st">"obs"</span>: np.asarray(forecast_samples[..., <span class="dv">0</span>])[<span class="va">None</span>]},</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_data"</span>: {<span class="st">"obs"</span>: np.asarray(y_test)},</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">"constant_data"</span>: {<span class="st">"time"</span>: np.asarray(t_test)},</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"t"</span>: np.asarray(t_test)},</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>    dims<span class="op">=</span>{<span class="st">"obs"</span>: [<span class="st">"t"</span>], <span class="st">"time"</span>: [<span class="st">"t"</span>]},</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_lm(</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>    idata_in_sample,</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C0"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">7</span>)},</span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>in_sample_bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"time"</span>]</span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a>band_in_94 <span class="op">=</span> in_sample_bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a>band_in_50 <span class="op">=</span> in_sample_bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a>az.plot_lm(</span>
+<span id="cb16-38"><a href="#cb16-38" aria-hidden="true" tabindex="-1"></a>    idata_forecast,</span>
+<span id="cb16-39"><a href="#cb16-39" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb16-40"><a href="#cb16-40" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb16-41"><a href="#cb16-41" aria-hidden="true" tabindex="-1"></a>    plot_collection<span class="op">=</span>pc,</span>
+<span id="cb16-42"><a href="#cb16-42" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb16-43"><a href="#cb16-43" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.94</span>),</span>
+<span id="cb16-44"><a href="#cb16-44" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb16-45"><a href="#cb16-45" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
+<span id="cb16-46"><a href="#cb16-46" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-47"><a href="#cb16-47" aria-hidden="true" tabindex="-1"></a>forecast_bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"time"</span>]</span>
+<span id="cb16-48"><a href="#cb16-48" aria-hidden="true" tabindex="-1"></a>band_fc_94 <span class="op">=</span> forecast_bands.sel(prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
+<span id="cb16-49"><a href="#cb16-49" aria-hidden="true" tabindex="-1"></a>band_fc_50 <span class="op">=</span> forecast_bands.sel(prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
+<span id="cb16-50"><a href="#cb16-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-51"><a href="#cb16-51" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
+<span id="cb16-52"><a href="#cb16-52" aria-hidden="true" tabindex="-1"></a>band_in_94.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb16-53"><a href="#cb16-53" aria-hidden="true" tabindex="-1"></a>band_in_50.set_label(<span class="vs">r"in-sample </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb16-54"><a href="#cb16-54" aria-hidden="true" tabindex="-1"></a>band_fc_94.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">94</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb16-55"><a href="#cb16-55" aria-hidden="true" tabindex="-1"></a>band_fc_50.set_label(<span class="vs">r"forecast </span><span class="dv">$</span><span class="vs">50</span><span class="ch">\%</span><span class="dv">$</span><span class="vs"> HDI"</span>)</span>
+<span id="cb16-56"><a href="#cb16-56" aria-hidden="true" tabindex="-1"></a>(observed_line,) <span class="op">=</span> ax.plot(np.asarray(t), np.asarray(y), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"observed"</span>)</span>
+<span id="cb16-57"><a href="#cb16-57" aria-hidden="true" tabindex="-1"></a>split_line <span class="op">=</span> ax.axvline(<span class="bu">float</span>(t_test[<span class="dv">0</span>]), color<span class="op">=</span><span class="st">"gray"</span>, linestyle<span class="op">=</span><span class="st">"--"</span>, label<span class="op">=</span><span class="st">"train/test split"</span>)</span>
+<span id="cb16-58"><a href="#cb16-58" aria-hidden="true" tabindex="-1"></a>ax.legend(</span>
+<span id="cb16-59"><a href="#cb16-59" aria-hidden="true" tabindex="-1"></a>    handles<span class="op">=</span>[band_in_94, band_in_50, band_fc_94, band_fc_50, observed_line, split_line],</span>
+<span id="cb16-60"><a href="#cb16-60" aria-hidden="true" tabindex="-1"></a>    loc<span class="op">=</span><span class="st">"upper center"</span>,</span>
+<span id="cb16-61"><a href="#cb16-61" aria-hidden="true" tabindex="-1"></a>    bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.1</span>),</span>
+<span id="cb16-62"><a href="#cb16-62" aria-hidden="true" tabindex="-1"></a>    ncol<span class="op">=</span><span class="dv">3</span>,</span>
+<span id="cb16-63"><a href="#cb16-63" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-64"><a href="#cb16-64" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
+<span id="cb16-65"><a href="#cb16-65" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="ss">f"Exponential smoothing forecast (train CRPS: </span><span class="sc">{</span>crps_train<span class="sc">:.3f}</span><span class="ss">, test CRPS: </span><span class="sc">{</span>crps_test<span class="sc">:.3f}</span><span class="ss">)"</span>,</span>
+<span id="cb16-66"><a href="#cb16-66" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb16-67"><a href="#cb16-67" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"y"</span>,</span>
+<span id="cb16-68"><a href="#cb16-68" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-69"><a href="#cb16-69" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
-<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-13-output-1.png" width="1211" height="711" class="figure-img"></p>
+<p class=""><img src="exponential_smoothing_state_space_files/figure-html/cell-12-output-1.png" width="1211" height="711" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -886,14 +850,14 @@ forecast samples: (2000, 48, 1)</code></pre>
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [14]:</pre></div><div id="81e400f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.696830Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.696756Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.851866Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.851427Z&quot;}}" data-execution_count="14">
-<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"MAE"</span>: eval_mae(forecast_samples, test_data),</span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"RMSE"</span>: eval_rmse(forecast_samples, test_data),</span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CRPS"</span>: eval_crps(forecast_samples, test_data),</span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"coverage (90%)"</span>: eval_coverage(forecast_samples, test_data, alpha<span class="op">=</span><span class="fl">0.9</span>),</span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, value <span class="kw">in</span> metrics.items():</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">:&gt;16}</span><span class="ss">: </span><span class="sc">{</span>value<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"MAE"</span>: eval_mae(forecast_samples, test_data),</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"RMSE"</span>: eval_rmse(forecast_samples, test_data),</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CRPS"</span>: eval_crps(forecast_samples, test_data),</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"coverage (90%)"</span>: eval_coverage(forecast_samples, test_data, alpha<span class="op">=</span><span class="fl">0.9</span>),</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, value <span class="kw">in</span> metrics.items():</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">:&gt;16}</span><span class="ss">: </span><span class="sc">{</span>value<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>             MAE: 0.2432
             RMSE: 0.2797

@@ -277,45 +277,6 @@ model = forecasting_model(exponential_smoothing_ssm)
 Before fitting, it is worth looking at the priors on the bounded parameters. The \\\text{Beta}(5, 5)\\ prior on the smoothing parameters is symmetric and concentrated away from \\0\\ and \\1\\, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The \\\text{Beta}(2, 5)\\ prior on the damping factor \\\varphi\\ puts more mass below \\0.5\\, encoding a mild preference for damped (non-explosive) trends.
 
 
-    In [6]:
-
-
-``` python
-fig, (ax_smoothing, ax_noise) = plt.subplots(
-    nrows=1, ncols=2, figsize=(12, 5), layout="constrained"
-)
-pz.Beta(5, 5).plot_pdf(ax=ax_smoothing, color="C0", legend=False)
-pz.Beta(2, 5).plot_pdf(ax=ax_smoothing, color="C1", legend=False)
-# preliz's plot_pdf adds a dashed baseline artist per curve, so build the legend from
-# explicit proxy handles to keep each label matched to its curve color.
-ax_smoothing.legend(
-    handles=[
-        Line2D([], [], color="C0", label=r"$\text{Beta}(5, 5)$ (smoothing)"),
-        Line2D([], [], color="C1", label=r"$\text{Beta}(2, 5)$ (damping $\varphi$)"),
-    ],
-    loc="upper right",
-)
-ax_smoothing.set(title="Priors on the bounded parameters", xlabel="value", ylabel="density")
-
-pz.HalfNormal(0.5).plot_pdf(ax=ax_noise, color="C0", legend=False)
-ax_noise.legend(
-    handles=[Line2D([], [], color="C0", label=r"$\text{HalfNormal}(0.5)$ (noise $\sigma$)")],
-    loc="upper right",
-)
-ax_noise.set(title="Prior on the observation noise", xlabel="value", ylabel="density")
-```
-
-
-    [Text(0.5, 1.0, 'Prior on the observation noise'),
-     Text(0.5, 0, 'value'),
-     Text(0, 0.5, 'density')]
-
-
-<figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/cell-7-output-2.png" class="figure-img" width="1211" height="511" /></p>
-</figure>
-
-
     In [7]:
 
 
@@ -346,7 +307,7 @@ ax_noise.set(
 
 
 <figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/cell-8-output-1.png" class="figure-img" width="1131" height="788" /></p>
+<p><img src="exponential_smoothing_state_space_files/figure-html/cell-7-output-1.png" class="figure-img" width="1131" height="788" /></p>
 </figure>
 
 
@@ -447,7 +408,7 @@ plt.show()
 
 
 <figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/cell-11-output-1.png" class="figure-img" width="1011" height="1663" /></p>
+<p><img src="exponential_smoothing_state_space_files/figure-html/cell-10-output-1.png" class="figure-img" width="1011" height="1663" /></p>
 </figure>
 
 
@@ -565,7 +526,7 @@ plt.show()
 
 
 <figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/cell-13-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="exponential_smoothing_state_space_files/figure-html/cell-12-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
