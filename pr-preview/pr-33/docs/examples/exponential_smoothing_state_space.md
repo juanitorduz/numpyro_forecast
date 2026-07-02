@@ -24,7 +24,6 @@ import numpyro.distributions as dist
 import pandas as pd
 import preliz as pz
 from jax import random
-from matplotlib.lines import Line2D
 from numpyro.infer import Predictive
 
 from numpyro_forecast import (

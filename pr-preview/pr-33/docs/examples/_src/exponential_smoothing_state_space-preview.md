@@ -11,7 +11,7 @@ A practical note on the design: the built-in [numpyro_forecast.functional.time_s
 # Prepare notebook
 
 
-    In [1]:
+    In [3]:
 
 
 ``` python
@@ -25,7 +25,6 @@ import numpyro.distributions as dist
 import pandas as pd
 import preliz as pz
 from jax import random
-from matplotlib.lines import Line2D
 from numpyro.infer import Predictive
 
 from numpyro_forecast import (
