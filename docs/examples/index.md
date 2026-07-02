@@ -13,6 +13,12 @@ Electricity demand forecasting
 Electricity demand forecasting: prior calibration
 
 
+<a href="../../docs/examples/exponential_smoothing_state_space.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"></a>
+
+
+Exponential Smoothing in State Space Form
+
+
 <a href="../../docs/examples/forecasting_univariate.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"></a>
 
 
