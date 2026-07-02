@@ -259,25 +259,32 @@ Before fitting, it is worth looking at the priors on the bounded parameters. The
 
 ``` python
 fig, (ax_smoothing, ax_noise) = plt.subplots(
-    nrows=1, ncols=2, figsize=(12, 5), layout="constrained"
+    nrows=2,
+    ncols=1,
+    figsize=(10, 9),
+    sharex=False,
+    sharey=True,
+    layout="constrained",
 )
-pz.Beta(5, 5).plot_pdf(ax=ax_smoothing, legend=False)
-pz.Beta(2, 5).plot_pdf(ax=ax_smoothing, legend=False)
-ax_smoothing.legend(
-    [r"$\text{Beta}(5, 5)$ (smoothing)", r"$\text{Beta}(2, 5)$ (damping $\varphi$)"],
-    loc="upper right",
+pz.Beta(5, 5).plot_pdf(ax=ax_smoothing, color="C0")
+pz.Beta(2, 5).plot_pdf(ax=ax_smoothing, color="C1")
+ax_smoothing.set(
+    title="Priors on the bounded parameters",
+    xlabel=None,
+    ylabel="density",
 )
-ax_smoothing.set(title="Priors on the bounded parameters", xlabel="value", ylabel="density")
 
-pz.HalfNormal(0.5).plot_pdf(ax=ax_noise, legend=False)
-ax_noise.legend([r"$\text{HalfNormal}(0.5)$ (noise $\sigma$)"], loc="upper right")
-ax_noise.set(title="Prior on the observation noise", xlabel="value", ylabel="density")
-plt.show()
+pz.HalfNormal(0.5).plot_pdf(ax=ax_noise, color="C2")
+ax_noise.set(
+    title="Prior on the observation noise",
+    xlabel="value",
+    ylabel="density",
+);
 ```
 
 
 <figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/_src-exponential_smoothing_state_space-cell-7-output-1.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="exponential_smoothing_state_space_files/figure-html/_src-exponential_smoothing_state_space-cell-7-output-1.png" class="figure-img" width="1131" height="788" /></p>
 </figure>
 
 
@@ -495,7 +502,7 @@ metrics = {
     "MAE": eval_mae(forecast_samples, test_data),
     "RMSE": eval_rmse(forecast_samples, test_data),
     "CRPS": eval_crps(forecast_samples, test_data),
-    "coverage (90%)": eval_coverage(forecast_samples, test_data),
+    "coverage (90%)": eval_coverage(forecast_samples, test_data, alpha=0.9),
 }
 for name, value in metrics.items():
     print(f"{name:>16}: {value:.4f}")

@@ -303,7 +303,7 @@ window.Quarto = {
 <p>A practical note on the design: the built-in <a href="../../reference/functional.time_series.html#numpyro_forecast.functional.time_series" class="gdls-link gdls-code">numpyro_forecast.functional.time_series</a> and <a href="../../reference/functional.predict.html#numpyro_forecast.functional.predict" class="gdls-link gdls-code">predict</a> primitives assume a deterministic mean plus independent per-step Gaussian noise, which is not how an innovations model behaves. We therefore write the model body directly against the functional API’s <a href="../../reference/functional.Horizon.html#numpyro_forecast.functional.Horizon" class="gdls-link gdls-code">Horizon</a> value, registering the framework’s <code>"obs"</code> and <code>"forecast"</code> sites ourselves, while still reusing everything downstream of the model.</p>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="35644f80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:14.590784Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:14.590590Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.384665Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.384170Z&quot;}}" data-execution_count="1">
+<div id="35644f80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:14.590784Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:14.590590Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.384665Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.384170Z&quot;}}">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
@@ -533,26 +533,33 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <section id="priors" class="level1">
 <h1>Priors</h1>
 <p>Before fitting, it is worth looking at the priors on the bounded parameters. The <span class="math inline">\(\text{Beta}(5, 5)\)</span> prior on the smoothing parameters is symmetric and concentrated away from <span class="math inline">\(0\)</span> and <span class="math inline">\(1\)</span>, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The <span class="math inline">\(\text{Beta}(2, 5)\)</span> prior on the damping factor <span class="math inline">\(\varphi\)</span> puts more mass below <span class="math inline">\(0.5\)</span>, encoding a mild preference for damped (non-explosive) trends.</p>
-<div id="57ca1da2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.780963Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.780882Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:17.191676Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:17.191060Z&quot;}}" data-execution_count="6">
+<div id="e259a46d" class="cell" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>fig, (ax_smoothing, ax_noise) <span class="op">=</span> plt.subplots(</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">5</span>), layout<span class="op">=</span><span class="st">"constrained"</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">5</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, legend<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">2</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, legend<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>ax_smoothing.legend(</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    [<span class="vs">r"</span><span class="dv">$</span><span class="ch">\t</span><span class="vs">ext{Beta}</span><span class="kw">(</span><span class="vs">5, 5</span><span class="kw">)</span><span class="dv">$</span><span class="vs"> </span><span class="kw">(</span><span class="vs">smoothing</span><span class="kw">)</span><span class="vs">"</span>, <span class="vs">r"</span><span class="dv">$</span><span class="ch">\t</span><span class="vs">ext{Beta}</span><span class="kw">(</span><span class="vs">2, 5</span><span class="kw">)</span><span class="dv">$</span><span class="vs"> </span><span class="kw">(</span><span class="vs">damping </span><span class="dv">$</span><span class="ch">\v</span><span class="vs">arphi</span><span class="dv">$</span><span class="kw">)</span><span class="vs">"</span>],</span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    loc<span class="op">=</span><span class="st">"upper right"</span>,</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>ax_smoothing.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Priors on the bounded parameters"</span>, xlabel<span class="op">=</span><span class="st">"value"</span>, ylabel<span class="op">=</span><span class="st">"density"</span>)</span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="fl">0.5</span>).plot_pdf(ax<span class="op">=</span>ax_noise, legend<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>ax_noise.legend([<span class="vs">r"</span><span class="dv">$</span><span class="ch">\t</span><span class="vs">ext{HalfNormal}</span><span class="kw">(</span><span class="vs">0</span><span class="dv">.</span><span class="vs">5</span><span class="kw">)</span><span class="dv">$</span><span class="vs"> </span><span class="kw">(</span><span class="vs">noise </span><span class="dv">$\s</span><span class="vs">igma</span><span class="dv">$</span><span class="kw">)</span><span class="vs">"</span>], loc<span class="op">=</span><span class="st">"upper right"</span>)</span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>ax_noise.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Prior on the observation noise"</span>, xlabel<span class="op">=</span><span class="st">"value"</span>, ylabel<span class="op">=</span><span class="st">"density"</span>)</span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    ncols<span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">9</span>),</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    sharex<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    sharey<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    layout<span class="op">=</span><span class="st">"constrained"</span>,</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">5</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C0"</span>)</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>pz.Beta(<span class="dv">2</span>, <span class="dv">5</span>).plot_pdf(ax<span class="op">=</span>ax_smoothing, color<span class="op">=</span><span class="st">"C1"</span>)</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>ax_smoothing.<span class="bu">set</span>(</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Priors on the bounded parameters"</span>,</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"density"</span>,</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>pz.HalfNormal(<span class="fl">0.5</span>).plot_pdf(ax<span class="op">=</span>ax_noise, color<span class="op">=</span><span class="st">"C2"</span>)</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>ax_noise.<span class="bu">set</span>(</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Prior on the observation noise"</span>,</span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"value"</span>,</span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"density"</span>,</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/_src-exponential_smoothing_state_space-cell-7-output-1.png" width="1211" height="511" class="figure-img"></p>
+<p><img src="exponential_smoothing_state_space_files/figure-html/_src-exponential_smoothing_state_space-cell-7-output-1.png" width="1131" height="788" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -561,7 +568,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <section id="inference" class="level1">
 <h1>Inference</h1>
 <p>We fit the model with the NUTS sampler through <a href="../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a>, running <span class="math inline">\(4\)</span> chains of <span class="math inline">\(2{,}000\)</span> warmup and <span class="math inline">\(2{,}000\)</span> sampling steps each. <a href="../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> takes the model, the in-sample data, and the covariates over the training window, and runs the No-U-Turn Sampler under the hood.</p>
-<div id="06a7c8ed" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:17.192986Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:17.192902Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:18.518623Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:18.518232Z&quot;}}" data-execution_count="7">
+<div id="06a7c8ed" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:17.192986Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:17.192902Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:18.518623Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:18.518232Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> HMCForecaster(</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
@@ -577,7 +584,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <section id="diagnostics" class="level1">
 <h1>Diagnostics</h1>
 <p><a href="../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> stores the posterior draws with the chains flattened together. NumPyro flattens the chains in order, so we can recover the <code>(chain, draw)</code> structure with a plain reshape and hand it to ArviZ for the standard convergence diagnostics.</p>
-<div id="ed54060a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:18.519934Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:18.519857Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.029328Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.029001Z&quot;}}" data-execution_count="8">
+<div id="ed54060a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:18.519934Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:18.519857Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.029328Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.029001Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>num_chains <span class="op">=</span> <span class="dv">4</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>posterior <span class="op">=</span> {</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    name: np.asarray(value).reshape(num_chains, <span class="op">-</span><span class="dv">1</span>, <span class="op">*</span>value.shape[<span class="dv">1</span>:])</span>
@@ -606,7 +613,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>scalar_vars,</span>
 <span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>diagnostics.<span class="bu">round</span>({<span class="st">"r_hat"</span>: <span class="dv">3</span>, <span class="st">"ess_bulk"</span>: <span class="dv">0</span>, <span class="st">"ess_tail"</span>: <span class="dv">0</span>})</span></code></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="8">
+<div class="cell-output cell-output-display" data-execution_count="9">
 <div>
 
 <table class="dataframe table table-sm table-striped small">
@@ -667,7 +674,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 </div>
 </div>
 <p>The <span class="math inline">\(\hat{R}\)</span> values are close to <span class="math inline">\(1\)</span> and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.</p>
-<div id="fd317770" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.030503Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.030420Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.810947Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.810474Z&quot;}}" data-execution_count="23">
+<div id="fd317770" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.030503Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.030420Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.810947Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.810474Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>pc_trace <span class="op">=</span> az.plot_trace_dist(</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    idata,</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>scalar_vars,</span>
@@ -693,7 +700,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <section id="forecast" class="level1">
 <h1>Forecast</h1>
 <p>We now generate the forecast over the test horizon. Calling the fitted forecaster with the full-horizon covariates returns forecast samples of shape <code>(sample, future, obs)</code>: for each posterior draw the model replays the in-sample filter, then rolls the state forward while sampling fresh innovations. For the in-sample fit we draw the one-step-ahead posterior predictive (the fitted mean plus observation noise).</p>
-<div id="76d5b161" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.812483Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.812392Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.348963Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.348553Z&quot;}}" data-execution_count="10">
+<div id="76d5b161" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.812483Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.812392Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.348963Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.348553Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>num_forecast_samples <span class="op">=</span> <span class="dv">2_000</span></span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
@@ -718,7 +725,7 @@ forecast samples: (2000, 48, 1)</code></pre>
 </div>
 </div>
 <p>We visualize both the in-sample fit and the forecast with <code>az.plot_lm</code>, showing the <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.</p>
-<div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.350055Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.349980Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.695230Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.694891Z&quot;}}" data-execution_count="11">
+<div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.350055Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.349980Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.695230Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.694891Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> eval_crps(in_sample_pp, train_data)</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast_samples, test_data)</span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -800,12 +807,12 @@ forecast samples: (2000, 48, 1)</code></pre>
 <section id="evaluation" class="level1">
 <h1>Evaluation</h1>
 <p>Finally, we score the forecast against the held-out test set with the package’s evaluation metrics: mean absolute error and root mean squared error (point-forecast accuracy), the continuous ranked probability score (a proper score for the whole predictive distribution), and the empirical coverage of the central <span class="math inline">\(90\%\)</span> interval (calibration).</p>
-<div id="81e400f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.696830Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.696756Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.851866Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.851427Z&quot;}}" data-execution_count="12">
+<div id="81e400f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.696830Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.696756Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.851866Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.851427Z&quot;}}" data-execution_count="14">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"MAE"</span>: eval_mae(forecast_samples, test_data),</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"RMSE"</span>: eval_rmse(forecast_samples, test_data),</span>
 <span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CRPS"</span>: eval_crps(forecast_samples, test_data),</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"coverage (90%)"</span>: eval_coverage(forecast_samples, test_data),</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"coverage (90%)"</span>: eval_coverage(forecast_samples, test_data, alpha<span class="op">=</span><span class="fl">0.9</span>),</span>
 <span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, value <span class="kw">in</span> metrics.items():</span>
 <span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">:&gt;16}</span><span class="ss">: </span><span class="sc">{</span>value<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
