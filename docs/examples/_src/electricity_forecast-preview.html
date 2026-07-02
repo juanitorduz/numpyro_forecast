@@ -277,6 +277,7 @@
   <li><a href="#posterior-predictive-checks" id="toc-posterior-predictive-checks" class="nav-link" data-scroll-target="#posterior-predictive-checks">Posterior predictive checks</a></li>
   <li><a href="#forecast-evaluation" id="toc-forecast-evaluation" class="nav-link" data-scroll-target="#forecast-evaluation">Forecast evaluation</a></li>
   <li><a href="#temperature-effect-on-demand" id="toc-temperature-effect-on-demand" class="nav-link" data-scroll-target="#temperature-effect-on-demand">Temperature effect on demand</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
 </nav>
@@ -994,6 +995,19 @@ covariates shape: (1344, 2)</code></pre>
 <p><em>“It is clear that high demand occurs when temperatures are high due to the effect of air-conditioning. But there is also a heating effect, where demand increases for very low temperatures.”</em></p>
 </blockquote>
 <p>Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range <span class="math inline">\(15\,°C - 25\,°C\)</span>.</p>
+</div>
+<div id="4e11b6a8" class="cell markdown">
+<section id="references" class="level1">
+<h1>References</h1>
+<ul>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/electricity_forecast/"><em>Electricity Demand Forecast: Dynamic Time-Series Model</em></a>.</li>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/bikes_gp/"><em>Time-Varying Regression Coefficients via Hilbert Space Gaussian Process Approximation</em></a>.</li>
+<li>TensorFlow Probability. <a href="https://www.tensorflow.org/probability/examples/Structural_Time_Series_Modeling_Case_Studies_Atmospheric_CO2_and_Electricity_Demand"><em>Structural Time Series Modeling Case Studies: Atmospheric CO2 and Electricity Demand</em></a>, using the <a href="https://www.tensorflow.org/probability/api_docs/python/tfp/sts"><code>tfp.sts</code></a> module.</li>
+<li>NumPyro. <a href="https://num.pyro.ai/en/stable/contrib.html#hilbert-space-gaussian-processes-approximation"><em>Hilbert Space Gaussian Processes approximation</em></a>.</li>
+<li>Hyndman, R. J., &amp; Athanasopoulos, G. <a href="https://otexts.com/fpp3/"><em>Forecasting: Principles and Practice</em></a>.</li>
+<li><a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score"><em>Continuous Ranked Probability Score</em></a> (Wikipedia).</li>
+</ul>
+</section>
 </div>
 
 

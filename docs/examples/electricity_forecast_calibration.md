@@ -624,4 +624,11 @@ The overall shape of the curve resembles the one in the baseline uncalibrated [e
 
 This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) can be anchored with an extra observed `numpyro.sample` site, optionally masked to the region where the domain knowledge applies.
 
+
+# References
+
+- Orduz, J. [*Electricity Demand Forecast: Prior Calibration*](https://juanitorduz.github.io/electricity_forecast_with_priors/).
+- Orduz, J. [*Electricity Demand Forecast: Dynamic Time-Series Model*](https://juanitorduz.github.io/electricity_forecast/) (the uncalibrated baseline this notebook extends).
+- [*Continuous Ranked Probability Score*](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score) (Wikipedia).
+
 [Source: Electricity demand forecasting: prior calibration with `numpyro_forecast`](_src/electricity_forecast_calibration-preview.html#d7e99391)

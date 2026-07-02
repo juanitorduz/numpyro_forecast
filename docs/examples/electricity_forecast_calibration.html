@@ -905,6 +905,14 @@ covariates shape: (1344, 2)</code></pre>
 <p>This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a <a href="../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> can be anchored with an extra observed <code>numpyro.sample</code> site, optionally masked to the region where the domain knowledge applies.</p>
 </section>
 </section>
+<section id="references" class="level1">
+<h1>References</h1>
+<ul>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/electricity_forecast_with_priors/"><em>Electricity Demand Forecast: Prior Calibration</em></a>.</li>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/electricity_forecast/"><em>Electricity Demand Forecast: Dynamic Time-Series Model</em></a> (the uncalibrated baseline this notebook extends).</li>
+<li><a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score"><em>Continuous Ranked Probability Score</em></a> (Wikipedia).</li>
+</ul>
+</section>
 <a class="quarto-notebook-link" id="nblink-1" href="_src/electricity_forecast_calibration-preview.html#d7e99391">Source: Electricity demand forecasting: prior calibration with `numpyro_forecast`</a></div>
 
 

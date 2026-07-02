@@ -497,4 +497,10 @@ fig.tight_layout();
 
 This closes the three-part tour: a single series in the [univariate notebook](forecasting_univariate.md), one destination in [part I](hierarchical_forecasting_1.md), and the full origin-destination panel here. The same holiday caveat applies (special dates like Christmas still need explicit features), and richer pairwise or low-rank structure is a natural extension. For the original treatment, see Pyro's [hierarchical forecasting tutorial](https://pyro.ai/examples/forecasting_iii.html).
 
+
+# References
+
+- Orduz, J. [*Hierarchical forecasting with NumPyro (part II)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/).
+- Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
+
 [Source: Hierarchical forecasting II with `numpyro_forecast`](_src/hierarchical_forecasting_2-preview.html#ea02cbb1)

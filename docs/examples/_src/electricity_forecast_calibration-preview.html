@@ -278,6 +278,7 @@
   <li><a href="#posterior-predictive-checks" id="toc-posterior-predictive-checks" class="nav-link" data-scroll-target="#posterior-predictive-checks">Posterior predictive checks</a></li>
   <li><a href="#forecast-evaluation" id="toc-forecast-evaluation" class="nav-link" data-scroll-target="#forecast-evaluation">Forecast evaluation</a></li>
   <li><a href="#temperature-effect-on-demand" id="toc-temperature-effect-on-demand" class="nav-link" data-scroll-target="#temperature-effect-on-demand">Temperature effect on demand</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
 </nav>
@@ -950,6 +951,16 @@ covariates shape: (1344, 2)</code></pre>
 <div id="fe92d4e3" class="cell markdown">
 <p>The overall shape of the curve resembles the one in the baseline uncalibrated <a href="electricity_forecast.ipynb">electricity demand example</a>: the temperature effect increases at both extremes of the common temperature range, reflecting the heating and cooling effects noted by Hyndman and Athanasopoulos. The difference is at the high end: the calibration likelihood pulls the estimate for temperatures over <code>32 °C</code> toward the expected value of <code>0.13</code>, with noticeably tighter credible bands than in the uncalibrated model.</p>
 <p>This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a <a href="../../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> can be anchored with an extra observed <code>numpyro.sample</code> site, optionally masked to the region where the domain knowledge applies.</p>
+</div>
+<div id="a3e07bf5" class="cell markdown">
+<section id="references" class="level1">
+<h1>References</h1>
+<ul>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/electricity_forecast_with_priors/"><em>Electricity Demand Forecast: Prior Calibration</em></a>.</li>
+<li>Orduz, J. <a href="https://juanitorduz.github.io/electricity_forecast/"><em>Electricity Demand Forecast: Dynamic Time-Series Model</em></a> (the uncalibrated baseline this notebook extends).</li>
+<li><a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score"><em>Continuous Ranked Probability Score</em></a> (Wikipedia).</li>
+</ul>
+</section>
 </div>
 
 

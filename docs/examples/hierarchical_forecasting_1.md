@@ -445,4 +445,10 @@ fig.suptitle(
 
 Here we pooled `50` origins into a single destination. In [part II](hierarchical_forecasting_2.md) we model the full `50x50` origin-destination panel at once, adding a static pairwise station affinity and separate origin and destination noise scales.
 
+
+# References
+
+- Orduz, J. [*Hierarchical forecasting with NumPyro (part I)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/).
+- Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
+
 [Source: Hierarchical forecasting I with `numpyro_forecast`](_src/hierarchical_forecasting_1-preview.html#e539289a)

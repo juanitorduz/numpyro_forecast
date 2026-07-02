@@ -672,3 +672,10 @@ ax.set(
 The overall shape of the curve resembles the one in the baseline uncalibrated [electricity demand example](electricity_forecast.ipynb): the temperature effect increases at both extremes of the common temperature range, reflecting the heating and cooling effects noted by Hyndman and Athanasopoulos. The difference is at the high end: the calibration likelihood pulls the estimate for temperatures over `32 °C` toward the expected value of `0.13`, with noticeably tighter credible bands than in the uncalibrated model.
 
 This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) can be anchored with an extra observed `numpyro.sample` site, optionally masked to the region where the domain knowledge applies.
+
+
+# References
+
+- Orduz, J. [*Electricity Demand Forecast: Prior Calibration*](https://juanitorduz.github.io/electricity_forecast_with_priors/).
+- Orduz, J. [*Electricity Demand Forecast: Dynamic Time-Series Model*](https://juanitorduz.github.io/electricity_forecast/) (the uncalibrated baseline this notebook extends).
+- [*Continuous Ranked Probability Score*](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score) (Wikipedia).

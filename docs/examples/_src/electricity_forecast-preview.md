@@ -723,3 +723,13 @@ This effect plot coincides with the exploratory comment by Hyndman and Athanasop
 > *"It is clear that high demand occurs when temperatures are high due to the effect of air-conditioning. But there is also a heating effect, where demand increases for very low temperatures."*
 
 Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range \\15\\°C - 25\\°C\\.
+
+
+# References
+
+- Orduz, J. [*Electricity Demand Forecast: Dynamic Time-Series Model*](https://juanitorduz.github.io/electricity_forecast/).
+- Orduz, J. [*Time-Varying Regression Coefficients via Hilbert Space Gaussian Process Approximation*](https://juanitorduz.github.io/bikes_gp/).
+- TensorFlow Probability. [*Structural Time Series Modeling Case Studies: Atmospheric CO2 and Electricity Demand*](https://www.tensorflow.org/probability/examples/Structural_Time_Series_Modeling_Case_Studies_Atmospheric_CO2_and_Electricity_Demand), using the [`tfp.sts`](https://www.tensorflow.org/probability/api_docs/python/tfp/sts) module.
+- NumPyro. [*Hilbert Space Gaussian Processes approximation*](https://num.pyro.ai/en/stable/contrib.html#hilbert-space-gaussian-processes-approximation).
+- Hyndman, R. J., & Athanasopoulos, G. [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/).
+- [*Continuous Ranked Probability Score*](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score) (Wikipedia).
