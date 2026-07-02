@@ -371,18 +371,28 @@ diagnostics.round({"r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
 The \\\hat{R}\\ values are close to \\1\\ and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
 
 
-    In [9]:
+    In [23]:
 
 
 ``` python
-pc_trace = az.plot_trace(idata, var_names=scalar_vars, figure_kwargs={"figsize": (10, 14)})
-pc_trace.viz["figure"].item().suptitle("Trace plots", fontsize=16)
+pc_trace = az.plot_trace_dist(
+    idata,
+    var_names=scalar_vars,
+    figure_kwargs={"figsize": (10, 16)},
+    compact=True,
+)
+pc_trace.viz["figure"].item().suptitle(
+    "Trace plots",
+    fontsize=18,
+    fontweight="bold",
+    y=1.03,
+)
 plt.show()
 ```
 
 
 <figure class="figure">
-<p><img src="exponential_smoothing_state_space_files/figure-html/cell-10-output-1.png" class="figure-img" width="1011" height="1411" /></p>
+<p><img src="exponential_smoothing_state_space_files/figure-html/cell-10-output-1.png" class="figure-img" width="1011" height="1663" /></p>
 </figure>
 
 
