@@ -103,6 +103,9 @@ print(f"total: {n}, train: {n_train}, test (forecast horizon): {future}")
     total: 240, train: 192, test (forecast horizon): 48
 
 
+We can visualize the series:
+
+
     In [3]:
 
 
@@ -138,7 +141,12 @@ def scan(f, init, xs, length=None):
     return carry, np.stack(ys)
 ```
 
-It threads a *carry* (the running state) through a step function `f`, and stacks the per-step outputs. As a warm-up, we use `scan` to compute the geometric damping sum \\\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\\ that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of \\\varphi\\.
+It threads a *carry* (the running state) through a step function `f`, and stacks the per-step outputs.
+
+
+## A simple example
+
+As a warm-up, we use `scan` to compute the geometric damping sum \\\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\\ that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of \\\varphi\\.
 
 
     In [4]:
@@ -174,13 +182,13 @@ print(f"partial sums: {np.asarray(partial_sums).round(5)}")
 
 The classical **damped Holt-Winters** method with additive seasonality of period \\m\\ is a set of recursive updates for the level \\\ell_t\\, the trend \\b_t\\, and the seasonal component \\s_t\\, together with an \\h\\-step forecast,
 
-\\ \begin{align} \hat{y}\_{t+h \mid t} &= \ell_t + \varphi_h \\ b_t + s\_{t + h - m(k+1)}, \\ \ell_t &= \alpha (y_t - s\_{t-m}) + (1 - \alpha)(\ell\_{t-1} + \varphi \\ b\_{t-1}), \\ b_t &= \beta^{\*} (\ell_t - \ell\_{t-1}) + (1 - \beta^{\*}) \varphi \\ b\_{t-1}, \\ s_t &= \gamma (y_t - \ell\_{t-1} - \varphi \\ b\_{t-1}) + (1 - \gamma) s\_{t-m}, \end{align} \\
+\\ \begin{align\*} \hat{y}\_{t+h \mid t} &= \ell_t + \varphi_h \\ b_t + s\_{t + h - m(k+1)}, \\ \ell_t &= \alpha (y_t - s\_{t-m}) + (1 - \alpha)(\ell\_{t-1} + \varphi \\ b\_{t-1}), \\ b_t &= \beta^{\*} (\ell_t - \ell\_{t-1}) + (1 - \beta^{\*}) \varphi \\ b\_{t-1}, \\ s_t &= \gamma (y_t - \ell\_{t-1} - \varphi \\ b\_{t-1}) + (1 - \gamma) s\_{t-m}, \end{align\*} \\
 
 where \\\alpha, \beta^{\*}, \gamma \in (0, 1)\\ are smoothing parameters, \\\varphi \in (0, 1)\\ is the damping factor, \\\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\\, and \\k = \lfloor (h-1)/m \rfloor\\.
 
 The **innovations state space form** (SSOE) rewrites this as a generative model driven by a *single* error term \\\varepsilon_t\\ shared across all equations,
 
-\\ \begin{align} y_t &= \underbrace{\ell\_{t-1} + \varphi \\ b\_{t-1} + s\_{t-m}}\_{\mu_t} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma), \\ \ell_t &= \ell\_{t-1} + \varphi \\ b\_{t-1} + \alpha \\ \varepsilon_t, \\ b_t &= \varphi \\ b\_{t-1} + \beta \\ \varepsilon_t, \\ s_t &= s\_{t-m} + \gamma \\ \varepsilon_t, \end{align} \\
+\\ \begin{align\*} y_t &= \underbrace{\ell\_{t-1} + \varphi \\ b\_{t-1} + s\_{t-m}}\_{\mu_t} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma), \\ \ell_t &= \ell\_{t-1} + \varphi \\ b\_{t-1} + \alpha \\ \varepsilon_t, \\ b_t &= \varphi \\ b\_{t-1} + \beta \\ \varepsilon_t, \\ s_t &= s\_{t-m} + \gamma \\ \varepsilon_t, \end{align\*} \\
 
 with the coefficient map \\\beta = \beta^{\*} \alpha\\ and \\\gamma = \gamma^{\*} (1 - \alpha)\\. The two forms are mathematically equivalent, but the SSOE form is the one we want for probabilistic forecasting. In sample, the innovation is exactly the one-step-ahead forecast error \\\varepsilon_t = y_t - \mu_t\\, so the whole state trajectory is a deterministic function of the observed data and the parameters. Out of sample there is no data, so \\\varepsilon_t\\ is *sampled* and fed back into the level, trend, and seasonal updates. Because a single innovation drives every component, the forecast uncertainty compounds and the prediction interval widens with the horizon, which is the behavior we expect from a genuine stochastic process.
 

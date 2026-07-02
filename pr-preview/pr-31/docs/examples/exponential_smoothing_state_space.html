@@ -376,6 +376,7 @@ window.Quarto = {
 <pre><code>total: 240, train: 192, test (forecast horizon): 48</code></pre>
 </div>
 </div>
+<p>We can visualize the series:</p>
 <div id="567a80b7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.614814Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.614725Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.728209Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.727879Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>ax.plot(t_train, y_train, color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="st">"train"</span>)</span>
@@ -405,7 +406,10 @@ window.Quarto = {
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        carry, y <span class="op">=</span> f(carry, x)</span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        ys.append(y)</span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> carry, np.stack(ys)</span></code></pre></div>
-<p>It threads a <em>carry</em> (the running state) through a step function <code>f</code>, and stacks the per-step outputs. As a warm-up, we use <code>scan</code> to compute the geometric damping sum <span class="math inline">\(\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\)</span> that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of <span class="math inline">\(\varphi\)</span>.</p>
+<p>It threads a <em>carry</em> (the running state) through a step function <code>f</code>, and stacks the per-step outputs.</p>
+<section id="a-simple-example" class="level2">
+<h2 class="anchored" data-anchor-id="a-simple-example">A simple example</h2>
+<p>As a warm-up, we use <code>scan</code> to compute the geometric damping sum <span class="math inline">\(\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\)</span> that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of <span class="math inline">\(\varphi\)</span>.</p>
 <div id="b145d081" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.729439Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.729366Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.762107Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.761718Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> damping_sum(phi, h):</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> step(carry, _):</span>
@@ -431,26 +435,27 @@ partial sums: [0.8     1.44    1.952   2.3616  2.68928]</code></pre>
 </div>
 </div>
 </section>
+</section>
 <section id="from-component-form-to-state-space-form" class="level1">
 <h1>From component form to state space form</h1>
 <p>The classical <strong>damped Holt-Winters</strong> method with additive seasonality of period <span class="math inline">\(m\)</span> is a set of recursive updates for the level <span class="math inline">\(\ell_t\)</span>, the trend <span class="math inline">\(b_t\)</span>, and the seasonal component <span class="math inline">\(s_t\)</span>, together with an <span class="math inline">\(h\)</span>-step forecast,</p>
 <p><span class="math display">\[
-\begin{align}
+\begin{align*}
 \hat{y}_{t+h \mid t} &amp;= \ell_t + \varphi_h \, b_t + s_{t + h - m(k+1)}, \\
 \ell_t &amp;= \alpha (y_t - s_{t-m}) + (1 - \alpha)(\ell_{t-1} + \varphi \, b_{t-1}), \\
 b_t &amp;= \beta^{*} (\ell_t - \ell_{t-1}) + (1 - \beta^{*}) \varphi \, b_{t-1}, \\
 s_t &amp;= \gamma (y_t - \ell_{t-1} - \varphi \, b_{t-1}) + (1 - \gamma) s_{t-m},
-\end{align}
+\end{align*}
 \]</span></p>
 <p>where <span class="math inline">\(\alpha, \beta^{*}, \gamma \in (0, 1)\)</span> are smoothing parameters, <span class="math inline">\(\varphi \in (0, 1)\)</span> is the damping factor, <span class="math inline">\(\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\)</span>, and <span class="math inline">\(k = \lfloor (h-1)/m \rfloor\)</span>.</p>
 <p>The <strong>innovations state space form</strong> (SSOE) rewrites this as a generative model driven by a <em>single</em> error term <span class="math inline">\(\varepsilon_t\)</span> shared across all equations,</p>
 <p><span class="math display">\[
-\begin{align}
+\begin{align*}
 y_t &amp;= \underbrace{\ell_{t-1} + \varphi \, b_{t-1} + s_{t-m}}_{\mu_t} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma), \\
 \ell_t &amp;= \ell_{t-1} + \varphi \, b_{t-1} + \alpha \, \varepsilon_t, \\
 b_t &amp;= \varphi \, b_{t-1} + \beta \, \varepsilon_t, \\
 s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
-\end{align}
+\end{align*}
 \]</span></p>
 <p>with the coefficient map <span class="math inline">\(\beta = \beta^{*} \alpha\)</span> and <span class="math inline">\(\gamma = \gamma^{*} (1 - \alpha)\)</span>. The two forms are mathematically equivalent, but the SSOE form is the one we want for probabilistic forecasting. In sample, the innovation is exactly the one-step-ahead forecast error <span class="math inline">\(\varepsilon_t = y_t - \mu_t\)</span>, so the whole state trajectory is a deterministic function of the observed data and the parameters. Out of sample there is no data, so <span class="math inline">\(\varepsilon_t\)</span> is <em>sampled</em> and fed back into the level, trend, and seasonal updates. Because a single innovation drives every component, the forecast uncertainty compounds and the prediction interval widens with the horizon, which is the behavior we expect from a genuine stochastic process.</p>
 </section>
