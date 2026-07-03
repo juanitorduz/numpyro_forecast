@@ -2,18 +2,31 @@ ci:
   autofix_prs: false
 
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.17
+  # ruff and ty run via `uv run` from a local hook so their versions come from
+  # the project's `.venv` (uv.lock) rather than an isolated, independently
+  # pinned pre-commit environment. This keeps the hooks in lockstep with local
+  # development and CI; bump them with uv (e.g. `uv lock --upgrade-package ruff`)
+  # and the hooks follow automatically.
+  - repo: local
     hooks:
       - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --output-format=full
+        language: system
         types_or: [python, pyi, jupyter]
-        args: ["--fix", "--output-format=full"]
+        require_serial: true
       - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
         types_or: [python, pyi, jupyter]
-  - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.56
-    hooks:
+        require_serial: true
       - id: ty
+        name: ty check
+        entry: uv run ty check numpyro_forecast/
+        language: system
+        types: [python]
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
