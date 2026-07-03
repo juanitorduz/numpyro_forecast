@@ -375,7 +375,7 @@ samples
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -398,10 +398,20 @@ metrics
     ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
 transform
     Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+window_type
+    Windowing strategy. If ``None`` (default) it is inferred from
+    ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and
+    ``"rolling"`` when it is set, matching the historical behavior. Pass
+    ``"expanding"`` to always train on all history from ``t0 = 0``, or
+    ``"rolling"`` to hold the training length fixed at ``train_window`` and
+    slide it forward. ``"expanding"`` and ``train_window`` are mutually
+    exclusive, and ``"rolling"`` requires ``train_window`` (both validated).
 train_window
     Training window size; if ``None`` the window expands from the start.
+    Required for ``window_type="rolling"``.
 min_train_window
-    Minimum training window size when ``train_window`` is ``None``.
+    Minimum training window size for the expanding strategy (used when
+    ``train_window`` is ``None``).
 test_window
     Test window size; if ``None`` forecasts to the end of the data.
 min_test_window

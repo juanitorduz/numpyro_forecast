@@ -16,6 +16,7 @@ evaluate.backtest(
     forecaster_fn=Forecaster,
     metrics=None,
     transform=None,
+    window_type=None,
     train_window=None,
     min_train_window=1,
     test_window=None,
@@ -54,11 +55,14 @@ Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each function
 `transform: Callable[[Array, Array], tuple[Array, Array]] | None = None`  
 Optional `(pred, truth) -> (pred, truth)` applied before metrics.
 
+`window_type: WindowType | None = None`  
+Windowing strategy. If `None` (default) it is inferred from `train_window`: `"expanding"` when `train_window` is `None` and `"rolling"` when it is set, matching the historical behavior. Pass `"expanding"` to always train on all history from `t0 = 0`, or `"rolling"` to hold the training length fixed at `train_window` and slide it forward. `"expanding"` and `train_window` are mutually exclusive, and `"rolling"` requires `train_window` (both validated).
+
 `train_window: int | None = None`  
-Training window size; if `None` the window expands from the start.
+Training window size; if `None` the window expands from the start. Required for `window_type="rolling"`.
 
 `min_train_window: int = ``1`  
-Minimum training window size when `train_window` is `None`.
+Minimum training window size for the expanding strategy (used when `train_window` is `None`).
 
 `test_window: int | None = None`  
 Test window size; if `None` forecasts to the end of the data.

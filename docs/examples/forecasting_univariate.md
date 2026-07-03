@@ -386,6 +386,8 @@ ax.set(
 
 A single train/test split tells us how the model did on one held-out year. A more honest picture of generalization comes from *rolling-origin* backtesting: we repeatedly move the train/test boundary forward, refit, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop on the full series for us, refitting a fresh `UnivariateForecaster` per fold.
 
+[backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) offers two windowing strategies through its `window_type` argument. An **expanding** window (the default) trains each fold on all history up to its split point, so the training set grows fold by fold. A **rolling** window instead holds the training length fixed at `train_window` and slides it forward, so every fold sees the same number of most-recent observations while older data drops off the back. We walk through the expanding window first, then contrast the two directly at the end of this section.
+
 We use an expanding window: each fold trains on everything up to its split point and forecasts the next `52` weeks (`test_window=52`), stepping forward a full year at a time (`stride=52`) so the folds do not overlap and the forecast overlay stays readable. The first `min_train_window=104` weeks (two years) seed the initial training window, matching Pyro's tutorial. With `eval_train=True` we also score the in-sample posterior predictive of each fold with the same CRPS metric, and `keep_predictions=True` retains each fold's out-of-sample forecast samples so we can plot them. Both options default to off, keeping the default [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) API faithful to Pyro.
 
 One practical point: because every fold is refit from scratch, each one needs enough optimization to converge. We give SVI `num_steps=50_000` per fold (the same budget as the main fit) so that the larger expanding windows are fit just as well as the small early ones, which keeps the inferred drift volatility stable and the per-fold scores comparable. With too small a budget the later windows would be under-fit, inflating `drift_scale` so that both the forecast bands and the in-sample CRPS grow spuriously with window length.
@@ -558,6 +560,75 @@ ax.set(
 </figure>
 
 
+## Expanding vs rolling windows
+
+The run above expanded the training window fold by fold. Switching to a **rolling** window takes a single argument, `window_type="rolling"`, plus a fixed `train_window`. We rerun the same backtest with a `104`-week (two-year) rolling window, matching the expanding run's seed so the two share identical split points, horizon, stride, sample count, and SVI budget. The only thing that changes is whether each fold keeps the older history or drops it.
+
+
+``` python
+rng_key, rng_subkey = random.split(rng_key)
+rolling_results = backtest(
+    rng_subkey,
+    data,
+    covariates,
+    UnivariateForecaster,
+    metrics=metrics,
+    window_type="rolling",  # fixed-size training window instead of expanding
+    train_window=104,  # 2 years, matching the expanding seed so the split points line up
+    test_window=52,  # 1-year horizon per fold, as before
+    stride=52,  # same non-overlapping folds
+    num_samples=num_backtest_samples,
+    forecaster_options={"optim": Adam(step_size=0.005), "num_steps": 50_000},
+)
+
+rolling_oos_crps = [r.metrics["crps"] for r in rolling_results]
+
+print(f"expanding folds: {len(results)}  |  rolling folds: {len(rolling_results)}")
+print(f"expanding mean out-of-sample CRPS: {np.mean(oos_crps):.4f}")
+print(f"rolling   mean out-of-sample CRPS: {np.mean(rolling_oos_crps):.4f}")
+for wk, exp_c, roll_c in zip(split_weeks, oos_crps, rolling_oos_crps, strict=True):
+    print(f"  split week {wk:>3}: expanding {exp_c:.4f}  rolling {roll_c:.4f}")
+```
+
+
+    expanding folds: 7  |  rolling folds: 7
+    expanding mean out-of-sample CRPS: 0.0375
+    rolling   mean out-of-sample CRPS: 0.0473
+      split week 104: expanding 0.0706  rolling 0.0733
+      split week 156: expanding 0.0437  rolling 0.0472
+      split week 208: expanding 0.0313  rolling 0.0524
+      split week 260: expanding 0.0250  rolling 0.0344
+      split week 312: expanding 0.0289  rolling 0.0375
+      split week 364: expanding 0.0307  rolling 0.0431
+      split week 416: expanding 0.0324  rolling 0.0430
+
+
+Both strategies train each fold on the same fixed `104`-week window at the first split, then diverge: the expanding window keeps every additional year while the rolling window always discards all but the most recent two.
+
+
+``` python
+fig, ax = plt.subplots()
+ax.plot(split_weeks, oos_crps, "o-", color="C0", label="expanding window")
+ax.plot(split_weeks, rolling_oos_crps, "s--", color="C1", label="rolling window (104 weeks)")
+ax.legend()
+ax.set(
+    xlabel="train/test split week",
+    ylabel="out-of-sample CRPS",
+    title="Expanding vs rolling window: out-of-sample CRPS per fold",
+);
+```
+
+
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-17-output-1.png" class="figure-img" width="1011" height="611" /></p>
+</figure>
+
+
+The mechanism behind the two curves is the random-walk level. Each forecast is anchored at the last observed level and fans out at a rate set by the inferred drift volatility `drift_scale`, which every fold estimates from its own training window. The expanding window estimates that volatility from all history and keeps sharpening it as data accumulates, so its out-of-sample CRPS falls steeply after the data-starved first fold and then settles near the in-sample floor. The rolling window only ever sees the most recent two years, so after its own early improvement it plateaus at a higher, noisier level: it keeps discarding the extra history that the expanding window compounds.
+
+Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0375` versus `0.0473`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
+
+
 # Functional API
 
 Everything so far went through the object-oriented [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel), but that class is only a thin shim over a functional core in `numpyro_forecast.functional`. The same model can be written as a plain function `(Horizon, covariates) -> None` that calls the free functions [time_series](../../reference/functional.time_series.md#numpyro_forecast.functional.time_series) and [predict](../../reference/functional.predict.md#numpyro_forecast.functional.predict) (the exact counterparts of the `self.time_series(...)` and `self.predict(...)` methods used above). The [Horizon](../../reference/functional.Horizon.md#numpyro_forecast.functional.Horizon) carries the train/forecast split that the class otherwise tracks as mutable state.
@@ -629,4 +700,4 @@ This local level model with seasonality is a solid baseline. From here a few dir
 - Orduz, J. [*Univariate time series forecasting with NumPyro*](https://juanitorduz.github.io/numpyro_forecasting-univariate/).
 - Pyro. [*Forecasting I: Univariate, Heavy Tailed*](https://pyro.ai/examples/forecasting_i.html).
 
-[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#2f6a3db4)
+[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#cbf57589)
