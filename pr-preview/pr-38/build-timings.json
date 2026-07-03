@@ -1,0 +1,241 @@
+{
+  "build_time": "2026-07-03T21:25:08Z",
+  "total_seconds": 48.41,
+  "pages": [
+    {
+      "page": "skill.md",
+      "seconds": 15.367,
+      "frozen": false
+    },
+    {
+      "page": "changelog.qmd",
+      "seconds": 2.552,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/forecasting_univariate.qmd",
+      "seconds": 2.473,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/electricity_forecast.qmd",
+      "seconds": 2.095,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/electricity_forecast_calibration.qmd",
+      "seconds": 2.003,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/exponential_smoothing_state_space.qmd",
+      "seconds": 1.829,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/hierarchical_forecasting_2.qmd",
+      "seconds": 1.776,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/hierarchical_forecasting_1.qmd",
+      "seconds": 1.728,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.evaluate_forecast.qmd",
+      "seconds": 0.929,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.zero_data_like.qmd",
+      "seconds": 0.69,
+      "frozen": false
+    },
+    {
+      "page": "reference/forecaster.ForecastingModel.qmd",
+      "seconds": 0.584,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.backtest.qmd",
+      "seconds": 0.553,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.Horizon.qmd",
+      "seconds": 0.509,
+      "frozen": false
+    },
+    {
+      "page": "index.qmd",
+      "seconds": 0.505,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.BacktestResult.qmd",
+      "seconds": 0.503,
+      "frozen": false
+    },
+    {
+      "page": "reference/datasets.load_bart_hierarchical.qmd",
+      "seconds": 0.5,
+      "frozen": false
+    },
+    {
+      "page": "reference/index.qmd",
+      "seconds": 0.499,
+      "frozen": false
+    },
+    {
+      "page": "reference/forecaster.Forecaster.qmd",
+      "seconds": 0.489,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.predict_in_sample.qmd",
+      "seconds": 0.488,
+      "frozen": false
+    },
+    {
+      "page": "reference/forecaster.HMCForecaster.qmd",
+      "seconds": 0.477,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.fit_mcmc.qmd",
+      "seconds": 0.477,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.forecast.qmd",
+      "seconds": 0.476,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.fourier_features.qmd",
+      "seconds": 0.467,
+      "frozen": false
+    },
+    {
+      "page": "reference/metrics.crps_empirical.qmd",
+      "seconds": 0.463,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.fit_svi.qmd",
+      "seconds": 0.462,
+      "frozen": false
+    },
+    {
+      "page": "reference/datasets.load_victoria_electricity.qmd",
+      "seconds": 0.458,
+      "frozen": false
+    },
+    {
+      "page": "reference/datasets.load_bart_weekly.qmd",
+      "seconds": 0.455,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.eval_rmse.qmd",
+      "seconds": 0.454,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.concat_future.qmd",
+      "seconds": 0.453,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.time_series.qmd",
+      "seconds": 0.452,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.draw_posterior.qmd",
+      "seconds": 0.451,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.forecasting_model.qmd",
+      "seconds": 0.449,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.prefix_condition.qmd",
+      "seconds": 0.448,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.periodic_repeat.qmd",
+      "seconds": 0.447,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.shift_loc.qmd",
+      "seconds": 0.447,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.SVIFit.qmd",
+      "seconds": 0.446,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.predict.qmd",
+      "seconds": 0.443,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.eval_coverage.qmd",
+      "seconds": 0.442,
+      "frozen": false
+    },
+    {
+      "page": "reference/util.slice_time.qmd",
+      "seconds": 0.439,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.eval_mae.qmd",
+      "seconds": 0.438,
+      "frozen": false
+    },
+    {
+      "page": "reference/functional.MCMCFit.qmd",
+      "seconds": 0.436,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.eval_crps.qmd",
+      "seconds": 0.435,
+      "frozen": false
+    },
+    {
+      "page": "reference/datasets.bart_available.qmd",
+      "seconds": 0.428,
+      "frozen": false
+    },
+    {
+      "page": "license.qmd",
+      "seconds": 0.404,
+      "frozen": false
+    },
+    {
+      "page": "skills.qmd",
+      "seconds": 0.372,
+      "frozen": false
+    },
+    {
+      "page": "contributing.qmd",
+      "seconds": 0.367,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/index.qmd",
+      "seconds": 0.352,
+      "frozen": false
+    }
+  ]
+}
