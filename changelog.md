@@ -3,6 +3,22 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.1.3
+
+*2026-07-03* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.3)
+
+
+## What's Changed
+
+- Rebuild docs on release so the version badge tracks the latest release by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/30
+- Add exponential smoothing example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/31
+- Add references to notebooks by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/32
+- Better prior plots by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/33
+- Backtest improvement by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/35
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3](https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2...0.1.3)
+
+
 # 0.1.2
 
 *2026-06-30* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.2)
