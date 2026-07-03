@@ -30,13 +30,11 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "jax>=0.10.0",
-    "numpyro>=0.21.0",
-    "jaxtyping>=0.3.11",
-    "beartype>=0.22",
     "arviz>=1.2.0",
+    "beartype>=0.22",
+    "jaxtyping>=0.3.11",
     "matplotlib>=3.8,<3.11",
-    "tqdm>=4.68.2",
+    "numpyro>=0.21.0",
 ]
 
 [project.optional-dependencies]
