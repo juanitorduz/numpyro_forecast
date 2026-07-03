@@ -45,7 +45,7 @@ jobs:
       # Notebooks render from their stored outputs, so MCMC does not run here.
       - name: Build docs
         run: make docs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: docs-site
           path: great-docs/_site
