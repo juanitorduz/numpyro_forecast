@@ -2,14 +2,16 @@
 
 This is the JAX/NumPyro port of ``pyro.contrib.forecast.evaluate``. Unlike Pyro
 there is no global parameter store, so each backtest window is a pure call that
-fits its own forecaster.
+fits its own forecaster. :func:`backtest` supports two windowing strategies, an
+``"expanding"`` window (always trains from ``t0 = 0``) and a fixed-size
+``"rolling"`` window (see :data:`WindowType`), selected via ``window_type``.
 """
 
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -258,22 +260,181 @@ def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
     return result, perf_counter() - start
 
 
+WindowType = Literal["expanding", "rolling"]
+"""Backtest windowing strategy: an expanding (``t0=0``) or fixed-size rolling window."""
+
+
+def _resolve_window_type(window_type: WindowType | None, train_window: int | None) -> WindowType:
+    """Resolve and validate the backtest window strategy.
+
+    When ``window_type`` is ``None`` the strategy is inferred from ``train_window``
+    for backward compatibility: a fixed ``train_window`` implies ``"rolling"``,
+    otherwise ``"expanding"``. An explicit ``window_type`` is validated against
+    ``train_window`` so contradictory combinations fail loudly.
+
+    Parameters
+    ----------
+    window_type
+        Requested strategy, or ``None`` to infer from ``train_window``.
+    train_window
+        Fixed training-window size, or ``None`` for an expanding window.
+
+    Returns
+    -------
+    Literal["expanding", "rolling"]
+        The resolved strategy.
+
+    Raises
+    ------
+    ValueError
+        If ``window_type="rolling"`` but ``train_window`` is ``None``, or
+        ``window_type="expanding"`` but ``train_window`` is set.
+    """
+    if window_type is None:
+        return "rolling" if train_window is not None else "expanding"
+    if window_type == "rolling" and train_window is None:
+        msg = "window_type='rolling' requires a fixed train_window"
+        raise ValueError(msg)
+    if window_type == "expanding" and train_window is not None:
+        msg = "window_type='expanding' is incompatible with train_window (t0 is always 0)"
+        raise ValueError(msg)
+    return window_type
+
+
+def _expanding_windows(
+    duration: int,
+    *,
+    min_train_window: int,
+    test_window: int | None,
+    min_test_window: int,
+    stride: int,
+) -> Iterator[tuple[int, int, int]]:
+    """Yield ``(t0, t1, t2)`` train-begin/split/test-end indices for expanding windows.
+
+    Every window starts at ``t0 = 0``: the training span ``[0, t1)`` lengthens by
+    ``stride`` each step while the test span ``[t1, t2)`` slides forward, so all
+    history up to ``t1`` is used to forecast the next window.
+
+    Parameters
+    ----------
+    duration
+        Total number of time steps in the series.
+    min_train_window
+        Length of the first (smallest) training window.
+    test_window
+        Test-window size; if ``None`` every window forecasts to ``duration``.
+    min_test_window
+        Minimum test-window size used to bound the last split when
+        ``test_window`` is ``None``.
+    stride
+        Step between successive train/test splits.
+
+    Yields
+    ------
+    tuple[int, int, int]
+        The ``(t0, t1, t2)`` train-begin/split/test-end indices for each window.
+    """
+    stop = duration - (min_test_window if test_window is None else test_window) + 1
+    for t1 in range(min_train_window, stop, stride):
+        yield 0, t1, (duration if test_window is None else t1 + test_window)
+
+
+def _rolling_windows(
+    duration: int,
+    *,
+    train_window: int,
+    test_window: int | None,
+    min_test_window: int,
+    stride: int,
+) -> Iterator[tuple[int, int, int]]:
+    """Yield ``(t0, t1, t2)`` train-begin/split/test-end indices for rolling windows.
+
+    The training span ``[t0, t1)`` has constant length ``train_window`` and slides
+    forward by ``stride`` each step (``t0 = t1 - train_window``), so old
+    observations drop off the left edge as new ones enter the right.
+
+    Parameters
+    ----------
+    duration
+        Total number of time steps in the series.
+    train_window
+        Fixed training-window size held constant across all windows.
+    test_window
+        Test-window size; if ``None`` every window forecasts to ``duration``.
+    min_test_window
+        Minimum test-window size used to bound the last split when
+        ``test_window`` is ``None``.
+    stride
+        Step between successive train/test splits.
+
+    Yields
+    ------
+    tuple[int, int, int]
+        The ``(t0, t1, t2)`` train-begin/split/test-end indices for each window.
+    """
+    stop = duration - (min_test_window if test_window is None else test_window) + 1
+    for t1 in range(train_window, stop, stride):
+        yield t1 - train_window, t1, (duration if test_window is None else t1 + test_window)
+
+
 def _iter_windows(
     duration: int,
     *,
+    window_type: WindowType,
     train_window: int | None,
     min_train_window: int,
     test_window: int | None,
     min_test_window: int,
     stride: int,
 ) -> Iterator[tuple[int, int, int]]:
-    """Yield ``(t0, t1, t2)`` train-begin/split/test-end indices for each window."""
-    stop = duration - (min_test_window if test_window is None else test_window) + 1
-    start = min_train_window if train_window is None else train_window
-    for t1 in range(start, stop, stride):
-        t0 = 0 if train_window is None else t1 - train_window
-        t2 = duration if test_window is None else t1 + test_window
-        yield t0, t1, t2
+    """Dispatch to the expanding or rolling window generator for ``window_type``.
+
+    Parameters
+    ----------
+    duration
+        Total number of time steps in the series.
+    window_type
+        Resolved strategy (see :func:`_resolve_window_type`).
+    train_window
+        Fixed training-window size; required (not ``None``) when
+        ``window_type="rolling"`` and ignored otherwise.
+    min_train_window
+        Length of the first training window for the expanding strategy.
+    test_window
+        Test-window size; if ``None`` every window forecasts to ``duration``.
+    min_test_window
+        Minimum test-window size when ``test_window`` is ``None``.
+    stride
+        Step between successive train/test splits.
+
+    Returns
+    -------
+    Iterator[tuple[int, int, int]]
+        The ``(t0, t1, t2)`` indices for each window.
+
+    Raises
+    ------
+    ValueError
+        If ``window_type="rolling"`` but ``train_window`` is ``None``.
+    """
+    if window_type == "rolling":
+        if train_window is None:
+            msg = "rolling windows require train_window"
+            raise ValueError(msg)
+        return _rolling_windows(
+            duration,
+            train_window=train_window,
+            test_window=test_window,
+            min_test_window=min_test_window,
+            stride=stride,
+        )
+    return _expanding_windows(
+        duration,
+        min_train_window=min_train_window,
+        test_window=test_window,
+        min_test_window=min_test_window,
+        stride=stride,
+    )
 
 
 def _resolve_options(
@@ -415,6 +576,7 @@ def backtest(
     forecaster_fn: ForecasterFactory = Forecaster,
     metrics: Mapping[str, Metric] | None = None,
     transform: Callable[[Array, Array], tuple[Array, Array]] | None = None,
+    window_type: WindowType | None = None,
     train_window: int | None = None,
     min_train_window: int = 1,
     test_window: int | None = None,
@@ -447,10 +609,20 @@ def backtest(
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
     transform
         Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+    window_type
+        Windowing strategy. If ``None`` (default) it is inferred from
+        ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and
+        ``"rolling"`` when it is set, matching the historical behavior. Pass
+        ``"expanding"`` to always train on all history from ``t0 = 0``, or
+        ``"rolling"`` to hold the training length fixed at ``train_window`` and
+        slide it forward. ``"expanding"`` and ``train_window`` are mutually
+        exclusive, and ``"rolling"`` requires ``train_window`` (both validated).
     train_window
         Training window size; if ``None`` the window expands from the start.
+        Required for ``window_type="rolling"``.
     min_train_window
-        Minimum training window size when ``train_window`` is ``None``.
+        Minimum training window size for the expanding strategy (used when
+        ``train_window`` is ``None``).
     test_window
         Test window size; if ``None`` forecasts to the end of the data.
     min_test_window
@@ -483,12 +655,14 @@ def backtest(
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
+    window_type = _resolve_window_type(window_type, train_window)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     duration = data.shape[-2]
 
     results: list[BacktestResult] = []
     for t0, t1, t2 in _iter_windows(
         duration,
+        window_type=window_type,
         train_window=train_window,
         min_train_window=min_train_window,
         test_window=test_window,

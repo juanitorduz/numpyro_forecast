@@ -11,8 +11,11 @@ from jax import Array, random
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
+    _expanding_windows,
     _iter_windows,
     _resolve_options,
+    _resolve_window_type,
+    _rolling_windows,
     _run_window,
     _scalar_params,
     _slice_window,
@@ -133,6 +136,77 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
         assert r.train_walltime >= 0.0
         # AutoNormal exposes per-site variational params (e.g. *_auto_loc).
         assert any("drift_scale" in name for name in r.params)
+
+
+def test_backtest_rolling_window(rng_key: Array) -> None:
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        window_type="rolling",
+        train_window=12,
+        test_window=4,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+    )
+    # Windows at t1 in {12, 16, 20} (stop = 24 - 4 + 1 = 21), each rolling.
+    assert [r.t1 for r in results] == [12, 16, 20]
+    for r in results:
+        assert isinstance(r, BacktestResult)
+        assert r.t1 - r.t0 == 12  # fixed-size rolling window
+        assert set(r.metrics) == {"mae", "rmse", "crps", "coverage"}
+
+
+def test_backtest_infers_rolling_from_train_window(rng_key: Array) -> None:
+    # Omitting window_type but setting train_window infers "rolling" (backward compat),
+    # producing the same windows as an explicit window_type="rolling".
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    run = partial(
+        backtest,
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        train_window=12,
+        test_window=4,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+    )
+    inferred = run()
+    explicit = run(window_type="rolling")
+    assert [(r.t0, r.t1, r.t2) for r in inferred] == [(r.t0, r.t1, r.t2) for r in explicit]
+    assert all(r.t1 - r.t0 == 12 for r in inferred)
+
+
+def test_backtest_rolling_requires_train_window(rng_key: Array) -> None:
+    with pytest.raises(ValueError, match="'rolling' requires a fixed train_window"):
+        backtest(
+            rng_key,
+            jnp.zeros((24, 1)),
+            jnp.zeros((24, 0)),
+            RandomWalkModel,
+            window_type="rolling",
+            test_window=4,
+        )
+
+
+def test_backtest_expanding_rejects_train_window(rng_key: Array) -> None:
+    with pytest.raises(ValueError, match="'expanding' is incompatible with train_window"):
+        backtest(
+            rng_key,
+            jnp.zeros((24, 1)),
+            jnp.zeros((24, 0)),
+            RandomWalkModel,
+            window_type="expanding",
+            train_window=12,
+            test_window=4,
+        )
 
 
 def test_backtest_honors_partial_coverage_metric(rng_key: Array) -> None:
@@ -396,10 +470,11 @@ def test_backtest_eval_train_requires_predict_in_sample(rng_key: Array) -> None:
 
 
 def test_iter_windows_expanding() -> None:
-    # train_window=None -> t0 stays 0 and the window expands from the start.
+    # window_type="expanding" -> t0 stays 0 and the window expands from the start.
     windows = list(
         _iter_windows(
             24,
+            window_type="expanding",
             train_window=None,
             min_train_window=12,
             test_window=4,
@@ -411,10 +486,11 @@ def test_iter_windows_expanding() -> None:
 
 
 def test_iter_windows_fixed_train_window_rolls() -> None:
-    # A fixed train_window makes t0 track t1 (rolling, not expanding).
+    # window_type="rolling" makes t0 track t1 (rolling, not expanding).
     windows = list(
         _iter_windows(
             24,
+            window_type="rolling",
             train_window=6,
             min_train_window=1,
             test_window=4,
@@ -431,6 +507,7 @@ def test_iter_windows_test_window_none_forecasts_to_end() -> None:
     windows = list(
         _iter_windows(
             10,
+            window_type="expanding",
             train_window=None,
             min_train_window=8,
             test_window=None,
@@ -446,6 +523,7 @@ def test_iter_windows_default_stride_steps_by_one() -> None:
     windows = list(
         _iter_windows(
             8,
+            window_type="expanding",
             train_window=None,
             min_train_window=4,
             test_window=2,
@@ -454,6 +532,81 @@ def test_iter_windows_default_stride_steps_by_one() -> None:
         )
     )
     assert [t1 for _, t1, _ in windows] == [4, 5, 6]
+
+
+def test_iter_windows_rolling_requires_train_window() -> None:
+    # The dispatcher is independently correct: rolling without a train_window fails.
+    with pytest.raises(ValueError, match="rolling windows require train_window"):
+        list(
+            _iter_windows(
+                24,
+                window_type="rolling",
+                train_window=None,
+                min_train_window=1,
+                test_window=4,
+                min_test_window=1,
+                stride=4,
+            )
+        )
+
+
+def test_resolve_window_type_infers_expanding_without_train_window() -> None:
+    assert _resolve_window_type(None, None) == "expanding"
+
+
+def test_resolve_window_type_infers_rolling_from_train_window() -> None:
+    assert _resolve_window_type(None, 6) == "rolling"
+
+
+def test_resolve_window_type_explicit_expanding_passes_through() -> None:
+    assert _resolve_window_type("expanding", None) == "expanding"
+
+
+def test_resolve_window_type_explicit_rolling_passes_through() -> None:
+    assert _resolve_window_type("rolling", 6) == "rolling"
+
+
+def test_resolve_window_type_rolling_requires_train_window() -> None:
+    with pytest.raises(ValueError, match="'rolling' requires a fixed train_window"):
+        _resolve_window_type("rolling", None)
+
+
+def test_resolve_window_type_expanding_rejects_train_window() -> None:
+    with pytest.raises(ValueError, match="'expanding' is incompatible with train_window"):
+        _resolve_window_type("expanding", 6)
+
+
+def test_expanding_windows_start_at_zero() -> None:
+    windows = list(
+        _expanding_windows(24, min_train_window=12, test_window=4, min_test_window=1, stride=4)
+    )
+    assert windows == [(0, 12, 16), (0, 16, 20), (0, 20, 24)]
+    assert all(t0 == 0 for t0, _, _ in windows)
+
+
+def test_expanding_windows_test_window_none_forecasts_to_end() -> None:
+    windows = list(
+        _expanding_windows(10, min_train_window=8, test_window=None, min_test_window=1, stride=1)
+    )
+    assert windows == [(0, 8, 10), (0, 9, 10)]
+    assert all(t2 == 10 for _, _, t2 in windows)
+
+
+def test_rolling_windows_have_constant_train_length() -> None:
+    windows = list(
+        _rolling_windows(24, train_window=6, test_window=4, min_test_window=1, stride=4)
+    )
+    assert windows == [(0, 6, 10), (4, 10, 14), (8, 14, 18), (12, 18, 22)]
+    assert all(t1 - t0 == 6 for t0, t1, _ in windows)
+
+
+def test_rolling_windows_test_window_none_forecasts_to_end() -> None:
+    windows = list(
+        _rolling_windows(10, train_window=4, test_window=None, min_test_window=1, stride=1)
+    )
+    assert windows == [(0, 4, 10), (1, 5, 10), (2, 6, 10), (3, 7, 10), (4, 8, 10), (5, 9, 10)]
+    assert all(t2 == 10 for _, _, t2 in windows)
+    assert all(t1 - t0 == 4 for t0, t1, _ in windows)
 
 
 def test_resolve_options_none_is_empty() -> None:
