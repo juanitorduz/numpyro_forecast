@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>evaluate.eval_crps() – numpyro_forecast | numpyro_forecast</title>
+<title>evaluate.VectorizedBacktestResult – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html">
-  <meta name="description" content="Empirical CRPS averaged over all data elements.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html">
+  <meta name="description" content="Result of a backtest_vectorized() run (all windows at once).">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "evaluate.eval_crps - numpyro_forecast",
+    "name": "evaluate.VectorizedBacktestResult - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="evaluate.eval_crps() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Empirical CRPS averaged over all data elements.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html">
+  <meta property="og:title" content="evaluate.VectorizedBacktestResult – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Result of a backtest_vectorized() run (all windows at once).">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="evaluate.eval_crps() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Empirical CRPS averaged over all data elements.">
+  <meta name="twitter:title" content="evaluate.VectorizedBacktestResult – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Result of a backtest_vectorized() run (all windows at once).">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.eval_crps()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.VectorizedBacktestResult</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -394,7 +394,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</span></span></a>
   </div>
 </li>
@@ -412,7 +412,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></span></a>
   </div>
 </li>
@@ -616,8 +616,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h3 id="toc-title">On this page</h3>
    
   <ul class="collapse">
-  <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
-  <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#parameter-attributes" id="toc-parameter-attributes" class="nav-link active" data-scroll-target="#parameter-attributes">Parameter Attributes</a></li>
+  <li><a href="#attributes" id="toc-attributes" class="nav-link" data-scroll-target="#attributes">Attributes</a></li>
+  <li><a href="#methods" id="toc-methods" class="nav-link" data-scroll-target="#methods">Methods</a>
+  <ul class="collapse">
+  <li><a href="#to_dict" id="toc-to_dict" class="nav-link" data-scroll-target="#to_dict"><span class="doc-object-name doc-function doc-label doc-label-method">to_dict()</span></a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -626,7 +630,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</span></h2>
 </div>
 
 
@@ -644,45 +648,131 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Empirical CRPS averaged over all data elements.</p>
+<p>Result of a <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> run (all windows at once).</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L102-L117" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L765-L808" target="_blank" rel="noopener">Source</a></p>
 </div>
-<div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">eval_crps</span>(
-    <span class="va">pred</span>,
-    <span class="va">truth</span>,
-)</span></code></pre></div>
+<div class="doc-signature doc-Kind.CLASS">
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">VectorizedBacktestResult</span>()</span></code></pre></div>
 </div>
-<section id="parameters" class="level2 doc-parameters">
-<h2 class="doc-parameters">Parameters</h2>
+<div class="doc-text">
+<p>Unlike <a href="evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult" class="gdls-link gdls-code">BacktestResult</a> this holds every window’s values stacked along a leading window axis, because the windows are fitted, drawn, and scored in single vmapped passes rather than one call each. There are no per-window walltimes (a single fused computation covers all windows).</p>
+</div>
+<section id="parameter-attributes" class="level2 doc-parameter-attributes">
+<h2 class="doc-parameter-attributes">Parameter Attributes</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">t0</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Forecast samples with the sample axis first.</p>
+
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">t1</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-Ground-truth values (matching <code>pred</code> without the sample axis).
+
+</dd>
+<dt><code><span class="doc-parameter-name">t2</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dd>
+
+</dd>
+<dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
+<dd>
+
+</dd>
+<dt><code><span class="doc-parameter-name">losses</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dd>
+
+</dd>
+<dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
+<dd>
+
+</dd>
+<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+
 </dd>
 </dl>
 </div>
 </section>
-<section id="returns" class="level2 doc-returns">
-<h2 class="doc-returns">Returns</h2>
+<section id="attributes" class="level2 doc-attributes">
+<h2 class="doc-attributes">Attributes</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">float</span></code></dt>
+<dt><code><span class="doc-parameter-name">t0, t1, t2</span></code></dt>
 <dd>
-The mean empirical CRPS.
+<p>Train-begin, train/test split, and test-end time indices, each an integer array of shape <code>(num_windows,)</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
+<dd>
+<p>Number of forecast samples drawn per window.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">losses</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dd>
+<p>SVI loss history with shape <code>(num_windows, num_steps)</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
+<dd>
+<p>Mapping of metric name to a <code>(num_windows,)</code> array of per-window values.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span></code></dt>
+<dd>
+Stacked out-of-sample forecast samples with shape <code>(num_windows, num_samples, *batch, test_window, obs)</code>, or <code>None</code> unless <code>keep_predictions=True</code>.
+</dd>
+</dl>
+</div>
+</section>
+<section id="methods" class="level2 doc-methods">
+<h2 class="doc-methods">Methods</h2>
+<table class="gd-summary-table">
+<thead>
+<tr>
+<th>
+Name
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="#to_dict" class="doc-function doc-label doc-label-method">to_dict()</a>
+</td>
+<td>
+Return a flat dictionary view.
+</td>
+</tr>
+</tbody>
+</table>
+<hr style="border: none; border-top: 2px solid #c5c8cd; margin: 1.5rem 0 1rem 0;">
+<section id="to_dict" class="level3">
+<h4 class="anchored" data-anchor-id="to_dict"><span class="doc-object-name doc-function doc-label doc-label-method">to_dict()</span></h4>
+<div class="doc-subject">
+<p>Return a flat dictionary view.</p>
+</div>
+<div class="doc-usage-source">
+<p>Usage</p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L800-L808" target="_blank" rel="noopener">Source</a></p>
+</div>
+<div class="doc-signature doc-Kind.FUNCTION">
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>to_dict()</span></code></pre></div>
+</div>
+<section id="returns" class="level4 doc-returns">
+<h5 class="doc-returns anchored" data-anchor-id="returns">Returns</h5>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">dict[str, Any]</span></code></dt>
+<dd>
+All fields as a plain dictionary.
 </dd>
 </dl>
 </div>
 
 
+</section>
+</section>
 </section>
 
 </main>

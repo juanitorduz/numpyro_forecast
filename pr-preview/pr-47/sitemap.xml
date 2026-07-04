@@ -79,7 +79,19 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html</loc>
+    <lastmod>2026-07-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html</loc>
+    <lastmod>2026-07-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html</loc>
     <lastmod>2026-07-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -188,6 +200,12 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecasting_model.html</loc>
+    <lastmod>2026-07-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html</loc>
     <lastmod>2026-07-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

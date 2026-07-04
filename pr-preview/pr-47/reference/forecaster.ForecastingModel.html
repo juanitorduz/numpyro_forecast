@@ -290,6 +290,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/functional.markov_time_series.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.markov_time_series()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/functional.predict.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.predict()</span></span></a>
   </div>
@@ -376,8 +382,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.backtest_vectorized.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.BacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.BacktestResult</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -607,6 +625,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#methods" id="toc-methods" class="nav-link" data-scroll-target="#methods">Methods</a>
   <ul class="collapse">
   <li><a href="#call__" id="toc-call__" class="nav-link" data-scroll-target="#call__"><span class="doc-object-name doc-function doc-label doc-label-method">__call__()</span></a></li>
+  <li><a href="#markov_time_series" id="toc-markov_time_series" class="nav-link" data-scroll-target="#markov_time_series"><span class="doc-object-name doc-function doc-label doc-label-method">markov_time_series()</span></a></li>
   <li><a href="#model" id="toc-model" class="nav-link" data-scroll-target="#model"><span class="doc-object-name doc-function doc-label doc-label-method">model()</span></a></li>
   <li><a href="#predict" id="toc-predict" class="nav-link" data-scroll-target="#predict"><span class="doc-object-name doc-function doc-label doc-label-method">predict()</span></a></li>
   <li><a href="#predict_glm" id="toc-predict_glm" class="nav-link" data-scroll-target="#predict_glm"><span class="doc-object-name doc-function doc-label doc-label-method">predict_glm()</span></a></li>
@@ -642,7 +661,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L46-L177" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L46-L206" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">forecaster</span><span class="op">.</span><span class="sig-name">ForecastingModel</span>()</span></code></pre></div>
@@ -746,6 +765,14 @@ Run the model as a NumPyro model function.
 </tr>
 <tr>
 <td>
+<a href="#markov_time_series" class="doc-function doc-label doc-label-method">markov_time_series()</a>
+</td>
+<td>
+Sample a Markov (state-space) latent over the full horizon.
+</td>
+</tr>
+<tr>
+<td>
 <a href="#model" class="doc-function doc-label doc-label-method">model()</a>
 </td>
 <td>
@@ -786,7 +813,7 @@ Sample a time-varying latent over the full horizon.
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L162-L177" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L191-L206" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">__call__</span>(covariates, data<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
@@ -808,6 +835,25 @@ Observed data with time at axis <code>-2</code> (<code>None</code> for prior sam
 </section>
 </section>
 <hr style="border: none; border-top: 2px dotted #b0b4ba; margin: 1.5rem 0 1rem 0;">
+<section id="markov_time_series" class="level3">
+<h4 class="anchored" data-anchor-id="markov_time_series"><span class="doc-object-name doc-function doc-label doc-label-method">markov_time_series()</span></h4>
+<div class="doc-subject">
+<p>Sample a Markov (state-space) latent over the full horizon.</p>
+</div>
+<div class="doc-usage-source">
+<p>Usage</p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L162-L189" target="_blank" rel="noopener">Source</a></p>
+</div>
+<div class="doc-signature doc-Kind.FUNCTION">
+<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>markov_time_series(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    name, init_carry, transition, xs<span class="op">=</span><span class="va">None</span>, <span class="op">*</span>, plates<span class="op">=</span>(), reparam_config<span class="op">=</span><span class="va">None</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>Thin wrapper over <a href="functional.markov_time_series.html#numpyro_forecast.functional.markov_time_series" class="gdls-link gdls-code">numpyro_forecast.functional.markov_time_series()</a>.</p>
+</div>
+</section>
+<hr style="border: none; border-top: 2px dotted #b0b4ba; margin: 1.5rem 0 1rem 0;">
 <section id="model" class="level3">
 <h4 class="anchored" data-anchor-id="model"><span class="doc-object-name doc-function doc-label doc-label-method">model()</span></h4>
 <div class="doc-subject">
@@ -818,7 +864,7 @@ Observed data with time at axis <code>-2</code> (<code>None</code> for prior sam
 <p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L63-L76" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>model(zero_data, covariates)</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>model(zero_data, covariates)</span></code></pre></div>
 </div>
 <section id="parameters-1" class="level4 doc-parameters">
 <h5 class="doc-parameters anchored" data-anchor-id="parameters-1">Parameters</h5>
@@ -847,7 +893,7 @@ Covariates with time at axis <code>-2</code> and shape <code>(*batch, duration, 
 <p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L127-L140" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>predict(noise_dist, prediction)</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>predict(noise_dist, prediction)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Thin wrapper over <a href="functional.predict.html#numpyro_forecast.functional.predict" class="gdls-link gdls-code">numpyro_forecast.functional.predict()</a>.</p>
@@ -879,7 +925,7 @@ Deterministic mean with time at axis <code>-2</code>, shape <code>(*batch, durat
 <p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L142-L160" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>predict_glm(obs_dist_fn, latent)</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>predict_glm(obs_dist_fn, latent)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Thin wrapper over <a href="functional.predict_glm.html#numpyro_forecast.functional.predict_glm" class="gdls-link gdls-code">numpyro_forecast.functional.predict_glm()</a>.</p>
@@ -911,7 +957,7 @@ The deterministic latent predictor over the full horizon, time at axis <code>-2<
 <p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L99-L125" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>time_series(name, dist_fn, <span class="op">*</span>, reparam<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>time_series(name, dist_fn, <span class="op">*</span>, reparam<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Thin wrapper over <a href="functional.time_series.html#numpyro_forecast.functional.time_series" class="gdls-link gdls-code">numpyro_forecast.functional.time_series()</a>.</p>

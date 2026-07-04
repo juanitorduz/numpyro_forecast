@@ -24,6 +24,7 @@
 
 - [functional.Horizon](https://juanitorduz.github.io/numpyro_forecast/reference/functional.Horizon.html)
 - [functional.time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.time_series.html)
+- [functional.markov_time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html)
 - [functional.predict](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict.html)
 - [functional.predict_glm](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_glm.html)
 - [functional.resolve_optimizer](https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_optimizer.html)
@@ -41,7 +42,9 @@
 > Rolling-window backtesting and forecast metrics.
 
 - [evaluate.backtest](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html)
+- [evaluate.backtest_vectorized](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html)
 - [evaluate.BacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html)
+- [evaluate.VectorizedBacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html)
 - [evaluate.evaluate_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html)
 - [evaluate.results_to_dataframe](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html)
 - [evaluate.eval_crps](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html)

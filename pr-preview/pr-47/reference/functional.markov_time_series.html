@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>evaluate.eval_crps() – numpyro_forecast | numpyro_forecast</title>
+<title>functional.markov_time_series() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html">
-  <meta name="description" content="Empirical CRPS averaged over all data elements.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html">
+  <meta name="description" content="Sample a Markov (state-space) latent over the full horizon.">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "evaluate.eval_crps - numpyro_forecast",
+    "name": "functional.markov_time_series - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="evaluate.eval_crps() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Empirical CRPS averaged over all data elements.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html">
+  <meta property="og:title" content="functional.markov_time_series() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Sample a Markov (state-space) latent over the full horizon.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="evaluate.eval_crps() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Empirical CRPS averaged over all data elements.">
+  <meta name="twitter:title" content="functional.markov_time_series() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Sample a Markov (state-space) latent over the full horizon.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.eval_crps()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">functional.markov_time_series()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -290,7 +290,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.markov_time_series.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/functional.markov_time_series.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.markov_time_series()</span></span></a>
   </div>
 </li>
@@ -412,7 +412,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></span></a>
   </div>
 </li>
@@ -618,6 +618,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   </ul>
 </nav>
     </div>
@@ -626,7 +627,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">functional.markov_time_series()</span></h2>
 </div>
 
 
@@ -644,29 +645,58 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Empirical CRPS averaged over all data elements.</p>
+<p>Sample a Markov (state-space) latent over the full horizon.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L102-L117" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional.py#L233-L320" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">eval_crps</span>(
-    <span class="va">pred</span>,
-    <span class="va">truth</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">functional</span><span class="op">.</span><span class="sig-name">markov_time_series</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">h</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">name</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">init_carry</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">transition</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">xs</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">plates</span><span class="op">=</span>(),</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">reparam_config</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>In-sample steps run in a <code>numpyro.contrib.control_flow.scan</code> with site <code>name</code>; when forecasting, horizon steps run in a second scan with site <code>f"{name}_future"</code> <strong>seeded by the final in-sample carry</strong>. The guide never sees the future site (same invariant as <a href="functional.time_series.html#numpyro_forecast.functional.time_series" class="gdls-link gdls-code">time_series()</a>), and under posterior replay the carry is a deterministic function of the replayed draws, so the forecast is conditioned through the state.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">h</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Horizon</span></code></dt>
 <dd>
-<p>Forecast samples with the sample axis first.</p>
+<p>The horizon for the current model call (see <a href="functional.Horizon.html#numpyro_forecast.functional.Horizon" class="gdls-link gdls-code">Horizon</a>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">name</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span></code></dt>
 <dd>
-Ground-truth values (matching <code>pred</code> without the sample axis).
+<p>Base sample-site name for the in-sample latent scan.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">init_carry</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">object</span></code></dt>
+<dd>
+<p>Initial carry passed to the first transition.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">transition</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Transition</span></code></dt>
+<dd>
+<p>Per-step <code>(carry, x_t) -&gt; (dist_t, carry_fn)</code> callable; the wrapper owns the <code>numpyro.sample</code> statement.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">xs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Optional exogenous inputs over the full horizon with time at axis <code>-2</code>, moved into scan layout internally; <code>None</code> for autonomous dynamics.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">plates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[tuple[str, int]]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">()<br></span></code></dt>
+<dd>
+<p><code>(name, size)</code> pairs opened <strong>inside</strong> the scan body around the sample statement (the only placement NumPyro supports for scan + plate).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">reparam_config</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Reparam] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Site-name -&gt; <code>~numpyro.infer.reparam.Reparam</code> mapping applied <strong>inside</strong> the scan body.
 </dd>
 </dl>
 </div>
@@ -675,9 +705,20 @@ Ground-truth values (matching <code>pred</code> without the sample axis).
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">float</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-The mean empirical CRPS.
+The latent over the full horizon in package layout <code>(*plate_batch, duration, obs)</code>.
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If forecasting without observed data, if the per-step shape lacks the observation dimension (C7), or if an enclosing plate is detected.
 </dd>
 </dl>
 </div>

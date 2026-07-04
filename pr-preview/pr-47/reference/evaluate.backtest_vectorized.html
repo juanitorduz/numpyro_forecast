@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>evaluate.eval_crps() – numpyro_forecast | numpyro_forecast</title>
+<title>evaluate.backtest_vectorized() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html">
-  <meta name="description" content="Empirical CRPS averaged over all data elements.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html">
+  <meta name="description" content="Rolling-window backtest with all windows fitted in one vmapped SVI run.">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "evaluate.eval_crps - numpyro_forecast",
+    "name": "evaluate.backtest_vectorized - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="evaluate.eval_crps() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Empirical CRPS averaged over all data elements.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html">
+  <meta property="og:title" content="evaluate.backtest_vectorized() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Rolling-window backtest with all windows fitted in one vmapped SVI run.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="evaluate.eval_crps() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Empirical CRPS averaged over all data elements.">
+  <meta name="twitter:title" content="evaluate.backtest_vectorized() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Rolling-window backtest with all windows fitted in one vmapped SVI run.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.eval_crps()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.backtest_vectorized()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -382,7 +382,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.backtest_vectorized.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/evaluate.backtest_vectorized.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</span></span></a>
   </div>
 </li>
@@ -412,7 +412,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></span></a>
   </div>
 </li>
@@ -618,6 +618,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   </ul>
 </nav>
     </div>
@@ -626,7 +627,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</span></h2>
 </div>
 
 
@@ -644,29 +645,89 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Empirical CRPS averaged over all data elements.</p>
+<p>Rolling-window backtest with all windows fitted in one vmapped SVI run.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L102-L117" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L844-L992" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">eval_crps</span>(
-    <span class="va">pred</span>,
-    <span class="va">truth</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest_vectorized</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">data</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">model_fn</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">train_window</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">test_window</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">stride</span><span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_steps</span><span class="op">=</span><span class="dv">1001</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">optim</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">guide</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_samples</span><span class="op">=</span><span class="dv">100</span>,</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">metrics</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">keep_predictions</span><span class="op">=</span><span class="cn-bool">False</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>Estimator-equivalent to <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows (invariant I3), giving order-of-magnitude wall-clock wins for tens of windows on small models.</p>
+<p>PRNG: <code>fold_in(rng_key, -1)</code> seeds a discarded eager warm-up init; <code>fold_in(rng_key, i)</code> seeds window <code>i</code>; each window key is split for the posterior draw and the forecast.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">rng_key</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Forecast samples with the sample axis first.</p>
+<p>Base PRNG key.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-Ground-truth values (matching <code>pred</code> without the sample axis).
+<p>Dataset with time at axis <code>-2</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dd>
+<p>Covariates with time at axis <code>-2</code> (same duration as <code>data</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">model_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ModelFactory</span></code></dt>
+<dd>
+<p>Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">train_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
+<dd>
+<p>Fixed training-window length (<code>&gt;= 1</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">test_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
+<dd>
+<p>Fixed test-window length (<code>&gt;= 1</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">stride</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
+<dd>
+<p>Step between successive windows (<code>&gt;= 1</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">num_steps</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1001</span></span></code></dt>
+<dd>
+<p>Number of SVI steps per window.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">optim</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">OptimizerLike</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Optimizer specification resolved by <code>~numpyro_forecast.functional.resolve_optimizer()</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">guide</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">GuideLike</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Guide specification; must resolve to an <code>AutoGuide</code> (hand-written guides are not vmappable, use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">100</span></span></code></dt>
+<dd>
+<p>Number of forecast samples drawn per window.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Mapping of metric name to function; defaults to <code>DEFAULT_METRICS</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">keep_predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
+<dd>
+If <code>True</code>, retain the stacked forecast samples on the result.
 </dd>
 </dl>
 </div>
@@ -675,9 +736,20 @@ Ground-truth values (matching <code>pred</code> without the sample axis).
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">float</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">VectorizedBacktestResult</span></code></dt>
 <dd>
-The mean empirical CRPS.
+The stacked per-window losses, metrics, and window indices.
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>data</code> and <code>covariates</code> durations differ, <code>train_window</code> or <code>test_window</code> or <code>stride</code> is <code>&lt; 1</code>, the resolved guide is not an <code>AutoGuide</code>, or there is no room for a single window.
 </dd>
 </dl>
 </div>

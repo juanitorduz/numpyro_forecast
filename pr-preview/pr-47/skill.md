@@ -39,6 +39,7 @@ Pure functional primitives for the train/forecast split.
 
 - `functional.Horizon`
 - `functional.time_series`
+- `functional.markov_time_series`
 - `functional.predict`
 - `functional.predict_glm`
 - `functional.resolve_optimizer`
@@ -57,7 +58,9 @@ Pure functional primitives for the train/forecast split.
 Rolling-window backtesting and forecast metrics.
 
 - `evaluate.backtest`
+- `evaluate.backtest_vectorized`
 - `evaluate.BacktestResult`
+- `evaluate.VectorizedBacktestResult`
 - `evaluate.evaluate_forecast`
 - `evaluate.results_to_dataframe`
 - `evaluate.eval_crps`

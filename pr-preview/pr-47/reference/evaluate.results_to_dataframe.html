@@ -290,6 +290,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/functional.markov_time_series.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.markov_time_series()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/functional.predict.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.predict()</span></span></a>
   </div>
@@ -376,8 +382,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.backtest_vectorized.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.BacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.BacktestResult</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -631,21 +649,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L745-L800" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L995-L1050" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">results_to_dataframe</span>(<span class="va">results</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Columns are prefix-namespaced so metric, in-sample-metric, and parameter names never collide: window metrics become <code>metric_&lt;name&gt;</code>, in-sample metrics <code>train_metric_&lt;name&gt;</code>, and scalar parameters <code>param_&lt;name&gt;</code>, alongside the window indices <code>t0</code>/<code>t1</code>/<code>t2</code>, <code>num_samples</code>, and <code>train_walltime</code>/<code>test_walltime</code>. Forecast samples are excluded. Windows may carry different metric sets (e.g.&nbsp;via <code>backtest(per_window_metrics=...)</code>); the union of columns is used and missing entries are left as <code>NaN</code>.</p>
+<p>A <a href="evaluate.VectorizedBacktestResult.html#numpyro_forecast.evaluate.VectorizedBacktestResult" class="gdls-link gdls-code">VectorizedBacktestResult</a> from <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> is also accepted; it produces the same <code>metric_&lt;name&gt;</code> columns for the same metric set, but has no <code>train_metric_*</code>, <code>param_*</code>, or walltime columns (a vectorized run has no per-window walltimes), which are simply absent.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">results</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[BacktestResult]</span></code></dt>
+<dt><code><span class="doc-parameter-name">results</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[BacktestResult] | VectorizedBacktestResult</span></code></dt>
 <dd>
-A sequence of <a href="evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult" class="gdls-link gdls-code">BacktestResult</a> from <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>.
+A sequence of <a href="evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult" class="gdls-link gdls-code">BacktestResult</a> from <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>, or a single <a href="evaluate.VectorizedBacktestResult.html#numpyro_forecast.evaluate.VectorizedBacktestResult" class="gdls-link gdls-code">VectorizedBacktestResult</a> from <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a>.
 </dd>
 </dl>
 </div>
@@ -665,10 +684,6 @@ One row per window with the namespaced columns described above.
 <h2 class="doc-raises">Raises</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">NotImplementedError</span></code></dt>
-<dd>
-<p>If a vectorized backtest result is passed; use the loop <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> output for now (vectorized support lands with <code>backtest_vectorized</code>).</p>
-</dd>
 <dt><code> <span class="doc-parameter-annotation">ImportError</span></code></dt>
 <dd>
 If <code>pandas</code> is not installed (<code>pip install numpyro_forecast[dataframes]</code>).

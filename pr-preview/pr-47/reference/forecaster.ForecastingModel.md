@@ -65,6 +65,7 @@ Number of observed (in-sample) time steps `t`.
 | Name | Description |
 |----|----|
 | [__call__()](#__call__) | Run the model as a NumPyro model function. |
+| [markov_time_series()](#markov_time_series) | Sample a Markov (state-space) latent over the full horizon. |
 | [model()](#model) | Define the generative model and call [predict()](functional.predict.md#numpyro_forecast.functional.predict) exactly once. |
 | [predict()](#predict) | Register the observation/forecast sites for the model. |
 | [predict_glm()](#predict_glm) | Register GLM-style observation/forecast sites from a latent predictor. |
@@ -94,6 +95,27 @@ Covariates with time at axis `-2` spanning the full horizon.
 
 `data: Array | None = None`  
 Observed data with time at axis `-2` (`None` for prior sampling).
+
+
+------------------------------------------------------------------------
+
+
+#### markov_time_series()
+
+
+Sample a Markov (state-space) latent over the full horizon.
+
+
+Usage
+
+``` python
+markov_time_series(
+    name, init_carry, transition, xs=None, *, plates=(), reparam_config=None
+)
+```
+
+
+Thin wrapper over [numpyro_forecast.functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series).
 
 
 ------------------------------------------------------------------------

@@ -27,7 +27,8 @@ evaluate.backtest(
     batch_size=None,
     forecaster_options=None,
     eval_train=False,
-    keep_predictions=False
+    keep_predictions=False,
+    reuse_model=True
 )
 ```
 
@@ -91,6 +92,9 @@ If `True`, also score the in-sample posterior predictive over each training wind
 
 `keep_predictions: bool = ``False`  
 If `True`, store each window's out-of-sample forecast samples (after `transform`) on `BacktestResult.prediction`. Defaults to `False` to avoid retaining large Monte Carlo arrays.
+
+`reuse_model: bool = ``True`  
+When `True` (default) and the windowing strategy is rolling, the model instance returned by the first `model_fn()` call is reused for every window so forecast/predict kernels can cache across windows. SVI still recompiles per window; for a single fused fit over all windows use [backtest_vectorized()](evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized). Ignored for expanding windows and when `False`.
 
 
 ## Returns

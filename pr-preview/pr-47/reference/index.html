@@ -243,6 +243,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/functional.markov_time_series.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.markov_time_series()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/functional.predict.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.predict()</span></span></a>
   </div>
@@ -329,8 +335,20 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.backtest_vectorized.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.BacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.BacktestResult</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -634,6 +652,10 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>Sample a time-varying latent over the full horizon.</p>
 </dd>
+<dt><a href="../reference/functional.markov_time_series.html#numpyro_forecast.functional.markov_time_series" class="doc-function doc-label doc-label-function">functional.markov_time_series()</a></dt>
+<dd>
+<p>Sample a Markov (state-space) latent over the full horizon.</p>
+</dd>
 <dt><a href="../reference/functional.predict.html#numpyro_forecast.functional.predict" class="doc-function doc-label doc-label-function">functional.predict()</a></dt>
 <dd>
 <p>Register the observation/forecast sites for the model.</p>
@@ -694,9 +716,17 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>Backtest a forecasting model on a moving window of <code>(train, test)</code> data.</p>
 </dd>
+<dt><a href="../reference/evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</a></dt>
+<dd>
+<p>Rolling-window backtest with all windows fitted in one vmapped SVI run.</p>
+</dd>
 <dt><a href="../reference/evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult" class="doc-class doc-label doc-label-dataclass">evaluate.BacktestResult</a></dt>
 <dd>
 <p>Per-window result of a <code>backtest()</code> run.</p>
+</dd>
+<dt><a href="../reference/evaluate.VectorizedBacktestResult.html#numpyro_forecast.evaluate.VectorizedBacktestResult" class="doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</a></dt>
+<dd>
+<p>Result of a <code>backtest_vectorized()</code> run (all windows at once).</p>
 </dd>
 <dt><a href="../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="doc-function doc-label doc-label-function">evaluate.evaluate_forecast()</a></dt>
 <dd>

@@ -198,6 +198,50 @@ Returns
 Array
     The latent over the full horizon with time at axis ``-2``.
 
+markov_time_series(h: numpyro_forecast.functional.Horizon, name: str, init_carry: object, transition: collections.abc.Callable[[object, jax.Array | None], tuple[numpyro.distributions.distribution.Distribution, collections.abc.Callable[[jax.Array], object]]], xs: jax.Array | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
+
+Sample a Markov (state-space) latent over the full horizon.
+
+In-sample steps run in a ``numpyro.contrib.control_flow.scan`` with site
+``name``; when forecasting, horizon steps run in a second scan with site
+``f"{name}_future"`` **seeded by the final in-sample carry**. The guide
+never sees the future site (same invariant as :func:`time_series`), and
+under posterior replay the carry is a deterministic function of the replayed
+draws, so the forecast is conditioned through the state.
+
+Parameters
+----------
+h
+    The horizon for the current model call (see :class:`Horizon`).
+name
+    Base sample-site name for the in-sample latent scan.
+init_carry
+    Initial carry passed to the first transition.
+transition
+    Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
+    owns the ``numpyro.sample`` statement.
+xs
+    Optional exogenous inputs over the full horizon with time at axis ``-2``,
+    moved into scan layout internally; ``None`` for autonomous dynamics.
+plates
+    ``(name, size)`` pairs opened **inside** the scan body around the sample
+    statement (the only placement NumPyro supports for scan + plate).
+reparam_config
+    Site-name -> :class:`~numpyro.infer.reparam.Reparam` mapping applied
+    **inside** the scan body.
+
+Returns
+-------
+Array
+    The latent over the full horizon in package layout
+    ``(*plate_batch, duration, obs)``.
+
+Raises
+------
+ValueError
+    If forecasting without observed data, if the per-step shape lacks the
+    observation dimension (C7), or if an enclosing plate is detected.
+
 predict(h: numpyro_forecast.functional.Horizon, noise_dist: numpyro.distributions.distribution.Distribution, prediction: jax.Array) -> None
 
 Register the observation/forecast sites for the model.
@@ -604,7 +648,7 @@ num_chains
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -669,11 +713,76 @@ keep_predictions
     If ``True``, store each window's out-of-sample forecast samples (after
     ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
     avoid retaining large Monte Carlo arrays.
+reuse_model
+    When ``True`` (default) and the windowing strategy is rolling, the model
+    instance returned by the first ``model_fn()`` call is reused for every
+    window so forecast/predict kernels can cache across windows. SVI still
+    recompiles per window; for a single fused fit over all windows use
+    :func:`backtest_vectorized`. Ignored for expanding windows and when
+    ``False``.
 
 Returns
 -------
 list[BacktestResult]
     One result per backtest window.
+
+backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, train_window: int, test_window: int, stride: int = 1, num_steps: int = 1001, optim: 'OptimizerLike' = None, guide: 'GuideLike' = None, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
+
+Rolling-window backtest with all windows fitted in one vmapped SVI run.
+
+Estimator-equivalent to :func:`backtest` with rolling windows; it differs
+only in PRNG stream layout and float reduction order, so the equivalence is
+statistical, not bitwise. Model, guide, and SVI compile once regardless of
+the number of windows (invariant I3), giving order-of-magnitude wall-clock
+wins for tens of windows on small models.
+
+PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
+``fold_in(rng_key, i)`` seeds window ``i``; each window key is split for the
+posterior draw and the forecast.
+
+Parameters
+----------
+rng_key
+    Base PRNG key.
+data
+    Dataset with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` (same duration as ``data``).
+model_fn
+    Factory returning a fresh model; called exactly once (per-window model
+    variation is unsupported here, use :func:`backtest`).
+train_window
+    Fixed training-window length (``>= 1``).
+test_window
+    Fixed test-window length (``>= 1``).
+stride
+    Step between successive windows (``>= 1``).
+num_steps
+    Number of SVI steps per window.
+optim
+    Optimizer specification resolved by
+    :func:`~numpyro_forecast.functional.resolve_optimizer`.
+guide
+    Guide specification; must resolve to an ``AutoGuide`` (hand-written
+    guides are not vmappable, use :func:`backtest`).
+num_samples
+    Number of forecast samples drawn per window.
+metrics
+    Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+keep_predictions
+    If ``True``, retain the stacked forecast samples on the result.
+
+Returns
+-------
+VectorizedBacktestResult
+    The stacked per-window losses, metrics, and window indices.
+
+Raises
+------
+ValueError
+    If ``data`` and ``covariates`` durations differ, ``train_window`` or
+    ``test_window`` or ``stride`` is ``< 1``, the resolved guide is not an
+    ``AutoGuide``, or there is no room for a single window.
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, train_walltime: float, test_walltime: float, metrics: dict[str, float], params: dict[str, float] = <factory>, train_metrics: dict[str, float] = <factory>, prediction: jax.Array | None = None) -> None
 
@@ -697,6 +806,32 @@ train_metrics
 prediction
     Out-of-sample forecast samples for the window (sample axis leading), or
     ``None`` unless ``backtest`` was called with ``keep_predictions=True``.
+
+VectorizedBacktestResult(t0: jax.Array, t1: jax.Array, t2: jax.Array, num_samples: int, losses: jax.Array, metrics: dict[str, jax.Array], predictions: jax.Array | None = None) -> None
+
+Result of a :func:`backtest_vectorized` run (all windows at once).
+
+Unlike :class:`BacktestResult` this holds every window's values stacked
+along a leading window axis, because the windows are fitted, drawn, and
+scored in single vmapped passes rather than one call each. There are no
+per-window walltimes (a single fused computation covers all windows).
+
+Attributes
+----------
+t0, t1, t2
+    Train-begin, train/test split, and test-end time indices, each an
+    integer array of shape ``(num_windows,)``.
+num_samples
+    Number of forecast samples drawn per window.
+losses
+    SVI loss history with shape ``(num_windows, num_steps)``.
+metrics
+    Mapping of metric name to a ``(num_windows,)`` array of per-window
+    values.
+predictions
+    Stacked out-of-sample forecast samples with shape
+    ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
+    unless ``keep_predictions=True``.
 
 evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None) -> dict[str, float]
 
@@ -733,7 +868,7 @@ Returns
 dict[str, float]
     Each metric name mapped to its value.
 
-results_to_dataframe(results: 'Sequence[BacktestResult]') -> 'pd.DataFrame'
+results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
 
 Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
 
@@ -746,10 +881,16 @@ Windows may carry different metric sets (e.g. via
 ``backtest(per_window_metrics=...)``); the union of columns is used and
 missing entries are left as ``NaN``.
 
+A :class:`VectorizedBacktestResult` from :func:`backtest_vectorized` is also
+accepted; it produces the same ``metric_<name>`` columns for the same metric
+set, but has no ``train_metric_*``, ``param_*``, or walltime columns (a
+vectorized run has no per-window walltimes), which are simply absent.
+
 Parameters
 ----------
 results
-    A sequence of :class:`BacktestResult` from :func:`backtest`.
+    A sequence of :class:`BacktestResult` from :func:`backtest`, or a single
+    :class:`VectorizedBacktestResult` from :func:`backtest_vectorized`.
 
 Returns
 -------
@@ -758,10 +899,6 @@ pandas.DataFrame
 
 Raises
 ------
-NotImplementedError
-    If a vectorized backtest result is passed; use the loop
-    :func:`backtest` output for now (vectorized support lands with
-    ``backtest_vectorized``).
 ImportError
     If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 

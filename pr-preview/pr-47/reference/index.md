@@ -42,6 +42,9 @@ The train/forecast split for a single model call.
 [functional.time_series()](functional.time_series.md#numpyro_forecast.functional.time_series)  
 Sample a time-varying latent over the full horizon.
 
+[functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series)  
+Sample a Markov (state-space) latent over the full horizon.
+
 [functional.predict()](functional.predict.md#numpyro_forecast.functional.predict)  
 Register the observation/forecast sites for the model.
 
@@ -88,8 +91,14 @@ Rolling-window backtesting and forecast metrics.
 [evaluate.backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)  
 Backtest a forecasting model on a moving window of `(train, test)` data.
 
+[evaluate.backtest_vectorized()](evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized)  
+Rolling-window backtest with all windows fitted in one vmapped SVI run.
+
 [evaluate.BacktestResult](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult)  
 Per-window result of a `backtest()` run.
+
+[evaluate.VectorizedBacktestResult](evaluate.VectorizedBacktestResult.md#numpyro_forecast.evaluate.VectorizedBacktestResult)  
+Result of a `backtest_vectorized()` run (all windows at once).
 
 [evaluate.evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)  
 Evaluate forecast samples against ground truth for several metrics at once.
