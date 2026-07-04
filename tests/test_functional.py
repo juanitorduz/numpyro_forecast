@@ -24,10 +24,12 @@ from numpyro_forecast.functional import (
     forecast,
     forecasting_model,
     predict,
+    predict_glm,
     predict_in_sample,
     time_series,
 )
 from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.util import shift_loc
 
 
 def _rw_body(h: Horizon, covariates: Array) -> None:
@@ -558,3 +560,90 @@ def test_single_compile_while_chunking(count_compilations) -> None:
         _sweep()
     assert tally.count == 0
     assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+
+# --- P13: predict_glm + predict refactor (I9) --------------------------------
+
+
+def _predict_glm_body(h: Horizon, covariates: Array) -> None:
+    """Random-walk body written directly with predict_glm and a shift_loc link."""
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+    drift = time_series(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    predict_glm(h, lambda mu: shift_loc(dist.Normal(0.0, sigma), mu), jnp.cumsum(drift, axis=-2))
+
+
+def _traces_equal(model_a: ForecastModel, model_b: ForecastModel, *args: Array) -> None:
+    key = random.PRNGKey(0)
+    trace_a = trace(seed(model_a, key)).get_trace(*args)
+    trace_b = trace(seed(model_b, key)).get_trace(*args)
+    assert set(trace_a) == set(trace_b)
+    for name, site_a in trace_a.items():
+        site_b = trace_b[name]
+        assert site_a["type"] == site_b["type"]
+        if "value" in site_a and site_a["value"] is not None:
+            assert jnp.allclose(site_a["value"], site_b["value"])
+        if site_a["type"] == "sample":
+            la = site_a["fn"].log_prob(site_a["value"])
+            lb = site_b["fn"].log_prob(site_b["value"])
+            assert jnp.allclose(la, lb)
+
+
+@pytest.mark.parametrize("future", [0, 6])
+def test_predict_predict_glm_trace_equivalence(future: int) -> None:
+    """Invariant I9: predict == predict_glm o shift_loc (identical traces)."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (24, 1)), axis=-2)
+    covariates = empty_covariates(24 + future)
+    model_predict = forecasting_model(_rw_body)
+    model_glm = forecasting_model(_predict_glm_body)
+    _traces_equal(model_predict, model_glm, covariates, data)
+
+
+def test_predict_glm_rejects_float_data_for_discrete_obs() -> None:
+    def poisson_body(h: Horizon, covariates: Array) -> None:
+        rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
+
+    model = forecasting_model(poisson_body)
+    float_data = jnp.abs(random.normal(random.PRNGKey(0), (12, 1)))
+    with pytest.raises(ValueError, match="discrete support"):
+        trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
+
+
+def test_predict_glm_accepts_integer_data_for_discrete_obs() -> None:
+    def poisson_body(h: Horizon, covariates: Array) -> None:
+        rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
+
+    model = forecasting_model(poisson_body)
+    int_data = jnp.asarray(random.poisson(random.PRNGKey(0), 3.0, (12, 1)), dtype=jnp.int32)
+    tr = trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), int_data)
+    assert "obs" in tr
+
+
+def test_poisson_local_level_end_to_end() -> None:
+    """A Poisson GLM local level: forecasts are integer, non-negative, and track the rate."""
+
+    def poisson_body(h: Horizon, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 0.5))
+        log_rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
+        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
+
+    model = forecasting_model(poisson_body)
+    true_rate = 5.0
+    data = jnp.asarray(random.poisson(random.PRNGKey(0), true_rate, (40, 1)), dtype=jnp.int32)
+    fit = fit_mcmc(
+        random.PRNGKey(1),
+        model,
+        data,
+        empty_covariates(40),
+        num_warmup=200,
+        num_samples=200,
+    )
+    post = draw_posterior(random.PRNGKey(2), fit, 200)
+    fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(46))
+    assert fc.shape == (200, 6, 1)
+    assert bool(jnp.all(fc >= 0.0))
+    assert bool(jnp.all(fc == jnp.floor(fc)))  # integer-valued counts
+    # The forecast median should be in the right ballpark of the true rate.
+    assert 2.0 < float(jnp.median(fc)) < 10.0

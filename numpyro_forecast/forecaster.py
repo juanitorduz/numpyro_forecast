@@ -17,7 +17,7 @@ from typing import Any, cast
 
 import numpyro.distributions as dist
 from jax import random
-from jaxtyping import Float
+from jaxtyping import Num
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.infer.reparam import Reparam
 
@@ -31,6 +31,7 @@ from numpyro_forecast.functional import (
 )
 from numpyro_forecast.functional import forecast as _forecast
 from numpyro_forecast.functional import predict as _predict
+from numpyro_forecast.functional import predict_glm as _predict_glm
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
 from numpyro_forecast.typing import (
@@ -138,6 +139,26 @@ class ForecastingModel(abc.ABC):
         """
         _predict(self._require_horizon(), noise_dist, prediction)
 
+    def predict_glm(
+        self,
+        obs_dist_fn: Callable[[Array], dist.Distribution],
+        latent: Array,
+    ) -> None:
+        """Register GLM-style observation/forecast sites from a latent predictor.
+
+        Thin wrapper over :func:`numpyro_forecast.functional.predict_glm`.
+
+        Parameters
+        ----------
+        obs_dist_fn
+            Link mapping the full-horizon ``latent`` predictor to the observation
+            distribution (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
+        latent
+            The deterministic latent predictor over the full horizon, time at
+            axis ``-2``.
+        """
+        _predict_glm(self._require_horizon(), obs_dist_fn, latent)
+
     def __call__(self, covariates: Array, data: Array | None = None) -> None:
         """Run the model as a NumPyro model function.
 
@@ -177,7 +198,7 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
-    ) -> Float[Array, " sample *batch future obs"]:
+    ) -> Num[Array, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
         Parameters
@@ -199,8 +220,9 @@ class _BaseForecaster(abc.ABC):
 
         Returns
         -------
-        Float[Array, " sample *batch future obs"]
-            Forecast samples over the ``future = duration - t`` horizon.
+        Num[Array, " sample *batch future obs"]
+            Forecast samples over the ``future = duration - t`` horizon (integer
+            for discrete/count models built with ``predict_glm``).
         """
         _require_covariates_extend_data(data, covariates)
         _require_positive_num_samples(num_samples)
@@ -224,7 +246,7 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
-    ) -> Float[Array, " sample *batch time obs"]:
+    ) -> Num[Array, " sample *batch time obs"]:
         """Sample the in-sample posterior predictive of the ``obs`` site.
 
         Draws ``num_samples`` posterior latent samples from the fitted forecaster and
@@ -250,7 +272,7 @@ class _BaseForecaster(abc.ABC):
 
         Returns
         -------
-        Float[Array, " sample *batch time obs"]
+        Num[Array, " sample *batch time obs"]
             In-sample posterior-predictive draws of the ``obs`` site.
 
         Raises

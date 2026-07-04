@@ -25,7 +25,7 @@ import numpyro
 import numpyro.distributions as dist
 from jax import random
 from jax.tree_util import tree_map
-from jaxtyping import Float
+from jaxtyping import Num
 from numpyro.infer import AIES, ESS, MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta, AutoGuide, AutoNormal
 from numpyro.infer.mcmc import MCMCKernel
@@ -186,6 +186,66 @@ def time_series(
     return concat_future(prefix, suffix, axis=-2)
 
 
+def predict_glm(
+    h: Horizon,
+    obs_dist_fn: Callable[[Array], dist.Distribution],
+    latent: Array,
+) -> None:
+    """Register GLM-style observation/forecast sites from a latent predictor.
+
+    The generalized-linear counterpart of :func:`predict`: instead of a
+    zero-centered noise distribution shifted by a mean, the caller supplies a link
+    ``obs_dist_fn`` that maps the full-horizon ``latent`` predictor to the
+    observation distribution directly (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
+    The prefix/suffix mirroring is identical to :func:`predict`: while training the
+    observation is observed; while forecasting the in-sample prefix is observed and
+    the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
+    site. The observation distribution must support time-axis surgery
+    (:func:`~numpyro_forecast.util.slice_time` /
+    :func:`~numpyro_forecast.util.prefix_condition`), i.e. an elementwise family.
+
+    Parameters
+    ----------
+    h
+        The horizon for the current model call (see :class:`Horizon`).
+    obs_dist_fn
+        Link mapping the full-horizon ``latent`` to the observation distribution
+        (time at axis ``-2``, shape ``(*batch, duration, obs)``).
+    latent
+        The deterministic latent predictor over the full horizon, time at axis
+        ``-2``.
+
+    Raises
+    ------
+    RuntimeError
+        If forecasting (``future > 0``) but no observed data is available.
+    ValueError
+        If the observation distribution has discrete support but ``h.data`` is
+        not integer-dtyped (the usual mistake for count models).
+    """
+    obs_dist = obs_dist_fn(latent)
+    support = obs_dist.support
+    if support is not None and support.is_discrete and h.data is not None:
+        if not jnp.issubdtype(h.data.dtype, jnp.integer):
+            msg = (
+                "the observation distribution has discrete support, so data must "
+                f"be integer-dtyped, got dtype {h.data.dtype}. Cast counts with "
+                "e.g. data.astype('int32')."
+            )
+            raise ValueError(msg)
+    if h.future == 0:
+        numpyro.sample("obs", obs_dist, obs=h.data)
+        return
+    data = h.data
+    if data is None:
+        msg = "forecasting requires observed data"
+        raise RuntimeError(msg)
+    prefix = slice_time(obs_dist, slice(None, h.t_obs))
+    numpyro.sample("obs", prefix, obs=data)
+    forecast = numpyro.sample("obs_future", prefix_condition(obs_dist, data))
+    numpyro.deterministic("forecast", forecast)
+
+
 def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> None:
     """Register the observation/forecast sites for the model.
 
@@ -193,7 +253,8 @@ def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> Non
     ``prediction`` the deterministic mean over the full horizon. While training
     the residual is observed; while forecasting the in-sample prefix is observed
     and the forecast suffix is sampled and exposed as the ``"forecast"``
-    deterministic site.
+    deterministic site. A thin wrapper over :func:`predict_glm` with the
+    location-shift link ``lambda mu: shift_loc(noise_dist, mu)``.
 
     Parameters
     ----------
@@ -210,18 +271,7 @@ def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> Non
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     """
-    obs_dist = shift_loc(noise_dist, prediction)
-    if h.future == 0:
-        numpyro.sample("obs", obs_dist, obs=h.data)
-        return
-    data = h.data
-    if data is None:
-        msg = "forecasting requires observed data"
-        raise RuntimeError(msg)
-    prefix = slice_time(obs_dist, slice(None, h.t_obs))
-    numpyro.sample("obs", prefix, obs=data)
-    forecast = numpyro.sample("obs_future", prefix_condition(obs_dist, data))
-    numpyro.deterministic("forecast", forecast)
+    predict_glm(h, lambda mu: shift_loc(noise_dist, mu), prediction)
 
 
 def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastModel:
@@ -946,7 +996,7 @@ def forecast(
     *,
     batch_size: int | None = None,
     parallel: bool = True,
-) -> Float[Array, " sample *batch future obs"]:
+) -> Num[Array, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
     Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
@@ -979,8 +1029,10 @@ def forecast(
 
     Returns
     -------
-    Float[Array, " sample *batch future obs"]
-        Forecast samples over the ``future = duration - t`` horizon.
+    Num[Array, " sample *batch future obs"]
+        Forecast samples over the ``future = duration - t`` horizon (floating
+        point for continuous observations, integer for discrete/count models
+        built with :func:`predict_glm`).
 
     Raises
     ------
@@ -1045,7 +1097,7 @@ def predict_in_sample(
     *,
     batch_size: int | None = None,
     parallel: bool = True,
-) -> Float[Array, " sample *batch time obs"]:
+) -> Num[Array, " sample *batch time obs"]:
     """Sample the in-sample posterior predictive of the ``obs`` site.
 
     Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
@@ -1076,7 +1128,7 @@ def predict_in_sample(
 
     Returns
     -------
-    Float[Array, " sample *batch time obs"]
+    Num[Array, " sample *batch time obs"]
         In-sample posterior-predictive draws of the ``obs`` site.
     """
     num_samples = next(iter(posterior.values())).shape[0]

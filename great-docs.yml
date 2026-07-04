@@ -89,6 +89,7 @@ reference:
       - functional.Horizon
       - functional.time_series
       - functional.predict
+      - functional.predict_glm
       - functional.resolve_optimizer
       - functional.resolve_guide
       - functional.fit_svi
