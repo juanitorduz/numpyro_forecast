@@ -63,6 +63,7 @@ def test_all_matches_exported_names() -> None:
         "eval_rmse",
         "evaluate_forecast",
         "forecasting_model",
+        "register_elementwise",
     }
     for name in names:
         assert hasattr(numpyro_forecast, name)

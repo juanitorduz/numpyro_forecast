@@ -5,15 +5,36 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
+from numpyro_forecast import util as nf_util
 from numpyro_forecast.util import (
+    _ELEMENTWISE_FAMILIES,
     concat_future,
     fourier_features,
     periodic_repeat,
     prefix_condition,
+    register_elementwise,
     shift_loc,
     slice_time,
     zero_data_like,
 )
+
+
+@pytest.fixture
+def restore_elementwise_registry():
+    """Snapshot and restore the module-global elementwise registry sets.
+
+    Tests that register throwaway families must not leak them into the
+    process-wide registry (which other tests inspect).
+    """
+    families = set(nf_util._ELEMENTWISE_FAMILIES)
+    checked = set(nf_util._ELEMENTWISE_CHECKED)
+    try:
+        yield
+    finally:
+        nf_util._ELEMENTWISE_FAMILIES.clear()
+        nf_util._ELEMENTWISE_FAMILIES.update(families)
+        nf_util._ELEMENTWISE_CHECKED.clear()
+        nf_util._ELEMENTWISE_CHECKED.update(checked)
 
 
 def test_zero_data_like_extends_to_covariate_duration() -> None:
@@ -142,3 +163,111 @@ def test_periodic_repeat_accepts_array_like() -> None:
     repeated = periodic_repeat(np.array([1.0, 2.0, 3.0]), 7)
     assert repeated.shape == (7,)
     assert jnp.allclose(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
+
+
+# --- P6: elementwise registry ------------------------------------------------
+
+_SHIFT_LOC_FAMILIES = [
+    (dist.Normal, {"loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1))}),
+    (
+        dist.StudentT,
+        {"df": jnp.full((5, 1), 4.0), "loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1))},
+    ),
+    (dist.Laplace, {"loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1))}),
+    (dist.Cauchy, {"loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1))}),
+    (dist.Gumbel, {"loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1))}),
+    (
+        dist.AsymmetricLaplace,
+        {"loc": jnp.zeros((5, 1)), "scale": jnp.ones((5, 1)), "asymmetry": jnp.ones((5, 1))},
+    ),
+]
+
+
+@pytest.mark.parametrize("cls, kwargs", _SHIFT_LOC_FAMILIES)
+def test_shift_loc_adds_location(cls, kwargs) -> None:
+    prediction = jnp.arange(5.0)[:, None]
+    shifted = shift_loc(cls(**kwargs), prediction)
+    assert isinstance(shifted, cls)
+    assert jnp.allclose(shifted.loc, prediction)
+
+
+def test_shift_loc_independent_laplace() -> None:
+    base = dist.Laplace(loc=jnp.zeros((4, 2)), scale=1.0)
+    noise = dist.Independent(base, reinterpreted_batch_ndims=1)
+    prediction = jnp.arange(8.0).reshape(4, 2)
+    shifted = shift_loc(noise, prediction)
+    assert isinstance(shifted, dist.Independent)
+    assert isinstance(shifted.base_dist, dist.Laplace)
+    assert jnp.allclose(shifted.base_dist.loc, prediction)
+
+
+_ELEMENTWISE_INSTANCES = [
+    dist.Normal(loc=jnp.arange(6.0)[:, None], scale=1.0),
+    dist.StudentT(df=4.0, loc=jnp.arange(6.0)[:, None], scale=1.0),
+    dist.Laplace(loc=jnp.arange(6.0)[:, None], scale=1.0),
+    dist.Cauchy(loc=jnp.arange(6.0)[:, None], scale=1.0),
+    dist.Gumbel(loc=jnp.arange(6.0)[:, None], scale=1.0),
+    dist.Poisson(rate=jnp.arange(1.0, 7.0)[:, None]),
+    dist.NegativeBinomial2(mean=jnp.arange(1.0, 7.0)[:, None], concentration=2.0),
+]
+
+
+@pytest.mark.parametrize("noise", _ELEMENTWISE_INSTANCES)
+def test_slice_time_matches_manual_param_slice(noise) -> None:
+    sliced = slice_time(noise, slice(2, 5))
+    assert type(sliced) is type(noise)
+    assert sliced.batch_shape == (3, 1)
+    for name in type(noise).arg_constraints:
+        expected = jnp.broadcast_to(getattr(noise, name), (6, 1))[2:5, :]
+        assert jnp.allclose(getattr(sliced, name), expected)
+
+
+def test_poisson_prefix_condition_is_future_marginal() -> None:
+    rate = jnp.arange(1.0, 7.0)[:, None]
+    d = dist.Poisson(rate=rate)
+    data = jnp.zeros((4, 1))
+    future = prefix_condition(d, data)
+    assert isinstance(future, dist.Poisson)
+    assert future.batch_shape == (2, 1)
+    assert jnp.allclose(future.rate, rate[4:])
+
+
+def test_slice_time_dirichlet_actionable_error() -> None:
+    # Dirichlet has a non-empty event_shape and is not elementwise.
+    d = dist.Dirichlet(concentration=jnp.ones((5, 3)))
+    with pytest.raises(NotImplementedError, match="register_elementwise"):
+        slice_time(d, slice(None, 3))
+
+
+def test_register_elementwise_decorator_and_slice(restore_elementwise_registry) -> None:
+    @register_elementwise
+    class _MyExponential(dist.Exponential):
+        pass
+
+    assert _MyExponential in _ELEMENTWISE_FAMILIES
+    d = _MyExponential(rate=jnp.arange(1.0, 7.0)[:, None])
+    sliced = slice_time(d, slice(1, 4))
+    assert isinstance(sliced, _MyExponential)
+    assert sliced.batch_shape == (3, 1)
+
+
+def test_elementwise_membership_is_not_inherited() -> None:
+    # A subclass of a registered family is not itself registered (exact type).
+    class _SubNormal(dist.Normal):
+        pass
+
+    assert _SubNormal not in _ELEMENTWISE_FAMILIES
+    with pytest.raises(NotImplementedError, match="register_elementwise"):
+        slice_time(_SubNormal(loc=jnp.zeros((5, 1)), scale=1.0), slice(None, 3))
+
+
+def test_register_structural_fake_fails_check(restore_elementwise_registry) -> None:
+    # A family registered as elementwise but with a non-empty event_shape trips
+    # the validation rather than silently producing wrong slices.
+    @register_elementwise
+    class _FakeMVN(dist.MultivariateNormal):
+        pass
+
+    d = _FakeMVN(loc=jnp.zeros((5, 2)), covariance_matrix=jnp.eye(2))
+    with pytest.raises(NotImplementedError, match="event_shape"):
+        slice_time(d, slice(None, 3))

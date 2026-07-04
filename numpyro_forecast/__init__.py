@@ -26,6 +26,7 @@ from numpyro_forecast.evaluate import (
 )
 from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
 from numpyro_forecast.functional import forecasting_model
+from numpyro_forecast.util import register_elementwise
 
 try:
     __version__ = version("numpyro_forecast")
@@ -46,4 +47,5 @@ __all__ = [
     "eval_rmse",
     "evaluate_forecast",
     "forecasting_model",
+    "register_elementwise",
 ]

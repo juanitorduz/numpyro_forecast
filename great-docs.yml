@@ -121,6 +121,7 @@ reference:
       - util.shift_loc
       - util.slice_time
       - util.prefix_condition
+      - util.register_elementwise
       - util.require
 
   - title: Datasets

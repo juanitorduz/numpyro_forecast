@@ -149,6 +149,97 @@ def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:
     return jnp.concatenate([prefix, suffix], axis=axis)
 
 
+_ELEMENTWISE_FAMILIES: set[type[dist.Distribution]] = set()
+"""Distribution families declared elementwise (independent per time/obs cell).
+
+Membership is by exact type (subclasses do not inherit it). Elementwise
+families get generic :func:`slice_time` and :func:`prefix_condition` support:
+slicing a parameter along the time axis is a valid restriction, and the
+forecast-horizon conditional reduces to the horizon marginal.
+"""
+
+_ELEMENTWISE_CHECKED: set[type[dist.Distribution]] = set()
+"""Cache of families that have passed :func:`_check_elementwise` (keyed by type)."""
+
+
+def register_elementwise(cls: type[dist.Distribution]) -> type[dist.Distribution]:
+    """Declare a distribution family elementwise (usable as a decorator).
+
+    An elementwise family is independent across every batch cell with an empty
+    event shape, so :func:`slice_time` may slice its broadcast parameters along
+    the time axis and :func:`prefix_condition` may reduce to the horizon
+    marginal. Membership is by exact type; register each concrete subclass you
+    rely on.
+
+    Parameters
+    ----------
+    cls
+        The distribution class to register.
+
+    Returns
+    -------
+    type[dist.Distribution]
+        ``cls`` unchanged, so this can decorate a class definition.
+    """
+    _ELEMENTWISE_FAMILIES.add(cls)
+    return cls
+
+
+def _check_elementwise(noise_dist: dist.Distribution) -> None:
+    """Validate that ``noise_dist`` is genuinely elementwise (cached per type).
+
+    Requires an empty ``event_shape`` and every constructor parameter to
+    broadcast against ``batch_shape``. Passing types are cached so repeated
+    slicing pays the check once.
+
+    Parameters
+    ----------
+    noise_dist
+        The instance to validate.
+
+    Raises
+    ------
+    NotImplementedError
+        If the event shape is non-empty or a parameter does not broadcast to the
+        batch shape, i.e. the family was registered but is not actually elementwise.
+    """
+    cls = type(noise_dist)
+    if cls in _ELEMENTWISE_CHECKED:
+        return
+    if noise_dist.event_shape != ():
+        msg = (
+            f"{cls.__name__} is registered elementwise but has event_shape "
+            f"{noise_dist.event_shape}; elementwise families must have an empty "
+            "event shape."
+        )
+        raise NotImplementedError(msg)
+    batch = noise_dist.batch_shape
+    for name in cls.arg_constraints:
+        param = getattr(noise_dist, name)
+        try:
+            jnp.broadcast_shapes(jnp.shape(param), batch)
+        except ValueError as exc:
+            msg = (
+                f"{cls.__name__} parameter {name!r} with shape {jnp.shape(param)} "
+                f"does not broadcast to batch_shape {batch}; it is not elementwise."
+            )
+            raise NotImplementedError(msg) from exc
+    _ELEMENTWISE_CHECKED.add(cls)
+
+
+def _require_elementwise(noise_dist: dist.Distribution) -> None:
+    """Raise unless ``noise_dist``'s exact type is a validated elementwise family."""
+    if type(noise_dist) not in _ELEMENTWISE_FAMILIES:
+        msg = (
+            f"{type(noise_dist).__name__} is not a registered elementwise family; "
+            "register it with numpyro_forecast.register_elementwise (if it is "
+            "independent over time) or add a dedicated slice_time/prefix_condition "
+            "dispatch (for correlated families such as MultivariateNormal)."
+        )
+        raise NotImplementedError(msg)
+    _check_elementwise(noise_dist)
+
+
 @singledispatch
 def shift_loc(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
     """Re-center a zero-centered noise distribution at ``loc``.
@@ -188,6 +279,28 @@ def _(noise_dist: dist.StudentT, loc: Array) -> dist.Distribution:
 
 
 @shift_loc.register
+def _(noise_dist: dist.Laplace, loc: Array) -> dist.Distribution:
+    return dist.Laplace(loc=noise_dist.loc + loc, scale=noise_dist.scale)
+
+
+@shift_loc.register
+def _(noise_dist: dist.Cauchy, loc: Array) -> dist.Distribution:
+    return dist.Cauchy(loc=noise_dist.loc + loc, scale=noise_dist.scale)
+
+
+@shift_loc.register
+def _(noise_dist: dist.Gumbel, loc: Array) -> dist.Distribution:
+    return dist.Gumbel(loc=noise_dist.loc + loc, scale=noise_dist.scale)
+
+
+@shift_loc.register
+def _(noise_dist: dist.AsymmetricLaplace, loc: Array) -> dist.Distribution:
+    return dist.AsymmetricLaplace(
+        loc=noise_dist.loc + loc, scale=noise_dist.scale, asymmetry=noise_dist.asymmetry
+    )
+
+
+@shift_loc.register
 def _(noise_dist: dist.Independent, loc: Array) -> dist.Distribution:
     base = shift_loc(noise_dist.base_dist, loc)
     return dist.Independent(base, noise_dist.reinterpreted_batch_ndims)
@@ -197,9 +310,10 @@ def _(noise_dist: dist.Independent, loc: Array) -> dist.Distribution:
 def slice_time(noise_dist: dist.Distribution, index: slice) -> dist.Distribution:
     """Slice an elementwise distribution along the time axis ``-2``.
 
-    The default implementation handles distributions with empty ``event_shape``
-    whose ``batch_shape`` ends with ``(time, obs)`` (e.g. ``Normal``,
-    ``StudentT``) by slicing each broadcast parameter.
+    The default implementation handles registered elementwise families (empty
+    ``event_shape``, ``batch_shape`` ending in ``(time, obs)``; e.g. ``Normal``,
+    ``StudentT``, ``Poisson``) by slicing each broadcast parameter. Correlated
+    families register a dedicated dispatch instead.
 
     Parameters
     ----------
@@ -216,14 +330,10 @@ def slice_time(noise_dist: dist.Distribution, index: slice) -> dist.Distribution
     Raises
     ------
     NotImplementedError
-        If the distribution has a non-empty event shape.
+        If ``noise_dist`` is not a registered elementwise family (and has no
+        dedicated dispatch).
     """
-    if noise_dist.event_shape != ():
-        msg = (
-            f"slice_time() default does not support {type(noise_dist).__name__} "
-            f"with event_shape {noise_dist.event_shape}"
-        )
-        raise NotImplementedError(msg)
+    _require_elementwise(noise_dist)
     batch = noise_dist.batch_shape
     params = {
         name: jnp.broadcast_to(getattr(noise_dist, name), batch)[..., index, :]
@@ -242,11 +352,12 @@ def _(noise_dist: dist.Independent, index: slice) -> dist.Distribution:
 def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distribution:
     """Condition a ``(t+f)``-length distribution on a ``t``-length data prefix.
 
-    For independent-over-time noise (the default) the conditional reduces to the
-    forecast-horizon marginal, i.e. a time slice ``[t:]``. Only independent
-    families are supported today; correlated families (e.g. ``MultivariateNormal``)
-    would need a registered dispatch implementing a genuine Gaussian conditional,
-    which is not yet provided.
+    For independent-over-time noise (the elementwise default) the conditional
+    reduces to the forecast-horizon marginal, i.e. a time slice ``[t:]``. Only
+    registered elementwise families take this path; correlated families (e.g.
+    ``MultivariateNormal``) need a dedicated dispatch implementing a genuine
+    Gaussian conditional, which is checked here rather than silently reduced to
+    a slice (the R1 fix).
 
     Parameters
     ----------
@@ -259,9 +370,33 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     -------
     dist.Distribution
         The forecast-horizon distribution over ``(*batch, f, obs)``.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``noise_dist`` is not a registered elementwise family (and has no
+        dedicated dispatch).
     """
+    _require_elementwise(noise_dist)
     t = data.shape[-2]
     return slice_time(noise_dist, slice(t, None))
+
+
+@prefix_condition.register
+def _(noise_dist: dist.Independent, data: Array) -> dist.Distribution:
+    # Independent-over-time noise: the conditional is the horizon marginal.
+    t = data.shape[-2]
+    return slice_time(noise_dist, slice(t, None))
+
+
+register_elementwise(dist.Normal)
+register_elementwise(dist.StudentT)
+register_elementwise(dist.Laplace)
+register_elementwise(dist.Cauchy)
+register_elementwise(dist.AsymmetricLaplace)
+register_elementwise(dist.Gumbel)
+register_elementwise(dist.Poisson)
+register_elementwise(dist.NegativeBinomial2)
 
 
 @lru_cache(maxsize=128)
