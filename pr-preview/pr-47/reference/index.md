@@ -45,6 +45,9 @@ Sample a time-varying latent over the full horizon.
 [functional.predict()](functional.predict.md#numpyro_forecast.functional.predict)  
 Register the observation/forecast sites for the model.
 
+[functional.predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm)  
+Register GLM-style observation/forecast sites from a latent predictor.
+
 [functional.resolve_optimizer()](functional.resolve_optimizer.md#numpyro_forecast.functional.resolve_optimizer)  
 Normalize an optimizer specification into a NumPyro optimizer.
 
@@ -151,6 +154,22 @@ Declare a distribution family elementwise (usable as a decorator).
 
 [util.require()](util.require.md#numpyro_forecast.util.require)  
 Import an optional dependency, or raise a targeted `ImportError`.
+
+
+## ArviZ export
+
+
+Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+
+[convert.to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree)  
+Convert a fit into an ArviZ-schema `xarray.DataTree`.
+
+[convert.add_forecast()](convert.add_forecast.md#numpyro_forecast.convert.add_forecast)  
+Attach out-of-sample forecast groups to a copy of `tree`.
+
+[convert.to_inferencedata()](convert.to_inferencedata.md#numpyro_forecast.convert.to_inferencedata)  
+Legacy shim converting via `to_datatree()` to an `InferenceData`.
 
 
 ## Extensions (contrib)

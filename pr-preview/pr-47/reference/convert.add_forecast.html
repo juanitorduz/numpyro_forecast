@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>evaluate.backtest() – numpyro_forecast | numpyro_forecast</title>
+<title>convert.add_forecast() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html">
-  <meta name="description" content="Backtest a forecasting model on a moving window of (train, test) data.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast.html">
+  <meta name="description" content="Attach out-of-sample forecast groups to a copy of tree.">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "evaluate.backtest - numpyro_forecast",
+    "name": "convert.add_forecast - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="evaluate.backtest() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Backtest a forecasting model on a moving window of (train, test) data.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html">
+  <meta property="og:title" content="convert.add_forecast() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Attach out-of-sample forecast groups to a copy of tree.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="evaluate.backtest() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Backtest a forecasting model on a moving window of (train, test) data.">
+  <meta name="twitter:title" content="convert.add_forecast() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Attach out-of-sample forecast groups to a copy of tree.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.backtest()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">convert.add_forecast()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -370,7 +370,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest()</span></span></a>
   </div>
 </li>
@@ -518,7 +518,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/convert.add_forecast.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/convert.add_forecast.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast()</span></span></a>
   </div>
 </li>
@@ -608,7 +608,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast()</span></h2>
 </div>
 
 
@@ -626,115 +626,39 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Backtest a forecasting model on a moving window of <code>(train, test)</code> data.</p>
+<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L613-L742" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L196-L260" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">data</span>,</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">model_fn</span>,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecaster_fn</span><span class="op">=</span><span class="va">Forecaster</span>,</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">metrics</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">per_window_metrics</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">transform</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">window_type</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">train_window</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">min_train_window</span><span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">test_window</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">min_test_window</span><span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="va">stride</span><span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_samples</span><span class="op">=</span><span class="dv">100</span>,</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecaster_options</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="va">eval_train</span><span class="op">=</span><span class="cn-bool">False</span>,</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="va">keep_predictions</span><span class="op">=</span><span class="cn-bool">False</span></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tree</span>, <span class="va">forecast_samples</span>, <span class="va">covariates_future</span>, <span class="op">*</span>, <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">rng_key</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">tree</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-<p>Base PRNG key (used for every window, matching Pyro).</p>
+<p>A tree from <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> (its <code>observed_data</code> time coordinate is continued).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">forecast_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Dataset with time at axis <code>-2</code>.</p>
+<p>Forecast draws shaped <code>(num_samples, future, obs)</code> from <code>~numpyro_forecast.functional.forecast()</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">covariates_future</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Covariates with time at axis <code>-2</code> (same duration as <code>data</code>).</p>
+<p>Future covariates shaped <code>(future, covariate_dim)</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">model_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ModelFactory</span></code></dt>
+<dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Factory returning a fresh <a href="forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> per window.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">forecaster_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ForecasterFactory</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">Forecaster<br></span></code></dt>
-<dd>
-<p>Factory returning a fitted forecaster (defaults to <a href="forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a>).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Mapping of metric name to function; defaults to <code>DEFAULT_METRICS</code>. Each function takes <code>(pred, truth)</code> and returns a float; bind any metric-specific parameters with <code>functools.partial()</code>, e.g. <code>{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}</code>.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">per_window_metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[int, int, int], Mapping[str, Metric]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Optional <code>(t0, t1, t2) -&gt; Mapping[str, Metric]</code> callable producing extra metrics merged over <code>metrics</code> for each window. Use it for window-dependent metrics such as a MASE scaled by that window’s training data (<a href="metrics.make_mase.html#numpyro_forecast.metrics.make_mase" class="gdls-link gdls-code">numpyro_forecast.metrics.make_mase()</a>).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">transform</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[Array, Array], tuple[Array, Array]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Optional <code>(pred, truth) -&gt; (pred, truth)</code> applied before metrics.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">window_type</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">WindowType | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Windowing strategy. If <code>None</code> (default) it is inferred from <code>train_window</code>: <code>"expanding"</code> when <code>train_window</code> is <code>None</code> and <code>"rolling"</code> when it is set, matching the historical behavior. Pass <code>"expanding"</code> to always train on all history from <code>t0 = 0</code>, or <code>"rolling"</code> to hold the training length fixed at <code>train_window</code> and slide it forward. <code>"expanding"</code> and <code>train_window</code> are mutually exclusive, and <code>"rolling"</code> requires <code>train_window</code> (both validated).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">train_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Training window size; if <code>None</code> the window expands from the start. Required for <code>window_type="rolling"</code>.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">min_train_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
-<dd>
-<p>Minimum training window size for the expanding strategy (used when <code>train_window</code> is <code>None</code>).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">test_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Test window size; if <code>None</code> forecasts to the end of the data.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">min_test_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
-<dd>
-<p>Minimum test window size when <code>test_window</code> is <code>None</code>.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">stride</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
-<dd>
-<p>Step between successive train/test splits.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">100</span></span></code></dt>
-<dd>
-<p>Number of forecast samples per window.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Optional forecast-sampling chunk size.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">forecaster_options</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Options dict passed to <code>forecaster_fn</code>, or a callable <code>(t0, t1, t2) -&gt; dict</code> returning per-window options.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">eval_train</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
-<dd>
-<p>If <code>True</code>, also score the in-sample posterior predictive over each training window with the same <code>metrics</code> and store them in <code>BacktestResult.train_metrics</code>. Requires a forecaster exposing <a href="functional.predict_in_sample.html#numpyro_forecast.functional.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a> (the built-in <a href="forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> and <a href="forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> do).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">keep_predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
-<dd>
-If <code>True</code>, store each window’s out-of-sample forecast samples (after <code>transform</code>) on <code>BacktestResult.prediction</code>. Defaults to <code>False</code> to avoid retaining large Monte Carlo arrays.
+Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time.
 </dd>
 </dl>
 </div>
@@ -743,9 +667,9 @@ If <code>True</code>, store each window’s out-of-sample forecast samples (afte
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">list[BacktestResult]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-One result per backtest window.
+A new tree with the <code>predictions</code> and <code>predictions_constant_data</code> groups added.
 </dd>
 </dl>
 </div>

@@ -67,6 +67,7 @@ Number of observed (in-sample) time steps `t`.
 | [__call__()](#__call__) | Run the model as a NumPyro model function. |
 | [model()](#model) | Define the generative model and call [predict()](functional.predict.md#numpyro_forecast.functional.predict) exactly once. |
 | [predict()](#predict) | Register the observation/forecast sites for the model. |
+| [predict_glm()](#predict_glm) | Register GLM-style observation/forecast sites from a latent predictor. |
 | [time_series()](#time_series) | Sample a time-varying latent over the full horizon. |
 
 ------------------------------------------------------------------------
@@ -148,6 +149,35 @@ Zero-centered observation noise (e.g. `Normal(0, sigma)`).
 
 `prediction: Array`  
 Deterministic mean with time at axis `-2`, shape `(*batch, duration, obs)`.
+
+
+------------------------------------------------------------------------
+
+
+#### predict_glm()
+
+
+Register GLM-style observation/forecast sites from a latent predictor.
+
+
+Usage
+
+``` python
+predict_glm(obs_dist_fn, latent)
+```
+
+
+Thin wrapper over [numpyro_forecast.functional.predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm).
+
+
+##### Parameters
+
+
+`obs_dist_fn: Callable[[Array], dist.Distribution]`  
+Link mapping the full-horizon `latent` predictor to the observation distribution (e.g. `lambda eta: Poisson(jnp.exp(eta))`).
+
+`latent: Array`  
+The deterministic latent predictor over the full horizon, time at axis `-2`.
 
 
 ------------------------------------------------------------------------

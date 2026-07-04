@@ -51,8 +51,8 @@ Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster
 ## Returns
 
 
-`Float[Array, ``" sample *batch future obs"]`  
-Forecast samples over the `future = duration - t` horizon.
+`Num[Array, ``" sample *batch future obs"]`  
+Forecast samples over the `future = duration - t` horizon (floating point for continuous observations, integer for discrete/count models built with [predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm)).
 
 
 ## Raises

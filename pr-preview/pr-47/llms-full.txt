@@ -206,7 +206,8 @@ Register the observation/forecast sites for the model.
 ``prediction`` the deterministic mean over the full horizon. While training
 the residual is observed; while forecasting the in-sample prefix is observed
 and the forecast suffix is sampled and exposed as the ``"forecast"``
-deterministic site.
+deterministic site. A thin wrapper over :func:`predict_glm` with the
+location-shift link ``lambda mu: shift_loc(noise_dist, mu)``.
 
 Parameters
 ----------
@@ -222,6 +223,40 @@ Raises
 ------
 RuntimeError
     If forecasting (``future > 0``) but no observed data is available.
+
+predict_glm(h: numpyro_forecast.functional.Horizon, obs_dist_fn: collections.abc.Callable[[jax.Array], numpyro.distributions.distribution.Distribution], latent: jax.Array) -> None
+
+Register GLM-style observation/forecast sites from a latent predictor.
+
+The generalized-linear counterpart of :func:`predict`: instead of a
+zero-centered noise distribution shifted by a mean, the caller supplies a link
+``obs_dist_fn`` that maps the full-horizon ``latent`` predictor to the
+observation distribution directly (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
+The prefix/suffix mirroring is identical to :func:`predict`: while training the
+observation is observed; while forecasting the in-sample prefix is observed and
+the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
+site. The observation distribution must support time-axis surgery
+(:func:`~numpyro_forecast.util.slice_time` /
+:func:`~numpyro_forecast.util.prefix_condition`), i.e. an elementwise family.
+
+Parameters
+----------
+h
+    The horizon for the current model call (see :class:`Horizon`).
+obs_dist_fn
+    Link mapping the full-horizon ``latent`` to the observation distribution
+    (time at axis ``-2``, shape ``(*batch, duration, obs)``).
+latent
+    The deterministic latent predictor over the full horizon, time at axis
+    ``-2``.
+
+Raises
+------
+RuntimeError
+    If forecasting (``future > 0``) but no observed data is available.
+ValueError
+    If the observation distribution has discrete support but ``h.data`` is
+    not integer-dtyped (the usual mistake for count models).
 
 resolve_optimizer(optim: 'OptimizerLike') -> numpyro.optim._NumPyroOptim
 
@@ -443,7 +478,7 @@ ValueError
     If ``data`` and ``covariates`` have different durations, or a run-config
     constraint is violated (see :func:`_validate_kernel_run_config`).
 
-forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Float[Array, 'sample *batch future obs']
+forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch future obs']
 
 Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
@@ -477,8 +512,10 @@ parallel
 
 Returns
 -------
-Float[Array, " sample *batch future obs"]
-    Forecast samples over the ``future = duration - t`` horizon.
+Num[Array, " sample *batch future obs"]
+    Forecast samples over the ``future = duration - t`` horizon (floating
+    point for continuous observations, integer for discrete/count models
+    built with :func:`predict_glm`).
 
 Raises
 ------
@@ -493,7 +530,7 @@ per ``(rng_key, batch_size)``. Each chunk is padded to a whole multiple of
 fixed shape (the pad draws are discarded), but changing ``batch_size``
 changes the PRNG stream layout and therefore the exact draws.
 
-predict_in_sample(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Float[Array, 'sample *batch time obs']
+predict_in_sample(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch time obs']
 
 Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -525,7 +562,7 @@ parallel
 
 Returns
 -------
-Float[Array, " sample *batch time obs"]
+Num[Array, " sample *batch time obs"]
     In-sample posterior-predictive draws of the ``obs`` site.
 
 SVIFit(guide: 'AutoGuide | Callable[..., None]', params: dict[str, jax.Array], losses: jax.Array, data: jax.Array | None = None, covariates: jax.Array | None = None) -> None
@@ -1127,6 +1164,106 @@ Raises
 ------
 ImportError
     If ``module`` is not importable, with an actionable install hint.
+
+
+## ArviZ export
+
+Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+
+to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
+
+Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
+
+PRNG: ``rng_key`` is consumed by the in-sample posterior-predictive draws (and,
+for a variational fit, the posterior draws).
+
+Parameters
+----------
+rng_key
+    PRNG key for the predictive (and variational posterior) draws.
+fit
+    A fit from :func:`~numpyro_forecast.functional.fit_mcmc`,
+    :func:`~numpyro_forecast.functional.fit_svi`, or
+    :func:`~numpyro_forecast.contrib.blackjax.fit_pathfinder`.
+model
+    The forecasting model that produced ``fit``.
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    In-sample covariates with time at axis ``-2``.
+num_predictive_samples
+    Number of posterior draws for a variational fit (ignored for
+    :class:`~numpyro_forecast.functional.MCMCFit`, which uses its own draws).
+    Defaults to ``1_000``.
+coords
+    Optional extra coordinates; these take precedence over the generated
+    ``time`` coordinate.
+time_coord
+    Optional explicit in-sample time coordinate values; defaults to
+    ``range(n_time)``.
+
+Returns
+-------
+xarray.DataTree
+    A tree with ``posterior`` (``(chain, draw, ...)``; a single pseudo-chain
+    plus ``variational: True`` attrs for SVI/Pathfinder), ``posterior_predictive``
+    (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups.
+
+add_forecast(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
+
+Attach out-of-sample forecast groups to a copy of ``tree``.
+
+Adds a ``predictions`` group (the forecast ``obs`` draws) and a
+``predictions_constant_data`` group (the future covariates). The forecast
+``time`` coordinate continues the in-sample one: integer continuation by
+default, or explicit values via ``time_coord``.
+
+Parameters
+----------
+tree
+    A tree from :func:`to_datatree` (its ``observed_data`` time coordinate is
+    continued).
+forecast_samples
+    Forecast draws shaped ``(num_samples, future, obs)`` from
+    :func:`~numpyro_forecast.functional.forecast`.
+covariates_future
+    Future covariates shaped ``(future, covariate_dim)``.
+time_coord
+    Optional explicit forecast time coordinate; defaults to integer
+    continuation of the in-sample time.
+
+Returns
+-------
+xarray.DataTree
+    A new tree with the ``predictions`` and ``predictions_constant_data``
+    groups added.
+
+to_inferencedata(*args: Any, **kwargs: Any) -> 'Any'
+
+Legacy shim converting via :func:`to_datatree` to an ``InferenceData``.
+
+Deprecated in favor of :func:`to_datatree`; emits a :class:`FutureWarning`.
+Requires classic ArviZ exposing ``InferenceData.from_datatree``; raises an
+actionable :class:`ImportError` otherwise (the package pins ArviZ >= 1.2, so
+this path is only for environments that additionally install classic ArviZ).
+
+Parameters
+----------
+*args
+    Positional arguments forwarded to :func:`to_datatree`.
+**kwargs
+    Keyword arguments forwarded to :func:`to_datatree`.
+
+Returns
+-------
+arviz.InferenceData
+    The converted legacy container.
+
+Raises
+------
+ImportError
+    If the installed ArviZ does not expose ``InferenceData.from_datatree``.
 
 
 ## Extensions (contrib)

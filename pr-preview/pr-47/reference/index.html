@@ -249,6 +249,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/functional.predict_glm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.predict_glm()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/functional.resolve_optimizer.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.resolve_optimizer()</span></span></a>
   </div>
@@ -454,9 +460,35 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Extensions (contrib)</span></a>
+ <span class="menu-text">ArviZ export</span></a>
 </div>
       <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.to_datatree()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.add_forecast.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.to_inferencedata.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.to_inferencedata()</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Extensions (contrib)</span></a>
+</div>
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -482,7 +514,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -524,6 +556,7 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#functional-core" id="toc-functional-core" class="nav-link" data-scroll-target="#functional-core">Functional core</a></li>
   <li><a href="#backtesting-evaluation" id="toc-backtesting-evaluation" class="nav-link" data-scroll-target="#backtesting-evaluation">Backtesting &amp; evaluation</a></li>
   <li><a href="#utilities" id="toc-utilities" class="nav-link" data-scroll-target="#utilities">Utilities</a></li>
+  <li><a href="#arviz-export" id="toc-arviz-export" class="nav-link" data-scroll-target="#arviz-export">ArviZ export</a></li>
   <li><a href="#extensions-contrib" id="toc-extensions-contrib" class="nav-link" data-scroll-target="#extensions-contrib">Extensions (contrib)</a></li>
   <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets">Datasets</a></li>
   </ul>
@@ -604,6 +637,10 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/functional.predict.html#numpyro_forecast.functional.predict" class="doc-function doc-label doc-label-function">functional.predict()</a></dt>
 <dd>
 <p>Register the observation/forecast sites for the model.</p>
+</dd>
+<dt><a href="../reference/functional.predict_glm.html#numpyro_forecast.functional.predict_glm" class="doc-function doc-label doc-label-function">functional.predict_glm()</a></dt>
+<dd>
+<p>Register GLM-style observation/forecast sites from a latent predictor.</p>
 </dd>
 <dt><a href="../reference/functional.resolve_optimizer.html#numpyro_forecast.functional.resolve_optimizer" class="doc-function doc-label doc-label-function">functional.resolve_optimizer()</a></dt>
 <dd>
@@ -744,6 +781,26 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/util.require.html#numpyro_forecast.util.require" class="doc-function doc-label doc-label-function">util.require()</a></dt>
 <dd>
 <p>Import an optional dependency, or raise a targeted <code>ImportError</code>.</p>
+</dd>
+</dl>
+</section>
+<section id="arviz-export" class="level2 doc-group">
+<h2 class="doc-group">ArviZ export</h2>
+<div class="doc-description">
+<p>Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.</p>
+</div>
+<dl>
+<dt><a href="../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="doc-function doc-label doc-label-function">convert.to_datatree()</a></dt>
+<dd>
+<p>Convert a fit into an ArviZ-schema <code>xarray.DataTree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.add_forecast.html#numpyro_forecast.convert.add_forecast" class="doc-function doc-label doc-label-function">convert.add_forecast()</a></dt>
+<dd>
+<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.to_inferencedata.html#numpyro_forecast.convert.to_inferencedata" class="doc-function doc-label doc-label-function">convert.to_inferencedata()</a></dt>
+<dd>
+<p>Legacy shim converting via <code>to_datatree()</code> to an <code>InferenceData</code>.</p>
 </dd>
 </dl>
 </section>

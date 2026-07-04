@@ -40,6 +40,7 @@ Pure functional primitives for the train/forecast split.
 - `functional.Horizon`
 - `functional.time_series`
 - `functional.predict`
+- `functional.predict_glm`
 - `functional.resolve_optimizer`
 - `functional.resolve_guide`
 - `functional.fit_svi`
@@ -81,6 +82,14 @@ Array helpers and feature builders.
 - `util.prefix_condition`
 - `util.register_elementwise`
 - `util.require`
+
+### ArviZ export
+
+Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+- `convert.to_datatree`
+- `convert.add_forecast`
+- `convert.to_inferencedata`
 
 ### Extensions (contrib)
 
