@@ -118,6 +118,7 @@ reference:
       - util.shift_loc
       - util.slice_time
       - util.prefix_condition
+      - util.require
 
   - title: Datasets
     desc: Example datasets used in the tutorials.

@@ -1,7 +1,10 @@
 """Shared fixtures for numpyro_forecast tests."""
 
-from collections.abc import Callable
+import types
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -15,6 +18,90 @@ from numpyro_forecast.forecaster import (
     _BaseForecaster,
 )
 from numpyro_forecast.typing import ForecastModel
+
+# ---------------------------------------------------------------------------
+# Compile-count harness (roadmap §4.5). A single process-wide JAX monitoring
+# listener counts backend compilations; the ``count_compilations`` fixture
+# exposes a context manager that reports the delta over a tightly scoped block.
+# Pre-create every array OUTSIDE the block (array constructors compile too) and
+# call ``block_until_ready`` INSIDE it so the compile is attributed correctly.
+# ---------------------------------------------------------------------------
+
+_BACKEND_COMPILE_EVENT = "/jax/core/compile/backend_compile_duration"
+
+
+class _CompileCounter:
+    """Process-wide backend-compilation tally."""
+
+    def __init__(self) -> None:
+        self.total = 0
+
+
+_COMPILE_COUNTER = _CompileCounter()
+_HARNESS_AVAILABLE = False
+
+
+def _install_compile_listener() -> None:
+    """Register the JAX monitoring listener that feeds :data:`_COMPILE_COUNTER`."""
+    global _HARNESS_AVAILABLE
+
+    def _listener(event: str, duration_secs: float, **_: object) -> None:
+        if event == _BACKEND_COMPILE_EVENT:
+            _COMPILE_COUNTER.total += 1
+
+    try:
+        jax.monitoring.register_event_duration_secs_listener(_listener)
+    except Exception:  # harness unavailability is non-fatal
+        _HARNESS_AVAILABLE = False
+    else:
+        _HARNESS_AVAILABLE = True
+
+
+_install_compile_listener()
+
+
+@pytest.fixture
+def count_compilations() -> Callable[[], object]:
+    """Return a factory of context managers that count backend compilations.
+
+    Usage::
+
+        with count_compilations() as tally:
+            jax.block_until_ready(jitted(x))
+        assert tally.count == 1
+
+    When the monitoring backend is unavailable the block imperatively xfails
+    (non-strict), never a silent skip (roadmap §4.5).
+    """
+
+    @contextmanager
+    def _tracker() -> Iterator[types.SimpleNamespace]:
+        if not _HARNESS_AVAILABLE:  # pragma: no cover - backend-dependent
+            pytest.xfail("compile-count harness unavailable on this JAX backend")
+        obj = types.SimpleNamespace(count=0)
+        start = _COMPILE_COUNTER.total
+        try:
+            yield obj
+        finally:
+            obj.count = _COMPILE_COUNTER.total - start
+
+    return _tracker
+
+
+@pytest.fixture
+def sample_hierarchical() -> Array:
+    """Short synthetic hierarchical series shaped ``(group, time, 1)``.
+
+    Three groups sharing a seasonal shape with per-group level offsets; the
+    layout matches the package contract (batch left, time at ``-2``, obs at
+    ``-1``).
+    """
+    time = jnp.linspace(0, 4 * jnp.pi, 40)
+    base = jnp.sin(time)
+    offsets = jnp.array([-1.0, 0.0, 1.0])[:, None]
+    noise = 0.1 * random.normal(random.PRNGKey(7), (3, 40))
+    series = offsets + base[None, :] + noise
+    return series[..., None]
 
 
 class RandomWalkModel(ForecastingModel):
