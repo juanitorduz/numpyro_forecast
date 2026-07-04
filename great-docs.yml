@@ -110,6 +110,9 @@ reference:
       - evaluate.eval_rmse
       - evaluate.eval_coverage
       - metrics.crps_empirical
+      - metrics.eval_pinball
+      - metrics.eval_interval_score
+      - metrics.make_mase
 
   - title: Utilities
     desc: Array helpers and feature builders.

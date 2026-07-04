@@ -549,6 +549,7 @@ def _run_window(
     num_samples: int,
     batch_size: int | None,
     metrics: Mapping[str, Metric],
+    per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None,
     transform: Callable[[Array, Array], tuple[Array, Array]] | None,
     eval_train: bool,
     keep_predictions: bool,
@@ -557,6 +558,8 @@ def _run_window(
     train_data, train_covariates, test_covariates, truth = _slice_window(
         data, covariates, t0, t1, t2
     )
+    if per_window_metrics is not None:
+        metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
     key_fit, key_forecast = random.split(rng_key)
 
     forecaster, train_walltime = _timed(
@@ -611,6 +614,7 @@ def backtest(
     *,
     forecaster_fn: ForecasterFactory = Forecaster,
     metrics: Mapping[str, Metric] | None = None,
+    per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None,
     transform: Callable[[Array, Array], tuple[Array, Array]] | None = None,
     window_type: WindowType | None = None,
     train_window: int | None = None,
@@ -643,6 +647,11 @@ def backtest(
         Each function takes ``(pred, truth)`` and returns a float; bind any
         metric-specific parameters with :func:`functools.partial`, e.g.
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
+    per_window_metrics
+        Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
+        extra metrics merged over ``metrics`` for each window. Use it for
+        window-dependent metrics such as a MASE scaled by that window's training
+        data (:func:`numpyro_forecast.metrics.make_mase`).
     transform
         Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
     window_type
@@ -719,6 +728,7 @@ def backtest(
                 num_samples=num_samples,
                 batch_size=batch_size,
                 metrics=metrics,
+                per_window_metrics=per_window_metrics,
                 transform=transform,
                 eval_train=eval_train,
                 keep_predictions=keep_predictions,

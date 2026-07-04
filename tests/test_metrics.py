@@ -6,7 +6,12 @@ import pytest
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
-from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.metrics import (
+    crps_empirical,
+    eval_interval_score,
+    eval_pinball,
+    make_mase,
+)
 
 
 def _brute_force_crps(pred: Array, truth: Array) -> Array:
@@ -72,3 +77,78 @@ def test_crps_shape_mismatch_raises() -> None:
 def test_crps_needs_two_samples() -> None:
     with pytest.raises(ValueError, match="at least 2 samples"):
         crps_empirical(jnp.zeros((1, 3)), jnp.zeros((3,)))
+
+
+# --- P7: pinball, interval score, MASE ---------------------------------------
+
+
+def test_pinball_median_is_half_mae() -> None:
+    pred = jnp.linspace(0.0, 1.0, 101)[:, None] * jnp.ones((101, 4))
+    truth = jnp.full((4,), 0.7)
+    # At tau=0.5 the pinball loss is half the absolute error of the median.
+    median = jnp.median(pred, axis=0)
+    expected = 0.5 * jnp.abs(median - truth).mean()
+    assert jnp.allclose(eval_pinball(pred, truth, quantile=0.5), float(expected), atol=1e-5)
+
+
+def test_pinball_minimized_at_true_quantile() -> None:
+    # With truth drawn from the same law as the samples, the pinball loss is
+    # minimized when we score the quantile that matches the target quantile.
+    pred = random.normal(random.PRNGKey(0), (2_000, 400))
+    truth = jnp.quantile(pred, 0.8, axis=0)
+    at_truth = eval_pinball(pred, truth, quantile=0.8)
+    below = eval_pinball(pred, truth, quantile=0.5)
+    above = eval_pinball(pred, truth, quantile=0.95)
+    assert at_truth < below
+    assert at_truth < above
+
+
+@pytest.mark.parametrize("quantile", [0.0, 1.0, -0.1, 1.5])
+def test_pinball_rejects_out_of_range_quantile(quantile: float) -> None:
+    with pytest.raises(ValueError, match=r"quantile must be in"):
+        eval_pinball(jnp.zeros((5, 2)), jnp.zeros((2,)), quantile=quantile)
+
+
+def test_interval_score_rewards_tight_covering_interval() -> None:
+    truth = jnp.zeros((4,))
+    tight = 0.1 * random.normal(random.PRNGKey(0), (500, 4))
+    wide = 5.0 * random.normal(random.PRNGKey(1), (500, 4))
+    # Both cover 0, but the tight interval scores lower (better).
+    assert eval_interval_score(tight, truth) < eval_interval_score(wide, truth)
+
+
+def test_interval_score_penalizes_misses() -> None:
+    samples = random.normal(random.PRNGKey(0), (500, 3))
+    inside = eval_interval_score(samples, jnp.zeros((3,)))
+    outside = eval_interval_score(samples, jnp.full((3,), 10.0))
+    assert outside > inside
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.2])
+def test_interval_score_rejects_out_of_range_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match=r"alpha must be in"):
+        eval_interval_score(jnp.zeros((5, 2)), jnp.zeros((2,)), alpha=alpha)
+
+
+def test_make_mase_scales_by_seasonal_naive() -> None:
+    train = jnp.arange(10.0)[:, None]  # constant step-1 differences of 1.0
+    mase = make_mase(train, seasonality=1)
+    # Seasonal-naive scale is 1.0, so MASE equals the forecast MAE.
+    pred = jnp.full((20, 3, 1), 5.0)
+    truth = jnp.full((3, 1), 7.0)
+    assert jnp.allclose(mase(pred, truth), 2.0, atol=1e-5)
+
+
+def test_make_mase_rejects_bad_seasonality() -> None:
+    with pytest.raises(ValueError, match="seasonality must be"):
+        make_mase(jnp.arange(10.0)[:, None], seasonality=0)
+
+
+def test_make_mase_rejects_short_train() -> None:
+    with pytest.raises(ValueError, match="longer than seasonality"):
+        make_mase(jnp.arange(3.0)[:, None], seasonality=5)
+
+
+def test_make_mase_rejects_constant_series() -> None:
+    with pytest.raises(ValueError, match="scale is zero"):
+        make_mase(jnp.ones((10, 1)), seasonality=1)

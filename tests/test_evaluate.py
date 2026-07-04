@@ -1,7 +1,7 @@
 """Tests for backtesting and evaluation metrics."""
 
 from functools import partial
-from typing import cast
+from typing import Any, cast
 
 import jax.numpy as jnp
 import pytest
@@ -408,6 +408,35 @@ def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Arr
         assert r.prediction is None
 
 
+def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
+    from numpyro_forecast.metrics import make_mase
+
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+
+    def per_window(t0: int, t1: int, t2: int) -> dict[str, object]:
+        # A MASE scaled by this window's own training slice.
+        return {"mase": make_mase(data[..., t0:t1, :], seasonality=1)}
+
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        metrics={"crps": eval_crps},
+        per_window_metrics=cast("Any", per_window),
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+    )
+    assert results
+    for r in results:
+        assert set(r.metrics) == {"crps", "mase"}
+        assert isinstance(r.metrics["mase"], float)
+
+
 def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
@@ -766,6 +795,7 @@ def test_run_window_builds_result_and_applies_transform() -> None:
         num_samples=16,
         batch_size=None,
         metrics=DEFAULT_METRICS,
+        per_window_metrics=None,
         transform=transform,
         eval_train=False,
         keep_predictions=False,

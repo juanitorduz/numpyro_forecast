@@ -1,13 +1,16 @@
 """Probabilistic forecast metrics.
 
-This module ports :func:`pyro.ops.stats.crps_empirical` to JAX.
+This module ports :func:`pyro.ops.stats.crps_empirical` to JAX and adds the
+pinball (quantile) loss, the Winkler interval score, and a MASE metric factory.
 """
+
+from functools import partial
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, Metric
 
 
 @jax.jit
@@ -71,3 +74,144 @@ def crps_empirical(
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
     return _crps_empirical(pred, truth)
+
+
+@partial(jax.jit, static_argnums=(2,))
+def _pinball(pred: Array, truth: Array, quantile: float) -> Array:
+    """Jitted mean pinball loss at ``quantile`` (static so the branch specializes)."""
+    estimate = jnp.quantile(pred, quantile, axis=0)
+    diff = truth - estimate
+    return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
+
+
+def eval_pinball(pred: Array, truth: Array, *, quantile: float = 0.5) -> float:
+    r"""Mean pinball (quantile) loss of the forecast ``quantile``.
+
+    The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
+    :math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
+    data elements. At ``quantile=0.5`` it is half the mean absolute error.
+
+    Parameters
+    ----------
+    pred
+        Forecast samples with the sample axis first.
+    truth
+        Ground-truth values (matching ``pred`` without the sample axis).
+    quantile
+        Target quantile in ``(0, 1)``.
+
+    Returns
+    -------
+    float
+        The mean pinball loss.
+
+    Raises
+    ------
+    ValueError
+        If ``quantile`` is not strictly inside ``(0, 1)``.
+    """
+    if not 0.0 < quantile < 1.0:
+        msg = f"quantile must be in (0, 1), got {quantile}"
+        raise ValueError(msg)
+    return float(_pinball(pred, truth, quantile))
+
+
+@partial(jax.jit, static_argnums=(2,))
+def _interval_score(pred: Array, truth: Array, alpha: float) -> Array:
+    """Jitted mean Winkler interval score for the central ``alpha`` interval."""
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    penalty = 2.0 / (1.0 - alpha)
+    below = penalty * (lo - truth) * (truth < lo)
+    above = penalty * (truth - hi) * (truth > hi)
+    return (hi - lo + below + above).mean()
+
+
+def eval_interval_score(pred: Array, truth: Array, *, alpha: float = 0.9) -> float:
+    r"""Mean Winkler interval score for the central ``alpha`` prediction interval.
+
+    For the central ``alpha`` interval :math:`[l, u]` (the :math:`(1-\alpha)/2`
+    and :math:`1-(1-\alpha)/2` quantiles), the interval score is
+    :math:`(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y<l} + (y -
+    u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
+    intervals and penalizes ground truth falling outside them; lower is better.
+
+    Parameters
+    ----------
+    pred
+        Forecast samples with the sample axis first.
+    truth
+        Ground-truth values (matching ``pred`` without the sample axis).
+    alpha
+        Nominal interval level in ``(0, 1)``.
+
+    Returns
+    -------
+    float
+        The mean interval score.
+
+    Raises
+    ------
+    ValueError
+        If ``alpha`` is not strictly inside ``(0, 1)``.
+    """
+    if not 0.0 < alpha < 1.0:
+        msg = f"alpha must be in (0, 1), got {alpha}"
+        raise ValueError(msg)
+    return float(_interval_score(pred, truth, alpha))
+
+
+def make_mase(train_data: Array, *, seasonality: int = 1) -> Metric:
+    """Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
+
+    MASE divides the forecast MAE (using the sample median as point estimate) by
+    the in-sample MAE of the seasonal-naive forecast on ``train_data``,
+    ``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
+    time; the returned metric has the standard ``(pred, truth) -> float``
+    signature.
+
+    Parameters
+    ----------
+    train_data
+        Training data with time at axis ``-2``; its seasonal differences set the
+        scale.
+    seasonality
+        Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
+
+    Returns
+    -------
+    Metric
+        A ``(pred, truth) -> float`` callable computing MASE.
+
+    Raises
+    ------
+    ValueError
+        If ``seasonality < 1``, ``train_data`` is not longer than
+        ``seasonality`` along the time axis, or the seasonal-naive scale is zero
+        (a constant series, for which MASE is undefined).
+    """
+    if seasonality < 1:
+        msg = f"seasonality must be >= 1, got {seasonality}"
+        raise ValueError(msg)
+    if train_data.shape[-2] <= seasonality:
+        msg = (
+            f"train_data must be longer than seasonality along the time axis "
+            f"(got length {train_data.shape[-2]}, seasonality {seasonality})"
+        )
+        raise ValueError(msg)
+    scale = float(
+        jnp.abs(train_data[..., seasonality:, :] - train_data[..., :-seasonality, :]).mean()
+    )
+    if scale == 0.0:
+        msg = (
+            "seasonal-naive scale is zero (constant training series); MASE is "
+            "undefined. Use a different metric or seasonality."
+        )
+        raise ValueError(msg)
+
+    def mase(pred: Array, truth: Array) -> float:
+        mae = jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+        return float(mae / scale)
+
+    return mase
