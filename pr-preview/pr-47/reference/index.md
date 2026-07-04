@@ -88,6 +88,9 @@ Per-window result of a `backtest()` run.
 [evaluate.evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)  
 Evaluate forecast samples against ground truth for several metrics at once.
 
+[evaluate.results_to_dataframe()](evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe)  
+Flatten backtest results into a tidy one-row-per-window `DataFrame`.
+
 [evaluate.eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps)  
 Empirical CRPS averaged over all data elements.
 
@@ -102,6 +105,15 @@ Empirical coverage of the central `alpha` prediction interval.
 
 [metrics.crps_empirical()](metrics.crps_empirical.md#numpyro_forecast.metrics.crps_empirical)  
 Compute the empirical Continuous Ranked Probability Score (CRPS).
+
+[metrics.eval_pinball()](metrics.eval_pinball.md#numpyro_forecast.metrics.eval_pinball)  
+Mean pinball (quantile) loss of the forecast `quantile`.
+
+[metrics.eval_interval_score()](metrics.eval_interval_score.md#numpyro_forecast.metrics.eval_interval_score)  
+Mean Winkler interval score for the central `alpha` prediction interval.
+
+[metrics.make_mase()](metrics.make_mase.md#numpyro_forecast.metrics.make_mase)  
+Build a Mean Absolute Scaled Error metric scaled by `train_data`.
 
 
 ## Utilities

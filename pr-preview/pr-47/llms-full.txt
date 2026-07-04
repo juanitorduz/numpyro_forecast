@@ -540,7 +540,7 @@ num_chains
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -561,6 +561,11 @@ metrics
     Each function takes ``(pred, truth)`` and returns a float; bind any
     metric-specific parameters with :func:`functools.partial`, e.g.
     ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
+per_window_metrics
+    Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
+    extra metrics merged over ``metrics`` for each window. Use it for
+    window-dependent metrics such as a MASE scaled by that window's training
+    data (:func:`numpyro_forecast.metrics.make_mase`).
 transform
     Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
 window_type
@@ -663,6 +668,38 @@ Returns
 -------
 dict[str, float]
     Each metric name mapped to its value.
+
+results_to_dataframe(results: 'Sequence[BacktestResult]') -> 'pd.DataFrame'
+
+Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
+
+Columns are prefix-namespaced so metric, in-sample-metric, and parameter
+names never collide: window metrics become ``metric_<name>``, in-sample
+metrics ``train_metric_<name>``, and scalar parameters ``param_<name>``,
+alongside the window indices ``t0``/``t1``/``t2``, ``num_samples``, and
+``train_walltime``/``test_walltime``. Forecast samples are excluded.
+Windows may carry different metric sets (e.g. via
+``backtest(per_window_metrics=...)``); the union of columns is used and
+missing entries are left as ``NaN``.
+
+Parameters
+----------
+results
+    A sequence of :class:`BacktestResult` from :func:`backtest`.
+
+Returns
+-------
+pandas.DataFrame
+    One row per window with the namespaced columns described above.
+
+Raises
+------
+NotImplementedError
+    If a vectorized backtest result is passed; use the loop
+    :func:`backtest` output for now (vectorized support lands with
+    ``backtest_vectorized``).
+ImportError
+    If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 
 eval_crps(pred: jax.Array, truth: jax.Array) -> float
 
@@ -768,6 +805,92 @@ References
 Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
 Prediction, and Estimation". *Journal of the American Statistical
 Association*.
+
+eval_pinball(pred: jax.Array, truth: jax.Array, *, quantile: float = 0.5) -> float
+
+Mean pinball (quantile) loss of the forecast ``quantile``.
+
+The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
+:math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
+data elements. At ``quantile=0.5`` it is half the mean absolute error.
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+quantile
+    Target quantile in ``(0, 1)``.
+
+Returns
+-------
+float
+    The mean pinball loss.
+
+Raises
+------
+ValueError
+    If ``quantile`` is not strictly inside ``(0, 1)``.
+
+eval_interval_score(pred: jax.Array, truth: jax.Array, *, alpha: float = 0.9) -> float
+
+Mean Winkler interval score for the central ``alpha`` prediction interval.
+
+For the central ``alpha`` interval :math:`[l, u]` (the :math:`(1-\alpha)/2`
+and :math:`1-(1-\alpha)/2` quantiles), the interval score is
+:math:`(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y<l} + (y -
+u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
+intervals and penalizes ground truth falling outside them; lower is better.
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+alpha
+    Nominal interval level in ``(0, 1)``.
+
+Returns
+-------
+float
+    The mean interval score.
+
+Raises
+------
+ValueError
+    If ``alpha`` is not strictly inside ``(0, 1)``.
+
+make_mase(train_data: jax.Array, *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], float]
+
+Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
+
+MASE divides the forecast MAE (using the sample median as point estimate) by
+the in-sample MAE of the seasonal-naive forecast on ``train_data``,
+``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
+time; the returned metric has the standard ``(pred, truth) -> float``
+signature.
+
+Parameters
+----------
+train_data
+    Training data with time at axis ``-2``; its seasonal differences set the
+    scale.
+seasonality
+    Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
+
+Returns
+-------
+Metric
+    A ``(pred, truth) -> float`` callable computing MASE.
+
+Raises
+------
+ValueError
+    If ``seasonality < 1``, ``train_data`` is not longer than
+    ``seasonality`` along the time axis, or the seasonal-naive scale is zero
+    (a constant series, for which MASE is undefined).
 
 
 ## Utilities

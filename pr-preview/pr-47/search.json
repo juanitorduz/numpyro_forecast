@@ -32,7 +32,7 @@
     "href": "skill.html#backtesting-evaluation",
     "title": "numpyro_forecast",
     "section": "Backtesting & evaluation",
-    "text": "Backtesting & evaluation\nRolling-window backtesting and forecast metrics.\n\nevaluate.backtest\nevaluate.BacktestResult\nevaluate.evaluate_forecast\nevaluate.eval_crps\nevaluate.eval_mae\nevaluate.eval_rmse\nevaluate.eval_coverage\nmetrics.crps_empirical"
+    "text": "Backtesting & evaluation\nRolling-window backtesting and forecast metrics.\n\nevaluate.backtest\nevaluate.BacktestResult\nevaluate.evaluate_forecast\nevaluate.results_to_dataframe\nevaluate.eval_crps\nevaluate.eval_mae\nevaluate.eval_rmse\nevaluate.eval_coverage\nmetrics.crps_empirical\nmetrics.eval_pinball\nmetrics.eval_interval_score\nmetrics.make_mase"
   },
   {
     "objectID": "skill.html#utilities",
@@ -61,51 +61,62 @@
     ]
   },
   {
-    "objectID": "reference/functional.fit_mcmc.html",
-    "href": "reference/functional.fit_mcmc.html",
-    "title": "functional.fit_mcmc()",
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "Reference",
     "section": "",
-    "text": "Fit a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.fit_mcmc(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    kernel=None,\n    kernel_kwargs=None,\n    num_warmup=1000,\n    num_samples=1000,\n    num_chains=1,\n    chain_method=\"sequential\",\n    progress_bar=False\n)\n\n\nPRNG: consumed entirely by ~numpyro.infer.MCMC.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class; rejected with an instance).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains (stored on the returned MCMCFit).\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.\n\n\n\n\n\nReturns\n\n\n MCMCFit\n\nThe posterior samples (flattened) and num_chains.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations, or a run-config constraint is violated (see _validate_kernel_run_config()).",
+    "text": "Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n\nforecaster.Forecaster\n\nFit a forecasting model with stochastic variational inference.\n\nforecaster.HMCForecaster\n\nFit a forecasting model with MCMC (NUTS by default).\n\n\n\n\nModels\n\nBuilding forecasting models (object-oriented and functional).\n\n\nforecaster.ForecastingModel\n\nAbstract base class for forecasting models.\n\nfunctional.forecasting_model()\n\nBuild a NumPyro model from a functional model body.\n\n\n\n\nFunctional core\n\nPure functional primitives for the train/forecast split.\n\n\nfunctional.Horizon\n\nThe train/forecast split for a single model call.\n\nfunctional.time_series()\n\nSample a time-varying latent over the full horizon.\n\nfunctional.predict()\n\nRegister the observation/forecast sites for the model.\n\nfunctional.resolve_optimizer()\n\nNormalize an optimizer specification into a NumPyro optimizer.\n\nfunctional.resolve_guide()\n\nNormalize a guide specification against model.\n\nfunctional.fit_svi()\n\nFit a forecasting model with stochastic variational inference.\n\nfunctional.draw_posterior()\n\nDraw num_samples posterior samples of the latent sites from a fit.\n\nfunctional.resolve_kernel()\n\nNormalize a kernel specification.\n\nfunctional.fit_mcmc()\n\nFit a forecasting model with MCMC.\n\nfunctional.forecast()\n\nSample forecasts for the steps in [t, duration) from a posterior.\n\nfunctional.predict_in_sample()\n\nSample the in-sample posterior predictive of the obs site.\n\nfunctional.SVIFit\n\nThe result of fitting a forecasting model with SVI.\n\nfunctional.MCMCFit\n\nThe result of fitting a forecasting model with MCMC.\n\n\n\n\nBacktesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n\nevaluate.backtest()\n\nBacktest a forecasting model on a moving window of (train, test) data.\n\nevaluate.BacktestResult\n\nPer-window result of a :func:backtest run.\n\nevaluate.evaluate_forecast()\n\nEvaluate forecast samples against ground truth for several metrics at once.\n\nevaluate.results_to_dataframe()\n\nFlatten backtest results into a tidy one-row-per-window DataFrame.\n\nevaluate.eval_crps()\n\nEmpirical CRPS averaged over all data elements.\n\nevaluate.eval_mae()\n\nMean absolute error using the forecast sample median as point estimate.\n\nevaluate.eval_rmse()\n\nRoot mean squared error using the forecast sample mean as point estimate.\n\nevaluate.eval_coverage()\n\nEmpirical coverage of the central alpha prediction interval.\n\nmetrics.crps_empirical()\n\nCompute the empirical Continuous Ranked Probability Score (CRPS).\n\nmetrics.eval_pinball()\n\nMean pinball (quantile) loss of the forecast quantile.\n\nmetrics.eval_interval_score()\n\nMean Winkler interval score for the central alpha prediction interval.\n\nmetrics.make_mase()\n\nBuild a Mean Absolute Scaled Error metric scaled by train_data.\n\n\n\n\nUtilities\n\nArray helpers and feature builders.\n\n\nutil.fourier_features()\n\nBuild a Fourier seasonality design matrix.\n\nutil.periodic_repeat()\n\nTile a seasonal pattern to cover duration time steps.\n\nutil.zero_data_like()\n\nReturn zeros shaped like data but extended to the covariate duration.\n\nutil.concat_future()\n\nConcatenate in-sample and forecast-horizon arrays along the time axis.\n\nutil.shift_loc()\n\nRe-center a zero-centered noise distribution at loc.\n\nutil.slice_time()\n\nSlice an elementwise distribution along the time axis -2.\n\nutil.prefix_condition()\n\nCondition a (t+f)-length distribution on a t-length data prefix.\n\nutil.register_elementwise()\n\nDeclare a distribution family elementwise (usable as a decorator).\n\nutil.require()\n\nImport an optional dependency, or raise a targeted ImportError.\n\n\n\n\nDatasets\n\nExample datasets used in the tutorials.\n\n\ndatasets.load_bart_weekly()\n\nLoad total weekly BART ridership (log scale) for the univariate example.\n\ndatasets.load_bart_hierarchical()\n\nLoad the windowed hierarchical BART panel for the hierarchical example.\n\ndatasets.load_victoria_electricity()\n\nLoad hourly Victoria (Australia) electricity demand and temperature.\n\ndatasets.bart_available()\n\nReturn whether the BART dataset can be loaded (download succeeds).",
+    "crumbs": [
+      "Reference",
+      "API Index"
+    ]
+  },
+  {
+    "objectID": "reference/functional.forecast.html",
+    "href": "reference/functional.forecast.html",
+    "title": "functional.forecast()",
+    "section": "",
+    "text": "Sample forecasts for the steps in [t, duration) from a posterior.\n\n\nUsage\nSource\n\n\nfunctional.forecast(\n    rng_key,\n    model,\n    posterior,\n    data,\n    covariates,\n    *,\n    batch_size=None,\n    parallel=True\n)\n\n\nRuns Predictive with full-horizon covariates and the in-sample data: the in-sample latent sites are drawn from posterior while the _future suffix is drawn from the prior, and the \"forecast\" site is returned. The number of forecast samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ndata: Array\n\nObserved data with time at axis -2 and length t.\n\ncovariates: Array\n\nCovariates with time at axis -2 and length duration &gt; t.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). With parallel=True the samples in each batch_size chunk are vectorized while the chunks are looped over, so batch_size remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.\n\n\n\n\n\nReturns\n\n\n Float[Array, \" sample *batch future obs\"]\n\nForecast samples over the future = duration - t horizon.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf covariates does not extend beyond data along the time axis.\n\n\n\n\n\nNotes\nChunking is a memory knob, not a reproducibility knob: reproducibility is per (rng_key, batch_size). Each chunk is padded to a whole multiple of batch_size so the underlying _predict compiles exactly once for a fixed shape (the pad draws are discarded), but changing batch_size changes the PRNG stream layout and therefore the exact draws.",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.fit_mcmc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.forecast()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/util.shift_loc.html",
-    "href": "reference/util.shift_loc.html",
-    "title": "util.shift_loc()",
+    "objectID": "reference/functional.predict.html",
+    "href": "reference/functional.predict.html",
+    "title": "functional.predict()",
     "section": "",
-    "text": "Re-center a zero-centered noise distribution at loc.\n\n\nUsage\nSource\n\n\nutil.shift_loc(noise_dist, loc)\n\n\nThis converts Pyro’s obs = data - prediction idiom into an additive shift of the observation distribution’s location.\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nA zero-centered location-family distribution.\n\nloc: Array\n\nThe deterministic mean to add to the distribution’s location.\n\n\n\n\n\nReturns\n\n\n dist.Distribution\n\nA distribution centered at loc.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf noise_dist is of an unsupported type.",
+    "text": "Register the observation/forecast sites for the model.\n\n\nUsage\nSource\n\n\nfunctional.predict(h, noise_dist, prediction)\n\n\nnoise_dist is a zero-centered observation noise distribution and prediction the deterministic mean over the full horizon. While training the residual is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the \"forecast\" deterministic site.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nnoise_dist: dist.Distribution\n\nZero-centered observation noise (e.g. Normal(0, sigma)).\n\nprediction: Array\n\nDeterministic mean with time at axis -2, shape (*batch, duration, obs).\n\n\n\n\n\nRaises\n\n\n RuntimeError\n\nIf forecasting (future &gt; 0) but no observed data is available.",
     "crumbs": [
       "Reference",
-      "Utilities",
-      "[util.shift_loc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core",
+      "[functional.predict()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/util.require.html",
-    "href": "reference/util.require.html",
-    "title": "util.require()",
+    "objectID": "reference/metrics.crps_empirical.html",
+    "href": "reference/metrics.crps_empirical.html",
+    "title": "metrics.crps_empirical()",
     "section": "",
-    "text": "Import an optional dependency, or raise a targeted ImportError.\n\n\nUsage\nSource\n\n\nutil.require(module, *, extra)\n\n\nOptional features (dataframes, blackjax, optax) live behind pyproject extras and are never imported at package import time. This helper imports the backing module lazily at first use and, when it is missing, raises an ImportError naming the exact pip install invocation that provides it.\n\n\nParameters\n\n\nmodule: str\n\nThe importable module name (e.g. \"pandas\").\n\nextra: str\n\nThe numpyro_forecast extra that installs it (e.g. \"dataframes\").\n\n\n\n\n\nReturns\n\n\n ModuleType\n\nThe imported module.\n\n\n\n\n\nRaises\n\n\n ImportError\n\nIf module is not importable, with an actionable install hint.",
-    "crumbs": [
-      "Reference",
-      "Utilities",
-      "[util.require()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/evaluate.backtest.html",
-    "href": "reference/evaluate.backtest.html",
-    "title": "evaluate.backtest()",
-    "section": "",
-    "text": "Backtest a forecasting model on a moving window of (train, test) data.\n\n\nUsage\nSource\n\n\nevaluate.backtest(\n    rng_key,\n    data,\n    covariates,\n    model_fn,\n    *,\n    forecaster_fn=Forecaster,\n    metrics=None,\n    transform=None,\n    window_type=None,\n    train_window=None,\n    min_train_window=1,\n    test_window=None,\n    min_test_window=1,\n    stride=1,\n    num_samples=100,\n    batch_size=None,\n    forecaster_options=None,\n    eval_train=False,\n    keep_predictions=False\n)\n\n\nParameters\n\n\nrng_key: Array\n\nBase PRNG key (used for every window, matching Pyro).\n\ndata: Array\n\nDataset with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 (same duration as data).\n\nmodel_fn: ModelFactory\n\nFactory returning a fresh ForecastingModel per window.\n\nforecaster_fn: ForecasterFactory = Forecaster\n\nFactory returning a fitted forecaster (defaults to Forecaster).\n\nmetrics: Mapping[str, Metric] | None = None\n\nMapping of metric name to function; defaults to DEFAULT_METRICS. Each function takes (pred, truth) and returns a float; bind any metric-specific parameters with functools.partial(), e.g. {**DEFAULT_METRICS, \"coverage\": partial(eval_coverage, alpha=0.8)}.\n\ntransform: Callable[[Array, Array], tuple[Array, Array]] | None = None\n\nOptional (pred, truth) -&gt; (pred, truth) applied before metrics.\n\nwindow_type: WindowType | None = None\n\nWindowing strategy. If None (default) it is inferred from train_window: \"expanding\" when train_window is None and \"rolling\" when it is set, matching the historical behavior. Pass \"expanding\" to always train on all history from t0 = 0, or \"rolling\" to hold the training length fixed at train_window and slide it forward. \"expanding\" and train_window are mutually exclusive, and \"rolling\" requires train_window (both validated).\n\ntrain_window: int | None = None\n\nTraining window size; if None the window expands from the start. Required for window_type=\"rolling\".\n\nmin_train_window: int = 1\n\nMinimum training window size for the expanding strategy (used when train_window is None).\n\ntest_window: int | None = None\n\nTest window size; if None forecasts to the end of the data.\n\nmin_test_window: int = 1\n\nMinimum test window size when test_window is None.\n\nstride: int = 1\n\nStep between successive train/test splits.\n\nnum_samples: int = 100\n\nNumber of forecast samples per window.\n\nbatch_size: int | None = None\n\nOptional forecast-sampling chunk size.\n\nforecaster_options: Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None = None\n\nOptions dict passed to forecaster_fn, or a callable (t0, t1, t2) -&gt; dict returning per-window options.\n\neval_train: bool = False\n\nIf True, also score the in-sample posterior predictive over each training window with the same metrics and store them in BacktestResult.train_metrics. Requires a forecaster exposing predict_in_sample (the built-in Forecaster and HMCForecaster do).\n\nkeep_predictions: bool = False\n\nIf True, store each window’s out-of-sample forecast samples (after transform) on BacktestResult.prediction. Defaults to False to avoid retaining large Monte Carlo arrays.\n\n\n\n\n\nReturns\n\n\n list[BacktestResult]\n\nOne result per backtest window.",
+    "text": "Compute the empirical Continuous Ranked Probability Score (CRPS).\n\n\nUsage\nSource\n\n\nmetrics.crps_empirical(pred, truth)\n\n\nThe CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as\n\\[\n\\mathrm{CRPS}(F, y) = \\mathbb{E}|X - y| - \\tfrac{1}{2}\\,\\mathbb{E}|X - X'|,\n\\]\nwhere \\(X, X'\\) are independent draws from the forecast distribution \\(F\\). The expectations are estimated from the forecast sample axis using the sorted-sample \\(O(n \\log n)\\) identity.\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first, shape (sample, *batch).\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values with shape (*batch) (broadcastable to pred).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"*batch\"]\n\nElementwise CRPS, one value per batch location.\n\n\n\n\n\nReferences\nTilmann Gneiting, Adrian E. Raftery (2007). “Strictly Proper Scoring Rules, Prediction, and Estimation”. Journal of the American Statistical Association.",
     "crumbs": [
       "Reference",
       "Backtesting & evaluation",
-      "[evaluate.backtest()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[metrics.crps_empirical()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/evaluate.results_to_dataframe.html",
+    "href": "reference/evaluate.results_to_dataframe.html",
+    "title": "evaluate.results_to_dataframe()",
+    "section": "",
+    "text": "Flatten backtest results into a tidy one-row-per-window DataFrame.\n\n\nUsage\nSource\n\n\nevaluate.results_to_dataframe(results)\n\n\nColumns are prefix-namespaced so metric, in-sample-metric, and parameter names never collide: window metrics become metric_&lt;name&gt;, in-sample metrics train_metric_&lt;name&gt;, and scalar parameters param_&lt;name&gt;, alongside the window indices t0/t1/t2, num_samples, and train_walltime/test_walltime. Forecast samples are excluded. Windows may carry different metric sets (e.g. via backtest(per_window_metrics=...)); the union of columns is used and missing entries are left as NaN.\n\n\nParameters\n\n\nresults: Sequence[BacktestResult]\n\nA sequence of BacktestResult from backtest().\n\n\n\n\n\nReturns\n\n\n pandas.DataFrame\n\nOne row per window with the namespaced columns described above.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf a vectorized backtest result is passed; use the loop backtest() output for now (vectorized support lands with backtest_vectorized).\n\n ImportError\n\nIf pandas is not installed (pip install numpyro_forecast[dataframes]).",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[evaluate.results_to_dataframe()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -169,27 +180,39 @@
     ]
   },
   {
-    "objectID": "reference/forecaster.HMCForecaster.html",
-    "href": "reference/forecaster.HMCForecaster.html",
-    "title": "forecaster.HMCForecaster",
+    "objectID": "reference/util.register_elementwise.html",
+    "href": "reference/util.register_elementwise.html",
+    "title": "util.register_elementwise()",
     "section": "",
-    "text": "Fit a forecasting model with MCMC (NUTS by default).\n\n\nUsage\nSource\n\n\nforecaster.HMCForecaster()\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by ~numpyro_forecast.functional.resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains.\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.",
+    "text": "Declare a distribution family elementwise (usable as a decorator).\n\n\nUsage\nSource\n\n\nutil.register_elementwise(cls)\n\n\nAn elementwise family is independent across every batch cell with an empty event shape, so slice_time() may slice its broadcast parameters along the time axis and prefix_condition() may reduce to the horizon marginal. Membership is by exact type; register each concrete subclass you rely on.\n\n\nParameters\n\n\ncls: type[dist.Distribution]\n\nThe distribution class to register.\n\n\n\n\n\nReturns\n\n\n type[dist.Distribution]\n\ncls unchanged, so this can decorate a class definition.",
     "crumbs": [
       "Reference",
-      "Forecasters",
-      "[forecaster.HMCForecaster]{.doc-object-name .doc-class .doc-label .doc-label-class}"
+      "Utilities",
+      "[util.register_elementwise()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.predict_in_sample.html",
-    "href": "reference/functional.predict_in_sample.html",
-    "title": "functional.predict_in_sample()",
+    "objectID": "reference/functional.time_series.html",
+    "href": "reference/functional.time_series.html",
+    "title": "functional.time_series()",
     "section": "",
-    "text": "Sample the in-sample posterior predictive of the obs site.\n\n\nUsage\nSource\n\n\nfunctional.predict_in_sample(\n    rng_key, model, posterior, covariates, *, batch_size=None, parallel=True\n)\n\n\nRuns Predictive with the in-sample covariates and the supplied posterior latent draws. Unlike forecast() there is no forecast horizon: covariates span only the observed window, so the model’s obs site is sampled at every step. The number of predictive samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the observed window. Its time length must match the data the posterior was fit on, since the in-sample latent sites are sized to that window.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). See forecast() for how this interacts with batch_size.\n\n\n\n\n\nReturns\n\n\n Float[Array, \" sample *batch time obs\"]\n\nIn-sample posterior-predictive draws of the obs site.",
+    "text": "Sample a time-varying latent over the full horizon.\n\n\nUsage\nSource\n\n\nfunctional.time_series(h, name, dist_fn, *, reparam=None)\n\n\nThe in-sample portion is sampled under plate(\"time\", t) with the fixed site name; when forecasting, the horizon portion is sampled under a separate site f\"{name}_future\" and concatenated. The separate site keeps the guide shape fixed and lets Predictive draw the forecast suffix from the prior.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nname: str\n\nBase sample-site name for the in-sample latent.\n\ndist_fn: Callable[[], dist.Distribution]\n\nZero-argument callable returning the per-step prior distribution.\n\nreparam: Reparam | None = None\n\nOptional reparameterization (e.g. LocScaleReparam) applied to both the in-sample and forecast sites.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon with time at axis -2.",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.predict_in_sample()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.time_series()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/metrics.eval_pinball.html",
+    "href": "reference/metrics.eval_pinball.html",
+    "title": "metrics.eval_pinball()",
+    "section": "",
+    "text": "Mean pinball (quantile) loss of the forecast quantile.\n\n\nUsage\nSource\n\n\nmetrics.eval_pinball(pred, truth, *, quantile=0.5)\n\n\nThe pinball loss for the forecast \\(\\hat q\\) of quantile \\(\\tau\\) is \\(\\max(\\tau (y - \\hat q), (\\tau - 1)(y - \\hat q))\\), averaged over all data elements. At quantile=0.5 it is half the mean absolute error.\n\n\nParameters\n\n\npred: Array\n\nForecast samples with the sample axis first.\n\ntruth: Array\n\nGround-truth values (matching pred without the sample axis).\n\nquantile: float = 0.5\n\nTarget quantile in (0, 1).\n\n\n\n\n\nReturns\n\n\n float\n\nThe mean pinball loss.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf quantile is not strictly inside (0, 1).",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[metrics.eval_pinball()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -430,48 +453,6 @@
     "text": "Thanks for your interest in numpyro_forecast!\n\nDevelopment setup\nuv sync --all-extras\nprek install\n\n\nWorkflow\n\nLint & format: uv run ruff check . and uv run ruff format .\nType check: uv run ty check numpyro_forecast/\nTests: uv run pytest\nNotebooks: uv run pytest --nbmake docs/examples/ (executes the example notebooks)\nDocs site: make docs (build) or make docs-preview (live preview)\nAll hooks: prek run --all-files\n\n\n\nGuidelines\n\nEvery function (public and private) must have complete input and return type hints. Type checking is enforced with ty.\nEvery public function and class must have a NumPy-style docstring.\nArray shapes are annotated with jaxtyping, with a leading space in the shape string (e.g. Float[Array, \" time obs\"]).\nFollow the array convention: time at axis -2, the observation dim at -1, batch dims to the left.\nAdd tests for new functionality. Keep one logical change per pull request."
   },
   {
-    "objectID": "changelog.html",
-    "href": "changelog.html",
-    "title": "Changelog",
-    "section": "",
-    "text": "This changelog is generated automatically from GitHub Releases."
-  },
-  {
-    "objectID": "changelog.html#whats-changed",
-    "href": "changelog.html#whats-changed",
-    "title": "Changelog",
-    "section": "What’s Changed",
-    "text": "What’s Changed\n\nRebuild docs on release so the version badge tracks the latest release by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/30\nAdd exponential smoothing example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/31\nAdd references to notebooks by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/32\nBetter prior plots by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/33\nBacktest improvement by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/35\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3"
-  },
-  {
-    "objectID": "changelog.html#whats-changed-1",
-    "href": "changelog.html#whats-changed-1",
-    "title": "Changelog",
-    "section": "What’s Changed",
-    "text": "What’s Changed\n\nImprove the univariate forecasting notebook by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/25\nUse better ArviZ functions by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/27\nBump version from 0.1.1 to 0.1.2 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/28\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2"
-  },
-  {
-    "objectID": "changelog.html#whats-changed-2",
-    "href": "changelog.html#whats-changed-2",
-    "title": "Changelog",
-    "section": "What’s Changed",
-    "text": "What’s Changed\n\nAdd documentation site with great-docs by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/14\nFix production docs deploy + prune old deployments by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/15\nFix merge-time docs deploy cancellation + restore prune workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/16\nAdd .nojekyll so notebook figures load on GitHub Pages by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/17\nAdd electricity demand forecasting example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/19\nAdd electricity forecasting calibration example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/20\nAdd coverage configuration to pyproject.toml by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/23\nOverall improvements after the MVP phase by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/21\nBump version from 0.1.0 to 0.1.1 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/24\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1"
-  },
-  {
-    "objectID": "changelog.html#whats-changed-3",
-    "href": "changelog.html#whats-changed-3",
-    "title": "Changelog",
-    "section": "What’s Changed",
-    "text": "What’s Changed\n\nInitial configuration by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/1\nAdd claude GitHub actions 1781548272346 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/3\nAdd examples by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/2\nmore improvements by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/4\nUpdate project name to ‘NumPyro Forecast’ by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/5\nfix prek by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/6\nAdditional cleanup by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/7\nFunctional API by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/8\nMake the random generator array the first argument by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/9\nImprovements by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/10\nImprove notebooks storyline by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/11\nrelease workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/13"
-  },
-  {
-    "objectID": "changelog.html#new-contributors",
-    "href": "changelog.html#new-contributors",
-    "title": "Changelog",
-    "section": "New Contributors",
-    "text": "New Contributors\n\n@juanitorduz made their first contribution in https://github.com/juanitorduz/numpyro_forecast/pull/1\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/commits/0.1.0"
-  },
-  {
     "objectID": "docs/examples/forecasting_univariate.html",
     "href": "docs/examples/forecasting_univariate.html",
     "title": "Univariate forecasting",
@@ -641,7 +622,7 @@
     "href": "skills.html",
     "title": "Skills",
     "section": "",
-    "text": "A skill is a package of structured files that teaches an AI coding agent how to work with a specific tool or framework. The skill below was generated by Great Docs from this project’s documentation. Install it in your agent and it will be able to run commands, edit configuration, write content, and troubleshoot problems without step-by-step guidance from you.\n\n  \n    ▶    Install this skill\n  \n  \n    \n      \nAny agent — install with npx:\nnpx skills add https://juanitorduz.github.io/numpyro_forecast/\nCodex / OpenCode\nTell the agent:Fetch the skill file at https://juanitorduz.github.io/numpyro_forecast/skill.md and follow the instructions.\nManual — download the skill file:\ncurl -O https://juanitorduz.github.io/numpyro_forecast/skill.md\nOr browse the SKILL.md file.\n      \n    \n  \n\n\nSKILL.md\n---\nname: numpyro-forecast\ndescription: &gt;\n  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.\nlicense: Apache-2.0\ncompatibility: Requires Python &gt;=3.12.\n---\n\n# numpyro_forecast\n\nA JAX/NumPyro port of Pyro's forecasting module.\n\n## Installation\n\n```bash\npip install numpyro-forecast\n```\n\n## API overview\n\n### Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n- `forecaster.Forecaster`\n- `forecaster.HMCForecaster`\n\n### Models\n\nBuilding forecasting models (object-oriented and functional).\n\n- `forecaster.ForecastingModel`\n- `functional.forecasting_model`\n\n### Functional core\n\nPure functional primitives for the train/forecast split.\n\n- `functional.Horizon`\n- `functional.time_series`\n- `functional.predict`\n- `functional.resolve_optimizer`\n- `functional.resolve_guide`\n- `functional.fit_svi`\n- `functional.draw_posterior`\n- `functional.resolve_kernel`\n- `functional.fit_mcmc`\n- `functional.forecast`\n- `functional.predict_in_sample`\n- `functional.SVIFit`\n- `functional.MCMCFit`\n\n### Backtesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n- `evaluate.backtest`\n- `evaluate.BacktestResult`\n- `evaluate.evaluate_forecast`\n- `evaluate.eval_crps`\n- `evaluate.eval_mae`\n- `evaluate.eval_rmse`\n- `evaluate.eval_coverage`\n- `metrics.crps_empirical`\n\n### Utilities\n\nArray helpers and feature builders.\n\n- `util.fourier_features`\n- `util.periodic_repeat`\n- `util.zero_data_like`\n- `util.concat_future`\n- `util.shift_loc`\n- `util.slice_time`\n- `util.prefix_condition`\n- `util.register_elementwise`\n- `util.require`\n\n### Datasets\n\nExample datasets used in the tutorials.\n\n- `datasets.load_bart_weekly`\n- `datasets.load_bart_hierarchical`\n- `datasets.load_victoria_electricity`\n- `datasets.bart_available`\n\n## Resources\n\n- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)\n- [llms.txt](llms.txt) — Indexed API reference for LLMs\n- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs\n- [Source code](https://github.com/juanitorduz/numpyro_forecast)"
+    "text": "A skill is a package of structured files that teaches an AI coding agent how to work with a specific tool or framework. The skill below was generated by Great Docs from this project’s documentation. Install it in your agent and it will be able to run commands, edit configuration, write content, and troubleshoot problems without step-by-step guidance from you.\n\n  \n    ▶    Install this skill\n  \n  \n    \n      \nAny agent — install with npx:\nnpx skills add https://juanitorduz.github.io/numpyro_forecast/\nCodex / OpenCode\nTell the agent:Fetch the skill file at https://juanitorduz.github.io/numpyro_forecast/skill.md and follow the instructions.\nManual — download the skill file:\ncurl -O https://juanitorduz.github.io/numpyro_forecast/skill.md\nOr browse the SKILL.md file.\n      \n    \n  \n\n\nSKILL.md\n---\nname: numpyro-forecast\ndescription: &gt;\n  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.\nlicense: Apache-2.0\ncompatibility: Requires Python &gt;=3.12.\n---\n\n# numpyro_forecast\n\nA JAX/NumPyro port of Pyro's forecasting module.\n\n## Installation\n\n```bash\npip install numpyro-forecast\n```\n\n## API overview\n\n### Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n- `forecaster.Forecaster`\n- `forecaster.HMCForecaster`\n\n### Models\n\nBuilding forecasting models (object-oriented and functional).\n\n- `forecaster.ForecastingModel`\n- `functional.forecasting_model`\n\n### Functional core\n\nPure functional primitives for the train/forecast split.\n\n- `functional.Horizon`\n- `functional.time_series`\n- `functional.predict`\n- `functional.resolve_optimizer`\n- `functional.resolve_guide`\n- `functional.fit_svi`\n- `functional.draw_posterior`\n- `functional.resolve_kernel`\n- `functional.fit_mcmc`\n- `functional.forecast`\n- `functional.predict_in_sample`\n- `functional.SVIFit`\n- `functional.MCMCFit`\n\n### Backtesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n- `evaluate.backtest`\n- `evaluate.BacktestResult`\n- `evaluate.evaluate_forecast`\n- `evaluate.results_to_dataframe`\n- `evaluate.eval_crps`\n- `evaluate.eval_mae`\n- `evaluate.eval_rmse`\n- `evaluate.eval_coverage`\n- `metrics.crps_empirical`\n- `metrics.eval_pinball`\n- `metrics.eval_interval_score`\n- `metrics.make_mase`\n\n### Utilities\n\nArray helpers and feature builders.\n\n- `util.fourier_features`\n- `util.periodic_repeat`\n- `util.zero_data_like`\n- `util.concat_future`\n- `util.shift_loc`\n- `util.slice_time`\n- `util.prefix_condition`\n- `util.register_elementwise`\n- `util.require`\n\n### Datasets\n\nExample datasets used in the tutorials.\n\n- `datasets.load_bart_weekly`\n- `datasets.load_bart_hierarchical`\n- `datasets.load_victoria_electricity`\n- `datasets.bart_available`\n\n## Resources\n\n- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)\n- [llms.txt](llms.txt) — Indexed API reference for LLMs\n- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs\n- [Source code](https://github.com/juanitorduz/numpyro_forecast)"
   },
   {
     "objectID": "reference/functional.resolve_kernel.html",
@@ -740,27 +721,39 @@
     ]
   },
   {
-    "objectID": "reference/functional.time_series.html",
-    "href": "reference/functional.time_series.html",
-    "title": "functional.time_series()",
+    "objectID": "reference/functional.predict_in_sample.html",
+    "href": "reference/functional.predict_in_sample.html",
+    "title": "functional.predict_in_sample()",
     "section": "",
-    "text": "Sample a time-varying latent over the full horizon.\n\n\nUsage\nSource\n\n\nfunctional.time_series(h, name, dist_fn, *, reparam=None)\n\n\nThe in-sample portion is sampled under plate(\"time\", t) with the fixed site name; when forecasting, the horizon portion is sampled under a separate site f\"{name}_future\" and concatenated. The separate site keeps the guide shape fixed and lets Predictive draw the forecast suffix from the prior.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nname: str\n\nBase sample-site name for the in-sample latent.\n\ndist_fn: Callable[[], dist.Distribution]\n\nZero-argument callable returning the per-step prior distribution.\n\nreparam: Reparam | None = None\n\nOptional reparameterization (e.g. LocScaleReparam) applied to both the in-sample and forecast sites.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon with time at axis -2.",
+    "text": "Sample the in-sample posterior predictive of the obs site.\n\n\nUsage\nSource\n\n\nfunctional.predict_in_sample(\n    rng_key, model, posterior, covariates, *, batch_size=None, parallel=True\n)\n\n\nRuns Predictive with the in-sample covariates and the supplied posterior latent draws. Unlike forecast() there is no forecast horizon: covariates span only the observed window, so the model’s obs site is sampled at every step. The number of predictive samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the observed window. Its time length must match the data the posterior was fit on, since the in-sample latent sites are sized to that window.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). See forecast() for how this interacts with batch_size.\n\n\n\n\n\nReturns\n\n\n Float[Array, \" sample *batch time obs\"]\n\nIn-sample posterior-predictive draws of the obs site.",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.time_series()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.predict_in_sample()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/util.register_elementwise.html",
-    "href": "reference/util.register_elementwise.html",
-    "title": "util.register_elementwise()",
+    "objectID": "reference/forecaster.HMCForecaster.html",
+    "href": "reference/forecaster.HMCForecaster.html",
+    "title": "forecaster.HMCForecaster",
     "section": "",
-    "text": "Declare a distribution family elementwise (usable as a decorator).\n\n\nUsage\nSource\n\n\nutil.register_elementwise(cls)\n\n\nAn elementwise family is independent across every batch cell with an empty event shape, so slice_time() may slice its broadcast parameters along the time axis and prefix_condition() may reduce to the horizon marginal. Membership is by exact type; register each concrete subclass you rely on.\n\n\nParameters\n\n\ncls: type[dist.Distribution]\n\nThe distribution class to register.\n\n\n\n\n\nReturns\n\n\n type[dist.Distribution]\n\ncls unchanged, so this can decorate a class definition.",
+    "text": "Fit a forecasting model with MCMC (NUTS by default).\n\n\nUsage\nSource\n\n\nforecaster.HMCForecaster()\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by ~numpyro_forecast.functional.resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains.\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.",
     "crumbs": [
       "Reference",
-      "Utilities",
-      "[util.register_elementwise()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Forecasters",
+      "[forecaster.HMCForecaster]{.doc-object-name .doc-class .doc-label .doc-label-class}"
+    ]
+  },
+  {
+    "objectID": "reference/metrics.eval_interval_score.html",
+    "href": "reference/metrics.eval_interval_score.html",
+    "title": "metrics.eval_interval_score()",
+    "section": "",
+    "text": "Mean Winkler interval score for the central alpha prediction interval.\n\n\nUsage\nSource\n\n\nmetrics.eval_interval_score(pred, truth, *, alpha=0.9)\n\n\nFor the central alpha interval \\([l, u]\\) (the \\((1-\\alpha)/2\\) and \\(1-(1-\\alpha)/2\\) quantiles), the interval score is \\((u - l) + \\tfrac{2}{1-\\alpha}\\big[(l - y)\\mathbf 1_{y&lt;l} + (y -\nu)\\mathbf 1_{y&gt;u}\\big]\\), averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better.\n\n\nParameters\n\n\npred: Array\n\nForecast samples with the sample axis first.\n\ntruth: Array\n\nGround-truth values (matching pred without the sample axis).\n\nalpha: float = 0.9\n\nNominal interval level in (0, 1).\n\n\n\n\n\nReturns\n\n\n float\n\nThe mean interval score.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf alpha is not strictly inside (0, 1).",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[metrics.eval_interval_score()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -872,50 +865,63 @@
     ]
   },
   {
-    "objectID": "reference/metrics.crps_empirical.html",
-    "href": "reference/metrics.crps_empirical.html",
-    "title": "metrics.crps_empirical()",
+    "objectID": "reference/evaluate.backtest.html",
+    "href": "reference/evaluate.backtest.html",
+    "title": "evaluate.backtest()",
     "section": "",
-    "text": "Compute the empirical Continuous Ranked Probability Score (CRPS).\n\n\nUsage\nSource\n\n\nmetrics.crps_empirical(pred, truth)\n\n\nThe CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as\n\\[\n\\mathrm{CRPS}(F, y) = \\mathbb{E}|X - y| - \\tfrac{1}{2}\\,\\mathbb{E}|X - X'|,\n\\]\nwhere \\(X, X'\\) are independent draws from the forecast distribution \\(F\\). The expectations are estimated from the forecast sample axis using the sorted-sample \\(O(n \\log n)\\) identity.\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first, shape (sample, *batch).\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values with shape (*batch) (broadcastable to pred).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"*batch\"]\n\nElementwise CRPS, one value per batch location.\n\n\n\n\n\nReferences\nTilmann Gneiting, Adrian E. Raftery (2007). “Strictly Proper Scoring Rules, Prediction, and Estimation”. Journal of the American Statistical Association.",
+    "text": "Backtest a forecasting model on a moving window of (train, test) data.\n\n\nUsage\nSource\n\n\nevaluate.backtest(\n    rng_key,\n    data,\n    covariates,\n    model_fn,\n    *,\n    forecaster_fn=Forecaster,\n    metrics=None,\n    per_window_metrics=None,\n    transform=None,\n    window_type=None,\n    train_window=None,\n    min_train_window=1,\n    test_window=None,\n    min_test_window=1,\n    stride=1,\n    num_samples=100,\n    batch_size=None,\n    forecaster_options=None,\n    eval_train=False,\n    keep_predictions=False\n)\n\n\nParameters\n\n\nrng_key: Array\n\nBase PRNG key (used for every window, matching Pyro).\n\ndata: Array\n\nDataset with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 (same duration as data).\n\nmodel_fn: ModelFactory\n\nFactory returning a fresh ForecastingModel per window.\n\nforecaster_fn: ForecasterFactory = Forecaster\n\nFactory returning a fitted forecaster (defaults to Forecaster).\n\nmetrics: Mapping[str, Metric] | None = None\n\nMapping of metric name to function; defaults to DEFAULT_METRICS. Each function takes (pred, truth) and returns a float; bind any metric-specific parameters with functools.partial(), e.g. {**DEFAULT_METRICS, \"coverage\": partial(eval_coverage, alpha=0.8)}.\n\nper_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None\n\nOptional (t0, t1, t2) -&gt; Mapping[str, Metric] callable producing extra metrics merged over metrics for each window. Use it for window-dependent metrics such as a MASE scaled by that window’s training data (numpyro_forecast.metrics.make_mase()).\n\ntransform: Callable[[Array, Array], tuple[Array, Array]] | None = None\n\nOptional (pred, truth) -&gt; (pred, truth) applied before metrics.\n\nwindow_type: WindowType | None = None\n\nWindowing strategy. If None (default) it is inferred from train_window: \"expanding\" when train_window is None and \"rolling\" when it is set, matching the historical behavior. Pass \"expanding\" to always train on all history from t0 = 0, or \"rolling\" to hold the training length fixed at train_window and slide it forward. \"expanding\" and train_window are mutually exclusive, and \"rolling\" requires train_window (both validated).\n\ntrain_window: int | None = None\n\nTraining window size; if None the window expands from the start. Required for window_type=\"rolling\".\n\nmin_train_window: int = 1\n\nMinimum training window size for the expanding strategy (used when train_window is None).\n\ntest_window: int | None = None\n\nTest window size; if None forecasts to the end of the data.\n\nmin_test_window: int = 1\n\nMinimum test window size when test_window is None.\n\nstride: int = 1\n\nStep between successive train/test splits.\n\nnum_samples: int = 100\n\nNumber of forecast samples per window.\n\nbatch_size: int | None = None\n\nOptional forecast-sampling chunk size.\n\nforecaster_options: Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None = None\n\nOptions dict passed to forecaster_fn, or a callable (t0, t1, t2) -&gt; dict returning per-window options.\n\neval_train: bool = False\n\nIf True, also score the in-sample posterior predictive over each training window with the same metrics and store them in BacktestResult.train_metrics. Requires a forecaster exposing predict_in_sample (the built-in Forecaster and HMCForecaster do).\n\nkeep_predictions: bool = False\n\nIf True, store each window’s out-of-sample forecast samples (after transform) on BacktestResult.prediction. Defaults to False to avoid retaining large Monte Carlo arrays.\n\n\n\n\n\nReturns\n\n\n list[BacktestResult]\n\nOne result per backtest window.",
     "crumbs": [
       "Reference",
       "Backtesting & evaluation",
-      "[metrics.crps_empirical()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[evaluate.backtest()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.predict.html",
-    "href": "reference/functional.predict.html",
-    "title": "functional.predict()",
+    "objectID": "reference/util.require.html",
+    "href": "reference/util.require.html",
+    "title": "util.require()",
     "section": "",
-    "text": "Register the observation/forecast sites for the model.\n\n\nUsage\nSource\n\n\nfunctional.predict(h, noise_dist, prediction)\n\n\nnoise_dist is a zero-centered observation noise distribution and prediction the deterministic mean over the full horizon. While training the residual is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the \"forecast\" deterministic site.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nnoise_dist: dist.Distribution\n\nZero-centered observation noise (e.g. Normal(0, sigma)).\n\nprediction: Array\n\nDeterministic mean with time at axis -2, shape (*batch, duration, obs).\n\n\n\n\n\nRaises\n\n\n RuntimeError\n\nIf forecasting (future &gt; 0) but no observed data is available.",
+    "text": "Import an optional dependency, or raise a targeted ImportError.\n\n\nUsage\nSource\n\n\nutil.require(module, *, extra)\n\n\nOptional features (dataframes, blackjax, optax) live behind pyproject extras and are never imported at package import time. This helper imports the backing module lazily at first use and, when it is missing, raises an ImportError naming the exact pip install invocation that provides it.\n\n\nParameters\n\n\nmodule: str\n\nThe importable module name (e.g. \"pandas\").\n\nextra: str\n\nThe numpyro_forecast extra that installs it (e.g. \"dataframes\").\n\n\n\n\n\nReturns\n\n\n ModuleType\n\nThe imported module.\n\n\n\n\n\nRaises\n\n\n ImportError\n\nIf module is not importable, with an actionable install hint.",
+    "crumbs": [
+      "Reference",
+      "Utilities",
+      "[util.require()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/util.shift_loc.html",
+    "href": "reference/util.shift_loc.html",
+    "title": "util.shift_loc()",
+    "section": "",
+    "text": "Re-center a zero-centered noise distribution at loc.\n\n\nUsage\nSource\n\n\nutil.shift_loc(noise_dist, loc)\n\n\nThis converts Pyro’s obs = data - prediction idiom into an additive shift of the observation distribution’s location.\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nA zero-centered location-family distribution.\n\nloc: Array\n\nThe deterministic mean to add to the distribution’s location.\n\n\n\n\n\nReturns\n\n\n dist.Distribution\n\nA distribution centered at loc.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf noise_dist is of an unsupported type.",
+    "crumbs": [
+      "Reference",
+      "Utilities",
+      "[util.shift_loc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.fit_mcmc.html",
+    "href": "reference/functional.fit_mcmc.html",
+    "title": "functional.fit_mcmc()",
+    "section": "",
+    "text": "Fit a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.fit_mcmc(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    kernel=None,\n    kernel_kwargs=None,\n    num_warmup=1000,\n    num_samples=1000,\n    num_chains=1,\n    chain_method=\"sequential\",\n    progress_bar=False\n)\n\n\nPRNG: consumed entirely by ~numpyro.infer.MCMC.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class; rejected with an instance).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains (stored on the returned MCMCFit).\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.\n\n\n\n\n\nReturns\n\n\n MCMCFit\n\nThe posterior samples (flattened) and num_chains.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations, or a run-config constraint is violated (see _validate_kernel_run_config()).",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.predict()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.fit_mcmc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.forecast.html",
-    "href": "reference/functional.forecast.html",
-    "title": "functional.forecast()",
+    "objectID": "reference/metrics.make_mase.html",
+    "href": "reference/metrics.make_mase.html",
+    "title": "metrics.make_mase()",
     "section": "",
-    "text": "Sample forecasts for the steps in [t, duration) from a posterior.\n\n\nUsage\nSource\n\n\nfunctional.forecast(\n    rng_key,\n    model,\n    posterior,\n    data,\n    covariates,\n    *,\n    batch_size=None,\n    parallel=True\n)\n\n\nRuns Predictive with full-horizon covariates and the in-sample data: the in-sample latent sites are drawn from posterior while the _future suffix is drawn from the prior, and the \"forecast\" site is returned. The number of forecast samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ndata: Array\n\nObserved data with time at axis -2 and length t.\n\ncovariates: Array\n\nCovariates with time at axis -2 and length duration &gt; t.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). With parallel=True the samples in each batch_size chunk are vectorized while the chunks are looped over, so batch_size remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.\n\n\n\n\n\nReturns\n\n\n Float[Array, \" sample *batch future obs\"]\n\nForecast samples over the future = duration - t horizon.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf covariates does not extend beyond data along the time axis.\n\n\n\n\n\nNotes\nChunking is a memory knob, not a reproducibility knob: reproducibility is per (rng_key, batch_size). Each chunk is padded to a whole multiple of batch_size so the underlying _predict compiles exactly once for a fixed shape (the pad draws are discarded), but changing batch_size changes the PRNG stream layout and therefore the exact draws.",
+    "text": "Build a Mean Absolute Scaled Error metric scaled by train_data.\n\n\nUsage\nSource\n\n\nmetrics.make_mase(train_data, *, seasonality=1)\n\n\nMASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on train_data, mean(|y_t - y_{t-seasonality}|). The scale is computed once at factory time; the returned metric has the standard (pred, truth) -&gt; float signature.\n\n\nParameters\n\n\ntrain_data: Array\n\nTraining data with time at axis -2; its seasonal differences set the scale.\n\nseasonality: int = 1\n\nSeasonal period (&gt;= 1); 1 is the random-walk naive baseline.\n\n\n\n\n\nReturns\n\n\n Metric\n\nA (pred, truth) -&gt; float callable computing MASE.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf seasonality &lt; 1, train_data is not longer than seasonality along the time axis, or the seasonal-naive scale is zero (a constant series, for which MASE is undefined).",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.forecast()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/index.html",
-    "href": "reference/index.html",
-    "title": "Reference",
-    "section": "",
-    "text": "Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n\nforecaster.Forecaster\n\nFit a forecasting model with stochastic variational inference.\n\nforecaster.HMCForecaster\n\nFit a forecasting model with MCMC (NUTS by default).\n\n\n\n\nModels\n\nBuilding forecasting models (object-oriented and functional).\n\n\nforecaster.ForecastingModel\n\nAbstract base class for forecasting models.\n\nfunctional.forecasting_model()\n\nBuild a NumPyro model from a functional model body.\n\n\n\n\nFunctional core\n\nPure functional primitives for the train/forecast split.\n\n\nfunctional.Horizon\n\nThe train/forecast split for a single model call.\n\nfunctional.time_series()\n\nSample a time-varying latent over the full horizon.\n\nfunctional.predict()\n\nRegister the observation/forecast sites for the model.\n\nfunctional.resolve_optimizer()\n\nNormalize an optimizer specification into a NumPyro optimizer.\n\nfunctional.resolve_guide()\n\nNormalize a guide specification against model.\n\nfunctional.fit_svi()\n\nFit a forecasting model with stochastic variational inference.\n\nfunctional.draw_posterior()\n\nDraw num_samples posterior samples of the latent sites from a fit.\n\nfunctional.resolve_kernel()\n\nNormalize a kernel specification.\n\nfunctional.fit_mcmc()\n\nFit a forecasting model with MCMC.\n\nfunctional.forecast()\n\nSample forecasts for the steps in [t, duration) from a posterior.\n\nfunctional.predict_in_sample()\n\nSample the in-sample posterior predictive of the obs site.\n\nfunctional.SVIFit\n\nThe result of fitting a forecasting model with SVI.\n\nfunctional.MCMCFit\n\nThe result of fitting a forecasting model with MCMC.\n\n\n\n\nBacktesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n\nevaluate.backtest()\n\nBacktest a forecasting model on a moving window of (train, test) data.\n\nevaluate.BacktestResult\n\nPer-window result of a :func:backtest run.\n\nevaluate.evaluate_forecast()\n\nEvaluate forecast samples against ground truth for several metrics at once.\n\nevaluate.eval_crps()\n\nEmpirical CRPS averaged over all data elements.\n\nevaluate.eval_mae()\n\nMean absolute error using the forecast sample median as point estimate.\n\nevaluate.eval_rmse()\n\nRoot mean squared error using the forecast sample mean as point estimate.\n\nevaluate.eval_coverage()\n\nEmpirical coverage of the central alpha prediction interval.\n\nmetrics.crps_empirical()\n\nCompute the empirical Continuous Ranked Probability Score (CRPS).\n\n\n\n\nUtilities\n\nArray helpers and feature builders.\n\n\nutil.fourier_features()\n\nBuild a Fourier seasonality design matrix.\n\nutil.periodic_repeat()\n\nTile a seasonal pattern to cover duration time steps.\n\nutil.zero_data_like()\n\nReturn zeros shaped like data but extended to the covariate duration.\n\nutil.concat_future()\n\nConcatenate in-sample and forecast-horizon arrays along the time axis.\n\nutil.shift_loc()\n\nRe-center a zero-centered noise distribution at loc.\n\nutil.slice_time()\n\nSlice an elementwise distribution along the time axis -2.\n\nutil.prefix_condition()\n\nCondition a (t+f)-length distribution on a t-length data prefix.\n\nutil.register_elementwise()\n\nDeclare a distribution family elementwise (usable as a decorator).\n\nutil.require()\n\nImport an optional dependency, or raise a targeted ImportError.\n\n\n\n\nDatasets\n\nExample datasets used in the tutorials.\n\n\ndatasets.load_bart_weekly()\n\nLoad total weekly BART ridership (log scale) for the univariate example.\n\ndatasets.load_bart_hierarchical()\n\nLoad the windowed hierarchical BART panel for the hierarchical example.\n\ndatasets.load_victoria_electricity()\n\nLoad hourly Victoria (Australia) electricity demand and temperature.\n\ndatasets.bart_available()\n\nReturn whether the BART dataset can be loaded (download succeeds).",
-    "crumbs": [
-      "Reference",
-      "API Index"
+      "Backtesting & evaluation",
+      "[metrics.make_mase()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {

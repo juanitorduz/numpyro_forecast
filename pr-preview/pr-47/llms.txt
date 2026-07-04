@@ -41,11 +41,15 @@
 - [evaluate.backtest](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html)
 - [evaluate.BacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html)
 - [evaluate.evaluate_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html)
+- [evaluate.results_to_dataframe](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html)
 - [evaluate.eval_crps](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html)
 - [evaluate.eval_mae](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_mae.html)
 - [evaluate.eval_rmse](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_rmse.html)
 - [evaluate.eval_coverage](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_coverage.html)
 - [metrics.crps_empirical](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.crps_empirical.html)
+- [metrics.eval_pinball](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_pinball.html)
+- [metrics.eval_interval_score](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_interval_score.html)
+- [metrics.make_mase](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.make_mase.html)
 
 #### Utilities
 > Array helpers and feature builders.

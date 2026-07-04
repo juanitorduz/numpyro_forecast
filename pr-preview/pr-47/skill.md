@@ -57,11 +57,15 @@ Rolling-window backtesting and forecast metrics.
 - `evaluate.backtest`
 - `evaluate.BacktestResult`
 - `evaluate.evaluate_forecast`
+- `evaluate.results_to_dataframe`
 - `evaluate.eval_crps`
 - `evaluate.eval_mae`
 - `evaluate.eval_rmse`
 - `evaluate.eval_coverage`
 - `metrics.crps_empirical`
+- `metrics.eval_pinball`
+- `metrics.eval_interval_score`
+- `metrics.make_mase`
 
 ### Utilities
 

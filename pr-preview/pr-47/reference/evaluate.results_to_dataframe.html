@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>util.register_elementwise() – numpyro_forecast | numpyro_forecast</title>
+<title>evaluate.results_to_dataframe() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/util.register_elementwise.html">
-  <meta name="description" content="Declare a distribution family elementwise (usable as a decorator).">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html">
+  <meta name="description" content="Flatten backtest results into a tidy one-row-per-window DataFrame.">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "util.register_elementwise - numpyro_forecast",
+    "name": "evaluate.results_to_dataframe - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/util.register_elementwise.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="util.register_elementwise() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Declare a distribution family elementwise (usable as a decorator).">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/util.register_elementwise.html">
+  <meta property="og:title" content="evaluate.results_to_dataframe() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Flatten backtest results into a tidy one-row-per-window DataFrame.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="util.register_elementwise() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Declare a distribution family elementwise (usable as a decorator).">
+  <meta name="twitter:title" content="evaluate.results_to_dataframe() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Flatten backtest results into a tidy one-row-per-window DataFrame.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -202,7 +202,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">util.register_elementwise()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">evaluate.results_to_dataframe()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -372,7 +372,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/evaluate.results_to_dataframe.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/evaluate.results_to_dataframe.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.results_to_dataframe()</span></span></a>
   </div>
 </li>
@@ -476,7 +476,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.register_elementwise.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/util.register_elementwise.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.register_elementwise()</span></span></a>
   </div>
 </li>
@@ -532,6 +532,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   </ul>
 </nav>
     </div>
@@ -540,7 +541,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">util.register_elementwise()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.results_to_dataframe()</span></h2>
 </div>
 
 
@@ -558,25 +559,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Declare a distribution family elementwise (usable as a decorator).</p>
+<p>Flatten backtest results into a tidy one-row-per-window <code>DataFrame</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/util.py#L165-L185" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L745-L800" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">util</span><span class="op">.</span><span class="sig-name">register_elementwise</span>(<span class="bu">cls</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">results_to_dataframe</span>(<span class="va">results</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>An elementwise family is independent across every batch cell with an empty event shape, so <a href="util.slice_time.html#numpyro_forecast.util.slice_time" class="gdls-link gdls-code">slice_time()</a> may slice its broadcast parameters along the time axis and <a href="util.prefix_condition.html#numpyro_forecast.util.prefix_condition" class="gdls-link gdls-code">prefix_condition()</a> may reduce to the horizon marginal. Membership is by exact type; register each concrete subclass you rely on.</p>
+<p>Columns are prefix-namespaced so metric, in-sample-metric, and parameter names never collide: window metrics become <code>metric_&lt;name&gt;</code>, in-sample metrics <code>train_metric_&lt;name&gt;</code>, and scalar parameters <code>param_&lt;name&gt;</code>, alongside the window indices <code>t0</code>/<code>t1</code>/<code>t2</code>, <code>num_samples</code>, and <code>train_walltime</code>/<code>test_walltime</code>. Forecast samples are excluded. Windows may carry different metric sets (e.g.&nbsp;via <code>backtest(per_window_metrics=...)</code>); the union of columns is used and missing entries are left as <code>NaN</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">cls</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">type[dist.Distribution]</span></code></dt>
+<dt><code><span class="doc-parameter-name">results</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[BacktestResult]</span></code></dt>
 <dd>
-The distribution class to register.
+A sequence of <a href="evaluate.BacktestResult.html#numpyro_forecast.evaluate.BacktestResult" class="gdls-link gdls-code">BacktestResult</a> from <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>.
 </dd>
 </dl>
 </div>
@@ -585,9 +586,24 @@ The distribution class to register.
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">type[dist.Distribution]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">pandas.DataFrame</span></code></dt>
 <dd>
-<code>cls</code> unchanged, so this can decorate a class definition.
+One row per window with the namespaced columns described above.
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">NotImplementedError</span></code></dt>
+<dd>
+<p>If a vectorized backtest result is passed; use the loop <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> output for now (vectorized support lands with <code>backtest_vectorized</code>).</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">ImportError</span></code></dt>
+<dd>
+If <code>pandas</code> is not installed (<code>pip install numpyro_forecast[dataframes]</code>).
 </dd>
 </dl>
 </div>
