@@ -192,7 +192,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="23" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="24" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -512,11 +512,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional.py#L569-L615" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional.py#L588-L640" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">functional</span><span class="op">.</span><span class="sig-name">predict_in_sample</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>, <span class="va">model</span>, <span class="va">posterior</span>, <span class="va">covariates</span>, <span class="op">*</span>, <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>, <span class="va">model</span>, <span class="va">posterior</span>, <span class="va">covariates</span>, <span class="op">*</span>, <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>, <span class="va">parallel</span><span class="op">=</span><span class="cn-bool">True</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
@@ -544,7 +544,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional chunk size for sampling (caps peak memory).
+<p>Optional chunk size for sampling (caps peak memory).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">parallel</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">True</span></span></code></dt>
+<dd>
+Whether <code>Predictive</code> vectorizes over the sample axis with <code>vmap</code> (<code>True</code>, faster, higher peak memory) or maps it serially with <code>lax.map</code> (<code>False</code>). See <a href="functional.forecast.html#numpyro_forecast.functional.forecast" class="gdls-link gdls-code">forecast()</a> for how this interacts with <code>batch_size</code>.
 </dd>
 </dl>
 </div>

@@ -8,7 +8,7 @@ Usage
 
 ``` python
 functional.predict_in_sample(
-    rng_key, model, posterior, covariates, *, batch_size=None
+    rng_key, model, posterior, covariates, *, batch_size=None, parallel=True
 )
 ```
 
@@ -33,6 +33,9 @@ Covariates with time at axis `-2` spanning the observed window. Its time length 
 
 `batch_size: int | None = None`  
 Optional chunk size for sampling (caps peak memory).
+
+`parallel: bool = ``True`  
+Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster, higher peak memory) or maps it serially with `lax.map` (`False`). See [forecast()](functional.forecast.md#numpyro_forecast.functional.forecast) for how this interacts with `batch_size`.
 
 
 ## Returns

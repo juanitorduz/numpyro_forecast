@@ -8,7 +8,14 @@ Usage
 
 ``` python
 functional.forecast(
-    rng_key, model, posterior, data, covariates, *, batch_size=None
+    rng_key,
+    model,
+    posterior,
+    data,
+    covariates,
+    *,
+    batch_size=None,
+    parallel=True
 )
 ```
 
@@ -36,6 +43,9 @@ Covariates with time at axis `-2` and length `duration > t`.
 
 `batch_size: int | None = None`  
 Optional chunk size for sampling (caps peak memory).
+
+`parallel: bool = ``True`  
+Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster, higher peak memory) or maps it serially with `lax.map` (`False`). With `parallel=True` the samples in each `batch_size` chunk are vectorized while the chunks are looped over, so `batch_size` remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.
 
 
 ## Returns
