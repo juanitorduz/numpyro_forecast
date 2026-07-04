@@ -11,6 +11,7 @@
 
 - [forecaster.Forecaster](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.Forecaster.html)
 - [forecaster.HMCForecaster](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.HMCForecaster.html)
+- [forecaster.PathfinderForecaster](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.PathfinderForecaster.html)
 
 #### Models
 > Building forecasting models (object-oriented and functional).
@@ -63,6 +64,13 @@
 - [util.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/util.prefix_condition.html)
 - [util.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/util.register_elementwise.html)
 - [util.require](https://juanitorduz.github.io/numpyro_forecast/reference/util.require.html)
+
+#### Extensions (contrib)
+> Optional backends behind pyproject extras (never imported by default).
+
+- [contrib.blackjax.BlackjaxNUTSKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxNUTSKernel.html)
+- [contrib.blackjax.BlackjaxMCLMCKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxMCLMCKernel.html)
+- [contrib.blackjax.BlackjaxCustomKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxCustomKernel.html)
 
 #### Datasets
 > Example datasets used in the tutorials.

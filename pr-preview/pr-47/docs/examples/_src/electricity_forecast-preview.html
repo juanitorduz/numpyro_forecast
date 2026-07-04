@@ -224,7 +224,7 @@
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-07-03">v0.1.3</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -241,11 +241,15 @@
     <a class="nav-link" href="../../../reference/index.html"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../../../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="24" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -474,7 +478,7 @@ temperature shape: (1344,)</code></pre>
 <div id="8a02a154" class="cell markdown">
 <section id="training-and-test-data" class="level1">
 <h1>Training and test data</h1>
-<p>We split the data as in the original example, holding out the last two weeks. In addition, we build the exogenous inputs the model needs and pack them into a single <a href="../../../reference/functional.SVIFit.html#numpyro_forecast.functional.SVIFit.covariates" class="gdls-link gdls-code">covariates</a> array with time at axis <code>-2</code>: the temperature and a <code>day_of_week</code> index. The forecast horizon is inferred later from <a href="../../../reference/functional.SVIFit.html#numpyro_forecast.functional.SVIFit.covariates" class="gdls-link gdls-code">covariates</a> being longer than the training data.</p>
+<p>We split the data as in the original example, holding out the last two weeks. In addition, we build the exogenous inputs the model needs and pack them into a single <code>covariates</code> array with time at axis <code>-2</code>: the temperature and a <code>day_of_week</code> index. The forecast horizon is inferred later from <code>covariates</code> being longer than the training data.</p>
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="9a43b249" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T09:31:28.088024Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T09:31:28.087935Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T09:31:28.177716Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T09:31:28.177195Z&quot;}}" data-execution_count="7">
@@ -531,7 +535,7 @@ covariates shape: (1344, 2)</code></pre>
 <li>The noise scale varies with the temperature.</li>
 <li>A Student-t distribution models the residual error.</li>
 </ul>
-<p>A <a href="../../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> reads its exogenous inputs from <a href="../../../reference/functional.SVIFit.html#numpyro_forecast.functional.SVIFit.covariates" class="gdls-link gdls-code">covariates</a> and must call <code>self.predict</code> exactly once with a zero-centered noise distribution and the deterministic mean. Because there is no random-walk latent here (the temperature and calendar are known over the whole horizon), the model is purely covariate-driven and <code>self.predict</code> handles both the in-sample fit and the forecast suffix, including the per-timestep noise scale.</p>
+<p>A <a href="../../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a> reads its exogenous inputs from <code>covariates</code> and must call <code>self.predict</code> exactly once with a zero-centered noise distribution and the deterministic mean. Because there is no random-walk latent here (the temperature and calendar are known over the whole horizon), the model is purely covariate-driven and <code>self.predict</code> handles both the in-sample fit and the forecast suffix, including the per-timestep noise scale.</p>
 </section>
 </div>
 <div id="95d8454f" class="cell markdown">

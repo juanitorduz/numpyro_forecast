@@ -13,7 +13,7 @@ functional.predict_in_sample(
 ```
 
 
-Runs `Predictive` with the in-sample [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) and the supplied posterior latent draws. Unlike [forecast()](functional.forecast.md#numpyro_forecast.functional.forecast) there is no forecast horizon: [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) span only the observed window, so the model's `obs` site is sampled at every step. The number of predictive samples equals the leading (sample) axis of `posterior` (see [draw_posterior()](functional.draw_posterior.md#numpyro_forecast.functional.draw_posterior)).
+Runs `Predictive` with the in-sample `covariates` and the supplied posterior latent draws. Unlike [forecast()](functional.forecast.md#numpyro_forecast.functional.forecast) there is no forecast horizon: `covariates` span only the observed window, so the model's `obs` site is sampled at every step. The number of predictive samples equals the leading (sample) axis of `posterior` (see [draw_posterior()](functional.draw_posterior.md#numpyro_forecast.functional.draw_posterior)).
 
 
 ## Parameters

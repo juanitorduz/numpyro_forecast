@@ -46,7 +46,7 @@ Total horizon length `t + future` (in time steps).
 
 | Name | Description |
 |----|----|
-| [zero_data](#zero_data) | Zeros shaped like [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) extended to the full horizon. |
+| [zero_data](#zero_data) | Zeros shaped like `data` extended to the full horizon. |
 
 ------------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ Total horizon length `t + future` (in time steps).
 #### zero_data
 
 
-Zeros shaped like [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) extended to the full horizon.
+Zeros shaped like `data` extended to the full horizon.
 
 
 `zero_data: Array | None`
@@ -116,11 +116,11 @@ Observed data with time at axis `-2` (`None` for prior sampling).
 
 
 `Horizon`  
-The horizon with `duration = covariates.shape[-2]`, `t_obs = data.shape[-2]` (or [duration](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.duration) when [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) is `None`), and `future = duration - t_obs`.
+The horizon with `duration = covariates.shape[-2]`, `t_obs = data.shape[-2]` (or [duration](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.duration) when `data` is `None`), and `future = duration - t_obs`.
 
 
 ##### Raises
 
 
 `ValueError`  
-If [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) is longer than [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) along the time axis.
+If `data` is longer than `covariates` along the time axis.

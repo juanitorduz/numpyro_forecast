@@ -42,7 +42,7 @@ Base PRNG key (used for every window, matching Pyro).
 Dataset with time at axis `-2`.
 
 `covariates: Array`  
-Covariates with time at axis `-2` (same duration as [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data)).
+Covariates with time at axis `-2` (same duration as `data`).
 
 `model_fn: ModelFactory`  
 Factory returning a fresh [ForecastingModel](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) per window.
@@ -90,7 +90,7 @@ Options dict passed to `forecaster_fn`, or a callable `(t0, t1, t2) -> dict` ret
 If `True`, also score the in-sample posterior predictive over each training window with the same `metrics` and store them in `BacktestResult.train_metrics`. Requires a forecaster exposing [predict_in_sample](functional.predict_in_sample.md#numpyro_forecast.functional.predict_in_sample) (the built-in [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) and [HMCForecaster](forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) do).
 
 `keep_predictions: bool = ``False`  
-If `True`, store each window's out-of-sample forecast samples (after `transform`) on [BacktestResult.prediction](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult.prediction). Defaults to `False` to avoid retaining large Monte Carlo arrays.
+If `True`, store each window's out-of-sample forecast samples (after `transform`) on `BacktestResult.prediction`. Defaults to `False` to avoid retaining large Monte Carlo arrays.
 
 
 ## Returns

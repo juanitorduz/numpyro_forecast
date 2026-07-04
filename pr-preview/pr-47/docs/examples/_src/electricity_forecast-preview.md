@@ -195,7 +195,7 @@ Of course there are strong seasonal effects hidden in these plots. Therefore we 
 
 # Training and test data
 
-We split the data as in the original example, holding out the last two weeks. In addition, we build the exogenous inputs the model needs and pack them into a single [covariates](../../../reference/functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) array with time at axis `-2`: the temperature and a `day_of_week` index. The forecast horizon is inferred later from [covariates](../../../reference/functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) being longer than the training data.
+We split the data as in the original example, holding out the last two weeks. In addition, we build the exogenous inputs the model needs and pack them into a single `covariates` array with time at axis `-2`: the temperature and a `day_of_week` index. The forecast horizon is inferred later from `covariates` being longer than the training data.
 
 
     In [7]:
@@ -259,7 +259,7 @@ Here is the modeling strategy, re-expressed as a `numpyro_forecast` [Forecasting
 - The noise scale varies with the temperature.
 - A Student-t distribution models the residual error.
 
-A [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) reads its exogenous inputs from [covariates](../../../reference/functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) and must call `self.predict` exactly once with a zero-centered noise distribution and the deterministic mean. Because there is no random-walk latent here (the temperature and calendar are known over the whole horizon), the model is purely covariate-driven and `self.predict` handles both the in-sample fit and the forecast suffix, including the per-timestep noise scale.
+A [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) reads its exogenous inputs from `covariates` and must call `self.predict` exactly once with a zero-centered noise distribution and the deterministic mean. Because there is no random-walk latent here (the temperature and calendar are known over the whole horizon), the model is purely covariate-driven and `self.predict` handles both the in-sample fit and the forecast suffix, including the per-timestep noise scale.
 
 
 ## GP prior parameters

@@ -167,7 +167,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-07-03">v0.1.3</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -184,11 +184,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="24" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -236,6 +240,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/forecaster.HMCForecaster.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.HMCForecaster</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.PathfinderForecaster</span></span></a>
   </div>
 </li>
       </ul>
@@ -491,9 +501,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Datasets</span></a>
+ <span class="menu-text">Extensions (contrib)</span></a>
 </div>
       <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxNUTSKernel</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxMCLMCKernel</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Datasets</span></a>
+</div>
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -601,7 +637,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Covariates with time at axis <code>-2</code> and the same duration as <a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit.data" class="gdls-link gdls-code">data</a>.</p>
+<p>Covariates with time at axis <code>-2</code> and the same duration as <code>data</code>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">guide</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">GuideLike</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -639,7 +675,7 @@ Whether SVI skips parameter updates whose new value is non-finite (NumPyro’s <
 <dl>
 <dt><code> <span class="doc-parameter-annotation">SVIFit</span></code></dt>
 <dd>
-The fitted guide, variational parameters, loss history, and the in-sample <a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit.data" class="gdls-link gdls-code">data</a>/<a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit.covariates" class="gdls-link gdls-code">covariates</a> (kept by identity, not copied).
+The fitted guide, variational parameters, loss history, and the in-sample <code>data</code>/<code>covariates</code> (kept by identity, not copied).
 </dd>
 </dl>
 </div>
@@ -650,7 +686,7 @@ The fitted guide, variational parameters, loss history, and the in-sample <a hre
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit.data" class="gdls-link gdls-code">data</a> and <a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit.covariates" class="gdls-link gdls-code">covariates</a> have different durations.
+If <code>data</code> and <code>covariates</code> have different durations.
 </dd>
 </dl>
 </div>

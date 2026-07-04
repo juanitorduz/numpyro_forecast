@@ -122,7 +122,7 @@ ax.set(title="Demand vs Temperature", xlabel="Temperature (°C)", ylabel="Demand
 
 # Training and test data
 
-We split the data as in the original example, holding out the last two weeks. We build the exogenous inputs the model needs and pack them into a single [covariates](../../reference/functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) array with time at axis `-2`: the temperature and a `day_of_week` index. The forecast horizon is inferred later from [covariates](../../reference/functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) being longer than the training data.
+We split the data as in the original example, holding out the last two weeks. We build the exogenous inputs the model needs and pack them into a single `covariates` array with time at axis `-2`: the temperature and a `day_of_week` index. The forecast horizon is inferred later from `covariates` being longer than the training data.
 
 
 ``` python
@@ -175,7 +175,7 @@ numpyro.sample(
 )
 ```
 
-In `numpyro_forecast` a single model handles both training and forecasting, so [covariates](../../reference/functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) (and therefore `beta_temperature`) change length between the two regimes and a fixed integer index does not translate cleanly. The idiomatic, jit-safe equivalent is a *masked* likelihood: we build a boolean mask from the temperature covariate and apply it with `numpyro.handlers.mask`.
+In `numpyro_forecast` a single model handles both training and forecasting, so `covariates` (and therefore `beta_temperature`) change length between the two regimes and a fixed integer index does not translate cleanly. The idiomatic, jit-safe equivalent is a *masked* likelihood: we build a boolean mask from the temperature covariate and apply it with `numpyro.handlers.mask`.
 
 These two formulations are mathematically identical at training time. `numpyro.handlers.mask` multiplies each element's `log_prob` by the `0/1` mask, so the calibration factor is the sum of `Normal(0.13, 0.01).log_prob(beta_temperature[t])` over exactly the timesteps where `temperature[t] > 32 °C`, the same terms the index version sums. The mask form has static shapes, works for both the in-sample fit and the forecast horizon, and during forecasting is harmless because `beta_temperature` is deterministic given the posterior and the forecast only reads the [forecast](../../reference/functional.forecast.md#numpyro_forecast.functional.forecast) site.
 

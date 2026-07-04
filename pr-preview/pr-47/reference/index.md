@@ -13,6 +13,9 @@ Fit a forecasting model with stochastic variational inference.
 [forecaster.HMCForecaster](forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster)  
 Fit a forecasting model with MCMC (NUTS by default).
 
+[forecaster.PathfinderForecaster](forecaster.PathfinderForecaster.md#numpyro_forecast.forecaster.PathfinderForecaster)  
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
 
 ## Models
 
@@ -148,6 +151,22 @@ Declare a distribution family elementwise (usable as a decorator).
 
 [util.require()](util.require.md#numpyro_forecast.util.require)  
 Import an optional dependency, or raise a targeted `ImportError`.
+
+
+## Extensions (contrib)
+
+
+Optional backends behind pyproject extras (never imported by default).
+
+
+[contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  
+BlackJAX NUTS with Stan-style window adaptation.
+
+[contrib.blackjax.BlackjaxMCLMCKernel](contrib.blackjax.BlackjaxMCLMCKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel)  
+BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
+
+[contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
+Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
 
 
 ## Datasets

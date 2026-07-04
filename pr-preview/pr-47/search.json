@@ -11,7 +11,7 @@
     "href": "skill.html#forecasters",
     "title": "numpyro_forecast",
     "section": "Forecasters",
-    "text": "Forecasters\nHigh-level interfaces for fitting and forecasting.\n\nforecaster.Forecaster\nforecaster.HMCForecaster"
+    "text": "Forecasters\nHigh-level interfaces for fitting and forecasting.\n\nforecaster.Forecaster\nforecaster.HMCForecaster\nforecaster.PathfinderForecaster"
   },
   {
     "objectID": "skill.html#models",
@@ -42,6 +42,13 @@
     "text": "Utilities\nArray helpers and feature builders.\n\nutil.fourier_features\nutil.periodic_repeat\nutil.zero_data_like\nutil.concat_future\nutil.shift_loc\nutil.slice_time\nutil.prefix_condition\nutil.register_elementwise\nutil.require"
   },
   {
+    "objectID": "skill.html#extensions-contrib",
+    "href": "skill.html#extensions-contrib",
+    "title": "numpyro_forecast",
+    "section": "Extensions (contrib)",
+    "text": "Extensions (contrib)\nOptional backends behind pyproject extras (never imported by default).\n\ncontrib.blackjax.BlackjaxNUTSKernel\ncontrib.blackjax.BlackjaxMCLMCKernel\ncontrib.blackjax.BlackjaxCustomKernel"
+  },
+  {
     "objectID": "skill.html#datasets",
     "href": "skill.html#datasets",
     "title": "numpyro_forecast",
@@ -61,26 +68,39 @@
     ]
   },
   {
-    "objectID": "reference/index.html",
-    "href": "reference/index.html",
-    "title": "Reference",
+    "objectID": "reference/metrics.make_mase.html",
+    "href": "reference/metrics.make_mase.html",
+    "title": "metrics.make_mase()",
     "section": "",
-    "text": "Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n\nforecaster.Forecaster\n\nFit a forecasting model with stochastic variational inference.\n\nforecaster.HMCForecaster\n\nFit a forecasting model with MCMC (NUTS by default).\n\n\n\n\nModels\n\nBuilding forecasting models (object-oriented and functional).\n\n\nforecaster.ForecastingModel\n\nAbstract base class for forecasting models.\n\nfunctional.forecasting_model()\n\nBuild a NumPyro model from a functional model body.\n\n\n\n\nFunctional core\n\nPure functional primitives for the train/forecast split.\n\n\nfunctional.Horizon\n\nThe train/forecast split for a single model call.\n\nfunctional.time_series()\n\nSample a time-varying latent over the full horizon.\n\nfunctional.predict()\n\nRegister the observation/forecast sites for the model.\n\nfunctional.resolve_optimizer()\n\nNormalize an optimizer specification into a NumPyro optimizer.\n\nfunctional.resolve_guide()\n\nNormalize a guide specification against model.\n\nfunctional.fit_svi()\n\nFit a forecasting model with stochastic variational inference.\n\nfunctional.draw_posterior()\n\nDraw num_samples posterior samples of the latent sites from a fit.\n\nfunctional.resolve_kernel()\n\nNormalize a kernel specification.\n\nfunctional.fit_mcmc()\n\nFit a forecasting model with MCMC.\n\nfunctional.forecast()\n\nSample forecasts for the steps in [t, duration) from a posterior.\n\nfunctional.predict_in_sample()\n\nSample the in-sample posterior predictive of the obs site.\n\nfunctional.SVIFit\n\nThe result of fitting a forecasting model with SVI.\n\nfunctional.MCMCFit\n\nThe result of fitting a forecasting model with MCMC.\n\n\n\n\nBacktesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n\nevaluate.backtest()\n\nBacktest a forecasting model on a moving window of (train, test) data.\n\nevaluate.BacktestResult\n\nPer-window result of a :func:backtest run.\n\nevaluate.evaluate_forecast()\n\nEvaluate forecast samples against ground truth for several metrics at once.\n\nevaluate.results_to_dataframe()\n\nFlatten backtest results into a tidy one-row-per-window DataFrame.\n\nevaluate.eval_crps()\n\nEmpirical CRPS averaged over all data elements.\n\nevaluate.eval_mae()\n\nMean absolute error using the forecast sample median as point estimate.\n\nevaluate.eval_rmse()\n\nRoot mean squared error using the forecast sample mean as point estimate.\n\nevaluate.eval_coverage()\n\nEmpirical coverage of the central alpha prediction interval.\n\nmetrics.crps_empirical()\n\nCompute the empirical Continuous Ranked Probability Score (CRPS).\n\nmetrics.eval_pinball()\n\nMean pinball (quantile) loss of the forecast quantile.\n\nmetrics.eval_interval_score()\n\nMean Winkler interval score for the central alpha prediction interval.\n\nmetrics.make_mase()\n\nBuild a Mean Absolute Scaled Error metric scaled by train_data.\n\n\n\n\nUtilities\n\nArray helpers and feature builders.\n\n\nutil.fourier_features()\n\nBuild a Fourier seasonality design matrix.\n\nutil.periodic_repeat()\n\nTile a seasonal pattern to cover duration time steps.\n\nutil.zero_data_like()\n\nReturn zeros shaped like data but extended to the covariate duration.\n\nutil.concat_future()\n\nConcatenate in-sample and forecast-horizon arrays along the time axis.\n\nutil.shift_loc()\n\nRe-center a zero-centered noise distribution at loc.\n\nutil.slice_time()\n\nSlice an elementwise distribution along the time axis -2.\n\nutil.prefix_condition()\n\nCondition a (t+f)-length distribution on a t-length data prefix.\n\nutil.register_elementwise()\n\nDeclare a distribution family elementwise (usable as a decorator).\n\nutil.require()\n\nImport an optional dependency, or raise a targeted ImportError.\n\n\n\n\nDatasets\n\nExample datasets used in the tutorials.\n\n\ndatasets.load_bart_weekly()\n\nLoad total weekly BART ridership (log scale) for the univariate example.\n\ndatasets.load_bart_hierarchical()\n\nLoad the windowed hierarchical BART panel for the hierarchical example.\n\ndatasets.load_victoria_electricity()\n\nLoad hourly Victoria (Australia) electricity demand and temperature.\n\ndatasets.bart_available()\n\nReturn whether the BART dataset can be loaded (download succeeds).",
+    "text": "Build a Mean Absolute Scaled Error metric scaled by train_data.\n\n\nUsage\nSource\n\n\nmetrics.make_mase(train_data, *, seasonality=1)\n\n\nMASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on train_data, mean(|y_t - y_{t-seasonality}|). The scale is computed once at factory time; the returned metric has the standard (pred, truth) -&gt; float signature.\n\n\nParameters\n\n\ntrain_data: Array\n\nTraining data with time at axis -2; its seasonal differences set the scale.\n\nseasonality: int = 1\n\nSeasonal period (&gt;= 1); 1 is the random-walk naive baseline.\n\n\n\n\n\nReturns\n\n\n Metric\n\nA (pred, truth) -&gt; float callable computing MASE.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf seasonality &lt; 1, train_data is not longer than seasonality along the time axis, or the seasonal-naive scale is zero (a constant series, for which MASE is undefined).",
     "crumbs": [
       "Reference",
-      "API Index"
+      "Backtesting & evaluation",
+      "[metrics.make_mase()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.forecast.html",
-    "href": "reference/functional.forecast.html",
-    "title": "functional.forecast()",
+    "objectID": "reference/functional.fit_mcmc.html",
+    "href": "reference/functional.fit_mcmc.html",
+    "title": "functional.fit_mcmc()",
     "section": "",
-    "text": "Sample forecasts for the steps in [t, duration) from a posterior.\n\n\nUsage\nSource\n\n\nfunctional.forecast(\n    rng_key,\n    model,\n    posterior,\n    data,\n    covariates,\n    *,\n    batch_size=None,\n    parallel=True\n)\n\n\nRuns Predictive with full-horizon covariates and the in-sample data: the in-sample latent sites are drawn from posterior while the _future suffix is drawn from the prior, and the \"forecast\" site is returned. The number of forecast samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ndata: Array\n\nObserved data with time at axis -2 and length t.\n\ncovariates: Array\n\nCovariates with time at axis -2 and length duration &gt; t.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). With parallel=True the samples in each batch_size chunk are vectorized while the chunks are looped over, so batch_size remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.\n\n\n\n\n\nReturns\n\n\n Float[Array, \" sample *batch future obs\"]\n\nForecast samples over the future = duration - t horizon.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf covariates does not extend beyond data along the time axis.\n\n\n\n\n\nNotes\nChunking is a memory knob, not a reproducibility knob: reproducibility is per (rng_key, batch_size). Each chunk is padded to a whole multiple of batch_size so the underlying _predict compiles exactly once for a fixed shape (the pad draws are discarded), but changing batch_size changes the PRNG stream layout and therefore the exact draws.",
+    "text": "Fit a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.fit_mcmc(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    kernel=None,\n    kernel_kwargs=None,\n    num_warmup=1000,\n    num_samples=1000,\n    num_chains=1,\n    chain_method=\"sequential\",\n    progress_bar=False\n)\n\n\nPRNG: consumed entirely by ~numpyro.infer.MCMC.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class; rejected with an instance).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains (stored on the returned MCMCFit).\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.\n\n\n\n\n\nReturns\n\n\n MCMCFit\n\nThe posterior samples (flattened) and num_chains.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations, or a run-config constraint is violated (see _validate_kernel_run_config()).",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.forecast()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.fit_mcmc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/util.shift_loc.html",
+    "href": "reference/util.shift_loc.html",
+    "title": "util.shift_loc()",
+    "section": "",
+    "text": "Re-center a zero-centered noise distribution at loc.\n\n\nUsage\nSource\n\n\nutil.shift_loc(noise_dist, loc)\n\n\nThis converts Pyro’s obs = data - prediction idiom into an additive shift of the observation distribution’s location.\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nA zero-centered location-family distribution.\n\nloc: Array\n\nThe deterministic mean to add to the distribution’s location.\n\n\n\n\n\nReturns\n\n\n dist.Distribution\n\nA distribution centered at loc.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf noise_dist is of an unsupported type.",
+    "crumbs": [
+      "Reference",
+      "Utilities",
+      "[util.shift_loc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -132,27 +152,75 @@
     ]
   },
   {
-    "objectID": "reference/evaluate.eval_crps.html",
-    "href": "reference/evaluate.eval_crps.html",
-    "title": "evaluate.eval_crps()",
+    "objectID": "reference/contrib.blackjax.BlackjaxNUTSKernel.html",
+    "href": "reference/contrib.blackjax.BlackjaxNUTSKernel.html",
+    "title": "contrib.blackjax.BlackjaxNUTSKernel",
     "section": "",
-    "text": "Empirical CRPS averaged over all data elements.\n\n\nUsage\nSource\n\n\nevaluate.eval_crps(pred, truth)\n\n\nParameters\n\n\npred: Array\n\nForecast samples with the sample axis first.\n\ntruth: Array\n\nGround-truth values (matching pred without the sample axis).\n\n\n\n\n\nReturns\n\n\n float\n\nThe mean empirical CRPS.",
+    "text": "BlackJAX NUTS with Stan-style window adaptation.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxNUTSKernel()\n\n\nAdaptation (step size and inverse mass matrix) runs once in ~_BlackjaxKernel.init() via blackjax.window_adaptation; each MCMC step is then a single tuned NUTS step.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nnum_adaptation_steps: int = 500\n\nNumber of window-adaptation steps.\n\ntarget_acceptance_rate: float = 0.8\n\nTarget acceptance probability for dual-averaging step-size adaptation.",
     "crumbs": [
       "Reference",
-      "Backtesting & evaluation",
-      "[evaluate.eval_crps()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Extensions (contrib)",
+      "[contrib.blackjax.BlackjaxNUTSKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
     ]
   },
   {
-    "objectID": "reference/functional.draw_posterior.html",
-    "href": "reference/functional.draw_posterior.html",
-    "title": "functional.draw_posterior()",
+    "objectID": "reference/functional.Horizon.html",
+    "href": "reference/functional.Horizon.html",
+    "title": "functional.Horizon",
     "section": "",
-    "text": "Draw num_samples posterior samples of the latent sites from a fit.\n\n\nUsage\nSource\n\n\nfunctional.draw_posterior(rng_key, fit, num_samples)\n\n\nDispatches on the fit type (e.g. SVIFit, MCMCFit). The returned dict has the sample axis leading and is ready to pass to forecast() or NumPyro’s Predictive.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nfit: object\n\nA fit result produced by fit_svi() or fit_mcmc().\n\nnum_samples: int\n\nNumber of posterior draws.\n\n\n\n\n\nReturns\n\n\n dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf fit is of an unsupported type.\n\n\n\n\n\nNotes\nFor an MCMCFit, when num_samples does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an SVIFit the draws are sampled afresh from the fitted guide.",
+    "text": "The train/forecast split for a single model call.",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.draw_posterior()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.Horizon.html#zero_data",
+    "href": "reference/functional.Horizon.html#zero_data",
+    "title": "functional.Horizon",
+    "section": "zero_data",
+    "text": "zero_data\n\nZeros shaped like data extended to the full horizon.\n\n\nzero_data: Array | None\n\n\nMirrors Pyro’s zero_data (and numpyro_forecast.util.zero_data_like()): it exposes the shape/dtype of the data over the forecast horizon without leaking observed values. None when there is no data.",
+    "crumbs": [
+      "Reference",
+      "Functional core",
+      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.Horizon.html#post_init__",
+    "href": "reference/functional.Horizon.html#post_init__",
+    "title": "functional.Horizon",
+    "section": "__post_init__()",
+    "text": "__post_init__()\n\nValidate that the horizon fields are internally consistent.\n\n\nUsage\nSource\n\n\n__post_init__()",
+    "crumbs": [
+      "Reference",
+      "Functional core",
+      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.Horizon.html#from_data",
+    "href": "reference/functional.Horizon.html#from_data",
+    "title": "functional.Horizon",
+    "section": "from_data()",
+    "text": "from_data()\n\nDerive the horizon from covariate and data shapes.\n\n\nUsage\nSource\n\n\nfrom_data(covariates, data)\n\n\nParameters\n\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the full horizon.\n\ndata: Array | None\n\nObserved data with time at axis -2 (None for prior sampling).\n\n\n\n\n\nReturns\n\n\n Horizon\n\nThe horizon with duration = covariates.shape[-2], t_obs = data.shape[-2] (or duration when data is None), and future = duration - t_obs.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data is longer than covariates along the time axis.",
+    "crumbs": [
+      "Reference",
+      "Functional core",
+      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/util.fourier_features.html",
+    "href": "reference/util.fourier_features.html",
+    "title": "util.fourier_features()",
+    "section": "",
+    "text": "Build a Fourier seasonality design matrix.\n\n\nUsage\nSource\n\n\nutil.fourier_features(duration, period, num_terms)\n\n\nParameters\n\n\nduration: int\n\nNumber of time steps.\n\nperiod: float\n\nSeasonal period (in time steps).\n\nnum_terms: int\n\nNumber of harmonics; the output has 2 * num_terms columns (sine then cosine).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"duration two_num_terms\"]\n\nThe design matrix of shape (duration, 2 * num_terms).",
+    "crumbs": [
+      "Reference",
+      "Utilities",
+      "[util.fourier_features()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -453,6 +521,48 @@
     "text": "Thanks for your interest in numpyro_forecast!\n\nDevelopment setup\nuv sync --all-extras\nprek install\n\n\nWorkflow\n\nLint & format: uv run ruff check . and uv run ruff format .\nType check: uv run ty check numpyro_forecast/\nTests: uv run pytest\nNotebooks: uv run pytest --nbmake docs/examples/ (executes the example notebooks)\nDocs site: make docs (build) or make docs-preview (live preview)\nAll hooks: prek run --all-files\n\n\n\nGuidelines\n\nEvery function (public and private) must have complete input and return type hints. Type checking is enforced with ty.\nEvery public function and class must have a NumPy-style docstring.\nArray shapes are annotated with jaxtyping, with a leading space in the shape string (e.g. Float[Array, \" time obs\"]).\nFollow the array convention: time at axis -2, the observation dim at -1, batch dims to the left.\nAdd tests for new functionality. Keep one logical change per pull request."
   },
   {
+    "objectID": "changelog.html",
+    "href": "changelog.html",
+    "title": "Changelog",
+    "section": "",
+    "text": "This changelog is generated automatically from GitHub Releases."
+  },
+  {
+    "objectID": "changelog.html#whats-changed",
+    "href": "changelog.html#whats-changed",
+    "title": "Changelog",
+    "section": "What’s Changed",
+    "text": "What’s Changed\n\nRebuild docs on release so the version badge tracks the latest release by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/30\nAdd exponential smoothing example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/31\nAdd references to notebooks by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/32\nBetter prior plots by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/33\nBacktest improvement by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/35\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3"
+  },
+  {
+    "objectID": "changelog.html#whats-changed-1",
+    "href": "changelog.html#whats-changed-1",
+    "title": "Changelog",
+    "section": "What’s Changed",
+    "text": "What’s Changed\n\nImprove the univariate forecasting notebook by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/25\nUse better ArviZ functions by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/27\nBump version from 0.1.1 to 0.1.2 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/28\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2"
+  },
+  {
+    "objectID": "changelog.html#whats-changed-2",
+    "href": "changelog.html#whats-changed-2",
+    "title": "Changelog",
+    "section": "What’s Changed",
+    "text": "What’s Changed\n\nAdd documentation site with great-docs by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/14\nFix production docs deploy + prune old deployments by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/15\nFix merge-time docs deploy cancellation + restore prune workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/16\nAdd .nojekyll so notebook figures load on GitHub Pages by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/17\nAdd electricity demand forecasting example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/19\nAdd electricity forecasting calibration example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/20\nAdd coverage configuration to pyproject.toml by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/23\nOverall improvements after the MVP phase by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/21\nBump version from 0.1.0 to 0.1.1 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/24\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1"
+  },
+  {
+    "objectID": "changelog.html#whats-changed-3",
+    "href": "changelog.html#whats-changed-3",
+    "title": "Changelog",
+    "section": "What’s Changed",
+    "text": "What’s Changed\n\nInitial configuration by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/1\nAdd claude GitHub actions 1781548272346 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/3\nAdd examples by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/2\nmore improvements by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/4\nUpdate project name to ‘NumPyro Forecast’ by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/5\nfix prek by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/6\nAdditional cleanup by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/7\nFunctional API by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/8\nMake the random generator array the first argument by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/9\nImprovements by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/10\nImprove notebooks storyline by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/11\nrelease workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/13"
+  },
+  {
+    "objectID": "changelog.html#new-contributors",
+    "href": "changelog.html#new-contributors",
+    "title": "Changelog",
+    "section": "New Contributors",
+    "text": "New Contributors\n\n@juanitorduz made their first contribution in https://github.com/juanitorduz/numpyro_forecast/pull/1\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/commits/0.1.0"
+  },
+  {
     "objectID": "docs/examples/forecasting_univariate.html",
     "href": "docs/examples/forecasting_univariate.html",
     "title": "Univariate forecasting",
@@ -622,7 +732,7 @@
     "href": "skills.html",
     "title": "Skills",
     "section": "",
-    "text": "A skill is a package of structured files that teaches an AI coding agent how to work with a specific tool or framework. The skill below was generated by Great Docs from this project’s documentation. Install it in your agent and it will be able to run commands, edit configuration, write content, and troubleshoot problems without step-by-step guidance from you.\n\n  \n    ▶    Install this skill\n  \n  \n    \n      \nAny agent — install with npx:\nnpx skills add https://juanitorduz.github.io/numpyro_forecast/\nCodex / OpenCode\nTell the agent:Fetch the skill file at https://juanitorduz.github.io/numpyro_forecast/skill.md and follow the instructions.\nManual — download the skill file:\ncurl -O https://juanitorduz.github.io/numpyro_forecast/skill.md\nOr browse the SKILL.md file.\n      \n    \n  \n\n\nSKILL.md\n---\nname: numpyro-forecast\ndescription: &gt;\n  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.\nlicense: Apache-2.0\ncompatibility: Requires Python &gt;=3.12.\n---\n\n# numpyro_forecast\n\nA JAX/NumPyro port of Pyro's forecasting module.\n\n## Installation\n\n```bash\npip install numpyro-forecast\n```\n\n## API overview\n\n### Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n- `forecaster.Forecaster`\n- `forecaster.HMCForecaster`\n\n### Models\n\nBuilding forecasting models (object-oriented and functional).\n\n- `forecaster.ForecastingModel`\n- `functional.forecasting_model`\n\n### Functional core\n\nPure functional primitives for the train/forecast split.\n\n- `functional.Horizon`\n- `functional.time_series`\n- `functional.predict`\n- `functional.resolve_optimizer`\n- `functional.resolve_guide`\n- `functional.fit_svi`\n- `functional.draw_posterior`\n- `functional.resolve_kernel`\n- `functional.fit_mcmc`\n- `functional.forecast`\n- `functional.predict_in_sample`\n- `functional.SVIFit`\n- `functional.MCMCFit`\n\n### Backtesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n- `evaluate.backtest`\n- `evaluate.BacktestResult`\n- `evaluate.evaluate_forecast`\n- `evaluate.results_to_dataframe`\n- `evaluate.eval_crps`\n- `evaluate.eval_mae`\n- `evaluate.eval_rmse`\n- `evaluate.eval_coverage`\n- `metrics.crps_empirical`\n- `metrics.eval_pinball`\n- `metrics.eval_interval_score`\n- `metrics.make_mase`\n\n### Utilities\n\nArray helpers and feature builders.\n\n- `util.fourier_features`\n- `util.periodic_repeat`\n- `util.zero_data_like`\n- `util.concat_future`\n- `util.shift_loc`\n- `util.slice_time`\n- `util.prefix_condition`\n- `util.register_elementwise`\n- `util.require`\n\n### Datasets\n\nExample datasets used in the tutorials.\n\n- `datasets.load_bart_weekly`\n- `datasets.load_bart_hierarchical`\n- `datasets.load_victoria_electricity`\n- `datasets.bart_available`\n\n## Resources\n\n- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)\n- [llms.txt](llms.txt) — Indexed API reference for LLMs\n- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs\n- [Source code](https://github.com/juanitorduz/numpyro_forecast)"
+    "text": "A skill is a package of structured files that teaches an AI coding agent how to work with a specific tool or framework. The skill below was generated by Great Docs from this project’s documentation. Install it in your agent and it will be able to run commands, edit configuration, write content, and troubleshoot problems without step-by-step guidance from you.\n\n  \n    ▶    Install this skill\n  \n  \n    \n      \nAny agent — install with npx:\nnpx skills add https://juanitorduz.github.io/numpyro_forecast/\nCodex / OpenCode\nTell the agent:Fetch the skill file at https://juanitorduz.github.io/numpyro_forecast/skill.md and follow the instructions.\nManual — download the skill file:\ncurl -O https://juanitorduz.github.io/numpyro_forecast/skill.md\nOr browse the SKILL.md file.\n      \n    \n  \n\n\nSKILL.md\n---\nname: numpyro-forecast\ndescription: &gt;\n  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.\nlicense: Apache-2.0\ncompatibility: Requires Python &gt;=3.12.\n---\n\n# numpyro_forecast\n\nA JAX/NumPyro port of Pyro's forecasting module.\n\n## Installation\n\n```bash\npip install numpyro-forecast\n```\n\n## API overview\n\n### Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n- `forecaster.Forecaster`\n- `forecaster.HMCForecaster`\n- `forecaster.PathfinderForecaster`\n\n### Models\n\nBuilding forecasting models (object-oriented and functional).\n\n- `forecaster.ForecastingModel`\n- `functional.forecasting_model`\n\n### Functional core\n\nPure functional primitives for the train/forecast split.\n\n- `functional.Horizon`\n- `functional.time_series`\n- `functional.predict`\n- `functional.resolve_optimizer`\n- `functional.resolve_guide`\n- `functional.fit_svi`\n- `functional.draw_posterior`\n- `functional.resolve_kernel`\n- `functional.fit_mcmc`\n- `functional.forecast`\n- `functional.predict_in_sample`\n- `functional.SVIFit`\n- `functional.MCMCFit`\n\n### Backtesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n- `evaluate.backtest`\n- `evaluate.BacktestResult`\n- `evaluate.evaluate_forecast`\n- `evaluate.results_to_dataframe`\n- `evaluate.eval_crps`\n- `evaluate.eval_mae`\n- `evaluate.eval_rmse`\n- `evaluate.eval_coverage`\n- `metrics.crps_empirical`\n- `metrics.eval_pinball`\n- `metrics.eval_interval_score`\n- `metrics.make_mase`\n\n### Utilities\n\nArray helpers and feature builders.\n\n- `util.fourier_features`\n- `util.periodic_repeat`\n- `util.zero_data_like`\n- `util.concat_future`\n- `util.shift_loc`\n- `util.slice_time`\n- `util.prefix_condition`\n- `util.register_elementwise`\n- `util.require`\n\n### Extensions (contrib)\n\nOptional backends behind pyproject extras (never imported by default).\n\n- `contrib.blackjax.BlackjaxNUTSKernel`\n- `contrib.blackjax.BlackjaxMCLMCKernel`\n- `contrib.blackjax.BlackjaxCustomKernel`\n\n### Datasets\n\nExample datasets used in the tutorials.\n\n- `datasets.load_bart_weekly`\n- `datasets.load_bart_hierarchical`\n- `datasets.load_victoria_electricity`\n- `datasets.bart_available`\n\n## Resources\n\n- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)\n- [llms.txt](llms.txt) — Indexed API reference for LLMs\n- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs\n- [Source code](https://github.com/juanitorduz/numpyro_forecast)"
   },
   {
     "objectID": "reference/functional.resolve_kernel.html",
@@ -769,63 +879,39 @@
     ]
   },
   {
-    "objectID": "reference/util.fourier_features.html",
-    "href": "reference/util.fourier_features.html",
-    "title": "util.fourier_features()",
+    "objectID": "reference/contrib.blackjax.BlackjaxMCLMCKernel.html",
+    "href": "reference/contrib.blackjax.BlackjaxMCLMCKernel.html",
+    "title": "contrib.blackjax.BlackjaxMCLMCKernel",
     "section": "",
-    "text": "Build a Fourier seasonality design matrix.\n\n\nUsage\nSource\n\n\nutil.fourier_features(duration, period, num_terms)\n\n\nParameters\n\n\nduration: int\n\nNumber of time steps.\n\nperiod: float\n\nSeasonal period (in time steps).\n\nnum_terms: int\n\nNumber of harmonics; the output has 2 * num_terms columns (sine then cosine).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"duration two_num_terms\"]\n\nThe design matrix of shape (duration, 2 * num_terms).",
+    "text": "BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxMCLMCKernel()\n\n\nThe step size and trajectory length L are tuned once in ~_BlackjaxKernel.init() via blackjax.mclmc_find_L_and_step_size; each MCMC step is then a single tuned MCLMC step.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nnum_tuning_steps: int = 500\n\nNumber of tuning steps for L and the step size.",
     "crumbs": [
       "Reference",
-      "Utilities",
-      "[util.fourier_features()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Extensions (contrib)",
+      "[contrib.blackjax.BlackjaxMCLMCKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
     ]
   },
   {
-    "objectID": "reference/functional.Horizon.html",
-    "href": "reference/functional.Horizon.html",
-    "title": "functional.Horizon",
+    "objectID": "reference/functional.draw_posterior.html",
+    "href": "reference/functional.draw_posterior.html",
+    "title": "functional.draw_posterior()",
     "section": "",
-    "text": "The train/forecast split for a single model call.",
+    "text": "Draw num_samples posterior samples of the latent sites from a fit.\n\n\nUsage\nSource\n\n\nfunctional.draw_posterior(rng_key, fit, num_samples)\n\n\nDispatches on the fit type (e.g. SVIFit, MCMCFit). The returned dict has the sample axis leading and is ready to pass to forecast() or NumPyro’s Predictive.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nfit: object\n\nA fit result produced by fit_svi() or fit_mcmc().\n\nnum_samples: int\n\nNumber of posterior draws.\n\n\n\n\n\nReturns\n\n\n dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf fit is of an unsupported type.\n\n\n\n\n\nNotes\nFor an MCMCFit, when num_samples does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an SVIFit the draws are sampled afresh from the fitted guide.",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "[functional.draw_posterior()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.Horizon.html#zero_data",
-    "href": "reference/functional.Horizon.html#zero_data",
-    "title": "functional.Horizon",
-    "section": "zero_data",
-    "text": "zero_data\n\nZeros shaped like data extended to the full horizon.\n\n\nzero_data: Array | None\n\n\nMirrors Pyro’s zero_data (and numpyro_forecast.util.zero_data_like()): it exposes the shape/dtype of the data over the forecast horizon without leaking observed values. None when there is no data.",
+    "objectID": "reference/evaluate.eval_crps.html",
+    "href": "reference/evaluate.eval_crps.html",
+    "title": "evaluate.eval_crps()",
+    "section": "",
+    "text": "Empirical CRPS averaged over all data elements.\n\n\nUsage\nSource\n\n\nevaluate.eval_crps(pred, truth)\n\n\nParameters\n\n\npred: Array\n\nForecast samples with the sample axis first.\n\ntruth: Array\n\nGround-truth values (matching pred without the sample axis).\n\n\n\n\n\nReturns\n\n\n float\n\nThe mean empirical CRPS.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.Horizon.html#post_init__",
-    "href": "reference/functional.Horizon.html#post_init__",
-    "title": "functional.Horizon",
-    "section": "__post_init__()",
-    "text": "__post_init__()\n\nValidate that the horizon fields are internally consistent.\n\n\nUsage\nSource\n\n\n__post_init__()",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.Horizon.html#from_data",
-    "href": "reference/functional.Horizon.html#from_data",
-    "title": "functional.Horizon",
-    "section": "from_data()",
-    "text": "from_data()\n\nDerive the horizon from covariate and data shapes.\n\n\nUsage\nSource\n\n\nfrom_data(covariates, data)\n\n\nParameters\n\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the full horizon.\n\ndata: Array | None\n\nObserved data with time at axis -2 (None for prior sampling).\n\n\n\n\n\nReturns\n\n\n Horizon\n\nThe horizon with duration = covariates.shape[-2], t_obs = data.shape[-2] (or duration when data is None), and future = duration - t_obs.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data is longer than covariates along the time axis.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "Backtesting & evaluation",
+      "[evaluate.eval_crps()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -889,39 +975,50 @@
     ]
   },
   {
-    "objectID": "reference/util.shift_loc.html",
-    "href": "reference/util.shift_loc.html",
-    "title": "util.shift_loc()",
+    "objectID": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
+    "href": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
+    "title": "contrib.blackjax.BlackjaxCustomKernel",
     "section": "",
-    "text": "Re-center a zero-centered noise distribution at loc.\n\n\nUsage\nSource\n\n\nutil.shift_loc(noise_dist, loc)\n\n\nThis converts Pyro’s obs = data - prediction idiom into an additive shift of the observation distribution’s location.\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nA zero-centered location-family distribution.\n\nloc: Array\n\nThe deterministic mean to add to the distribution’s location.\n\n\n\n\n\nReturns\n\n\n dist.Distribution\n\nA distribution centered at loc.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf noise_dist is of an unsupported type.",
+    "text": "Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxCustomKernel()\n\n\nThe escape hatch for kernels without a dedicated wrapper. build_fn receives (logdensity_fn, rng_key, position, num_warmup) and must return (inner_state, step_fn), where inner_state exposes .position over the same sites as the model and step_fn has signature (rng_key, inner_state) -&gt; (inner_state, info). The base class validates the returned state’s key set and raises TypeError if it is malformed.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nbuild_fn: BuildFn\n\nThe blackjax build callable described above.",
     "crumbs": [
       "Reference",
-      "Utilities",
-      "[util.shift_loc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Extensions (contrib)",
+      "[contrib.blackjax.BlackjaxCustomKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
     ]
   },
   {
-    "objectID": "reference/functional.fit_mcmc.html",
-    "href": "reference/functional.fit_mcmc.html",
-    "title": "functional.fit_mcmc()",
+    "objectID": "reference/functional.forecast.html",
+    "href": "reference/functional.forecast.html",
+    "title": "functional.forecast()",
     "section": "",
-    "text": "Fit a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.fit_mcmc(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    kernel=None,\n    kernel_kwargs=None,\n    num_warmup=1000,\n    num_samples=1000,\n    num_chains=1,\n    chain_method=\"sequential\",\n    progress_bar=False\n)\n\n\nPRNG: consumed entirely by ~numpyro.infer.MCMC.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class; rejected with an instance).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains (stored on the returned MCMCFit).\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.\n\n\n\n\n\nReturns\n\n\n MCMCFit\n\nThe posterior samples (flattened) and num_chains.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations, or a run-config constraint is violated (see _validate_kernel_run_config()).",
+    "text": "Sample forecasts for the steps in [t, duration) from a posterior.\n\n\nUsage\nSource\n\n\nfunctional.forecast(\n    rng_key,\n    model,\n    posterior,\n    data,\n    covariates,\n    *,\n    batch_size=None,\n    parallel=True\n)\n\n\nRuns Predictive with full-horizon covariates and the in-sample data: the in-sample latent sites are drawn from posterior while the _future suffix is drawn from the prior, and the \"forecast\" site is returned. The number of forecast samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ndata: Array\n\nObserved data with time at axis -2 and length t.\n\ncovariates: Array\n\nCovariates with time at axis -2 and length duration &gt; t.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). With parallel=True the samples in each batch_size chunk are vectorized while the chunks are looped over, so batch_size remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.\n\n\n\n\n\nReturns\n\n\n Float[Array, \" sample *batch future obs\"]\n\nForecast samples over the future = duration - t horizon.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf covariates does not extend beyond data along the time axis.\n\n\n\n\n\nNotes\nChunking is a memory knob, not a reproducibility knob: reproducibility is per (rng_key, batch_size). Each chunk is padded to a whole multiple of batch_size so the underlying _predict compiles exactly once for a fixed shape (the pad draws are discarded), but changing batch_size changes the PRNG stream layout and therefore the exact draws.",
     "crumbs": [
       "Reference",
       "Functional core",
-      "[functional.fit_mcmc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[functional.forecast()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/metrics.make_mase.html",
-    "href": "reference/metrics.make_mase.html",
-    "title": "metrics.make_mase()",
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "Reference",
     "section": "",
-    "text": "Build a Mean Absolute Scaled Error metric scaled by train_data.\n\n\nUsage\nSource\n\n\nmetrics.make_mase(train_data, *, seasonality=1)\n\n\nMASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on train_data, mean(|y_t - y_{t-seasonality}|). The scale is computed once at factory time; the returned metric has the standard (pred, truth) -&gt; float signature.\n\n\nParameters\n\n\ntrain_data: Array\n\nTraining data with time at axis -2; its seasonal differences set the scale.\n\nseasonality: int = 1\n\nSeasonal period (&gt;= 1); 1 is the random-walk naive baseline.\n\n\n\n\n\nReturns\n\n\n Metric\n\nA (pred, truth) -&gt; float callable computing MASE.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf seasonality &lt; 1, train_data is not longer than seasonality along the time axis, or the seasonal-naive scale is zero (a constant series, for which MASE is undefined).",
+    "text": "Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n\nforecaster.Forecaster\n\nFit a forecasting model with stochastic variational inference.\n\nforecaster.HMCForecaster\n\nFit a forecasting model with MCMC (NUTS by default).\n\nforecaster.PathfinderForecaster\n\nFit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\n\n\nModels\n\nBuilding forecasting models (object-oriented and functional).\n\n\nforecaster.ForecastingModel\n\nAbstract base class for forecasting models.\n\nfunctional.forecasting_model()\n\nBuild a NumPyro model from a functional model body.\n\n\n\n\nFunctional core\n\nPure functional primitives for the train/forecast split.\n\n\nfunctional.Horizon\n\nThe train/forecast split for a single model call.\n\nfunctional.time_series()\n\nSample a time-varying latent over the full horizon.\n\nfunctional.predict()\n\nRegister the observation/forecast sites for the model.\n\nfunctional.resolve_optimizer()\n\nNormalize an optimizer specification into a NumPyro optimizer.\n\nfunctional.resolve_guide()\n\nNormalize a guide specification against model.\n\nfunctional.fit_svi()\n\nFit a forecasting model with stochastic variational inference.\n\nfunctional.draw_posterior()\n\nDraw num_samples posterior samples of the latent sites from a fit.\n\nfunctional.resolve_kernel()\n\nNormalize a kernel specification.\n\nfunctional.fit_mcmc()\n\nFit a forecasting model with MCMC.\n\nfunctional.forecast()\n\nSample forecasts for the steps in [t, duration) from a posterior.\n\nfunctional.predict_in_sample()\n\nSample the in-sample posterior predictive of the obs site.\n\nfunctional.SVIFit\n\nThe result of fitting a forecasting model with SVI.\n\nfunctional.MCMCFit\n\nThe result of fitting a forecasting model with MCMC.\n\n\n\n\nBacktesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n\nevaluate.backtest()\n\nBacktest a forecasting model on a moving window of (train, test) data.\n\nevaluate.BacktestResult\n\nPer-window result of a :func:backtest run.\n\nevaluate.evaluate_forecast()\n\nEvaluate forecast samples against ground truth for several metrics at once.\n\nevaluate.results_to_dataframe()\n\nFlatten backtest results into a tidy one-row-per-window DataFrame.\n\nevaluate.eval_crps()\n\nEmpirical CRPS averaged over all data elements.\n\nevaluate.eval_mae()\n\nMean absolute error using the forecast sample median as point estimate.\n\nevaluate.eval_rmse()\n\nRoot mean squared error using the forecast sample mean as point estimate.\n\nevaluate.eval_coverage()\n\nEmpirical coverage of the central alpha prediction interval.\n\nmetrics.crps_empirical()\n\nCompute the empirical Continuous Ranked Probability Score (CRPS).\n\nmetrics.eval_pinball()\n\nMean pinball (quantile) loss of the forecast quantile.\n\nmetrics.eval_interval_score()\n\nMean Winkler interval score for the central alpha prediction interval.\n\nmetrics.make_mase()\n\nBuild a Mean Absolute Scaled Error metric scaled by train_data.\n\n\n\n\nUtilities\n\nArray helpers and feature builders.\n\n\nutil.fourier_features()\n\nBuild a Fourier seasonality design matrix.\n\nutil.periodic_repeat()\n\nTile a seasonal pattern to cover duration time steps.\n\nutil.zero_data_like()\n\nReturn zeros shaped like data but extended to the covariate duration.\n\nutil.concat_future()\n\nConcatenate in-sample and forecast-horizon arrays along the time axis.\n\nutil.shift_loc()\n\nRe-center a zero-centered noise distribution at loc.\n\nutil.slice_time()\n\nSlice an elementwise distribution along the time axis -2.\n\nutil.prefix_condition()\n\nCondition a (t+f)-length distribution on a t-length data prefix.\n\nutil.register_elementwise()\n\nDeclare a distribution family elementwise (usable as a decorator).\n\nutil.require()\n\nImport an optional dependency, or raise a targeted ImportError.\n\n\n\n\nExtensions (contrib)\n\nOptional backends behind pyproject extras (never imported by default).\n\n\ncontrib.blackjax.BlackjaxNUTSKernel\n\nBlackJAX NUTS with Stan-style window adaptation.\n\ncontrib.blackjax.BlackjaxMCLMCKernel\n\nBlackJAX Microcanonical Langevin Monte Carlo (MCLMC).\n\ncontrib.blackjax.BlackjaxCustomKernel\n\nAdapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\n\n\n\nDatasets\n\nExample datasets used in the tutorials.\n\n\ndatasets.load_bart_weekly()\n\nLoad total weekly BART ridership (log scale) for the univariate example.\n\ndatasets.load_bart_hierarchical()\n\nLoad the windowed hierarchical BART panel for the hierarchical example.\n\ndatasets.load_victoria_electricity()\n\nLoad hourly Victoria (Australia) electricity demand and temperature.\n\ndatasets.bart_available()\n\nReturn whether the BART dataset can be loaded (download succeeds).",
     "crumbs": [
       "Reference",
-      "Backtesting & evaluation",
-      "[metrics.make_mase()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "API Index"
+    ]
+  },
+  {
+    "objectID": "reference/forecaster.PathfinderForecaster.html",
+    "href": "reference/forecaster.PathfinderForecaster.html",
+    "title": "forecaster.PathfinderForecaster",
+    "section": "",
+    "text": "Fit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\nUsage\nSource\n\n\nforecaster.PathfinderForecaster()\n\n\nA thin shim over numpyro_forecast.contrib.blackjax.fit_pathfinder(). BlackJAX is an optional dependency (pip install numpyro_forecast[blackjax]) imported lazily here, so constructing this class is the opt-in that pulls it in; importing numpyro_forecast never does (invariant I8). The constructor mirrors Forecaster without guide/optim (Pathfinder has neither) and adds num_elbo_samples/ftol.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nnum_elbo_samples: int = 200\n\nNumber of Monte Carlo samples used to estimate the ELBO along the L-BFGS path.\n\nftol: float = 1e-05\n\nL-BFGS relative function-value tolerance (convergence criterion).",
+    "crumbs": [
+      "Reference",
+      "Forecasters",
+      "[forecaster.PathfinderForecaster]{.doc-object-name .doc-class .doc-label .doc-label-class}"
     ]
   },
   {

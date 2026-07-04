@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>functional.draw_posterior() – numpyro_forecast | numpyro_forecast</title>
+<title>forecaster.PathfinderForecaster – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html">
-  <meta name="description" content="Draw num_samples posterior samples of the latent sites from a fit.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.PathfinderForecaster.html">
+  <meta name="description" content="Fit a forecasting model with BlackJAX Pathfinder variational inference.">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "functional.draw_posterior - numpyro_forecast",
+    "name": "forecaster.PathfinderForecaster - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.PathfinderForecaster.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="functional.draw_posterior() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Draw num_samples posterior samples of the latent sites from a fit.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html">
+  <meta property="og:title" content="forecaster.PathfinderForecaster – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Fit a forecasting model with BlackJAX Pathfinder variational inference.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.PathfinderForecaster.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="functional.draw_posterior() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Draw num_samples posterior samples of the latent sites from a fit.">
+  <meta name="twitter:title" content="forecaster.PathfinderForecaster – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Fit a forecasting model with BlackJAX Pathfinder variational inference.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">functional.draw_posterior()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">forecaster.PathfinderForecaster</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -244,7 +244,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.PathfinderForecaster</span></span></a>
   </div>
 </li>
@@ -314,7 +314,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.draw_posterior.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/functional.draw_posterior.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.draw_posterior()</span></span></a>
   </div>
 </li>
@@ -567,9 +567,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
    
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
-  <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
-  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
-  <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
     </div>
@@ -578,7 +575,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">functional.draw_posterior()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.PathfinderForecaster</span></h2>
 </div>
 
 
@@ -596,21 +593,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Draw <code>num_samples</code> posterior samples of the latent sites from a fit.</p>
+<p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional.py#L655-L689" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L413-L466" target="_blank" rel="noopener">Source</a></p>
 </div>
-<div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">functional</span><span class="op">.</span><span class="sig-name">draw_posterior</span>(
-    <span class="va">rng_key</span>,
-    <span class="va">fit</span>,
-    <span class="va">num_samples</span>,
-)</span></code></pre></div>
+<div class="doc-signature doc-Kind.CLASS">
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">forecaster</span><span class="op">.</span><span class="sig-name">PathfinderForecaster</span>()</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Dispatches on the fit type (e.g.&nbsp;<a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit" class="gdls-link gdls-code">SVIFit</a>, <a href="functional.MCMCFit.html#numpyro_forecast.functional.MCMCFit" class="gdls-link gdls-code">MCMCFit</a>). The returned dict has the sample axis leading and is ready to pass to <a href="functional.forecast.html#numpyro_forecast.functional.forecast" class="gdls-link gdls-code">forecast()</a> or NumPyro’s <code>Predictive</code>.</p>
+<p>A thin shim over <code>numpyro_forecast.contrib.blackjax.fit_pathfinder()</code>. BlackJAX is an optional dependency (<code>pip install numpyro_forecast[blackjax]</code>) imported lazily here, so constructing this class is the opt-in that pulls it in; importing <code>numpyro_forecast</code> never does (invariant I8). The constructor mirrors <a href="forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> without <code>guide</code>/<code>optim</code> (Pathfinder has neither) and adds <code>num_elbo_samples</code>/<code>ftol</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -618,44 +611,30 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dl>
 <dt><code><span class="doc-parameter-name">rng_key</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>PRNG key.</p>
+<p>PRNG key for inference.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">fit</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">object</span></code></dt>
+<dt><code><span class="doc-parameter-name">model</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ForecastModel</span></code></dt>
 <dd>
-<p>A fit result produced by <a href="functional.fit_svi.html#numpyro_forecast.functional.fit_svi" class="gdls-link gdls-code">fit_svi()</a> or <a href="functional.fit_mcmc.html#numpyro_forecast.functional.fit_mcmc" class="gdls-link gdls-code">fit_mcmc()</a>.</p>
+<p>The forecasting model to fit (OOP instance or functional model).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
+<dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-Number of posterior draws.
+<p>In-sample data with time at axis <code>-2</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dd>
+<p>Covariates with time at axis <code>-2</code> and the same duration as <code>data</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">num_elbo_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">200</span></span></code></dt>
+<dd>
+<p>Number of Monte Carlo samples used to estimate the ELBO along the L-BFGS path.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">ftol</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">float</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="fl">1e-05</span></span></code></dt>
+<dd>
+L-BFGS relative function-value tolerance (convergence criterion).
 </dd>
 </dl>
 </div>
-</section>
-<section id="returns" class="level2 doc-returns">
-<h2 class="doc-returns">Returns</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
-<dd>
-Posterior samples of the latent sites, sample axis leading.
-</dd>
-</dl>
-</div>
-</section>
-<section id="raises" class="level2 doc-raises">
-<h2 class="doc-raises">Raises</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">NotImplementedError</span></code></dt>
-<dd>
-If <code>fit</code> is of an unsupported type.
-</dd>
-</dl>
-</div>
-</section>
-<section id="notes" class="level2 doc-notes">
-<h2 class="doc-notes">Notes</h2>
-<p>For an <a href="functional.MCMCFit.html#numpyro_forecast.functional.MCMCFit" class="gdls-link gdls-code">MCMCFit</a>, when <code>num_samples</code> does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an <a href="functional.SVIFit.html#numpyro_forecast.functional.SVIFit" class="gdls-link gdls-code">SVIFit</a> the draws are sampled afresh from the fitted guide.</p>
 
 
 </section>

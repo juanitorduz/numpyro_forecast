@@ -24,7 +24,7 @@ The forecasting model to fit (OOP instance or functional model).
 In-sample data with time at axis `-2`.
 
 `covariates: Array`  
-Covariates with time at axis `-2` and the same duration as [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data).
+Covariates with time at axis `-2` and the same duration as `data`.
 
 `kernel: KernelLike = None`  
 Kernel specification resolved by `~numpyro_forecast.functional.resolve_kernel()`: `None` (`NUTS`), an `MCMCKernel` instance, or an `MCMCKernel` subclass.

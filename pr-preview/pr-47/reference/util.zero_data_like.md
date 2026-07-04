@@ -1,7 +1,7 @@
 ## util.zero_data_like()
 
 
-Return zeros shaped like [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) but extended to the covariate duration.
+Return zeros shaped like `data` but extended to the covariate duration.
 
 
 Usage

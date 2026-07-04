@@ -40,7 +40,7 @@ The forecasting model callable (OOP instance or functional model).
 In-sample data with time at axis `-2`.
 
 `covariates: Array`  
-Covariates with time at axis `-2` and the same duration as [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data).
+Covariates with time at axis `-2` and the same duration as `data`.
 
 `kernel: KernelLike = None`  
 Kernel specification resolved by [resolve_kernel()](functional.resolve_kernel.md#numpyro_forecast.functional.resolve_kernel): `None` (`NUTS`), an `MCMCKernel` instance, or an `MCMCKernel` subclass.
@@ -68,11 +68,11 @@ Whether to display the MCMC progress bar.
 
 
 `MCMCFit`  
-The posterior samples (flattened) and [num_chains](functional.MCMCFit.md#numpyro_forecast.functional.MCMCFit.num_chains).
+The posterior samples (flattened) and `num_chains`.
 
 
 ## Raises
 
 
 `ValueError`  
-If [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) and [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) have different durations, or a run-config constraint is violated (see `_validate_kernel_run_config()`).
+If `data` and `covariates` have different durations, or a run-config constraint is violated (see `_validate_kernel_run_config()`).

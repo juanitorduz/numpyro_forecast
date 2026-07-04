@@ -24,6 +24,7 @@ High-level interfaces for fitting and forecasting.
 
 - `forecaster.Forecaster`
 - `forecaster.HMCForecaster`
+- `forecaster.PathfinderForecaster`
 
 ### Models
 
@@ -80,6 +81,14 @@ Array helpers and feature builders.
 - `util.prefix_condition`
 - `util.register_elementwise`
 - `util.require`
+
+### Extensions (contrib)
+
+Optional backends behind pyproject extras (never imported by default).
+
+- `contrib.blackjax.BlackjaxNUTSKernel`
+- `contrib.blackjax.BlackjaxMCLMCKernel`
+- `contrib.blackjax.BlackjaxCustomKernel`
 
 ### Datasets
 

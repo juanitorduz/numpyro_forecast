@@ -20,7 +20,7 @@ functional.forecast(
 ```
 
 
-Runs `Predictive` with full-horizon [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) and the in-sample [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data): the in-sample latent sites are drawn from `posterior` while the `_future` suffix is drawn from the prior, and the `"forecast"` site is returned. The number of forecast samples equals the leading (sample) axis of `posterior` (see [draw_posterior()](functional.draw_posterior.md#numpyro_forecast.functional.draw_posterior)).
+Runs `Predictive` with full-horizon `covariates` and the in-sample `data`: the in-sample latent sites are drawn from `posterior` while the `_future` suffix is drawn from the prior, and the `"forecast"` site is returned. The number of forecast samples equals the leading (sample) axis of `posterior` (see [draw_posterior()](functional.draw_posterior.md#numpyro_forecast.functional.draw_posterior)).
 
 
 ## Parameters
@@ -59,7 +59,7 @@ Forecast samples over the `future = duration - t` horizon.
 
 
 `ValueError`  
-If [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) does not extend beyond [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) along the time axis.
+If `covariates` does not extend beyond `data` along the time axis.
 
 
 ## Notes

@@ -39,7 +39,7 @@ The forecasting model callable (OOP instance or functional model).
 In-sample data with time at axis `-2`.
 
 `covariates: Array`  
-Covariates with time at axis `-2` and the same duration as [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data).
+Covariates with time at axis `-2` and the same duration as `data`.
 
 `guide: GuideLike = None`  
 Guide specification resolved by [resolve_guide()](functional.resolve_guide.md#numpyro_forecast.functional.resolve_guide): `None` (`AutoNormal`), an `AutoGuide` instance, an `AutoGuide` subclass or `functools.partial` factory of one, or a hand-written guide function.
@@ -71,11 +71,11 @@ Whether SVI skips parameter updates whose new value is non-finite (NumPyro's `st
 
 
 `SVIFit`  
-The fitted guide, variational parameters, loss history, and the in-sample [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data)/[covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) (kept by identity, not copied).
+The fitted guide, variational parameters, loss history, and the in-sample `data`/`covariates` (kept by identity, not copied).
 
 
 ## Raises
 
 
 `ValueError`  
-If [data](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.data) and [covariates](functional.SVIFit.md#numpyro_forecast.functional.SVIFit.covariates) have different durations.
+If `data` and `covariates` have different durations.
