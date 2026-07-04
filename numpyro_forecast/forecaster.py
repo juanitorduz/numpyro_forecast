@@ -13,6 +13,7 @@ posterior dict of latent draws.
 
 import abc
 from collections.abc import Callable
+from typing import cast
 
 import numpyro.distributions as dist
 from jax import random
@@ -32,7 +33,7 @@ from numpyro_forecast.functional import forecast as _forecast
 from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
-from numpyro_forecast.typing import Array, ForecastModel, OptimizerLike
+from numpyro_forecast.typing import Array, ForecastModel, GuideLike, OptimizerLike
 
 
 class ForecastingModel(abc.ABC):
@@ -280,7 +281,10 @@ class Forecaster(_BaseForecaster):
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
     guide
-        Variational guide; defaults to ``AutoNormal(model)``.
+        Guide specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_guide`: ``None``
+        (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
+        ``functools.partial`` factory of one, or a hand-written guide function.
     optim
         Optimizer specification resolved by
         :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
@@ -303,7 +307,7 @@ class Forecaster(_BaseForecaster):
         data: Array,
         covariates: Array,
         *,
-        guide: AutoGuide | None = None,
+        guide: "GuideLike" = None,
         optim: "OptimizerLike" = None,
         num_steps: int = 1_001,
         num_particles: int = 1,
@@ -323,7 +327,9 @@ class Forecaster(_BaseForecaster):
             progress_bar=progress_bar,
             stable_update=stable_update,
         )
-        self.guide: AutoGuide = self._fit.guide
+        # Typed as AutoGuide for the common OOP path; hand-written guides
+        # (callables) are supported at runtime but rare through this class.
+        self.guide: AutoGuide = cast("AutoGuide", self._fit.guide)
         self.params: dict[str, Array] = self._fit.params
         self.losses: Array = self._fit.losses
 

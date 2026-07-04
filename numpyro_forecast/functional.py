@@ -9,6 +9,8 @@ styles are fully interchangeable: both produce a NumPyro model callable
 ``(covariates, data=None)`` and consume a posterior dict of latent draws.
 """
 
+import functools
+import inspect
 import math
 from collections.abc import Callable
 from contextlib import ExitStack
@@ -24,11 +26,11 @@ from jax import random
 from jax.tree_util import tree_map
 from jaxtyping import Float
 from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
-from numpyro.infer.autoguide import AutoGuide, AutoNormal
+from numpyro.infer.autoguide import AutoDelta, AutoGuide, AutoNormal
 from numpyro.infer.reparam import Reparam
 from numpyro.optim import Adam, _NumPyroOptim
 
-from numpyro_forecast.typing import Array, ForecastModel, OptimizerLike
+from numpyro_forecast.typing import Array, ForecastModel, GuideLike, OptimizerLike
 from numpyro_forecast.util import (
     _zeros_like_data,
     concat_future,
@@ -306,6 +308,132 @@ def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
     raise TypeError(msg)
 
 
+_HANDWRITTEN_GUIDE_FACTORY_MSG = (
+    "resolve_guide() received a callable taking a single required positional "
+    "argument and no defaults. This is ambiguous: it looks like a guide *factory* "
+    "(e.g. `lambda model: AutoNormal(model)`), which must be passed as the class "
+    "or a functools.partial of it, not a lambda; or it is a hand-written guide, "
+    "which must use the model signature `(covariates, data=None)`."
+)
+
+_HANDWRITTEN_GUIDE_NEEDS_ARGS_MSG = (
+    "drawing from a hand-written guide requires the in-sample covariates/data, "
+    "which this SVIFit was constructed without. Fit via fit_svi (which records "
+    "them) or provide them explicitly."
+)
+
+
+def _probe_handwritten_guide(guide: Callable[..., object]) -> None:
+    """Reject callables whose signature matches a guide *factory*.
+
+    Uses :func:`inspect.signature`: exactly one required positional parameter,
+    no defaults, and no var-args raises :class:`TypeError` with the
+    dual-interpretation message. Signatures :mod:`inspect` cannot resolve
+    (builtins, some partials) pass the probe: it is a tripwire for the common
+    mistyped-factory mistake, not a gatekeeper.
+
+    Parameters
+    ----------
+    guide
+        The candidate hand-written guide callable.
+
+    Raises
+    ------
+    TypeError
+        If ``guide`` has the single-required-positional-argument factory shape.
+    """
+    try:
+        sig = inspect.signature(guide)
+    except (ValueError, TypeError):
+        return
+    params = list(sig.parameters.values())
+    required_positional = [
+        p
+        for p in params
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) and p.default is p.empty
+    ]
+    has_default = any(p.default is not p.empty for p in params)
+    has_var = any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in params)
+    if len(required_positional) == 1 and not has_default and not has_var:
+        raise TypeError(_HANDWRITTEN_GUIDE_FACTORY_MSG)
+
+
+def resolve_guide(
+    guide: "GuideLike",
+    model: ForecastModel,
+) -> "AutoGuide | Callable[..., None]":
+    """Normalize a guide specification against ``model``.
+
+    Resolution: ``None`` -> ``AutoNormal(model)``; an ``AutoGuide`` instance ->
+    returned unchanged; an ``AutoGuide`` subclass or a ``functools.partial`` of
+    one -> called with ``model``; any other callable -> a hand-written guide,
+    after :func:`_probe_handwritten_guide`. Anything else -> ``TypeError``.
+
+    Parameters
+    ----------
+    guide
+        The guide specification (see :data:`~numpyro_forecast.typing.GuideLike`).
+    model
+        The model the guide is built against.
+
+    Returns
+    -------
+    AutoGuide | Callable[..., None]
+        The resolved guide.
+
+    Raises
+    ------
+    TypeError
+        If ``guide`` is neither an ``AutoGuide`` (instance/subclass/partial) nor
+        a callable, or if it has the mistyped-factory shape.
+    """
+    if guide is None:
+        return AutoNormal(model)
+    if isinstance(guide, AutoGuide):
+        return guide
+    if isinstance(guide, type) and issubclass(guide, AutoGuide):
+        return guide(model)
+    if isinstance(guide, functools.partial):
+        target = guide.func
+        if isinstance(target, type) and issubclass(target, AutoGuide):
+            return cast("AutoGuide", guide(model))
+    if callable(guide):
+        _probe_handwritten_guide(guide)
+        return cast("Callable[..., None]", guide)
+    msg = (
+        f"resolve_guide() does not support {type(guide).__name__}; pass None, an "
+        "AutoGuide instance, an AutoGuide subclass (or functools.partial of one), "
+        "or a hand-written guide function `(covariates, data=None)`."
+    )
+    raise TypeError(msg)
+
+
+def _ensure_sample_axis_for_delta(samples: dict[str, Array], num_samples: int) -> dict[str, Array]:
+    """Tile ``AutoDelta`` point estimates to a leading sample axis.
+
+    Called only when the fit's guide is an ``AutoDelta`` (guide-type dispatch,
+    never shape inspection): every leaf is broadcast to
+    ``(num_samples, *leaf.shape)`` unconditionally. For all other Auto guides
+    ``sample_posterior`` already returns the axis and this is never invoked.
+
+    Parameters
+    ----------
+    samples
+        The MAP point estimate, one leaf per latent site.
+    num_samples
+        The leading sample-axis size to tile to.
+
+    Returns
+    -------
+    dict[str, Array]
+        Each leaf broadcast to ``(num_samples, *leaf.shape)``.
+    """
+    return {
+        name: jnp.broadcast_to(leaf, (num_samples, *jnp.shape(leaf)))
+        for name, leaf in samples.items()
+    }
+
+
 @dataclass(frozen=True)
 class SVIFit:
     """The result of fitting a forecasting model with SVI.
@@ -327,7 +455,7 @@ class SVIFit:
         constructed without it.
     """
 
-    guide: AutoGuide
+    guide: "AutoGuide | Callable[..., None]"
     params: dict[str, Array]
     losses: Array
     data: Array | None = None
@@ -366,7 +494,7 @@ def fit_svi(
     data: Array,
     covariates: Array,
     *,
-    guide: AutoGuide | None = None,
+    guide: "GuideLike" = None,
     optim: "OptimizerLike" = None,
     num_steps: int = 1_001,
     num_particles: int = 1,
@@ -388,7 +516,9 @@ def fit_svi(
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
     guide
-        Variational guide; defaults to ``AutoNormal(model)``.
+        Guide specification resolved by :func:`resolve_guide`: ``None``
+        (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
+        ``functools.partial`` factory of one, or a hand-written guide function.
     optim
         Optimizer specification resolved by :func:`resolve_optimizer`: ``None``
         (``Adam(0.01)``), a positive scalar learning rate, an
@@ -422,7 +552,7 @@ def fit_svi(
         If ``data`` and ``covariates`` have different durations.
     """
     _require_equal_duration(data, covariates)
-    resolved_guide = AutoNormal(model) if guide is None else guide
+    resolved_guide = resolve_guide(guide, model)
     optimizer = resolve_optimizer(optim)
     svi = SVI(model, resolved_guide, optimizer, Trace_ELBO(num_particles=num_particles))
     result = svi.run(
@@ -452,7 +582,15 @@ def _draw_posterior_impl(fit: object, num_samples: int, rng_key: Array) -> dict[
 @_draw_posterior_impl.register
 def _(fit: SVIFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     _require_positive_num_samples(num_samples)
-    return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+    if isinstance(fit.guide, AutoDelta):
+        point = fit.guide.sample_posterior(rng_key, fit.params)
+        return _ensure_sample_axis_for_delta(point, num_samples)
+    if isinstance(fit.guide, AutoGuide):
+        return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+    if fit.covariates is None:
+        raise ValueError(_HANDWRITTEN_GUIDE_NEEDS_ARGS_MSG)
+    predictive = Predictive(fit.guide, params=fit.params, num_samples=num_samples)
+    return predictive(rng_key, fit.covariates, fit.data)
 
 
 def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, Array]:

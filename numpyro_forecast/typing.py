@@ -11,6 +11,7 @@ import jax
 
 if TYPE_CHECKING:
     import optax
+    from numpyro.infer.autoguide import AutoGuide
     from numpyro.optim import _NumPyroOptim
 
     from numpyro_forecast.forecaster import _BaseForecaster
@@ -30,6 +31,18 @@ else:
     # Runtime alias kept deliberately broad so the beartype import hook accepts
     # any resolvable form without forcing an ``optax`` import (invariant I8).
     OptimizerLike = object
+
+if TYPE_CHECKING:
+    GuideLike = AutoGuide | type[AutoGuide] | Callable[..., object] | None
+    """A guide specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
+
+    Resolved by :func:`~numpyro_forecast.functional.resolve_guide`: ``None``
+    (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or a
+    ``functools.partial`` factory of one, or a hand-written guide function.
+    """
+else:
+    # Runtime alias kept broad for the beartype import hook (see OptimizerLike).
+    GuideLike = object
 
 Metric = Callable[[Array, Array], float]
 """A metric maps ``(pred, truth)`` forecast/ground-truth arrays to a scalar."""
