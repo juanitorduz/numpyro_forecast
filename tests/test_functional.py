@@ -527,18 +527,34 @@ def test_forecast_chunked_close_to_unchunked() -> None:
     )
 
 
-def test_forecast_compiles_predict_once_across_sample_sweep(count_compilations) -> None:
-    """Invariant I3: chunked forecasts compile _predict once for a fixed shape."""
+def test_single_compile_while_chunking(count_compilations) -> None:
+    """Invariant I3: fixed shapes ⇒ fixed compile counts for chunked forecasts.
+
+    Padding makes every chunk share the ``(batch_size, future, obs)`` shape, so
+    the forecast kernel (`_predict`) compiles a single variant across the whole
+    ``num_samples`` sweep. The compile-count harness (roadmap §4.5) then proves
+    that replaying the sweep triggers zero further backend compilations once
+    every shape has been seen, and the ``_predict`` cache introspection pins the
+    forecast kernel specifically to one variant.
+    """
     model, data, fit = _fit_data()
     covariates = empty_covariates(36)
     # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
     posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    with count_compilations():
+
+    def _sweep() -> None:
         for post in posteriors:
             jax.block_until_ready(
                 forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
             )
-    # A single (batch_size, future, obs) shape variant across the whole sweep.
+
+    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
+    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
+    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+    # Replaying the sweep hits every cached shape, so nothing recompiles.
+    with count_compilations() as tally:
+        _sweep()
+    assert tally.count == 0
     assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
