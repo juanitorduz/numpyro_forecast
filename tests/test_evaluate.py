@@ -790,6 +790,7 @@ def test_run_window_builds_result_and_applies_transform() -> None:
         data=data,
         covariates=covariates,
         model_fn=RandomWalkModel,
+        shared_model=None,
         forecaster_fn=cast("ForecasterFactory", lambda *args, **kwargs: _FakeForecaster()),
         options={},
         num_samples=16,
@@ -902,3 +903,42 @@ def test_results_to_dataframe_missing_pandas(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(importlib, "import_module", fake_import)
     with pytest.raises(ImportError, match=r"dataframes"):
         results_to_dataframe([_make_result(0)])
+
+
+def test_rolling_backtest_reuse_model_predict_cache(
+    count_compilations,
+    rng_key: Array,
+) -> None:
+    """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
+    import jax
+
+    from numpyro_forecast.functional import _predict
+
+    duration = 80
+    train, test, stride = 25, 5, 5
+    data = jnp.sin(jnp.linspace(0, 6, duration))[:, None]
+    cov = jnp.zeros((duration, 0))
+    num_windows = (duration - train - test) // stride + 1
+
+    def run(reuse: bool) -> int:
+        _predict.clear_cache()  # ty: ignore[unresolved-attribute]
+        with count_compilations() as tally:  # type: ignore[operator]
+            backtest(
+                rng_key,
+                data,
+                cov,
+                RandomWalkModel,
+                train_window=train,
+                test_window=test,
+                stride=stride,
+                num_samples=10,
+                forecaster_options={"num_steps": 30},
+                reuse_model=reuse,
+            )
+            jax.block_until_ready(data)
+        return int(tally.count)  # type: ignore[attr-defined]
+
+    without_reuse = run(False)
+    with_reuse = run(True)
+    assert with_reuse <= without_reuse
+    assert _predict._cache_size() <= num_windows  # ty: ignore[unresolved-attribute]

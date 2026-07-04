@@ -56,8 +56,11 @@ def test_all_matches_exported_names() -> None:
         "ForecastingModel",
         "HMCForecaster",
         "PathfinderForecaster",
+        "VectorizedBacktestResult",
         "__version__",
+        "add_forecast",
         "backtest",
+        "backtest_vectorized",
         "eval_coverage",
         "eval_crps",
         "eval_mae",
@@ -66,7 +69,6 @@ def test_all_matches_exported_names() -> None:
         "forecasting_model",
         "register_elementwise",
         "results_to_dataframe",
-        "add_forecast",
         "to_datatree",
     }
     for name in names:

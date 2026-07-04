@@ -88,6 +88,7 @@ reference:
     contents:
       - functional.Horizon
       - functional.time_series
+      - functional.markov_time_series
       - functional.predict
       - functional.predict_glm
       - functional.resolve_optimizer
@@ -105,7 +106,9 @@ reference:
     desc: Rolling-window backtesting and forecast metrics.
     contents:
       - evaluate.backtest
+      - evaluate.backtest_vectorized
       - evaluate.BacktestResult
+      - evaluate.VectorizedBacktestResult
       - evaluate.evaluate_forecast
       - evaluate.results_to_dataframe
       - evaluate.eval_crps

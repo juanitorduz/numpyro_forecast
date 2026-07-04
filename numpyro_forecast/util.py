@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from functools import lru_cache, singledispatch
 from types import ModuleType
 
+import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
@@ -387,6 +388,86 @@ def _(noise_dist: dist.Independent, data: Array) -> dist.Distribution:
     # Independent-over-time noise: the conditional is the horizon marginal.
     t = data.shape[-2]
     return slice_time(noise_dist, slice(t, None))
+
+
+_MVN_LAYOUT_MSG = (
+    "MultivariateNormal time-axis surgery requires obs == 1 with time as the "
+    "leading correlation axis (loc shape ``(*batch, time)`` or "
+    "``(*batch, time, 1)`` with matching ``(*batch, time, time)`` covariance)."
+)
+
+
+def _mvn_time_params(
+    noise_dist: dist.MultivariateNormal,
+) -> tuple[Array, Array]:
+    """Return ``(loc, cov)`` with loc shaped ``(*batch, time)`` for the supported layout."""
+    loc = jnp.asarray(noise_dist.loc)
+    cov = jnp.asarray(noise_dist.covariance_matrix)
+    if loc.ndim >= 2 and loc.shape[-1] != 1:
+        raise NotImplementedError(_MVN_LAYOUT_MSG)
+    if loc.ndim >= 1 and loc.shape[-1] == 1:
+        loc = loc[..., 0]
+    if loc.ndim == 0:
+        raise NotImplementedError(_MVN_LAYOUT_MSG)
+    return loc, cov
+
+
+def _symmetrize(cov: Array) -> Array:
+    return 0.5 * (cov + jnp.swapaxes(cov, -1, -2))
+
+
+def _mvn_jitter(cov: Array, floor: float = 1e-6) -> Array:
+    dim = cov.shape[-1]
+    eye = jnp.eye(dim, dtype=cov.dtype)
+    return _symmetrize(cov) + floor * eye
+
+
+def _mvn_prefix_condition(
+    loc: Array, cov: Array, data: Array
+) -> dist.MultivariateNormal:
+    """Gaussian conditional of an MVN over time given a prefix observation."""
+    t = data.shape[-2]
+    x = data[..., 0]
+    mu_p = loc[..., :t]
+    mu_f = loc[..., t:]
+    sigma_pp = cov[..., :t, :t]
+    sigma_pf = cov[..., :t, t:]
+    sigma_fp = cov[..., t:, :t]
+    sigma_ff = cov[..., t:, t:]
+
+    sigma_pp = _mvn_jitter(sigma_pp)
+    chol = jnp.linalg.cholesky(sigma_pp)
+    diff = (x - mu_p)[..., None]
+    # solve sigma_pp @ v = diff
+    v = jax.scipy.linalg.cho_solve((chol, True), diff)
+    cond_mean = mu_f + (sigma_fp @ v)[..., 0]
+    # cond cov: sigma_ff - sigma_fp @ inv(sigma_pp) @ sigma_pf
+    w = jax.scipy.linalg.cho_solve((chol, True), sigma_pf)
+    cond_cov = _mvn_jitter(sigma_ff - sigma_fp @ w)
+    return dist.MultivariateNormal(loc=cond_mean, covariance_matrix=cond_cov)
+
+
+@shift_loc.register
+def _(noise_dist: dist.MultivariateNormal, loc: Array) -> dist.Distribution:
+    base_loc, cov = _mvn_time_params(noise_dist)
+    shift = loc[..., 0] if loc.ndim >= 1 and loc.shape[-1] == 1 else loc
+    while shift.ndim > base_loc.ndim:
+        shift = shift[..., 0]
+    return dist.MultivariateNormal(loc=base_loc + shift, covariance_matrix=cov)
+
+
+@slice_time.register
+def _(noise_dist: dist.MultivariateNormal, index: slice) -> dist.Distribution:
+    base_loc, cov = _mvn_time_params(noise_dist)
+    new_loc = base_loc[..., index]
+    new_cov = cov[..., index, :][..., :, index]
+    return dist.MultivariateNormal(loc=new_loc, covariance_matrix=new_cov)
+
+
+@prefix_condition.register
+def _(noise_dist: dist.MultivariateNormal, data: Array) -> dist.Distribution:
+    base_loc, cov = _mvn_time_params(noise_dist)
+    return _mvn_prefix_condition(base_loc, cov, data)
 
 
 register_elementwise(dist.Normal)

@@ -12,7 +12,7 @@ posterior dict of latent draws.
 """
 
 import abc
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 import numpyro.distributions as dist
@@ -158,6 +158,35 @@ class ForecastingModel(abc.ABC):
             axis ``-2``.
         """
         _predict_glm(self._require_horizon(), obs_dist_fn, latent)
+
+    def markov_time_series(
+        self,
+        name: str,
+        init_carry: object,
+        transition: Callable[
+            [object, Array | None],
+            tuple[dist.Distribution, Callable[[Array], object]],
+        ],
+        xs: Array | None = None,
+        *,
+        plates: Sequence[tuple[str, int]] = (),
+        reparam_config: Mapping[str, Reparam] | None = None,
+    ) -> Array:
+        """Sample a Markov (state-space) latent over the full horizon.
+
+        Thin wrapper over :func:`numpyro_forecast.functional.markov_time_series`.
+        """
+        from numpyro_forecast.functional import markov_time_series as _markov_time_series
+
+        return _markov_time_series(
+            self._require_horizon(),
+            name,
+            init_carry,
+            transition,
+            xs,
+            plates=plates,
+            reparam_config=reparam_config,
+        )
 
     def __call__(self, covariates: Array, data: Array | None = None) -> None:
         """Run the model as a NumPyro model function.

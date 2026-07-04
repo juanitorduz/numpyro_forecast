@@ -109,11 +109,10 @@ def test_slice_time_independent_slices_base() -> None:
     assert jnp.allclose(sliced.base_dist.loc, loc[:4])
 
 
-def test_slice_time_non_empty_event_shape_raises() -> None:
-    # MultivariateNormal has a non-empty event_shape, which the default
-    # element-wise slicer cannot handle.
+def test_slice_time_mvn_invalid_layout_raises() -> None:
+    """MVN surgery requires obs == 1; a multivariate event layout is rejected."""
     mvn = dist.MultivariateNormal(loc=jnp.zeros((5, 2)), covariance_matrix=jnp.eye(2))
-    with pytest.raises(NotImplementedError, match="slice_time"):
+    with pytest.raises(NotImplementedError, match="obs == 1"):
         slice_time(mvn, slice(None, 3))
 
 
@@ -269,5 +268,5 @@ def test_register_structural_fake_fails_check(restore_elementwise_registry) -> N
         pass
 
     d = _FakeMVN(loc=jnp.zeros((5, 2)), covariance_matrix=jnp.eye(2))
-    with pytest.raises(NotImplementedError, match="event_shape"):
+    with pytest.raises(NotImplementedError, match="obs == 1"):
         slice_time(d, slice(None, 3))

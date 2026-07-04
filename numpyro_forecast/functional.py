@@ -13,8 +13,8 @@ import functools
 import inspect
 import math
 import warnings
-from collections.abc import Callable, Mapping
-from contextlib import ExitStack
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from functools import partial, singledispatch
 from typing import Any, cast
@@ -26,6 +26,7 @@ import numpyro.distributions as dist
 from jax import random
 from jax.tree_util import tree_map
 from jaxtyping import Num
+from numpyro.contrib.control_flow import scan
 from numpyro.infer import AIES, ESS, MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta, AutoGuide, AutoNormal
 from numpyro.infer.mcmc import MCMCKernel
@@ -184,6 +185,139 @@ def time_series(
         return prefix
     suffix = _sample_time_block(f"{name}_future", h.future, "time_future", dist_fn, reparam)
     return concat_future(prefix, suffix, axis=-2)
+
+
+Transition = Callable[
+    [object, Array | None],
+    tuple[dist.Distribution, Callable[[Array], object]],
+]
+"""(carry, x_t) -> (dist_t, carry_fn) where carry_fn(z_t) builds the next carry
+from the *sampled* latent. The wrapper owns the sample statement."""
+
+
+@contextmanager
+def _plate_stack(plates: Sequence[tuple[str, int]]):
+    """Open nested ``numpyro.plate`` contexts (innermost last)."""
+    with ExitStack() as stack:
+        for plate_name, size in plates:
+            stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
+        yield
+
+
+def _reject_enclosing_plates() -> None:
+    """Raise if ``markov_time_series`` is called inside an enclosing plate."""
+    try:
+        from numpyro.primitives import _PYRO_STACK
+
+        for msg in _PYRO_STACK:
+            if type(msg).__name__ == "plate":
+                msg_text = (
+                    "markov_time_series opens plates internally via the plates= "
+                    "argument; do not wrap the call in an enclosing numpyro.plate."
+                )
+                raise ValueError(msg_text)
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+
+def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
+    """Require a non-degenerate per-step shape with an observation axis (C7)."""
+    if len(dist_t.event_shape) == 0 and len(dist_t.batch_shape) == 0:
+        msg = (
+            "markov_time_series requires the transition distribution to carry "
+            "the trailing observation dimension; add it, e.g. loc=...[..., None]."
+        )
+        raise ValueError(msg)
+
+
+def markov_time_series(
+    h: Horizon,
+    name: str,
+    init_carry: object,
+    transition: Transition,
+    xs: Array | None = None,
+    *,
+    plates: Sequence[tuple[str, int]] = (),
+    reparam_config: Mapping[str, Reparam] | None = None,
+) -> Array:
+    """Sample a Markov (state-space) latent over the full horizon.
+
+    In-sample steps run in a ``numpyro.contrib.control_flow.scan`` with site
+    ``name``; when forecasting, horizon steps run in a second scan with site
+    ``f"{name}_future"`` **seeded by the final in-sample carry**. The guide
+    never sees the future site (same invariant as :func:`time_series`), and
+    under posterior replay the carry is a deterministic function of the replayed
+    draws, so the forecast is conditioned through the state.
+
+    Parameters
+    ----------
+    h
+        The horizon for the current model call (see :class:`Horizon`).
+    name
+        Base sample-site name for the in-sample latent scan.
+    init_carry
+        Initial carry passed to the first transition.
+    transition
+        Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
+        owns the ``numpyro.sample`` statement.
+    xs
+        Optional exogenous inputs over the full horizon with time at axis ``-2``,
+        moved into scan layout internally; ``None`` for autonomous dynamics.
+    plates
+        ``(name, size)`` pairs opened **inside** the scan body around the sample
+        statement (the only placement NumPyro supports for scan + plate).
+    reparam_config
+        Site-name -> :class:`~numpyro.infer.reparam.Reparam` mapping applied
+        **inside** the scan body.
+
+    Returns
+    -------
+    Array
+        The latent over the full horizon in package layout
+        ``(*plate_batch, duration, obs)``.
+
+    Raises
+    ------
+    ValueError
+        If forecasting without observed data, if the per-step shape lacks the
+        observation dimension (C7), or if an enclosing plate is detected.
+    """
+    if h.future > 0 and h.data is None:
+        msg = "markov_time_series requires observed data when forecasting"
+        raise ValueError(msg)
+    _reject_enclosing_plates()
+
+    def _body(site_name: str) -> Callable[[object, Array | None], tuple[object, Array]]:
+        def body(carry: object, x_t: Array | None) -> tuple[object, Array]:
+            dist_t, carry_fn = transition(carry, x_t)
+            _validate_markov_step_dist(dist_t)
+            ctx = (
+                numpyro.handlers.reparam(config=dict(reparam_config))
+                if reparam_config
+                else nullcontext()
+            )
+            with ctx, _plate_stack(plates):
+                z = cast(Array, numpyro.sample(site_name, dist_t))
+            return carry_fn(z), z
+
+        return body
+
+    xs_scan = None if xs is None else jnp.moveaxis(xs, -2, 0)
+    final_carry, zs = scan(
+        _body(name),
+        init_carry,
+        None if xs_scan is None else xs_scan[: h.t_obs],
+        length=h.t_obs if xs_scan is None else None,
+    )
+    if h.future == 0:
+        return jnp.moveaxis(zs, 0, -2)
+    _, zf = scan(
+        _body(f"{name}_future"),
+        final_carry,
+        None if xs_scan is None else xs_scan[h.t_obs :],
+        length=h.future if xs_scan is None else None,
+    )
+    return jnp.moveaxis(jnp.concatenate([zs, zf], axis=0), 0, -2)
 
 
 def predict_glm(

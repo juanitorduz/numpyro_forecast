@@ -15,16 +15,21 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
-from jax import random
+from jax import lax, random
 from jaxtyping import Float
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoGuide
 
 from numpyro_forecast.forecaster import Forecaster
+from numpyro_forecast.functional import resolve_guide, resolve_optimizer
 from numpyro_forecast.metrics import crps_empirical
-from numpyro_forecast.typing import Array, ForecasterFactory, Metric, ModelFactory
+from numpyro_forecast.typing import Array, ForecasterFactory, ForecastModel, Metric, ModelFactory
 from numpyro_forecast.util import require
 
 if TYPE_CHECKING:
     import pandas as pd
+
+    from numpyro_forecast.typing import GuideLike, OptimizerLike
 
 
 @jax.jit
@@ -548,6 +553,7 @@ def _run_window(
     data: Array,
     covariates: Array,
     model_fn: ModelFactory,
+    shared_model: ForecastModel | None,
     forecaster_fn: ForecasterFactory,
     options: Mapping[str, Any],
     num_samples: int,
@@ -566,9 +572,10 @@ def _run_window(
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
     key_fit, key_forecast = random.split(rng_key)
 
+    model = shared_model if shared_model is not None else model_fn()
     forecaster, train_walltime = _timed(
         lambda: _block_object(
-            forecaster_fn(key_fit, model_fn(), train_data, train_covariates, **options)
+            forecaster_fn(key_fit, model, train_data, train_covariates, **options)
         )
     )
     pred, test_walltime = _timed(
@@ -631,6 +638,7 @@ def backtest(
     forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None = None,
     eval_train: bool = False,
     keep_predictions: bool = False,
+    reuse_model: bool = True,
 ) -> list[BacktestResult]:
     """Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -695,6 +703,13 @@ def backtest(
         If ``True``, store each window's out-of-sample forecast samples (after
         ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
         avoid retaining large Monte Carlo arrays.
+    reuse_model
+        When ``True`` (default) and the windowing strategy is rolling, the model
+        instance returned by the first ``model_fn()`` call is reused for every
+        window so forecast/predict kernels can cache across windows. SVI still
+        recompiles per window; for a single fused fit over all windows use
+        :func:`backtest_vectorized`. Ignored for expanding windows and when
+        ``False``.
 
     Returns
     -------
@@ -707,6 +722,10 @@ def backtest(
     window_type = _resolve_window_type(window_type, train_window)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     duration = data.shape[-2]
+
+    shared_model: ForecastModel | None = None
+    if reuse_model and window_type == "rolling" and train_window is not None:
+        shared_model = model_fn()
 
     results: list[BacktestResult] = []
     for t0, t1, t2 in _iter_windows(
@@ -727,6 +746,7 @@ def backtest(
                 data=data,
                 covariates=covariates,
                 model_fn=model_fn,
+                shared_model=shared_model,
                 forecaster_fn=forecaster_fn,
                 options=_resolve_options(forecaster_options, t0, t1, t2),
                 num_samples=num_samples,
@@ -742,7 +762,239 @@ def backtest(
     return results
 
 
-def results_to_dataframe(results: "Sequence[BacktestResult]") -> "pd.DataFrame":
+@dataclass(frozen=True)
+class VectorizedBacktestResult:
+    """Result of a :func:`backtest_vectorized` run (all windows at once).
+
+    Unlike :class:`BacktestResult` this holds every window's values stacked
+    along a leading window axis, because the windows are fitted, drawn, and
+    scored in single vmapped passes rather than one call each. There are no
+    per-window walltimes (a single fused computation covers all windows).
+
+    Attributes
+    ----------
+    t0, t1, t2
+        Train-begin, train/test split, and test-end time indices, each an
+        integer array of shape ``(num_windows,)``.
+    num_samples
+        Number of forecast samples drawn per window.
+    losses
+        SVI loss history with shape ``(num_windows, num_steps)``.
+    metrics
+        Mapping of metric name to a ``(num_windows,)`` array of per-window
+        values.
+    predictions
+        Stacked out-of-sample forecast samples with shape
+        ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
+        unless ``keep_predictions=True``.
+    """
+
+    t0: Array
+    t1: Array
+    t2: Array
+    num_samples: int
+    losses: Array
+    metrics: dict[str, Array]
+    predictions: Array | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a flat dictionary view.
+
+        Returns
+        -------
+        dict[str, Any]
+            All fields as a plain dictionary.
+        """
+        return asdict(self)
+
+
+_VECTORIZED_NEEDS_AUTOGUIDE_MSG = (
+    "backtest_vectorized requires an AutoGuide (guide resolves to one); "
+    "hand-written guides are not vmappable here, use backtest() instead."
+)
+_VECTORIZED_TRAIN_WINDOW_MSG = "train_window must be >= 1"
+_VECTORIZED_TEST_WINDOW_MSG = "test_window must be >= 1"
+_VECTORIZED_STRIDE_MSG = "stride must be >= 1"
+
+
+def _vmapped_metrics(
+    metrics: Mapping[str, Metric], predictions: Array, truth: Array
+) -> dict[str, Array]:
+    """Score every window at once, returning ``name -> (num_windows,)`` arrays.
+
+    The default metric set maps to its jitted array kernels vmapped over the
+    window axis (one device→host transfer deferred to the caller). Any other
+    metric mapping falls back to scoring each window through
+    :func:`evaluate_forecast` (host floats), mirroring its dual-path design.
+    """
+    if metrics is DEFAULT_METRICS:
+        kernels: dict[str, Callable[[Array, Array], Array]] = {
+            "mae": _mae,
+            "rmse": _rmse,
+            "crps": _crps,
+            "coverage": lambda pred, tr: _coverage(pred, tr, _DEFAULT_COVERAGE_ALPHA),
+        }
+        return {name: jax.vmap(kern)(predictions, truth) for name, kern in kernels.items()}
+    num_windows = int(predictions.shape[0])
+    scored = [evaluate_forecast(predictions[i], truth[i], metrics=metrics) for i in range(num_windows)]
+    names = list(scored[0]) if scored else list(metrics)
+    return {name: jnp.asarray([row[name] for row in scored]) for name in names}
+
+
+def backtest_vectorized(
+    rng_key: Array,
+    data: Array,
+    covariates: Array,
+    model_fn: ModelFactory,
+    *,
+    train_window: int,
+    test_window: int,
+    stride: int = 1,
+    num_steps: int = 1_001,
+    optim: "OptimizerLike" = None,
+    guide: "GuideLike" = None,
+    num_samples: int = 100,
+    metrics: Mapping[str, Metric] | None = None,
+    keep_predictions: bool = False,
+) -> VectorizedBacktestResult:
+    """Rolling-window backtest with all windows fitted in one vmapped SVI run.
+
+    Estimator-equivalent to :func:`backtest` with rolling windows; it differs
+    only in PRNG stream layout and float reduction order, so the equivalence is
+    statistical, not bitwise. Model, guide, and SVI compile once regardless of
+    the number of windows (invariant I3), giving order-of-magnitude wall-clock
+    wins for tens of windows on small models.
+
+    PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
+    ``fold_in(rng_key, i)`` seeds window ``i``; each window key is split for the
+    posterior draw and the forecast.
+
+    Parameters
+    ----------
+    rng_key
+        Base PRNG key.
+    data
+        Dataset with time at axis ``-2``.
+    covariates
+        Covariates with time at axis ``-2`` (same duration as ``data``).
+    model_fn
+        Factory returning a fresh model; called exactly once (per-window model
+        variation is unsupported here, use :func:`backtest`).
+    train_window
+        Fixed training-window length (``>= 1``).
+    test_window
+        Fixed test-window length (``>= 1``).
+    stride
+        Step between successive windows (``>= 1``).
+    num_steps
+        Number of SVI steps per window.
+    optim
+        Optimizer specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_optimizer`.
+    guide
+        Guide specification; must resolve to an ``AutoGuide`` (hand-written
+        guides are not vmappable, use :func:`backtest`).
+    num_samples
+        Number of forecast samples drawn per window.
+    metrics
+        Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+    keep_predictions
+        If ``True``, retain the stacked forecast samples on the result.
+
+    Returns
+    -------
+    VectorizedBacktestResult
+        The stacked per-window losses, metrics, and window indices.
+
+    Raises
+    ------
+    ValueError
+        If ``data`` and ``covariates`` durations differ, ``train_window`` or
+        ``test_window`` or ``stride`` is ``< 1``, the resolved guide is not an
+        ``AutoGuide``, or there is no room for a single window.
+    """
+    if data.shape[-2] != covariates.shape[-2]:
+        msg = "data and covariates must share the time axis length"
+        raise ValueError(msg)
+    if train_window < 1:
+        raise ValueError(_VECTORIZED_TRAIN_WINDOW_MSG)
+    if test_window < 1:
+        raise ValueError(_VECTORIZED_TEST_WINDOW_MSG)
+    if stride < 1:
+        raise ValueError(_VECTORIZED_STRIDE_MSG)
+
+    duration = data.shape[-2]
+    last_start = duration - train_window - test_window
+    if last_start < 0:
+        msg = "train_window + test_window exceeds the series duration; no window fits"
+        raise ValueError(msg)
+    starts = jnp.arange(0, last_start + 1, stride)
+
+    def slice_one(t0: Array) -> tuple[Array, Array, Array, Array]:
+        train_d = lax.dynamic_slice_in_dim(data, t0, train_window, axis=-2)
+        train_c = lax.dynamic_slice_in_dim(covariates, t0, train_window, axis=-2)
+        hor_c = lax.dynamic_slice_in_dim(covariates, t0, train_window + test_window, axis=-2)
+        truth = lax.dynamic_slice_in_dim(data, t0 + train_window, test_window, axis=-2)
+        return train_d, train_c, hor_c, truth
+
+    train_d, train_c, hor_c, truth = jax.vmap(slice_one)(starts)
+
+    model = model_fn()
+    resolved_guide = resolve_guide(guide, model)
+    if not isinstance(resolved_guide, AutoGuide):
+        raise ValueError(_VECTORIZED_NEEDS_AUTOGUIDE_MSG)
+    svi = SVI(model, resolved_guide, resolve_optimizer(optim), Trace_ELBO())
+
+    # K11 — MANDATORY eager warm-up on concrete window-0 arrays: AutoGuide
+    # caches its prototype on the instance at first init; if that first
+    # init is traced under vmap, the instance holds leaked tracers and any
+    # later eager use raises UnexpectedTracerError (spike-pinned).
+    # (fold_in wants a non-negative uint32 index on this JAX floor, so the
+    # roadmap's ``-1`` sentinel is passed as an int32 array.)
+    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
+
+    def fit_one(key: Array, d: Array, c: Array) -> tuple[dict[str, Array], Array]:
+        state = svi.init(key, c, d)
+
+        def step(carry: object, _: None) -> tuple[object, Array]:
+            carry, loss = svi.update(carry, c, d)
+            return carry, loss
+
+        state, losses = lax.scan(step, state, length=num_steps)
+        return svi.get_params(state), losses
+
+    window_keys = jax.vmap(lambda i: random.fold_in(rng_key, i))(jnp.arange(starts.shape[0]))
+    params, losses = jax.jit(jax.vmap(fit_one))(window_keys, train_d, train_c)
+
+    split_keys = jax.vmap(random.split)(window_keys)
+    post_keys, fc_keys = split_keys[:, 0], split_keys[:, 1]
+    posterior = jax.jit(
+        jax.vmap(lambda k, p: resolved_guide.sample_posterior(k, p, sample_shape=(num_samples,)))
+    )(post_keys, params)
+
+    def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
+        pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])
+        return pred(key, hc, d)["forecast"]
+
+    predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
+
+    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
+
+    return VectorizedBacktestResult(
+        t0=starts,
+        t1=starts + train_window,
+        t2=starts + train_window + test_window,
+        num_samples=num_samples,
+        losses=losses,
+        metrics=metric_values,
+        predictions=predictions if keep_predictions else None,
+    )
+
+
+def results_to_dataframe(
+    results: "Sequence[BacktestResult] | VectorizedBacktestResult",
+) -> "pd.DataFrame":
     """Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
 
     Columns are prefix-namespaced so metric, in-sample-metric, and parameter
@@ -754,10 +1006,16 @@ def results_to_dataframe(results: "Sequence[BacktestResult]") -> "pd.DataFrame":
     ``backtest(per_window_metrics=...)``); the union of columns is used and
     missing entries are left as ``NaN``.
 
+    A :class:`VectorizedBacktestResult` from :func:`backtest_vectorized` is also
+    accepted; it produces the same ``metric_<name>`` columns for the same metric
+    set, but has no ``train_metric_*``, ``param_*``, or walltime columns (a
+    vectorized run has no per-window walltimes), which are simply absent.
+
     Parameters
     ----------
     results
-        A sequence of :class:`BacktestResult` from :func:`backtest`.
+        A sequence of :class:`BacktestResult` from :func:`backtest`, or a single
+        :class:`VectorizedBacktestResult` from :func:`backtest_vectorized`.
 
     Returns
     -------
@@ -766,22 +1024,14 @@ def results_to_dataframe(results: "Sequence[BacktestResult]") -> "pd.DataFrame":
 
     Raises
     ------
-    NotImplementedError
-        If a vectorized backtest result is passed; use the loop
-        :func:`backtest` output for now (vectorized support lands with
-        ``backtest_vectorized``).
     ImportError
         If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
     """
     pandas = require("pandas", extra="dataframes")
+    if isinstance(results, VectorizedBacktestResult):
+        return pandas.DataFrame(_vectorized_rows(results))
     rows: list[dict[str, Any]] = []
     for result in results:
-        if not isinstance(result, BacktestResult):
-            msg = (
-                "results_to_dataframe currently supports only a sequence of "
-                "BacktestResult; vectorized backtest results are not yet supported."
-            )
-            raise NotImplementedError(msg)
         row: dict[str, Any] = {
             "t0": result.t0,
             "t1": result.t1,
@@ -798,3 +1048,23 @@ def results_to_dataframe(results: "Sequence[BacktestResult]") -> "pd.DataFrame":
             row[f"param_{name}"] = value
         rows.append(row)
     return pandas.DataFrame(rows)
+
+
+def _vectorized_rows(result: VectorizedBacktestResult) -> list[dict[str, Any]]:
+    """Build one namespaced row dict per window from a vectorized result."""
+    t0 = [int(x) for x in result.t0]
+    t1 = [int(x) for x in result.t1]
+    t2 = [int(x) for x in result.t2]
+    metric_columns = {name: [float(x) for x in values] for name, values in result.metrics.items()}
+    rows: list[dict[str, Any]] = []
+    for i in range(len(t0)):
+        row: dict[str, Any] = {
+            "t0": t0[i],
+            "t1": t1[i],
+            "t2": t2[i],
+            "num_samples": result.num_samples,
+        }
+        for name, column in metric_columns.items():
+            row[f"metric_{name}"] = column[i]
+        rows.append(row)
+    return rows
