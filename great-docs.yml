@@ -88,6 +88,7 @@ reference:
       - functional.Horizon
       - functional.time_series
       - functional.predict
+      - functional.resolve_optimizer
       - functional.fit_svi
       - functional.draw_posterior
       - functional.fit_mcmc

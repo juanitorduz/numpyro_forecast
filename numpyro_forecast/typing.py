@@ -10,10 +10,26 @@ from typing import TYPE_CHECKING
 import jax
 
 if TYPE_CHECKING:
+    import optax
+    from numpyro.optim import _NumPyroOptim
+
     from numpyro_forecast.forecaster import _BaseForecaster
 
 Array = jax.Array
 """A JAX array (alias of :class:`jax.Array`)."""
+
+if TYPE_CHECKING:
+    OptimizerLike = float | int | _NumPyroOptim | optax.GradientTransformation | None
+    """An optimizer specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
+
+    Resolved by :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
+    (default ``Adam``), a positive scalar learning rate, an
+    ``optax.GradientTransformation``, or a NumPyro ``_NumPyroOptim``.
+    """
+else:
+    # Runtime alias kept deliberately broad so the beartype import hook accepts
+    # any resolvable form without forcing an ``optax`` import (invariant I8).
+    OptimizerLike = object
 
 Metric = Callable[[Array, Array], float]
 """A metric maps ``(pred, truth)`` forecast/ground-truth arrays to a scalar."""

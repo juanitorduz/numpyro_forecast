@@ -19,7 +19,6 @@ from jax import random
 from jaxtyping import Float
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.infer.reparam import Reparam
-from numpyro.optim import _NumPyroOptim
 
 from numpyro_forecast.functional import (
     Horizon,
@@ -33,7 +32,7 @@ from numpyro_forecast.functional import forecast as _forecast
 from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.typing import Array, ForecastModel, OptimizerLike
 
 
 class ForecastingModel(abc.ABC):
@@ -283,13 +282,18 @@ class Forecaster(_BaseForecaster):
     guide
         Variational guide; defaults to ``AutoNormal(model)``.
     optim
-        NumPyro optimizer; defaults to ``Adam(0.01)``.
+        Optimizer specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
+        (``Adam(0.01)``), a positive scalar learning rate, an
+        ``optax.GradientTransformation``, or a ``_NumPyroOptim``.
     num_steps
         Number of SVI steps.
     num_particles
         Number of ELBO particles.
     progress_bar
         Whether to display the SVI progress bar.
+    stable_update
+        Whether SVI skips non-finite parameter updates.
     """
 
     def __init__(
@@ -300,10 +304,11 @@ class Forecaster(_BaseForecaster):
         covariates: Array,
         *,
         guide: AutoGuide | None = None,
-        optim: _NumPyroOptim | None = None,
+        optim: "OptimizerLike" = None,
         num_steps: int = 1_001,
         num_particles: int = 1,
         progress_bar: bool = False,
+        stable_update: bool = False,
     ) -> None:
         super().__init__(model, data.shape[-2])
         self._fit = fit_svi(
@@ -316,6 +321,7 @@ class Forecaster(_BaseForecaster):
             num_steps=num_steps,
             num_particles=num_particles,
             progress_bar=progress_bar,
+            stable_update=stable_update,
         )
         self.guide: AutoGuide = self._fit.guide
         self.params: dict[str, Array] = self._fit.params

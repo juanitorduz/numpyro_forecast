@@ -9,6 +9,7 @@ styles are fully interchangeable: both produce a NumPyro model callable
 ``(covariates, data=None)`` and consume a posterior dict of latent draws.
 """
 
+import math
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ from numpyro.infer.autoguide import AutoGuide, AutoNormal
 from numpyro.infer.reparam import Reparam
 from numpyro.optim import Adam, _NumPyroOptim
 
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.typing import Array, ForecastModel, OptimizerLike
 from numpyro_forecast.util import (
     _zeros_like_data,
     concat_future,
@@ -243,6 +244,68 @@ def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastMod
     return numpyro_model
 
 
+_DEFAULT_LEARNING_RATE: float = 0.01
+"""Default Adam learning rate used when ``optim`` is ``None``."""
+
+
+def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
+    """Normalize an optimizer specification into a NumPyro optimizer.
+
+    Accepted forms: ``None`` (``Adam(0.01)``); a finite positive scalar learning
+    rate (``float``/``int``/NumPy scalar/0-d array) giving ``Adam(lr)``; an
+    ``optax.GradientTransformation`` (wrapped via
+    ``numpyro.optim.optax_to_numpyro``, imported lazily so optax stays a soft
+    dependency); a ``_NumPyroOptim`` (returned unchanged).
+
+    Parameters
+    ----------
+    optim
+        The optimizer specification (see :data:`~numpyro_forecast.typing.OptimizerLike`).
+
+    Returns
+    -------
+    _NumPyroOptim
+        The resolved NumPyro optimizer.
+
+    Raises
+    ------
+    TypeError
+        For ``bool`` (``bool`` is an ``int`` subclass, so it would silently mean
+        ``Adam(1.0)``) and for any other unrecognized type; the message lists
+        the accepted forms.
+    ValueError
+        For a non-finite or non-positive learning rate.
+    """
+    if optim is None:
+        return Adam(_DEFAULT_LEARNING_RATE)
+    if isinstance(optim, _NumPyroOptim):
+        return optim
+    if isinstance(optim, bool):
+        msg = (
+            "resolve_optimizer() does not accept bool; pass a positive float "
+            "learning rate, an optax.GradientTransformation, a numpyro optimizer, "
+            "or None."
+        )
+        raise TypeError(msg)
+    is_array_scalar = getattr(optim, "ndim", None) == 0
+    if isinstance(optim, (int, float)) or is_array_scalar:
+        lr = float(cast("float", optim))
+        if not math.isfinite(lr) or lr <= 0.0:
+            msg = f"learning rate must be finite and positive, got {lr}"
+            raise ValueError(msg)
+        return Adam(lr)
+    if hasattr(optim, "init") and hasattr(optim, "update"):
+        from numpyro.optim import optax_to_numpyro
+
+        return optax_to_numpyro(optim)
+    msg = (
+        f"resolve_optimizer() does not support {type(optim).__name__}; pass None, "
+        "a positive float learning rate, an optax.GradientTransformation, or a "
+        "numpyro optimizer (_NumPyroOptim)."
+    )
+    raise TypeError(msg)
+
+
 @dataclass(frozen=True)
 class SVIFit:
     """The result of fitting a forecasting model with SVI.
@@ -255,11 +318,20 @@ class SVIFit:
         The learned variational parameters.
     losses
         The ELBO loss per SVI step (shape ``(num_steps,)``).
+    data
+        The in-sample data the model was fit on (needed to draw from
+        hand-written guides and by :func:`~numpyro_forecast.convert.to_datatree`).
+        ``None`` for fits constructed without it.
+    covariates
+        The in-sample covariates the model was fit on. ``None`` for fits
+        constructed without it.
     """
 
     guide: AutoGuide
     params: dict[str, Array]
     losses: Array
+    data: Array | None = None
+    covariates: Array | None = None
 
 
 def _require_positive_num_samples(num_samples: int) -> None:
@@ -295,12 +367,15 @@ def fit_svi(
     covariates: Array,
     *,
     guide: AutoGuide | None = None,
-    optim: _NumPyroOptim | None = None,
+    optim: "OptimizerLike" = None,
     num_steps: int = 1_001,
     num_particles: int = 1,
     progress_bar: bool = False,
+    stable_update: bool = False,
 ) -> SVIFit:
     """Fit a forecasting model with stochastic variational inference.
+
+    PRNG: consumes ``rng_key`` once for the SVI run; nothing is retained.
 
     Parameters
     ----------
@@ -315,18 +390,31 @@ def fit_svi(
     guide
         Variational guide; defaults to ``AutoNormal(model)``.
     optim
-        NumPyro optimizer; defaults to ``Adam(0.01)``.
+        Optimizer specification resolved by :func:`resolve_optimizer`: ``None``
+        (``Adam(0.01)``), a positive scalar learning rate, an
+        ``optax.GradientTransformation``, or a ``_NumPyroOptim``. For example, a
+        cosine-decayed, gradient-clipped Adam::
+
+            import optax
+
+            schedule = optax.cosine_decay_schedule(1e-2, decay_steps=1_000)
+            optim = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
+
     num_steps
         Number of SVI steps.
     num_particles
         Number of ELBO particles.
     progress_bar
         Whether to display the SVI progress bar.
+    stable_update
+        Whether SVI skips parameter updates whose new value is non-finite
+        (NumPyro's ``stable_update``).
 
     Returns
     -------
     SVIFit
-        The fitted guide, variational parameters, and loss history.
+        The fitted guide, variational parameters, loss history, and the
+        in-sample ``data``/``covariates`` (kept by identity, not copied).
 
     Raises
     ------
@@ -334,11 +422,24 @@ def fit_svi(
         If ``data`` and ``covariates`` have different durations.
     """
     _require_equal_duration(data, covariates)
-    guide = AutoNormal(model) if guide is None else guide
-    optimizer = Adam(0.01) if optim is None else optim
-    svi = SVI(model, guide, optimizer, Trace_ELBO(num_particles=num_particles))
-    result = svi.run(rng_key, num_steps, covariates, data, progress_bar=progress_bar)
-    return SVIFit(guide=guide, params=result.params, losses=result.losses)
+    resolved_guide = AutoNormal(model) if guide is None else guide
+    optimizer = resolve_optimizer(optim)
+    svi = SVI(model, resolved_guide, optimizer, Trace_ELBO(num_particles=num_particles))
+    result = svi.run(
+        rng_key,
+        num_steps,
+        covariates,
+        data,
+        progress_bar=progress_bar,
+        stable_update=stable_update,
+    )
+    return SVIFit(
+        guide=resolved_guide,
+        params=result.params,
+        losses=result.losses,
+        data=data,
+        covariates=covariates,
+    )
 
 
 @singledispatch
