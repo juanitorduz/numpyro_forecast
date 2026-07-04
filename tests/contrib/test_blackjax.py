@@ -4,6 +4,7 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 (which must not import optional dependencies, invariant I8) never runs them.
 """
 
+import pickle
 from collections import namedtuple
 
 import jax.numpy as jnp
@@ -13,7 +14,7 @@ import pytest
 from jax import Array, random
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.forecaster import ForecastingModel
+from numpyro_forecast.forecaster import ForecastingModel, PathfinderForecaster
 from numpyro_forecast.functional import draw_posterior, fit_mcmc, forecast
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.util import _api_canary
@@ -24,6 +25,8 @@ from numpyro_forecast.contrib.blackjax import (
     BlackjaxCustomKernel,
     BlackjaxMCLMCKernel,
     BlackjaxNUTSKernel,
+    PathfinderFit,
+    fit_pathfinder,
 )
 
 
@@ -197,3 +200,99 @@ def test_blackjax_api_canaries() -> None:
     """Pin the exact BlackJAX symbols the adapters rely on (risk K1)."""
     _api_canary("blackjax", ["nuts", "window_adaptation", "mclmc", "mclmc_find_L_and_step_size"])
     _api_canary("blackjax.mcmc.mclmc", ["init", "build_kernel"])
+
+
+# --- Pathfinder (P11) --------------------------------------------------------
+
+
+def test_pathfinder_approximate_return_structure_canary() -> None:
+    """Pin the ``approximate`` ELBO path and ``sample`` arity (risk K1)."""
+    import blackjax
+
+    _api_canary("blackjax.vi.pathfinder", ["approximate", "sample", "PathfinderState"])
+    assert "elbo" in blackjax.vi.pathfinder.PathfinderState._fields
+
+    def logdensity(p: dict[str, Array]) -> Array:
+        return -0.5 * (p["x"] ** 2).sum()
+
+    state, _info = blackjax.vi.pathfinder.approximate(
+        random.PRNGKey(0), logdensity, {"x": jnp.zeros(2)}, num_samples=50, ftol=1e-4
+    )
+    out = blackjax.vi.pathfinder.sample(random.PRNGKey(1), state, 5)
+    assert isinstance(out, tuple)
+    assert len(out) == 2  # (samples, log_weights)
+
+
+def test_pathfinder_constrained_support() -> None:
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(
+        random.PRNGKey(1),
+        RandomWalkForCustom(),
+        data,
+        covariates,
+        num_elbo_samples=100,
+        ftol=1e-4,
+    )
+    assert isinstance(fit, PathfinderFit)
+    post = draw_posterior(random.PRNGKey(2), fit, 200)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+    assert bool(jnp.all(post["drift_scale"] > 0.0))
+
+
+def test_pathfinder_forecast_composes() -> None:
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    forecaster = PathfinderForecaster(
+        random.PRNGKey(1),
+        RandomWalkForCustom(),
+        data,
+        _empty_covariates(24),
+        num_elbo_samples=100,
+        ftol=1e-4,
+    )
+    forecast_samples = forecaster(random.PRNGKey(2), data, _empty_covariates(30), 100)
+    assert forecast_samples.shape == (100, 6, 1)
+    assert bool(jnp.all(jnp.isfinite(forecast_samples)))
+    assert isinstance(forecaster.elbo, float)
+
+
+def test_pathfinder_fit_pickle_round_trip() -> None:
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(
+        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
+    )
+    restored = pickle.loads(pickle.dumps(fit))  # noqa: S301 - round-trip of our own data
+    assert isinstance(restored, PathfinderFit)
+    assert restored.elbo == fit.elbo
+    # The restored fit still draws a valid constrained posterior.
+    post = draw_posterior(random.PRNGKey(2), restored, 50)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+
+
+def test_pathfinder_as_backtest_forecaster_fn() -> None:
+    from numpyro_forecast.evaluate import backtest
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+
+    def make(rng_key, model, train_data, train_covariates, **options):  # type: ignore[no-untyped-def]
+        return PathfinderForecaster(
+            rng_key, model, train_data, train_covariates, num_elbo_samples=80, ftol=1e-4
+        )
+
+    results = backtest(
+        random.PRNGKey(1),
+        data,
+        covariates,
+        RandomWalkForCustom,
+        forecaster_fn=make,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=50,
+    )
+    assert results
+    for r in results:
+        assert set(r.metrics)
+        assert all(isinstance(v, float) for v in r.metrics.values())

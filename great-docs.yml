@@ -75,6 +75,7 @@ reference:
     contents:
       - forecaster.Forecaster
       - forecaster.HMCForecaster
+      - forecaster.PathfinderForecaster
 
   - title: Models
     desc: Building forecasting models (object-oriented and functional).

@@ -55,6 +55,7 @@ def test_all_matches_exported_names() -> None:
         "Forecaster",
         "ForecastingModel",
         "HMCForecaster",
+        "PathfinderForecaster",
         "__version__",
         "backtest",
         "eval_coverage",

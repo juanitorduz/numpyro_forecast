@@ -25,7 +25,12 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
     results_to_dataframe,
 )
-from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
+from numpyro_forecast.forecaster import (
+    Forecaster,
+    ForecastingModel,
+    HMCForecaster,
+    PathfinderForecaster,
+)
 from numpyro_forecast.functional import forecasting_model
 from numpyro_forecast.util import register_elementwise
 
@@ -40,6 +45,7 @@ __all__ = [
     "Forecaster",
     "ForecastingModel",
     "HMCForecaster",
+    "PathfinderForecaster",
     "__version__",
     "backtest",
     "eval_coverage",

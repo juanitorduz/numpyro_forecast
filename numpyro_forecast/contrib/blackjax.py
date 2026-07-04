@@ -15,13 +15,16 @@ kernels run one blackjax step per NumPyro sampling step; adaptation happens once
 """
 
 from collections import namedtuple
+from dataclasses import dataclass
 from typing import Any, cast
 
+import jax
 from jax import random
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
+from numpyro_forecast.functional import _draw_posterior_impl, _require_positive_num_samples
 from numpyro_forecast.typing import Array, BuildFn, ForecastModel
 from numpyro_forecast.util import require
 
@@ -355,3 +358,115 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     ) -> tuple[Any, Any]:
         result = self._build_fn(logdensity_fn, rng_key, position, num_warmup)
         return cast("tuple[Any, Any]", result)
+
+
+@dataclass(frozen=True)
+class PathfinderFit:
+    """The result of fitting a forecasting model with BlackJAX Pathfinder.
+
+    A plain-data (picklable) container: it holds the raw blackjax
+    ``PathfinderState``, the model and its data/covariates (needed to rebuild the
+    unconstrained-to-constrained transform when drawing), and the fitted ELBO.
+    Draws are produced lazily by :func:`~numpyro_forecast.functional.draw_posterior`.
+
+    Attributes
+    ----------
+    state
+        The blackjax ``PathfinderState`` (the variational approximation).
+    model
+        The forecasting model that was fit.
+    covariates
+        In-sample covariates used at fit time (time at axis ``-2``).
+    data
+        In-sample data used at fit time (time at axis ``-2``).
+    elbo
+        The evidence lower bound of the fitted approximation.
+    """
+
+    state: Any
+    model: ForecastModel
+    covariates: Array
+    data: Array
+    elbo: float
+
+
+def fit_pathfinder(
+    rng_key: Array,
+    model: ForecastModel,
+    data: Array,
+    covariates: Array,
+    *,
+    num_elbo_samples: int = 200,
+    ftol: float = 1e-5,
+) -> PathfinderFit:
+    """Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
+    PRNG: ``rng_key`` is split into a model-initialization stream and a
+    Pathfinder-approximation stream.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for initialization and the Pathfinder run.
+    model
+        The forecasting model callable (OOP instance or functional model).
+    data
+        In-sample data with time at axis ``-2``.
+    covariates
+        Covariates with time at axis ``-2`` and the same duration as ``data``.
+    num_elbo_samples
+        Number of Monte Carlo samples used to estimate the ELBO along the
+        L-BFGS optimization path.
+    ftol
+        L-BFGS relative function-value tolerance (convergence criterion).
+
+    Returns
+    -------
+    PathfinderFit
+        The fitted variational approximation.
+    """
+    blackjax = require("blackjax", extra="blackjax")
+    init_key, approx_key = random.split(rng_key)
+    param_info, potential_fn_gen, _postprocess_fn, _ = initialize_model(
+        init_key,
+        model,
+        dynamic_args=True,
+        model_args=(covariates, data),
+    )
+    potential_fn = potential_fn_gen(covariates, data)
+
+    def logdensity_fn(position: dict[str, Array]) -> Array:
+        return -potential_fn(position)
+
+    state, _info = blackjax.vi.pathfinder.approximate(
+        approx_key,
+        logdensity_fn,
+        param_info.z,
+        num_samples=num_elbo_samples,
+        ftol=ftol,
+    )
+    return PathfinderFit(
+        state=state,
+        model=model,
+        covariates=covariates,
+        data=data,
+        elbo=float(state.elbo),
+    )
+
+
+@_draw_posterior_impl.register
+def _(fit: PathfinderFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
+    _require_positive_num_samples(num_samples)
+    blackjax = require("blackjax", extra="blackjax")
+    _param_info, _potential_fn_gen, postprocess_fn, _ = initialize_model(
+        rng_key,
+        fit.model,
+        dynamic_args=True,
+        model_args=(fit.covariates, fit.data),
+    )
+    # sample() returns (samples_dict, log_weights); take the unconstrained draws
+    # and map the constraining transform over the leading sample axis (no
+    # batch_ndims reliance).
+    unconstrained, _log_weights = blackjax.vi.pathfinder.sample(rng_key, fit.state, num_samples)
+    transform = postprocess_fn(fit.covariates, fit.data)
+    return jax.vmap(transform)(unconstrained)

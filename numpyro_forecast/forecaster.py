@@ -408,3 +408,59 @@ class HMCForecaster(_BaseForecaster):
 
     def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
         return draw_posterior(rng_key, self._fit, num_samples)
+
+
+class PathfinderForecaster(_BaseForecaster):
+    """Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
+    A thin shim over :func:`numpyro_forecast.contrib.blackjax.fit_pathfinder`.
+    BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``)
+    imported lazily here, so constructing this class is the opt-in that pulls it
+    in; importing :mod:`numpyro_forecast` never does (invariant I8). The
+    constructor mirrors :class:`Forecaster` without ``guide``/``optim`` (Pathfinder
+    has neither) and adds ``num_elbo_samples``/``ftol``.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for inference.
+    model
+        The forecasting model to fit (OOP instance or functional model).
+    data
+        In-sample data with time at axis ``-2``.
+    covariates
+        Covariates with time at axis ``-2`` and the same duration as ``data``.
+    num_elbo_samples
+        Number of Monte Carlo samples used to estimate the ELBO along the
+        L-BFGS path.
+    ftol
+        L-BFGS relative function-value tolerance (convergence criterion).
+    """
+
+    def __init__(
+        self,
+        rng_key: Array,
+        model: ForecastModel,
+        data: Array,
+        covariates: Array,
+        *,
+        num_elbo_samples: int = 200,
+        ftol: float = 1e-5,
+    ) -> None:
+        super().__init__(model, data.shape[-2])
+        # Lazy import: registers the PathfinderFit draw dispatch and defers the
+        # blackjax dependency to first use (I8).
+        from numpyro_forecast.contrib.blackjax import fit_pathfinder
+
+        self._fit = fit_pathfinder(
+            rng_key,
+            model,
+            data,
+            covariates,
+            num_elbo_samples=num_elbo_samples,
+            ftol=ftol,
+        )
+        self.elbo: float = self._fit.elbo
+
+    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
+        return draw_posterior(rng_key, self._fit, num_samples)
