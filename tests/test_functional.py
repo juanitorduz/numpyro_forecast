@@ -307,6 +307,30 @@ def test_forecast_batched_shape_and_finite() -> None:
     assert bool(jnp.all(jnp.isfinite(fc)))
 
 
+def test_forecast_parallel_matches_serial() -> None:
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    serial = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=False)
+    vmapped = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=True)
+    assert vmapped.shape == serial.shape == (10, 6, 1)
+    assert jnp.allclose(vmapped, serial, atol=1e-4)
+
+
+def test_forecast_parallel_matches_serial_batched() -> None:
+    # With batch_size fixed, only the within-chunk mapping changes (vmap vs
+    # lax.map), so the chunked-vmap path must match the chunked-serial path.
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    kwargs = {"batch_size": 3}
+    serial = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=False, **kwargs
+    )
+    vmapped = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=True, **kwargs
+    )
+    assert jnp.allclose(vmapped, serial, atol=1e-4)
+
+
 def test_forecast_rejects_covariates_not_longer() -> None:
     model, data, fit = _fit_data(num_steps=20)
     post = draw_posterior(random.PRNGKey(2), fit, 5)
@@ -331,6 +355,19 @@ def test_predict_in_sample_batched_matches_unbatched_shape() -> None:
     assert bool(jnp.all(jnp.isfinite(batched)))
 
 
+def test_predict_in_sample_parallel_matches_serial() -> None:
+    model, _data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    serial = predict_in_sample(
+        random.PRNGKey(3), model, post, empty_covariates(30), parallel=False
+    )
+    vmapped = predict_in_sample(
+        random.PRNGKey(3), model, post, empty_covariates(30), parallel=True
+    )
+    assert vmapped.shape == serial.shape == (10, 30, 1)
+    assert jnp.allclose(vmapped, serial, atol=1e-4)
+
+
 # --- Interchangeability between the functional and OOP APIs -------------------
 
 
@@ -343,6 +380,22 @@ def test_functional_model_through_oop_forecaster() -> None:
     fc = forecaster(random.PRNGKey(2), data, empty_covariates(36), num_samples=8)
     assert fc.shape == (8, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
+
+
+def test_oop_forecaster_parallel_matches_serial() -> None:
+    func_model = forecasting_model(_rw_body)
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (30, 1)), axis=-2)
+    forecaster = Forecaster(
+        random.PRNGKey(1), func_model, data, empty_covariates(30), num_steps=30
+    )
+    serial = forecaster(
+        random.PRNGKey(2), data, empty_covariates(36), num_samples=8, parallel=False
+    )
+    vmapped = forecaster(
+        random.PRNGKey(2), data, empty_covariates(36), num_samples=8, parallel=True
+    )
+    assert vmapped.shape == serial.shape == (8, 6, 1)
+    assert jnp.allclose(vmapped, serial, atol=1e-4)
 
 
 def test_functional_model_through_hmc_forecaster() -> None:

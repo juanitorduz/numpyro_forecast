@@ -475,21 +475,28 @@ def _(fit: MCMCFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     return _index_tree(fit.samples, indices)
 
 
-@partial(jax.jit, static_argnums=(1,))
+@partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
 def _predict(
     rng_key: Array,
     model: ForecastModel,
     posterior: dict[str, Array],
     data: Array,
     covariates: Array,
+    *,
+    parallel: bool = True,
 ) -> Array:
     """Run ``Predictive`` over the full horizon and return the ``forecast`` site.
 
-    Jitted with ``model`` static: each ``(model, shape)`` combination compiles
-    once and is reused, which is what makes the chunked :func:`forecast` loop
-    cheap (the per-call ``Predictive`` tracing cost is paid a single time).
+    Jitted with ``model`` (and ``parallel``) static: each
+    ``(model, parallel, shape)`` combination compiles once and is reused, which
+    is what makes the chunked :func:`forecast` loop cheap (the per-call
+    ``Predictive`` tracing cost is paid a single time). ``parallel`` selects
+    ``Predictive``'s sample-axis mapping (``vmap`` when ``True``, serial
+    ``lax.map`` when ``False``).
     """
-    predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
+    predictive = Predictive(
+        model, posterior_samples=posterior, return_sites=["forecast"], parallel=parallel
+    )
     return predictive(rng_key, covariates, data)["forecast"]
 
 
@@ -501,6 +508,7 @@ def forecast(
     covariates: Array,
     *,
     batch_size: int | None = None,
+    parallel: bool = True,
 ) -> Float[Array, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
@@ -524,6 +532,13 @@ def forecast(
         Covariates with time at axis ``-2`` and length ``duration > t``.
     batch_size
         Optional chunk size for sampling (caps peak memory).
+    parallel
+        Whether ``Predictive`` vectorizes over the sample axis with ``vmap``
+        (``True``, faster, higher peak memory) or maps it serially with
+        ``lax.map`` (``False``). With ``parallel=True`` the samples in each
+        ``batch_size`` chunk are vectorized while the chunks are looped over, so
+        ``batch_size`` remains the peak-memory governor. The two settings produce
+        the same draws up to floating-point reduction order.
 
     Returns
     -------
@@ -538,31 +553,35 @@ def forecast(
     _require_covariates_extend_data(data, covariates)
     num_samples = next(iter(posterior.values())).shape[0]
     if batch_size is None or batch_size >= num_samples:
-        return _predict(rng_key, model, posterior, data, covariates)
+        return _predict(rng_key, model, posterior, data, covariates, parallel=parallel)
     outputs = []
     key = rng_key
     for start in range(0, num_samples, batch_size):
         stop = min(start + batch_size, num_samples)
         key, sub_key = random.split(key)
         chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict(sub_key, model, chunk, data, covariates))
+        outputs.append(_predict(sub_key, model, chunk, data, covariates, parallel=parallel))
     return jnp.concatenate(outputs, axis=0)
 
 
-@partial(jax.jit, static_argnums=(1,))
+@partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
 def _predict_obs(
     rng_key: Array,
     model: ForecastModel,
     posterior: dict[str, Array],
     covariates: Array,
+    *,
+    parallel: bool = True,
 ) -> Array:
     """Run ``Predictive`` over the observed window and return the ``obs`` site.
 
-    Jitted with ``model`` static (see :func:`_predict`): each ``(model, shape)``
-    combination compiles once and is reused, keeping the chunked
-    :func:`predict_in_sample` loop cheap.
+    Jitted with ``model`` (and ``parallel``) static (see :func:`_predict`): each
+    ``(model, parallel, shape)`` combination compiles once and is reused, keeping
+    the chunked :func:`predict_in_sample` loop cheap.
     """
-    predictive = Predictive(model, posterior_samples=posterior, return_sites=["obs"])
+    predictive = Predictive(
+        model, posterior_samples=posterior, return_sites=["obs"], parallel=parallel
+    )
     return predictive(rng_key, covariates)["obs"]
 
 
@@ -573,6 +592,7 @@ def predict_in_sample(
     covariates: Array,
     *,
     batch_size: int | None = None,
+    parallel: bool = True,
 ) -> Float[Array, " sample *batch time obs"]:
     """Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -596,6 +616,11 @@ def predict_in_sample(
         latent sites are sized to that window.
     batch_size
         Optional chunk size for sampling (caps peak memory).
+    parallel
+        Whether ``Predictive`` vectorizes over the sample axis with ``vmap``
+        (``True``, faster, higher peak memory) or maps it serially with
+        ``lax.map`` (``False``). See :func:`forecast` for how this interacts with
+        ``batch_size``.
 
     Returns
     -------
@@ -604,12 +629,12 @@ def predict_in_sample(
     """
     num_samples = next(iter(posterior.values())).shape[0]
     if batch_size is None or batch_size >= num_samples:
-        return _predict_obs(rng_key, model, posterior, covariates)
+        return _predict_obs(rng_key, model, posterior, covariates, parallel=parallel)
     outputs = []
     key = rng_key
     for start in range(0, num_samples, batch_size):
         stop = min(start + batch_size, num_samples)
         key, sub_key = random.split(key)
         chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict_obs(sub_key, model, chunk, covariates))
+        outputs.append(_predict_obs(sub_key, model, chunk, covariates, parallel=parallel))
     return jnp.concatenate(outputs, axis=0)
