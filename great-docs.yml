@@ -128,6 +128,13 @@ reference:
       - util.register_elementwise
       - util.require
 
+  - title: Extensions (contrib)
+    desc: Optional backends behind pyproject extras (never imported by default).
+    contents:
+      - contrib.blackjax.BlackjaxNUTSKernel
+      - contrib.blackjax.BlackjaxMCLMCKernel
+      - contrib.blackjax.BlackjaxCustomKernel
+
   - title: Datasets
     desc: Example datasets used in the tutorials.
     contents:
