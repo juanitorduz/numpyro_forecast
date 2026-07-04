@@ -92,6 +92,7 @@ reference:
       - functional.resolve_guide
       - functional.fit_svi
       - functional.draw_posterior
+      - functional.resolve_kernel
       - functional.fit_mcmc
       - functional.forecast
       - functional.predict_in_sample

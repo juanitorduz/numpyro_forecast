@@ -12,8 +12,8 @@ posterior dict of latent draws.
 """
 
 import abc
-from collections.abc import Callable
-from typing import cast
+from collections.abc import Callable, Mapping
+from typing import Any, cast
 
 import numpyro.distributions as dist
 from jax import random
@@ -33,7 +33,13 @@ from numpyro_forecast.functional import forecast as _forecast
 from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
-from numpyro_forecast.typing import Array, ForecastModel, GuideLike, OptimizerLike
+from numpyro_forecast.typing import (
+    Array,
+    ForecastModel,
+    GuideLike,
+    KernelLike,
+    OptimizerLike,
+)
 
 
 class ForecastingModel(abc.ABC):
@@ -338,7 +344,7 @@ class Forecaster(_BaseForecaster):
 
 
 class HMCForecaster(_BaseForecaster):
-    """Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
+    """Fit a forecasting model with MCMC (NUTS by default).
 
     Parameters
     ----------
@@ -350,12 +356,21 @@ class HMCForecaster(_BaseForecaster):
         In-sample data with time at axis ``-2``.
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
+    kernel
+        Kernel specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_kernel`: ``None`` (``NUTS``),
+        an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
+    kernel_kwargs
+        Extra keyword arguments for the kernel constructor (only with ``None``
+        or a kernel class).
     num_warmup
         Number of warmup steps.
     num_samples
         Number of posterior samples.
     num_chains
         Number of MCMC chains.
+    chain_method
+        NumPyro chain method (``"sequential"``/``"parallel"``/``"vectorized"``).
     progress_bar
         Whether to display the MCMC progress bar.
     """
@@ -367,9 +382,12 @@ class HMCForecaster(_BaseForecaster):
         data: Array,
         covariates: Array,
         *,
+        kernel: "KernelLike" = None,
+        kernel_kwargs: Mapping[str, Any] | None = None,
         num_warmup: int = 1_000,
         num_samples: int = 1_000,
         num_chains: int = 1,
+        chain_method: str = "sequential",
         progress_bar: bool = False,
     ) -> None:
         super().__init__(model, data.shape[-2])
@@ -378,9 +396,12 @@ class HMCForecaster(_BaseForecaster):
             model,
             data,
             covariates,
+            kernel=kernel,
+            kernel_kwargs=kernel_kwargs,
             num_warmup=num_warmup,
             num_samples=num_samples,
             num_chains=num_chains,
+            chain_method=chain_method,
             progress_bar=progress_bar,
         )
         self.posterior_samples: dict[str, Array] = self._fit.samples
