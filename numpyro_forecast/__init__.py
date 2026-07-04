@@ -6,6 +6,7 @@ from jaxtyping import install_import_hook
 
 with install_import_hook("numpyro_forecast", "beartype.beartype"):
     from numpyro_forecast import (  # noqa: F401
+        convert,
         datasets,
         evaluate,
         forecaster,
@@ -14,6 +15,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         util,
     )
 
+from numpyro_forecast.convert import add_forecast, to_datatree
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
@@ -47,6 +49,7 @@ __all__ = [
     "HMCForecaster",
     "PathfinderForecaster",
     "__version__",
+    "add_forecast",
     "backtest",
     "eval_coverage",
     "eval_crps",
@@ -56,4 +59,5 @@ __all__ = [
     "forecasting_model",
     "register_elementwise",
     "results_to_dataframe",
+    "to_datatree",
 ]

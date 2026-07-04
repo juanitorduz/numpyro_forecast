@@ -66,6 +66,8 @@ def test_all_matches_exported_names() -> None:
         "forecasting_model",
         "register_elementwise",
         "results_to_dataframe",
+        "add_forecast",
+        "to_datatree",
     }
     for name in names:
         assert hasattr(numpyro_forecast, name)
