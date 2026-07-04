@@ -1,5 +1,6 @@
 """Tests for the functional forecasting API."""
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -15,6 +16,8 @@ from numpyro_forecast.functional import (
     Horizon,
     MCMCFit,
     SVIFit,
+    _pad_posterior,
+    _predict,
     draw_posterior,
     fit_mcmc,
     fit_svi,
@@ -462,3 +465,80 @@ def test_oop_and_functional_fits_and_forecasts_are_identical() -> None:
     post = draw_posterior(key_post, fit, 8)
     fc_func = forecast(key_pred, func_model, post, data, cov_full)
     assert jnp.array_equal(fc_oop, fc_func)
+
+
+# --- P5: chunk padding & compile discipline ----------------------------------
+
+
+def test_pad_posterior_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        _pad_posterior({}, 4)
+
+
+def test_pad_posterior_rejects_non_positive_batch() -> None:
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        _pad_posterior({"x": jnp.zeros((5, 1))}, 0)
+
+
+def test_pad_posterior_rejects_ragged_sample_axis() -> None:
+    posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((6, 1))}
+    with pytest.raises(ValueError, match="disagree on the sample axis"):
+        _pad_posterior(posterior, 4)
+
+
+def test_pad_posterior_pads_to_multiple_and_reports_original() -> None:
+    posterior = {"x": jnp.arange(5.0)[:, None]}
+    padded, num = _pad_posterior(posterior, 4)
+    assert num == 5
+    assert padded["x"].shape == (8, 1)  # next multiple of 4
+    # The original prefix is preserved; pad rows wrap around from the start.
+    assert jnp.array_equal(padded["x"][:5], posterior["x"])
+
+
+def test_pad_posterior_no_pad_when_already_multiple() -> None:
+    posterior = {"x": jnp.arange(8.0)[:, None]}
+    padded, num = _pad_posterior(posterior, 4)
+    assert num == 8
+    assert padded["x"] is posterior["x"]
+
+
+@pytest.mark.parametrize("num_samples", [1, 3, 4, 5, 12])
+def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
+    # Sweep num_samples around batch_size b=4: {1, b-1, b, b+1, 3b}.
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, num_samples)
+    fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=4)
+    assert fc.shape == (num_samples, 6, 1)
+    assert bool(jnp.all(jnp.isfinite(fc)))
+
+
+def test_forecast_chunked_close_to_unchunked() -> None:
+    # Chunking changes the PRNG layout, so draws differ; the sample means still
+    # agree within Monte Carlo error (same distribution).
+    model, data, fit = _fit_data()
+    n = 400
+    post = draw_posterior(random.PRNGKey(2), fit, n)
+    chunked = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=8)
+    unchunked = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
+    assert chunked.shape == unchunked.shape == (n, 6, 1)
+    standard_error = unchunked.std(axis=0) / jnp.sqrt(n)
+    assert jnp.all(
+        jnp.abs(chunked.mean(axis=0) - unchunked.mean(axis=0)) < 8.0 * standard_error + 0.05
+    )
+
+
+def test_forecast_compiles_predict_once_across_sample_sweep(count_compilations) -> None:
+    """Invariant I3: chunked forecasts compile _predict once for a fixed shape."""
+    model, data, fit = _fit_data()
+    covariates = empty_covariates(36)
+    # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
+    posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
+    jax.block_until_ready(posteriors)
+    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
+    with count_compilations():
+        for post in posteriors:
+            jax.block_until_ready(
+                forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
+            )
+    # A single (batch_size, future, obs) shape variant across the whole sweep.
+    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]

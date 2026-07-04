@@ -496,6 +496,57 @@ def _index_tree(tree: dict[str, Array], index: Array | slice) -> dict[str, Array
     return tree_map(lambda leaf: leaf[index], tree)
 
 
+def _pad_posterior(posterior: dict[str, Array], batch_size: int) -> tuple[dict[str, Array], int]:
+    """Pad a posterior's sample axis up to a whole multiple of ``batch_size``.
+
+    Padding lets the chunk loop slice fixed-size ``batch_size`` blocks so
+    ``_predict`` compiles exactly once regardless of ``num_samples`` (invariant
+    I3). The pad rows are wrapped-around copies of existing draws and are
+    discarded by the caller's final ``[:num]`` slice, so they never affect the
+    result.
+
+    Parameters
+    ----------
+    posterior
+        Posterior samples, sample axis leading (all leaves agree on that axis).
+    batch_size
+        Positive chunk size.
+
+    Returns
+    -------
+    tuple[dict[str, Array], int]
+        The padded posterior and the original (pre-pad) sample count.
+
+    Raises
+    ------
+    ValueError
+        If ``posterior`` is empty, ``batch_size`` is not positive, or the leaves
+        disagree on the sample-axis length (the message names the offending sites).
+    """
+    if not posterior:
+        msg = "_pad_posterior() requires a non-empty posterior"
+        raise ValueError(msg)
+    if batch_size <= 0:
+        msg = f"batch_size must be positive, got {batch_size}"
+        raise ValueError(msg)
+    sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
+    distinct = set(sizes.values())
+    if len(distinct) != 1:
+        msg = f"posterior leaves disagree on the sample axis: {sizes}"
+        raise ValueError(msg)
+    num = distinct.pop()
+    remainder = num % batch_size
+    if remainder == 0:
+        return posterior, num
+    pad = batch_size - remainder
+    pad_indices = jnp.arange(pad) % num
+    padded = {
+        name: jnp.concatenate([leaf, leaf[pad_indices]], axis=0)
+        for name, leaf in posterior.items()
+    }
+    return padded, num
+
+
 def fit_svi(
     rng_key: Array,
     model: ForecastModel,
@@ -935,19 +986,34 @@ def forecast(
     ------
     ValueError
         If ``covariates`` does not extend beyond ``data`` along the time axis.
+
+    Notes
+    -----
+    Chunking is a memory knob, not a reproducibility knob: reproducibility is
+    per ``(rng_key, batch_size)``. Each chunk is padded to a whole multiple of
+    ``batch_size`` so the underlying ``_predict`` compiles exactly once for a
+    fixed shape (the pad draws are discarded), but changing ``batch_size``
+    changes the PRNG stream layout and therefore the exact draws.
     """
     _require_covariates_extend_data(data, covariates)
     num_samples = next(iter(posterior.values())).shape[0]
     if batch_size is None or batch_size >= num_samples:
         return _predict(rng_key, model, posterior, data, covariates, parallel=parallel)
-    outputs = []
-    key = rng_key
-    for start in range(0, num_samples, batch_size):
-        stop = min(start + batch_size, num_samples)
-        key, sub_key = random.split(key)
-        chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict(sub_key, model, chunk, data, covariates, parallel=parallel))
-    return jnp.concatenate(outputs, axis=0)
+    padded, num = _pad_posterior(posterior, batch_size)
+    num_padded = next(iter(padded.values())).shape[0]
+    keys = random.split(rng_key, num_padded // batch_size)
+    chunks = [
+        _predict(
+            keys[i],
+            model,
+            _index_tree(padded, slice(start, start + batch_size)),
+            data,
+            covariates,
+            parallel=parallel,
+        )
+        for i, start in enumerate(range(0, num_padded, batch_size))
+    ]
+    return jnp.concatenate(chunks, axis=0)[:num]
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
@@ -1016,11 +1082,17 @@ def predict_in_sample(
     num_samples = next(iter(posterior.values())).shape[0]
     if batch_size is None or batch_size >= num_samples:
         return _predict_obs(rng_key, model, posterior, covariates, parallel=parallel)
-    outputs = []
-    key = rng_key
-    for start in range(0, num_samples, batch_size):
-        stop = min(start + batch_size, num_samples)
-        key, sub_key = random.split(key)
-        chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict_obs(sub_key, model, chunk, covariates, parallel=parallel))
-    return jnp.concatenate(outputs, axis=0)
+    padded, num = _pad_posterior(posterior, batch_size)
+    num_padded = next(iter(padded.values())).shape[0]
+    keys = random.split(rng_key, num_padded // batch_size)
+    chunks = [
+        _predict_obs(
+            keys[i],
+            model,
+            _index_tree(padded, slice(start, start + batch_size)),
+            covariates,
+            parallel=parallel,
+        )
+        for i, start in enumerate(range(0, num_padded, batch_size))
+    ]
+    return jnp.concatenate(chunks, axis=0)[:num]
