@@ -170,6 +170,7 @@ class _BaseForecaster(abc.ABC):
         num_samples: int,
         *,
         batch_size: int | None = None,
+        parallel: bool = True,
     ) -> Float[Array, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
@@ -185,6 +186,10 @@ class _BaseForecaster(abc.ABC):
             Number of forecast samples to draw.
         batch_size
             Optional chunk size for sampling (caps peak memory).
+        parallel
+            Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
+            higher peak memory) or map it serially (``False``). See
+            :func:`numpyro_forecast.functional.forecast`.
 
         Returns
         -------
@@ -195,7 +200,15 @@ class _BaseForecaster(abc.ABC):
         _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
         posterior = self._draw_posterior(key_post, num_samples)
-        return _forecast(key_pred, self.model, posterior, data, covariates, batch_size=batch_size)
+        return _forecast(
+            key_pred,
+            self.model,
+            posterior,
+            data,
+            covariates,
+            batch_size=batch_size,
+            parallel=parallel,
+        )
 
     def predict_in_sample(
         self,
@@ -204,6 +217,7 @@ class _BaseForecaster(abc.ABC):
         num_samples: int,
         *,
         batch_size: int | None = None,
+        parallel: bool = True,
     ) -> Float[Array, " sample *batch time obs"]:
         """Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -223,6 +237,10 @@ class _BaseForecaster(abc.ABC):
             Number of posterior-predictive samples to draw.
         batch_size
             Optional chunk size for sampling (caps peak memory).
+        parallel
+            Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
+            higher peak memory) or map it serially (``False``). See
+            :func:`numpyro_forecast.functional.predict_in_sample`.
 
         Returns
         -------
@@ -245,7 +263,7 @@ class _BaseForecaster(abc.ABC):
         key_post, key_pred = random.split(rng_key)
         posterior = self._draw_posterior(key_post, num_samples)
         return _predict_in_sample(
-            key_pred, self.model, posterior, covariates, batch_size=batch_size
+            key_pred, self.model, posterior, covariates, batch_size=batch_size, parallel=parallel
         )
 
 
