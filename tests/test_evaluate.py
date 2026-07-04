@@ -11,6 +11,7 @@ from jax import Array, random
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
+    _block_object,
     _expanding_windows,
     _iter_windows,
     _resolve_options,
@@ -29,6 +30,65 @@ from numpyro_forecast.evaluate import (
 )
 from numpyro_forecast.forecaster import HMCForecaster
 from numpyro_forecast.typing import ForecasterFactory
+
+
+class _SlotShim:
+    """A __slots__ object (no __dict__) to exercise the _block_object no-op."""
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: Array) -> None:
+        self.value = value
+
+
+def test_block_object_handles_frozen_dataclass_and_shim() -> None:
+    # Regular object with __dict__: returned unchanged, arrays materialized.
+    class _Holder:
+        def __init__(self) -> None:
+            self.arr = jnp.ones(4)
+            self.name = "holder"
+
+    holder = _Holder()
+    assert _block_object(holder) is holder
+    assert bool(jnp.all(holder.arr == 1.0))
+
+    # __slots__ object without __dict__: no-op, returned unchanged.
+    shim = _SlotShim(jnp.zeros(2))
+    assert _block_object(shim) is shim
+
+
+def test_timed_returns_result_and_nonnegative_time() -> None:
+    result, seconds = _timed(lambda: jnp.ones(3) * 2.0)
+    assert bool(jnp.all(result == 2.0))
+    assert seconds >= 0.0
+
+
+@pytest.mark.slow
+def test_walltime_includes_compute() -> None:
+    # A blocked forecast timing must exceed a trivially small threshold: it
+    # includes real compile+compute, not just async dispatch.
+    from numpyro_forecast.forecaster import Forecaster
+
+    t = jnp.linspace(0, 4 * jnp.pi, 60)
+    data = (jnp.sin(t) + 0.1 * random.normal(random.PRNGKey(0), (60,)))[:, None]
+    covariates = jnp.zeros((60, 0))
+
+    def make(rng_key, model, d, c) -> object:
+        return Forecaster(rng_key, model, d, c, num_steps=100)
+
+    results = backtest(
+        random.PRNGKey(1),
+        data,
+        covariates,
+        RandomWalkModel,
+        forecaster_fn=cast("ForecasterFactory", make),
+        train_window=40,
+        test_window=5,
+        num_samples=50,
+    )
+    assert results
+    assert all(r.train_walltime > 0.0 for r in results)
+    assert all(r.test_walltime > 0.0 for r in results)
 
 
 def test_eval_mae_uses_median() -> None:

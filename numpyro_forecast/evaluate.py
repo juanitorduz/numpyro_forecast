@@ -253,10 +253,44 @@ def _scalar_params(forecaster: object) -> dict[str, float]:
     return {name: float(value) for name, value in params.items() if jnp.size(value) == 1}
 
 
+def _block_object[T](obj: T) -> T:
+    """Block until every JAX array reachable from ``obj``'s attributes is ready.
+
+    JAX arrays materialize asynchronously, so timing a call that returns a
+    container (e.g. a fitted forecaster) without blocking would report only the
+    dispatch time. This materializes ``vars(obj)`` (a pytree-generic sweep over
+    the instance ``__dict__``); objects without a ``__dict__`` (``__slots__``)
+    are a safe no-op.
+
+    Parameters
+    ----------
+    obj
+        Any object; its array-valued attributes are awaited.
+
+    Returns
+    -------
+    T
+        ``obj`` unchanged (returned so it can wrap a call inline).
+    """
+    try:
+        attrs = vars(obj)
+    except TypeError:
+        return obj
+    jax.block_until_ready(attrs)
+    return obj
+
+
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
-    """Run ``fn`` and return its result alongside the wall-clock seconds it took."""
+    """Run ``fn``, block until its result is ready, and return ``(result, seconds)``.
+
+    The ``jax.block_until_ready`` call folds asynchronous compute time into the
+    measurement so reported walltimes reflect real work (roadmap §4.1, risk K6);
+    array results are awaited directly, containers should be pre-wrapped with
+    :func:`_block_object`.
+    """
     start = perf_counter()
     result = fn()
+    jax.block_until_ready(result)
     return result, perf_counter() - start
 
 
@@ -526,7 +560,9 @@ def _run_window(
     key_fit, key_forecast = random.split(rng_key)
 
     forecaster, train_walltime = _timed(
-        lambda: forecaster_fn(key_fit, model_fn(), train_data, train_covariates, **options)
+        lambda: _block_object(
+            forecaster_fn(key_fit, model_fn(), train_data, train_covariates, **options)
+        )
     )
     pred, test_walltime = _timed(
         lambda: forecaster(
