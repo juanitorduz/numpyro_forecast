@@ -7,11 +7,11 @@ fits its own forecaster. :func:`backtest` supports two windowing strategies, an
 ``"rolling"`` window (see :data:`WindowType`), selected via ``window_type``.
 """
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -21,6 +21,10 @@ from jaxtyping import Float
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.typing import Array, ForecasterFactory, Metric, ModelFactory
+from numpyro_forecast.util import require
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 @jax.jit
@@ -736,3 +740,61 @@ def backtest(
         )
 
     return results
+
+
+def results_to_dataframe(results: "Sequence[BacktestResult]") -> "pd.DataFrame":
+    """Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
+
+    Columns are prefix-namespaced so metric, in-sample-metric, and parameter
+    names never collide: window metrics become ``metric_<name>``, in-sample
+    metrics ``train_metric_<name>``, and scalar parameters ``param_<name>``,
+    alongside the window indices ``t0``/``t1``/``t2``, ``num_samples``, and
+    ``train_walltime``/``test_walltime``. Forecast samples are excluded.
+    Windows may carry different metric sets (e.g. via
+    ``backtest(per_window_metrics=...)``); the union of columns is used and
+    missing entries are left as ``NaN``.
+
+    Parameters
+    ----------
+    results
+        A sequence of :class:`BacktestResult` from :func:`backtest`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per window with the namespaced columns described above.
+
+    Raises
+    ------
+    NotImplementedError
+        If a vectorized backtest result is passed; use the loop
+        :func:`backtest` output for now (vectorized support lands with
+        ``backtest_vectorized``).
+    ImportError
+        If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
+    """
+    pandas = require("pandas", extra="dataframes")
+    rows: list[dict[str, Any]] = []
+    for result in results:
+        if not isinstance(result, BacktestResult):
+            msg = (
+                "results_to_dataframe currently supports only a sequence of "
+                "BacktestResult; vectorized backtest results are not yet supported."
+            )
+            raise NotImplementedError(msg)
+        row: dict[str, Any] = {
+            "t0": result.t0,
+            "t1": result.t1,
+            "t2": result.t2,
+            "num_samples": result.num_samples,
+            "train_walltime": result.train_walltime,
+            "test_walltime": result.test_walltime,
+        }
+        for name, value in result.metrics.items():
+            row[f"metric_{name}"] = value
+        for name, value in result.train_metrics.items():
+            row[f"train_metric_{name}"] = value
+        for name, value in result.params.items():
+            row[f"param_{name}"] = value
+        rows.append(row)
+    return pandas.DataFrame(rows)

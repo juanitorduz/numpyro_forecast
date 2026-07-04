@@ -810,3 +810,95 @@ def test_run_window_builds_result_and_applies_transform() -> None:
     assert result.train_metrics == {}
     assert result.prediction is None
     assert transform_calls["count"] == 1
+
+
+# --- P8: results_to_dataframe ------------------------------------------------
+
+
+def _make_result(t0: int, **kwargs: object) -> BacktestResult:
+    base: dict[str, Any] = {
+        "t0": t0,
+        "t1": t0 + 10,
+        "t2": t0 + 14,
+        "num_samples": 20,
+        "train_walltime": 0.5,
+        "test_walltime": 0.25,
+        "metrics": {"crps": 1.0, "mae": 2.0},
+        "params": {"sigma": 0.3},
+        "train_metrics": {"crps": 0.8},
+    }
+    base.update(kwargs)
+    return BacktestResult(**cast("Any", base))
+
+
+def test_results_to_dataframe_schema_and_row_count() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    results = [_make_result(0), _make_result(4)]
+    df = results_to_dataframe(results)
+    assert len(df) == 2
+    assert set(df.columns) == {
+        "t0",
+        "t1",
+        "t2",
+        "num_samples",
+        "train_walltime",
+        "test_walltime",
+        "metric_crps",
+        "metric_mae",
+        "train_metric_crps",
+        "param_sigma",
+    }
+    assert list(df["t0"]) == [0, 4]
+    assert list(df["metric_crps"]) == [1.0, 1.0]
+    assert list(df["param_sigma"]) == [0.3, 0.3]
+
+
+def test_results_to_dataframe_empty_input() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    df = results_to_dataframe([])
+    assert len(df) == 0
+
+
+def test_results_to_dataframe_heterogeneous_metrics() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    # One window carries an extra per-window metric; its column is NaN elsewhere.
+    a = _make_result(0)
+    b = _make_result(4, metrics={"crps": 1.0, "mae": 2.0, "mase": 0.9})
+    df = results_to_dataframe([a, b])
+    assert "metric_mase" in df.columns
+    assert df["metric_mase"].isna().tolist() == [True, False]
+
+
+def test_results_to_dataframe_no_metrics_or_params() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    r = _make_result(0, metrics={}, params={}, train_metrics={})
+    df = results_to_dataframe([r])
+    assert set(df.columns) == {
+        "t0",
+        "t1",
+        "t2",
+        "num_samples",
+        "train_walltime",
+        "test_walltime",
+    }
+
+
+def test_results_to_dataframe_missing_pandas(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    real_import = importlib.import_module
+
+    def fake_import(name: str, package: str | None = None) -> object:
+        if name == "pandas":
+            raise ImportError("no pandas")
+        return real_import(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    with pytest.raises(ImportError, match=r"dataframes"):
+        results_to_dataframe([_make_result(0)])

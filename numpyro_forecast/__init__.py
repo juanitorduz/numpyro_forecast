@@ -23,6 +23,7 @@ from numpyro_forecast.evaluate import (
     eval_mae,
     eval_rmse,
     evaluate_forecast,
+    results_to_dataframe,
 )
 from numpyro_forecast.forecaster import Forecaster, ForecastingModel, HMCForecaster
 from numpyro_forecast.functional import forecasting_model
@@ -48,4 +49,5 @@ __all__ = [
     "evaluate_forecast",
     "forecasting_model",
     "register_elementwise",
+    "results_to_dataframe",
 ]
