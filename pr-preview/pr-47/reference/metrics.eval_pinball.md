@@ -22,10 +22,10 @@ The pinball loss for the forecast \\\hat q\\ of quantile \\\tau\\ is \\\max(\tau
 ## Parameters
 
 
-`pred: Array`  
+`pred: Float[Array, ``" sample *batch"]`  
 Forecast samples with the sample axis first.
 
-`truth: Array`  
+`truth: Float[Array, ``" *batch"]`  
 Ground-truth values (matching `pred` without the sample axis).
 
 `quantile: float = ``0.5`  

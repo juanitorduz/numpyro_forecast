@@ -601,6 +601,18 @@ window.Quarto = {
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</span></span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.PathfinderFit.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.fit_pathfinder.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</span></span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -678,7 +690,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L131-L162" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L136-L172" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">eval_interval_score</span>(
@@ -696,11 +708,11 @@ u)\mathbf 1_{y&gt;u}\big]\)</span>, averaged over all data elements. It rewards 
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
 <p>Forecast samples with the sample axis first.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>
 <p>Ground-truth values (matching <code>pred</code> without the sample axis).</p>
 </dd>

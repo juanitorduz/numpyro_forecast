@@ -82,6 +82,8 @@
 - [contrib.blackjax.BlackjaxNUTSKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxNUTSKernel.html)
 - [contrib.blackjax.BlackjaxMCLMCKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxMCLMCKernel.html)
 - [contrib.blackjax.BlackjaxCustomKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxCustomKernel.html)
+- [contrib.blackjax.PathfinderFit](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.PathfinderFit.html)
+- [contrib.blackjax.fit_pathfinder](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.fit_pathfinder.html)
 
 #### Datasets
 > Example datasets used in the tutorials.

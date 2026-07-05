@@ -196,6 +196,12 @@ BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 [contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
 Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
 
+[contrib.blackjax.PathfinderFit](contrib.blackjax.PathfinderFit.md#numpyro_forecast.contrib.blackjax.PathfinderFit)  
+The result of fitting a forecasting model with BlackJAX Pathfinder.
+
+[contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder)  
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
 
 ## Datasets
 

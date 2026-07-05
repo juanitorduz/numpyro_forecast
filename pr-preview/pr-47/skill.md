@@ -101,6 +101,8 @@ Optional backends behind pyproject extras (never imported by default).
 - `contrib.blackjax.BlackjaxNUTSKernel`
 - `contrib.blackjax.BlackjaxMCLMCKernel`
 - `contrib.blackjax.BlackjaxCustomKernel`
+- `contrib.blackjax.PathfinderFit`
+- `contrib.blackjax.fit_pathfinder`
 
 ### Datasets
 

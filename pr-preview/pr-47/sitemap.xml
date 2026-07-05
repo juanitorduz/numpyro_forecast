@@ -31,6 +31,18 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.PathfinderFit.html</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.fit_pathfinder.html</loc>
+    <lastmod>2026-07-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast.html</loc>
     <lastmod>2026-07-05</lastmod>
     <changefreq>monthly</changefreq>

@@ -22,10 +22,10 @@ For the central `alpha` interval \\\[l, u\]\\ (the \\(1-\alpha)/2\\ and \\1-(1-\
 ## Parameters
 
 
-`pred: Array`  
+`pred: Float[Array, ``" sample *batch"]`  
 Forecast samples with the sample axis first.
 
-`truth: Array`  
+`truth: Float[Array, ``" *batch"]`  
 Ground-truth values (matching `pred` without the sample axis).
 
 `alpha: float = ``0.9`  

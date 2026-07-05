@@ -1007,7 +1007,7 @@ Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
 Prediction, and Estimation". *Journal of the American Statistical
 Association*.
 
-eval_pinball(pred: jax.Array, truth: jax.Array, *, quantile: float = 0.5) -> float
+eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, quantile: float = 0.5) -> float
 
 Mean pinball (quantile) loss of the forecast ``quantile``.
 
@@ -1034,7 +1034,7 @@ Raises
 ValueError
     If ``quantile`` is not strictly inside ``(0, 1)``.
 
-eval_interval_score(pred: jax.Array, truth: jax.Array, *, alpha: float = 0.9) -> float
+eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> float
 
 Mean Winkler interval score for the central ``alpha`` prediction interval.
 
@@ -1063,7 +1063,7 @@ Raises
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``.
 
-make_mase(train_data: jax.Array, *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], float]
+make_mase(train_data: jaxtyping.Float[Array, 'time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], float]
 
 Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 

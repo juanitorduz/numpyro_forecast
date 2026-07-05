@@ -572,6 +572,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</span></span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.PathfinderFit.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.fit_pathfinder.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</span></span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -653,7 +665,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">BlackjaxCustomKernel</span>()</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The escape hatch for kernels without a dedicated wrapper. <code>build_fn</code> receives <code>(logdensity_fn, rng_key, position, num_warmup)</code> and must return <code>(inner_state, step_fn)</code>, where <code>inner_state</code> exposes <code>.position</code> over the same sites as the model and <code>step_fn</code> has signature <code>(rng_key, inner_state) -&gt; (inner_state, info)</code>. The base class validates the returned state’s key set and raises <code>TypeError</code> if it is malformed.</p>
+<p>The escape hatch for kernels without a dedicated wrapper. <code>build_fn</code> receives <code>(rng_key, logdensity_fn, position, num_warmup)</code> and must return <code>(inner_state, step_fn)</code>, where <code>inner_state</code> exposes <code>.position</code> over the same sites as the model and <code>step_fn</code> has signature <code>(rng_key, inner_state) -&gt; (inner_state, info)</code>. The base class validates the returned state’s key set and raises <code>TypeError</code> if it is malformed.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
