@@ -165,6 +165,40 @@ Declare a distribution family elementwise (usable as a decorator).
 Import an optional dependency, or raise a targeted `ImportError`.
 
 
+## Exceptions
+
+
+Package exception hierarchy raised at resolution and validation boundaries.
+
+
+[exceptions.NumpyroForecastError](exceptions.NumpyroForecastError.md#numpyro_forecast.exceptions.NumpyroForecastError)  
+Base class for all deliberate `numpyro_forecast` errors.
+
+[exceptions.BacktestWindowError](exceptions.BacktestWindowError.md#numpyro_forecast.exceptions.BacktestWindowError)  
+A backtest window configuration is invalid.
+
+[exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
+The vectorized backtest requires an `AutoGuide`.
+
+[exceptions.OptimizerResolutionError](exceptions.OptimizerResolutionError.md#numpyro_forecast.exceptions.OptimizerResolutionError)  
+An optimizer specification could not be resolved.
+
+[exceptions.GuideResolutionError](exceptions.GuideResolutionError.md#numpyro_forecast.exceptions.GuideResolutionError)  
+A guide specification could not be resolved.
+
+[exceptions.GuideSampleArgsError](exceptions.GuideSampleArgsError.md#numpyro_forecast.exceptions.GuideSampleArgsError)  
+Drawing from a hand-written guide needs the in-sample arguments.
+
+[exceptions.KernelResolutionError](exceptions.KernelResolutionError.md#numpyro_forecast.exceptions.KernelResolutionError)  
+A kernel specification could not be resolved.
+
+[exceptions.KernelConfigError](exceptions.KernelConfigError.md#numpyro_forecast.exceptions.KernelConfigError)  
+A kernel is combined with an invalid configuration.
+
+[exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
+A `MultivariateNormal` layout is unsupported for time-axis surgery.
+
+
 ## ArviZ export
 
 

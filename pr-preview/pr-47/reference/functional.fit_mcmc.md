@@ -75,4 +75,7 @@ The posterior samples (flattened) and `num_chains`.
 
 
 `ValueError`  
-If `data` and `covariates` have different durations, or a run-config constraint is violated (see `_validate_kernel_run_config()`).
+If `data` and `covariates` have different durations.
+
+`KernelConfigError`  
+If a run-config constraint is violated (see `_validate_kernel_run_config()`).

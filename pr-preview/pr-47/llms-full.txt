@@ -324,7 +324,7 @@ _NumPyroOptim
 
 Raises
 ------
-TypeError
+OptimizerResolutionError
     For boolean inputs of any form, including 0-d boolean arrays (``bool`` is
     an ``int`` subclass, so a bool would silently mean ``Adam(1.0)``), and for
     any other unrecognized type; the message lists the accepted forms.
@@ -338,7 +338,8 @@ Normalize a guide specification against ``model``.
 Resolution: ``None`` -> ``AutoNormal(model)``; an ``AutoGuide`` instance ->
 returned unchanged; an ``AutoGuide`` subclass or a ``functools.partial`` of
 one -> called with ``model``; any other callable -> a hand-written guide,
-after :func:`_probe_handwritten_guide`. Anything else -> ``TypeError``.
+after :func:`_probe_handwritten_guide`. Anything else ->
+:class:`GuideResolutionError`.
 
 Parameters
 ----------
@@ -354,7 +355,7 @@ AutoGuide | Callable[..., None]
 
 Raises
 ------
-TypeError
+GuideResolutionError
     If ``guide`` is neither an ``AutoGuide`` (instance/subclass/partial) nor
     a callable, or if it has the mistyped-factory shape.
 
@@ -436,6 +437,9 @@ Raises
 ------
 NotImplementedError
     If ``fit`` is of an unsupported type.
+GuideSampleArgsError
+    If the fit holds a hand-written guide but was constructed without its
+    in-sample covariates/data.
 
 Notes
 -----
@@ -472,9 +476,9 @@ MCMCKernel
 
 Raises
 ------
-ValueError
+KernelConfigError
     If a kernel instance is combined with non-empty ``kernel_kwargs``.
-TypeError
+KernelResolutionError
     If ``kernel`` is neither ``None``, an ``MCMCKernel`` subclass, nor an
     ``MCMCKernel`` instance.
 
@@ -519,8 +523,10 @@ MCMCFit
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` have different durations, or a run-config
-    constraint is violated (see :func:`_validate_kernel_run_config`).
+    If ``data`` and ``covariates`` have different durations.
+KernelConfigError
+    If a run-config constraint is violated (see
+    :func:`_validate_kernel_run_config`).
 
 forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch future obs']
 
@@ -781,9 +787,12 @@ VectorizedBacktestResult
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, ``train_window`` or
-    ``test_window`` or ``stride`` is ``< 1``, the resolved guide is not an
-    ``AutoGuide``, or there is no room for a single window.
+    If ``data`` and ``covariates`` durations differ.
+BacktestWindowError
+    If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
+    there is no room for a single window.
+VectorizedGuideError
+    If the resolved guide is not an ``AutoGuide``.
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, train_walltime: float, test_walltime: float, metrics: dict[str, float], params: dict[str, float] = <factory>, train_metrics: dict[str, float] = <factory>, prediction: jax.Array | None = None) -> None
 
@@ -1302,6 +1311,94 @@ Raises
 ------
 ImportError
     If ``module`` is not importable, with an actionable install hint.
+
+
+## Exceptions
+
+Package exception hierarchy raised at resolution and validation boundaries.
+
+
+NumpyroForecastError(message: str | None = None) -> None
+
+Base class for all deliberate ``numpyro_forecast`` errors.
+
+Subclasses may set :attr:`default_message`; instantiating without arguments
+then carries that message, and a positional message overrides it.
+
+Parameters
+----------
+message
+    Optional explicit message; defaults to the class
+    :attr:`default_message`.
+
+BacktestWindowError(message: str | None = None) -> None
+
+A backtest window configuration is invalid.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
+``train_window``, ``test_window``, or ``stride`` is below 1, or when the
+series has no room for a single window.
+
+VectorizedGuideError(message: str | None = None) -> None
+
+The vectorized backtest requires an ``AutoGuide``.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when the
+resolved guide is hand-written: those are not vmappable, use
+:func:`~numpyro_forecast.evaluate.backtest` instead.
+
+OptimizerResolutionError(message: str | None = None) -> None
+
+An optimizer specification could not be resolved.
+
+Raised by :func:`~numpyro_forecast.functional.resolve_optimizer` for
+boolean inputs of any form (``bool`` is an ``int`` subclass, so a bool
+would silently mean ``Adam(1.0)``; the default message) and for any other
+unrecognized type.
+
+GuideResolutionError(message: str | None = None) -> None
+
+A guide specification could not be resolved.
+
+Raised by :func:`~numpyro_forecast.functional.resolve_guide` for a
+callable shaped like a guide *factory* (the default message) or for an
+unsupported type.
+
+GuideSampleArgsError(message: str | None = None) -> None
+
+Drawing from a hand-written guide needs the in-sample arguments.
+
+Raised by :func:`~numpyro_forecast.functional.draw_posterior` when an
+:class:`~numpyro_forecast.functional.SVIFit` holding a hand-written guide
+was constructed without its in-sample covariates/data.
+
+KernelResolutionError(message: str | None = None) -> None
+
+A kernel specification could not be resolved.
+
+Raised by :func:`~numpyro_forecast.functional.resolve_kernel` for a type
+that is neither ``None``, an ``MCMCKernel`` subclass, nor an ``MCMCKernel``
+instance.
+
+KernelConfigError(message: str | None = None) -> None
+
+A kernel is combined with an invalid configuration.
+
+Raised by :func:`~numpyro_forecast.functional.resolve_kernel` when
+``kernel_kwargs`` accompany an already-constructed instance, and by
+:func:`~numpyro_forecast.functional.fit_mcmc` for run-config constraints
+(ensemble samplers need multiple vectorized chains; BlackJAX kernels need
+sequential chains).
+
+MVNLayoutError(message: str | None = None) -> None
+
+A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
+
+Raised by :func:`~numpyro_forecast.util.shift_loc`,
+:func:`~numpyro_forecast.util.slice_time`, and
+:func:`~numpyro_forecast.util.prefix_condition` on MVN noise whose
+``loc``/``covariance_matrix`` shapes do not match the supported
+time-leading layout.
 
 
 ## ArviZ export

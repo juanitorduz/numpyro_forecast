@@ -14,7 +14,7 @@ functional.resolve_guide(
 ```
 
 
-Resolution: `None` -\> `AutoNormal(model)`; an `AutoGuide` instance -\> returned unchanged; an `AutoGuide` subclass or a `functools.partial` of one -\> called with [model](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model); any other callable -\> a hand-written guide, after `_probe_handwritten_guide()`. Anything else -\> `TypeError`.
+Resolution: `None` -\> `AutoNormal(model)`; an `AutoGuide` instance -\> returned unchanged; an `AutoGuide` subclass or a `functools.partial` of one -\> called with [model](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model); any other callable -\> a hand-written guide, after `_probe_handwritten_guide()`. Anything else -\> [GuideResolutionError](exceptions.GuideResolutionError.md#numpyro_forecast.exceptions.GuideResolutionError).
 
 
 ## Parameters
@@ -37,5 +37,5 @@ The resolved guide.
 ## Raises
 
 
-`TypeError`  
+`GuideResolutionError`  
 If `guide` is neither an `AutoGuide` (instance/subclass/partial) nor a callable, or if it has the mistyped-factory shape.

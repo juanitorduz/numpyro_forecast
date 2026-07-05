@@ -86,6 +86,20 @@ Array helpers and feature builders.
 - `util.register_elementwise`
 - `util.require`
 
+### Exceptions
+
+Package exception hierarchy raised at resolution and validation boundaries.
+
+- `exceptions.NumpyroForecastError`
+- `exceptions.BacktestWindowError`
+- `exceptions.VectorizedGuideError`
+- `exceptions.OptimizerResolutionError`
+- `exceptions.GuideResolutionError`
+- `exceptions.GuideSampleArgsError`
+- `exceptions.KernelResolutionError`
+- `exceptions.KernelConfigError`
+- `exceptions.MVNLayoutError`
+
 ### ArviZ export
 
 Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.

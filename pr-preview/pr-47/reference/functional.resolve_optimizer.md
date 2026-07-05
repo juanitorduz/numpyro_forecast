@@ -31,7 +31,7 @@ The resolved NumPyro optimizer.
 ## Raises
 
 
-`TypeError`  
+`OptimizerResolutionError`  
 For boolean inputs of any form, including 0-d boolean arrays (`bool` is an `int` subclass, so a bool would silently mean `Adam(1.0)`), and for any other unrecognized type; the message lists the accepted forms.
 
 `ValueError`  

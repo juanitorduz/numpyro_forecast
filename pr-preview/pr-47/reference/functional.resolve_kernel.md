@@ -41,8 +41,8 @@ The resolved kernel.
 ## Raises
 
 
-`ValueError`  
+`KernelConfigError`  
 If a kernel instance is combined with non-empty `kernel_kwargs`.
 
-`TypeError`  
+`KernelResolutionError`  
 If `kernel` is neither `None`, an `MCMCKernel` subclass, nor an `MCMCKernel` instance.

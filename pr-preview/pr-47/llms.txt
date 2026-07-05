@@ -69,6 +69,19 @@
 - [util.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/util.register_elementwise.html)
 - [util.require](https://juanitorduz.github.io/numpyro_forecast/reference/util.require.html)
 
+#### Exceptions
+> Package exception hierarchy raised at resolution and validation boundaries.
+
+- [exceptions.NumpyroForecastError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.NumpyroForecastError.html)
+- [exceptions.BacktestWindowError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.BacktestWindowError.html)
+- [exceptions.VectorizedGuideError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedGuideError.html)
+- [exceptions.OptimizerResolutionError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.OptimizerResolutionError.html)
+- [exceptions.GuideResolutionError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.GuideResolutionError.html)
+- [exceptions.GuideSampleArgsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.GuideSampleArgsError.html)
+- [exceptions.KernelResolutionError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelResolutionError.html)
+- [exceptions.KernelConfigError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelConfigError.html)
+- [exceptions.MVNLayoutError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.MVNLayoutError.html)
+
 #### ArviZ export
 > Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 

@@ -85,4 +85,10 @@ The stacked per-window losses, metrics, and window indices.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ, `train_window` or `test_window` or `stride` is `< 1`, the resolved guide is not an `AutoGuide`, or there is no room for a single window.
+If `data` and `covariates` durations differ.
+
+`BacktestWindowError`  
+If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.
+
+`VectorizedGuideError`  
+If the resolved guide is not an `AutoGuide`.
