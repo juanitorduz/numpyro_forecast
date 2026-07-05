@@ -19,6 +19,7 @@ from jax import Array, random
 
 from numpyro_forecast.evaluate import (
     VectorizedBacktestResult,
+    _window_key_streams,
     backtest,
     backtest_vectorized,
 )
@@ -319,6 +320,28 @@ def test_keep_predictions_shape() -> None:
     assert result.predictions is not None
     num_windows = result.t0.shape[0]
     assert result.predictions.shape == (num_windows, 15, TEST, 1)
+
+
+def test_window_streams_are_disjoint() -> None:
+    """Per-window init/posterior/forecast keys are pairwise distinct, never a parent.
+
+    Guards the PRNG-hygiene rule from round-1 item 1: ``fold_in(rng_key, i)`` is
+    a split parent only, so no stream may reuse it directly, and none may
+    collide with the eager warm-up key ``fold_in(rng_key, -1)``.
+    """
+    import jax
+
+    rng_key = random.PRNGKey(0)
+    num_windows = 2
+    init_keys, post_keys, fc_keys = _window_key_streams(rng_key, num_windows)
+    parents = jax.vmap(lambda i: random.fold_in(rng_key, i))(jnp.arange(num_windows))
+    warmup = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
+
+    keys = [warmup]
+    for i in range(num_windows):
+        keys += [init_keys[i], post_keys[i], fc_keys[i], parents[i]]
+    raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
+    assert len(set(raw)) == len(raw)
 
 
 def test_result_schema_and_dataframe_row_shape() -> None:

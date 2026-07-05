@@ -845,6 +845,32 @@ def _vmapped_metrics(
     return {name: jnp.asarray([row[name] for row in scored]) for name in names}
 
 
+def _window_key_streams(rng_key: Array, num_windows: int) -> tuple[Array, Array, Array]:
+    """Derive disjoint per-window ``(init, posterior, forecast)`` key streams.
+
+    ``fold_in(rng_key, i)`` is the window-``i`` parent and is used as a split
+    parent only, never consumed directly: consuming a key that also parents a
+    split gives streams with no independence guarantee (the same anti-pattern
+    as round-1 item 1).
+
+    Parameters
+    ----------
+    rng_key
+        Base PRNG key.
+    num_windows
+        Number of rolling windows.
+
+    Returns
+    -------
+    tuple[Array, Array, Array]
+        ``(init_keys, post_keys, fc_keys)``, each a stacked key array with a
+        leading ``num_windows`` axis.
+    """
+    window_keys = jax.vmap(lambda i: random.fold_in(rng_key, i))(jnp.arange(num_windows))
+    subkeys = jax.vmap(lambda k: random.split(k, 3))(window_keys)
+    return subkeys[:, 0], subkeys[:, 1], subkeys[:, 2]
+
+
 def backtest_vectorized(
     rng_key: Array,
     data: Array,
@@ -870,8 +896,9 @@ def backtest_vectorized(
     wins for tens of windows on small models.
 
     PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-    ``fold_in(rng_key, i)`` seeds window ``i``; each window key is split for the
-    posterior draw and the forecast.
+    ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
+    posterior-draw, and forecast subkeys (the parent itself is never consumed;
+    see :func:`_window_key_streams`).
 
     Parameters
     ----------
@@ -967,11 +994,8 @@ def backtest_vectorized(
         state, losses = lax.scan(step, state, length=num_steps)
         return svi.get_params(state), losses
 
-    window_keys = jax.vmap(lambda i: random.fold_in(rng_key, i))(jnp.arange(starts.shape[0]))
-    params, losses = jax.jit(jax.vmap(fit_one))(window_keys, train_d, train_c)
-
-    split_keys = jax.vmap(random.split)(window_keys)
-    post_keys, fc_keys = split_keys[:, 0], split_keys[:, 1]
+    init_keys, post_keys, fc_keys = _window_key_streams(rng_key, int(starts.shape[0]))
+    params, losses = jax.jit(jax.vmap(fit_one))(init_keys, train_d, train_c)
     posterior = jax.jit(
         jax.vmap(lambda k, p: resolved_guide.sample_posterior(k, p, sample_shape=(num_samples,)))
     )(post_keys, params)
