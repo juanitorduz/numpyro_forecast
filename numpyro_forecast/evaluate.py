@@ -296,9 +296,9 @@ def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
     """Run ``fn``, block until its result is ready, and return ``(result, seconds)``.
 
     The ``jax.block_until_ready`` call folds asynchronous compute time into the
-    measurement so reported walltimes reflect real work (roadmap §4.1, risk K6);
-    array results are awaited directly, containers should be pre-wrapped with
-    :func:`_block_object`.
+    measurement so reported walltimes reflect real work rather than dispatch
+    time; array results are awaited directly, containers should be pre-wrapped
+    with :func:`_block_object`.
     """
     start = perf_counter()
     result = fn()
@@ -842,8 +842,7 @@ def _window_key_streams(rng_key: Array, num_windows: int) -> tuple[Array, Array,
 
     ``fold_in(rng_key, i)`` is the window-``i`` parent and is used as a split
     parent only, never consumed directly: consuming a key that also parents a
-    split gives streams with no independence guarantee (the same anti-pattern
-    as round-1 item 1).
+    split gives streams with no independence guarantee.
 
     Parameters
     ----------
@@ -884,8 +883,8 @@ def backtest_vectorized(
     Estimator-equivalent to :func:`backtest` with rolling windows; it differs
     only in PRNG stream layout and float reduction order, so the equivalence is
     statistical, not bitwise. Model, guide, and SVI compile once regardless of
-    the number of windows (invariant I3), giving order-of-magnitude wall-clock
-    wins for tens of windows on small models.
+    the number of windows, giving order-of-magnitude wall-clock wins for tens
+    of windows on small models.
 
     PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
     ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
@@ -971,12 +970,12 @@ def backtest_vectorized(
         raise VectorizedGuideError()
     svi = SVI(model, resolved_guide, resolve_optimizer(optim), Trace_ELBO())
 
-    # K11 — MANDATORY eager warm-up on concrete window-0 arrays: AutoGuide
-    # caches its prototype on the instance at first init; if that first
-    # init is traced under vmap, the instance holds leaked tracers and any
-    # later eager use raises UnexpectedTracerError (spike-pinned).
-    # (fold_in wants a non-negative uint32 index on this JAX floor, so the
-    # roadmap's ``-1`` sentinel is passed as an int32 array.)
+    # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
+    # caches its prototype trace on the instance at first init, so if that
+    # first init happens under vmap tracing the instance retains tracers and
+    # any later eager use raises UnexpectedTracerError.
+    # (fold_in requires a non-negative uint32 index on this JAX version, so
+    # the ``-1`` warm-up sentinel is passed as an int32 array.)
     svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
 
     def fit_one(key: Array, d: Array, c: Array) -> tuple[dict[str, Array], Array]:

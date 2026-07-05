@@ -23,7 +23,7 @@ Array = jax.Array
 if TYPE_CHECKING:
     # Precise unions for static checkers. At runtime (the ``else`` branch) each is
     # ``object`` so the beartype import hook accepts any resolvable form without
-    # forcing an ``optax``/``numpyro`` import at package import time (invariant I8).
+    # forcing an ``optax``/``numpyro`` import at package import time.
     OptimizerLike = float | int | _NumPyroOptim | optax.GradientTransformation | None
     """An optimizer specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
 

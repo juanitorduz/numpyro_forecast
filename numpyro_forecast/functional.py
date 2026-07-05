@@ -57,10 +57,15 @@ from numpyro_forecast.util import (
     slice_time,
 )
 
-# Frames to skip when attributing user-facing warnings: this package's own frames
-# and jaxtyping's runtime type-check wrapper (which double-wraps every annotated
-# function). Skipping both lands warnings on the caller regardless of wrapper
-# depth (``warnings.warn(skip_file_prefixes=...)``, Python 3.12+).
+# Why this exists: user-facing warnings (e.g. the BlackJAX num_warmup warning)
+# should point at the *caller's* line, not at a frame inside this package. A
+# numeric ``stacklevel`` cannot do that reliably here because the jaxtyping
+# import hook wraps every annotated function in a runtime type-check wrapper,
+# inserting extra frames whose count is an implementation detail that can
+# change between releases. ``warnings.warn(skip_file_prefixes=...)`` (Python
+# 3.12+) instead skips every frame from these directories -- this package's
+# own modules and jaxtyping's wrapper -- so attribution lands on the first
+# user frame regardless of wrapper depth.
 _WARN_SKIP_PREFIXES = (
     os.path.dirname(__file__),
     os.path.dirname(jaxtyping.__file__),
@@ -689,10 +694,9 @@ def _pad_posterior(posterior: dict[str, Array], batch_size: int) -> tuple[dict[s
     """Pad a posterior's sample axis up to a whole multiple of ``batch_size``.
 
     Padding lets the chunk loop slice fixed-size ``batch_size`` blocks so
-    ``_predict`` compiles exactly once regardless of ``num_samples`` (invariant
-    I3). The pad rows are wrapped-around copies of existing draws and are
-    discarded by the caller's final ``[:num]`` slice, so they never affect the
-    result.
+    ``_predict`` compiles exactly once regardless of ``num_samples``. The pad
+    rows are wrapped-around copies of existing draws and are discarded by the
+    caller's final ``[:num]`` slice, so they never affect the result.
 
     Parameters
     ----------
@@ -1016,7 +1020,7 @@ def _validate_kernel_run_config(
       "vectorized"`` (the ensemble is the chain batch).
     - ``_BlackjaxKernel`` subclasses: require ``chain_method == "sequential"``
       (instance-held step/postprocess functions capture tracers under vmap/pmap
-      tracing, risk K5); warn when ``num_warmup > 0`` (adaptation lives in
+      tracing); warn when ``num_warmup > 0`` (adaptation lives in
       ``kernel.init``, so warmup steps are discarded work).
 
     The warmup warning is attributed to the caller of :func:`fit_mcmc` via

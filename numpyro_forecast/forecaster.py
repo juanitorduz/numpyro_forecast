@@ -498,7 +498,7 @@ class PathfinderForecaster(_BaseForecaster):
     A thin shim over :func:`numpyro_forecast.contrib.blackjax.fit_pathfinder`.
     BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``)
     imported lazily here, so constructing this class is the opt-in that pulls it
-    in; importing :mod:`numpyro_forecast` never does (invariant I8). The
+    in; importing :mod:`numpyro_forecast` never does. The
     constructor mirrors :class:`Forecaster` without ``guide``/``optim`` (Pathfinder
     has neither) and adds ``num_elbo_samples``/``ftol``.
 
