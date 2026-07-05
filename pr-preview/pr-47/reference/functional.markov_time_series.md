@@ -59,4 +59,4 @@ The latent over the full horizon in package layout `(*plate_batch, duration, obs
 
 
 `ValueError`  
-If forecasting without observed data, if the per-step shape lacks the observation dimension (C7), or if an enclosing plate is detected.
+If forecasting without observed data, if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.

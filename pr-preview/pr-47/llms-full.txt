@@ -240,7 +240,7 @@ Raises
 ------
 ValueError
     If forecasting without observed data, if the per-step shape lacks the
-    observation dimension (C7), or if an enclosing plate is detected.
+    observation dimension, or if an enclosing plate is detected.
 
 predict(h: numpyro_forecast.functional.Horizon, noise_dist: numpyro.distributions.distribution.Distribution, prediction: jax.Array) -> None
 
