@@ -445,6 +445,12 @@ def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastMod
 _DEFAULT_LEARNING_RATE: float = 0.01
 """Default Adam learning rate used when ``optim`` is ``None``."""
 
+_BOOL_MSG = (
+    "resolve_optimizer() does not accept bool; pass a positive float learning "
+    "rate, an optax.GradientTransformation, a numpyro optimizer, or None."
+)
+"""Rejection message for boolean inputs (Python ``bool`` or 0-d boolean array)."""
+
 
 def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
     """Normalize an optimizer specification into a NumPyro optimizer.
@@ -468,9 +474,9 @@ def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
     Raises
     ------
     TypeError
-        For ``bool`` (``bool`` is an ``int`` subclass, so it would silently mean
-        ``Adam(1.0)``) and for any other unrecognized type; the message lists
-        the accepted forms.
+        For boolean inputs of any form, including 0-d boolean arrays (``bool`` is
+        an ``int`` subclass, so a bool would silently mean ``Adam(1.0)``), and for
+        any other unrecognized type; the message lists the accepted forms.
     ValueError
         For a non-finite or non-positive learning rate.
     """
@@ -479,13 +485,10 @@ def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
     if isinstance(optim, _NumPyroOptim):
         return optim
     if isinstance(optim, bool):
-        msg = (
-            "resolve_optimizer() does not accept bool; pass a positive float "
-            "learning rate, an optax.GradientTransformation, a numpyro optimizer, "
-            "or None."
-        )
-        raise TypeError(msg)
+        raise TypeError(_BOOL_MSG)
     is_array_scalar = getattr(optim, "ndim", None) == 0
+    if is_array_scalar and jnp.issubdtype(jnp.asarray(optim).dtype, jnp.bool_):
+        raise TypeError(_BOOL_MSG)  # 0-d bool array: same silent Adam(1.0) trap
     if isinstance(optim, (int, float)) or is_array_scalar:
         lr = float(cast("float", optim))
         if not math.isfinite(lr) or lr <= 0.0:
@@ -970,6 +973,10 @@ def _validate_kernel_run_config(
       tracing, risk K5); warn when ``num_warmup > 0`` (adaptation lives in
       ``kernel.init``, so warmup steps are discarded work).
 
+    The warmup warning uses ``stacklevel=3`` so it is attributed to the caller of
+    :func:`fit_mcmc`; this assumes exactly one intermediate frame (``fit_mcmc``)
+    between the ``warnings.warn`` call and user code.
+
     Parameters
     ----------
     kernel
@@ -1008,7 +1015,7 @@ def _validate_kernel_run_config(
                 f"{type(kernel).__name__} performs adaptation in kernel.init; "
                 f"num_warmup={num_warmup} warmup steps are discarded work, pass "
                 "num_warmup=0.",
-                stacklevel=2,
+                stacklevel=3,
             )
 
 

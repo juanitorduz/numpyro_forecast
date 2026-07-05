@@ -57,6 +57,22 @@ def test_block_object_handles_frozen_dataclass_and_shim() -> None:
     assert _block_object(shim) is shim
 
 
+def test_block_object_reaches_nested_arrays() -> None:
+    """Arrays nested inside containers under an attribute are blocked, not just top-level."""
+
+    class _Nested:
+        def __init__(self) -> None:
+            self.inner = {"samples": [jnp.arange(3.0), jnp.ones(2)]}
+            self.pair = (jnp.zeros(1), {"deep": jnp.full(2, 5.0)})
+
+    obj = _Nested()
+    # block_until_ready recurses the __dict__ pytree; the call succeeds and leaf
+    # values survive the walk unchanged.
+    assert _block_object(obj) is obj
+    assert bool(jnp.all(obj.inner["samples"][0] == jnp.arange(3.0)))
+    assert bool(jnp.all(obj.pair[1]["deep"] == 5.0))
+
+
 def test_timed_returns_result_and_nonnegative_time() -> None:
     result, seconds = _timed(lambda: jnp.ones(3) * 2.0)
     assert bool(jnp.all(result == 2.0))

@@ -48,6 +48,13 @@ def test_resolve_rejects_bool(value: bool) -> None:
         resolve_optimizer(value)
 
 
+@pytest.mark.parametrize("value", [jnp.asarray(True), np.asarray(False)])
+def test_resolve_rejects_zero_dim_bool_array(value: object) -> None:
+    """A 0-d boolean array must not slip past as ``Adam(1.0)`` via the scalar path."""
+    with pytest.raises(TypeError, match="bool"):
+        resolve_optimizer(value)  # ty: ignore[invalid-argument-type]
+
+
 @pytest.mark.parametrize("value", [0.0, -1.0])
 def test_resolve_rejects_non_positive(value: float) -> None:
     with pytest.raises(ValueError, match="finite and positive"):

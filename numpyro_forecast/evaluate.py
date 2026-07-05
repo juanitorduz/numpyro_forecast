@@ -263,13 +263,15 @@ def _scalar_params(forecaster: object) -> dict[str, float]:
 
 
 def _block_object[T](obj: T) -> T:
-    """Block until every JAX array reachable from ``obj``'s attributes is ready.
+    """Block until every JAX array transitively reachable from ``obj`` is ready.
 
     JAX arrays materialize asynchronously, so timing a call that returns a
     container (e.g. a fitted forecaster) without blocking would report only the
-    dispatch time. This materializes ``vars(obj)`` (a pytree-generic sweep over
-    the instance ``__dict__``); objects without a ``__dict__`` (``__slots__``)
-    are a safe no-op.
+    dispatch time. This passes ``vars(obj)`` (the instance ``__dict__``) to
+    :func:`jax.block_until_ready`, which recurses through the dict as a pytree:
+    array leaves nested inside lists/tuples/dicts/registered dataclasses are all
+    awaited, not just top-level attributes. Objects without a ``__dict__``
+    (``__slots__``-only or ``vars``-less) are a safe no-op.
 
     Parameters
     ----------
