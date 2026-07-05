@@ -67,7 +67,7 @@ def test_all_matches_exported_names() -> None:
         "VectorizedBacktestResult",
         "VectorizedGuideError",
         "__version__",
-        "add_forecast",
+        "add_forecast_groups",
         "backtest",
         "backtest_vectorized",
         "eval_coverage",

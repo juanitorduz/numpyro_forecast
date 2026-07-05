@@ -150,8 +150,7 @@ reference:
     desc: Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
     contents:
       - convert.to_datatree
-      - convert.add_forecast
-      - convert.to_inferencedata
+      - convert.add_forecast_groups
 
   - title: Extensions (contrib)
     desc: Optional backends behind pyproject extras (never imported by default).

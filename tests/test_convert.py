@@ -8,7 +8,7 @@ import pytest
 from conftest import RandomWalkModel, empty_covariates
 from jax import Array, random
 
-from numpyro_forecast.convert import add_forecast, to_datatree, to_inferencedata
+from numpyro_forecast.convert import add_forecast_groups, to_datatree
 from numpyro_forecast.functional import draw_posterior, fit_mcmc, fit_svi, forecast
 from numpyro_forecast.typing import ForecastModel
 
@@ -113,14 +113,14 @@ def test_to_datatree_time_coord_threading() -> None:
     np.testing.assert_array_equal(tree["posterior_predictive"].coords["time"].values, custom_time)
 
 
-def test_add_forecast_groups_and_time_continuation() -> None:
+def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
     post = draw_posterior(random.PRNGKey(3), fit, 100)
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
-    out = add_forecast(tree, fc, future_covariates[n:])
+    out = add_forecast_groups(tree, fc, future_covariates[n:])
     assert "predictions" in out.children
     assert "predictions_constant_data" in out.children
     times = out["predictions"].coords["time"].values
@@ -129,18 +129,18 @@ def test_add_forecast_groups_and_time_continuation() -> None:
     assert "predictions" not in tree.children
 
 
-def test_add_forecast_explicit_time_coord() -> None:
+def test_add_forecast_groups_explicit_time_coord() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 3)
     post = draw_posterior(random.PRNGKey(3), fit, 60)
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
-    out = add_forecast(tree, fc, future_covariates[n:], time_coord=[900, 901, 902])
+    out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=[900, 901, 902])
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, [900, 901, 902])
 
 
-def test_add_forecast_rejects_wrong_length_time_coord() -> None:
+def test_add_forecast_groups_rejects_wrong_length_time_coord() -> None:
     """A ``time_coord`` whose length differs from the forecast horizon raises by name.
 
     Without the guard the mismatch flowed into ``dict_to_dataset`` and died deep
@@ -153,10 +153,10 @@ def test_add_forecast_rejects_wrong_length_time_coord() -> None:
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
     with pytest.raises(ValueError, match="time_coord has length 2"):
-        add_forecast(tree, fc, future_covariates[n:], time_coord=[900, 901])
+        add_forecast_groups(tree, fc, future_covariates[n:], time_coord=[900, 901])
 
 
-def test_add_forecast_noninteger_time_requires_explicit_coord() -> None:
+def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
     """A datetime64 in-sample time coordinate demands an explicit forecast ``time_coord``.
 
     The default integer continuation would otherwise raise an opaque cast error;
@@ -172,9 +172,9 @@ def test_add_forecast_noninteger_time_requires_explicit_coord() -> None:
         random.PRNGKey(2), fit, RandomWalkModel(), data, covariates, time_coord=list(days)
     )
     with pytest.raises(ValueError, match="pass explicit time_coord"):
-        add_forecast(tree, fc, future_covariates[n:])
+        add_forecast_groups(tree, fc, future_covariates[n:])
     future_days = days[-1] + 1 + np.arange(3)
-    out = add_forecast(tree, fc, future_covariates[n:], time_coord=list(future_days))
+    out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=list(future_days))
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, future_days)
 
 
@@ -277,9 +277,3 @@ def test_to_datatree_deterministic_given_key() -> None:
         np.asarray(a["posterior"]["drift"]),
         np.asarray(b["posterior"]["drift"]),
     )
-
-
-def test_to_inferencedata_shim_raises_on_datatree_only_arviz() -> None:
-    fit, data, covariates = _mcmc_fit()
-    with pytest.warns(FutureWarning), pytest.raises(ImportError, match="to_datatree"):
-        to_inferencedata(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)

@@ -16,7 +16,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         util,
     )
 
-from numpyro_forecast.convert import add_forecast, to_datatree
+from numpyro_forecast.convert import add_forecast_groups, to_datatree
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
@@ -73,7 +73,7 @@ __all__ = [
     "VectorizedBacktestResult",
     "VectorizedGuideError",
     "__version__",
-    "add_forecast",
+    "add_forecast_groups",
     "backtest",
     "backtest_vectorized",
     "eval_coverage",

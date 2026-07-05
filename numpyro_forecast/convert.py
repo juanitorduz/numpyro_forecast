@@ -1,8 +1,8 @@
 """Convert fits into ArviZ-schema :class:`xarray.DataTree` objects.
 
-ArviZ (>= 1.0, the DataTree line) is a hard dependency of this package, so no
-optional-extra gating is needed here; the ``arviz_base``/``xarray`` imports are
-kept inside the functions purely to keep ``import numpyro_forecast`` fast.
+ArviZ (>= 1.0, the DataTree line) is a hard dependency of this package, so
+``arviz_base`` and ``xarray`` are imported at module top like any other
+dependency.
 
 The single normative construction rule (enforced by
 ``tests/test_convert.py::test_all_groups_via_dict_to_dataset``) is that **every**
@@ -14,16 +14,15 @@ groups are then assembled with :meth:`xarray.DataTree.from_dict`.
 
 from collections.abc import Mapping, Sequence
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
+import arviz_base
 import numpy as np
+import xarray
 from jax import random
 
 from numpyro_forecast.functional import MCMCFit, draw_posterior, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
-
-if TYPE_CHECKING:
-    import xarray
 
 _DEFAULT_NUM_PREDICTIVE_SAMPLES = 1_000
 """Default posterior draw count for variational fits when unspecified."""
@@ -143,9 +142,6 @@ def to_datatree(
     deterministic derivation applied for every fit type, so passing the same key
     twice never correlates the two sample sets.
     """
-    import arviz_base
-    import xarray as xr
-
     key_post, key_pred = random.split(rng_key)
 
     is_mcmc = isinstance(fit, MCMCFit)
@@ -196,7 +192,7 @@ def to_datatree(
         coords=merged_arg,
     )
 
-    tree = xr.DataTree.from_dict(
+    tree = xarray.DataTree.from_dict(
         {
             "posterior": posterior_ds,
             "posterior_predictive": pp_ds,
@@ -214,7 +210,7 @@ def to_datatree(
     return tree
 
 
-def add_forecast(
+def add_forecast_groups(
     tree: "xarray.DataTree",
     forecast_samples: Array,
     covariates_future: Array,
@@ -257,9 +253,6 @@ def add_forecast(
         horizon, or if it is omitted while the in-sample time coordinate is
         non-integer.
     """
-    import arviz_base
-    import xarray as xr
-
     in_time = np.asarray(tree["observed_data"].coords["time"].values)
     future_len = forecast_samples.shape[-2]
     if time_coord is not None:
@@ -297,52 +290,6 @@ def add_forecast(
     groups: dict[str, Any] = {name: node.dataset for name, node in tree.children.items()}
     groups["predictions"] = predictions_ds
     groups["predictions_constant_data"] = predictions_constant_ds
-    new_tree = xr.DataTree.from_dict(groups)
+    new_tree = xarray.DataTree.from_dict(groups)
     new_tree.attrs.update(dict(tree.attrs))
     return new_tree
-
-
-def to_inferencedata(*args: Any, **kwargs: Any) -> "Any":
-    """Legacy shim converting via :func:`to_datatree` to an ``InferenceData``.
-
-    Deprecated in favor of :func:`to_datatree`; emits a :class:`FutureWarning`.
-    Requires classic ArviZ exposing ``InferenceData.from_datatree``; raises an
-    actionable :class:`ImportError` otherwise (the package pins ArviZ >= 1.2, so
-    this path is only for environments that additionally install classic ArviZ).
-
-    Parameters
-    ----------
-    *args
-        Positional arguments forwarded to :func:`to_datatree`.
-    **kwargs
-        Keyword arguments forwarded to :func:`to_datatree`.
-
-    Returns
-    -------
-    arviz.InferenceData
-        The converted legacy container.
-
-    Raises
-    ------
-    ImportError
-        If the installed ArviZ does not expose ``InferenceData.from_datatree``.
-    """
-    import warnings
-
-    warnings.warn(
-        "to_inferencedata is deprecated; use to_datatree, which returns an "
-        "xarray.DataTree (ArviZ >= 1.0).",
-        FutureWarning,
-        stacklevel=2,
-    )
-    import arviz
-
-    from_datatree = getattr(getattr(arviz, "InferenceData", None), "from_datatree", None)
-    if from_datatree is None:
-        msg = (
-            "to_inferencedata requires a classic ArviZ (< 1.0) exposing "
-            "InferenceData.from_datatree; the installed ArviZ only supports "
-            "DataTree. Use to_datatree instead."
-        )
-        raise ImportError(msg)
-    return from_datatree(to_datatree(*args, **kwargs))
