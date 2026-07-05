@@ -121,7 +121,7 @@
     "href": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
     "title": "contrib.blackjax.BlackjaxCustomKernel",
     "section": "",
-    "text": "Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxCustomKernel()\n\n\nThe escape hatch for kernels without a dedicated wrapper. build_fn receives (rng_key, logdensity_fn, position, num_warmup) and must return (inner_state, step_fn), where inner_state exposes .position over the same sites as the model and step_fn has signature (rng_key, inner_state) -&gt; (inner_state, info). The base class validates the returned state’s key set and raises TypeError if it is malformed.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nbuild_fn: BuildFn\n\nThe blackjax build callable described above.",
+    "text": "Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxCustomKernel()\n\n\nThe escape hatch for kernels without a dedicated wrapper. build_fn receives (rng_key, logdensity_fn, position, num_warmup) and must return (inner_state, step_fn), where inner_state exposes .position over the same sites as the model and step_fn has signature (rng_key, inner_state) -&gt; (inner_state, info). The base class validates the returned state’s key set and raises TypeError if it is malformed.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nbuild_fn: BlackjaxBuildFn\n\nThe blackjax build callable described above.",
     "crumbs": [
       "Reference",
       "Extensions (contrib)",

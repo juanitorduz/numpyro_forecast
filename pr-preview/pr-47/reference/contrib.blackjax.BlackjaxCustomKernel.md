@@ -20,5 +20,5 @@ The escape hatch for kernels without a dedicated wrapper. `build_fn` receives `(
 `model: ForecastModel | None = None`  
 The NumPyro model to sample from.
 
-`build_fn: BuildFn`  
+`build_fn: BlackjaxBuildFn`  
 The blackjax build callable described above.
