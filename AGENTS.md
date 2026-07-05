@@ -27,7 +27,8 @@ the relevant ones before making non-trivial changes.
 
 - Every function (public and private) has complete input and return type hints,
   checked with `ty`.
-- Every public function/class has a NumPy-style docstring (ruff `D`/`DOC`).
+- Every public function/class has a NumPy-style docstring (ruff `D`; the preview-only `DOC` rules are deliberately not selected, see the comment in `pyproject.toml`).
+- **Line length:** the formatter targets 99 characters, but `E501` only fires above 120. The 100 to 120 band is an intentional grace zone for lines the formatter cannot wrap (trailing `# type: ignore` comments, long string literals); do not write new code past 99 on purpose.
 - **jaxtyping:** annotate array shapes as `Float[Array, " time obs"]` with a
   **leading space** in the shape string (per the jaxtyping FAQ this turns ruff's
   `F821` into `F722`, which we ignore globally; `F821` stays active otherwise).
