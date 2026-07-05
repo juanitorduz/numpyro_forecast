@@ -27,7 +27,7 @@ the relevant ones before making non-trivial changes.
 
 - Every function (public and private) has complete input and return type hints,
   checked with `ty`.
-- Every public function/class has a NumPy-style docstring (ruff `D`; the preview-only `DOC` rules are deliberately not selected, see the comment in `pyproject.toml`).
+- Every public function/class has a NumPy-style docstring (ruff `D`). The preview-only `DOC` (pydoclint) rules are deliberately not selected: without `preview = true` they are inert and warn on every ruff run, and enabling preview would switch all stable rules to their preview behavior. Revisit when `DOC` stabilizes.
 - **Line length:** the formatter targets 99 characters, but `E501` only fires above 120. The 100 to 120 band is an intentional grace zone for lines the formatter cannot wrap (trailing `# type: ignore` comments, long string literals); do not write new code past 99 on purpose.
 - **jaxtyping:** annotate array shapes as `Float[Array, " time obs"]` with a
   **leading space** in the shape string (per the jaxtyping FAQ this turns ruff's
