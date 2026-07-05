@@ -11,7 +11,7 @@ forecaster.PathfinderForecaster()
 ```
 
 
-A thin shim over [numpyro_forecast.contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder). BlackJAX is an optional dependency (`pip install numpyro_forecast[blackjax]`) imported lazily here, so constructing this class is the opt-in that pulls it in; importing `numpyro_forecast` never does (invariant I8). The constructor mirrors [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) without `guide`/`optim` (Pathfinder has neither) and adds `num_elbo_samples`/`ftol`.
+A thin shim over [numpyro_forecast.contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder). BlackJAX is an optional dependency (`pip install numpyro_forecast[blackjax]`) imported lazily here, so constructing this class is the opt-in that pulls it in; importing `numpyro_forecast` never does. The constructor mirrors [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) without `guide`/`optim` (Pathfinder has neither) and adds `num_elbo_samples`/`ftol`.
 
 
 ## Parameters

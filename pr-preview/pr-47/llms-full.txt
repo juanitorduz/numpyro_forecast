@@ -80,7 +80,7 @@ Fit a forecasting model with BlackJAX Pathfinder variational inference.
 A thin shim over :func:`numpyro_forecast.contrib.blackjax.fit_pathfinder`.
 BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``)
 imported lazily here, so constructing this class is the opt-in that pulls it
-in; importing :mod:`numpyro_forecast` never does (invariant I8). The
+in; importing :mod:`numpyro_forecast` never does. The
 constructor mirrors :class:`Forecaster` without ``guide``/``optim`` (Pathfinder
 has neither) and adds ``num_elbo_samples``/``ftol``.
 
@@ -739,8 +739,8 @@ Rolling-window backtest with all windows fitted in one vmapped SVI run.
 Estimator-equivalent to :func:`backtest` with rolling windows; it differs
 only in PRNG stream layout and float reduction order, so the equivalence is
 statistical, not bitwise. Model, guide, and SVI compile once regardless of
-the number of windows (invariant I3), giving order-of-magnitude wall-clock
-wins for tens of windows on small models.
+the number of windows, giving order-of-magnitude wall-clock wins for tens
+of windows on small models.
 
 PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
 ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
