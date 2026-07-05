@@ -90,6 +90,7 @@ def to_datatree(
     num_predictive_samples: int | None = None,
     coords: Mapping[str, Sequence[Any]] | None = None,
     time_coord: Sequence[Any] | None = None,
+    posterior_dims: Mapping[str, Sequence[str]] | None = None,
 ) -> "xarray.DataTree":
     r"""Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
 
@@ -120,6 +121,13 @@ def to_datatree(
     time_coord
         Optional explicit in-sample time coordinate values; defaults to
         ``range(n_time)``.
+    posterior_dims
+        Optional mapping from a posterior site name to its non-sample dimension
+        names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
+        ``time`` coordinate; unlisted sites keep ArviZ's auto-named dims. This is
+        an explicit opt-in on purpose: inferring time-indexed sites from trace
+        shapes is fragile (a coincidental ``n_params == n_time`` would misattribute
+        the axis).
 
     Returns
     -------
@@ -155,13 +163,16 @@ def to_datatree(
     time = np.asarray(time_coord) if time_coord is not None else np.arange(n_time)
     merged_coords = _merge_coords(time, coords)
 
-    coords_arg = cast("dict[Any, Any] | None", coords)
     merged_arg = cast("dict[Any, Any]", merged_coords)
 
     posterior = _posterior_reshape(fit, samples)
     posterior_attrs = None if is_mcmc else {"variational": True}
     posterior_ds = arviz_base.dict_to_dataset(
-        posterior, sample_dims=_SAMPLE_DIMS, coords=coords_arg, attrs=posterior_attrs
+        posterior,
+        sample_dims=_SAMPLE_DIMS,
+        dims=cast("dict[Any, Any] | None", posterior_dims),
+        coords=merged_arg,
+        attrs=posterior_attrs,
     )
 
     predictive = predict_in_sample(key_pred, model, samples, covariates)

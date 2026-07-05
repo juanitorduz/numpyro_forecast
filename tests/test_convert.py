@@ -156,6 +156,34 @@ def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None
     assert calls["count"] == 4
 
 
+def test_posterior_time_site_shares_time_coord() -> None:
+    """A per-time posterior site listed in posterior_dims shares the tree time coord."""
+    fit, data, covariates = _mcmc_fit()
+    n = data.shape[-2]
+    custom_time = list(range(200, 200 + n))
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        covariates,
+        time_coord=custom_time,
+        posterior_dims={"drift": ["time", "obs_dim"]},
+    )
+    drift_time = tree["posterior"]["drift"].coords["time"].values
+    np.testing.assert_array_equal(drift_time, custom_time)
+    np.testing.assert_array_equal(
+        drift_time, tree["posterior_predictive"]["obs"].coords["time"].values
+    )
+
+
+def test_posterior_dims_default_is_backward_compatible() -> None:
+    """Without posterior_dims, per-time sites keep ArviZ's auto-named dims."""
+    fit, data, covariates = _mcmc_fit()
+    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    assert "time" not in tree["posterior"]["drift"].dims
+
+
 def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Posterior draws and in-sample predictive must receive distinct subkeys.
 
