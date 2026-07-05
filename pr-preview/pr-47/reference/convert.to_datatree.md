@@ -16,7 +16,8 @@ convert.to_datatree(
     *,
     num_predictive_samples=None,
     coords=None,
-    time_coord=None
+    time_coord=None,
+    posterior_dims=None
 )
 ```
 
@@ -50,6 +51,9 @@ Optional extra coordinates; these take precedence over the generated `time` coor
 
 `time_coord: Sequence[Any] | None = None`  
 Optional explicit in-sample time coordinate values; defaults to `range(n_time)`.
+
+`posterior_dims: Mapping[str, Sequence[str]] | None = None`  
+Optional mapping from a posterior site name to its non-sample dimension names, e.g. `{"drift": ["time"]}`. Sites listed here share the tree-wide `time` coordinate; unlisted sites keep ArviZ's auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental `n_params == n_time` would misattribute the axis).
 
 
 ## Returns

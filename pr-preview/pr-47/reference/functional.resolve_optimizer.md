@@ -32,7 +32,7 @@ The resolved NumPyro optimizer.
 
 
 `TypeError`  
-For `bool` (`bool` is an `int` subclass, so it would silently mean `Adam(1.0)`) and for any other unrecognized type; the message lists the accepted forms.
+For boolean inputs of any form, including 0-d boolean arrays (`bool` is an `int` subclass, so a bool would silently mean `Adam(1.0)`), and for any other unrecognized type; the message lists the accepted forms.
 
 `ValueError`  
 For a non-finite or non-positive learning rate.

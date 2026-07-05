@@ -325,9 +325,9 @@ _NumPyroOptim
 Raises
 ------
 TypeError
-    For ``bool`` (``bool`` is an ``int`` subclass, so it would silently mean
-    ``Adam(1.0)``) and for any other unrecognized type; the message lists
-    the accepted forms.
+    For boolean inputs of any form, including 0-d boolean arrays (``bool`` is
+    an ``int`` subclass, so a bool would silently mean ``Adam(1.0)``), and for
+    any other unrecognized type; the message lists the accepted forms.
 ValueError
     For a non-finite or non-positive learning rate.
 
@@ -1308,7 +1308,7 @@ ImportError
 Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None) -> 'xarray.DataTree'
 
 Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
 
@@ -1339,6 +1339,13 @@ coords
 time_coord
     Optional explicit in-sample time coordinate values; defaults to
     ``range(n_time)``.
+posterior_dims
+    Optional mapping from a posterior site name to its non-sample dimension
+    names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
+    ``time`` coordinate; unlisted sites keep ArviZ's auto-named dims. This is
+    an explicit opt-in on purpose: inferring time-indexed sites from trace
+    shapes is fragile (a coincidental ``n_params == n_time`` would misattribute
+    the axis).
 
 Returns
 -------
