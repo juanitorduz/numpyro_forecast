@@ -248,7 +248,7 @@ def _reject_enclosing_plates() -> None:
 
 
 def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
-    """Require a non-degenerate per-step shape with an observation axis (C7)."""
+    """Require a non-degenerate per-step shape with an observation axis."""
     if len(dist_t.event_shape) == 0 and len(dist_t.batch_shape) == 0:
         msg = (
             "markov_time_series requires the transition distribution to carry "
@@ -307,7 +307,7 @@ def markov_time_series(
     ------
     ValueError
         If forecasting without observed data, if the per-step shape lacks the
-        observation dimension (C7), or if an enclosing plate is detected.
+        observation dimension, or if an enclosing plate is detected.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_time_series requires observed data when forecasting"
