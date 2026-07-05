@@ -25,7 +25,7 @@ from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
 from numpyro_forecast.functional import _draw_posterior_impl, _require_positive_num_samples
-from numpyro_forecast.typing import Array, BuildFn, ForecastModel
+from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
 from numpyro_forecast.util import require
 
 _BJState = namedtuple("_BJState", ["position", "inner", "rng_key"])
@@ -344,7 +344,7 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
         self,
         model: ForecastModel | None = None,
         *,
-        build_fn: BuildFn,
+        build_fn: BlackjaxBuildFn,
     ) -> None:
         super().__init__(model)
         self._build_fn = build_fn

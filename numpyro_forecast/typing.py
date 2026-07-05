@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 else:
     OptimizerLike = GuideLike = KernelLike = object
 
-BuildFn = Callable[..., object]
+BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
 Returns ``(inner_state, step_fn)``. ``rng_key`` is first, matching the package's
