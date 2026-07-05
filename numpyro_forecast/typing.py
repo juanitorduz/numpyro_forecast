@@ -21,6 +21,9 @@ Array = jax.Array
 """A JAX array (alias of :class:`jax.Array`)."""
 
 if TYPE_CHECKING:
+    # Precise unions for static checkers. At runtime (the ``else`` branch) each is
+    # ``object`` so the beartype import hook accepts any resolvable form without
+    # forcing an ``optax``/``numpyro`` import at package import time (invariant I8).
     OptimizerLike = float | int | _NumPyroOptim | optax.GradientTransformation | None
     """An optimizer specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
 
@@ -28,12 +31,7 @@ if TYPE_CHECKING:
     (default ``Adam``), a positive scalar learning rate, an
     ``optax.GradientTransformation``, or a NumPyro ``_NumPyroOptim``.
     """
-else:
-    # Runtime alias kept deliberately broad so the beartype import hook accepts
-    # any resolvable form without forcing an ``optax`` import (invariant I8).
-    OptimizerLike = object
 
-if TYPE_CHECKING:
     GuideLike = AutoGuide | type[AutoGuide] | Callable[..., object] | None
     """A guide specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
 
@@ -41,11 +39,7 @@ if TYPE_CHECKING:
     (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or a
     ``functools.partial`` factory of one, or a hand-written guide function.
     """
-else:
-    # Runtime alias kept broad for the beartype import hook (see OptimizerLike).
-    GuideLike = object
 
-if TYPE_CHECKING:
     KernelLike = MCMCKernel | type[MCMCKernel] | None
     """A kernel specification accepted by :func:`~numpyro_forecast.functional.fit_mcmc`.
 
@@ -53,8 +47,7 @@ if TYPE_CHECKING:
     (``NUTS``), an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
     """
 else:
-    # Runtime alias kept broad for the beartype import hook (see OptimizerLike).
-    KernelLike = object
+    OptimizerLike = GuideLike = KernelLike = object
 
 BuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.

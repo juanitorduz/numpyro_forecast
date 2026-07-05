@@ -269,36 +269,33 @@ def shift_loc(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
     raise NotImplementedError(msg)
 
 
-@shift_loc.register
-def _(noise_dist: dist.Normal, loc: Array) -> dist.Distribution:
-    return dist.Normal(loc=noise_dist.loc + loc, scale=noise_dist.scale)
+def _shift_loc_elementwise(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
+    """Rebuild ``type(noise_dist)`` with ``loc`` shifted, other parameters unchanged.
+
+    Shared implementation for the location-family ``shift_loc`` registrations: the
+    family's constructor parameters are read back from ``arg_constraints`` (each a
+    distribution attribute), the ``loc`` parameter is shifted by ``loc``, and the
+    distribution is reconstructed. It is registered only for the explicit families
+    in :data:`_SHIFT_LOC_FAMILIES`, so the generic ``shift_loc`` keeps refusing
+    unknown families.
+    """
+    kwargs = {name: getattr(noise_dist, name) for name in type(noise_dist).arg_constraints}
+    kwargs["loc"] = jnp.asarray(kwargs["loc"]) + loc
+    return type(noise_dist)(**kwargs)
 
 
-@shift_loc.register
-def _(noise_dist: dist.StudentT, loc: Array) -> dist.Distribution:
-    return dist.StudentT(df=noise_dist.df, loc=noise_dist.loc + loc, scale=noise_dist.scale)
+_SHIFT_LOC_FAMILIES: tuple[type[dist.Distribution], ...] = (
+    dist.Normal,
+    dist.StudentT,
+    dist.Laplace,
+    dist.Cauchy,
+    dist.Gumbel,
+    dist.AsymmetricLaplace,
+)
+"""Location-scale families that share :func:`_shift_loc_elementwise`."""
 
-
-@shift_loc.register
-def _(noise_dist: dist.Laplace, loc: Array) -> dist.Distribution:
-    return dist.Laplace(loc=noise_dist.loc + loc, scale=noise_dist.scale)
-
-
-@shift_loc.register
-def _(noise_dist: dist.Cauchy, loc: Array) -> dist.Distribution:
-    return dist.Cauchy(loc=noise_dist.loc + loc, scale=noise_dist.scale)
-
-
-@shift_loc.register
-def _(noise_dist: dist.Gumbel, loc: Array) -> dist.Distribution:
-    return dist.Gumbel(loc=noise_dist.loc + loc, scale=noise_dist.scale)
-
-
-@shift_loc.register
-def _(noise_dist: dist.AsymmetricLaplace, loc: Array) -> dist.Distribution:
-    return dist.AsymmetricLaplace(
-        loc=noise_dist.loc + loc, scale=noise_dist.scale, asymmetry=noise_dist.asymmetry
-    )
+for _family in _SHIFT_LOC_FAMILIES:
+    shift_loc.register(_family, _shift_loc_elementwise)
 
 
 @shift_loc.register
