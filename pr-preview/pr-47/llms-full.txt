@@ -1459,7 +1459,7 @@ variational fits) and the other the in-sample predictive. The split is a
 deterministic derivation applied for every fit type, so passing the same key
 twice never correlates the two sample sets.
 
-add_forecast(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 
@@ -1496,32 +1496,6 @@ ValueError
     If ``time_coord`` is given but its length differs from the forecast
     horizon, or if it is omitted while the in-sample time coordinate is
     non-integer.
-
-to_inferencedata(*args: Any, **kwargs: Any) -> 'Any'
-
-Legacy shim converting via :func:`to_datatree` to an ``InferenceData``.
-
-Deprecated in favor of :func:`to_datatree`; emits a :class:`FutureWarning`.
-Requires classic ArviZ exposing ``InferenceData.from_datatree``; raises an
-actionable :class:`ImportError` otherwise (the package pins ArviZ >= 1.2, so
-this path is only for environments that additionally install classic ArviZ).
-
-Parameters
-----------
-*args
-    Positional arguments forwarded to :func:`to_datatree`.
-**kwargs
-    Keyword arguments forwarded to :func:`to_datatree`.
-
-Returns
--------
-arviz.InferenceData
-    The converted legacy container.
-
-Raises
-------
-ImportError
-    If the installed ArviZ does not expose ``InferenceData.from_datatree``.
 
 
 ## Extensions (contrib)

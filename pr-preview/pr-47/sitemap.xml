@@ -43,19 +43,13 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html</loc>
     <lastmod>2026-07-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html</loc>
-    <lastmod>2026-07-05</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_inferencedata.html</loc>
     <lastmod>2026-07-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

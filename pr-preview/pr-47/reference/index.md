@@ -208,11 +208,8 @@ Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 [convert.to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree)  
 Convert a fit into an ArviZ-schema `xarray.DataTree`.
 
-[convert.add_forecast()](convert.add_forecast.md#numpyro_forecast.convert.add_forecast)  
+[convert.add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups)  
 Attach out-of-sample forecast groups to a copy of `tree`.
-
-[convert.to_inferencedata()](convert.to_inferencedata.md#numpyro_forecast.convert.to_inferencedata)  
-Legacy shim converting via `to_datatree()` to an `InferenceData`.
 
 
 ## Extensions (contrib)

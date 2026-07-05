@@ -86,8 +86,7 @@
 > Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 - [convert.to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html)
-- [convert.add_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast.html)
-- [convert.to_inferencedata](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_inferencedata.html)
+- [convert.add_forecast_groups](https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html)
 
 #### Extensions (contrib)
 > Optional backends behind pyproject extras (never imported by default).

@@ -105,8 +105,7 @@ Package exception hierarchy raised at resolution and validation boundaries.
 Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 - `convert.to_datatree`
-- `convert.add_forecast`
-- `convert.to_inferencedata`
+- `convert.add_forecast_groups`
 
 ### Extensions (contrib)
 

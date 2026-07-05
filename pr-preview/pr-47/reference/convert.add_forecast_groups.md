@@ -1,4 +1,4 @@
-## convert.add_forecast()
+## convert.add_forecast_groups()
 
 
 Attach out-of-sample forecast groups to a copy of `tree`.
@@ -7,7 +7,7 @@ Attach out-of-sample forecast groups to a copy of `tree`.
 Usage
 
 ``` python
-convert.add_forecast(
+convert.add_forecast_groups(
     tree, forecast_samples, covariates_future, *, time_coord=None
 )
 ```
