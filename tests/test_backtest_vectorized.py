@@ -319,3 +319,38 @@ def test_keep_predictions_shape() -> None:
     assert result.predictions is not None
     num_windows = result.t0.shape[0]
     assert result.predictions.shape == (num_windows, 15, TEST, 1)
+
+
+def test_result_schema_and_dataframe_row_shape() -> None:
+    """Result fields are per-window and results_to_dataframe is one row per window."""
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    duration = TRAIN + TEST + 8
+    data, cov = _series(duration)
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        data,
+        cov,
+        _RandomWalk,
+        train_window=TRAIN,
+        test_window=TEST,
+        stride=1,
+        num_steps=20,
+        num_samples=15,
+    )
+    num_windows = result.t0.shape[0]
+    # Every per-window field has a leading window axis.
+    assert result.t0.shape == (num_windows,)
+    assert result.t1.shape == (num_windows,)
+    assert result.t2.shape == (num_windows,)
+    for values in result.metrics.values():
+        assert values.shape == (num_windows,)
+
+    df = results_to_dataframe(result)
+    assert len(df) == num_windows
+    metric_cols = [c for c in df.columns if c.startswith("metric_")]
+    assert metric_cols  # at least one metric column
+    assert {"t0", "t1", "t2", "num_samples"}.issubset(df.columns)
+    # A vectorized run has no per-window walltimes or params.
+    assert not any(c.startswith("train_metric_") or c.startswith("param_") for c in df.columns)
+    assert "train_walltime" not in df.columns

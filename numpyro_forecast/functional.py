@@ -12,6 +12,7 @@ styles are fully interchangeable: both produce a NumPyro model callable
 import functools
 import inspect
 import math
+import os.path
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
@@ -21,6 +22,7 @@ from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import numpyro
 import numpyro.distributions as dist
 from jax import random
@@ -46,6 +48,15 @@ from numpyro_forecast.util import (
     prefix_condition,
     shift_loc,
     slice_time,
+)
+
+# Frames to skip when attributing user-facing warnings: this package's own frames
+# and jaxtyping's runtime type-check wrapper (which double-wraps every annotated
+# function). Skipping both lands warnings on the caller regardless of wrapper
+# depth (``warnings.warn(skip_file_prefixes=...)``, Python 3.12+).
+_WARN_SKIP_PREFIXES = (
+    os.path.dirname(__file__),
+    os.path.dirname(jaxtyping.__file__),
 )
 
 
@@ -973,9 +984,9 @@ def _validate_kernel_run_config(
       tracing, risk K5); warn when ``num_warmup > 0`` (adaptation lives in
       ``kernel.init``, so warmup steps are discarded work).
 
-    The warmup warning uses ``stacklevel=3`` so it is attributed to the caller of
-    :func:`fit_mcmc`; this assumes exactly one intermediate frame (``fit_mcmc``)
-    between the ``warnings.warn`` call and user code.
+    The warmup warning is attributed to the caller of :func:`fit_mcmc` via
+    ``skip_file_prefixes`` (this package's frames and jaxtyping's runtime
+    type-check wrapper are skipped), which is robust to the wrapper's frame depth.
 
     Parameters
     ----------
@@ -1015,7 +1026,8 @@ def _validate_kernel_run_config(
                 f"{type(kernel).__name__} performs adaptation in kernel.init; "
                 f"num_warmup={num_warmup} warmup steps are discarded work, pass "
                 "num_warmup=0.",
-                stacklevel=3,
+                stacklevel=2,
+                skip_file_prefixes=_WARN_SKIP_PREFIXES,
             )
 
 

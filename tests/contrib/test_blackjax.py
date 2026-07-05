@@ -196,6 +196,42 @@ def test_blackjax_custom_kernel_malformed_state_raises() -> None:
         )
 
 
+def test_blackjax_kernel_rejects_non_sequential_chain_method() -> None:
+    """A Blackjax* kernel with chain_method='vectorized' raises before running."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (12, 1)), axis=-2)
+    cov = _empty_covariates(12)
+    with pytest.raises(ValueError, match="sequential"):
+        fit_mcmc(
+            random.PRNGKey(1),
+            MeanModel(),
+            data,
+            cov,
+            kernel=BlackjaxNUTSKernel,
+            chain_method="vectorized",
+            num_warmup=0,
+            num_samples=5,
+        )
+
+
+def test_blackjax_kernel_warns_on_num_warmup() -> None:
+    """num_warmup>0 warns, attributed to the caller of fit_mcmc (stacklevel=3)."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (12, 1)), axis=-2)
+    cov = _empty_covariates(12)
+    with pytest.warns(UserWarning, match="warmup") as record:
+        fit_mcmc(
+            random.PRNGKey(1),
+            MeanModel(),
+            data,
+            cov,
+            kernel=BlackjaxNUTSKernel,
+            kernel_kwargs={"num_adaptation_steps": 20},
+            num_warmup=2,
+            num_samples=5,
+        )
+    # stacklevel=3 points the warning at this test file, not fit_mcmc's frame.
+    assert any(w.filename.endswith("test_blackjax.py") for w in record)
+
+
 def test_blackjax_api_canaries() -> None:
     """Pin the exact BlackJAX symbols the adapters rely on (risk K1)."""
     _api_canary("blackjax", ["nuts", "window_adaptation", "mclmc", "mclmc_find_L_and_step_size"])
