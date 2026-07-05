@@ -20,6 +20,7 @@ from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
 
+from numpyro_forecast.exceptions import BacktestWindowError, VectorizedGuideError
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.functional import resolve_guide, resolve_optimizer
 from numpyro_forecast.metrics import crps_empirical
@@ -810,15 +811,6 @@ class VectorizedBacktestResult:
         return asdict(self)
 
 
-_VECTORIZED_NEEDS_AUTOGUIDE_MSG = (
-    "backtest_vectorized requires an AutoGuide (guide resolves to one); "
-    "hand-written guides are not vmappable here, use backtest() instead."
-)
-_VECTORIZED_TRAIN_WINDOW_MSG = "train_window must be >= 1"
-_VECTORIZED_TEST_WINDOW_MSG = "test_window must be >= 1"
-_VECTORIZED_STRIDE_MSG = "stride must be >= 1"
-
-
 def _vmapped_metrics(
     metrics: Mapping[str, Metric], predictions: Array, truth: Array
 ) -> dict[str, Array]:
@@ -940,25 +932,28 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, ``train_window`` or
-        ``test_window`` or ``stride`` is ``< 1``, the resolved guide is not an
-        ``AutoGuide``, or there is no room for a single window.
+        If ``data`` and ``covariates`` durations differ.
+    BacktestWindowError
+        If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
+        there is no room for a single window.
+    VectorizedGuideError
+        If the resolved guide is not an ``AutoGuide``.
     """
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
     if train_window < 1:
-        raise ValueError(_VECTORIZED_TRAIN_WINDOW_MSG)
+        raise BacktestWindowError("train_window must be >= 1")
     if test_window < 1:
-        raise ValueError(_VECTORIZED_TEST_WINDOW_MSG)
+        raise BacktestWindowError("test_window must be >= 1")
     if stride < 1:
-        raise ValueError(_VECTORIZED_STRIDE_MSG)
+        raise BacktestWindowError("stride must be >= 1")
 
     duration = data.shape[-2]
     last_start = duration - train_window - test_window
     if last_start < 0:
         msg = "train_window + test_window exceeds the series duration; no window fits"
-        raise ValueError(msg)
+        raise BacktestWindowError(msg)
     starts = jnp.arange(0, last_start + 1, stride)
 
     def slice_one(t0: Array) -> tuple[Array, Array, Array, Array]:
@@ -973,7 +968,7 @@ def backtest_vectorized(
     model = model_fn()
     resolved_guide = resolve_guide(guide, model)
     if not isinstance(resolved_guide, AutoGuide):
-        raise ValueError(_VECTORIZED_NEEDS_AUTOGUIDE_MSG)
+        raise VectorizedGuideError()
     svi = SVI(model, resolved_guide, resolve_optimizer(optim), Trace_ELBO())
 
     # K11 — MANDATORY eager warm-up on concrete window-0 arrays: AutoGuide

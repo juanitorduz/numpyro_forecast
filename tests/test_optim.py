@@ -11,6 +11,7 @@ from conftest import RandomWalkModel, empty_covariates
 from jax import random
 from numpyro.optim import Adam, _NumPyroOptim
 
+from numpyro_forecast.exceptions import OptimizerResolutionError
 from numpyro_forecast.functional import fit_svi, resolve_optimizer
 
 
@@ -44,14 +45,14 @@ def test_resolve_zero_dim_array_accepted() -> None:
 
 @pytest.mark.parametrize("value", [True, False])
 def test_resolve_rejects_bool(value: bool) -> None:
-    with pytest.raises(TypeError, match="bool"):
+    with pytest.raises(OptimizerResolutionError, match="bool"):
         resolve_optimizer(value)
 
 
 @pytest.mark.parametrize("value", [jnp.asarray(True), np.asarray(False)])
 def test_resolve_rejects_zero_dim_bool_array(value: object) -> None:
     """A 0-d boolean array must not slip past as ``Adam(1.0)`` via the scalar path."""
-    with pytest.raises(TypeError, match="bool"):
+    with pytest.raises(OptimizerResolutionError, match="bool"):
         resolve_optimizer(value)  # ty: ignore[invalid-argument-type]
 
 
@@ -73,7 +74,7 @@ def test_resolve_optax_transformation() -> None:
 
 
 def test_resolve_rejects_unknown_type() -> None:
-    with pytest.raises(TypeError, match="does not support"):
+    with pytest.raises(OptimizerResolutionError, match="does not support"):
         resolve_optimizer("adam")  # ty: ignore[invalid-argument-type]
 
 

@@ -198,9 +198,11 @@ def test_blackjax_custom_kernel_malformed_state_raises() -> None:
 
 def test_blackjax_kernel_rejects_non_sequential_chain_method() -> None:
     """A Blackjax* kernel with chain_method='vectorized' raises before running."""
+    from numpyro_forecast.exceptions import KernelConfigError
+
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (12, 1)), axis=-2)
     cov = _empty_covariates(12)
-    with pytest.raises(ValueError, match="sequential"):
+    with pytest.raises(KernelConfigError, match="sequential"):
         fit_mcmc(
             random.PRNGKey(1),
             MeanModel(),

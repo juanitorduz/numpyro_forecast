@@ -23,6 +23,7 @@ from numpyro_forecast.evaluate import (
     backtest,
     backtest_vectorized,
 )
+from numpyro_forecast.exceptions import BacktestWindowError, VectorizedGuideError
 from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.functional import fit_svi, forecast
 
@@ -124,9 +125,9 @@ def test_metrics_statistically_close_to_loop() -> None:
 def test_window_size_validators(
     train_window: int, test_window: int, stride: int, message: str
 ) -> None:
-    """Each window-size/stride constraint raises its own ``ValueError``."""
+    """Each window-size/stride constraint raises its own ``BacktestWindowError``."""
     data, cov = _series(50)
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(BacktestWindowError, match=message):
         backtest_vectorized(
             random.PRNGKey(0),
             data,
@@ -147,7 +148,7 @@ def test_handwritten_guide_rejected() -> None:
         loc = numpyro.param("loc", 0.0)
         numpyro.sample("drift_scale", dist.Delta(loc))
 
-    with pytest.raises(ValueError, match="AutoGuide"):
+    with pytest.raises(VectorizedGuideError, match="AutoGuide"):
         backtest_vectorized(
             random.PRNGKey(0),
             data,
@@ -161,9 +162,9 @@ def test_handwritten_guide_rejected() -> None:
 
 
 def test_duration_too_short_rejected() -> None:
-    """A series with no room for a single window raises ``ValueError``."""
+    """A series with no room for a single window raises ``BacktestWindowError``."""
     data, cov = _series(TRAIN + TEST - 1)
-    with pytest.raises(ValueError, match="no window fits"):
+    with pytest.raises(BacktestWindowError, match="no window fits"):
         backtest_vectorized(
             random.PRNGKey(0),
             data,

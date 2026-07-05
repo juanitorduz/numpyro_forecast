@@ -16,6 +16,7 @@ from numpyro.infer.autoguide import (
     AutoNormal,
 )
 
+from numpyro_forecast.exceptions import GuideResolutionError, GuideSampleArgsError
 from numpyro_forecast.functional import (
     SVIFit,
     draw_posterior,
@@ -65,19 +66,19 @@ def test_resolve_handwritten_is_identity() -> None:
 
 
 def test_resolve_lambda_factory_rejected() -> None:
-    # R4: a factory-shaped lambda `model -> guide` is ambiguous and rejected.
-    with pytest.raises(TypeError, match=r"ambiguous|factory"):
+    # A factory-shaped lambda `model -> guide` is ambiguous and rejected.
+    with pytest.raises(GuideResolutionError, match=r"ambiguous|factory"):
         resolve_guide(lambda model: AutoNormal(model), RandomWalkModel())
 
 
 def test_resolve_unknown_type_rejected() -> None:
-    with pytest.raises(TypeError, match="does not support"):
+    with pytest.raises(GuideResolutionError, match="does not support"):
         resolve_guide(42, RandomWalkModel())  # ty: ignore[invalid-argument-type]
 
 
 def test_manual_svifit_handwritten_without_args_raises() -> None:
     fit = SVIFit(guide=_handwritten_guide, params={}, losses=jnp.zeros(1))
-    with pytest.raises(ValueError, match="hand-written guide"):
+    with pytest.raises(GuideSampleArgsError, match="hand-written guide"):
         draw_posterior(random.PRNGKey(0), fit, 5)
 
 

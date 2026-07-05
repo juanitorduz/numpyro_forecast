@@ -35,6 +35,13 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.reparam import Reparam
 from numpyro.optim import Adam, _NumPyroOptim
 
+from numpyro_forecast.exceptions import (
+    GuideResolutionError,
+    GuideSampleArgsError,
+    KernelConfigError,
+    KernelResolutionError,
+    OptimizerResolutionError,
+)
 from numpyro_forecast.typing import (
     Array,
     ForecastModel,
@@ -456,12 +463,6 @@ def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastMod
 _DEFAULT_LEARNING_RATE: float = 0.01
 """Default Adam learning rate used when ``optim`` is ``None``."""
 
-_BOOL_MSG = (
-    "resolve_optimizer() does not accept bool; pass a positive float learning "
-    "rate, an optax.GradientTransformation, a numpyro optimizer, or None."
-)
-"""Rejection message for boolean inputs (Python ``bool`` or 0-d boolean array)."""
-
 
 def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
     """Normalize an optimizer specification into a NumPyro optimizer.
@@ -484,7 +485,7 @@ def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
 
     Raises
     ------
-    TypeError
+    OptimizerResolutionError
         For boolean inputs of any form, including 0-d boolean arrays (``bool`` is
         an ``int`` subclass, so a bool would silently mean ``Adam(1.0)``), and for
         any other unrecognized type; the message lists the accepted forms.
@@ -496,10 +497,10 @@ def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
     if isinstance(optim, _NumPyroOptim):
         return optim
     if isinstance(optim, bool):
-        raise TypeError(_BOOL_MSG)
+        raise OptimizerResolutionError()
     is_array_scalar = getattr(optim, "ndim", None) == 0
     if is_array_scalar and jnp.issubdtype(jnp.asarray(optim).dtype, jnp.bool_):
-        raise TypeError(_BOOL_MSG)  # 0-d bool array: same silent Adam(1.0) trap
+        raise OptimizerResolutionError()  # 0-d bool array: same silent Adam(1.0) trap
     if isinstance(optim, (int, float)) or is_array_scalar:
         lr = float(cast("float", optim))
         if not math.isfinite(lr) or lr <= 0.0:
@@ -515,29 +516,14 @@ def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
         "a positive float learning rate, an optax.GradientTransformation, or a "
         "numpyro optimizer (_NumPyroOptim)."
     )
-    raise TypeError(msg)
-
-
-_HANDWRITTEN_GUIDE_FACTORY_MSG = (
-    "resolve_guide() received a callable taking a single required positional "
-    "argument and no defaults. This is ambiguous: it looks like a guide *factory* "
-    "(e.g. `lambda model: AutoNormal(model)`), which must be passed as the class "
-    "or a functools.partial of it, not a lambda; or it is a hand-written guide, "
-    "which must use the model signature `(covariates, data=None)`."
-)
-
-_HANDWRITTEN_GUIDE_NEEDS_ARGS_MSG = (
-    "drawing from a hand-written guide requires the in-sample covariates/data, "
-    "which this SVIFit was constructed without. Fit via fit_svi (which records "
-    "them) or provide them explicitly."
-)
+    raise OptimizerResolutionError(msg)
 
 
 def _probe_handwritten_guide(guide: Callable[..., object]) -> None:
     """Reject callables whose signature matches a guide *factory*.
 
     Uses :func:`inspect.signature`: exactly one required positional parameter,
-    no defaults, and no var-args raises :class:`TypeError` with the
+    no defaults, and no var-args raises :class:`GuideResolutionError` with the
     dual-interpretation message. Signatures :mod:`inspect` cannot resolve
     (builtins, some partials) pass the probe: it is a tripwire for the common
     mistyped-factory mistake, not a gatekeeper.
@@ -549,7 +535,7 @@ def _probe_handwritten_guide(guide: Callable[..., object]) -> None:
 
     Raises
     ------
-    TypeError
+    GuideResolutionError
         If ``guide`` has the single-required-positional-argument factory shape.
     """
     try:
@@ -565,7 +551,7 @@ def _probe_handwritten_guide(guide: Callable[..., object]) -> None:
     has_default = any(p.default is not p.empty for p in params)
     has_var = any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in params)
     if len(required_positional) == 1 and not has_default and not has_var:
-        raise TypeError(_HANDWRITTEN_GUIDE_FACTORY_MSG)
+        raise GuideResolutionError()
 
 
 def resolve_guide(
@@ -577,7 +563,8 @@ def resolve_guide(
     Resolution: ``None`` -> ``AutoNormal(model)``; an ``AutoGuide`` instance ->
     returned unchanged; an ``AutoGuide`` subclass or a ``functools.partial`` of
     one -> called with ``model``; any other callable -> a hand-written guide,
-    after :func:`_probe_handwritten_guide`. Anything else -> ``TypeError``.
+    after :func:`_probe_handwritten_guide`. Anything else ->
+    :class:`GuideResolutionError`.
 
     Parameters
     ----------
@@ -593,7 +580,7 @@ def resolve_guide(
 
     Raises
     ------
-    TypeError
+    GuideResolutionError
         If ``guide`` is neither an ``AutoGuide`` (instance/subclass/partial) nor
         a callable, or if it has the mistyped-factory shape.
     """
@@ -615,7 +602,7 @@ def resolve_guide(
         "AutoGuide instance, an AutoGuide subclass (or functools.partial of one), "
         "or a hand-written guide function `(covariates, data=None)`."
     )
-    raise TypeError(msg)
+    raise GuideResolutionError(msg)
 
 
 def _ensure_sample_axis_for_delta(samples: dict[str, Array], num_samples: int) -> dict[str, Array]:
@@ -849,7 +836,7 @@ def _(fit: SVIFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     if isinstance(fit.guide, AutoGuide):
         return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
     if fit.covariates is None:
-        raise ValueError(_HANDWRITTEN_GUIDE_NEEDS_ARGS_MSG)
+        raise GuideSampleArgsError()
     predictive = Predictive(fit.guide, params=fit.params, num_samples=num_samples)
     return predictive(rng_key, fit.covariates, fit.data)
 
@@ -879,6 +866,9 @@ def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, A
     ------
     NotImplementedError
         If ``fit`` is of an unsupported type.
+    GuideSampleArgsError
+        If the fit holds a hand-written guide but was constructed without its
+        in-sample covariates/data.
 
     Notes
     -----
@@ -939,9 +929,9 @@ def resolve_kernel(
 
     Raises
     ------
-    ValueError
+    KernelConfigError
         If a kernel instance is combined with non-empty ``kernel_kwargs``.
-    TypeError
+    KernelResolutionError
         If ``kernel`` is neither ``None``, an ``MCMCKernel`` subclass, nor an
         ``MCMCKernel`` instance.
     """
@@ -958,13 +948,13 @@ def resolve_kernel(
                 "kernel instance; pass the kernel class instead, or set the "
                 "options on the instance."
             )
-            raise ValueError(msg)
+            raise KernelConfigError(msg)
         return kernel
     msg = (
         f"resolve_kernel() does not support {type(kernel).__name__}; pass None, "
         "an MCMCKernel subclass, or an MCMCKernel instance."
     )
-    raise TypeError(msg)
+    raise KernelResolutionError(msg)
 
 
 def _is_blackjax_kernel(kernel: MCMCKernel) -> bool:
@@ -1001,7 +991,7 @@ def _validate_kernel_run_config(
 
     Raises
     ------
-    ValueError
+    KernelConfigError
         For each violated constraint, naming the constraint and the fix.
     """
     if isinstance(kernel, (AIES, ESS)):
@@ -1012,7 +1002,7 @@ def _validate_kernel_run_config(
                 f'chain_method="vectorized" (got num_chains={num_chains}, '
                 f'chain_method="{chain_method}").'
             )
-            raise ValueError(msg)
+            raise KernelConfigError(msg)
     if _is_blackjax_kernel(kernel):
         if chain_method != "sequential":
             msg = (
@@ -1020,7 +1010,7 @@ def _validate_kernel_run_config(
                 "its step/postprocess functions capture tracers under "
                 f'vmap/pmap (got chain_method="{chain_method}").'
             )
-            raise ValueError(msg)
+            raise KernelConfigError(msg)
         if num_warmup > 0:
             warnings.warn(
                 f"{type(kernel).__name__} performs adaptation in kernel.init; "
@@ -1084,8 +1074,10 @@ def fit_mcmc(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` have different durations, or a run-config
-        constraint is violated (see :func:`_validate_kernel_run_config`).
+        If ``data`` and ``covariates`` have different durations.
+    KernelConfigError
+        If a run-config constraint is violated (see
+        :func:`_validate_kernel_run_config`).
     """
     _require_equal_duration(data, covariates)
     resolved_kernel = resolve_kernel(kernel, model, kernel_kwargs)

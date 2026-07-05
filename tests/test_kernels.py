@@ -8,6 +8,7 @@ from conftest import RandomWalkModel, empty_covariates
 from jax import random
 from numpyro.infer import AIES, ESS, HMC, HMCECS, NUTS, SA, BarkerMH, HMCGibbs
 
+from numpyro_forecast.exceptions import KernelConfigError, KernelResolutionError
 from numpyro_forecast.functional import (
     MCMCFit,
     draw_posterior,
@@ -40,12 +41,12 @@ def test_resolve_instance_is_identity() -> None:
 
 def test_resolve_instance_with_kwargs_raises() -> None:
     instance = NUTS(RandomWalkModel())
-    with pytest.raises(ValueError, match="cannot be combined"):
+    with pytest.raises(KernelConfigError, match="cannot be combined"):
         resolve_kernel(instance, RandomWalkModel(), {"target_accept_prob": 0.9})
 
 
 def test_resolve_unknown_type_raises() -> None:
-    with pytest.raises(TypeError, match="does not support"):
+    with pytest.raises(KernelResolutionError, match="does not support"):
         resolve_kernel(42, RandomWalkModel(), None)  # ty: ignore[invalid-argument-type]
 
 
@@ -66,7 +67,7 @@ def test_ensemble_kernel_requires_multichain_vectorized(
         f'and chain_method="vectorized" (got num_chains={num_chains}, '
         f'chain_method="{chain_method}").'
     )
-    with pytest.raises(ValueError, match=expected):
+    with pytest.raises(KernelConfigError, match=expected):
         fit_mcmc(
             random.PRNGKey(0),
             RandomWalkModel(),

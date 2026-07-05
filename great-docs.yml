@@ -133,6 +133,19 @@ reference:
       - util.register_elementwise
       - util.require
 
+  - title: Exceptions
+    desc: Package exception hierarchy raised at resolution and validation boundaries.
+    contents:
+      - exceptions.NumpyroForecastError
+      - exceptions.BacktestWindowError
+      - exceptions.VectorizedGuideError
+      - exceptions.OptimizerResolutionError
+      - exceptions.GuideResolutionError
+      - exceptions.GuideSampleArgsError
+      - exceptions.KernelResolutionError
+      - exceptions.KernelConfigError
+      - exceptions.MVNLayoutError
+
   - title: ArviZ export
     desc: Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
     contents:

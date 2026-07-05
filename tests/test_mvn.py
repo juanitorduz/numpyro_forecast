@@ -6,6 +6,7 @@ import numpyro.distributions as dist
 import pytest
 from jax import Array, random
 
+from numpyro_forecast.exceptions import MVNLayoutError
 from numpyro_forecast.functional import (
     Horizon,
     draw_posterior,
@@ -14,7 +15,6 @@ from numpyro_forecast.functional import (
     predict,
 )
 from numpyro_forecast.util import (
-    _MVN_LAYOUT_MSG,
     _mvn_time_params,
     prefix_condition,
     shift_loc,
@@ -202,7 +202,7 @@ def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
     """
     loc = jnp.zeros((3, 6))
     cov = jnp.broadcast_to(jnp.eye(6), (4, 6, 6))
-    with pytest.raises(NotImplementedError, match="MultivariateNormal"):
+    with pytest.raises(MVNLayoutError, match="MultivariateNormal"):
         _mvn_time_params(_fake_mvn(loc, cov))
 
 
@@ -210,9 +210,9 @@ def test_mvn_time_params_rejects_mismatched_trailing_axis() -> None:
     """A loc whose trailing axis is neither time nor squeezable-1 raises."""
     loc = jnp.zeros((3, 4))  # trailing 4 != time 6, not 1
     cov = jnp.broadcast_to(jnp.eye(6), (3, 6, 6))
-    with pytest.raises(NotImplementedError, match="MultivariateNormal"):
+    with pytest.raises(MVNLayoutError, match="MultivariateNormal"):
         _mvn_time_params(_fake_mvn(loc, cov))
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(MVNLayoutError):
         _mvn_time_params(_fake_mvn(jnp.asarray(0.0), jnp.eye(6)))
 
 
@@ -227,7 +227,7 @@ def test_shift_loc_mvn_batched() -> None:
     assert isinstance(shifted, dist.MultivariateNormal)
     assert jnp.allclose(shifted.loc, loc + 1.0)
     # A non-size-1 extra trailing axis is a layout error, not a silent truncation.
-    with pytest.raises(NotImplementedError, match=_MVN_LAYOUT_MSG[:20]):
+    with pytest.raises(MVNLayoutError, match=MVNLayoutError.default_message[:20]):
         shift_loc(mvn, jnp.ones((3, time, 2)))
 
 

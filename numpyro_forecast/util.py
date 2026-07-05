@@ -17,6 +17,7 @@ import numpyro.distributions as dist
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from numpyro_forecast.exceptions import MVNLayoutError
 from numpyro_forecast.typing import Array
 
 
@@ -387,13 +388,6 @@ def _(noise_dist: dist.Independent, data: Array) -> dist.Distribution:
     return slice_time(noise_dist, slice(t, None))
 
 
-_MVN_LAYOUT_MSG = (
-    "MultivariateNormal time-axis surgery requires obs == 1 with time as the "
-    "leading correlation axis (loc shape ``(*batch, time)`` or "
-    "``(*batch, time, 1)`` with matching ``(*batch, time, time)`` covariance)."
-)
-
-
 def _mvn_time_params(
     noise_dist: dist.MultivariateNormal,
 ) -> tuple[Array, Array]:
@@ -415,26 +409,25 @@ def _mvn_time_params(
 
     Raises
     ------
-    NotImplementedError
+    MVNLayoutError
         If ``loc`` is 0-d, its trailing axes match neither layout, or its batch
-        shape does not broadcast against the covariance batch shape
-        (:data:`_MVN_LAYOUT_MSG`).
+        shape does not broadcast against the covariance batch shape.
     """
     loc = jnp.asarray(noise_dist.loc)
     cov = jnp.asarray(noise_dist.covariance_matrix)
     time = cov.shape[-1]
     if loc.ndim == 0:
-        raise NotImplementedError(_MVN_LAYOUT_MSG)
+        raise MVNLayoutError()
     if loc.ndim >= 2 and loc.shape[-1] == 1 and loc.shape[-2] == time:
         resolved = loc[..., 0]  # (*batch, time, 1) -> (*batch, time)
     elif loc.shape[-1] == time:
         resolved = loc
     else:
-        raise NotImplementedError(_MVN_LAYOUT_MSG)
+        raise MVNLayoutError()
     try:
         jnp.broadcast_shapes(resolved.shape[:-1], cov.shape[:-2])
     except ValueError as err:
-        raise NotImplementedError(_MVN_LAYOUT_MSG) from err
+        raise MVNLayoutError() from err
     return resolved, cov
 
 
@@ -479,7 +472,7 @@ def _(noise_dist: dist.MultivariateNormal, loc: Array) -> dist.Distribution:
     # layout error, not something to silently drop.
     while shift.ndim > base_loc.ndim:
         if shift.shape[-1] != 1:
-            raise NotImplementedError(_MVN_LAYOUT_MSG)
+            raise MVNLayoutError()
         shift = shift[..., 0]
     return dist.MultivariateNormal(loc=base_loc + shift, covariance_matrix=cov)
 
