@@ -240,13 +240,22 @@ def add_forecast(
         Future covariates shaped ``(future, covariate_dim)``.
     time_coord
         Optional explicit forecast time coordinate; defaults to integer
-        continuation of the in-sample time.
+        continuation of the in-sample time. Required when the in-sample time
+        coordinate is non-integer (e.g. datetime64): auto-continuing would have
+        to guess the frequency, so explicit values are demanded instead.
 
     Returns
     -------
     xarray.DataTree
         A new tree with the ``predictions`` and ``predictions_constant_data``
         groups added.
+
+    Raises
+    ------
+    ValueError
+        If ``time_coord`` is given but its length differs from the forecast
+        horizon, or if it is omitted while the in-sample time coordinate is
+        non-integer.
     """
     import arviz_base
     import xarray as xr
@@ -255,9 +264,21 @@ def add_forecast(
     future_len = forecast_samples.shape[-2]
     if time_coord is not None:
         future_time = np.asarray(time_coord)
-    else:
+        if future_time.shape[0] != future_len:
+            msg = (
+                f"time_coord has length {future_time.shape[0]} but "
+                f"forecast_samples spans {future_len} future steps"
+            )
+            raise ValueError(msg)
+    elif np.issubdtype(in_time.dtype, np.integer):
         start = int(in_time[-1]) + 1
         future_time = np.arange(start, start + future_len)
+    else:
+        msg = (
+            f"the in-sample time coordinate is non-integer (dtype {in_time.dtype}); "
+            "pass explicit time_coord for the forecast horizon"
+        )
+        raise ValueError(msg)
     future_coords = cast("dict[Any, Any]", {"time": future_time})
 
     predictions_ds = arviz_base.dict_to_dataset(

@@ -140,6 +140,44 @@ def test_add_forecast_explicit_time_coord() -> None:
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, [900, 901, 902])
 
 
+def test_add_forecast_rejects_wrong_length_time_coord() -> None:
+    """A ``time_coord`` whose length differs from the forecast horizon raises by name.
+
+    Without the guard the mismatch flowed into ``dict_to_dataset`` and died deep
+    in xarray with a shape message that never mentioned ``time_coord``.
+    """
+    fit, data, covariates = _mcmc_fit()
+    n = data.shape[-2]
+    future_covariates = empty_covariates(n + 3)
+    post = draw_posterior(random.PRNGKey(3), fit, 60)
+    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    with pytest.raises(ValueError, match="time_coord has length 2"):
+        add_forecast(tree, fc, future_covariates[n:], time_coord=[900, 901])
+
+
+def test_add_forecast_noninteger_time_requires_explicit_coord() -> None:
+    """A datetime64 in-sample time coordinate demands an explicit forecast ``time_coord``.
+
+    The default integer continuation would otherwise raise an opaque cast error;
+    the frequency of a datetime index is deliberately not guessed.
+    """
+    fit, data, covariates = _mcmc_fit()
+    n = data.shape[-2]
+    days = np.datetime64("2024-01-01") + np.arange(n)
+    future_covariates = empty_covariates(n + 3)
+    post = draw_posterior(random.PRNGKey(3), fit, 60)
+    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    tree = to_datatree(
+        random.PRNGKey(2), fit, RandomWalkModel(), data, covariates, time_coord=list(days)
+    )
+    with pytest.raises(ValueError, match="pass explicit time_coord"):
+        add_forecast(tree, fc, future_covariates[n:])
+    future_days = days[-1] + 1 + np.arange(3)
+    out = add_forecast(tree, fc, future_covariates[n:], time_coord=list(future_days))
+    np.testing.assert_array_equal(out["predictions"].coords["time"].values, future_days)
+
+
 def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every group must be built through arviz_base.dict_to_dataset (normative rule)."""
     calls = {"count": 0}
