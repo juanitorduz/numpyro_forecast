@@ -198,7 +198,7 @@ Returns
 Array
     The latent over the full horizon with time at axis ``-2``.
 
-markov_time_series(h: numpyro_forecast.functional.Horizon, name: str, init_carry: object, transition: collections.abc.Callable[[object, jax.Array | None], tuple[numpyro.distributions.distribution.Distribution, collections.abc.Callable[[jax.Array], object]]], xs: jax.Array | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
+markov_time_series(h: numpyro_forecast.functional.Horizon, name: str, init_carry: Any, transition: collections.abc.Callable[[typing.Any, jax.Array | None], tuple[numpyro.distributions.distribution.Distribution, collections.abc.Callable[[jax.Array], typing.Any]]], xs: jax.Array | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
 
 Sample a Markov (state-space) latent over the full horizon.
 
@@ -1346,6 +1346,13 @@ xarray.DataTree
     A tree with ``posterior`` (``(chain, draw, ...)``; a single pseudo-chain
     plus ``variational: True`` attrs for SVI/Pathfinder), ``posterior_predictive``
     (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups.
+
+Notes
+-----
+``rng_key`` is split internally: one subkey drives the posterior draws (for
+variational fits) and the other the in-sample predictive. The split is a
+deterministic derivation applied for every fit type, so passing the same key
+twice never correlates the two sample sets.
 
 add_forecast(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
 

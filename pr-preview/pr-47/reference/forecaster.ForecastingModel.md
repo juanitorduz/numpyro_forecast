@@ -115,7 +115,36 @@ markov_time_series(
 ```
 
 
-Thin wrapper over [numpyro_forecast.functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series).
+Thin wrapper over [numpyro_forecast.functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series) that threads this model's train/forecast horizon. In-sample steps run in a `scan` under site `name`; the forecast horizon runs in a second scan under `f"{name}_future"` seeded by the final in-sample carry, so the guide never sees the future site.
+
+
+##### Parameters
+
+
+`name: str`  
+Sample-site name for the in-sample scan; the forecast scan uses `f"{name}_future"`.
+
+`init_carry: Any`  
+Initial carry PyTree fed to the first transition step.
+
+`transition: Transition`  
+Callable `(carry, x_t) -> (dist_t, carry_fn)`: `dist_t` is the per-step observation distribution (its per-step shape must carry the trailing observation dimension) and `carry_fn(z_t)` builds the next carry from the sampled latent `z_t`. The wrapper owns the `sample` statement, so the Markov structure cannot be broken by resampling.
+
+`xs: Array | None = None`  
+Optional exogenous inputs spanning the full horizon with time at axis `-2`; split and moved into scan layout internally. `None` for autonomous dynamics.
+
+`plates: Sequence[tuple[str, int]] = ()`    
+`(name, size)` pairs opened inside the scan body around the sample statement (the only placement NumPyro accepts around a scan).
+
+`reparam_config: Mapping[str, Reparam] | None = None`  
+Optional site-name to `~numpyro.infer.reparam.Reparam` mapping applied inside the scan body.
+
+
+##### Returns
+
+
+`Array`  
+The latent over the full horizon in package layout `(*plate_batch, duration, obs)` (time at axis `-2`).
 
 
 ------------------------------------------------------------------------

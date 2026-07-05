@@ -57,3 +57,8 @@ Optional explicit in-sample time coordinate values; defaults to `range(n_time)`.
 
 `xarray.DataTree`  
 A tree with `posterior` (`(chain, draw, ...)`; a single pseudo-chain plus `variational: True` attrs for SVI/Pathfinder), `posterior_predictive` (in-sample `obs`), `observed_data`, and `constant_data` groups.
+
+
+## Notes
+
+`rng_key` is split internally: one subkey drives the posterior draws (for variational fits) and the other the in-sample predictive. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the two sample sets.

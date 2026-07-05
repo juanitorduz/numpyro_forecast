@@ -32,7 +32,7 @@ The horizon for the current model call (see [Horizon](functional.Horizon.md#nump
 `name: str`  
 Base sample-site name for the in-sample latent scan.
 
-`init_carry: object`  
+`init_carry: Any`  
 Initial carry passed to the first transition.
 
 `transition: Transition`  

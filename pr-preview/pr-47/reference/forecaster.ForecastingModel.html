@@ -661,7 +661,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L46-L206" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L48-L237" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">forecaster</span><span class="op">.</span><span class="sig-name">ForecastingModel</span>()</span></code></pre></div>
@@ -813,7 +813,7 @@ Sample a time-varying latent over the full horizon.
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L191-L206" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L222-L237" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">__call__</span>(covariates, data<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
@@ -842,7 +842,7 @@ Observed data with time at axis <code>-2</code> (<code>None</code> for prior sam
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L162-L189" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L164-L220" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>markov_time_series(</span>
@@ -850,8 +850,50 @@ Observed data with time at axis <code>-2</code> (<code>None</code> for prior sam
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Thin wrapper over <a href="functional.markov_time_series.html#numpyro_forecast.functional.markov_time_series" class="gdls-link gdls-code">numpyro_forecast.functional.markov_time_series()</a>.</p>
+<p>Thin wrapper over <a href="functional.markov_time_series.html#numpyro_forecast.functional.markov_time_series" class="gdls-link gdls-code">numpyro_forecast.functional.markov_time_series()</a> that threads this model’s train/forecast horizon. In-sample steps run in a <code>scan</code> under site <code>name</code>; the forecast horizon runs in a second scan under <code>f"{name}_future"</code> seeded by the final in-sample carry, so the guide never sees the future site.</p>
 </div>
+<section id="parameters-1" class="level4 doc-parameters">
+<h5 class="doc-parameters anchored" data-anchor-id="parameters-1">Parameters</h5>
+<div class="doc-definition-items">
+<dl>
+<dt><code><span class="doc-parameter-name">name</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span></code></dt>
+<dd>
+<p>Sample-site name for the in-sample scan; the forecast scan uses <code>f"{name}_future"</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">init_carry</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Any</span></code></dt>
+<dd>
+<p>Initial carry PyTree fed to the first transition step.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">transition</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Transition</span></code></dt>
+<dd>
+<p>Callable <code>(carry, x_t) -&gt; (dist_t, carry_fn)</code>: <code>dist_t</code> is the per-step observation distribution (its per-step shape must carry the trailing observation dimension) and <code>carry_fn(z_t)</code> builds the next carry from the sampled latent <code>z_t</code>. The wrapper owns the <code>sample</code> statement, so the Markov structure cannot be broken by resampling.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">xs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Optional exogenous inputs spanning the full horizon with time at axis <code>-2</code>; split and moved into scan layout internally. <code>None</code> for autonomous dynamics.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">plates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[tuple[str, int]]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">()<br></span></code></dt>
+<dd>
+<p><code>(name, size)</code> pairs opened inside the scan body around the sample statement (the only placement NumPyro accepts around a scan).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">reparam_config</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Reparam] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional site-name to <code>~numpyro.infer.reparam.Reparam</code> mapping applied inside the scan body.
+</dd>
+</dl>
+</div>
+</section>
+<section id="returns" class="level4 doc-returns">
+<h5 class="doc-returns anchored" data-anchor-id="returns">Returns</h5>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dd>
+The latent over the full horizon in package layout <code>(*plate_batch, duration, obs)</code> (time at axis <code>-2</code>).
+</dd>
+</dl>
+</div>
+</section>
 </section>
 <hr style="border: none; border-top: 2px dotted #b0b4ba; margin: 1.5rem 0 1rem 0;">
 <section id="model" class="level3">
@@ -861,13 +903,13 @@ Observed data with time at axis <code>-2</code> (<code>None</code> for prior sam
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L63-L76" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L65-L78" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>model(zero_data, covariates)</span></code></pre></div>
 </div>
-<section id="parameters-1" class="level4 doc-parameters">
-<h5 class="doc-parameters anchored" data-anchor-id="parameters-1">Parameters</h5>
+<section id="parameters-2" class="level4 doc-parameters">
+<h5 class="doc-parameters anchored" data-anchor-id="parameters-2">Parameters</h5>
 <div class="doc-definition-items">
 <dl>
 <dt><code><span class="doc-parameter-name">zero_data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span></code></dt>
@@ -890,7 +932,7 @@ Covariates with time at axis <code>-2</code> and shape <code>(*batch, duration, 
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L127-L140" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L129-L142" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>predict(noise_dist, prediction)</span></code></pre></div>
@@ -898,8 +940,8 @@ Covariates with time at axis <code>-2</code> and shape <code>(*batch, duration, 
 <div class="doc-text">
 <p>Thin wrapper over <a href="functional.predict.html#numpyro_forecast.functional.predict" class="gdls-link gdls-code">numpyro_forecast.functional.predict()</a>.</p>
 </div>
-<section id="parameters-2" class="level4 doc-parameters">
-<h5 class="doc-parameters anchored" data-anchor-id="parameters-2">Parameters</h5>
+<section id="parameters-3" class="level4 doc-parameters">
+<h5 class="doc-parameters anchored" data-anchor-id="parameters-3">Parameters</h5>
 <div class="doc-definition-items">
 <dl>
 <dt><code><span class="doc-parameter-name">noise_dist</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
@@ -922,7 +964,7 @@ Deterministic mean with time at axis <code>-2</code>, shape <code>(*batch, durat
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L142-L160" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L144-L162" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>predict_glm(obs_dist_fn, latent)</span></code></pre></div>
@@ -930,8 +972,8 @@ Deterministic mean with time at axis <code>-2</code>, shape <code>(*batch, durat
 <div class="doc-text">
 <p>Thin wrapper over <a href="functional.predict_glm.html#numpyro_forecast.functional.predict_glm" class="gdls-link gdls-code">numpyro_forecast.functional.predict_glm()</a>.</p>
 </div>
-<section id="parameters-3" class="level4 doc-parameters">
-<h5 class="doc-parameters anchored" data-anchor-id="parameters-3">Parameters</h5>
+<section id="parameters-4" class="level4 doc-parameters">
+<h5 class="doc-parameters anchored" data-anchor-id="parameters-4">Parameters</h5>
 <div class="doc-definition-items">
 <dl>
 <dt><code><span class="doc-parameter-name">obs_dist_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[Array], dist.Distribution]</span></code></dt>
@@ -954,7 +996,7 @@ The deterministic latent predictor over the full horizon, time at axis <code>-2<
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L99-L125" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/forecaster.py#L101-L127" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>time_series(name, dist_fn, <span class="op">*</span>, reparam<span class="op">=</span><span class="va">None</span>)</span></code></pre></div>
@@ -962,8 +1004,8 @@ The deterministic latent predictor over the full horizon, time at axis <code>-2<
 <div class="doc-text">
 <p>Thin wrapper over <a href="functional.time_series.html#numpyro_forecast.functional.time_series" class="gdls-link gdls-code">numpyro_forecast.functional.time_series()</a>.</p>
 </div>
-<section id="parameters-4" class="level4 doc-parameters">
-<h5 class="doc-parameters anchored" data-anchor-id="parameters-4">Parameters</h5>
+<section id="parameters-5" class="level4 doc-parameters">
+<h5 class="doc-parameters anchored" data-anchor-id="parameters-5">Parameters</h5>
 <div class="doc-definition-items">
 <dl>
 <dt><code><span class="doc-parameter-name">name</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span></code></dt>
@@ -981,8 +1023,8 @@ Optional reparameterization (e.g.&nbsp;<code>LocScaleReparam</code>) applied to 
 </dl>
 </div>
 </section>
-<section id="returns" class="level4 doc-returns">
-<h5 class="doc-returns anchored" data-anchor-id="returns">Returns</h5>
+<section id="returns-1" class="level4 doc-returns">
+<h5 class="doc-returns anchored" data-anchor-id="returns-1">Returns</h5>
 <div class="doc-definition-items">
 <dl>
 <dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
