@@ -165,12 +165,45 @@ def test_mvn_time_params_squeezes_trailing_singleton() -> None:
 
 
 def test_mvn_time_params_time_one_tiebreak() -> None:
-    """When ``time == 1`` the trailing axis is time, so ``(*batch, 1)`` is kept."""
+    """The remaining ``time == 1`` tie: a 2-d ``(*batch, 1)`` loc is kept as-is.
+
+    The 3-axis ``(*batch, time, 1)`` layout is squeezed even at ``time == 1``
+    (see ``test_mvn_time_params_time_one_squeezes_three_axis_layout``); the only
+    ambiguity left is a 2-d loc whose trailing axis could be time or a squeezable
+    singleton, resolved as "the trailing axis is time".
+    """
     loc = jnp.zeros((3, 1))
     cov = jnp.broadcast_to(jnp.eye(1), (3, 1, 1))
     out_loc, _ = _mvn_time_params(_fake_mvn(loc, cov))
-    # loc.shape[-1] == time == 1 is matched first, so the axis is treated as time.
+    # The squeeze branch requires shape[-2] == time (3 != 1 here), so the
+    # loc falls through to the (*batch, time) branch and is kept unchanged.
     assert out_loc.shape == (3, 1)
+
+
+def test_mvn_time_params_time_one_squeezes_three_axis_layout() -> None:
+    """A ``(*batch, time, 1)`` loc with ``time == 1`` squeezes to ``(*batch, 1)``.
+
+    Regression: the ``shape[-1] == time`` branch used to match first when
+    ``time == 1`` (a trailing singleton also equals time), returning the loc
+    unsqueezed with a phantom trailing axis.
+    """
+    loc = jnp.zeros((3, 1, 1))
+    cov = jnp.broadcast_to(jnp.eye(1), (3, 1, 1))
+    out_loc, out_cov = _mvn_time_params(_fake_mvn(loc, cov))
+    assert out_loc.shape == (3, 1)
+    assert out_cov.shape == (3, 1, 1)
+
+
+def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
+    """A loc batch incompatible with the cov batch raises at the boundary.
+
+    Without the guard, a mismatched user construction flows downstream and dies
+    deep in ``cho_solve`` with a shape error that never names the layout rule.
+    """
+    loc = jnp.zeros((3, 6))
+    cov = jnp.broadcast_to(jnp.eye(6), (4, 6, 6))
+    with pytest.raises(NotImplementedError, match="MultivariateNormal"):
+        _mvn_time_params(_fake_mvn(loc, cov))
 
 
 def test_mvn_time_params_rejects_mismatched_trailing_axis() -> None:

@@ -403,17 +403,21 @@ def _mvn_time_params(
     (``cov.shape[-1]``), which is unambiguous, rather than guessed from ``loc``.
     Supported ``loc`` layouts:
 
+    - ``(*batch, time, 1)`` -- the trailing singleton is squeezed (checked
+      first, so the rule holds even when ``time == 1``).
     - ``(*batch, time)`` -- returned unchanged.
-    - ``(*batch, time, 1)`` -- the trailing singleton is squeezed.
 
-    When ``time == 1`` the two layouts coincide; the tie is resolved in favor of
-    "the trailing axis is time" (i.e. a trailing singleton is squeezed only when
-    the preceding axis already matches ``time``).
+    The remaining ``time == 1`` tie -- a 2-d ``(*batch, 1)`` -- is resolved as
+    "the trailing axis is time" (kept unchanged), pinned by
+    ``test_mvn_time_params_time_one_tiebreak``. The resolved loc batch must
+    broadcast against the cov batch, so a mismatched construction fails here
+    rather than deep in ``cho_solve``.
 
     Raises
     ------
     NotImplementedError
-        If ``loc`` is 0-d or its trailing axes match neither layout
+        If ``loc`` is 0-d, its trailing axes match neither layout, or its batch
+        shape does not broadcast against the covariance batch shape
         (:data:`_MVN_LAYOUT_MSG`).
     """
     loc = jnp.asarray(noise_dist.loc)
@@ -421,11 +425,17 @@ def _mvn_time_params(
     time = cov.shape[-1]
     if loc.ndim == 0:
         raise NotImplementedError(_MVN_LAYOUT_MSG)
-    if loc.shape[-1] == time:
-        return loc, cov
-    if loc.shape[-1] == 1 and loc.ndim >= 2 and loc.shape[-2] == time:
-        return loc[..., 0], cov  # (*batch, time, 1) -> (*batch, time)
-    raise NotImplementedError(_MVN_LAYOUT_MSG)
+    if loc.ndim >= 2 and loc.shape[-1] == 1 and loc.shape[-2] == time:
+        resolved = loc[..., 0]  # (*batch, time, 1) -> (*batch, time)
+    elif loc.shape[-1] == time:
+        resolved = loc
+    else:
+        raise NotImplementedError(_MVN_LAYOUT_MSG)
+    try:
+        jnp.broadcast_shapes(resolved.shape[:-1], cov.shape[:-2])
+    except ValueError as err:
+        raise NotImplementedError(_MVN_LAYOUT_MSG) from err
+    return resolved, cov
 
 
 def _symmetrize(cov: Array) -> Array:
