@@ -422,9 +422,7 @@ def _mvn_jitter(cov: Array, floor: float = 1e-6) -> Array:
     return _symmetrize(cov) + floor * eye
 
 
-def _mvn_prefix_condition(
-    loc: Array, cov: Array, data: Array
-) -> dist.MultivariateNormal:
+def _mvn_prefix_condition(loc: Array, cov: Array, data: Array) -> dist.MultivariateNormal:
     """Gaussian conditional of an MVN over time given a prefix observation."""
     t = data.shape[-2]
     x = data[..., 0]

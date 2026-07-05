@@ -836,7 +836,9 @@ def _vmapped_metrics(
         }
         return {name: jax.vmap(kern)(predictions, truth) for name, kern in kernels.items()}
     num_windows = int(predictions.shape[0])
-    scored = [evaluate_forecast(predictions[i], truth[i], metrics=metrics) for i in range(num_windows)]
+    scored = [
+        evaluate_forecast(predictions[i], truth[i], metrics=metrics) for i in range(num_windows)
+    ]
     names = list(scored[0]) if scored else list(metrics)
     return {name: jnp.asarray([row[name] for row in scored]) for name in names}
 
