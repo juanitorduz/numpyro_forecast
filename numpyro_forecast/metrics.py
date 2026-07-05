@@ -172,7 +172,7 @@ def eval_interval_score(
     return float(_interval_score(pred, truth, alpha))
 
 
-def make_mase(train_data: Float[Array, " time obs_dim"], *, seasonality: int = 1) -> Metric:
+def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: int = 1) -> Metric:
     """Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
     MASE divides the forecast MAE (using the sample median as point estimate) by
@@ -184,8 +184,8 @@ def make_mase(train_data: Float[Array, " time obs_dim"], *, seasonality: int = 1
     Parameters
     ----------
     train_data
-        Training data with time at axis ``-2``; its seasonal differences set the
-        scale.
+        Training data with time at axis ``-2``; leading batch axes are allowed
+        and the seasonal-naive scale is averaged over all axes.
     seasonality
         Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
 

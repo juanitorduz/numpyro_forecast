@@ -12,6 +12,7 @@ from numpyro_forecast.metrics import (
     eval_pinball,
     make_mase,
 )
+from numpyro_forecast.typing import Metric
 
 
 def _brute_force_crps(pred: Array, truth: Array) -> Array:
@@ -137,6 +138,37 @@ def test_make_mase_scales_by_seasonal_naive() -> None:
     pred = jnp.full((20, 3, 1), 5.0)
     truth = jnp.full((3, 1), 7.0)
     assert jnp.allclose(mase(pred, truth), 2.0, atol=1e-5)
+
+
+def _mase_scale(mase: Metric) -> float:
+    """Back out the factory-time scale: with a zero point forecast the metric is mae/scale."""
+    pred = jnp.zeros((1, 1, 1))
+    truth = jnp.ones((1, 1))  # mae = |0 - 1| = 1, so metric == 1/scale
+    return 1.0 / float(mase(pred, truth))
+
+
+def test_make_mase_accepts_batched_train_data() -> None:
+    """A ``(*batch, time, obs)`` train_data builds a metric; the scale averages over batch.
+
+    Regression: the annotation was tightened to exactly 2-d, so any batched
+    caller hit a runtime ``TypeCheckError`` despite the docstring's package-wide
+    time-at-axis(-2) contract.
+    """
+    train = jnp.stack([jnp.arange(8.0)[:, None], 3.0 * jnp.arange(8.0)[:, None]])
+    mase = make_mase(train, seasonality=1)
+    per_series = [
+        float(jnp.abs(train[b, 1:, :] - train[b, :-1, :]).mean()) for b in range(train.shape[0])
+    ]
+    expected_scale = float(np.mean(per_series))
+    assert jnp.allclose(_mase_scale(mase), expected_scale, atol=1e-6)
+
+
+def test_make_mase_time_axis_is_minus_two() -> None:
+    """A ``(time, obs)`` input and its ``(1, time, obs)`` unsqueeze yield the same scale."""
+    train = jnp.sin(jnp.arange(12.0))[:, None]
+    scale_2d = _mase_scale(make_mase(train, seasonality=3))
+    scale_3d = _mase_scale(make_mase(train[None], seasonality=3))
+    assert jnp.allclose(scale_2d, scale_3d, atol=1e-6)
 
 
 def test_make_mase_rejects_bad_seasonality() -> None:
