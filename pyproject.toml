@@ -81,9 +81,6 @@ default-groups = []
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
-# Spike scripts are kept verbatim for provenance (recorded jax/numpyro env) and
-# are intentionally not held to the package's lint/style rules.
-extend-exclude = ["spikes"]
 line-length = 99
 target-version = "py312"
 
