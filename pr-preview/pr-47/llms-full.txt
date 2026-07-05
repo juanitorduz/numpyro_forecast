@@ -737,8 +737,9 @@ the number of windows (invariant I3), giving order-of-magnitude wall-clock
 wins for tens of windows on small models.
 
 PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-``fold_in(rng_key, i)`` seeds window ``i``; each window key is split for the
-posterior draw and the forecast.
+``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
+posterior-draw, and forecast subkeys (the parent itself is never consumed;
+see :func:`_window_key_streams`).
 
 Parameters
 ----------
@@ -1063,7 +1064,7 @@ Raises
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``.
 
-make_mase(train_data: jaxtyping.Float[Array, 'time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], float]
+make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], float]
 
 Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
@@ -1076,8 +1077,8 @@ signature.
 Parameters
 ----------
 train_data
-    Training data with time at axis ``-2``; its seasonal differences set the
-    scale.
+    Training data with time at axis ``-2``; leading batch axes are allowed
+    and the seasonal-naive scale is averaged over all axes.
 seasonality
     Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
 
@@ -1382,13 +1383,22 @@ covariates_future
     Future covariates shaped ``(future, covariate_dim)``.
 time_coord
     Optional explicit forecast time coordinate; defaults to integer
-    continuation of the in-sample time.
+    continuation of the in-sample time. Required when the in-sample time
+    coordinate is non-integer (e.g. datetime64): auto-continuing would have
+    to guess the frequency, so explicit values are demanded instead.
 
 Returns
 -------
 xarray.DataTree
     A new tree with the ``predictions`` and ``predictions_constant_data``
     groups added.
+
+Raises
+------
+ValueError
+    If ``time_coord`` is given but its length differs from the forecast
+    horizon, or if it is omitted while the in-sample time coordinate is
+    non-integer.
 
 to_inferencedata(*args: Any, **kwargs: Any) -> 'Any'
 

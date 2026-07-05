@@ -29,7 +29,7 @@ Forecast draws shaped `(num_samples, future, obs)` from `~numpyro_forecast.funct
 Future covariates shaped `(future, covariate_dim)`.
 
 `time_coord: Sequence[Any] | None = None`  
-Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time.
+Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g. datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.
 
 
 ## Returns
@@ -37,3 +37,10 @@ Optional explicit forecast time coordinate; defaults to integer continuation of 
 
 `xarray.DataTree`  
 A new tree with the `predictions` and `predictions_constant_data` groups added.
+
+
+## Raises
+
+
+`ValueError`  
+If `time_coord` is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.

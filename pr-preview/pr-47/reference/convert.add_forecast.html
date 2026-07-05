@@ -192,7 +192,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="26" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="27" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -630,6 +630,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   </ul>
 </nav>
     </div>
@@ -660,7 +661,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L217-L281" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L217-L302" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast</span>(</span>
@@ -688,7 +689,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time.
+Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g.&nbsp;datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.
 </dd>
 </dl>
 </div>
@@ -700,6 +701,17 @@ Optional explicit forecast time coordinate; defaults to integer continuation of 
 <dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
 A new tree with the <code>predictions</code> and <code>predictions_constant_data</code> groups added.
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.
 </dd>
 </dl>
 </div>

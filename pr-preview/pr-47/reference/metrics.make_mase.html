@@ -192,7 +192,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="26" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="27" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -677,9 +677,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">train_data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" time obs_dim"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">train_data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch time obs_dim"</span>]</span></code></dt>
 <dd>
-<p>Training data with time at axis <code>-2</code>; its seasonal differences set the scale.</p>
+<p>Training data with time at axis <code>-2</code>; leading batch axes are allowed and the seasonal-naive scale is averaged over all axes.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">seasonality</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
 <dd>

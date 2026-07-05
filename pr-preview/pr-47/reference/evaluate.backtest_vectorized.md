@@ -28,7 +28,7 @@ evaluate.backtest_vectorized(
 
 Estimator-equivalent to [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows (invariant I3), giving order-of-magnitude wall-clock wins for tens of windows on small models.
 
-PRNG: `fold_in(rng_key, -1)` seeds a discarded eager warm-up init; `fold_in(rng_key, i)` seeds window `i`; each window key is split for the posterior draw and the forecast.
+PRNG: `fold_in(rng_key, -1)` seeds a discarded eager warm-up init; `fold_in(rng_key, i)` is the window-`i` parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see `_window_key_streams()`).
 
 
 ## Parameters
