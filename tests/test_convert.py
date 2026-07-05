@@ -10,6 +10,7 @@ from jax import Array, random
 
 from numpyro_forecast.convert import add_forecast, to_datatree, to_inferencedata
 from numpyro_forecast.functional import draw_posterior, fit_mcmc, fit_svi, forecast
+from numpyro_forecast.typing import ForecastModel
 
 arviz_base = pytest.importorskip("arviz_base")
 arviz_stats = pytest.importorskip("arviz_stats")
@@ -153,6 +154,63 @@ def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None
     to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
     # posterior + posterior_predictive + observed_data + constant_data.
     assert calls["count"] == 4
+
+
+def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Posterior draws and in-sample predictive must receive distinct subkeys.
+
+    Spies on the ``draw_posterior``/``predict_in_sample`` names as looked up
+    inside ``convert``; a variational fit exercises both draws.
+    """
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, Array] = {}
+    real_draw = convert_mod.draw_posterior
+    real_pred = convert_mod.predict_in_sample
+
+    def spy_draw(rng_key: Array, fit: object, num: int) -> object:
+        captured["post"] = rng_key
+        return real_draw(rng_key, fit, num)
+
+    def spy_pred(
+        rng_key: Array, model: ForecastModel, posterior: dict[str, Array], covariates: Array
+    ) -> object:
+        captured["pred"] = rng_key
+        return real_pred(rng_key, model, posterior, covariates)
+
+    monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
+    monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
+
+    data = _series()
+    covariates = empty_covariates(data.shape[-2])
+    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, covariates, num_steps=40)
+    parent = random.PRNGKey(2)
+    to_datatree(parent, svi, RandomWalkModel(), data, covariates, num_predictive_samples=20)
+
+    assert not jnp.array_equal(captured["post"], captured["pred"])
+    assert not jnp.array_equal(captured["post"], parent)
+    assert not jnp.array_equal(captured["pred"], parent)
+
+
+def test_to_datatree_deterministic_given_key() -> None:
+    """Two calls with the same rng_key produce identical trees (derived split)."""
+    data = _series()
+    covariates = empty_covariates(data.shape[-2])
+    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, covariates, num_steps=40)
+    a = to_datatree(
+        random.PRNGKey(7), svi, RandomWalkModel(), data, covariates, num_predictive_samples=20
+    )
+    b = to_datatree(
+        random.PRNGKey(7), svi, RandomWalkModel(), data, covariates, num_predictive_samples=20
+    )
+    np.testing.assert_array_equal(
+        np.asarray(a["posterior_predictive"]["obs"]),
+        np.asarray(b["posterior_predictive"]["obs"]),
+    )
+    np.testing.assert_array_equal(
+        np.asarray(a["posterior"]["drift"]),
+        np.asarray(b["posterior"]["drift"]),
+    )
 
 
 def test_to_inferencedata_shim_raises_on_datatree_only_arviz() -> None:

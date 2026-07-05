@@ -17,6 +17,7 @@ from functools import singledispatch
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
+from jax import random
 
 from numpyro_forecast.functional import MCMCFit, draw_posterior, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
@@ -126,9 +127,18 @@ def to_datatree(
         A tree with ``posterior`` (``(chain, draw, ...)``; a single pseudo-chain
         plus ``variational: True`` attrs for SVI/Pathfinder), ``posterior_predictive``
         (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups.
+
+    Notes
+    -----
+    ``rng_key`` is split internally: one subkey drives the posterior draws (for
+    variational fits) and the other the in-sample predictive. The split is a
+    deterministic derivation applied for every fit type, so passing the same key
+    twice never correlates the two sample sets.
     """
     import arviz_base
     import xarray as xr
+
+    key_post, key_pred = random.split(rng_key)
 
     is_mcmc = isinstance(fit, MCMCFit)
     if is_mcmc:
@@ -139,7 +149,7 @@ def to_datatree(
             if num_predictive_samples is None
             else num_predictive_samples
         )
-        samples = draw_posterior(rng_key, fit, num)
+        samples = draw_posterior(key_post, fit, num)
 
     n_time = data.shape[-2]
     time = np.asarray(time_coord) if time_coord is not None else np.arange(n_time)
@@ -154,7 +164,7 @@ def to_datatree(
         posterior, sample_dims=_SAMPLE_DIMS, coords=coords_arg, attrs=posterior_attrs
     )
 
-    predictive = predict_in_sample(rng_key, model, samples, covariates)
+    predictive = predict_in_sample(key_pred, model, samples, covariates)
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_predictive(fit, predictive)},
         sample_dims=_SAMPLE_DIMS,

@@ -458,8 +458,11 @@ def fit_pathfinder(
 def _(fit: PathfinderFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
+    # Split so the discarded init draws and the pathfinder draws use distinct
+    # streams (the init param draws are unused, but keep the streams isolated).
+    key_init, key_sample = random.split(rng_key)
     _param_info, _potential_fn_gen, postprocess_fn, _ = initialize_model(
-        rng_key,
+        key_init,
         fit.model,
         dynamic_args=True,
         model_args=(fit.covariates, fit.data),
@@ -467,6 +470,6 @@ def _(fit: PathfinderFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     # sample() returns (samples_dict, log_weights); take the unconstrained draws
     # and map the constraining transform over the leading sample axis (no
     # batch_ndims reliance).
-    unconstrained, _log_weights = blackjax.vi.pathfinder.sample(rng_key, fit.state, num_samples)
+    unconstrained, _log_weights = blackjax.vi.pathfinder.sample(key_sample, fit.state, num_samples)
     transform = postprocess_fn(fit.covariates, fit.data)
     return jax.vmap(transform)(unconstrained)

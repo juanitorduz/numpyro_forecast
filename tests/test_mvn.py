@@ -16,7 +16,7 @@ from numpyro_forecast.util import prefix_condition, shift_loc, slice_time
 from tests.conftest import empty_covariates
 
 
-def _ar_covariance(time: int, phi: float) -> Array:
+def _ar_covariance(time: int, phi: Array | float) -> Array:
     idx = jnp.arange(time)
     return phi ** jnp.abs(idx[:, None] - idx[None, :])
 
@@ -53,7 +53,7 @@ def test_mvn_diagonal_matches_independent_normal_slice() -> None:
         xv = jnp.full((time - t, 1), x)
         assert jnp.allclose(
             mvn_future.log_prob(xv[:, 0]),
-            norm_future.log_prob(xv).sum(),
+            jnp.asarray(norm_future.log_prob(xv)).sum(),
             atol=1e-5,
         )
 
@@ -65,8 +65,10 @@ def test_mvn_near_singular_prefix_still_valid() -> None:
     mvn = dist.MultivariateNormal(loc=jnp.zeros(time), covariance_matrix=cov)
     data = jnp.zeros((t, 1))
     cond = prefix_condition(mvn, data)
-    assert jnp.all(jnp.isfinite(cond.covariance_matrix))
-    assert jnp.all(jnp.linalg.eigvalsh(cond.covariance_matrix) > 0)
+    assert isinstance(cond, dist.MultivariateNormal)
+    cond_cov = jnp.asarray(cond.covariance_matrix)
+    assert jnp.all(jnp.isfinite(cond_cov))
+    assert jnp.all(jnp.linalg.eigvalsh(cond_cov) > 0)
 
 
 def test_mvn_shift_loc_adds_to_mean() -> None:
@@ -75,6 +77,7 @@ def test_mvn_shift_loc_adds_to_mean() -> None:
     mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
     shift = jnp.ones((4, 1))
     shifted = shift_loc(mvn, shift)
+    assert isinstance(shifted, dist.MultivariateNormal)
     assert jnp.allclose(shifted.loc, jnp.ones(4))
 
 
@@ -83,8 +86,9 @@ def test_mvn_slice_time_marginal_block() -> None:
     cov = _ar_covariance(6, 0.5)
     mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
     sliced = slice_time(mvn, slice(1, 4))
+    assert isinstance(sliced, dist.MultivariateNormal)
     assert sliced.loc.shape == (3,)
-    assert sliced.covariance_matrix.shape == (3, 3)
+    assert jnp.asarray(sliced.covariance_matrix).shape == (3, 3)
 
 
 def test_gp_noise_end_to_end() -> None:
@@ -94,10 +98,10 @@ def test_gp_noise_end_to_end() -> None:
         time = h.duration
         sigma = numpyro.sample("sigma", dist.HalfNormal(1.0))
         rho = numpyro.sample("rho", dist.Beta(2.0, 2.0))
-        cov = _ar_covariance(time, rho) * sigma**2
+        cov = _ar_covariance(time, jnp.asarray(rho)) * sigma**2
         noise = dist.MultivariateNormal(loc=jnp.zeros(time), covariance_matrix=cov)
         level = numpyro.sample("level", dist.Normal(0.0, 1.0))
-        predict(h, noise, level + jnp.zeros((time, 1)))
+        predict(h, noise, jnp.asarray(level) + jnp.zeros((time, 1)))
 
     model = forecasting_model(gp_body)
     data = random.normal(random.PRNGKey(0), (12, 1))

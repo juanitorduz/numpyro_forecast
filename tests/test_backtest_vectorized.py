@@ -7,7 +7,9 @@ and the I6 acceptance check that a subsequent eager ``fit_svi`` with a fresh
 guide runs without an ``UnexpectedTracerError``.
 """
 
+import types
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 
 import jax.numpy as jnp
 import numpyro
@@ -216,7 +218,7 @@ def test_window_count_matches_formula(duration: int, train: int, test: int, stri
 
 
 def test_single_svi_compilation(
-    count_compilations: Callable[[], object],
+    count_compilations: Callable[[], AbstractContextManager[types.SimpleNamespace]],
 ) -> None:
     """I3: the fused fit is O(1) in window count, not O(num_windows).
 
@@ -231,7 +233,7 @@ def test_single_svi_compilation(
     data, cov = _series(duration)
 
     def run() -> int:
-        with count_compilations() as tally:  # type: ignore[operator]
+        with count_compilations() as tally:
             result = backtest_vectorized(
                 random.PRNGKey(0),
                 data,
@@ -244,13 +246,13 @@ def test_single_svi_compilation(
                 num_samples=10,
             )
             jax.block_until_ready(result.losses)
-        return int(tally.count)  # type: ignore[attr-defined]
+        return int(tally.count)
 
     first = run()
     # First call may compile several vmapped stages (fit, posterior, forecast, metrics).
     assert first < 50
 
-    with count_compilations() as tally:  # type: ignore[operator]
+    with count_compilations() as tally:
         result = backtest_vectorized(
             random.PRNGKey(0),
             data,
@@ -264,7 +266,7 @@ def test_single_svi_compilation(
         )
         jax.block_until_ready(result.losses)
     # Same shapes should not trigger a full recompile storm (allow a few residual).
-    assert tally.count <= max(first, 1)  # type: ignore[attr-defined]
+    assert tally.count <= max(first, 1)
 
 
 def test_no_tracer_leak_on_subsequent_eager_fit() -> None:

@@ -23,6 +23,7 @@ from numpyro.infer.reparam import Reparam
 
 from numpyro_forecast.functional import (
     Horizon,
+    Transition,
     _require_covariates_extend_data,
     _require_positive_num_samples,
     draw_posterior,
@@ -30,6 +31,7 @@ from numpyro_forecast.functional import (
     fit_svi,
 )
 from numpyro_forecast.functional import forecast as _forecast
+from numpyro_forecast.functional import markov_time_series as _markov_time_series
 from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_glm as _predict_glm
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
@@ -162,11 +164,8 @@ class ForecastingModel(abc.ABC):
     def markov_time_series(
         self,
         name: str,
-        init_carry: object,
-        transition: Callable[
-            [object, Array | None],
-            tuple[dist.Distribution, Callable[[Array], object]],
-        ],
+        init_carry: Any,
+        transition: Transition,
         xs: Array | None = None,
         *,
         plates: Sequence[tuple[str, int]] = (),
@@ -174,10 +173,42 @@ class ForecastingModel(abc.ABC):
     ) -> Array:
         """Sample a Markov (state-space) latent over the full horizon.
 
-        Thin wrapper over :func:`numpyro_forecast.functional.markov_time_series`.
-        """
-        from numpyro_forecast.functional import markov_time_series as _markov_time_series
+        Thin wrapper over :func:`numpyro_forecast.functional.markov_time_series`
+        that threads this model's train/forecast horizon. In-sample steps run in a
+        ``scan`` under site ``name``; the forecast horizon runs in a second scan
+        under ``f"{name}_future"`` seeded by the final in-sample carry, so the guide
+        never sees the future site.
 
+        Parameters
+        ----------
+        name
+            Sample-site name for the in-sample scan; the forecast scan uses
+            ``f"{name}_future"``.
+        init_carry
+            Initial carry PyTree fed to the first transition step.
+        transition
+            Callable ``(carry, x_t) -> (dist_t, carry_fn)``: ``dist_t`` is the
+            per-step observation distribution (its per-step shape must carry the
+            trailing observation dimension) and ``carry_fn(z_t)`` builds the next
+            carry from the sampled latent ``z_t``. The wrapper owns the ``sample``
+            statement, so the Markov structure cannot be broken by resampling.
+        xs
+            Optional exogenous inputs spanning the full horizon with time at axis
+            ``-2``; split and moved into scan layout internally. ``None`` for
+            autonomous dynamics.
+        plates
+            ``(name, size)`` pairs opened inside the scan body around the sample
+            statement (the only placement NumPyro accepts around a scan).
+        reparam_config
+            Optional site-name to :class:`~numpyro.infer.reparam.Reparam` mapping
+            applied inside the scan body.
+
+        Returns
+        -------
+        Array
+            The latent over the full horizon in package layout
+            ``(*plate_batch, duration, obs)`` (time at axis ``-2``).
+        """
         return _markov_time_series(
             self._require_horizon(),
             name,

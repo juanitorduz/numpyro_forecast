@@ -2,7 +2,7 @@
 
 import types
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 
 import jax
 import jax.numpy as jnp
@@ -61,7 +61,7 @@ _install_compile_listener()
 
 
 @pytest.fixture
-def count_compilations() -> Callable[[], object]:
+def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleNamespace]]:
     """Return a factory of context managers that count backend compilations.
 
     Usage::

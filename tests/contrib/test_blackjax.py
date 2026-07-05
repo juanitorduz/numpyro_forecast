@@ -240,6 +240,41 @@ def test_pathfinder_constrained_support() -> None:
     assert bool(jnp.all(post["drift_scale"] > 0.0))
 
 
+def test_pathfinder_draw_posterior_splits_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pathfinder draw splits rng_key: model init and sampling get distinct subkeys."""
+    import blackjax
+
+    import numpyro_forecast.contrib.blackjax as bj
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(
+        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
+    )
+
+    captured: dict[str, Array] = {}
+    real_init = bj.initialize_model
+    real_sample = blackjax.vi.pathfinder.sample
+
+    def spy_init(rng_key: Array, *args: object, **kwargs: object) -> object:
+        captured["init"] = rng_key
+        return real_init(rng_key, *args, **kwargs)
+
+    def spy_sample(rng_key: Array, *args: object, **kwargs: object) -> object:
+        captured["sample"] = rng_key
+        return real_sample(rng_key, *args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(bj, "initialize_model", spy_init)
+    monkeypatch.setattr(blackjax.vi.pathfinder, "sample", spy_sample)
+
+    parent = random.PRNGKey(2)
+    draw_posterior(parent, fit, 50)
+
+    assert not jnp.array_equal(captured["init"], captured["sample"])
+    assert not jnp.array_equal(captured["init"], parent)
+    assert not jnp.array_equal(captured["sample"], parent)
+
+
 def test_pathfinder_forecast_composes() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     forecaster = PathfinderForecaster(

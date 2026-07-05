@@ -188,11 +188,15 @@ def time_series(
 
 
 Transition = Callable[
-    [object, Array | None],
-    tuple[dist.Distribution, Callable[[Array], object]],
+    [Any, Array | None],
+    tuple[dist.Distribution, Callable[[Array], Any]],
 ]
 """(carry, x_t) -> (dist_t, carry_fn) where carry_fn(z_t) builds the next carry
-from the *sampled* latent. The wrapper owns the sample statement."""
+from the *sampled* latent. The wrapper owns the sample statement.
+
+``carry`` is an arbitrary PyTree (hence ``Any``): typing it as ``object`` would,
+by function-parameter contravariance, reject every concretely-typed transition a
+user might write (e.g. ``carry: Array``)."""
 
 
 @contextmanager
@@ -233,7 +237,7 @@ def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
 def markov_time_series(
     h: Horizon,
     name: str,
-    init_carry: object,
+    init_carry: Any,
     transition: Transition,
     xs: Array | None = None,
     *,
