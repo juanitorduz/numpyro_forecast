@@ -16,6 +16,7 @@ from numpyro_forecast.functional import (
     Horizon,
     MCMCFit,
     SVIFit,
+    _chunked_draws,
     _pad_posterior,
     _predict,
     draw_posterior,
@@ -502,6 +503,42 @@ def test_pad_posterior_no_pad_when_already_multiple() -> None:
     padded, num = _pad_posterior(posterior, 4)
     assert num == 8
     assert padded["x"] is posterior["x"]
+
+
+def test_chunked_draws_pads_splits_and_truncates() -> None:
+    """The chunk driver feeds fixed-size chunks, distinct subkeys, and truncates the pad."""
+    calls: list[tuple[Array, tuple[int, ...]]] = []
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        calls.append((key, post["x"].shape))
+        return post["x"] * 2.0
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    out = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    # 10 samples pad to 12 = 3 chunks of 4; the result is cut back to 10.
+    assert out.shape == (10, 1)
+    assert jnp.allclose(out, posterior["x"] * 2.0)
+    assert [shape for _, shape in calls] == [(4, 1), (4, 1), (4, 1)]
+    keys = [key for key, _ in calls] + [random.PRNGKey(0)]
+    raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
+    assert len(set(raw)) == len(raw)  # per-chunk subkeys distinct, parent unused
+
+
+@pytest.mark.parametrize("batch_size", [None, 10, 64])
+def test_chunked_draws_unchunked_passthrough(batch_size: int | None) -> None:
+    """batch_size None or >= the sample count calls predict_fn once with the parent key."""
+    calls: list[Array] = []
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        calls.append(key)
+        return post["x"]
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    parent = random.PRNGKey(0)
+    out = _chunked_draws(parent, predict_fn, posterior, batch_size)
+    assert out.shape == (10, 1)
+    assert len(calls) == 1
+    assert jnp.array_equal(random.key_data(calls[0]), random.key_data(parent))
 
 
 @pytest.mark.parametrize("num_samples", [1, 3, 4, 5, 12])

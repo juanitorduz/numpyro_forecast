@@ -736,6 +736,51 @@ def _pad_posterior(posterior: dict[str, Array], batch_size: int) -> tuple[dict[s
     return padded, num
 
 
+def _chunked_draws(
+    rng_key: Array,
+    predict_fn: Callable[[Array, dict[str, Array]], Array],
+    posterior: dict[str, Array],
+    batch_size: int | None,
+) -> Array:
+    """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
+
+    Shared chunk driver for :func:`forecast` and :func:`predict_in_sample`.
+    With ``batch_size`` ``None`` (or at least the sample count) ``predict_fn``
+    is called once on the full posterior with ``rng_key`` itself. Otherwise the
+    posterior is padded to a whole multiple of ``batch_size``
+    (:func:`_pad_posterior`) so every chunk shares one shape and the jitted
+    ``predict_fn`` compiles exactly once; one subkey is split per chunk, and
+    the pad draws are discarded by the final slice.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key; consumed directly when unchunked, split per chunk otherwise.
+    predict_fn
+        ``(rng_key, posterior) -> draws`` with the sample axis leading.
+    posterior
+        Posterior samples of the latent sites, sample axis leading.
+    batch_size
+        Optional chunk size (caps peak memory).
+
+    Returns
+    -------
+    Array
+        The stitched draws for the original (pre-pad) sample count.
+    """
+    num_samples = next(iter(posterior.values())).shape[0]
+    if batch_size is None or batch_size >= num_samples:
+        return predict_fn(rng_key, posterior)
+    padded, num = _pad_posterior(posterior, batch_size)
+    num_padded = next(iter(padded.values())).shape[0]
+    keys = random.split(rng_key, num_padded // batch_size)
+    chunks = [
+        predict_fn(keys[i], _index_tree(padded, slice(start, start + batch_size)))
+        for i, start in enumerate(range(0, num_padded, batch_size))
+    ]
+    return jnp.concatenate(chunks, axis=0)[:num]
+
+
 def fit_svi(
     rng_key: Array,
     model: ForecastModel,
@@ -1197,24 +1242,11 @@ def forecast(
     changes the PRNG stream layout and therefore the exact draws.
     """
     _require_covariates_extend_data(data, covariates)
-    num_samples = next(iter(posterior.values())).shape[0]
-    if batch_size is None or batch_size >= num_samples:
-        return _predict(rng_key, model, posterior, data, covariates, parallel=parallel)
-    padded, num = _pad_posterior(posterior, batch_size)
-    num_padded = next(iter(padded.values())).shape[0]
-    keys = random.split(rng_key, num_padded // batch_size)
-    chunks = [
-        _predict(
-            keys[i],
-            model,
-            _index_tree(padded, slice(start, start + batch_size)),
-            data,
-            covariates,
-            parallel=parallel,
-        )
-        for i, start in enumerate(range(0, num_padded, batch_size))
-    ]
-    return jnp.concatenate(chunks, axis=0)[:num]
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        return _predict(key, model, post, data, covariates, parallel=parallel)
+
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size)
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
@@ -1280,20 +1312,8 @@ def predict_in_sample(
     Num[Array, " sample *batch time obs"]
         In-sample posterior-predictive draws of the ``obs`` site.
     """
-    num_samples = next(iter(posterior.values())).shape[0]
-    if batch_size is None or batch_size >= num_samples:
-        return _predict_obs(rng_key, model, posterior, covariates, parallel=parallel)
-    padded, num = _pad_posterior(posterior, batch_size)
-    num_padded = next(iter(padded.values())).shape[0]
-    keys = random.split(rng_key, num_padded // batch_size)
-    chunks = [
-        _predict_obs(
-            keys[i],
-            model,
-            _index_tree(padded, slice(start, start + batch_size)),
-            covariates,
-            parallel=parallel,
-        )
-        for i, start in enumerate(range(0, num_padded, batch_size))
-    ]
-    return jnp.concatenate(chunks, axis=0)[:num]
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        return _predict_obs(key, model, post, covariates, parallel=parallel)
+
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size)
