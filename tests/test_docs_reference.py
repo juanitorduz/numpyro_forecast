@@ -33,19 +33,38 @@ def _documented_names() -> set[str]:
 
 
 def _public_api() -> set[str]:
-    """Return ``module.name`` for every public function/class defined in the package."""
+    """Return ``module.name`` for every public function/class defined in the package.
+
+    Uses :func:`pkgutil.walk_packages` (recursive) so subpackages such as
+    ``contrib`` are scanned too, not just top-level modules. This relies on
+    ``contrib`` submodules being importable without their optional dependency
+    (they pull the extra in lazily via ``require``), so walking them does not
+    import ``blackjax``/``optax`` at collection time and invariant I8 (no optional
+    imports on the base leg) is preserved; a genuinely un-importable module is
+    skipped rather than failing the walk.
+    """
+    prefix = f"{numpyro_forecast.__name__}."
     api: set[str] = set()
-    for info in pkgutil.iter_modules(numpyro_forecast.__path__):
-        if info.name.startswith("_") or info.name in IGNORED_MODULES:
+    for info in pkgutil.walk_packages(
+        numpyro_forecast.__path__, prefix=prefix, onerror=lambda _: None
+    ):
+        relative = info.name.removeprefix(prefix)
+        if (
+            any(part.startswith("_") for part in relative.split("."))
+            or relative in IGNORED_MODULES
+        ):
             continue
-        module = importlib.import_module(f"numpyro_forecast.{info.name}")
+        try:
+            module = importlib.import_module(info.name)
+        except ImportError:
+            continue
         for name, obj in inspect.getmembers(
             module, lambda o: inspect.isfunction(o) or inspect.isclass(o)
         ):
             if name.startswith("_"):
                 continue
-            if getattr(obj, "__module__", "") == f"numpyro_forecast.{info.name}":
-                api.add(f"{info.name}.{name}")
+            if getattr(obj, "__module__", "") == info.name:
+                api.add(f"{relative}.{name}")
     return api
 
 

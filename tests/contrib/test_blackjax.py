@@ -134,7 +134,7 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
     assert mclmc_crps <= 2.0 * nuts_crps
 
 
-def _nuts_build_fn(logdensity_fn, rng_key, position, num_warmup):  # type: ignore[no-untyped-def]
+def _nuts_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
     """A minimal custom build_fn wrapping BlackJAX window-adapted NUTS."""
     import blackjax
 
@@ -175,7 +175,7 @@ class RandomWalkForCustom(ForecastingModel):
 _BadState = namedtuple("_BadState", ["position"])
 
 
-def _malformed_build_fn(logdensity_fn, rng_key, position, num_warmup):  # type: ignore[no-untyped-def]
+def _malformed_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
     """Return a state whose position keys do not match the model's sites."""
     return _BadState(position={"not_a_real_site": jnp.zeros(())}), (lambda k, s: (s, None))
 

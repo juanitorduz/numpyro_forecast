@@ -146,6 +146,8 @@ reference:
       - contrib.blackjax.BlackjaxNUTSKernel
       - contrib.blackjax.BlackjaxMCLMCKernel
       - contrib.blackjax.BlackjaxCustomKernel
+      - contrib.blackjax.PathfinderFit
+      - contrib.blackjax.fit_pathfinder
 
   - title: Datasets
     desc: Example datasets used in the tutorials.

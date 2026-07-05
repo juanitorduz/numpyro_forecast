@@ -57,9 +57,11 @@ else:
     KernelLike = object
 
 BuildFn = Callable[..., object]
-"""A blackjax sampler build function ``(logdensity_fn, **kwargs) -> sampler``.
+"""A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
-Consumed by :class:`~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
+Returns ``(inner_state, step_fn)``. ``rng_key`` is first, matching the package's
+rng-key-first convention. Consumed by
+:class:`~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
 """
 
 Metric = Callable[[Array, Array], float]

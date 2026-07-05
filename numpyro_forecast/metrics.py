@@ -84,7 +84,12 @@ def _pinball(pred: Array, truth: Array, quantile: float) -> Array:
     return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
 
 
-def eval_pinball(pred: Array, truth: Array, *, quantile: float = 0.5) -> float:
+def eval_pinball(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+    *,
+    quantile: float = 0.5,
+) -> float:
     r"""Mean pinball (quantile) loss of the forecast ``quantile``.
 
     The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
@@ -128,7 +133,12 @@ def _interval_score(pred: Array, truth: Array, alpha: float) -> Array:
     return (hi - lo + below + above).mean()
 
 
-def eval_interval_score(pred: Array, truth: Array, *, alpha: float = 0.9) -> float:
+def eval_interval_score(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+    *,
+    alpha: float = 0.9,
+) -> float:
     r"""Mean Winkler interval score for the central ``alpha`` prediction interval.
 
     For the central ``alpha`` interval :math:`[l, u]` (the :math:`(1-\alpha)/2`
@@ -162,7 +172,7 @@ def eval_interval_score(pred: Array, truth: Array, *, alpha: float = 0.9) -> flo
     return float(_interval_score(pred, truth, alpha))
 
 
-def make_mase(train_data: Array, *, seasonality: int = 1) -> Metric:
+def make_mase(train_data: Float[Array, " time obs_dim"], *, seasonality: int = 1) -> Metric:
     """Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
     MASE divides the forecast MAE (using the sample median as point estimate) by

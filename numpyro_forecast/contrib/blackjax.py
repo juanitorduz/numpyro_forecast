@@ -70,8 +70,8 @@ class _BlackjaxKernel(MCMCKernel):
 
     def _build(
         self,
-        logdensity_fn: "Any",
         rng_key: Array,
+        logdensity_fn: "Any",
         position: dict[str, Array],
         num_warmup: int,
     ) -> tuple[Any, Any]:
@@ -79,10 +79,10 @@ class _BlackjaxKernel(MCMCKernel):
 
         Parameters
         ----------
-        logdensity_fn
-            The unnormalized log density over the unconstrained ``position``.
         rng_key
             PRNG key for adaptation/initialization.
+        logdensity_fn
+            The unnormalized log density over the unconstrained ``position``.
         position
             Initial unconstrained parameter dictionary.
         num_warmup
@@ -158,7 +158,7 @@ class _BlackjaxKernel(MCMCKernel):
             return -potential_fn(position)
 
         position = param_info.z if init_params is None else init_params
-        inner_state, step_fn = self._build(logdensity_fn, build_key, position, num_warmup)
+        inner_state, step_fn = self._build(build_key, logdensity_fn, position, num_warmup)
         self._step_fn = step_fn
 
         built_position = inner_state.position
@@ -252,8 +252,8 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
 
     def _build(
         self,
-        logdensity_fn: "Any",
         rng_key: Array,
+        logdensity_fn: "Any",
         position: dict[str, Array],
         num_warmup: int,
     ) -> tuple[Any, Any]:
@@ -294,8 +294,8 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
 
     def _build(
         self,
-        logdensity_fn: "Any",
         rng_key: Array,
+        logdensity_fn: "Any",
         position: dict[str, Array],
         num_warmup: int,
     ) -> tuple[Any, Any]:
@@ -326,7 +326,7 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     """Adapt an arbitrary BlackJAX sampler via a user-supplied ``build_fn``.
 
     The escape hatch for kernels without a dedicated wrapper. ``build_fn`` receives
-    ``(logdensity_fn, rng_key, position, num_warmup)`` and must return
+    ``(rng_key, logdensity_fn, position, num_warmup)`` and must return
     ``(inner_state, step_fn)``, where ``inner_state`` exposes ``.position`` over the
     same sites as the model and ``step_fn`` has signature
     ``(rng_key, inner_state) -> (inner_state, info)``. The base class validates the
@@ -351,12 +351,12 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
 
     def _build(
         self,
-        logdensity_fn: "Any",
         rng_key: Array,
+        logdensity_fn: "Any",
         position: dict[str, Array],
         num_warmup: int,
     ) -> tuple[Any, Any]:
-        result = self._build_fn(logdensity_fn, rng_key, position, num_warmup)
+        result = self._build_fn(rng_key, logdensity_fn, position, num_warmup)
         return cast("tuple[Any, Any]", result)
 
 
