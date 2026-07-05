@@ -3,6 +3,7 @@
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
+import pytest
 from jax import Array, random
 
 from numpyro_forecast.functional import (
@@ -12,8 +13,37 @@ from numpyro_forecast.functional import (
     forecasting_model,
     predict,
 )
-from numpyro_forecast.util import prefix_condition, shift_loc, slice_time
+from numpyro_forecast.util import (
+    _MVN_LAYOUT_MSG,
+    _mvn_time_params,
+    prefix_condition,
+    shift_loc,
+    slice_time,
+)
 from tests.conftest import empty_covariates
+
+
+class _RawMVN(dist.MultivariateNormal):
+    """An MVN with ``loc``/``covariance_matrix`` set directly, bypassing init.
+
+    numpyro normalizes a real ``MultivariateNormal.loc`` to ``(*batch, time)``, so
+    the ``(*batch, time, 1)`` and ``time == 1`` layouts that ``_mvn_time_params``
+    documents cannot be built through the real constructor. This subclass keeps
+    ``isinstance(..., MultivariateNormal)`` true (so the runtime type check
+    accepts it) while exposing the raw arrays those branches expect.
+    """
+
+    def __init__(self, loc: Array, cov: Array) -> None:
+        self.loc = loc
+        self._raw_cov = cov
+
+    @property
+    def covariance_matrix(self) -> Array:
+        return self._raw_cov
+
+
+def _fake_mvn(loc: Array, cov: Array) -> dist.MultivariateNormal:
+    return _RawMVN(loc, cov)
 
 
 def _ar_covariance(time: int, phi: Array | float) -> Array:
@@ -110,3 +140,83 @@ def test_gp_noise_end_to_end() -> None:
     post = draw_posterior(random.PRNGKey(2), fit, 30)
     assert set(post) >= {"sigma", "rho", "level"}
     assert jnp.all(jnp.isfinite(post["sigma"]))
+
+
+@pytest.mark.parametrize("batch", [(), (3,), (2, 3)])
+def test_mvn_time_params_accepts_batched_layouts(batch: tuple[int, ...]) -> None:
+    """A ``(*batch, time)`` loc resolves unchanged (regression: batched was rejected)."""
+    time = 6
+    loc = random.normal(random.PRNGKey(0), (*batch, time))
+    cov = jnp.broadcast_to(jnp.eye(time), (*batch, time, time))
+    mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
+    out_loc, out_cov = _mvn_time_params(mvn)
+    assert out_loc.shape == (*batch, time)
+    assert out_cov.shape == (*batch, time, time)
+    assert jnp.allclose(out_loc, loc)
+
+
+def test_mvn_time_params_squeezes_trailing_singleton() -> None:
+    """A ``(*batch, time, 1)`` loc is squeezed to ``(*batch, time)``."""
+    loc = jnp.arange(3.0 * 6.0).reshape(3, 6, 1)
+    cov = jnp.broadcast_to(jnp.eye(6), (3, 6, 6))
+    out_loc, _ = _mvn_time_params(_fake_mvn(loc, cov))
+    assert out_loc.shape == (3, 6)
+    assert jnp.allclose(out_loc, loc[..., 0])
+
+
+def test_mvn_time_params_time_one_tiebreak() -> None:
+    """When ``time == 1`` the trailing axis is time, so ``(*batch, 1)`` is kept."""
+    loc = jnp.zeros((3, 1))
+    cov = jnp.broadcast_to(jnp.eye(1), (3, 1, 1))
+    out_loc, _ = _mvn_time_params(_fake_mvn(loc, cov))
+    # loc.shape[-1] == time == 1 is matched first, so the axis is treated as time.
+    assert out_loc.shape == (3, 1)
+
+
+def test_mvn_time_params_rejects_mismatched_trailing_axis() -> None:
+    """A loc whose trailing axis is neither time nor squeezable-1 raises."""
+    loc = jnp.zeros((3, 4))  # trailing 4 != time 6, not 1
+    cov = jnp.broadcast_to(jnp.eye(6), (3, 6, 6))
+    with pytest.raises(NotImplementedError, match="MultivariateNormal"):
+        _mvn_time_params(_fake_mvn(loc, cov))
+    with pytest.raises(NotImplementedError):
+        _mvn_time_params(_fake_mvn(jnp.asarray(0.0), jnp.eye(6)))
+
+
+def test_shift_loc_mvn_batched() -> None:
+    """shift_loc on a batched MVN shifts loc elementwise; a non-singleton extra axis raises."""
+    time = 6
+    loc = random.normal(random.PRNGKey(0), (3, time))
+    cov = jnp.broadcast_to(jnp.eye(time), (3, time, time))
+    mvn = dist.MultivariateNormal(loc=loc, covariance_matrix=cov)
+    shift = jnp.ones((3, time, 1))  # (*batch, time, obs=1) as predict supplies
+    shifted = shift_loc(mvn, shift)
+    assert isinstance(shifted, dist.MultivariateNormal)
+    assert jnp.allclose(shifted.loc, loc + 1.0)
+    # A non-size-1 extra trailing axis is a layout error, not a silent truncation.
+    with pytest.raises(NotImplementedError, match=_MVN_LAYOUT_MSG[:20]):
+        shift_loc(mvn, jnp.ones((3, time, 2)))
+
+
+def test_slice_time_and_prefix_condition_mvn_batched() -> None:
+    """Batched slice_time/prefix_condition match the per-batch-element results."""
+    batch, time, t = 3, 6, 3
+    locs = random.normal(random.PRNGKey(1), (batch, time))
+    covs = jnp.stack([_ar_covariance(time, 0.3 + 0.15 * i) for i in range(batch)])
+    mvn = dist.MultivariateNormal(loc=locs, covariance_matrix=covs)
+    data = jnp.zeros((batch, t, 1))
+
+    sliced = slice_time(mvn, slice(1, 4))
+    cond = prefix_condition(mvn, data)
+    assert isinstance(sliced, dist.MultivariateNormal)
+    assert isinstance(cond, dist.MultivariateNormal)
+    assert sliced.loc.shape == (batch, 3)
+
+    for b in range(batch):
+        mvn_b = dist.MultivariateNormal(loc=locs[b], covariance_matrix=covs[b])
+        sliced_b = slice_time(mvn_b, slice(1, 4))
+        cond_b = prefix_condition(mvn_b, data[b])
+        assert isinstance(sliced_b, dist.MultivariateNormal)
+        assert isinstance(cond_b, dist.MultivariateNormal)
+        assert jnp.allclose(sliced.loc[b], sliced_b.loc)
+        assert jnp.allclose(cond.loc[b], cond_b.loc, atol=1e-4)

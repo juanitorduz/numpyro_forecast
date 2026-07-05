@@ -109,11 +109,18 @@ def test_slice_time_independent_slices_base() -> None:
     assert jnp.allclose(sliced.base_dist.loc, loc[:4])
 
 
-def test_slice_time_mvn_invalid_layout_raises() -> None:
-    """MVN surgery requires obs == 1; a multivariate event layout is rejected."""
-    mvn = dist.MultivariateNormal(loc=jnp.zeros((5, 2)), covariance_matrix=jnp.eye(2))
-    with pytest.raises(NotImplementedError, match="obs == 1"):
-        slice_time(mvn, slice(None, 3))
+def test_slice_time_mvn_batched_layout_supported() -> None:
+    """A ``(*batch, time)`` MVN (obs == 1) slices along the time (event) axis.
+
+    Regression for W1.2: a batched loc such as ``(5, time)`` used to be rejected;
+    the time step count is now read from the covariance, so batched surgery works.
+    """
+    mvn = dist.MultivariateNormal(
+        loc=jnp.zeros((5, 4)), covariance_matrix=jnp.broadcast_to(jnp.eye(4), (5, 4, 4))
+    )
+    sliced = slice_time(mvn, slice(None, 2))
+    assert isinstance(sliced, dist.MultivariateNormal)
+    assert sliced.loc.shape == (5, 2)
 
 
 def test_prefix_condition_iid_returns_future_slice() -> None:
@@ -261,12 +268,40 @@ def test_elementwise_membership_is_not_inherited() -> None:
 
 
 def test_register_structural_fake_fails_check(restore_elementwise_registry) -> None:
-    # A family registered as elementwise but with a non-empty event_shape trips
-    # the validation rather than silently producing wrong slices.
+    """The generic elementwise path rejects a mis-declared family.
+
+    ``_VectorFamily`` is a *direct* ``Distribution`` subclass, so ``slice_time``
+    dispatches to the generic elementwise handler (not a dedicated one). Its
+    non-empty ``event_shape`` makes ``_check_elementwise`` reject it rather than
+    silently produce a wrong slice.
+    """
+
     @register_elementwise
-    class _FakeMVN(dist.MultivariateNormal):
+    class _VectorFamily(dist.Distribution):
+        def __init__(self, loc: jnp.ndarray) -> None:
+            self.loc = loc
+            super().__init__(batch_shape=jnp.shape(loc)[:-1], event_shape=jnp.shape(loc)[-1:])
+
+    d = _VectorFamily(jnp.zeros((5, 2)))  # event_shape == (2,)
+    with pytest.raises(NotImplementedError, match="event_shape"):
+        slice_time(d, slice(None, 3))
+
+
+def test_mvn_subclass_dispatches_to_mvn_handler() -> None:
+    """A ``MultivariateNormal`` subclass routes to the dedicated MVN handler (MRO).
+
+    ``singledispatch`` picks the ``MultivariateNormal`` ``slice_time`` handler for
+    any subclass, regardless of the elementwise registry, so the time (event) axis
+    is sliced correctly instead of falling to the generic elementwise path.
+    """
+
+    class _MyMVN(dist.MultivariateNormal):
         pass
 
-    d = _FakeMVN(loc=jnp.zeros((5, 2)), covariance_matrix=jnp.eye(2))
-    with pytest.raises(NotImplementedError, match="obs == 1"):
-        slice_time(d, slice(None, 3))
+    d = _MyMVN(
+        loc=jnp.zeros((5, 3)),  # batch=5, time(event)=3, obs=1
+        covariance_matrix=jnp.broadcast_to(jnp.eye(3), (5, 3, 3)),
+    )
+    sliced = slice_time(d, slice(None, 2))
+    assert isinstance(sliced, dist.MultivariateNormal)
+    assert sliced.loc.shape == (5, 2)

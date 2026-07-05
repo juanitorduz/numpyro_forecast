@@ -400,16 +400,35 @@ _MVN_LAYOUT_MSG = (
 def _mvn_time_params(
     noise_dist: dist.MultivariateNormal,
 ) -> tuple[Array, Array]:
-    """Return ``(loc, cov)`` with loc shaped ``(*batch, time)`` for the supported layout."""
+    """Return ``(loc, cov)`` with ``loc`` shaped ``(*batch, time)``.
+
+    The number of time steps is read from the covariance matrix
+    (``cov.shape[-1]``), which is unambiguous, rather than guessed from ``loc``.
+    Supported ``loc`` layouts:
+
+    - ``(*batch, time)`` -- returned unchanged.
+    - ``(*batch, time, 1)`` -- the trailing singleton is squeezed.
+
+    When ``time == 1`` the two layouts coincide; the tie is resolved in favor of
+    "the trailing axis is time" (i.e. a trailing singleton is squeezed only when
+    the preceding axis already matches ``time``).
+
+    Raises
+    ------
+    NotImplementedError
+        If ``loc`` is 0-d or its trailing axes match neither layout
+        (:data:`_MVN_LAYOUT_MSG`).
+    """
     loc = jnp.asarray(noise_dist.loc)
     cov = jnp.asarray(noise_dist.covariance_matrix)
-    if loc.ndim >= 2 and loc.shape[-1] != 1:
-        raise NotImplementedError(_MVN_LAYOUT_MSG)
-    if loc.ndim >= 1 and loc.shape[-1] == 1:
-        loc = loc[..., 0]
+    time = cov.shape[-1]
     if loc.ndim == 0:
         raise NotImplementedError(_MVN_LAYOUT_MSG)
-    return loc, cov
+    if loc.shape[-1] == time:
+        return loc, cov
+    if loc.shape[-1] == 1 and loc.ndim >= 2 and loc.shape[-2] == time:
+        return loc[..., 0], cov  # (*batch, time, 1) -> (*batch, time)
+    raise NotImplementedError(_MVN_LAYOUT_MSG)
 
 
 def _symmetrize(cov: Array) -> Array:
@@ -449,7 +468,11 @@ def _mvn_prefix_condition(loc: Array, cov: Array, data: Array) -> dist.Multivari
 def _(noise_dist: dist.MultivariateNormal, loc: Array) -> dist.Distribution:
     base_loc, cov = _mvn_time_params(noise_dist)
     shift = loc[..., 0] if loc.ndim >= 1 and loc.shape[-1] == 1 else loc
+    # Squeeze only genuine trailing singletons; a non-size-1 extra axis is a
+    # layout error, not something to silently drop.
     while shift.ndim > base_loc.ndim:
+        if shift.shape[-1] != 1:
+            raise NotImplementedError(_MVN_LAYOUT_MSG)
         shift = shift[..., 0]
     return dist.MultivariateNormal(loc=base_loc + shift, covariance_matrix=cov)
 
