@@ -1,5 +1,7 @@
 """Tests for kernel resolution, run-config validation, and fit_mcmc (roadmap §3)."""
 
+import re
+
 import jax.numpy as jnp
 import pytest
 from conftest import RandomWalkModel, empty_covariates
@@ -47,37 +49,34 @@ def test_resolve_unknown_type_raises() -> None:
         resolve_kernel(42, RandomWalkModel(), None)  # ty: ignore[invalid-argument-type]
 
 
-def test_aies_single_chain_rejected() -> None:
+@pytest.mark.parametrize("kernel_cls", [AIES, ESS])
+@pytest.mark.parametrize(
+    ("num_chains", "chain_method"),
+    [(1, "vectorized"), (4, "sequential")],
+    ids=["single-chain", "non-vectorized"],
+)
+def test_ensemble_kernel_requires_multichain_vectorized(
+    kernel_cls: type[AIES] | type[ESS], num_chains: int, chain_method: str
+) -> None:
+    """Each ensemble run-config violation raises the exact documented message."""
     data = jnp.zeros((15, 1))
     covariates = empty_covariates(15)
-    with pytest.raises(ValueError, match="ensemble sampler"):
+    expected = re.escape(
+        f"{kernel_cls.__name__} is an ensemble sampler: it requires num_chains > 1 "
+        f'and chain_method="vectorized" (got num_chains={num_chains}, '
+        f'chain_method="{chain_method}").'
+    )
+    with pytest.raises(ValueError, match=expected):
         fit_mcmc(
             random.PRNGKey(0),
             RandomWalkModel(),
             data,
             covariates,
-            kernel=AIES,
+            kernel=kernel_cls,
             num_warmup=5,
             num_samples=5,
-            num_chains=1,
-            chain_method="vectorized",
-        )
-
-
-def test_aies_non_vectorized_rejected() -> None:
-    data = jnp.zeros((15, 1))
-    covariates = empty_covariates(15)
-    with pytest.raises(ValueError, match="ensemble sampler"):
-        fit_mcmc(
-            random.PRNGKey(0),
-            RandomWalkModel(),
-            data,
-            covariates,
-            kernel=ESS,
-            num_warmup=5,
-            num_samples=5,
-            num_chains=4,
-            chain_method="sequential",
+            num_chains=num_chains,
+            chain_method=chain_method,
         )
 
 
@@ -102,7 +101,9 @@ def test_numpyro_kernels_fit_and_forecast(kernel) -> None:
     assert jnp.all(jnp.isfinite(fc))
 
 
-def test_aies_vectorized_smoke() -> None:
+@pytest.mark.parametrize("kernel_cls", [AIES, ESS])
+def test_ensemble_kernel_accepts_valid_config(kernel_cls: type[AIES] | type[ESS]) -> None:
+    """num_chains > 1 with chain_method='vectorized' passes validation and fits."""
     data = jnp.zeros((12, 1))
     covariates = empty_covariates(12)
     fit = fit_mcmc(
@@ -110,7 +111,7 @@ def test_aies_vectorized_smoke() -> None:
         RandomWalkModel(),
         data,
         covariates,
-        kernel=AIES,
+        kernel=kernel_cls,
         num_warmup=10,
         num_samples=10,
         num_chains=4,
