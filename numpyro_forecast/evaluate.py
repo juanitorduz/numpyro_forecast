@@ -901,7 +901,7 @@ def backtest_vectorized(
         Number of SVI steps per window.
     optim
         Optimizer specification resolved by
-        :func:`~numpyro_forecast.functional.resolve_optimizer`.
+        :func:`~numpyro_forecast.functional.svi.resolve_optimizer`.
     guide
         Guide specification; must resolve to an ``AutoGuide`` (hand-written
         guides are not vmappable, use :func:`backtest`).

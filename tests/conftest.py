@@ -17,6 +17,16 @@ from numpyro_forecast.forecaster import (
     HMCForecaster,
     _BaseForecaster,
 )
+from numpyro_forecast.functional import (
+    Horizon,
+    MCMCFit,
+    SVIFit,
+    fit_mcmc,
+    fit_svi,
+    forecasting_model,
+    predict,
+    time_series,
+)
 from numpyro_forecast.typing import ForecastModel
 
 # ---------------------------------------------------------------------------
@@ -118,6 +128,35 @@ class RandomWalkModel(ForecastingModel):
 def empty_covariates(duration: int) -> Array:
     """Return a ``(duration, 0)`` covariate array (no exogenous features)."""
     return jnp.zeros((duration, 0))
+
+
+def rw_body(h: Horizon, covariates: Array) -> None:
+    """Random-walk model body using the functional primitives (shared test helper)."""
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+    drift = time_series(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+
+def svi_fit(t: int, num_steps: int = 40) -> SVIFit:
+    """Fit the shared random-walk body with SVI on a synthetic series (test helper)."""
+    model = forecasting_model(rw_body)
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
+    return fit_svi(random.PRNGKey(1), model, data, empty_covariates(t), num_steps=num_steps)
+
+
+def mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
+    """Fit the shared random-walk body with MCMC on a synthetic series (test helper)."""
+    model = forecasting_model(rw_body)
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
+    return fit_mcmc(
+        random.PRNGKey(1),
+        model,
+        data,
+        empty_covariates(t),
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+    )
 
 
 @pytest.fixture

@@ -3,10 +3,10 @@
 This is the JAX/NumPyro port of Pyro's ``pyro.contrib.forecast.forecaster``.
 The classes here are thin object-oriented shims over the functional core in
 :mod:`numpyro_forecast.functional`: :class:`ForecastingModel` threads the
-train/forecast :class:`~numpyro_forecast.functional.Horizon` for you, and the
-forecaster classes wrap :func:`~numpyro_forecast.functional.fit_svi` /
-:func:`~numpyro_forecast.functional.fit_mcmc` plus
-:func:`~numpyro_forecast.functional.forecast`. The two styles are fully
+train/forecast :class:`~numpyro_forecast.functional.models.Horizon` for you, and the
+forecaster classes wrap :func:`~numpyro_forecast.functional.svi.fit_svi` /
+:func:`~numpyro_forecast.functional.mcmc.fit_mcmc` plus
+:func:`~numpyro_forecast.functional.prediction.forecast`. The two styles are fully
 interchangeable: both consume a model callable ``(covariates, data=None)`` and a
 posterior dict of latent draws.
 """
@@ -24,8 +24,6 @@ from numpyro.infer.reparam import Reparam
 from numpyro_forecast.functional import (
     Horizon,
     Transition,
-    _require_covariates_extend_data,
-    _require_positive_num_samples,
     draw_posterior,
     fit_mcmc,
     fit_svi,
@@ -36,6 +34,10 @@ from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_glm as _predict_glm
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
+from numpyro_forecast.functional._validation import (
+    _require_covariates_extend_data,
+    _require_positive_num_samples,
+)
 from numpyro_forecast.typing import (
     Array,
     ForecastModel,
@@ -56,7 +58,7 @@ class ForecastingModel(abc.ABC):
     This is the object-oriented façade over the functional API: :meth:`time_series`
     and :meth:`predict` delegate to the free functions in
     :mod:`numpyro_forecast.functional`, passing the current
-    :class:`~numpyro_forecast.functional.Horizon`.
+    :class:`~numpyro_forecast.functional.models.Horizon`.
     """
 
     def __init__(self) -> None:
@@ -107,7 +109,7 @@ class ForecastingModel(abc.ABC):
     ) -> Array:
         """Sample a time-varying latent over the full horizon.
 
-        Thin wrapper over :func:`numpyro_forecast.functional.time_series`.
+        Thin wrapper over :func:`numpyro_forecast.functional.models.time_series`.
 
         Parameters
         ----------
@@ -129,7 +131,7 @@ class ForecastingModel(abc.ABC):
     def predict(self, noise_dist: dist.Distribution, prediction: Array) -> None:
         """Register the observation/forecast sites for the model.
 
-        Thin wrapper over :func:`numpyro_forecast.functional.predict`.
+        Thin wrapper over :func:`numpyro_forecast.functional.models.predict`.
 
         Parameters
         ----------
@@ -148,7 +150,7 @@ class ForecastingModel(abc.ABC):
     ) -> None:
         """Register GLM-style observation/forecast sites from a latent predictor.
 
-        Thin wrapper over :func:`numpyro_forecast.functional.predict_glm`.
+        Thin wrapper over :func:`numpyro_forecast.functional.models.predict_glm`.
 
         Parameters
         ----------
@@ -173,7 +175,7 @@ class ForecastingModel(abc.ABC):
     ) -> Array:
         """Sample a Markov (state-space) latent over the full horizon.
 
-        Thin wrapper over :func:`numpyro_forecast.functional.markov_time_series`
+        Thin wrapper over :func:`numpyro_forecast.functional.models.markov_time_series`
         that threads this model's train/forecast horizon. In-sample steps run in a
         ``scan`` under site ``name``; the forecast horizon runs in a second scan
         under ``f"{name}_future"`` seeded by the final in-sample carry, so the guide
@@ -276,7 +278,7 @@ class _BaseForecaster(abc.ABC):
         parallel
             Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
             higher peak memory) or map it serially (``False``). See
-            :func:`numpyro_forecast.functional.forecast`.
+            :func:`numpyro_forecast.functional.prediction.forecast`.
 
         Returns
         -------
@@ -328,7 +330,7 @@ class _BaseForecaster(abc.ABC):
         parallel
             Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
             higher peak memory) or map it serially (``False``). See
-            :func:`numpyro_forecast.functional.predict_in_sample`.
+            :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
 
         Returns
         -------
@@ -370,12 +372,12 @@ class Forecaster(_BaseForecaster):
         Covariates with time at axis ``-2`` and the same duration as ``data``.
     guide
         Guide specification resolved by
-        :func:`~numpyro_forecast.functional.resolve_guide`: ``None``
+        :func:`~numpyro_forecast.functional.svi.resolve_guide`: ``None``
         (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
         ``functools.partial`` factory of one, or a hand-written guide function.
     optim
         Optimizer specification resolved by
-        :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
+        :func:`~numpyro_forecast.functional.svi.resolve_optimizer`: ``None``
         (``Adam(0.01)``), a positive scalar learning rate, an
         ``optax.GradientTransformation``, or a ``_NumPyroOptim``.
     num_steps
@@ -440,7 +442,7 @@ class HMCForecaster(_BaseForecaster):
         Covariates with time at axis ``-2`` and the same duration as ``data``.
     kernel
         Kernel specification resolved by
-        :func:`~numpyro_forecast.functional.resolve_kernel`: ``None`` (``NUTS``),
+        :func:`~numpyro_forecast.functional.mcmc.resolve_kernel`: ``None`` (``NUTS``),
         an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
     kernel_kwargs
         Extra keyword arguments for the kernel constructor (only with ``None``

@@ -25,25 +25,25 @@ if TYPE_CHECKING:
     # ``object`` so the beartype import hook accepts any resolvable form without
     # forcing an ``optax``/``numpyro`` import at package import time.
     OptimizerLike = float | int | _NumPyroOptim | optax.GradientTransformation | None
-    """An optimizer specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
+    """An optimizer specification accepted by :func:`~numpyro_forecast.functional.svi.fit_svi`.
 
-    Resolved by :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
+    Resolved by :func:`~numpyro_forecast.functional.svi.resolve_optimizer`: ``None``
     (default ``Adam``), a positive scalar learning rate, an
     ``optax.GradientTransformation``, or a NumPyro ``_NumPyroOptim``.
     """
 
     GuideLike = AutoGuide | type[AutoGuide] | Callable[..., object] | None
-    """A guide specification accepted by :func:`~numpyro_forecast.functional.fit_svi`.
+    """A guide specification accepted by :func:`~numpyro_forecast.functional.svi.fit_svi`.
 
-    Resolved by :func:`~numpyro_forecast.functional.resolve_guide`: ``None``
+    Resolved by :func:`~numpyro_forecast.functional.svi.resolve_guide`: ``None``
     (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or a
     ``functools.partial`` factory of one, or a hand-written guide function.
     """
 
     KernelLike = MCMCKernel | type[MCMCKernel] | None
-    """A kernel specification accepted by :func:`~numpyro_forecast.functional.fit_mcmc`.
+    """A kernel specification accepted by :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
 
-    Resolved by :func:`~numpyro_forecast.functional.resolve_kernel`: ``None``
+    Resolved by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel`: ``None``
     (``NUTS``), an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
     """
 else:
@@ -75,7 +75,7 @@ ForecastModel = Callable[..., None]
 """A NumPyro forecasting model callable ``(covariates, data=None) -> None``.
 
 Both an OOP :class:`~numpyro_forecast.forecaster.ForecastingModel` instance and a
-plain function built by :func:`numpyro_forecast.functional.forecasting_model`
+plain function built by :func:`numpyro_forecast.functional.models.forecasting_model`
 satisfy this. Typed loosely (a bare ``Callable``) on purpose: the package's
 beartype import hook performs an ``isinstance``-style check on annotated
 parameters, so a nominal ``ForecastingModel`` hint would reject functional
