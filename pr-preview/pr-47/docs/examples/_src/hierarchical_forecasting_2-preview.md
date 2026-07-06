@@ -314,7 +314,7 @@ fig.tight_layout();
     prior band shape: (500, 8, 504)
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_88701/741911304.py:98: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_36442/741911304.py:98: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -395,8 +395,8 @@ print(f"Test CRPS:  {crps_test:.4f}")
 ```
 
 
-    Train CRPS: 0.2375
-    Test CRPS:  0.2786
+    Train CRPS: 0.2388
+    Test CRPS:  0.2806
 
 
 # Forecast visualization
@@ -517,7 +517,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_88701/2085423411.py:106: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_36442/2085423411.py:106: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

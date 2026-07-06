@@ -15,7 +15,7 @@ metrics.make_mase(
 ```
 
 
-MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on `train_data`, `mean(|y_t - y_{t-seasonality}|)`. The scale is computed once at factory time; the returned metric has the standard `(pred, truth) -> float` signature.
+MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on `train_data`, `mean(|y_t - y_{t-seasonality}|)`. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see `~numpyro_forecast.typing.Metric`).
 
 
 ## Parameters
@@ -32,7 +32,7 @@ Seasonal period (`>= 1`); `1` is the random-walk naive baseline.
 
 
 `Metric`  
-A `(pred, truth) -> float` callable computing MASE.
+A `(pred, truth)` callable computing MASE as a scalar array.
 
 
 ## Raises

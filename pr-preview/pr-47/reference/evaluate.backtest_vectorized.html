@@ -548,6 +548,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.OptimizerResolutionError</span></span></a>
   </div>
@@ -717,7 +723,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L865-L1014" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L854-L1012" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest_vectorized</span>(</span>
@@ -791,7 +797,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Mapping of metric name to function; defaults to <code>DEFAULT_METRICS</code>.</p>
+<p>Mapping of metric name to function; defaults to <code>DEFAULT_METRICS</code>. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as <code>{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}</code>, is scored inside the single fused computation. Host-side metrics are unsupported here; use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>, or <code>keep_predictions=True</code> and score on the host.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">keep_predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
 <dd>
@@ -825,7 +831,11 @@ The stacked per-window losses, metrics, and window indices.
 </dd>
 <dt><code> <span class="doc-parameter-annotation">VectorizedGuideError</span></code></dt>
 <dd>
-If the resolved guide is not an <code>AutoGuide</code>.
+<p>If the resolved guide is not an <code>AutoGuide</code>.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">VectorizedMetricError</span></code></dt>
+<dd>
+If a metric forces a host conversion under <code>vmap</code> (it is not a pure JAX function).
 </dd>
 </dl>
 </div>

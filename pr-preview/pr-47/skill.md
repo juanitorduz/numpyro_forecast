@@ -93,6 +93,7 @@ Package exception hierarchy raised at resolution and validation boundaries.
 - `exceptions.NumpyroForecastError`
 - `exceptions.BacktestWindowError`
 - `exceptions.VectorizedGuideError`
+- `exceptions.VectorizedMetricError`
 - `exceptions.OptimizerResolutionError`
 - `exceptions.GuideResolutionError`
 - `exceptions.GuideSampleArgsError`

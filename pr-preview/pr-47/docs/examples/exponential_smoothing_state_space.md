@@ -346,13 +346,13 @@ diagnostics.round({"r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
 
 |                       | r_hat | ess_bulk | ess_tail |
 |-----------------------|-------|----------|----------|
-| level_smoothing       | 1.001 | 3499.0   | 3837.0   |
-| trend_smoothing       | 1.000 | 4187.0   | 5045.0   |
-| seasonality_smoothing | 1.001 | 2634.0   | 3290.0   |
-| phi                   | 1.001 | 3574.0   | 3871.0   |
-| noise                 | 1.001 | 3358.0   | 4319.0   |
-| level_init            | 1.003 | 917.0    | 1571.0   |
-| trend_init            | 1.000 | 3785.0   | 4253.0   |
+| level_smoothing       | 1.001 | 3518.0   | 3720.0   |
+| trend_smoothing       | 1.001 | 3845.0   | 3933.0   |
+| seasonality_smoothing | 1.001 | 2437.0   | 3276.0   |
+| phi                   | 1.002 | 3492.0   | 3991.0   |
+| noise                 | 1.001 | 3383.0   | 3855.0   |
+| level_init            | 1.007 | 869.0    | 1398.0   |
+| trend_init            | 1.001 | 3796.0   | 4569.0   |
 
 
 The \\\hat{R}\\ values are close to \\1\\ and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
@@ -509,9 +509,9 @@ for name, value in metrics.items():
 ```
 
 
-                 MAE: 0.2432
-                RMSE: 0.2797
-                CRPS: 0.1648
+                 MAE: 0.2433
+                RMSE: 0.2796
+                CRPS: 0.1651
       coverage (90%): 0.9583
 
 

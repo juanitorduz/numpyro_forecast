@@ -548,6 +548,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.OptimizerResolutionError</span></span></a>
   </div>
@@ -717,7 +723,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L175-L227" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L168-L220" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">make_mase</span>(
@@ -727,7 +733,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on <code>train_data</code>, <code>mean(|y_t - y_{t-seasonality}|)</code>. The scale is computed once at factory time; the returned metric has the standard <code>(pred, truth) -&gt; float</code> signature.</p>
+<p>MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on <code>train_data</code>, <code>mean(|y_t - y_{t-seasonality}|)</code>. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see <code>~numpyro_forecast.typing.Metric</code>).</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -750,7 +756,7 @@ Seasonal period (<code>&gt;= 1</code>); <code>1</code> is the random-walk naive 
 <dl>
 <dt><code> <span class="doc-parameter-annotation">Metric</span></code></dt>
 <dd>
-A <code>(pred, truth) -&gt; float</code> callable computing MASE.
+A <code>(pred, truth)</code> callable computing MASE as a scalar array.
 </dd>
 </dl>
 </div>

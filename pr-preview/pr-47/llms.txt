@@ -75,6 +75,7 @@
 - [exceptions.NumpyroForecastError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.NumpyroForecastError.html)
 - [exceptions.BacktestWindowError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.BacktestWindowError.html)
 - [exceptions.VectorizedGuideError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedGuideError.html)
+- [exceptions.VectorizedMetricError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedMetricError.html)
 - [exceptions.OptimizerResolutionError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.OptimizerResolutionError.html)
 - [exceptions.GuideResolutionError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.GuideResolutionError.html)
 - [exceptions.GuideSampleArgsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.GuideSampleArgsError.html)

@@ -369,8 +369,8 @@ print(f"Test CRPS:  {crps_test:.4f}")
 ```
 
 
-    Train CRPS: 0.2375
-    Test CRPS:  0.2786
+    Train CRPS: 0.2388
+    Test CRPS:  0.2806
 
 
 # Forecast visualization

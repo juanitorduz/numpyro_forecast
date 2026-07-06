@@ -654,7 +654,7 @@ num_chains
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -672,8 +672,9 @@ forecaster_fn
     Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
 metrics
     Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
-    Each function takes ``(pred, truth)`` and returns a float; bind any
-    metric-specific parameters with :func:`functools.partial`, e.g.
+    Each function takes ``(pred, truth)`` and returns a scalar array (see
+    :data:`~numpyro_forecast.typing.Metric`); bind any metric-specific
+    parameters with :func:`functools.partial`, e.g.
     ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
 per_window_metrics
     Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
@@ -732,7 +733,7 @@ Returns
 list[BacktestResult]
     One result per backtest window.
 
-backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, train_window: int, test_window: int, stride: int = 1, num_steps: int = 1001, optim: 'OptimizerLike' = None, guide: 'GuideLike' = None, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
+backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, train_window: int, test_window: int, stride: int = 1, num_steps: int = 1001, optim: 'OptimizerLike' = None, guide: 'GuideLike' = None, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
 
 Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
@@ -776,6 +777,12 @@ num_samples
     Number of forecast samples drawn per window.
 metrics
     Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+    Each metric is vmapped over the window axis, so any pure-JAX mapping,
+    including partial-bound variants such as
+    ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
+    is scored inside the single fused computation. Host-side metrics are
+    unsupported here; use :func:`backtest`, or ``keep_predictions=True``
+    and score on the host.
 keep_predictions
     If ``True``, retain the stacked forecast samples on the result.
 
@@ -793,6 +800,9 @@ BacktestWindowError
     there is no room for a single window.
 VectorizedGuideError
     If the resolved guide is not an ``AutoGuide``.
+VectorizedMetricError
+    If a metric forces a host conversion under ``vmap`` (it is not a pure
+    JAX function).
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, train_walltime: float, test_walltime: float, metrics: dict[str, float], params: dict[str, float] = <factory>, train_metrics: dict[str, float] = <factory>, prediction: jax.Array | None = None) -> None
 
@@ -843,14 +853,14 @@ predictions
     ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
     unless ``keep_predictions=True``.
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], float]] | None = None) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
 A one-call convenience that applies each metric in ``metrics`` to the same
-forecast samples and ground truth. It is the one-shot counterpart to
-:func:`backtest` and is also used internally by :func:`backtest` to score
-each rolling window.
+forecast samples and ground truth, converting to host floats at the end. It
+is the one-shot counterpart to :func:`backtest` and is also used internally
+by :func:`backtest` to score each rolling window.
 
 Metric-specific parameters live with the metric in the ``metrics`` mapping,
 not on this function. To tune a metric, bind its keyword with
@@ -870,8 +880,9 @@ truth
 metrics
     Mapping of metric name to function; when ``None`` defaults to
     :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-    Each function takes ``(pred, truth)`` and returns a float; bind any extra
-    parameters with :func:`functools.partial` (see above).
+    Each function takes ``(pred, truth)`` and returns a scalar array (see
+    :data:`~numpyro_forecast.typing.Metric`); bind any extra parameters
+    with :func:`functools.partial` (see above).
 
 Returns
 -------
@@ -912,10 +923,12 @@ Raises
 ImportError
     If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 
-eval_crps(pred: jax.Array, truth: jax.Array) -> float
+eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
 
 Empirical CRPS averaged over all data elements.
 
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
 Parameters
 ----------
 pred
@@ -925,13 +938,15 @@ truth
 
 Returns
 -------
-float
-    The mean empirical CRPS.
+Array
+    The mean empirical CRPS as a scalar array.
 
-eval_mae(pred: jax.Array, truth: jax.Array) -> float
+eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
 
 Mean absolute error using the forecast sample median as point estimate.
 
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
 Parameters
 ----------
 pred
@@ -941,13 +956,15 @@ truth
 
 Returns
 -------
-float
-    The mean absolute error.
+Array
+    The mean absolute error as a scalar array.
 
-eval_rmse(pred: jax.Array, truth: jax.Array) -> float
+eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
 
 Root mean squared error using the forecast sample mean as point estimate.
 
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
 Parameters
 ----------
 pred
@@ -957,17 +974,19 @@ truth
 
 Returns
 -------
-float
-    The root mean squared error.
+Array
+    The root mean squared error as a scalar array.
 
-eval_coverage(pred: jax.Array, truth: jax.Array, *, alpha: float = 0.9) -> float
+eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
 
 Empirical coverage of the central ``alpha`` prediction interval.
 
 The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
 ``1 - (1 - alpha) / 2`` quantiles of the forecast samples; the metric is the
 fraction of ground-truth values that fall inside it. A well-calibrated
-forecast has coverage close to ``alpha``.
+forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
+:data:`~numpyro_forecast.typing.Metric`); bind a non-default level with
+``functools.partial(eval_coverage, alpha=...)``.
 
 Parameters
 ----------
@@ -976,13 +995,18 @@ pred
 truth
     Ground-truth values (matching ``pred`` without the sample axis).
 alpha
-    Nominal interval level in ``(0, 1)``; when omitted, uses the module
-    default ``_DEFAULT_COVERAGE_ALPHA``.
+    Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
 
 Returns
 -------
-float
-    The fraction of ground-truth values inside the central ``alpha`` interval.
+Array
+    The fraction of ground truth inside the central ``alpha`` interval, as
+    a scalar array.
+
+Raises
+------
+ValueError
+    If ``alpha`` is not strictly inside ``(0, 1)``.
 
 crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jaxtyping.Float[Array, '*batch']
 
@@ -1017,13 +1041,15 @@ Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
 Prediction, and Estimation". *Journal of the American Statistical
 Association*.
 
-eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, quantile: float = 0.5) -> float
+eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, quantile: float = 0.5) -> jax.Array
 
 Mean pinball (quantile) loss of the forecast ``quantile``.
 
 The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
 :math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
-data elements. At ``quantile=0.5`` it is half the mean absolute error.
+data elements. At ``quantile=0.5`` it is half the mean absolute error. A
+pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`);
+``quantile`` is static so each level specializes its own branch.
 
 Parameters
 ----------
@@ -1036,15 +1062,15 @@ quantile
 
 Returns
 -------
-float
-    The mean pinball loss.
+Array
+    The mean pinball loss as a scalar array.
 
 Raises
 ------
 ValueError
     If ``quantile`` is not strictly inside ``(0, 1)``.
 
-eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> float
+eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
 
 Mean Winkler interval score for the central ``alpha`` prediction interval.
 
@@ -1053,6 +1079,7 @@ and :math:`1-(1-\alpha)/2` quantiles), the interval score is
 :math:`(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y<l} + (y -
 u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
 intervals and penalizes ground truth falling outside them; lower is better.
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
 
 Parameters
 ----------
@@ -1065,23 +1092,23 @@ alpha
 
 Returns
 -------
-float
-    The mean interval score.
+Array
+    The mean interval score as a scalar array.
 
 Raises
 ------
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``.
 
-make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], float]
+make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
 
 Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
 MASE divides the forecast MAE (using the sample median as point estimate) by
 the in-sample MAE of the seasonal-naive forecast on ``train_data``,
 ``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
-time; the returned metric has the standard ``(pred, truth) -> float``
-signature.
+time; the returned metric has the standard scalar-array signature (see
+:data:`~numpyro_forecast.typing.Metric`).
 
 Parameters
 ----------
@@ -1094,7 +1121,7 @@ seasonality
 Returns
 -------
 Metric
-    A ``(pred, truth) -> float`` callable computing MASE.
+    A ``(pred, truth)`` callable computing MASE as a scalar array.
 
 Raises
 ------
@@ -1346,6 +1373,15 @@ The vectorized backtest requires an ``AutoGuide``.
 Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when the
 resolved guide is hand-written: those are not vmappable, use
 :func:`~numpyro_forecast.evaluate.backtest` instead.
+
+VectorizedMetricError(message: str | None = None) -> None
+
+A metric is not vmappable in the vectorized backtest.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when a
+metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
+under ``vmap``. Metrics must be pure JAX functions returning a scalar
+array; see :data:`~numpyro_forecast.typing.Metric`.
 
 OptimizerResolutionError(message: str | None = None) -> None
 

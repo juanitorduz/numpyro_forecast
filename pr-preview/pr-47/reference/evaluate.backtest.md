@@ -52,7 +52,7 @@ Factory returning a fresh [ForecastingModel](forecaster.ForecastingModel.md#nump
 Factory returning a fitted forecaster (defaults to [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster)).
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each function takes `(pred, truth)` and returns a float; bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
+Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each function takes `(pred, truth)` and returns a scalar array (see `~numpyro_forecast.typing.Metric`); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
 
 `per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None`  
 Optional `(t0, t1, t2) -> Mapping[str, Metric]` callable producing extra metrics merged over `metrics` for each window. Use it for window-dependent metrics such as a MASE scaled by that window's training data ([numpyro_forecast.metrics.make_mase()](metrics.make_mase.md#numpyro_forecast.metrics.make_mase)).

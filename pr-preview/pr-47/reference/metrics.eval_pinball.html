@@ -577,6 +577,12 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.OptimizerResolutionError</span></span></a>
   </div>
@@ -746,7 +752,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L87-L121" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L79-L118" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">eval_pinball</span>(
@@ -757,7 +763,7 @@ window.Quarto = {
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The pinball loss for the forecast <span class="math inline">\(\hat q\)</span> of quantile <span class="math inline">\(\tau\)</span> is <span class="math inline">\(\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))\)</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error.</p>
+<p>The pinball loss for the forecast <span class="math inline">\(\hat q\)</span> of quantile <span class="math inline">\(\tau\)</span> is <span class="math inline">\(\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))\)</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>); <code>quantile</code> is static so each level specializes its own branch.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -782,9 +788,9 @@ Target quantile in <code>(0, 1)</code>.
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">float</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-The mean pinball loss.
+The mean pinball loss as a scalar array.
 </dd>
 </dl>
 </div>

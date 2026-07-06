@@ -15,6 +15,7 @@ Instead of hand-writing the NumPyro model and a bespoke prediction loop, we subc
 
 ``` python
 from functools import partial
+from time import perf_counter
 
 import arviz as az
 import jax.numpy as jnp
@@ -27,7 +28,14 @@ from numpyro.infer import Predictive
 from numpyro.infer.reparam import LocScaleReparam
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel, backtest, eval_coverage, eval_crps
+from numpyro_forecast import (
+    Forecaster,
+    ForecastingModel,
+    backtest,
+    backtest_vectorized,
+    eval_coverage,
+    eval_crps,
+)
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.functional import Horizon, forecasting_model, predict, time_series
 from numpyro_forecast.typing import Array
@@ -629,6 +637,77 @@ The mechanism behind the two curves is the random-walk level. Each forecast is a
 Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0375` versus `0.0473`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
 
 
+## Vectorized rolling backtest
+
+The rolling loop above refits one fold at a time, so each fold pays its own SVI compilation and Python-loop overhead. Because every fold shares the same model, guide, and window sizes, [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) can instead fit **all folds in a single vmapped SVI run**: model, guide, and optimizer compile once, and the per-fold losses, forecasts, and metrics come out stacked along a leading window axis.
+
+The `metrics` mapping needs no change at all. Metrics are pure JAX scalar kernels, so the partial-bound \\50\\\\ and \\94\\\\ coverage levels defined earlier are scored inside the same single fused computation, right alongside the default CRPS. The two backtests are estimator-equivalent but differ in PRNG stream layout, so the per-fold numbers agree statistically rather than bitwise.
+
+
+``` python
+rng_key, rng_subkey = random.split(rng_key)
+start_seconds = perf_counter()
+vectorized_results = backtest_vectorized(
+    rng_subkey,
+    data,
+    covariates,
+    UnivariateForecaster,
+    train_window=104,  # same rolling configuration as the loop run above
+    test_window=52,
+    stride=52,
+    num_steps=50_000,
+    optim=Adam(step_size=0.005),
+    num_samples=num_backtest_samples,
+    metrics=metrics,  # same custom mapping, including both partial-bound coverage levels
+)
+vectorized_seconds = perf_counter() - start_seconds
+loop_seconds = sum(r.train_walltime + r.test_walltime for r in rolling_results)
+
+vectorized_oos_crps = np.asarray(vectorized_results.metrics["crps"])
+vectorized_cov_50 = float(vectorized_results.metrics["coverage_50"].mean())
+vectorized_cov_94 = float(vectorized_results.metrics["coverage_94"].mean())
+
+print(f"folds: {vectorized_results.t0.shape[0]} in one vmapped SVI fit")
+print(
+    f"wall-clock: vectorized {vectorized_seconds:.1f}s (incl. compile)"
+    f"  |  loop {loop_seconds:.1f}s"
+)
+print(f"vectorized mean out-of-sample CRPS: {vectorized_oos_crps.mean():.4f}")
+print(f"loop       mean out-of-sample CRPS: {np.mean(rolling_oos_crps):.4f}")
+print(f"vectorized mean 50% coverage: {vectorized_cov_50:.2f}  (nominal 0.50)")
+print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
+```
+
+
+    folds: 7 in one vmapped SVI fit
+    wall-clock: vectorized 2.1s (incl. compile)  |  loop 19.9s
+    vectorized mean out-of-sample CRPS: 0.0434
+    loop       mean out-of-sample CRPS: 0.0473
+    vectorized mean 50% coverage: 0.50  (nominal 0.50)
+    vectorized mean 94% coverage: 0.95  (nominal 0.94)
+
+
+``` python
+fig, ax = plt.subplots()
+ax.plot(split_weeks, rolling_oos_crps, "s--", color="C1", label="loop rolling backtest")
+ax.plot(split_weeks, vectorized_oos_crps, "^-", color="C2", label="backtest_vectorized")
+ax.legend()
+ax.set(
+    xlabel="train/test split week",
+    ylabel="out-of-sample CRPS",
+    title="Loop vs vectorized rolling backtest: out-of-sample CRPS per fold",
+);
+```
+
+
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-19-output-1.png" class="figure-img" width="1011" height="611" /></p>
+</figure>
+
+
+Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, an `AutoGuide`, and pure JAX metrics, which the coverage partials above already are.
+
+
 # Functional API
 
 Everything so far went through the object-oriented [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel), but that class is only a thin shim over a functional core in `numpyro_forecast.functional`. The same model can be written as a plain function `(Horizon, covariates) -> None` that calls the free functions [time_series](../../reference/functional.time_series.md#numpyro_forecast.functional.time_series) and [predict](../../reference/functional.predict.md#numpyro_forecast.functional.predict) (the exact counterparts of the `self.time_series(...)` and `self.predict(...)` methods used above). The [Horizon](../../reference/functional.Horizon.md#numpyro_forecast.functional.Horizon) carries the train/forecast split that the class otherwise tracks as mutable state.
@@ -700,4 +779,4 @@ This local level model with seasonality is a solid baseline. From here a few dir
 - Orduz, J. [*Univariate time series forecasting with NumPyro*](https://juanitorduz.github.io/numpyro_forecasting-univariate/).
 - Pyro. [*Forecasting I: Univariate, Heavy Tailed*](https://pyro.ai/examples/forecasting_i.html).
 
-[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#cbf57589)
+[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#c90cd179)

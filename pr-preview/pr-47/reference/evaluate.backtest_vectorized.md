@@ -68,7 +68,7 @@ Guide specification; must resolve to an `AutoGuide` (hand-written guides are not
 Number of forecast samples drawn per window.
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
+Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}`, is scored inside the single fused computation. Host-side metrics are unsupported here; use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest), or `keep_predictions=True` and score on the host.
 
 `keep_predictions: bool = ``False`  
 If `True`, retain the stacked forecast samples on the result.
@@ -92,3 +92,6 @@ If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for 
 
 `VectorizedGuideError`  
 If the resolved guide is not an `AutoGuide`.
+
+`VectorizedMetricError`  
+If a metric forces a host conversion under `vmap` (it is not a pure JAX function).

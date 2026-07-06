@@ -314,7 +314,7 @@
 <h1>Prepare notebook</h1>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="35644f80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:14.590784Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:14.590590Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.384665Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.384170Z&quot;}}">
+<div class="cell-container"><div class="cell-decorator"><pre>In [1]:</pre></div><div id="35644f80" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:20.850744Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:20.850598Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:23.229602Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:23.229049Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
@@ -367,7 +367,7 @@
 <p>This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last <span class="math inline">\(20\%\)</span> of the series as a test set.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="f9ccf2d5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.385956Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.385811Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.613607Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.613234Z&quot;}}" data-execution_count="2">
+<div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="f9ccf2d5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:23.230856Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:23.230704Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:23.465505Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:23.464862Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>n_seasons <span class="op">=</span> <span class="dv">15</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>t <span class="op">=</span> jnp.linspace(<span class="dv">0</span>, n_seasons <span class="op">+</span> <span class="dv">1</span>, (n_seasons <span class="op">+</span> <span class="dv">1</span>) <span class="op">*</span> n_seasons)</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -398,7 +398,7 @@
 <div id="4779e40a" class="cell markdown">
 <p>We can visualize the series:</p>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="567a80b7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.614814Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.614725Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.728209Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.727879Z&quot;}}" data-execution_count="3">
+<div class="cell-container"><div class="cell-decorator"><pre>In [3]:</pre></div><div id="567a80b7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:23.466767Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:23.466670Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:23.588829Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:23.588491Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>ax.plot(t_train, y_train, color<span class="op">=</span><span class="st">"C0"</span>, label<span class="op">=</span><span class="st">"train"</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>ax.plot(t_test, y_test, color<span class="op">=</span><span class="st">"C1"</span>, label<span class="op">=</span><span class="st">"test"</span>)</span>
@@ -434,7 +434,7 @@
 </section>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [4]:</pre></div><div id="b145d081" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.729439Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.729366Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.762107Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.761718Z&quot;}}" data-execution_count="4">
+<div class="cell-container"><div class="cell-decorator"><pre>In [4]:</pre></div><div id="b145d081" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:23.590141Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:23.590062Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:23.622902Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:23.622581Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> damping_sum(phi, h):</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> step(carry, _):</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        running_sum, power <span class="op">=</span> carry</span>
@@ -495,7 +495,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>The priors follow the source post: <span class="math inline">\(\text{Beta}(5, 5)\)</span> on the level, trend, and seasonal smoothing parameters (flat enough near the boundaries to avoid a funnel-shaped posterior), <span class="math inline">\(\text{Beta}(2, 5)\)</span> on the damping factor (favoring some damping), a tight <span class="math inline">\(\text{HalfNormal}(0.5)\)</span> on the noise, and weakly informative priors on the initial states.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="bb8186b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:16.763147Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:16.763076Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:16.779713Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:16.779310Z&quot;}}" data-execution_count="5">
+<div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="bb8186b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:23.624252Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:23.624173Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:23.642363Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:23.641955Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> exponential_smoothing_ssm(h: Horizon, covariates: Array) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Damped Holt-Winters exponential smoothing in innovations state space form."""</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.data <span class="kw">is</span> <span class="va">None</span>:</span>
@@ -562,7 +562,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>Before fitting, it is worth looking at the priors on the bounded parameters. The <span class="math inline">\(\text{Beta}(5, 5)\)</span> prior on the smoothing parameters is symmetric and concentrated away from <span class="math inline">\(0\)</span> and <span class="math inline">\(1\)</span>, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The <span class="math inline">\(\text{Beta}(2, 5)\)</span> prior on the damping factor <span class="math inline">\(\varphi\)</span> puts more mass below <span class="math inline">\(0.5\)</span>, encoding a mild preference for damped (non-explosive) trends.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="e259a46d" class="cell" data-execution_count="7">
+<div class="cell-container"><div class="cell-decorator"><pre>In [6]:</pre></div><div id="e259a46d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:23.643591Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:23.643517Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:24.386221Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:24.385889Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>fig, (ax_smoothing, ax_noise) <span class="op">=</span> plt.subplots(</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">2</span>,</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    ncols<span class="op">=</span><span class="dv">1</span>,</span>
@@ -599,7 +599,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>We fit the model with the NUTS sampler through <a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a>, running <span class="math inline">\(4\)</span> chains of <span class="math inline">\(2{,}000\)</span> warmup and <span class="math inline">\(2{,}000\)</span> sampling steps each. <a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> takes the model, the in-sample data, and the covariates over the training window, and runs the No-U-Turn Sampler under the hood.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="06a7c8ed" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:17.192986Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:17.192902Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:18.518623Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:18.518232Z&quot;}}" data-execution_count="8">
+<div class="cell-container"><div class="cell-decorator"><pre>In [7]:</pre></div><div id="06a7c8ed" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:24.387405Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:24.387315Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:32.373977Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:32.373331Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> HMCForecaster(</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    rng_subkey,</span>
@@ -617,7 +617,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p><a href="../../../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="gdls-link gdls-code">HMCForecaster</a> stores the posterior draws with the chains flattened together. NumPyro flattens the chains in order, so we can recover the <code>(chain, draw)</code> structure with a plain reshape and hand it to ArviZ for the standard convergence diagnostics.</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="ed54060a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:18.519934Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:18.519857Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.029328Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.029001Z&quot;}}" data-execution_count="9">
+<div class="cell-container"><div class="cell-decorator"><pre>In [8]:</pre></div><div id="ed54060a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:32.375368Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:32.375288Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:32.422177Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:32.421775Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>num_chains <span class="op">=</span> <span class="dv">4</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>posterior <span class="op">=</span> {</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    name: np.asarray(value).reshape(num_chains, <span class="op">-</span><span class="dv">1</span>, <span class="op">*</span>value.shape[<span class="dv">1</span>:])</span>
@@ -646,7 +646,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>scalar_vars,</span>
 <span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>diagnostics.<span class="bu">round</span>({<span class="st">"r_hat"</span>: <span class="dv">3</span>, <span class="st">"ess_bulk"</span>: <span class="dv">0</span>, <span class="st">"ess_tail"</span>: <span class="dv">0</span>})</span></code></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="9">
+<div class="cell-output cell-output-display" data-execution_count="8">
 <div>
 
 <table class="dataframe table table-sm table-striped small">
@@ -662,44 +662,44 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
     <tr>
       <th>level_smoothing</th>
       <td>1.001</td>
-      <td>3499.0</td>
-      <td>3837.0</td>
+      <td>3518.0</td>
+      <td>3720.0</td>
     </tr>
     <tr>
       <th>trend_smoothing</th>
-      <td>1.000</td>
-      <td>4187.0</td>
-      <td>5045.0</td>
+      <td>1.001</td>
+      <td>3845.0</td>
+      <td>3933.0</td>
     </tr>
     <tr>
       <th>seasonality_smoothing</th>
       <td>1.001</td>
-      <td>2634.0</td>
-      <td>3290.0</td>
+      <td>2437.0</td>
+      <td>3276.0</td>
     </tr>
     <tr>
       <th>phi</th>
-      <td>1.001</td>
-      <td>3574.0</td>
-      <td>3871.0</td>
+      <td>1.002</td>
+      <td>3492.0</td>
+      <td>3991.0</td>
     </tr>
     <tr>
       <th>noise</th>
       <td>1.001</td>
-      <td>3358.0</td>
-      <td>4319.0</td>
+      <td>3383.0</td>
+      <td>3855.0</td>
     </tr>
     <tr>
       <th>level_init</th>
-      <td>1.003</td>
-      <td>917.0</td>
-      <td>1571.0</td>
+      <td>1.007</td>
+      <td>869.0</td>
+      <td>1398.0</td>
     </tr>
     <tr>
       <th>trend_init</th>
-      <td>1.000</td>
-      <td>3785.0</td>
-      <td>4253.0</td>
+      <td>1.001</td>
+      <td>3796.0</td>
+      <td>4569.0</td>
     </tr>
   </tbody>
 </table>
@@ -709,7 +709,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <div id="8931d884" class="cell markdown">
 <p>The <span class="math inline">\(\hat{R}\)</span> values are close to <span class="math inline">\(1\)</span> and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.</p>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [10]:</pre></div><div id="fd317770" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.030503Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.030420Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:19.810947Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:19.810474Z&quot;}}" data-execution_count="10">
+<div class="cell-container"><div class="cell-decorator"><pre>In [9]:</pre></div><div id="fd317770" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:32.423278Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:32.423201Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:33.108763Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:33.108433Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>pc_trace <span class="op">=</span> az.plot_trace_dist(</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    idata,</span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>scalar_vars,</span>
@@ -737,7 +737,7 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <p>We now generate the forecast over the test horizon. Calling the fitted forecaster with the full-horizon covariates returns forecast samples of shape <code>(sample, future, obs)</code>: for each posterior draw the model replays the in-sample filter, then rolls the state forward while sampling fresh innovations. For the in-sample fit we draw the one-step-ahead posterior predictive (the fitted mean plus observation noise).</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [11]:</pre></div><div id="76d5b161" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:19.812483Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:19.812392Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.348963Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.348553Z&quot;}}" data-execution_count="11">
+<div class="cell-container"><div class="cell-decorator"><pre>In [10]:</pre></div><div id="76d5b161" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:33.110738Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:33.110654Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:33.613066Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:33.612615Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>num_forecast_samples <span class="op">=</span> <span class="dv">2_000</span></span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
@@ -764,7 +764,7 @@ forecast samples: (2000, 48, 1)</code></pre>
 <div id="5edd8e76" class="cell markdown">
 <p>We visualize both the in-sample fit and the forecast with <code>az.plot_lm</code>, showing the <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.</p>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [12]:</pre></div><div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.350055Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.349980Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.695230Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.694891Z&quot;}}" data-execution_count="12">
+<div class="cell-container"><div class="cell-decorator"><pre>In [11]:</pre></div><div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:33.614181Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:33.614115Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:34.081656Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:34.081163Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> eval_crps(in_sample_pp, train_data)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast_samples, test_data)</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -848,7 +848,7 @@ forecast samples: (2000, 48, 1)</code></pre>
 <p>Finally, we score the forecast against the held-out test set with the package’s evaluation metrics: mean absolute error and root mean squared error (point-forecast accuracy), the continuous ranked probability score (a proper score for the whole predictive distribution), and the empirical coverage of the central <span class="math inline">\(90\%\)</span> interval (calibration).</p>
 </section>
 </div>
-<div class="cell-container"><div class="cell-decorator"><pre>In [14]:</pre></div><div id="81e400f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-01T20:07:20.696830Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-01T20:07:20.696756Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-01T20:07:20.851866Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-01T20:07:20.851427Z&quot;}}" data-execution_count="14">
+<div class="cell-container"><div class="cell-decorator"><pre>In [12]:</pre></div><div id="81e400f7" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:34.082723Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:34.082659Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:34.207436Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:34.206938Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"MAE"</span>: eval_mae(forecast_samples, test_data),</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"RMSE"</span>: eval_rmse(forecast_samples, test_data),</span>
@@ -858,9 +858,9 @@ forecast samples: (2000, 48, 1)</code></pre>
 <span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name, value <span class="kw">in</span> metrics.items():</span>
 <span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">:&gt;16}</span><span class="ss">: </span><span class="sc">{</span>value<span class="sc">:.4f}</span><span class="ss">"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>             MAE: 0.2432
-            RMSE: 0.2797
-            CRPS: 0.1648
+<pre><code>             MAE: 0.2433
+            RMSE: 0.2796
+            CRPS: 0.1651
   coverage (90%): 0.9583</code></pre>
 </div>
 </div></div>

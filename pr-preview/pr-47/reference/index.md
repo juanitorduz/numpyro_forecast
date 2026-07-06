@@ -180,6 +180,9 @@ A backtest window configuration is invalid.
 [exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
 The vectorized backtest requires an `AutoGuide`.
 
+[exceptions.VectorizedMetricError](exceptions.VectorizedMetricError.md#numpyro_forecast.exceptions.VectorizedMetricError)  
+A metric is not vmappable in the vectorized backtest.
+
 [exceptions.OptimizerResolutionError](exceptions.OptimizerResolutionError.md#numpyro_forecast.exceptions.OptimizerResolutionError)  
 An optimizer specification could not be resolved.
 
