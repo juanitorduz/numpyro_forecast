@@ -1,5 +1,6 @@
 """Tests for the functional forecasting API."""
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -15,16 +16,21 @@ from numpyro_forecast.functional import (
     Horizon,
     MCMCFit,
     SVIFit,
+    _chunked_draws,
+    _pad_posterior,
+    _predict,
     draw_posterior,
     fit_mcmc,
     fit_svi,
     forecast,
     forecasting_model,
     predict,
+    predict_glm,
     predict_in_sample,
     time_series,
 )
 from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.util import shift_loc
 
 
 def _rw_body(h: Horizon, covariates: Array) -> None:
@@ -462,3 +468,219 @@ def test_oop_and_functional_fits_and_forecasts_are_identical() -> None:
     post = draw_posterior(key_post, fit, 8)
     fc_func = forecast(key_pred, func_model, post, data, cov_full)
     assert jnp.array_equal(fc_oop, fc_func)
+
+
+# --- P5: chunk padding & compile discipline ----------------------------------
+
+
+def test_pad_posterior_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        _pad_posterior({}, 4)
+
+
+def test_pad_posterior_rejects_non_positive_batch() -> None:
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        _pad_posterior({"x": jnp.zeros((5, 1))}, 0)
+
+
+def test_pad_posterior_rejects_ragged_sample_axis() -> None:
+    posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((6, 1))}
+    with pytest.raises(ValueError, match="disagree on the sample axis"):
+        _pad_posterior(posterior, 4)
+
+
+def test_pad_posterior_pads_to_multiple_and_reports_original() -> None:
+    posterior = {"x": jnp.arange(5.0)[:, None]}
+    padded, num = _pad_posterior(posterior, 4)
+    assert num == 5
+    assert padded["x"].shape == (8, 1)  # next multiple of 4
+    # The original prefix is preserved; pad rows wrap around from the start.
+    assert jnp.array_equal(padded["x"][:5], posterior["x"])
+
+
+def test_pad_posterior_no_pad_when_already_multiple() -> None:
+    posterior = {"x": jnp.arange(8.0)[:, None]}
+    padded, num = _pad_posterior(posterior, 4)
+    assert num == 8
+    assert padded["x"] is posterior["x"]
+
+
+def test_chunked_draws_pads_splits_and_truncates() -> None:
+    """The chunk driver feeds fixed-size chunks, distinct subkeys, and truncates the pad."""
+    calls: list[tuple[Array, tuple[int, ...]]] = []
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        calls.append((key, post["x"].shape))
+        return post["x"] * 2.0
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    out = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    # 10 samples pad to 12 = 3 chunks of 4; the result is cut back to 10.
+    assert out.shape == (10, 1)
+    assert jnp.allclose(out, posterior["x"] * 2.0)
+    assert [shape for _, shape in calls] == [(4, 1), (4, 1), (4, 1)]
+    keys = [key for key, _ in calls] + [random.PRNGKey(0)]
+    raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
+    assert len(set(raw)) == len(raw)  # per-chunk subkeys distinct, parent unused
+
+
+@pytest.mark.parametrize("batch_size", [None, 10, 64])
+def test_chunked_draws_unchunked_passthrough(batch_size: int | None) -> None:
+    """batch_size None or >= the sample count calls predict_fn once with the parent key."""
+    calls: list[Array] = []
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        calls.append(key)
+        return post["x"]
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    parent = random.PRNGKey(0)
+    out = _chunked_draws(parent, predict_fn, posterior, batch_size)
+    assert out.shape == (10, 1)
+    assert len(calls) == 1
+    assert jnp.array_equal(random.key_data(calls[0]), random.key_data(parent))
+
+
+@pytest.mark.parametrize("num_samples", [1, 3, 4, 5, 12])
+def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
+    # Sweep num_samples around batch_size b=4: {1, b-1, b, b+1, 3b}.
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, num_samples)
+    fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=4)
+    assert fc.shape == (num_samples, 6, 1)
+    assert bool(jnp.all(jnp.isfinite(fc)))
+
+
+def test_forecast_chunked_close_to_unchunked() -> None:
+    # Chunking changes the PRNG layout, so draws differ; the sample means still
+    # agree within Monte Carlo error (same distribution).
+    model, data, fit = _fit_data()
+    n = 400
+    post = draw_posterior(random.PRNGKey(2), fit, n)
+    chunked = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=8)
+    unchunked = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
+    assert chunked.shape == unchunked.shape == (n, 6, 1)
+    standard_error = unchunked.std(axis=0) / jnp.sqrt(n)
+    assert jnp.all(
+        jnp.abs(chunked.mean(axis=0) - unchunked.mean(axis=0)) < 8.0 * standard_error + 0.05
+    )
+
+
+def test_single_compile_while_chunking(count_compilations) -> None:
+    """Invariant I3: fixed shapes ⇒ fixed compile counts for chunked forecasts.
+
+    Padding makes every chunk share the ``(batch_size, future, obs)`` shape, so
+    the forecast kernel (`_predict`) compiles a single variant across the whole
+    ``num_samples`` sweep. The compile-count harness (roadmap §4.5) then proves
+    that replaying the sweep triggers zero further backend compilations once
+    every shape has been seen, and the ``_predict`` cache introspection pins the
+    forecast kernel specifically to one variant.
+    """
+    model, data, fit = _fit_data()
+    covariates = empty_covariates(36)
+    # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
+    posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
+    jax.block_until_ready(posteriors)
+
+    def _sweep() -> None:
+        for post in posteriors:
+            jax.block_until_ready(
+                forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
+            )
+
+    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
+    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
+    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+    # Replaying the sweep hits every cached shape, so nothing recompiles.
+    with count_compilations() as tally:
+        _sweep()
+    assert tally.count == 0
+    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+
+# --- P13: predict_glm + predict refactor (I9) --------------------------------
+
+
+def _predict_glm_body(h: Horizon, covariates: Array) -> None:
+    """Random-walk body written directly with predict_glm and a shift_loc link."""
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+    drift = time_series(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    predict_glm(h, lambda mu: shift_loc(dist.Normal(0.0, sigma), mu), jnp.cumsum(drift, axis=-2))
+
+
+def _traces_equal(model_a: ForecastModel, model_b: ForecastModel, *args: Array) -> None:
+    key = random.PRNGKey(0)
+    trace_a = trace(seed(model_a, key)).get_trace(*args)
+    trace_b = trace(seed(model_b, key)).get_trace(*args)
+    assert set(trace_a) == set(trace_b)
+    for name, site_a in trace_a.items():
+        site_b = trace_b[name]
+        assert site_a["type"] == site_b["type"]
+        if "value" in site_a and site_a["value"] is not None:
+            assert jnp.allclose(site_a["value"], site_b["value"])
+        if site_a["type"] == "sample":
+            la = site_a["fn"].log_prob(site_a["value"])
+            lb = site_b["fn"].log_prob(site_b["value"])
+            assert jnp.allclose(la, lb)
+
+
+@pytest.mark.parametrize("future", [0, 6])
+def test_predict_predict_glm_trace_equivalence(future: int) -> None:
+    """Invariant I9: predict == predict_glm o shift_loc (identical traces)."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (24, 1)), axis=-2)
+    covariates = empty_covariates(24 + future)
+    model_predict = forecasting_model(_rw_body)
+    model_glm = forecasting_model(_predict_glm_body)
+    _traces_equal(model_predict, model_glm, covariates, data)
+
+
+def test_predict_glm_rejects_float_data_for_discrete_obs() -> None:
+    def poisson_body(h: Horizon, covariates: Array) -> None:
+        rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
+
+    model = forecasting_model(poisson_body)
+    float_data = jnp.abs(random.normal(random.PRNGKey(0), (12, 1)))
+    with pytest.raises(ValueError, match="discrete support"):
+        trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
+
+
+def test_predict_glm_accepts_integer_data_for_discrete_obs() -> None:
+    def poisson_body(h: Horizon, covariates: Array) -> None:
+        rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
+
+    model = forecasting_model(poisson_body)
+    int_data = jnp.asarray(random.poisson(random.PRNGKey(0), 3.0, (12, 1)), dtype=jnp.int32)
+    tr = trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), int_data)
+    assert "obs" in tr
+
+
+def test_poisson_local_level_end_to_end() -> None:
+    """A Poisson GLM local level: forecasts are integer, non-negative, and track the rate."""
+
+    def poisson_body(h: Horizon, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 0.5))
+        log_rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
+        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
+
+    model = forecasting_model(poisson_body)
+    true_rate = 5.0
+    data = jnp.asarray(random.poisson(random.PRNGKey(0), true_rate, (40, 1)), dtype=jnp.int32)
+    fit = fit_mcmc(
+        random.PRNGKey(1),
+        model,
+        data,
+        empty_covariates(40),
+        num_warmup=200,
+        num_samples=200,
+    )
+    post = draw_posterior(random.PRNGKey(2), fit, 200)
+    fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(46))
+    assert fc.shape == (200, 6, 1)
+    assert bool(jnp.all(fc >= 0.0))
+    assert bool(jnp.all(fc == jnp.floor(fc)))  # integer-valued counts
+    # The forecast median should be in the right ballpark of the true rate.
+    assert 2.0 < float(jnp.median(fc)) < 10.0

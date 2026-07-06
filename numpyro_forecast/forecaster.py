@@ -12,17 +12,18 @@ posterior dict of latent draws.
 """
 
 import abc
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, cast
 
 import numpyro.distributions as dist
 from jax import random
-from jaxtyping import Float
+from jaxtyping import Num
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.infer.reparam import Reparam
-from numpyro.optim import _NumPyroOptim
 
 from numpyro_forecast.functional import (
     Horizon,
+    Transition,
     _require_covariates_extend_data,
     _require_positive_num_samples,
     draw_posterior,
@@ -30,10 +31,18 @@ from numpyro_forecast.functional import (
     fit_svi,
 )
 from numpyro_forecast.functional import forecast as _forecast
+from numpyro_forecast.functional import markov_time_series as _markov_time_series
 from numpyro_forecast.functional import predict as _predict
+from numpyro_forecast.functional import predict_glm as _predict_glm
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.typing import (
+    Array,
+    ForecastModel,
+    GuideLike,
+    KernelLike,
+    OptimizerLike,
+)
 
 
 class ForecastingModel(abc.ABC):
@@ -132,6 +141,84 @@ class ForecastingModel(abc.ABC):
         """
         _predict(self._require_horizon(), noise_dist, prediction)
 
+    def predict_glm(
+        self,
+        obs_dist_fn: Callable[[Array], dist.Distribution],
+        latent: Array,
+    ) -> None:
+        """Register GLM-style observation/forecast sites from a latent predictor.
+
+        Thin wrapper over :func:`numpyro_forecast.functional.predict_glm`.
+
+        Parameters
+        ----------
+        obs_dist_fn
+            Link mapping the full-horizon ``latent`` predictor to the observation
+            distribution (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
+        latent
+            The deterministic latent predictor over the full horizon, time at
+            axis ``-2``.
+        """
+        _predict_glm(self._require_horizon(), obs_dist_fn, latent)
+
+    def markov_time_series(
+        self,
+        name: str,
+        init_carry: Any,
+        transition: Transition,
+        xs: Array | None = None,
+        *,
+        plates: Sequence[tuple[str, int]] = (),
+        reparam_config: Mapping[str, Reparam] | None = None,
+    ) -> Array:
+        """Sample a Markov (state-space) latent over the full horizon.
+
+        Thin wrapper over :func:`numpyro_forecast.functional.markov_time_series`
+        that threads this model's train/forecast horizon. In-sample steps run in a
+        ``scan`` under site ``name``; the forecast horizon runs in a second scan
+        under ``f"{name}_future"`` seeded by the final in-sample carry, so the guide
+        never sees the future site.
+
+        Parameters
+        ----------
+        name
+            Sample-site name for the in-sample scan; the forecast scan uses
+            ``f"{name}_future"``.
+        init_carry
+            Initial carry PyTree fed to the first transition step.
+        transition
+            Callable ``(carry, x_t) -> (dist_t, carry_fn)``: ``dist_t`` is the
+            per-step observation distribution (its per-step shape must carry the
+            trailing observation dimension) and ``carry_fn(z_t)`` builds the next
+            carry from the sampled latent ``z_t``. The wrapper owns the ``sample``
+            statement, so the Markov structure cannot be broken by resampling.
+        xs
+            Optional exogenous inputs spanning the full horizon with time at axis
+            ``-2``; split and moved into scan layout internally. ``None`` for
+            autonomous dynamics.
+        plates
+            ``(name, size)`` pairs opened inside the scan body around the sample
+            statement (the only placement NumPyro accepts around a scan).
+        reparam_config
+            Optional site-name to :class:`~numpyro.infer.reparam.Reparam` mapping
+            applied inside the scan body.
+
+        Returns
+        -------
+        Array
+            The latent over the full horizon in package layout
+            ``(*plate_batch, duration, obs)`` (time at axis ``-2``).
+        """
+        return _markov_time_series(
+            self._require_horizon(),
+            name,
+            init_carry,
+            transition,
+            xs,
+            plates=plates,
+            reparam_config=reparam_config,
+        )
+
     def __call__(self, covariates: Array, data: Array | None = None) -> None:
         """Run the model as a NumPyro model function.
 
@@ -171,7 +258,7 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
-    ) -> Float[Array, " sample *batch future obs"]:
+    ) -> Num[Array, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
         Parameters
@@ -193,8 +280,9 @@ class _BaseForecaster(abc.ABC):
 
         Returns
         -------
-        Float[Array, " sample *batch future obs"]
-            Forecast samples over the ``future = duration - t`` horizon.
+        Num[Array, " sample *batch future obs"]
+            Forecast samples over the ``future = duration - t`` horizon (integer
+            for discrete/count models built with ``predict_glm``).
         """
         _require_covariates_extend_data(data, covariates)
         _require_positive_num_samples(num_samples)
@@ -218,7 +306,7 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
-    ) -> Float[Array, " sample *batch time obs"]:
+    ) -> Num[Array, " sample *batch time obs"]:
         """Sample the in-sample posterior predictive of the ``obs`` site.
 
         Draws ``num_samples`` posterior latent samples from the fitted forecaster and
@@ -244,7 +332,7 @@ class _BaseForecaster(abc.ABC):
 
         Returns
         -------
-        Float[Array, " sample *batch time obs"]
+        Num[Array, " sample *batch time obs"]
             In-sample posterior-predictive draws of the ``obs`` site.
 
         Raises
@@ -281,15 +369,23 @@ class Forecaster(_BaseForecaster):
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
     guide
-        Variational guide; defaults to ``AutoNormal(model)``.
+        Guide specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_guide`: ``None``
+        (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
+        ``functools.partial`` factory of one, or a hand-written guide function.
     optim
-        NumPyro optimizer; defaults to ``Adam(0.01)``.
+        Optimizer specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
+        (``Adam(0.01)``), a positive scalar learning rate, an
+        ``optax.GradientTransformation``, or a ``_NumPyroOptim``.
     num_steps
         Number of SVI steps.
     num_particles
         Number of ELBO particles.
     progress_bar
         Whether to display the SVI progress bar.
+    stable_update
+        Whether SVI skips non-finite parameter updates.
     """
 
     def __init__(
@@ -299,11 +395,12 @@ class Forecaster(_BaseForecaster):
         data: Array,
         covariates: Array,
         *,
-        guide: AutoGuide | None = None,
-        optim: _NumPyroOptim | None = None,
+        guide: "GuideLike" = None,
+        optim: "OptimizerLike" = None,
         num_steps: int = 1_001,
         num_particles: int = 1,
         progress_bar: bool = False,
+        stable_update: bool = False,
     ) -> None:
         super().__init__(model, data.shape[-2])
         self._fit = fit_svi(
@@ -316,8 +413,11 @@ class Forecaster(_BaseForecaster):
             num_steps=num_steps,
             num_particles=num_particles,
             progress_bar=progress_bar,
+            stable_update=stable_update,
         )
-        self.guide: AutoGuide = self._fit.guide
+        # Typed as AutoGuide for the common OOP path; hand-written guides
+        # (callables) are supported at runtime but rare through this class.
+        self.guide: AutoGuide = cast("AutoGuide", self._fit.guide)
         self.params: dict[str, Array] = self._fit.params
         self.losses: Array = self._fit.losses
 
@@ -326,7 +426,7 @@ class Forecaster(_BaseForecaster):
 
 
 class HMCForecaster(_BaseForecaster):
-    """Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
+    """Fit a forecasting model with MCMC (NUTS by default).
 
     Parameters
     ----------
@@ -338,12 +438,21 @@ class HMCForecaster(_BaseForecaster):
         In-sample data with time at axis ``-2``.
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
+    kernel
+        Kernel specification resolved by
+        :func:`~numpyro_forecast.functional.resolve_kernel`: ``None`` (``NUTS``),
+        an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
+    kernel_kwargs
+        Extra keyword arguments for the kernel constructor (only with ``None``
+        or a kernel class).
     num_warmup
         Number of warmup steps.
     num_samples
         Number of posterior samples.
     num_chains
         Number of MCMC chains.
+    chain_method
+        NumPyro chain method (``"sequential"``/``"parallel"``/``"vectorized"``).
     progress_bar
         Whether to display the MCMC progress bar.
     """
@@ -355,9 +464,12 @@ class HMCForecaster(_BaseForecaster):
         data: Array,
         covariates: Array,
         *,
+        kernel: "KernelLike" = None,
+        kernel_kwargs: Mapping[str, Any] | None = None,
         num_warmup: int = 1_000,
         num_samples: int = 1_000,
         num_chains: int = 1,
+        chain_method: str = "sequential",
         progress_bar: bool = False,
     ) -> None:
         super().__init__(model, data.shape[-2])
@@ -366,12 +478,71 @@ class HMCForecaster(_BaseForecaster):
             model,
             data,
             covariates,
+            kernel=kernel,
+            kernel_kwargs=kernel_kwargs,
             num_warmup=num_warmup,
             num_samples=num_samples,
             num_chains=num_chains,
+            chain_method=chain_method,
             progress_bar=progress_bar,
         )
         self.posterior_samples: dict[str, Array] = self._fit.samples
+
+    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
+        return draw_posterior(rng_key, self._fit, num_samples)
+
+
+class PathfinderForecaster(_BaseForecaster):
+    """Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
+    A thin shim over :func:`numpyro_forecast.contrib.blackjax.fit_pathfinder`.
+    BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``)
+    imported lazily here, so constructing this class is the opt-in that pulls it
+    in; importing :mod:`numpyro_forecast` never does. The
+    constructor mirrors :class:`Forecaster` without ``guide``/``optim`` (Pathfinder
+    has neither) and adds ``num_elbo_samples``/``ftol``.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for inference.
+    model
+        The forecasting model to fit (OOP instance or functional model).
+    data
+        In-sample data with time at axis ``-2``.
+    covariates
+        Covariates with time at axis ``-2`` and the same duration as ``data``.
+    num_elbo_samples
+        Number of Monte Carlo samples used to estimate the ELBO along the
+        L-BFGS path.
+    ftol
+        L-BFGS relative function-value tolerance (convergence criterion).
+    """
+
+    def __init__(
+        self,
+        rng_key: Array,
+        model: ForecastModel,
+        data: Array,
+        covariates: Array,
+        *,
+        num_elbo_samples: int = 200,
+        ftol: float = 1e-5,
+    ) -> None:
+        super().__init__(model, data.shape[-2])
+        # Lazy import: registers the PathfinderFit draw dispatch and defers the
+        # blackjax dependency to first use (I8).
+        from numpyro_forecast.contrib.blackjax import fit_pathfinder
+
+        self._fit = fit_pathfinder(
+            rng_key,
+            model,
+            data,
+            covariates,
+            num_elbo_samples=num_elbo_samples,
+            ftol=ftol,
+        )
+        self.elbo: float = self._fit.elbo
 
     def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
         return draw_posterior(rng_key, self._fit, num_samples)

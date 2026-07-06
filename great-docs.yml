@@ -75,6 +75,7 @@ reference:
     contents:
       - forecaster.Forecaster
       - forecaster.HMCForecaster
+      - forecaster.PathfinderForecaster
 
   - title: Models
     desc: Building forecasting models (object-oriented and functional).
@@ -87,9 +88,14 @@ reference:
     contents:
       - functional.Horizon
       - functional.time_series
+      - functional.markov_time_series
       - functional.predict
+      - functional.predict_glm
+      - functional.resolve_optimizer
+      - functional.resolve_guide
       - functional.fit_svi
       - functional.draw_posterior
+      - functional.resolve_kernel
       - functional.fit_mcmc
       - functional.forecast
       - functional.predict_in_sample
@@ -100,13 +106,19 @@ reference:
     desc: Rolling-window backtesting and forecast metrics.
     contents:
       - evaluate.backtest
+      - evaluate.backtest_vectorized
       - evaluate.BacktestResult
+      - evaluate.VectorizedBacktestResult
       - evaluate.evaluate_forecast
+      - evaluate.results_to_dataframe
       - evaluate.eval_crps
       - evaluate.eval_mae
       - evaluate.eval_rmse
       - evaluate.eval_coverage
       - metrics.crps_empirical
+      - metrics.eval_pinball
+      - metrics.eval_interval_score
+      - metrics.make_mase
 
   - title: Utilities
     desc: Array helpers and feature builders.
@@ -118,6 +130,37 @@ reference:
       - util.shift_loc
       - util.slice_time
       - util.prefix_condition
+      - util.register_elementwise
+      - util.require
+
+  - title: Exceptions
+    desc: Package exception hierarchy raised at resolution and validation boundaries.
+    contents:
+      - exceptions.NumpyroForecastError
+      - exceptions.BacktestWindowError
+      - exceptions.VectorizedGuideError
+      - exceptions.VectorizedMetricError
+      - exceptions.OptimizerResolutionError
+      - exceptions.GuideResolutionError
+      - exceptions.GuideSampleArgsError
+      - exceptions.KernelResolutionError
+      - exceptions.KernelConfigError
+      - exceptions.MVNLayoutError
+
+  - title: ArviZ export
+    desc: Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+    contents:
+      - convert.to_datatree
+      - convert.add_forecast_groups
+
+  - title: Extensions (contrib)
+    desc: Optional backends behind pyproject extras (never imported by default).
+    contents:
+      - contrib.blackjax.BlackjaxNUTSKernel
+      - contrib.blackjax.BlackjaxMCLMCKernel
+      - contrib.blackjax.BlackjaxCustomKernel
+      - contrib.blackjax.PathfinderFit
+      - contrib.blackjax.fit_pathfinder
 
   - title: Datasets
     desc: Example datasets used in the tutorials.

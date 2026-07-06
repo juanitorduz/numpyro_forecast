@@ -1,12 +1,21 @@
 """Tests for the empirical CRPS implementation."""
 
+from functools import partial
+
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
-from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.metrics import (
+    crps_empirical,
+    eval_interval_score,
+    eval_pinball,
+    make_mase,
+)
+from numpyro_forecast.typing import Metric
 
 
 def _brute_force_crps(pred: Array, truth: Array) -> Array:
@@ -72,3 +81,144 @@ def test_crps_shape_mismatch_raises() -> None:
 def test_crps_needs_two_samples() -> None:
     with pytest.raises(ValueError, match="at least 2 samples"):
         crps_empirical(jnp.zeros((1, 3)), jnp.zeros((3,)))
+
+
+# --- P7: pinball, interval score, MASE ---------------------------------------
+
+
+def test_pinball_median_is_half_mae() -> None:
+    pred = jnp.linspace(0.0, 1.0, 101)[:, None] * jnp.ones((101, 4))
+    truth = jnp.full((4,), 0.7)
+    # At tau=0.5 the pinball loss is half the absolute error of the median.
+    median = jnp.median(pred, axis=0)
+    expected = 0.5 * jnp.abs(median - truth).mean()
+    assert jnp.allclose(eval_pinball(pred, truth, quantile=0.5), float(expected), atol=1e-5)
+
+
+def test_pinball_minimized_at_true_quantile() -> None:
+    # With truth drawn from the same law as the samples, the pinball loss is
+    # minimized when we score the quantile that matches the target quantile.
+    pred = random.normal(random.PRNGKey(0), (2_000, 400))
+    truth = jnp.quantile(pred, 0.8, axis=0)
+    at_truth = eval_pinball(pred, truth, quantile=0.8)
+    below = eval_pinball(pred, truth, quantile=0.5)
+    above = eval_pinball(pred, truth, quantile=0.95)
+    assert at_truth < below
+    assert at_truth < above
+
+
+@pytest.mark.parametrize("quantile", [0.0, 1.0, -0.1, 1.5])
+def test_pinball_rejects_out_of_range_quantile(quantile: float) -> None:
+    with pytest.raises(ValueError, match=r"quantile must be in"):
+        eval_pinball(jnp.zeros((5, 2)), jnp.zeros((2,)), quantile=quantile)
+
+
+def test_interval_score_rewards_tight_covering_interval() -> None:
+    truth = jnp.zeros((4,))
+    tight = 0.1 * random.normal(random.PRNGKey(0), (500, 4))
+    wide = 5.0 * random.normal(random.PRNGKey(1), (500, 4))
+    # Both cover 0, but the tight interval scores lower (better).
+    assert eval_interval_score(tight, truth) < eval_interval_score(wide, truth)
+
+
+def test_interval_score_penalizes_misses() -> None:
+    samples = random.normal(random.PRNGKey(0), (500, 3))
+    inside = eval_interval_score(samples, jnp.zeros((3,)))
+    outside = eval_interval_score(samples, jnp.full((3,), 10.0))
+    assert outside > inside
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.2])
+def test_interval_score_rejects_out_of_range_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match=r"alpha must be in"):
+        eval_interval_score(jnp.zeros((5, 2)), jnp.zeros((2,)), alpha=alpha)
+
+
+def test_make_mase_scales_by_seasonal_naive() -> None:
+    train = jnp.arange(10.0)[:, None]  # constant step-1 differences of 1.0
+    mase = make_mase(train, seasonality=1)
+    # Seasonal-naive scale is 1.0, so MASE equals the forecast MAE.
+    pred = jnp.full((20, 3, 1), 5.0)
+    truth = jnp.full((3, 1), 7.0)
+    assert jnp.allclose(mase(pred, truth), 2.0, atol=1e-5)
+
+
+def _mase_scale(mase: Metric) -> float:
+    """Back out the factory-time scale: with a zero point forecast the metric is mae/scale."""
+    pred = jnp.zeros((1, 1, 1))
+    truth = jnp.ones((1, 1))  # mae = |0 - 1| = 1, so metric == 1/scale
+    return 1.0 / float(mase(pred, truth))
+
+
+def test_make_mase_accepts_batched_train_data() -> None:
+    """A ``(*batch, time, obs)`` train_data builds a metric; the scale averages over batch.
+
+    Regression: the annotation was tightened to exactly 2-d, so any batched
+    caller hit a runtime ``TypeCheckError`` despite the docstring's package-wide
+    time-at-axis(-2) contract.
+    """
+    train = jnp.stack([jnp.arange(8.0)[:, None], 3.0 * jnp.arange(8.0)[:, None]])
+    mase = make_mase(train, seasonality=1)
+    per_series = [
+        float(jnp.abs(train[b, 1:, :] - train[b, :-1, :]).mean()) for b in range(train.shape[0])
+    ]
+    expected_scale = float(np.mean(per_series))
+    assert jnp.allclose(_mase_scale(mase), expected_scale, atol=1e-6)
+
+
+def test_make_mase_time_axis_is_minus_two() -> None:
+    """A ``(time, obs)`` input and its ``(1, time, obs)`` unsqueeze yield the same scale."""
+    train = jnp.sin(jnp.arange(12.0))[:, None]
+    scale_2d = _mase_scale(make_mase(train, seasonality=3))
+    scale_3d = _mase_scale(make_mase(train[None], seasonality=3))
+    assert jnp.allclose(scale_2d, scale_3d, atol=1e-6)
+
+
+def test_make_mase_rejects_bad_seasonality() -> None:
+    with pytest.raises(ValueError, match="seasonality must be"):
+        make_mase(jnp.arange(10.0)[:, None], seasonality=0)
+
+
+def test_make_mase_rejects_short_train() -> None:
+    with pytest.raises(ValueError, match="longer than seasonality"):
+        make_mase(jnp.arange(3.0)[:, None], seasonality=5)
+
+
+def test_make_mase_rejects_constant_series() -> None:
+    with pytest.raises(ValueError, match="scale is zero"):
+        make_mase(jnp.ones((10, 1)), seasonality=1)
+
+
+# --- The array-metric contract: scalar-array returns, vmap composability -----
+
+
+def test_metrics_return_scalar_arrays() -> None:
+    """Every metric returns a 0-d array (host floats only at result boundaries)."""
+    pred = random.normal(random.PRNGKey(0), (100, 6, 1))
+    truth = random.normal(random.PRNGKey(1), (6, 1))
+    mase = make_mase(jnp.arange(10.0)[:, None], seasonality=1)
+    for value in (
+        eval_pinball(pred, truth, quantile=0.3),
+        eval_interval_score(pred, truth, alpha=0.8),
+        mase(pred, truth),
+    ):
+        assert value.shape == ()
+
+
+def test_metrics_are_vmappable() -> None:
+    """Metrics are pure JAX functions: vmapping over a leading axis works.
+
+    This is the property ``backtest_vectorized`` relies on to score every
+    window in one fused computation, including partial-bound variants.
+    """
+    pred = random.normal(random.PRNGKey(0), (4, 100, 6, 1))
+    truth = random.normal(random.PRNGKey(1), (4, 6, 1))
+    mase = make_mase(jnp.arange(10.0)[:, None], seasonality=1)
+    for metric in (
+        partial(eval_pinball, quantile=0.3),
+        partial(eval_interval_score, alpha=0.8),
+        mase,
+    ):
+        values = jax.vmap(metric)(pred, truth)
+        assert values.shape == (4,)
+        assert bool(jnp.all(jnp.isfinite(values)))

@@ -1,7 +1,7 @@
 """Tests for backtesting and evaluation metrics."""
 
 from functools import partial
-from typing import cast
+from typing import Any, cast
 
 import jax.numpy as jnp
 import pytest
@@ -11,6 +11,7 @@ from jax import Array, random
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
+    _block_object,
     _expanding_windows,
     _iter_windows,
     _resolve_options,
@@ -31,6 +32,81 @@ from numpyro_forecast.forecaster import HMCForecaster
 from numpyro_forecast.typing import ForecasterFactory
 
 
+class _SlotShim:
+    """A __slots__ object (no __dict__) to exercise the _block_object no-op."""
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: Array) -> None:
+        self.value = value
+
+
+def test_block_object_handles_frozen_dataclass_and_shim() -> None:
+    # Regular object with __dict__: returned unchanged, arrays materialized.
+    class _Holder:
+        def __init__(self) -> None:
+            self.arr = jnp.ones(4)
+            self.name = "holder"
+
+    holder = _Holder()
+    assert _block_object(holder) is holder
+    assert bool(jnp.all(holder.arr == 1.0))
+
+    # __slots__ object without __dict__: no-op, returned unchanged.
+    shim = _SlotShim(jnp.zeros(2))
+    assert _block_object(shim) is shim
+
+
+def test_block_object_reaches_nested_arrays() -> None:
+    """Arrays nested inside containers under an attribute are blocked, not just top-level."""
+
+    class _Nested:
+        def __init__(self) -> None:
+            self.inner = {"samples": [jnp.arange(3.0), jnp.ones(2)]}
+            self.pair = (jnp.zeros(1), {"deep": jnp.full(2, 5.0)})
+
+    obj = _Nested()
+    # block_until_ready recurses the __dict__ pytree; the call succeeds and leaf
+    # values survive the walk unchanged.
+    assert _block_object(obj) is obj
+    assert bool(jnp.all(obj.inner["samples"][0] == jnp.arange(3.0)))
+    assert bool(jnp.all(obj.pair[1]["deep"] == 5.0))
+
+
+def test_timed_returns_result_and_nonnegative_time() -> None:
+    result, seconds = _timed(lambda: jnp.ones(3) * 2.0)
+    assert bool(jnp.all(result == 2.0))
+    assert seconds >= 0.0
+
+
+@pytest.mark.slow
+def test_walltime_includes_compute() -> None:
+    # A blocked forecast timing must exceed a trivially small threshold: it
+    # includes real compile+compute, not just async dispatch.
+    from numpyro_forecast.forecaster import Forecaster
+
+    t = jnp.linspace(0, 4 * jnp.pi, 60)
+    data = (jnp.sin(t) + 0.1 * random.normal(random.PRNGKey(0), (60,)))[:, None]
+    covariates = jnp.zeros((60, 0))
+
+    def make(rng_key, model, d, c) -> object:
+        return Forecaster(rng_key, model, d, c, num_steps=100)
+
+    results = backtest(
+        random.PRNGKey(1),
+        data,
+        covariates,
+        RandomWalkModel,
+        forecaster_fn=cast("ForecasterFactory", make),
+        train_window=40,
+        test_window=5,
+        num_samples=50,
+    )
+    assert results
+    assert all(r.train_walltime > 0.0 for r in results)
+    assert all(r.test_walltime > 0.0 for r in results)
+
+
 def test_eval_mae_uses_median() -> None:
     pred = jnp.array([1.0, 2.0, 9.0]).reshape(3, 1)  # median 2
     truth = jnp.array([0.0])
@@ -43,12 +119,12 @@ def test_eval_rmse_uses_mean() -> None:
     assert eval_rmse(pred, truth) == 2.0
 
 
-def test_eval_crps_returns_float() -> None:
+def test_eval_crps_returns_scalar_array() -> None:
     pred = random.normal(random.PRNGKey(0), (50, 4))
     truth = random.normal(random.PRNGKey(1), (4,))
     value = eval_crps(pred, truth)
-    assert isinstance(value, float)
-    assert value >= 0.0
+    assert value.shape == ()
+    assert float(value) >= 0.0
 
 
 def test_eval_coverage_perfect_and_zero() -> None:
@@ -59,12 +135,18 @@ def test_eval_coverage_perfect_and_zero() -> None:
     assert eval_coverage(pred, jnp.array([100.0])) == 0.0
 
 
-def test_eval_coverage_returns_float() -> None:
+def test_eval_coverage_returns_scalar_array() -> None:
     pred = random.normal(random.PRNGKey(0), (200, 4))
     truth = random.normal(random.PRNGKey(1), (4,))
     value = eval_coverage(pred, truth, alpha=0.8)
-    assert isinstance(value, float)
-    assert 0.0 <= value <= 1.0
+    assert value.shape == ()
+    assert 0.0 <= float(value) <= 1.0
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1, 1.5])
+def test_eval_coverage_rejects_out_of_range_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match=r"alpha must be in"):
+        eval_coverage(jnp.zeros((5, 2)), jnp.zeros((2,)), alpha=alpha)
 
 
 def test_default_metrics_keys() -> None:
@@ -346,6 +428,35 @@ def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Arr
     for r in results:
         assert r.train_metrics == {}
         assert r.prediction is None
+
+
+def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
+    from numpyro_forecast.metrics import make_mase
+
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+
+    def per_window(t0: int, t1: int, t2: int) -> dict[str, object]:
+        # A MASE scaled by this window's own training slice.
+        return {"mase": make_mase(data[..., t0:t1, :], seasonality=1)}
+
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        RandomWalkModel,
+        metrics={"crps": eval_crps},
+        per_window_metrics=cast("Any", per_window),
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        forecaster_options={"num_steps": 30},
+    )
+    assert results
+    for r in results:
+        assert set(r.metrics) == {"crps", "mase"}
+        assert isinstance(r.metrics["mase"], float)
 
 
 def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
@@ -701,11 +812,13 @@ def test_run_window_builds_result_and_applies_transform() -> None:
         data=data,
         covariates=covariates,
         model_fn=RandomWalkModel,
+        shared_model=None,
         forecaster_fn=cast("ForecasterFactory", lambda *args, **kwargs: _FakeForecaster()),
         options={},
         num_samples=16,
         batch_size=None,
         metrics=DEFAULT_METRICS,
+        per_window_metrics=None,
         transform=transform,
         eval_train=False,
         keep_predictions=False,
@@ -720,3 +833,134 @@ def test_run_window_builds_result_and_applies_transform() -> None:
     assert result.train_metrics == {}
     assert result.prediction is None
     assert transform_calls["count"] == 1
+
+
+# --- P8: results_to_dataframe ------------------------------------------------
+
+
+def _make_result(t0: int, **kwargs: object) -> BacktestResult:
+    base: dict[str, Any] = {
+        "t0": t0,
+        "t1": t0 + 10,
+        "t2": t0 + 14,
+        "num_samples": 20,
+        "train_walltime": 0.5,
+        "test_walltime": 0.25,
+        "metrics": {"crps": 1.0, "mae": 2.0},
+        "params": {"sigma": 0.3},
+        "train_metrics": {"crps": 0.8},
+    }
+    base.update(kwargs)
+    return BacktestResult(**cast("Any", base))
+
+
+def test_results_to_dataframe_schema_and_row_count() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    results = [_make_result(0), _make_result(4)]
+    df = results_to_dataframe(results)
+    assert len(df) == 2
+    assert set(df.columns) == {
+        "t0",
+        "t1",
+        "t2",
+        "num_samples",
+        "train_walltime",
+        "test_walltime",
+        "metric_crps",
+        "metric_mae",
+        "train_metric_crps",
+        "param_sigma",
+    }
+    assert list(df["t0"]) == [0, 4]
+    assert list(df["metric_crps"]) == [1.0, 1.0]
+    assert list(df["param_sigma"]) == [0.3, 0.3]
+
+
+def test_results_to_dataframe_empty_input() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    df = results_to_dataframe([])
+    assert len(df) == 0
+
+
+def test_results_to_dataframe_heterogeneous_metrics() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    # One window carries an extra per-window metric; its column is NaN elsewhere.
+    a = _make_result(0)
+    b = _make_result(4, metrics={"crps": 1.0, "mae": 2.0, "mase": 0.9})
+    df = results_to_dataframe([a, b])
+    assert "metric_mase" in df.columns
+    assert df["metric_mase"].isna().tolist() == [True, False]
+
+
+def test_results_to_dataframe_no_metrics_or_params() -> None:
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    r = _make_result(0, metrics={}, params={}, train_metrics={})
+    df = results_to_dataframe([r])
+    assert set(df.columns) == {
+        "t0",
+        "t1",
+        "t2",
+        "num_samples",
+        "train_walltime",
+        "test_walltime",
+    }
+
+
+def test_results_to_dataframe_missing_pandas(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib
+
+    from numpyro_forecast.evaluate import results_to_dataframe
+
+    real_import = importlib.import_module
+
+    def fake_import(name: str, package: str | None = None) -> object:
+        if name == "pandas":
+            raise ImportError("no pandas")
+        return real_import(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    with pytest.raises(ImportError, match=r"dataframes"):
+        results_to_dataframe([_make_result(0)])
+
+
+def test_rolling_backtest_reuse_model_predict_cache(
+    count_compilations,
+    rng_key: Array,
+) -> None:
+    """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
+    import jax
+
+    from numpyro_forecast.functional import _predict
+
+    duration = 80
+    train, test, stride = 25, 5, 5
+    data = jnp.sin(jnp.linspace(0, 6, duration))[:, None]
+    cov = jnp.zeros((duration, 0))
+    num_windows = (duration - train - test) // stride + 1
+
+    def run(reuse: bool) -> int:
+        _predict.clear_cache()  # ty: ignore[unresolved-attribute]
+        with count_compilations() as tally:  # type: ignore[operator]
+            backtest(
+                rng_key,
+                data,
+                cov,
+                RandomWalkModel,
+                train_window=train,
+                test_window=test,
+                stride=stride,
+                num_samples=10,
+                forecaster_options={"num_steps": 30},
+                reuse_model=reuse,
+            )
+            jax.block_until_ready(data)
+        return int(tally.count)  # type: ignore[attr-defined]
+
+    without_reuse = run(False)
+    with_reuse = run(True)
+    assert with_reuse <= without_reuse
+    assert _predict._cache_size() <= num_windows  # ty: ignore[unresolved-attribute]

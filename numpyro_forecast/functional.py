@@ -9,31 +9,66 @@ styles are fully interchangeable: both produce a NumPyro model callable
 ``(covariates, data=None)`` and consume a posterior dict of latent draws.
 """
 
-from collections.abc import Callable
-from contextlib import ExitStack
+import functools
+import inspect
+import math
+import os.path
+import warnings
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from functools import partial, singledispatch
-from typing import cast
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import numpyro
 import numpyro.distributions as dist
 from jax import random
 from jax.tree_util import tree_map
-from jaxtyping import Float
-from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
-from numpyro.infer.autoguide import AutoGuide, AutoNormal
+from jaxtyping import Num
+from numpyro.contrib.control_flow import scan
+from numpyro.infer import AIES, ESS, MCMC, NUTS, SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoDelta, AutoGuide, AutoNormal
+from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.reparam import Reparam
 from numpyro.optim import Adam, _NumPyroOptim
 
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.exceptions import (
+    GuideResolutionError,
+    GuideSampleArgsError,
+    KernelConfigError,
+    KernelResolutionError,
+    OptimizerResolutionError,
+)
+from numpyro_forecast.typing import (
+    Array,
+    ForecastModel,
+    GuideLike,
+    KernelLike,
+    OptimizerLike,
+)
 from numpyro_forecast.util import (
     _zeros_like_data,
     concat_future,
     prefix_condition,
     shift_loc,
     slice_time,
+)
+
+# Why this exists: user-facing warnings (e.g. the BlackJAX num_warmup warning)
+# should point at the *caller's* line, not at a frame inside this package. A
+# numeric ``stacklevel`` cannot do that reliably here because the jaxtyping
+# import hook wraps every annotated function in a runtime type-check wrapper,
+# inserting extra frames whose count is an implementation detail that can
+# change between releases. ``warnings.warn(skip_file_prefixes=...)`` (Python
+# 3.12+) instead skips every frame from these directories -- this package's
+# own modules and jaxtyping's wrapper -- so attribution lands on the first
+# user frame regardless of wrapper depth.
+_WARN_SKIP_PREFIXES = (
+    os.path.dirname(__file__),
+    os.path.dirname(jaxtyping.__file__),
 )
 
 
@@ -175,6 +210,203 @@ def time_series(
     return concat_future(prefix, suffix, axis=-2)
 
 
+Transition = Callable[
+    [Any, Array | None],
+    tuple[dist.Distribution, Callable[[Array], Any]],
+]
+"""(carry, x_t) -> (dist_t, carry_fn) where carry_fn(z_t) builds the next carry
+from the *sampled* latent. The wrapper owns the sample statement.
+
+``carry`` is an arbitrary PyTree (hence ``Any``): typing it as ``object`` would,
+by function-parameter contravariance, reject every concretely-typed transition a
+user might write (e.g. ``carry: Array``)."""
+
+
+@contextmanager
+def _plate_stack(plates: Sequence[tuple[str, int]]):
+    """Open nested ``numpyro.plate`` contexts (innermost last)."""
+    with ExitStack() as stack:
+        for plate_name, size in plates:
+            stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
+        yield
+
+
+def _reject_enclosing_plates() -> None:
+    """Raise if ``markov_time_series`` is called inside an enclosing plate."""
+    try:
+        from numpyro.primitives import _PYRO_STACK
+
+        for msg in _PYRO_STACK:
+            if type(msg).__name__ == "plate":
+                msg_text = (
+                    "markov_time_series opens plates internally via the plates= "
+                    "argument; do not wrap the call in an enclosing numpyro.plate."
+                )
+                raise ValueError(msg_text)
+    except (ImportError, AttributeError, TypeError):
+        pass
+
+
+def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
+    """Require a non-degenerate per-step shape with an observation axis."""
+    if len(dist_t.event_shape) == 0 and len(dist_t.batch_shape) == 0:
+        msg = (
+            "markov_time_series requires the transition distribution to carry "
+            "the trailing observation dimension; add it, e.g. loc=...[..., None]."
+        )
+        raise ValueError(msg)
+
+
+def markov_time_series(
+    h: Horizon,
+    name: str,
+    init_carry: Any,
+    transition: Transition,
+    xs: Array | None = None,
+    *,
+    plates: Sequence[tuple[str, int]] = (),
+    reparam_config: Mapping[str, Reparam] | None = None,
+) -> Array:
+    """Sample a Markov (state-space) latent over the full horizon.
+
+    In-sample steps run in a ``numpyro.contrib.control_flow.scan`` with site
+    ``name``; when forecasting, horizon steps run in a second scan with site
+    ``f"{name}_future"`` **seeded by the final in-sample carry**. The guide
+    never sees the future site (same invariant as :func:`time_series`), and
+    under posterior replay the carry is a deterministic function of the replayed
+    draws, so the forecast is conditioned through the state.
+
+    Parameters
+    ----------
+    h
+        The horizon for the current model call (see :class:`Horizon`).
+    name
+        Base sample-site name for the in-sample latent scan.
+    init_carry
+        Initial carry passed to the first transition.
+    transition
+        Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
+        owns the ``numpyro.sample`` statement.
+    xs
+        Optional exogenous inputs over the full horizon with time at axis ``-2``,
+        moved into scan layout internally; ``None`` for autonomous dynamics.
+    plates
+        ``(name, size)`` pairs opened **inside** the scan body around the sample
+        statement (the only placement NumPyro supports for scan + plate).
+    reparam_config
+        Site-name -> :class:`~numpyro.infer.reparam.Reparam` mapping applied
+        **inside** the scan body.
+
+    Returns
+    -------
+    Array
+        The latent over the full horizon in package layout
+        ``(*plate_batch, duration, obs)``.
+
+    Raises
+    ------
+    ValueError
+        If forecasting without observed data, if the per-step shape lacks the
+        observation dimension, or if an enclosing plate is detected.
+    """
+    if h.future > 0 and h.data is None:
+        msg = "markov_time_series requires observed data when forecasting"
+        raise ValueError(msg)
+    _reject_enclosing_plates()
+
+    def _body(site_name: str) -> Callable[[object, Array | None], tuple[object, Array]]:
+        def body(carry: object, x_t: Array | None) -> tuple[object, Array]:
+            dist_t, carry_fn = transition(carry, x_t)
+            _validate_markov_step_dist(dist_t)
+            ctx = (
+                numpyro.handlers.reparam(config=dict(reparam_config))
+                if reparam_config
+                else nullcontext()
+            )
+            with ctx, _plate_stack(plates):
+                z = cast(Array, numpyro.sample(site_name, dist_t))
+            return carry_fn(z), z
+
+        return body
+
+    xs_scan = None if xs is None else jnp.moveaxis(xs, -2, 0)
+    final_carry, zs = scan(
+        _body(name),
+        init_carry,
+        None if xs_scan is None else xs_scan[: h.t_obs],
+        length=h.t_obs if xs_scan is None else None,
+    )
+    if h.future == 0:
+        return jnp.moveaxis(zs, 0, -2)
+    _, zf = scan(
+        _body(f"{name}_future"),
+        final_carry,
+        None if xs_scan is None else xs_scan[h.t_obs :],
+        length=h.future if xs_scan is None else None,
+    )
+    return jnp.moveaxis(jnp.concatenate([zs, zf], axis=0), 0, -2)
+
+
+def predict_glm(
+    h: Horizon,
+    obs_dist_fn: Callable[[Array], dist.Distribution],
+    latent: Array,
+) -> None:
+    """Register GLM-style observation/forecast sites from a latent predictor.
+
+    The generalized-linear counterpart of :func:`predict`: instead of a
+    zero-centered noise distribution shifted by a mean, the caller supplies a link
+    ``obs_dist_fn`` that maps the full-horizon ``latent`` predictor to the
+    observation distribution directly (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
+    The prefix/suffix mirroring is identical to :func:`predict`: while training the
+    observation is observed; while forecasting the in-sample prefix is observed and
+    the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
+    site. The observation distribution must support time-axis surgery
+    (:func:`~numpyro_forecast.util.slice_time` /
+    :func:`~numpyro_forecast.util.prefix_condition`), i.e. an elementwise family.
+
+    Parameters
+    ----------
+    h
+        The horizon for the current model call (see :class:`Horizon`).
+    obs_dist_fn
+        Link mapping the full-horizon ``latent`` to the observation distribution
+        (time at axis ``-2``, shape ``(*batch, duration, obs)``).
+    latent
+        The deterministic latent predictor over the full horizon, time at axis
+        ``-2``.
+
+    Raises
+    ------
+    RuntimeError
+        If forecasting (``future > 0``) but no observed data is available.
+    ValueError
+        If the observation distribution has discrete support but ``h.data`` is
+        not integer-dtyped (the usual mistake for count models).
+    """
+    obs_dist = obs_dist_fn(latent)
+    support = obs_dist.support
+    if support is not None and support.is_discrete and h.data is not None:
+        if not jnp.issubdtype(h.data.dtype, jnp.integer):
+            msg = (
+                "the observation distribution has discrete support, so data must "
+                f"be integer-dtyped, got dtype {h.data.dtype}. Cast counts with "
+                "e.g. data.astype('int32')."
+            )
+            raise ValueError(msg)
+    if h.future == 0:
+        numpyro.sample("obs", obs_dist, obs=h.data)
+        return
+    data = h.data
+    if data is None:
+        msg = "forecasting requires observed data"
+        raise RuntimeError(msg)
+    prefix = slice_time(obs_dist, slice(None, h.t_obs))
+    numpyro.sample("obs", prefix, obs=data)
+    forecast = numpyro.sample("obs_future", prefix_condition(obs_dist, data))
+    numpyro.deterministic("forecast", forecast)
+
+
 def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> None:
     """Register the observation/forecast sites for the model.
 
@@ -182,7 +414,8 @@ def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> Non
     ``prediction`` the deterministic mean over the full horizon. While training
     the residual is observed; while forecasting the in-sample prefix is observed
     and the forecast suffix is sampled and exposed as the ``"forecast"``
-    deterministic site.
+    deterministic site. A thin wrapper over :func:`predict_glm` with the
+    location-shift link ``lambda mu: shift_loc(noise_dist, mu)``.
 
     Parameters
     ----------
@@ -199,18 +432,7 @@ def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> Non
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     """
-    obs_dist = shift_loc(noise_dist, prediction)
-    if h.future == 0:
-        numpyro.sample("obs", obs_dist, obs=h.data)
-        return
-    data = h.data
-    if data is None:
-        msg = "forecasting requires observed data"
-        raise RuntimeError(msg)
-    prefix = slice_time(obs_dist, slice(None, h.t_obs))
-    numpyro.sample("obs", prefix, obs=data)
-    forecast = numpyro.sample("obs_future", prefix_condition(obs_dist, data))
-    numpyro.deterministic("forecast", forecast)
+    predict_glm(h, lambda mu: shift_loc(noise_dist, mu), prediction)
 
 
 def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastModel:
@@ -243,6 +465,177 @@ def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastMod
     return numpyro_model
 
 
+_DEFAULT_LEARNING_RATE: float = 0.01
+"""Default Adam learning rate used when ``optim`` is ``None``."""
+
+
+def resolve_optimizer(optim: "OptimizerLike") -> _NumPyroOptim:
+    """Normalize an optimizer specification into a NumPyro optimizer.
+
+    Accepted forms: ``None`` (``Adam(0.01)``); a finite positive scalar learning
+    rate (``float``/``int``/NumPy scalar/0-d array) giving ``Adam(lr)``; an
+    ``optax.GradientTransformation`` (wrapped via
+    ``numpyro.optim.optax_to_numpyro``, imported lazily so optax stays a soft
+    dependency); a ``_NumPyroOptim`` (returned unchanged).
+
+    Parameters
+    ----------
+    optim
+        The optimizer specification (see :data:`~numpyro_forecast.typing.OptimizerLike`).
+
+    Returns
+    -------
+    _NumPyroOptim
+        The resolved NumPyro optimizer.
+
+    Raises
+    ------
+    OptimizerResolutionError
+        For boolean inputs of any form, including 0-d boolean arrays (``bool`` is
+        an ``int`` subclass, so a bool would silently mean ``Adam(1.0)``), and for
+        any other unrecognized type; the message lists the accepted forms.
+    ValueError
+        For a non-finite or non-positive learning rate.
+    """
+    if optim is None:
+        return Adam(_DEFAULT_LEARNING_RATE)
+    if isinstance(optim, _NumPyroOptim):
+        return optim
+    if isinstance(optim, bool):
+        raise OptimizerResolutionError()
+    is_array_scalar = getattr(optim, "ndim", None) == 0
+    if is_array_scalar and jnp.issubdtype(jnp.asarray(optim).dtype, jnp.bool_):
+        raise OptimizerResolutionError()  # 0-d bool array: same silent Adam(1.0) trap
+    if isinstance(optim, (int, float)) or is_array_scalar:
+        lr = float(cast("float", optim))
+        if not math.isfinite(lr) or lr <= 0.0:
+            msg = f"learning rate must be finite and positive, got {lr}"
+            raise ValueError(msg)
+        return Adam(lr)
+    if hasattr(optim, "init") and hasattr(optim, "update"):
+        from numpyro.optim import optax_to_numpyro
+
+        return optax_to_numpyro(optim)
+    msg = (
+        f"resolve_optimizer() does not support {type(optim).__name__}; pass None, "
+        "a positive float learning rate, an optax.GradientTransformation, or a "
+        "numpyro optimizer (_NumPyroOptim)."
+    )
+    raise OptimizerResolutionError(msg)
+
+
+def _probe_handwritten_guide(guide: Callable[..., object]) -> None:
+    """Reject callables whose signature matches a guide *factory*.
+
+    Uses :func:`inspect.signature`: exactly one required positional parameter,
+    no defaults, and no var-args raises :class:`GuideResolutionError` with the
+    dual-interpretation message. Signatures :mod:`inspect` cannot resolve
+    (builtins, some partials) pass the probe: it is a tripwire for the common
+    mistyped-factory mistake, not a gatekeeper.
+
+    Parameters
+    ----------
+    guide
+        The candidate hand-written guide callable.
+
+    Raises
+    ------
+    GuideResolutionError
+        If ``guide`` has the single-required-positional-argument factory shape.
+    """
+    try:
+        sig = inspect.signature(guide)
+    except (ValueError, TypeError):
+        return
+    params = list(sig.parameters.values())
+    required_positional = [
+        p
+        for p in params
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) and p.default is p.empty
+    ]
+    has_default = any(p.default is not p.empty for p in params)
+    has_var = any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in params)
+    if len(required_positional) == 1 and not has_default and not has_var:
+        raise GuideResolutionError()
+
+
+def resolve_guide(
+    guide: "GuideLike",
+    model: ForecastModel,
+) -> "AutoGuide | Callable[..., None]":
+    """Normalize a guide specification against ``model``.
+
+    Resolution: ``None`` -> ``AutoNormal(model)``; an ``AutoGuide`` instance ->
+    returned unchanged; an ``AutoGuide`` subclass or a ``functools.partial`` of
+    one -> called with ``model``; any other callable -> a hand-written guide,
+    after :func:`_probe_handwritten_guide`. Anything else ->
+    :class:`GuideResolutionError`.
+
+    Parameters
+    ----------
+    guide
+        The guide specification (see :data:`~numpyro_forecast.typing.GuideLike`).
+    model
+        The model the guide is built against.
+
+    Returns
+    -------
+    AutoGuide | Callable[..., None]
+        The resolved guide.
+
+    Raises
+    ------
+    GuideResolutionError
+        If ``guide`` is neither an ``AutoGuide`` (instance/subclass/partial) nor
+        a callable, or if it has the mistyped-factory shape.
+    """
+    if guide is None:
+        return AutoNormal(model)
+    if isinstance(guide, AutoGuide):
+        return guide
+    if isinstance(guide, type) and issubclass(guide, AutoGuide):
+        return guide(model)
+    if isinstance(guide, functools.partial):
+        target = guide.func
+        if isinstance(target, type) and issubclass(target, AutoGuide):
+            return cast("AutoGuide", guide(model))
+    if callable(guide):
+        _probe_handwritten_guide(guide)
+        return cast("Callable[..., None]", guide)
+    msg = (
+        f"resolve_guide() does not support {type(guide).__name__}; pass None, an "
+        "AutoGuide instance, an AutoGuide subclass (or functools.partial of one), "
+        "or a hand-written guide function `(covariates, data=None)`."
+    )
+    raise GuideResolutionError(msg)
+
+
+def _ensure_sample_axis_for_delta(samples: dict[str, Array], num_samples: int) -> dict[str, Array]:
+    """Tile ``AutoDelta`` point estimates to a leading sample axis.
+
+    Called only when the fit's guide is an ``AutoDelta`` (guide-type dispatch,
+    never shape inspection): every leaf is broadcast to
+    ``(num_samples, *leaf.shape)`` unconditionally. For all other Auto guides
+    ``sample_posterior`` already returns the axis and this is never invoked.
+
+    Parameters
+    ----------
+    samples
+        The MAP point estimate, one leaf per latent site.
+    num_samples
+        The leading sample-axis size to tile to.
+
+    Returns
+    -------
+    dict[str, Array]
+        Each leaf broadcast to ``(num_samples, *leaf.shape)``.
+    """
+    return {
+        name: jnp.broadcast_to(leaf, (num_samples, *jnp.shape(leaf)))
+        for name, leaf in samples.items()
+    }
+
+
 @dataclass(frozen=True)
 class SVIFit:
     """The result of fitting a forecasting model with SVI.
@@ -255,11 +648,20 @@ class SVIFit:
         The learned variational parameters.
     losses
         The ELBO loss per SVI step (shape ``(num_steps,)``).
+    data
+        The in-sample data the model was fit on (needed to draw from
+        hand-written guides and by :func:`~numpyro_forecast.convert.to_datatree`).
+        ``None`` for fits constructed without it.
+    covariates
+        The in-sample covariates the model was fit on. ``None`` for fits
+        constructed without it.
     """
 
-    guide: AutoGuide
+    guide: "AutoGuide | Callable[..., None]"
     params: dict[str, Array]
     losses: Array
+    data: Array | None = None
+    covariates: Array | None = None
 
 
 def _require_positive_num_samples(num_samples: int) -> None:
@@ -288,19 +690,117 @@ def _index_tree(tree: dict[str, Array], index: Array | slice) -> dict[str, Array
     return tree_map(lambda leaf: leaf[index], tree)
 
 
+def _pad_posterior(posterior: dict[str, Array], batch_size: int) -> tuple[dict[str, Array], int]:
+    """Pad a posterior's sample axis up to a whole multiple of ``batch_size``.
+
+    Padding lets the chunk loop slice fixed-size ``batch_size`` blocks so
+    ``_predict`` compiles exactly once regardless of ``num_samples``. The pad
+    rows are wrapped-around copies of existing draws and are discarded by the
+    caller's final ``[:num]`` slice, so they never affect the result.
+
+    Parameters
+    ----------
+    posterior
+        Posterior samples, sample axis leading (all leaves agree on that axis).
+    batch_size
+        Positive chunk size.
+
+    Returns
+    -------
+    tuple[dict[str, Array], int]
+        The padded posterior and the original (pre-pad) sample count.
+
+    Raises
+    ------
+    ValueError
+        If ``posterior`` is empty, ``batch_size`` is not positive, or the leaves
+        disagree on the sample-axis length (the message names the offending sites).
+    """
+    if not posterior:
+        msg = "_pad_posterior() requires a non-empty posterior"
+        raise ValueError(msg)
+    if batch_size <= 0:
+        msg = f"batch_size must be positive, got {batch_size}"
+        raise ValueError(msg)
+    sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
+    distinct = set(sizes.values())
+    if len(distinct) != 1:
+        msg = f"posterior leaves disagree on the sample axis: {sizes}"
+        raise ValueError(msg)
+    num = distinct.pop()
+    remainder = num % batch_size
+    if remainder == 0:
+        return posterior, num
+    pad = batch_size - remainder
+    pad_indices = jnp.arange(pad) % num
+    padded = {
+        name: jnp.concatenate([leaf, leaf[pad_indices]], axis=0)
+        for name, leaf in posterior.items()
+    }
+    return padded, num
+
+
+def _chunked_draws(
+    rng_key: Array,
+    predict_fn: Callable[[Array, dict[str, Array]], Array],
+    posterior: dict[str, Array],
+    batch_size: int | None,
+) -> Array:
+    """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
+
+    Shared chunk driver for :func:`forecast` and :func:`predict_in_sample`.
+    With ``batch_size`` ``None`` (or at least the sample count) ``predict_fn``
+    is called once on the full posterior with ``rng_key`` itself. Otherwise the
+    posterior is padded to a whole multiple of ``batch_size``
+    (:func:`_pad_posterior`) so every chunk shares one shape and the jitted
+    ``predict_fn`` compiles exactly once; one subkey is split per chunk, and
+    the pad draws are discarded by the final slice.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key; consumed directly when unchunked, split per chunk otherwise.
+    predict_fn
+        ``(rng_key, posterior) -> draws`` with the sample axis leading.
+    posterior
+        Posterior samples of the latent sites, sample axis leading.
+    batch_size
+        Optional chunk size (caps peak memory).
+
+    Returns
+    -------
+    Array
+        The stitched draws for the original (pre-pad) sample count.
+    """
+    num_samples = next(iter(posterior.values())).shape[0]
+    if batch_size is None or batch_size >= num_samples:
+        return predict_fn(rng_key, posterior)
+    padded, num = _pad_posterior(posterior, batch_size)
+    num_padded = next(iter(padded.values())).shape[0]
+    keys = random.split(rng_key, num_padded // batch_size)
+    chunks = [
+        predict_fn(keys[i], _index_tree(padded, slice(start, start + batch_size)))
+        for i, start in enumerate(range(0, num_padded, batch_size))
+    ]
+    return jnp.concatenate(chunks, axis=0)[:num]
+
+
 def fit_svi(
     rng_key: Array,
     model: ForecastModel,
     data: Array,
     covariates: Array,
     *,
-    guide: AutoGuide | None = None,
-    optim: _NumPyroOptim | None = None,
+    guide: "GuideLike" = None,
+    optim: "OptimizerLike" = None,
     num_steps: int = 1_001,
     num_particles: int = 1,
     progress_bar: bool = False,
+    stable_update: bool = False,
 ) -> SVIFit:
     """Fit a forecasting model with stochastic variational inference.
+
+    PRNG: consumes ``rng_key`` once for the SVI run; nothing is retained.
 
     Parameters
     ----------
@@ -313,20 +813,35 @@ def fit_svi(
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
     guide
-        Variational guide; defaults to ``AutoNormal(model)``.
+        Guide specification resolved by :func:`resolve_guide`: ``None``
+        (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
+        ``functools.partial`` factory of one, or a hand-written guide function.
     optim
-        NumPyro optimizer; defaults to ``Adam(0.01)``.
+        Optimizer specification resolved by :func:`resolve_optimizer`: ``None``
+        (``Adam(0.01)``), a positive scalar learning rate, an
+        ``optax.GradientTransformation``, or a ``_NumPyroOptim``. For example, a
+        cosine-decayed, gradient-clipped Adam::
+
+            import optax
+
+            schedule = optax.cosine_decay_schedule(1e-2, decay_steps=1_000)
+            optim = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
+
     num_steps
         Number of SVI steps.
     num_particles
         Number of ELBO particles.
     progress_bar
         Whether to display the SVI progress bar.
+    stable_update
+        Whether SVI skips parameter updates whose new value is non-finite
+        (NumPyro's ``stable_update``).
 
     Returns
     -------
     SVIFit
-        The fitted guide, variational parameters, and loss history.
+        The fitted guide, variational parameters, loss history, and the
+        in-sample ``data``/``covariates`` (kept by identity, not copied).
 
     Raises
     ------
@@ -334,11 +849,24 @@ def fit_svi(
         If ``data`` and ``covariates`` have different durations.
     """
     _require_equal_duration(data, covariates)
-    guide = AutoNormal(model) if guide is None else guide
-    optimizer = Adam(0.01) if optim is None else optim
-    svi = SVI(model, guide, optimizer, Trace_ELBO(num_particles=num_particles))
-    result = svi.run(rng_key, num_steps, covariates, data, progress_bar=progress_bar)
-    return SVIFit(guide=guide, params=result.params, losses=result.losses)
+    resolved_guide = resolve_guide(guide, model)
+    optimizer = resolve_optimizer(optim)
+    svi = SVI(model, resolved_guide, optimizer, Trace_ELBO(num_particles=num_particles))
+    result = svi.run(
+        rng_key,
+        num_steps,
+        covariates,
+        data,
+        progress_bar=progress_bar,
+        stable_update=stable_update,
+    )
+    return SVIFit(
+        guide=resolved_guide,
+        params=result.params,
+        losses=result.losses,
+        data=data,
+        covariates=covariates,
+    )
 
 
 @singledispatch
@@ -351,7 +879,15 @@ def _draw_posterior_impl(fit: object, num_samples: int, rng_key: Array) -> dict[
 @_draw_posterior_impl.register
 def _(fit: SVIFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     _require_positive_num_samples(num_samples)
-    return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+    if isinstance(fit.guide, AutoDelta):
+        point = fit.guide.sample_posterior(rng_key, fit.params)
+        return _ensure_sample_axis_for_delta(point, num_samples)
+    if isinstance(fit.guide, AutoGuide):
+        return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+    if fit.covariates is None:
+        raise GuideSampleArgsError()
+    predictive = Predictive(fit.guide, params=fit.params, num_samples=num_samples)
+    return predictive(rng_key, fit.covariates, fit.data)
 
 
 def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, Array]:
@@ -379,6 +915,9 @@ def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, A
     ------
     NotImplementedError
         If ``fit`` is of an unsupported type.
+    GuideSampleArgsError
+        If the fit holds a hand-written guide but was constructed without its
+        in-sample covariates/data.
 
     Notes
     -----
@@ -393,15 +932,142 @@ def draw_posterior(rng_key: Array, fit: object, num_samples: int) -> dict[str, A
 
 @dataclass(frozen=True)
 class MCMCFit:
-    """The result of fitting a forecasting model with MCMC (NUTS).
+    """The result of fitting a forecasting model with MCMC.
 
     Attributes
     ----------
     samples
-        The posterior samples of the latent sites, sample axis leading.
+        The posterior samples of the latent sites, sample axis leading and
+        stored flattened (``group_by_chain=False``).
+    num_chains
+        The number of chains the fit was run with (frozen; default ``1``), so
+        chain structure survives into :func:`~numpyro_forecast.convert.to_datatree`.
     """
 
     samples: dict[str, Array]
+    num_chains: int = 1
+
+
+def resolve_kernel(
+    kernel: "KernelLike",
+    model: ForecastModel,
+    kernel_kwargs: Mapping[str, Any] | None,
+) -> MCMCKernel:
+    """Normalize a kernel specification.
+
+    ``None`` -> ``NUTS(model, **kernel_kwargs)`` (kwargs tune the default kernel
+    without naming it); a kernel class -> ``kernel(model, **kernel_kwargs)``; a
+    kernel instance -> returned unchanged, and combining an instance with
+    non-empty ``kernel_kwargs`` raises ``ValueError`` (ambiguous). Anything else
+    -> ``TypeError``.
+
+    Parameters
+    ----------
+    kernel
+        The kernel specification (see :data:`~numpyro_forecast.typing.KernelLike`).
+    model
+        The model the kernel is built against.
+    kernel_kwargs
+        Extra keyword arguments forwarded to the kernel constructor (ignored,
+        and rejected, for an already-constructed instance).
+
+    Returns
+    -------
+    MCMCKernel
+        The resolved kernel.
+
+    Raises
+    ------
+    KernelConfigError
+        If a kernel instance is combined with non-empty ``kernel_kwargs``.
+    KernelResolutionError
+        If ``kernel`` is neither ``None``, an ``MCMCKernel`` subclass, nor an
+        ``MCMCKernel`` instance.
+    """
+    kwargs = dict(kernel_kwargs or {})
+    if kernel is None:
+        return NUTS(model, **kwargs)
+    if isinstance(kernel, type) and issubclass(kernel, MCMCKernel):
+        factory = cast("Callable[..., MCMCKernel]", kernel)
+        return factory(model, **kwargs)
+    if isinstance(kernel, MCMCKernel):
+        if kwargs:
+            msg = (
+                "kernel_kwargs cannot be combined with an already-constructed "
+                "kernel instance; pass the kernel class instead, or set the "
+                "options on the instance."
+            )
+            raise KernelConfigError(msg)
+        return kernel
+    msg = (
+        f"resolve_kernel() does not support {type(kernel).__name__}; pass None, "
+        "an MCMCKernel subclass, or an MCMCKernel instance."
+    )
+    raise KernelResolutionError(msg)
+
+
+def _is_blackjax_kernel(kernel: MCMCKernel) -> bool:
+    """Return whether ``kernel`` is a ``_BlackjaxKernel`` (by MRO name, import-free)."""
+    return any(base.__name__ == "_BlackjaxKernel" for base in type(kernel).__mro__)
+
+
+def _validate_kernel_run_config(
+    kernel: MCMCKernel, num_chains: int, chain_method: str, num_warmup: int
+) -> None:
+    """Entry-point checks for constraints NumPyro surfaces late or never.
+
+    - ``AIES``/``ESS``: require ``num_chains > 1`` and ``chain_method ==
+      "vectorized"`` (the ensemble is the chain batch).
+    - ``_BlackjaxKernel`` subclasses: require ``chain_method == "sequential"``
+      (instance-held step/postprocess functions capture tracers under vmap/pmap
+      tracing); warn when ``num_warmup > 0`` (adaptation lives in
+      ``kernel.init``, so warmup steps are discarded work).
+
+    The warmup warning is attributed to the caller of :func:`fit_mcmc` via
+    ``skip_file_prefixes`` (this package's frames and jaxtyping's runtime
+    type-check wrapper are skipped), which is robust to the wrapper's frame depth.
+
+    Parameters
+    ----------
+    kernel
+        The resolved kernel.
+    num_chains
+        The requested number of chains.
+    chain_method
+        The requested chain method (``"sequential"``/``"parallel"``/``"vectorized"``).
+    num_warmup
+        The requested number of warmup steps.
+
+    Raises
+    ------
+    KernelConfigError
+        For each violated constraint, naming the constraint and the fix.
+    """
+    if isinstance(kernel, (AIES, ESS)):
+        name = type(kernel).__name__
+        if num_chains <= 1 or chain_method != "vectorized":
+            msg = (
+                f"{name} is an ensemble sampler: it requires num_chains > 1 and "
+                f'chain_method="vectorized" (got num_chains={num_chains}, '
+                f'chain_method="{chain_method}").'
+            )
+            raise KernelConfigError(msg)
+    if _is_blackjax_kernel(kernel):
+        if chain_method != "sequential":
+            msg = (
+                f'{type(kernel).__name__} requires chain_method="sequential"; '
+                "its step/postprocess functions capture tracers under "
+                f'vmap/pmap (got chain_method="{chain_method}").'
+            )
+            raise KernelConfigError(msg)
+        if num_warmup > 0:
+            warnings.warn(
+                f"{type(kernel).__name__} performs adaptation in kernel.init; "
+                f"num_warmup={num_warmup} warmup steps are discarded work, pass "
+                "num_warmup=0.",
+                stacklevel=2,
+                skip_file_prefixes=_WARN_SKIP_PREFIXES,
+            )
 
 
 def fit_mcmc(
@@ -410,12 +1076,17 @@ def fit_mcmc(
     data: Array,
     covariates: Array,
     *,
+    kernel: "KernelLike" = None,
+    kernel_kwargs: Mapping[str, Any] | None = None,
     num_warmup: int = 1_000,
     num_samples: int = 1_000,
     num_chains: int = 1,
+    chain_method: str = "sequential",
     progress_bar: bool = False,
 ) -> MCMCFit:
-    """Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
+    """Fit a forecasting model with MCMC.
+
+    PRNG: consumed entirely by :class:`~numpyro.infer.MCMC`.
 
     Parameters
     ----------
@@ -427,35 +1098,49 @@ def fit_mcmc(
         In-sample data with time at axis ``-2``.
     covariates
         Covariates with time at axis ``-2`` and the same duration as ``data``.
+    kernel
+        Kernel specification resolved by :func:`resolve_kernel`: ``None``
+        (``NUTS``), an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
+    kernel_kwargs
+        Extra keyword arguments for the kernel constructor (only with ``None``
+        or a kernel class; rejected with an instance).
     num_warmup
         Number of warmup steps.
     num_samples
         Number of posterior samples.
     num_chains
-        Number of MCMC chains.
+        Number of MCMC chains (stored on the returned :class:`MCMCFit`).
+    chain_method
+        NumPyro chain method (``"sequential"``/``"parallel"``/``"vectorized"``).
     progress_bar
         Whether to display the MCMC progress bar.
 
     Returns
     -------
     MCMCFit
-        The posterior samples.
+        The posterior samples (flattened) and ``num_chains``.
 
     Raises
     ------
     ValueError
         If ``data`` and ``covariates`` have different durations.
+    KernelConfigError
+        If a run-config constraint is violated (see
+        :func:`_validate_kernel_run_config`).
     """
     _require_equal_duration(data, covariates)
+    resolved_kernel = resolve_kernel(kernel, model, kernel_kwargs)
+    _validate_kernel_run_config(resolved_kernel, num_chains, chain_method, num_warmup)
     mcmc = MCMC(
-        NUTS(model),
+        resolved_kernel,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
+        chain_method=chain_method,
         progress_bar=progress_bar,
     )
     mcmc.run(rng_key, covariates, data)
-    return MCMCFit(samples=mcmc.get_samples())
+    return MCMCFit(samples=mcmc.get_samples(), num_chains=num_chains)
 
 
 @_draw_posterior_impl.register
@@ -509,7 +1194,7 @@ def forecast(
     *,
     batch_size: int | None = None,
     parallel: bool = True,
-) -> Float[Array, " sample *batch future obs"]:
+) -> Num[Array, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
     Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
@@ -542,26 +1227,30 @@ def forecast(
 
     Returns
     -------
-    Float[Array, " sample *batch future obs"]
-        Forecast samples over the ``future = duration - t`` horizon.
+    Num[Array, " sample *batch future obs"]
+        Forecast samples over the ``future = duration - t`` horizon (floating
+        point for continuous observations, integer for discrete/count models
+        built with :func:`predict_glm`).
 
     Raises
     ------
     ValueError
         If ``covariates`` does not extend beyond ``data`` along the time axis.
+
+    Notes
+    -----
+    Chunking is a memory knob, not a reproducibility knob: reproducibility is
+    per ``(rng_key, batch_size)``. Each chunk is padded to a whole multiple of
+    ``batch_size`` so the underlying ``_predict`` compiles exactly once for a
+    fixed shape (the pad draws are discarded), but changing ``batch_size``
+    changes the PRNG stream layout and therefore the exact draws.
     """
     _require_covariates_extend_data(data, covariates)
-    num_samples = next(iter(posterior.values())).shape[0]
-    if batch_size is None or batch_size >= num_samples:
-        return _predict(rng_key, model, posterior, data, covariates, parallel=parallel)
-    outputs = []
-    key = rng_key
-    for start in range(0, num_samples, batch_size):
-        stop = min(start + batch_size, num_samples)
-        key, sub_key = random.split(key)
-        chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict(sub_key, model, chunk, data, covariates, parallel=parallel))
-    return jnp.concatenate(outputs, axis=0)
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        return _predict(key, model, post, data, covariates, parallel=parallel)
+
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size)
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
@@ -593,7 +1282,7 @@ def predict_in_sample(
     *,
     batch_size: int | None = None,
     parallel: bool = True,
-) -> Float[Array, " sample *batch time obs"]:
+) -> Num[Array, " sample *batch time obs"]:
     """Sample the in-sample posterior predictive of the ``obs`` site.
 
     Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
@@ -624,17 +1313,11 @@ def predict_in_sample(
 
     Returns
     -------
-    Float[Array, " sample *batch time obs"]
+    Num[Array, " sample *batch time obs"]
         In-sample posterior-predictive draws of the ``obs`` site.
     """
-    num_samples = next(iter(posterior.values())).shape[0]
-    if batch_size is None or batch_size >= num_samples:
-        return _predict_obs(rng_key, model, posterior, covariates, parallel=parallel)
-    outputs = []
-    key = rng_key
-    for start in range(0, num_samples, batch_size):
-        stop = min(start + batch_size, num_samples)
-        key, sub_key = random.split(key)
-        chunk = _index_tree(posterior, slice(start, stop))
-        outputs.append(_predict_obs(sub_key, model, chunk, covariates, parallel=parallel))
-    return jnp.concatenate(outputs, axis=0)
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        return _predict_obs(key, model, post, covariates, parallel=parallel)
+
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size)

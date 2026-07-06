@@ -22,6 +22,11 @@ GREAT_DOCS_YML = Path(__file__).resolve().parent.parent / "great-docs.yml"
 # Internal submodules whose public symbols are intentionally undocumented.
 IGNORED_MODULES: set[str] = set()
 
+# Optional third-party dependencies: a module whose import fails on one of these
+# is covered by the extras CI leg instead of this walk. Any other ImportError
+# (e.g. a package-internal name) is a real bug and must fail the test loudly.
+_OPTIONAL_DEPS: frozenset[str] = frozenset({"blackjax", "optax", "pandas", "polars"})
+
 
 def _documented_names() -> set[str]:
     config = yaml.safe_load(GREAT_DOCS_YML.read_text(encoding="utf-8"))
@@ -33,19 +38,42 @@ def _documented_names() -> set[str]:
 
 
 def _public_api() -> set[str]:
-    """Return ``module.name`` for every public function/class defined in the package."""
+    """Return ``module.name`` for every public function/class defined in the package.
+
+    Uses :func:`pkgutil.walk_packages` (recursive) so subpackages such as
+    ``contrib`` are scanned too, not just top-level modules. This relies on
+    ``contrib`` submodules being importable without their optional dependency
+    (they pull the extra in lazily via ``require``), so walking them does not
+    import ``blackjax``/``optax`` at collection time and invariant I8 (no optional
+    imports on the base leg) is preserved. An ``ImportError`` whose failing name
+    is in :data:`_OPTIONAL_DEPS` skips just that module (the extras leg covers
+    it); any other import failure propagates so a broken module cannot silently
+    shrink the scanned surface.
+    """
+    prefix = f"{numpyro_forecast.__name__}."
     api: set[str] = set()
-    for info in pkgutil.iter_modules(numpyro_forecast.__path__):
-        if info.name.startswith("_") or info.name in IGNORED_MODULES:
+    for info in pkgutil.walk_packages(
+        numpyro_forecast.__path__, prefix=prefix, onerror=lambda _: None
+    ):
+        relative = info.name.removeprefix(prefix)
+        if (
+            any(part.startswith("_") for part in relative.split("."))
+            or relative in IGNORED_MODULES
+        ):
             continue
-        module = importlib.import_module(f"numpyro_forecast.{info.name}")
+        try:
+            module = importlib.import_module(info.name)
+        except ImportError as err:
+            if err.name in _OPTIONAL_DEPS:
+                continue  # extras leg covers this module
+            raise  # a real import bug must fail the test loudly
         for name, obj in inspect.getmembers(
             module, lambda o: inspect.isfunction(o) or inspect.isclass(o)
         ):
             if name.startswith("_"):
                 continue
-            if getattr(obj, "__module__", "") == f"numpyro_forecast.{info.name}":
-                api.add(f"{info.name}.{name}")
+            if getattr(obj, "__module__", "") == info.name:
+                api.add(f"{relative}.{name}")
     return api
 
 
@@ -55,6 +83,26 @@ def test_public_api_is_documented():
         f"Public API missing from great-docs.yml reference: {sorted(missing)}. "
         "Add each to the appropriate `reference:` section."
     )
+
+
+def test_public_api_walk_raises_on_internal_import_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ImportError not caused by an optional dep propagates out of the walk.
+
+    Guards against the blanket-skip regression where a genuinely broken module
+    (syntax error, renamed internal import) silently shrank the scanned API.
+    """
+    real_import = importlib.import_module
+
+    def fake_import(name: str, package: str | None = None) -> object:
+        if name == "numpyro_forecast.contrib.blackjax":
+            raise ImportError("boom", name="numpyro_forecast.contrib.blackjax")
+        return real_import(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+    with pytest.raises(ImportError, match="boom"):
+        _public_api()
 
 
 def test_documented_names_resolve():

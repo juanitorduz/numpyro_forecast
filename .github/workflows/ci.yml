@@ -31,3 +31,26 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: make setup
       - run: make tests
+
+  # Base leg (no optional extras): importing the package must not pull in
+  # optax/blackjax/pandas (invariant I8). Kept separate from the full suite so a
+  # regression that eagerly imports an extra fails even when extras are absent.
+  base-import:
+    runs-on: ubuntu-latest
+    needs: prek
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --no-default-groups
+      - name: import isolation
+        # pandas is deliberately absent from the leak list: it is a hard
+        # transitive dependency of arviz/xarray (imported at module top by
+        # convert.py), so it is always present and always imported. Only
+        # optax, blackjax, and polars are meaningful extras-leak signals.
+        run: |
+          uv run python -c "import sys, numpyro_forecast; leaked=[m for m in ('optax','blackjax','polars') if m in sys.modules]; assert not leaked, leaked; print('base import OK')"
