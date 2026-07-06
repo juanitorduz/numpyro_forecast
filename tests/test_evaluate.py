@@ -934,7 +934,7 @@ def test_rolling_backtest_reuse_model_predict_cache(
     """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
     import jax
 
-    from numpyro_forecast.functional import _predict
+    from numpyro_forecast.functional.prediction import _predict
 
     duration = 80
     train, test, stride = 25, 5, 5

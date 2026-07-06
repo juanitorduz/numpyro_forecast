@@ -81,26 +81,34 @@ reference:
     desc: Building forecasting models (object-oriented and functional).
     contents:
       - forecaster.ForecastingModel
-      - functional.forecasting_model
+      - functional.models.forecasting_model
 
-  - title: Functional core
+  - title: "Functional core: model primitives"
     desc: Pure functional primitives for the train/forecast split.
     contents:
-      - functional.Horizon
-      - functional.time_series
-      - functional.markov_time_series
-      - functional.predict
-      - functional.predict_glm
-      - functional.resolve_optimizer
-      - functional.resolve_guide
-      - functional.fit_svi
-      - functional.draw_posterior
-      - functional.resolve_kernel
-      - functional.fit_mcmc
-      - functional.forecast
-      - functional.predict_in_sample
-      - functional.SVIFit
-      - functional.MCMCFit
+      - functional.models.Horizon
+      - functional.models.time_series
+      - functional.models.markov_time_series
+      - functional.models.predict
+      - functional.models.predict_glm
+
+  - title: "Functional core: fitting"
+    desc: Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
+    contents:
+      - functional.svi.resolve_optimizer
+      - functional.svi.resolve_guide
+      - functional.svi.fit_svi
+      - functional.svi.SVIFit
+      - functional.mcmc.resolve_kernel
+      - functional.mcmc.fit_mcmc
+      - functional.mcmc.MCMCFit
+
+  - title: "Functional core: posterior and prediction"
+    desc: Drawing posterior samples and generating forecasts and in-sample predictions.
+    contents:
+      - functional.posterior.draw_posterior
+      - functional.prediction.forecast
+      - functional.prediction.predict_in_sample
 
   - title: Backtesting & evaluation
     desc: Rolling-window backtesting and forecast metrics.

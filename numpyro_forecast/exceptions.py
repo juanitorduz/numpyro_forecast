@@ -64,7 +64,7 @@ class VectorizedMetricError(NumpyroForecastError, TypeError):
 class OptimizerResolutionError(NumpyroForecastError, TypeError):
     """An optimizer specification could not be resolved.
 
-    Raised by :func:`~numpyro_forecast.functional.resolve_optimizer` for
+    Raised by :func:`~numpyro_forecast.functional.svi.resolve_optimizer` for
     boolean inputs of any form (``bool`` is an ``int`` subclass, so a bool
     would silently mean ``Adam(1.0)``; the default message) and for any other
     unrecognized type.
@@ -79,7 +79,7 @@ class OptimizerResolutionError(NumpyroForecastError, TypeError):
 class GuideResolutionError(NumpyroForecastError, TypeError):
     """A guide specification could not be resolved.
 
-    Raised by :func:`~numpyro_forecast.functional.resolve_guide` for a
+    Raised by :func:`~numpyro_forecast.functional.svi.resolve_guide` for a
     callable shaped like a guide *factory* (the default message) or for an
     unsupported type.
     """
@@ -96,8 +96,8 @@ class GuideResolutionError(NumpyroForecastError, TypeError):
 class GuideSampleArgsError(NumpyroForecastError, ValueError):
     """Drawing from a hand-written guide needs the in-sample arguments.
 
-    Raised by :func:`~numpyro_forecast.functional.draw_posterior` when an
-    :class:`~numpyro_forecast.functional.SVIFit` holding a hand-written guide
+    Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` when an
+    :class:`~numpyro_forecast.functional.svi.SVIFit` holding a hand-written guide
     was constructed without its in-sample covariates/data.
     """
 
@@ -111,7 +111,7 @@ class GuideSampleArgsError(NumpyroForecastError, ValueError):
 class KernelResolutionError(NumpyroForecastError, TypeError):
     """A kernel specification could not be resolved.
 
-    Raised by :func:`~numpyro_forecast.functional.resolve_kernel` for a type
+    Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` for a type
     that is neither ``None``, an ``MCMCKernel`` subclass, nor an ``MCMCKernel``
     instance.
     """
@@ -120,9 +120,9 @@ class KernelResolutionError(NumpyroForecastError, TypeError):
 class KernelConfigError(NumpyroForecastError, ValueError):
     """A kernel is combined with an invalid configuration.
 
-    Raised by :func:`~numpyro_forecast.functional.resolve_kernel` when
+    Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when
     ``kernel_kwargs`` accompany an already-constructed instance, and by
-    :func:`~numpyro_forecast.functional.fit_mcmc` for run-config constraints
+    :func:`~numpyro_forecast.functional.mcmc.fit_mcmc` for run-config constraints
     (ensemble samplers need multiple vectorized chains; BlackJAX kernels need
     sequential chains).
     """

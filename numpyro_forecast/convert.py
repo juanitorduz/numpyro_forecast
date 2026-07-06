@@ -37,7 +37,7 @@ def _posterior_reshape(fit: object, samples: dict[str, Array]) -> dict[str, "np.
 
     The default adds a single pseudo-chain (``leaf[None]``), which is correct for
     the variational fits (SVI, Pathfinder) that have no chain structure. The
-    :class:`~numpyro_forecast.functional.MCMCFit` override splits the flattened
+    :class:`~numpyro_forecast.functional.mcmc.MCMCFit` override splits the flattened
     draws back into ``fit.num_chains`` chains.
 
     Parameters
@@ -101,8 +101,8 @@ def to_datatree(
     rng_key
         PRNG key for the predictive (and variational posterior) draws.
     fit
-        A fit from :func:`~numpyro_forecast.functional.fit_mcmc`,
-        :func:`~numpyro_forecast.functional.fit_svi`, or
+        A fit from :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`,
+        :func:`~numpyro_forecast.functional.svi.fit_svi`, or
         :func:`~numpyro_forecast.contrib.blackjax.fit_pathfinder`.
     model
         The forecasting model that produced ``fit``.
@@ -112,7 +112,7 @@ def to_datatree(
         In-sample covariates with time at axis ``-2``.
     num_predictive_samples
         Number of posterior draws for a variational fit (ignored for
-        :class:`~numpyro_forecast.functional.MCMCFit`, which uses its own draws).
+        :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
         Defaults to ``1_000``.
     coords
         Optional extra coordinates; these take precedence over the generated
@@ -231,7 +231,7 @@ def add_forecast_groups(
         continued).
     forecast_samples
         Forecast draws shaped ``(num_samples, future, obs)`` from
-        :func:`~numpyro_forecast.functional.forecast`.
+        :func:`~numpyro_forecast.functional.prediction.forecast`.
     covariates_future
         Future covariates shaped ``(future, covariate_dim)``.
     time_coord

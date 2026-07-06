@@ -2,7 +2,7 @@
 
 This module adapts `BlackJAX <https://blackjax-devs.github.io/blackjax/>`_ sampling
 algorithms to the NumPyro ``MCMCKernel`` interface so they can be passed straight to
-:func:`numpyro_forecast.functional.fit_mcmc` (and thus
+:func:`numpyro_forecast.functional.mcmc.fit_mcmc` (and thus
 :class:`~numpyro_forecast.forecaster.HMCForecaster`).
 
 BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``) and is
@@ -11,7 +11,7 @@ never imported at package import time: it is pulled in lazily, via
 kernels run one blackjax step per NumPyro sampling step; adaptation happens once inside
 :meth:`_BlackjaxKernel.init`, so these kernels require ``chain_method="sequential"`` and
 ``num_warmup=0`` (enforced/warned by
-:func:`numpyro_forecast.functional._validate_kernel_run_config`).
+:func:`numpyro_forecast.functional.mcmc._validate_kernel_run_config`).
 """
 
 from collections import namedtuple
@@ -24,7 +24,8 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
-from numpyro_forecast.functional import _draw_posterior_impl, _require_positive_num_samples
+from numpyro_forecast.functional._validation import _require_positive_num_samples
+from numpyro_forecast.functional.posterior import _draw_posterior_impl
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
 from numpyro_forecast.util import require
 
@@ -52,8 +53,8 @@ class _BlackjaxKernel(MCMCKernel):
     ----------
     model
         The NumPyro forecasting model the kernel samples from. Bound by
-        :func:`~numpyro_forecast.functional.resolve_kernel` when a kernel class is
-        passed to :func:`~numpyro_forecast.functional.fit_mcmc`.
+        :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when a kernel class
+        is passed to :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
     """
 
     sample_field = "position"
@@ -367,7 +368,7 @@ class PathfinderFit:
     A plain-data (picklable) container: it holds the raw blackjax
     ``PathfinderState``, the model and its data/covariates (needed to rebuild the
     unconstrained-to-constrained transform when drawing), and the fitted ELBO.
-    Draws are produced lazily by :func:`~numpyro_forecast.functional.draw_posterior`.
+    Draws are produced lazily by :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
 
     Attributes
     ----------
