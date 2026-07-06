@@ -14,7 +14,7 @@ util.slice_time(
 ```
 
 
-The default implementation handles distributions with empty `event_shape` whose `batch_shape` ends with `(time, obs)` (e.g. `Normal`, `StudentT`) by slicing each broadcast parameter.
+The default implementation handles registered elementwise families (empty `event_shape`, `batch_shape` ending in `(time, obs)`; e.g. `Normal`, `StudentT`, `Poisson`) by slicing each broadcast parameter. Correlated families register a dedicated dispatch instead.
 
 
 ## Parameters
@@ -38,4 +38,4 @@ The same distribution family restricted to the selected time steps.
 
 
 `NotImplementedError`  
-If the distribution has a non-empty event shape.
+If `noise_dist` is not a registered elementwise family (and has no dedicated dispatch).

@@ -11,7 +11,7 @@ A practical note on the design: the built-in [numpyro_forecast.functional.time_s
 # Prepare notebook
 
 
-    In [3]:
+    In [1]:
 
 
 ``` python
@@ -276,7 +276,7 @@ model = forecasting_model(exponential_smoothing_ssm)
 Before fitting, it is worth looking at the priors on the bounded parameters. The \\\text{Beta}(5, 5)\\ prior on the smoothing parameters is symmetric and concentrated away from \\0\\ and \\1\\, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The \\\text{Beta}(2, 5)\\ prior on the damping factor \\\varphi\\ puts more mass below \\0.5\\, encoding a mild preference for damped (non-explosive) trends.
 
 
-    In [7]:
+    In [6]:
 
 
 ``` python
@@ -315,7 +315,7 @@ ax_noise.set(
 We fit the model with the NUTS sampler through [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), running \\4\\ chains of \\2{,}000\\ warmup and \\2{,}000\\ sampling steps each. [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) takes the model, the in-sample data, and the covariates over the training window, and runs the No-U-Turn Sampler under the hood.
 
 
-    In [8]:
+    In [7]:
 
 
 ``` python
@@ -337,7 +337,7 @@ forecaster = HMCForecaster(
 [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) stores the posterior draws with the chains flattened together. NumPyro flattens the chains in order, so we can recover the `(chain, draw)` structure with a plain reshape and hand it to ArviZ for the standard convergence diagnostics.
 
 
-    In [9]:
+    In [8]:
 
 
 ``` python
@@ -374,19 +374,19 @@ diagnostics.round({"r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
 
 |                       | r_hat | ess_bulk | ess_tail |
 |-----------------------|-------|----------|----------|
-| level_smoothing       | 1.001 | 3499.0   | 3837.0   |
-| trend_smoothing       | 1.000 | 4187.0   | 5045.0   |
-| seasonality_smoothing | 1.001 | 2634.0   | 3290.0   |
-| phi                   | 1.001 | 3574.0   | 3871.0   |
-| noise                 | 1.001 | 3358.0   | 4319.0   |
-| level_init            | 1.003 | 917.0    | 1571.0   |
-| trend_init            | 1.000 | 3785.0   | 4253.0   |
+| level_smoothing       | 1.001 | 3518.0   | 3720.0   |
+| trend_smoothing       | 1.001 | 3845.0   | 3933.0   |
+| seasonality_smoothing | 1.001 | 2437.0   | 3276.0   |
+| phi                   | 1.002 | 3492.0   | 3991.0   |
+| noise                 | 1.001 | 3383.0   | 3855.0   |
+| level_init            | 1.007 | 869.0    | 1398.0   |
+| trend_init            | 1.001 | 3796.0   | 4569.0   |
 
 
 The \\\hat{R}\\ values are close to \\1\\ and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
 
 
-    In [10]:
+    In [9]:
 
 
 ``` python
@@ -416,7 +416,7 @@ plt.show()
 We now generate the forecast over the test horizon. Calling the fitted forecaster with the full-horizon covariates returns forecast samples of shape `(sample, future, obs)`: for each posterior draw the model replays the in-sample filter, then rolls the state forward while sampling fresh innovations. For the in-sample fit we draw the one-step-ahead posterior predictive (the fitted mean plus observation noise).
 
 
-    In [11]:
+    In [10]:
 
 
 ``` python
@@ -448,7 +448,7 @@ print(f"forecast samples: {forecast_samples.shape}")
 We visualize both the in-sample fit and the forecast with `az.plot_lm`, showing the \\50\\\\ and \\94\\\\ HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.
 
 
-    In [12]:
+    In [11]:
 
 
 ``` python
@@ -534,7 +534,7 @@ plt.show()
 Finally, we score the forecast against the held-out test set with the package's evaluation metrics: mean absolute error and root mean squared error (point-forecast accuracy), the continuous ranked probability score (a proper score for the whole predictive distribution), and the empirical coverage of the central \\90\\\\ interval (calibration).
 
 
-    In [14]:
+    In [12]:
 
 
 ``` python
@@ -549,9 +549,9 @@ for name, value in metrics.items():
 ```
 
 
-                 MAE: 0.2432
-                RMSE: 0.2797
-                CRPS: 0.1648
+                 MAE: 0.2433
+                RMSE: 0.2796
+                CRPS: 0.1651
       coverage (90%): 0.9583
 
 

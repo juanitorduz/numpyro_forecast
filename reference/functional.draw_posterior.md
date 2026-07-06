@@ -44,6 +44,9 @@ Posterior samples of the latent sites, sample axis leading.
 `NotImplementedError`  
 If `fit` is of an unsupported type.
 
+`GuideSampleArgsError`  
+If the fit holds a hand-written guide but was constructed without its in-sample covariates/data.
+
 
 ## Notes
 

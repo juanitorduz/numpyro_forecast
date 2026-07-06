@@ -24,6 +24,7 @@ High-level interfaces for fitting and forecasting.
 
 - `forecaster.Forecaster`
 - `forecaster.HMCForecaster`
+- `forecaster.PathfinderForecaster`
 
 ### Models
 
@@ -38,9 +39,14 @@ Pure functional primitives for the train/forecast split.
 
 - `functional.Horizon`
 - `functional.time_series`
+- `functional.markov_time_series`
 - `functional.predict`
+- `functional.predict_glm`
+- `functional.resolve_optimizer`
+- `functional.resolve_guide`
 - `functional.fit_svi`
 - `functional.draw_posterior`
+- `functional.resolve_kernel`
 - `functional.fit_mcmc`
 - `functional.forecast`
 - `functional.predict_in_sample`
@@ -52,13 +58,19 @@ Pure functional primitives for the train/forecast split.
 Rolling-window backtesting and forecast metrics.
 
 - `evaluate.backtest`
+- `evaluate.backtest_vectorized`
 - `evaluate.BacktestResult`
+- `evaluate.VectorizedBacktestResult`
 - `evaluate.evaluate_forecast`
+- `evaluate.results_to_dataframe`
 - `evaluate.eval_crps`
 - `evaluate.eval_mae`
 - `evaluate.eval_rmse`
 - `evaluate.eval_coverage`
 - `metrics.crps_empirical`
+- `metrics.eval_pinball`
+- `metrics.eval_interval_score`
+- `metrics.make_mase`
 
 ### Utilities
 
@@ -71,6 +83,40 @@ Array helpers and feature builders.
 - `util.shift_loc`
 - `util.slice_time`
 - `util.prefix_condition`
+- `util.register_elementwise`
+- `util.require`
+
+### Exceptions
+
+Package exception hierarchy raised at resolution and validation boundaries.
+
+- `exceptions.NumpyroForecastError`
+- `exceptions.BacktestWindowError`
+- `exceptions.VectorizedGuideError`
+- `exceptions.VectorizedMetricError`
+- `exceptions.OptimizerResolutionError`
+- `exceptions.GuideResolutionError`
+- `exceptions.GuideSampleArgsError`
+- `exceptions.KernelResolutionError`
+- `exceptions.KernelConfigError`
+- `exceptions.MVNLayoutError`
+
+### ArviZ export
+
+Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+- `convert.to_datatree`
+- `convert.add_forecast_groups`
+
+### Extensions (contrib)
+
+Optional backends behind pyproject extras (never imported by default).
+
+- `contrib.blackjax.BlackjaxNUTSKernel`
+- `contrib.blackjax.BlackjaxMCLMCKernel`
+- `contrib.blackjax.BlackjaxCustomKernel`
+- `contrib.blackjax.PathfinderFit`
+- `contrib.blackjax.fit_pathfinder`
 
 ### Datasets
 

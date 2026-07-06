@@ -11,7 +11,10 @@ High-level interfaces for fitting and forecasting.
 Fit a forecasting model with stochastic variational inference.
 
 [forecaster.HMCForecaster](forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster)  
-Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
+Fit a forecasting model with MCMC (NUTS by default).
+
+[forecaster.PathfinderForecaster](forecaster.PathfinderForecaster.md#numpyro_forecast.forecaster.PathfinderForecaster)  
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
 
 ## Models
@@ -39,8 +42,20 @@ The train/forecast split for a single model call.
 [functional.time_series()](functional.time_series.md#numpyro_forecast.functional.time_series)  
 Sample a time-varying latent over the full horizon.
 
+[functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series)  
+Sample a Markov (state-space) latent over the full horizon.
+
 [functional.predict()](functional.predict.md#numpyro_forecast.functional.predict)  
 Register the observation/forecast sites for the model.
+
+[functional.predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm)  
+Register GLM-style observation/forecast sites from a latent predictor.
+
+[functional.resolve_optimizer()](functional.resolve_optimizer.md#numpyro_forecast.functional.resolve_optimizer)  
+Normalize an optimizer specification into a NumPyro optimizer.
+
+[functional.resolve_guide()](functional.resolve_guide.md#numpyro_forecast.functional.resolve_guide)  
+Normalize a guide specification against `model`.
 
 [functional.fit_svi()](functional.fit_svi.md#numpyro_forecast.functional.fit_svi)  
 Fit a forecasting model with stochastic variational inference.
@@ -48,8 +63,11 @@ Fit a forecasting model with stochastic variational inference.
 [functional.draw_posterior()](functional.draw_posterior.md#numpyro_forecast.functional.draw_posterior)  
 Draw `num_samples` posterior samples of the latent sites from a fit.
 
+[functional.resolve_kernel()](functional.resolve_kernel.md#numpyro_forecast.functional.resolve_kernel)  
+Normalize a kernel specification.
+
 [functional.fit_mcmc()](functional.fit_mcmc.md#numpyro_forecast.functional.fit_mcmc)  
-Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
+Fit a forecasting model with MCMC.
 
 [functional.forecast()](functional.forecast.md#numpyro_forecast.functional.forecast)  
 Sample forecasts for the steps in `[t, duration)` from a posterior.
@@ -61,7 +79,7 @@ Sample the in-sample posterior predictive of the `obs` site.
 The result of fitting a forecasting model with SVI.
 
 [functional.MCMCFit](functional.MCMCFit.md#numpyro_forecast.functional.MCMCFit)  
-The result of fitting a forecasting model with MCMC (NUTS).
+The result of fitting a forecasting model with MCMC.
 
 
 ## Backtesting & evaluation
@@ -73,11 +91,20 @@ Rolling-window backtesting and forecast metrics.
 [evaluate.backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)  
 Backtest a forecasting model on a moving window of `(train, test)` data.
 
+[evaluate.backtest_vectorized()](evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized)  
+Rolling-window backtest with all windows fitted in one vmapped SVI run.
+
 [evaluate.BacktestResult](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult)  
 Per-window result of a `backtest()` run.
 
+[evaluate.VectorizedBacktestResult](evaluate.VectorizedBacktestResult.md#numpyro_forecast.evaluate.VectorizedBacktestResult)  
+Result of a `backtest_vectorized()` run (all windows at once).
+
 [evaluate.evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)  
 Evaluate forecast samples against ground truth for several metrics at once.
+
+[evaluate.results_to_dataframe()](evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe)  
+Flatten backtest results into a tidy one-row-per-window `DataFrame`.
 
 [evaluate.eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps)  
 Empirical CRPS averaged over all data elements.
@@ -93,6 +120,15 @@ Empirical coverage of the central `alpha` prediction interval.
 
 [metrics.crps_empirical()](metrics.crps_empirical.md#numpyro_forecast.metrics.crps_empirical)  
 Compute the empirical Continuous Ranked Probability Score (CRPS).
+
+[metrics.eval_pinball()](metrics.eval_pinball.md#numpyro_forecast.metrics.eval_pinball)  
+Mean pinball (quantile) loss of the forecast `quantile`.
+
+[metrics.eval_interval_score()](metrics.eval_interval_score.md#numpyro_forecast.metrics.eval_interval_score)  
+Mean Winkler interval score for the central `alpha` prediction interval.
+
+[metrics.make_mase()](metrics.make_mase.md#numpyro_forecast.metrics.make_mase)  
+Build a Mean Absolute Scaled Error metric scaled by `train_data`.
 
 
 ## Utilities
@@ -121,6 +157,84 @@ Slice an elementwise distribution along the time axis `-2`.
 
 [util.prefix_condition()](util.prefix_condition.md#numpyro_forecast.util.prefix_condition)  
 Condition a `(t+f)`-length distribution on a `t`-length data prefix.
+
+[util.register_elementwise()](util.register_elementwise.md#numpyro_forecast.util.register_elementwise)  
+Declare a distribution family elementwise (usable as a decorator).
+
+[util.require()](util.require.md#numpyro_forecast.util.require)  
+Import an optional dependency, or raise a targeted `ImportError`.
+
+
+## Exceptions
+
+
+Package exception hierarchy raised at resolution and validation boundaries.
+
+
+[exceptions.NumpyroForecastError](exceptions.NumpyroForecastError.md#numpyro_forecast.exceptions.NumpyroForecastError)  
+Base class for all deliberate `numpyro_forecast` errors.
+
+[exceptions.BacktestWindowError](exceptions.BacktestWindowError.md#numpyro_forecast.exceptions.BacktestWindowError)  
+A backtest window configuration is invalid.
+
+[exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
+The vectorized backtest requires an `AutoGuide`.
+
+[exceptions.VectorizedMetricError](exceptions.VectorizedMetricError.md#numpyro_forecast.exceptions.VectorizedMetricError)  
+A metric is not vmappable in the vectorized backtest.
+
+[exceptions.OptimizerResolutionError](exceptions.OptimizerResolutionError.md#numpyro_forecast.exceptions.OptimizerResolutionError)  
+An optimizer specification could not be resolved.
+
+[exceptions.GuideResolutionError](exceptions.GuideResolutionError.md#numpyro_forecast.exceptions.GuideResolutionError)  
+A guide specification could not be resolved.
+
+[exceptions.GuideSampleArgsError](exceptions.GuideSampleArgsError.md#numpyro_forecast.exceptions.GuideSampleArgsError)  
+Drawing from a hand-written guide needs the in-sample arguments.
+
+[exceptions.KernelResolutionError](exceptions.KernelResolutionError.md#numpyro_forecast.exceptions.KernelResolutionError)  
+A kernel specification could not be resolved.
+
+[exceptions.KernelConfigError](exceptions.KernelConfigError.md#numpyro_forecast.exceptions.KernelConfigError)  
+A kernel is combined with an invalid configuration.
+
+[exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
+A `MultivariateNormal` layout is unsupported for time-axis surgery.
+
+
+## ArviZ export
+
+
+Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+
+[convert.to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree)  
+Convert a fit into an ArviZ-schema `xarray.DataTree`.
+
+[convert.add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups)  
+Attach out-of-sample forecast groups to a copy of `tree`.
+
+
+## Extensions (contrib)
+
+
+Optional backends behind pyproject extras (never imported by default).
+
+
+[contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  
+BlackJAX NUTS with Stan-style window adaptation.
+
+[contrib.blackjax.BlackjaxMCLMCKernel](contrib.blackjax.BlackjaxMCLMCKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel)  
+BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
+
+[contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
+Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
+
+[contrib.blackjax.PathfinderFit](contrib.blackjax.PathfinderFit.md#numpyro_forecast.contrib.blackjax.PathfinderFit)  
+The result of fitting a forecasting model with BlackJAX Pathfinder.
+
+[contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder)  
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
 
 ## Datasets

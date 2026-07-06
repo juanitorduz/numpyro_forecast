@@ -1,7 +1,7 @@
 ## functional.fit_mcmc()
 
 
-Fit a forecasting model with NUTS (Hamiltonian Monte Carlo).
+Fit a forecasting model with MCMC.
 
 
 Usage
@@ -13,12 +13,18 @@ functional.fit_mcmc(
     data,
     covariates,
     *,
+    kernel=None,
+    kernel_kwargs=None,
     num_warmup=1000,
     num_samples=1000,
     num_chains=1,
+    chain_method="sequential",
     progress_bar=False
 )
 ```
+
+
+PRNG: consumed entirely by `~numpyro.infer.MCMC`.
 
 
 ## Parameters
@@ -36,6 +42,12 @@ In-sample data with time at axis `-2`.
 `covariates: Array`  
 Covariates with time at axis `-2` and the same duration as `data`.
 
+`kernel: KernelLike = None`  
+Kernel specification resolved by [resolve_kernel()](functional.resolve_kernel.md#numpyro_forecast.functional.resolve_kernel): `None` (`NUTS`), an `MCMCKernel` instance, or an `MCMCKernel` subclass.
+
+`kernel_kwargs: Mapping[str, Any] | None = None`  
+Extra keyword arguments for the kernel constructor (only with `None` or a kernel class; rejected with an instance).
+
 `num_warmup: int = ``1000`  
 Number of warmup steps.
 
@@ -43,7 +55,10 @@ Number of warmup steps.
 Number of posterior samples.
 
 `num_chains: int = ``1`  
-Number of MCMC chains.
+Number of MCMC chains (stored on the returned [MCMCFit](functional.MCMCFit.md#numpyro_forecast.functional.MCMCFit)).
+
+`chain_method: str = ``"sequential"`  
+NumPyro chain method (`"sequential"`/`"parallel"`/`"vectorized"`).
 
 `progress_bar: bool = ``False`  
 Whether to display the MCMC progress bar.
@@ -53,7 +68,7 @@ Whether to display the MCMC progress bar.
 
 
 `MCMCFit`  
-The posterior samples.
+The posterior samples (flattened) and `num_chains`.
 
 
 ## Raises
@@ -61,3 +76,6 @@ The posterior samples.
 
 `ValueError`  
 If `data` and `covariates` have different durations.
+
+`KernelConfigError`  
+If a run-config constraint is violated (see `_validate_kernel_run_config()`).

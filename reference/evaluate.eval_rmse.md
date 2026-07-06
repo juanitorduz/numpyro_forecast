@@ -14,18 +14,21 @@ evaluate.eval_rmse(
 ```
 
 
+A pure JAX scalar kernel (see `~numpyro_forecast.typing.Metric`).
+
+
 ## Parameters
 
 
-`pred: Array`  
+`pred: Float[Array, ``" sample *batch"]`  
 Forecast samples with the sample axis first.
 
-`truth: Array`  
+`truth: Float[Array, ``" *batch"]`  
 Ground-truth values (matching `pred` without the sample axis).
 
 
 ## Returns
 
 
-`float`  
-The root mean squared error.
+`Array`  
+The root mean squared error as a scalar array.

@@ -195,7 +195,7 @@ window.Quarto = {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="24" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="27" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -301,7 +301,7 @@ window.Quarto = {
 </blockquote>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="120b1515" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:50.410369Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:50.410241Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:52.287005Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:52.286462Z&quot;}}" data-execution_count="1">
+<div id="120b1515" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:18.197526Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:18.197249Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:19.573445Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:19.572926Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
@@ -342,7 +342,7 @@ window.Quarto = {
 <section id="read-data" class="level1">
 <h1>Read data</h1>
 <p>We load the windowed origin-destination panel (<code>log1p</code> counts, <code>90</code> training days plus <code>2</code> test weeks) and select arrivals to <code>EMBR</code> from every origin. The <code>log1p</code> transform tames the multiplicative growth while staying defined at zero rides, which matters for hourly counts. The result is a <code>(time, n_series)</code> array where each of the <code>50</code> origins is one series, time is at axis <code>-2</code>, and the series dimension is at axis <code>-1</code>.</p>
-<div id="4d28aa13" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:52.288392Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:52.288275Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:53.453432Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:53.452983Z&quot;}}" data-execution_count="2">
+<div id="4d28aa13" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:19.574680Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:19.574550Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:20.646029Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:20.645490Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>y_full, split, stations <span class="op">=</span> load_bart_hierarchical()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>embr <span class="op">=</span> stations.index(<span class="st">"EMBR"</span>)</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data <span class="op">=</span> jnp.swapaxes(y_full[:, :, embr], <span class="dv">0</span>, <span class="dv">1</span>)  <span class="co"># (time, n_series)</span></span>
@@ -369,7 +369,7 @@ window.Quarto = {
 <section id="train-test-split" class="level1">
 <h1>Train-test split</h1>
 <p>We hold out the last two weeks (<code>336</code> hours) for testing. The model learns seasonality internally from the time index, so the covariates here are just dummy zeros: only their shape (the duration) is read, to tell training from forecasting.</p>
-<div id="1a06930d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:53.457433Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:53.457351Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:53.533790Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:53.533361Z&quot;}}" data-execution_count="3">
+<div id="1a06930d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:20.648770Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:20.648682Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:20.729529Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:20.729144Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>T0 <span class="op">=</span> <span class="dv">0</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>T1 <span class="op">=</span> split  <span class="co"># 2_160</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>T2 <span class="op">=</span> data.shape[<span class="dv">0</span>]  <span class="co"># 2_496</span></span>
@@ -405,7 +405,7 @@ christmas index: 2328</code></pre>
 y_{t,s} &amp; \sim \text{Normal}(\mu_{t,s}, \sigma).
 \end{align*}\]</span></p>
 <p>The hierarchy is expressed with <code>numpyro.plate</code>. We wrap <code>self.time_series(...)</code> in an <code>n_series</code> plate so the drift (and its forecast <code>_future</code> companion) is sampled per series. The weekly seasonal lives under the <code>n_series</code> and <code>hour_of_week</code> plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with <a href="../../reference/util.periodic_repeat.html#numpyro_forecast.util.periodic_repeat" class="gdls-link gdls-code">periodic_repeat</a>. Sharing the global hyperparameters across the plate is what couples the series together.</p>
-<div id="4f75f72f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:53.534812Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:53.534738Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:53.548528Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:53.548120Z&quot;}}" data-execution_count="4">
+<div id="4f75f72f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:20.730643Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:20.730568Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:20.745107Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:20.744716Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> MultiSeriesForecaster(ForecastingModel):</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Per-series local level + weekly seasonality with a shared Normal scale."""</span></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -437,7 +437,7 @@ y_{t,s} &amp; \sim \text{Normal}(\mu_{t,s}, \sigma).
 <span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.predict(dist.Normal(<span class="fl">0.0</span>, sigma), prediction)</span></code></pre></div>
 </div>
 <p>Let’s visualize the model:</p>
-<div id="2b7e52f6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:53.549744Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:53.549672Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:18:53.707802Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:18:53.707192Z&quot;}}" data-execution_count="5">
+<div id="2b7e52f6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:20.746227Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:20.746162Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:20.891752Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:20.891354Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>period <span class="op">=</span> <span class="dv">24</span> <span class="op">*</span> <span class="dv">7</span>  <span class="co"># weekly seasonality (hours)</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>numpyro.render_model(</span>
@@ -457,7 +457,7 @@ y_{t,s} &amp; \sim \text{Normal}(\mu_{t,s}, \sigma).
 <section id="prior-predictive-checks" class="level1">
 <h1>Prior predictive checks</h1>
 <p>As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.</p>
-<div id="cb1a33b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:18:53.709096Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:18:53.709001Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:19:00.825897Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:19:00.825466Z&quot;}}" data-execution_count="6">
+<div id="cb1a33b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:20.893242Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:20.893162Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:27.901312Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:27.900839Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>n_plot <span class="op">=</span> <span class="dv">8</span>  <span class="co"># origins shown in the facet grid</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>dest <span class="op">=</span> <span class="st">"EMBR"</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>series <span class="op">=</span> <span class="bu">list</span>(<span class="bu">range</span>(n_plot))</span>
@@ -550,7 +550,7 @@ y_{t,s} &amp; \sim \text{Normal}(\mu_{t,s}, \sigma).
 <section id="inference-with-svi" class="level1">
 <h1>Inference with SVI</h1>
 <p>We fit the model with SVI through <a href="../../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a> (an <code>AutoNormal</code> guide with <code>Adam</code>). Plotting the ELBO on a log scale makes the convergence easy to read.</p>
-<div id="ea16aa9e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:19:00.829771Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:19:00.829677Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:19:25.714946Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:19:25.714403Z&quot;}}" data-execution_count="7">
+<div id="ea16aa9e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:27.903050Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:27.902985Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:44:49.387833Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:44:49.387398Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> MultiSeriesForecaster(period<span class="op">=</span>period)</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>forecaster <span class="op">=</span> Forecaster(</span>
@@ -578,7 +578,7 @@ y_{t,s} &amp; \sim \text{Normal}(\mu_{t,s}, \sigma).
 <section id="posterior-predictive-check" class="level1">
 <h1>Posterior predictive check</h1>
 <p>We draw the in-sample posterior predictive over the train window and the forecast over the test horizon, then score both with CRPS. Since the data live on the <code>log1p</code> scale, which is non-negative, we clip the predictions at zero before scoring.</p>
-<div id="a60e3958" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:19:25.717039Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:19:25.716928Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:19:50.738661Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:19:50.738098Z&quot;}}" data-execution_count="8">
+<div id="a60e3958" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:44:49.389007Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:44:49.388928Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:45:13.050993Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:45:13.050408Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">4</span>)</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>posterior_samples <span class="op">=</span> forecaster.guide.sample_posterior(</span>
@@ -607,7 +607,7 @@ Test CRPS:  0.3676</code></pre>
 <h1>Forecast visualization</h1>
 <p>Eight origins arriving at <code>EMBR</code>: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50% and 94% HDI bands, the train/test split, and the observed series in black. The shaded band marks Christmas day.</p>
 <p>The model does quite well on most of the test window, but it clearly struggles around Christmas: ridership collapses on the holiday and the forecast, which only knows about the weekly cycle, does not see it coming. This is the expected failure mode of a model without holiday information. The fixes are to feed it more history (so it has seen past Christmases) or to add explicit holiday features, for example dummy variables or Gaussian bump functions around special dates.</p>
-<div id="68ec51da" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-06-30T10:19:50.741394Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-06-30T10:19:50.741211Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-06-30T10:19:51.682671Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-06-30T10:19:51.682152Z&quot;}}" data-execution_count="9">
+<div id="68ec51da" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:45:13.057116Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:45:13.055925Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:45:14.100802Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:45:14.100366Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>t_test <span class="op">=</span> time_test.astype(<span class="bu">float</span>)</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>t_full <span class="op">=</span> time[lo:T2].astype(<span class="bu">float</span>)</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>

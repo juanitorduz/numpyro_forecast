@@ -41,5 +41,5 @@ Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster
 ## Returns
 
 
-`Float[Array, ``" sample *batch time obs"]`  
+`Num[Array, ``" sample *batch time obs"]`  
 In-sample posterior-predictive draws of the `obs` site.

@@ -51,8 +51,8 @@ Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster
 ## Returns
 
 
-`Float[Array, ``" sample *batch future obs"]`  
-Forecast samples over the `future = duration - t` horizon.
+`Num[Array, ``" sample *batch future obs"]`  
+Forecast samples over the `future = duration - t` horizon (floating point for continuous observations, integer for discrete/count models built with [predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm)).
 
 
 ## Raises
@@ -60,3 +60,8 @@ Forecast samples over the `future = duration - t` horizon.
 
 `ValueError`  
 If `covariates` does not extend beyond `data` along the time axis.
+
+
+## Notes
+
+Chunking is a memory knob, not a reproducibility knob: reproducibility is per `(rng_key, batch_size)`. Each chunk is padded to a whole multiple of `batch_size` so the underlying `_predict` compiles exactly once for a fixed shape (the pad draws are discarded), but changing `batch_size` changes the PRNG stream layout and therefore the exact draws.
