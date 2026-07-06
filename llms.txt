@@ -17,26 +17,34 @@
 > Building forecasting models (object-oriented and functional).
 
 - [forecaster.ForecastingModel](https://juanitorduz.github.io/numpyro_forecast/reference/forecaster.ForecastingModel.html)
-- [functional.forecasting_model](https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecasting_model.html)
+- [functional.models.forecasting_model](https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.forecasting_model.html)
 
-#### Functional core
+#### Functional core: model primitives
 > Pure functional primitives for the train/forecast split.
 
-- [functional.Horizon](https://juanitorduz.github.io/numpyro_forecast/reference/functional.Horizon.html)
-- [functional.time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.time_series.html)
-- [functional.markov_time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html)
-- [functional.predict](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict.html)
-- [functional.predict_glm](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_glm.html)
-- [functional.resolve_optimizer](https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_optimizer.html)
-- [functional.resolve_guide](https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_guide.html)
-- [functional.fit_svi](https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_svi.html)
-- [functional.draw_posterior](https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html)
-- [functional.resolve_kernel](https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_kernel.html)
-- [functional.fit_mcmc](https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_mcmc.html)
-- [functional.forecast](https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecast.html)
-- [functional.predict_in_sample](https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_in_sample.html)
-- [functional.SVIFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.SVIFit.html)
-- [functional.MCMCFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.MCMCFit.html)
+- [functional.models.Horizon](https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.Horizon.html)
+- [functional.models.time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.time_series.html)
+- [functional.models.markov_time_series](https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.markov_time_series.html)
+- [functional.models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.predict.html)
+- [functional.models.predict_glm](https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.predict_glm.html)
+
+#### Functional core: fitting
+> Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
+
+- [functional.svi.resolve_optimizer](https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.resolve_optimizer.html)
+- [functional.svi.resolve_guide](https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.resolve_guide.html)
+- [functional.svi.fit_svi](https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.fit_svi.html)
+- [functional.svi.SVIFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.SVIFit.html)
+- [functional.mcmc.resolve_kernel](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.resolve_kernel.html)
+- [functional.mcmc.fit_mcmc](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html)
+- [functional.mcmc.MCMCFit](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.MCMCFit.html)
+
+#### Functional core: posterior and prediction
+> Drawing posterior samples and generating forecasts and in-sample predictions.
+
+- [functional.posterior.draw_posterior](https://juanitorduz.github.io/numpyro_forecast/reference/functional.posterior.draw_posterior.html)
+- [functional.prediction.forecast](https://juanitorduz.github.io/numpyro_forecast/reference/functional.prediction.forecast.html)
+- [functional.prediction.predict_in_sample](https://juanitorduz.github.io/numpyro_forecast/reference/functional.prediction.predict_in_sample.html)
 
 #### Backtesting & evaluation
 > Rolling-window backtesting and forecast metrics.

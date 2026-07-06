@@ -11,9 +11,9 @@ forecaster.ForecastingModel()
 ```
 
 
-Subclasses implement [model()](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model), which must call [predict()](functional.predict.md#numpyro_forecast.functional.predict) exactly once. The instance itself is the (pure) NumPyro model function with signature `model_instance(covariates, data=None)`: the forecast horizon is inferred from the shapes (`future = covariates.shape[-2] - data.shape[-2]`).
+Subclasses implement [model()](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model), which must call [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict) exactly once. The instance itself is the (pure) NumPyro model function with signature `model_instance(covariates, data=None)`: the forecast horizon is inferred from the shapes (`future = covariates.shape[-2] - data.shape[-2]`).
 
-This is the object-oriented façade over the functional API: [time_series()](functional.time_series.md#numpyro_forecast.functional.time_series) and [predict()](functional.predict.md#numpyro_forecast.functional.predict) delegate to the free functions in `numpyro_forecast.functional`, passing the current `~numpyro_forecast.functional.Horizon`.
+This is the object-oriented façade over the functional API: [time_series()](functional.models.time_series.md#numpyro_forecast.functional.models.time_series) and [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict) delegate to the free functions in `numpyro_forecast.functional`, passing the current `~numpyro_forecast.functional.models.Horizon`.
 
 
 ## Attributes
@@ -66,7 +66,7 @@ Number of observed (in-sample) time steps `t`.
 |----|----|
 | [__call__()](#__call__) | Run the model as a NumPyro model function. |
 | [markov_time_series()](#markov_time_series) | Sample a Markov (state-space) latent over the full horizon. |
-| [model()](#model) | Define the generative model and call [predict()](functional.predict.md#numpyro_forecast.functional.predict) exactly once. |
+| [model()](#model) | Define the generative model and call [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict) exactly once. |
 | [predict()](#predict) | Register the observation/forecast sites for the model. |
 | [predict_glm()](#predict_glm) | Register GLM-style observation/forecast sites from a latent predictor. |
 | [time_series()](#time_series) | Sample a time-varying latent over the full horizon. |
@@ -115,7 +115,7 @@ markov_time_series(
 ```
 
 
-Thin wrapper over [numpyro_forecast.functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series) that threads this model's train/forecast horizon. In-sample steps run in a `scan` under site `name`; the forecast horizon runs in a second scan under `f"{name}_future"` seeded by the final in-sample carry, so the guide never sees the future site.
+Thin wrapper over [numpyro_forecast.functional.models.markov_time_series()](functional.models.markov_time_series.md#numpyro_forecast.functional.models.markov_time_series) that threads this model's train/forecast horizon. In-sample steps run in a `scan` under site `name`; the forecast horizon runs in a second scan under `f"{name}_future"` seeded by the final in-sample carry, so the guide never sees the future site.
 
 
 ##### Parameters
@@ -153,7 +153,7 @@ The latent over the full horizon in package layout `(*plate_batch, duration, obs
 #### model()
 
 
-Define the generative model and call [predict()](functional.predict.md#numpyro_forecast.functional.predict) exactly once.
+Define the generative model and call [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict) exactly once.
 
 
 Usage
@@ -189,7 +189,7 @@ predict(noise_dist, prediction)
 ```
 
 
-Thin wrapper over [numpyro_forecast.functional.predict()](functional.predict.md#numpyro_forecast.functional.predict).
+Thin wrapper over [numpyro_forecast.functional.models.predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict).
 
 
 ##### Parameters
@@ -218,7 +218,7 @@ predict_glm(obs_dist_fn, latent)
 ```
 
 
-Thin wrapper over [numpyro_forecast.functional.predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm).
+Thin wrapper over [numpyro_forecast.functional.models.predict_glm()](functional.models.predict_glm.md#numpyro_forecast.functional.models.predict_glm).
 
 
 ##### Parameters
@@ -247,7 +247,7 @@ time_series(name, dist_fn, *, reparam=None)
 ```
 
 
-Thin wrapper over [numpyro_forecast.functional.time_series()](functional.time_series.md#numpyro_forecast.functional.time_series).
+Thin wrapper over [numpyro_forecast.functional.models.time_series()](functional.models.time_series.md#numpyro_forecast.functional.models.time_series).
 
 
 ##### Parameters

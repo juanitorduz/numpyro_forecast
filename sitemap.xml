@@ -223,97 +223,97 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.Horizon.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.MCMCFit.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.MCMCFit.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.SVIFit.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.resolve_kernel.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.draw_posterior.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.Horizon.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_mcmc.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.forecasting_model.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.fit_svi.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.markov_time_series.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecast.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.predict.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.forecasting_model.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.predict_glm.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.markov_time_series.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.time_series.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.posterior.draw_posterior.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_glm.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.prediction.forecast.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.predict_in_sample.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.prediction.predict_in_sample.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_guide.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.SVIFit.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_kernel.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.fit_svi.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.resolve_optimizer.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.resolve_guide.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.time_series.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.resolve_optimizer.html</loc>
     <lastmod>2026-07-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>

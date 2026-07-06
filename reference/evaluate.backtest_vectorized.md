@@ -59,7 +59,7 @@ Step between successive windows (`>= 1`).
 Number of SVI steps per window.
 
 `optim: OptimizerLike = None`  
-Optimizer specification resolved by `~numpyro_forecast.functional.resolve_optimizer()`.
+Optimizer specification resolved by `~numpyro_forecast.functional.svi.resolve_optimizer()`.
 
 `guide: GuideLike = None`  
 Guide specification; must resolve to an `AutoGuide` (hand-written guides are not vmappable, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)).

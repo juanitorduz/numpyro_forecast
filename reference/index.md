@@ -26,60 +26,74 @@ Building forecasting models (object-oriented and functional).
 [forecaster.ForecastingModel](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel)  
 Abstract base class for forecasting models.
 
-[functional.forecasting_model()](functional.forecasting_model.md#numpyro_forecast.functional.forecasting_model)  
+[functional.models.forecasting_model()](functional.models.forecasting_model.md#numpyro_forecast.functional.models.forecasting_model)  
 Build a NumPyro model from a functional model body.
 
 
-## Functional core
+## Functional core: model primitives
 
 
 Pure functional primitives for the train/forecast split.
 
 
-[functional.Horizon](functional.Horizon.md#numpyro_forecast.functional.Horizon)  
+[functional.models.Horizon](functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon)  
 The train/forecast split for a single model call.
 
-[functional.time_series()](functional.time_series.md#numpyro_forecast.functional.time_series)  
+[functional.models.time_series()](functional.models.time_series.md#numpyro_forecast.functional.models.time_series)  
 Sample a time-varying latent over the full horizon.
 
-[functional.markov_time_series()](functional.markov_time_series.md#numpyro_forecast.functional.markov_time_series)  
+[functional.models.markov_time_series()](functional.models.markov_time_series.md#numpyro_forecast.functional.models.markov_time_series)  
 Sample a Markov (state-space) latent over the full horizon.
 
-[functional.predict()](functional.predict.md#numpyro_forecast.functional.predict)  
+[functional.models.predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict)  
 Register the observation/forecast sites for the model.
 
-[functional.predict_glm()](functional.predict_glm.md#numpyro_forecast.functional.predict_glm)  
+[functional.models.predict_glm()](functional.models.predict_glm.md#numpyro_forecast.functional.models.predict_glm)  
 Register GLM-style observation/forecast sites from a latent predictor.
 
-[functional.resolve_optimizer()](functional.resolve_optimizer.md#numpyro_forecast.functional.resolve_optimizer)  
+
+## Functional core: fitting
+
+
+Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
+
+
+[functional.svi.resolve_optimizer()](functional.svi.resolve_optimizer.md#numpyro_forecast.functional.svi.resolve_optimizer)  
 Normalize an optimizer specification into a NumPyro optimizer.
 
-[functional.resolve_guide()](functional.resolve_guide.md#numpyro_forecast.functional.resolve_guide)  
+[functional.svi.resolve_guide()](functional.svi.resolve_guide.md#numpyro_forecast.functional.svi.resolve_guide)  
 Normalize a guide specification against `model`.
 
-[functional.fit_svi()](functional.fit_svi.md#numpyro_forecast.functional.fit_svi)  
+[functional.svi.fit_svi()](functional.svi.fit_svi.md#numpyro_forecast.functional.svi.fit_svi)  
 Fit a forecasting model with stochastic variational inference.
 
-[functional.draw_posterior()](functional.draw_posterior.md#numpyro_forecast.functional.draw_posterior)  
-Draw `num_samples` posterior samples of the latent sites from a fit.
-
-[functional.resolve_kernel()](functional.resolve_kernel.md#numpyro_forecast.functional.resolve_kernel)  
-Normalize a kernel specification.
-
-[functional.fit_mcmc()](functional.fit_mcmc.md#numpyro_forecast.functional.fit_mcmc)  
-Fit a forecasting model with MCMC.
-
-[functional.forecast()](functional.forecast.md#numpyro_forecast.functional.forecast)  
-Sample forecasts for the steps in `[t, duration)` from a posterior.
-
-[functional.predict_in_sample()](functional.predict_in_sample.md#numpyro_forecast.functional.predict_in_sample)  
-Sample the in-sample posterior predictive of the `obs` site.
-
-[functional.SVIFit](functional.SVIFit.md#numpyro_forecast.functional.SVIFit)  
+[functional.svi.SVIFit](functional.svi.SVIFit.md#numpyro_forecast.functional.svi.SVIFit)  
 The result of fitting a forecasting model with SVI.
 
-[functional.MCMCFit](functional.MCMCFit.md#numpyro_forecast.functional.MCMCFit)  
+[functional.mcmc.resolve_kernel()](functional.mcmc.resolve_kernel.md#numpyro_forecast.functional.mcmc.resolve_kernel)  
+Normalize a kernel specification.
+
+[functional.mcmc.fit_mcmc()](functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc)  
+Fit a forecasting model with MCMC.
+
+[functional.mcmc.MCMCFit](functional.mcmc.MCMCFit.md#numpyro_forecast.functional.mcmc.MCMCFit)  
 The result of fitting a forecasting model with MCMC.
+
+
+## Functional core: posterior and prediction
+
+
+Drawing posterior samples and generating forecasts and in-sample predictions.
+
+
+[functional.posterior.draw_posterior()](functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior)  
+Draw `num_samples` posterior samples of the latent sites from a fit.
+
+[functional.prediction.forecast()](functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast)  
+Sample forecasts for the steps in `[t, duration)` from a posterior.
+
+[functional.prediction.predict_in_sample()](functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample)  
+Sample the in-sample posterior predictive of the `obs` site.
 
 
 ## Backtesting & evaluation

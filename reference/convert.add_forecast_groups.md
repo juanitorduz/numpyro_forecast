@@ -23,7 +23,7 @@ Adds a `predictions` group (the forecast `obs` draws) and a `predictions_constan
 A tree from [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) (its `observed_data` time coordinate is continued).
 
 `forecast_samples: Array`  
-Forecast draws shaped `(num_samples, future, obs)` from `~numpyro_forecast.functional.forecast()`.
+Forecast draws shaped `(num_samples, future, obs)` from `~numpyro_forecast.functional.prediction.forecast()`.
 
 `covariates_future: Array`  
 Future covariates shaped `(future, covariate_dim)`.

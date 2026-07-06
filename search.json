@@ -18,14 +18,28 @@
     "href": "skill.html#models",
     "title": "numpyro_forecast",
     "section": "Models",
-    "text": "Models\nBuilding forecasting models (object-oriented and functional).\n\nforecaster.ForecastingModel\nfunctional.forecasting_model"
+    "text": "Models\nBuilding forecasting models (object-oriented and functional).\n\nforecaster.ForecastingModel\nfunctional.models.forecasting_model"
   },
   {
-    "objectID": "skill.html#functional-core",
-    "href": "skill.html#functional-core",
+    "objectID": "skill.html#functional-core-model-primitives",
+    "href": "skill.html#functional-core-model-primitives",
     "title": "numpyro_forecast",
-    "section": "Functional core",
-    "text": "Functional core\nPure functional primitives for the train/forecast split.\n\nfunctional.Horizon\nfunctional.time_series\nfunctional.markov_time_series\nfunctional.predict\nfunctional.predict_glm\nfunctional.resolve_optimizer\nfunctional.resolve_guide\nfunctional.fit_svi\nfunctional.draw_posterior\nfunctional.resolve_kernel\nfunctional.fit_mcmc\nfunctional.forecast\nfunctional.predict_in_sample\nfunctional.SVIFit\nfunctional.MCMCFit"
+    "section": "Functional core: model primitives",
+    "text": "Functional core: model primitives\nPure functional primitives for the train/forecast split.\n\nfunctional.models.Horizon\nfunctional.models.time_series\nfunctional.models.markov_time_series\nfunctional.models.predict\nfunctional.models.predict_glm"
+  },
+  {
+    "objectID": "skill.html#functional-core-fitting",
+    "href": "skill.html#functional-core-fitting",
+    "title": "numpyro_forecast",
+    "section": "Functional core: fitting",
+    "text": "Functional core: fitting\nOptimizer/guide/kernel resolution and the SVI and MCMC fit entry points.\n\nfunctional.svi.resolve_optimizer\nfunctional.svi.resolve_guide\nfunctional.svi.fit_svi\nfunctional.svi.SVIFit\nfunctional.mcmc.resolve_kernel\nfunctional.mcmc.fit_mcmc\nfunctional.mcmc.MCMCFit"
+  },
+  {
+    "objectID": "skill.html#functional-core-posterior-and-prediction",
+    "href": "skill.html#functional-core-posterior-and-prediction",
+    "title": "numpyro_forecast",
+    "section": "Functional core: posterior and prediction",
+    "text": "Functional core: posterior and prediction\nDrawing posterior samples and generating forecasts and in-sample predictions.\n\nfunctional.posterior.draw_posterior\nfunctional.prediction.forecast\nfunctional.prediction.predict_in_sample"
   },
   {
     "objectID": "skill.html#backtesting-evaluation",
@@ -70,146 +84,159 @@
     "text": "Datasets\nExample datasets used in the tutorials.\n\ndatasets.load_bart_weekly\ndatasets.load_bart_hierarchical\ndatasets.load_victoria_electricity\ndatasets.bart_available"
   },
   {
-    "objectID": "reference/functional.forecasting_model.html",
-    "href": "reference/functional.forecasting_model.html",
-    "title": "functional.forecasting_model()",
+    "objectID": "reference/functional.svi.SVIFit.html",
+    "href": "reference/functional.svi.SVIFit.html",
+    "title": "functional.svi.SVIFit",
     "section": "",
-    "text": "Build a NumPyro model from a functional model body.\n\n\nUsage\nSource\n\n\nfunctional.forecasting_model(model_fn)\n\n\nThe functional analogue of subclassing ~numpyro_forecast.forecaster.ForecastingModel. model_fn is a pure function (Horizon, covariates) -&gt; None that calls time_series() and predict(); this wraps it into the standard NumPyro model callable (covariates, data=None), deriving the Horizon from the shapes.\n\n\nParameters\n\n\nmodel_fn: Callable[[Horizon, Array], None]\n\nThe model body. It receives the per-call Horizon (use h.zero_data for the Pyro-style zero_data) and the covariates with time at axis -2.\n\n\n\n\n\nReturns\n\n\n ForecastModel\n\nA callable (covariates, data=None) -&gt; None usable with SVI, MCMC, Predictive, fit_svi(), fit_mcmc(), and the OOP forecaster classes.",
+    "text": "The result of fitting a forecasting model with SVI.\n\n\nUsage\nSource\n\n\nfunctional.svi.SVIFit(guide, params, losses, data=None, covariates=None)\n\n\nParameter Attributes\n\n\nguide: AutoGuide | Callable[…, None]\n\n\n\nparams: dict[str, Array]\n\n\n\nlosses: Array\n\n\n\ndata: Array | None = None\n\n\n\ncovariates: Array | None = None\n\n\n\n\n\n\n\nAttributes\n\n\nguide: AutoGuide | Callable[…, None]\n\nThe fitted variational guide.\n\nparams: dict[str, Array]\n\nThe learned variational parameters.\n\nlosses: Array\n\nThe ELBO loss per SVI step (shape (num_steps,)).\n\ndata: Array | None\n\nThe in-sample data the model was fit on (needed to draw from hand-written guides and by ~numpyro_forecast.convert.to_datatree()). None for fits constructed without it.\n\ncovariates: Array | None\n\nThe in-sample covariates the model was fit on. None for fits constructed without it.",
     "crumbs": [
       "Reference",
-      "Models",
-      "[functional.forecasting_model()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: fitting",
+      "[functional.svi.SVIFit]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
     ]
   },
   {
-    "objectID": "reference/metrics.make_mase.html",
-    "href": "reference/metrics.make_mase.html",
-    "title": "metrics.make_mase()",
+    "objectID": "reference/forecaster.PathfinderForecaster.html",
+    "href": "reference/forecaster.PathfinderForecaster.html",
+    "title": "forecaster.PathfinderForecaster",
     "section": "",
-    "text": "Build a Mean Absolute Scaled Error metric scaled by train_data.\n\n\nUsage\nSource\n\n\nmetrics.make_mase(train_data, *, seasonality=1)\n\n\nMASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on train_data, mean(|y_t - y_{t-seasonality}|). The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see ~numpyro_forecast.typing.Metric).\n\n\nParameters\n\n\ntrain_data: Float[Array, \"*batch time obs_dim\"]\n\nTraining data with time at axis -2; leading batch axes are allowed and the seasonal-naive scale is averaged over all axes.\n\nseasonality: int = 1\n\nSeasonal period (&gt;= 1); 1 is the random-walk naive baseline.\n\n\n\n\n\nReturns\n\n\n Metric\n\nA (pred, truth) callable computing MASE as a scalar array.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf seasonality &lt; 1, train_data is not longer than seasonality along the time axis, or the seasonal-naive scale is zero (a constant series, for which MASE is undefined).",
+    "text": "Fit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\nUsage\nSource\n\n\nforecaster.PathfinderForecaster()\n\n\nA thin shim over numpyro_forecast.contrib.blackjax.fit_pathfinder(). BlackJAX is an optional dependency (pip install numpyro_forecast[blackjax]) imported lazily here, so constructing this class is the opt-in that pulls it in; importing numpyro_forecast never does. The constructor mirrors Forecaster without guide/optim (Pathfinder has neither) and adds num_elbo_samples/ftol.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nnum_elbo_samples: int = 200\n\nNumber of Monte Carlo samples used to estimate the ELBO along the L-BFGS path.\n\nftol: float = 1e-05\n\nL-BFGS relative function-value tolerance (convergence criterion).",
     "crumbs": [
       "Reference",
-      "Backtesting & evaluation",
-      "[metrics.make_mase()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Forecasters",
+      "[forecaster.PathfinderForecaster]{.doc-object-name .doc-class .doc-label .doc-label-class}"
     ]
   },
   {
-    "objectID": "reference/index.html",
-    "href": "reference/index.html",
-    "title": "Reference",
+    "objectID": "reference/convert.to_datatree.html",
+    "href": "reference/convert.to_datatree.html",
+    "title": "convert.to_datatree()",
     "section": "",
-    "text": "Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n\nforecaster.Forecaster\n\nFit a forecasting model with stochastic variational inference.\n\nforecaster.HMCForecaster\n\nFit a forecasting model with MCMC (NUTS by default).\n\nforecaster.PathfinderForecaster\n\nFit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\n\n\nModels\n\nBuilding forecasting models (object-oriented and functional).\n\n\nforecaster.ForecastingModel\n\nAbstract base class for forecasting models.\n\nfunctional.forecasting_model()\n\nBuild a NumPyro model from a functional model body.\n\n\n\n\nFunctional core\n\nPure functional primitives for the train/forecast split.\n\n\nfunctional.Horizon\n\nThe train/forecast split for a single model call.\n\nfunctional.time_series()\n\nSample a time-varying latent over the full horizon.\n\nfunctional.markov_time_series()\n\nSample a Markov (state-space) latent over the full horizon.\n\nfunctional.predict()\n\nRegister the observation/forecast sites for the model.\n\nfunctional.predict_glm()\n\nRegister GLM-style observation/forecast sites from a latent predictor.\n\nfunctional.resolve_optimizer()\n\nNormalize an optimizer specification into a NumPyro optimizer.\n\nfunctional.resolve_guide()\n\nNormalize a guide specification against model.\n\nfunctional.fit_svi()\n\nFit a forecasting model with stochastic variational inference.\n\nfunctional.draw_posterior()\n\nDraw num_samples posterior samples of the latent sites from a fit.\n\nfunctional.resolve_kernel()\n\nNormalize a kernel specification.\n\nfunctional.fit_mcmc()\n\nFit a forecasting model with MCMC.\n\nfunctional.forecast()\n\nSample forecasts for the steps in [t, duration) from a posterior.\n\nfunctional.predict_in_sample()\n\nSample the in-sample posterior predictive of the obs site.\n\nfunctional.SVIFit\n\nThe result of fitting a forecasting model with SVI.\n\nfunctional.MCMCFit\n\nThe result of fitting a forecasting model with MCMC.\n\n\n\n\nBacktesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n\nevaluate.backtest()\n\nBacktest a forecasting model on a moving window of (train, test) data.\n\nevaluate.backtest_vectorized()\n\nRolling-window backtest with all windows fitted in one vmapped SVI run.\n\nevaluate.BacktestResult\n\nPer-window result of a :func:backtest run.\n\nevaluate.VectorizedBacktestResult\n\nResult of a :func:backtest_vectorized run (all windows at once).\n\nevaluate.evaluate_forecast()\n\nEvaluate forecast samples against ground truth for several metrics at once.\n\nevaluate.results_to_dataframe()\n\nFlatten backtest results into a tidy one-row-per-window DataFrame.\n\nevaluate.eval_crps()\n\nEmpirical CRPS averaged over all data elements.\n\nevaluate.eval_mae()\n\nMean absolute error using the forecast sample median as point estimate.\n\nevaluate.eval_rmse()\n\nRoot mean squared error using the forecast sample mean as point estimate.\n\nevaluate.eval_coverage()\n\nEmpirical coverage of the central alpha prediction interval.\n\nmetrics.crps_empirical()\n\nCompute the empirical Continuous Ranked Probability Score (CRPS).\n\nmetrics.eval_pinball()\n\nMean pinball (quantile) loss of the forecast quantile.\n\nmetrics.eval_interval_score()\n\nMean Winkler interval score for the central alpha prediction interval.\n\nmetrics.make_mase()\n\nBuild a Mean Absolute Scaled Error metric scaled by train_data.\n\n\n\n\nUtilities\n\nArray helpers and feature builders.\n\n\nutil.fourier_features()\n\nBuild a Fourier seasonality design matrix.\n\nutil.periodic_repeat()\n\nTile a seasonal pattern to cover duration time steps.\n\nutil.zero_data_like()\n\nReturn zeros shaped like data but extended to the covariate duration.\n\nutil.concat_future()\n\nConcatenate in-sample and forecast-horizon arrays along the time axis.\n\nutil.shift_loc()\n\nRe-center a zero-centered noise distribution at loc.\n\nutil.slice_time()\n\nSlice an elementwise distribution along the time axis -2.\n\nutil.prefix_condition()\n\nCondition a (t+f)-length distribution on a t-length data prefix.\n\nutil.register_elementwise()\n\nDeclare a distribution family elementwise (usable as a decorator).\n\nutil.require()\n\nImport an optional dependency, or raise a targeted ImportError.\n\n\n\n\nExceptions\n\nPackage exception hierarchy raised at resolution and validation boundaries.\n\n\nexceptions.NumpyroForecastError\n\nBase class for all deliberate numpyro_forecast errors.\n\nexceptions.BacktestWindowError\n\nA backtest window configuration is invalid.\n\nexceptions.VectorizedGuideError\n\nThe vectorized backtest requires an AutoGuide.\n\nexceptions.VectorizedMetricError\n\nA metric is not vmappable in the vectorized backtest.\n\nexceptions.OptimizerResolutionError\n\nAn optimizer specification could not be resolved.\n\nexceptions.GuideResolutionError\n\nA guide specification could not be resolved.\n\nexceptions.GuideSampleArgsError\n\nDrawing from a hand-written guide needs the in-sample arguments.\n\nexceptions.KernelResolutionError\n\nA kernel specification could not be resolved.\n\nexceptions.KernelConfigError\n\nA kernel is combined with an invalid configuration.\n\nexceptions.MVNLayoutError\n\nA MultivariateNormal layout is unsupported for time-axis surgery.\n\n\n\n\nArviZ export\n\nConvert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.\n\n\nconvert.to_datatree()\n\nConvert a fit into an ArviZ-schema :class:xarray.DataTree.\n\nconvert.add_forecast_groups()\n\nAttach out-of-sample forecast groups to a copy of tree.\n\n\n\n\nExtensions (contrib)\n\nOptional backends behind pyproject extras (never imported by default).\n\n\ncontrib.blackjax.BlackjaxNUTSKernel\n\nBlackJAX NUTS with Stan-style window adaptation.\n\ncontrib.blackjax.BlackjaxMCLMCKernel\n\nBlackJAX Microcanonical Langevin Monte Carlo (MCLMC).\n\ncontrib.blackjax.BlackjaxCustomKernel\n\nAdapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\ncontrib.blackjax.PathfinderFit\n\nThe result of fitting a forecasting model with BlackJAX Pathfinder.\n\ncontrib.blackjax.fit_pathfinder()\n\nFit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\n\n\nDatasets\n\nExample datasets used in the tutorials.\n\n\ndatasets.load_bart_weekly()\n\nLoad total weekly BART ridership (log scale) for the univariate example.\n\ndatasets.load_bart_hierarchical()\n\nLoad the windowed hierarchical BART panel for the hierarchical example.\n\ndatasets.load_victoria_electricity()\n\nLoad hourly Victoria (Australia) electricity demand and temperature.\n\ndatasets.bart_available()\n\nReturn whether the BART dataset can be loaded (download succeeds).",
+    "text": "Convert a fit into an ArviZ-schema :class:xarray.DataTree.\n\n\nUsage\nSource\n\n\nconvert.to_datatree(\n    rng_key,\n    fit,\n    model,\n    data,\n    covariates,\n    *,\n    num_predictive_samples=None,\n    coords=None,\n    time_coord=None,\n    posterior_dims=None\n)\n\n\nPRNG: rng_key is consumed by the in-sample posterior-predictive draws (and, for a variational fit, the posterior draws).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for the predictive (and variational posterior) draws.\n\nfit: object\n\nA fit from ~numpyro_forecast.functional.mcmc.fit_mcmc(), ~numpyro_forecast.functional.svi.fit_svi(), or ~numpyro_forecast.contrib.blackjax.fit_pathfinder().\n\nmodel: ForecastModel\n\nThe forecasting model that produced fit.\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nIn-sample covariates with time at axis -2.\n\nnum_predictive_samples: int | None = None\n\nNumber of posterior draws for a variational fit (ignored for ~numpyro_forecast.functional.mcmc.MCMCFit, which uses its own draws). Defaults to 1_000.\n\ncoords: Mapping[str, Sequence[Any]] | None = None\n\nOptional extra coordinates; these take precedence over the generated time coordinate.\n\ntime_coord: Sequence[Any] | None = None\n\nOptional explicit in-sample time coordinate values; defaults to range(n_time).\n\nposterior_dims: Mapping[str, Sequence[str]] | None = None\n\nOptional mapping from a posterior site name to its non-sample dimension names, e.g. {\"drift\": [\"time\"]}. Sites listed here share the tree-wide time coordinate; unlisted sites keep ArviZ’s auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental n_params == n_time would misattribute the axis).\n\n\n\n\n\nReturns\n\n\n xarray.DataTree\n\nA tree with posterior ((chain, draw, ...); a single pseudo-chain plus variational: True attrs for SVI/Pathfinder), posterior_predictive (in-sample obs), observed_data, and constant_data groups.\n\n\n\n\n\nNotes\nrng_key is split internally: one subkey drives the posterior draws (for variational fits) and the other the in-sample predictive. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the two sample sets.",
     "crumbs": [
       "Reference",
-      "API Index"
+      "ArviZ export",
+      "[convert.to_datatree()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.forecast.html",
-    "href": "reference/functional.forecast.html",
-    "title": "functional.forecast()",
+    "objectID": "reference/functional.posterior.draw_posterior.html",
+    "href": "reference/functional.posterior.draw_posterior.html",
+    "title": "functional.posterior.draw_posterior()",
     "section": "",
-    "text": "Sample forecasts for the steps in [t, duration) from a posterior.\n\n\nUsage\nSource\n\n\nfunctional.forecast(\n    rng_key,\n    model,\n    posterior,\n    data,\n    covariates,\n    *,\n    batch_size=None,\n    parallel=True\n)\n\n\nRuns Predictive with full-horizon covariates and the in-sample data: the in-sample latent sites are drawn from posterior while the _future suffix is drawn from the prior, and the \"forecast\" site is returned. The number of forecast samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ndata: Array\n\nObserved data with time at axis -2 and length t.\n\ncovariates: Array\n\nCovariates with time at axis -2 and length duration &gt; t.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). With parallel=True the samples in each batch_size chunk are vectorized while the chunks are looped over, so batch_size remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.\n\n\n\n\n\nReturns\n\n\n Num[Array, \" sample *batch future obs\"]\n\nForecast samples over the future = duration - t horizon (floating point for continuous observations, integer for discrete/count models built with predict_glm()).\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf covariates does not extend beyond data along the time axis.\n\n\n\n\n\nNotes\nChunking is a memory knob, not a reproducibility knob: reproducibility is per (rng_key, batch_size). Each chunk is padded to a whole multiple of batch_size so the underlying _predict compiles exactly once for a fixed shape (the pad draws are discarded), but changing batch_size changes the PRNG stream layout and therefore the exact draws.",
+    "text": "Draw num_samples posterior samples of the latent sites from a fit.\n\n\nUsage\nSource\n\n\nfunctional.posterior.draw_posterior(rng_key, fit, num_samples)\n\n\nDispatches on the fit type (e.g. ~numpyro_forecast.functional.svi.SVIFit, ~numpyro_forecast.functional.mcmc.MCMCFit). The returned dict has the sample axis leading and is ready to pass to ~numpyro_forecast.functional.prediction.forecast() or NumPyro’s Predictive.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nfit: object\n\nA fit result produced by ~numpyro_forecast.functional.svi.fit_svi() or ~numpyro_forecast.functional.mcmc.fit_mcmc().\n\nnum_samples: int\n\nNumber of posterior draws.\n\n\n\n\n\nReturns\n\n\n dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf fit is of an unsupported type.\n\n GuideSampleArgsError\n\nIf the fit holds a hand-written guide but was constructed without its in-sample covariates/data.\n\n\n\n\n\nNotes\nFor an ~numpyro_forecast.functional.mcmc.MCMCFit, when num_samples does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an ~numpyro_forecast.functional.svi.SVIFit the draws are sampled afresh from the fitted guide.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.forecast()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: posterior and prediction",
+      "[functional.posterior.draw_posterior()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
-    "href": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
-    "title": "contrib.blackjax.BlackjaxCustomKernel",
+    "objectID": "reference/util.shift_loc.html",
+    "href": "reference/util.shift_loc.html",
+    "title": "util.shift_loc()",
     "section": "",
-    "text": "Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxCustomKernel()\n\n\nThe escape hatch for kernels without a dedicated wrapper. build_fn receives (rng_key, logdensity_fn, position, num_warmup) and must return (inner_state, step_fn), where inner_state exposes .position over the same sites as the model and step_fn has signature (rng_key, inner_state) -&gt; (inner_state, info). The base class validates the returned state’s key set and raises TypeError if it is malformed.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nbuild_fn: BlackjaxBuildFn\n\nThe blackjax build callable described above.",
-    "crumbs": [
-      "Reference",
-      "Extensions (contrib)",
-      "[contrib.blackjax.BlackjaxCustomKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
-    ]
-  },
-  {
-    "objectID": "reference/util.require.html",
-    "href": "reference/util.require.html",
-    "title": "util.require()",
-    "section": "",
-    "text": "Import an optional dependency, or raise a targeted ImportError.\n\n\nUsage\nSource\n\n\nutil.require(module, *, extra)\n\n\nOptional features (dataframes, blackjax, optax) live behind pyproject extras and are never imported at package import time. This helper imports the backing module lazily at first use and, when it is missing, raises an ImportError naming the exact pip install invocation that provides it.\n\n\nParameters\n\n\nmodule: str\n\nThe importable module name (e.g. \"pandas\").\n\nextra: str\n\nThe numpyro_forecast extra that installs it (e.g. \"dataframes\").\n\n\n\n\n\nReturns\n\n\n ModuleType\n\nThe imported module.\n\n\n\n\n\nRaises\n\n\n ImportError\n\nIf module is not importable, with an actionable install hint.",
+    "text": "Re-center a zero-centered noise distribution at loc.\n\n\nUsage\nSource\n\n\nutil.shift_loc(noise_dist, loc)\n\n\nThis converts Pyro’s obs = data - prediction idiom into an additive shift of the observation distribution’s location.\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nA zero-centered location-family distribution.\n\nloc: Array\n\nThe deterministic mean to add to the distribution’s location.\n\n\n\n\n\nReturns\n\n\n dist.Distribution\n\nA distribution centered at loc.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf noise_dist is of an unsupported type.",
     "crumbs": [
       "Reference",
       "Utilities",
-      "[util.require()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[util.shift_loc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/metrics.crps_empirical.html",
-    "href": "reference/metrics.crps_empirical.html",
-    "title": "metrics.crps_empirical()",
+    "objectID": "reference/functional.prediction.forecast.html",
+    "href": "reference/functional.prediction.forecast.html",
+    "title": "functional.prediction.forecast()",
     "section": "",
-    "text": "Compute the empirical Continuous Ranked Probability Score (CRPS).\n\n\nUsage\nSource\n\n\nmetrics.crps_empirical(pred, truth)\n\n\nThe CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as\n\\[\n\\mathrm{CRPS}(F, y) = \\mathbb{E}|X - y| - \\tfrac{1}{2}\\,\\mathbb{E}|X - X'|,\n\\]\nwhere \\(X, X'\\) are independent draws from the forecast distribution \\(F\\). The expectations are estimated from the forecast sample axis using the sorted-sample \\(O(n \\log n)\\) identity.\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first, shape (sample, *batch).\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values with shape (*batch) (broadcastable to pred).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"*batch\"]\n\nElementwise CRPS, one value per batch location.\n\n\n\n\n\nReferences\nTilmann Gneiting, Adrian E. Raftery (2007). “Strictly Proper Scoring Rules, Prediction, and Estimation”. Journal of the American Statistical Association.",
+    "text": "Sample forecasts for the steps in [t, duration) from a posterior.\n\n\nUsage\nSource\n\n\nfunctional.prediction.forecast(\n    rng_key,\n    model,\n    posterior,\n    data,\n    covariates,\n    *,\n    batch_size=None,\n    parallel=True\n)\n\n\nRuns Predictive with full-horizon covariates and the in-sample data: the in-sample latent sites are drawn from posterior while the _future suffix is drawn from the prior, and the \"forecast\" site is returned. The number of forecast samples equals the leading (sample) axis of posterior (see ~numpyro_forecast.functional.posterior.draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ndata: Array\n\nObserved data with time at axis -2 and length t.\n\ncovariates: Array\n\nCovariates with time at axis -2 and length duration &gt; t.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). With parallel=True the samples in each batch_size chunk are vectorized while the chunks are looped over, so batch_size remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.\n\n\n\n\n\nReturns\n\n\n Num[Array, \" sample *batch future obs\"]\n\nForecast samples over the future = duration - t horizon (floating point for continuous observations, integer for discrete/count models built with ~numpyro_forecast.functional.models.predict_glm()).\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf covariates does not extend beyond data along the time axis.\n\n\n\n\n\nNotes\nChunking is a memory knob, not a reproducibility knob: reproducibility is per (rng_key, batch_size). Each chunk is padded to a whole multiple of batch_size so the underlying _predict compiles exactly once for a fixed shape (the pad draws are discarded), but changing batch_size changes the PRNG stream layout and therefore the exact draws.",
     "crumbs": [
       "Reference",
-      "Backtesting & evaluation",
-      "[metrics.crps_empirical()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: posterior and prediction",
+      "[functional.prediction.forecast()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/evaluate.results_to_dataframe.html",
-    "href": "reference/evaluate.results_to_dataframe.html",
-    "title": "evaluate.results_to_dataframe()",
+    "objectID": "reference/exceptions.GuideResolutionError.html",
+    "href": "reference/exceptions.GuideResolutionError.html",
+    "title": "exceptions.GuideResolutionError",
     "section": "",
-    "text": "Flatten backtest results into a tidy one-row-per-window DataFrame.\n\n\nUsage\nSource\n\n\nevaluate.results_to_dataframe(results)\n\n\nColumns are prefix-namespaced so metric, in-sample-metric, and parameter names never collide: window metrics become metric_&lt;name&gt;, in-sample metrics train_metric_&lt;name&gt;, and scalar parameters param_&lt;name&gt;, alongside the window indices t0/t1/t2, num_samples, and train_walltime/test_walltime. Forecast samples are excluded. Windows may carry different metric sets (e.g. via backtest(per_window_metrics=...)); the union of columns is used and missing entries are left as NaN.\nA VectorizedBacktestResult from backtest_vectorized() is also accepted; it produces the same metric_&lt;name&gt; columns for the same metric set, but has no train_metric_*, param_*, or walltime columns (a vectorized run has no per-window walltimes), which are simply absent.\n\n\nParameters\n\n\nresults: Sequence[BacktestResult] | VectorizedBacktestResult\n\nA sequence of BacktestResult from backtest(), or a single VectorizedBacktestResult from backtest_vectorized().\n\n\n\n\n\nReturns\n\n\n pandas.DataFrame\n\nOne row per window with the namespaced columns described above.\n\n\n\n\n\nRaises\n\n\n ImportError\n\nIf pandas is not installed (pip install numpyro_forecast[dataframes]).",
-    "crumbs": [
-      "Reference",
-      "Backtesting & evaluation",
-      "[evaluate.results_to_dataframe()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.MCMCFit.html",
-    "href": "reference/functional.MCMCFit.html",
-    "title": "functional.MCMCFit",
-    "section": "",
-    "text": "The result of fitting a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.MCMCFit(samples, num_chains=1)\n\n\nParameter Attributes\n\n\nsamples: dict[str, Array]\n\n\n\nnum_chains: int = 1\n\n\n\n\n\n\n\nAttributes\n\n\nsamples: dict[str, Array]\n\nThe posterior samples of the latent sites, sample axis leading and stored flattened (group_by_chain=False).\n\nnum_chains: int\n\nThe number of chains the fit was run with (frozen; default 1), so chain structure survives into ~numpyro_forecast.convert.to_datatree().",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.MCMCFit]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
-    ]
-  },
-  {
-    "objectID": "reference/exceptions.NumpyroForecastError.html",
-    "href": "reference/exceptions.NumpyroForecastError.html",
-    "title": "exceptions.NumpyroForecastError",
-    "section": "",
-    "text": "Base class for all deliberate numpyro_forecast errors.\n\n\nUsage\nSource\n\n\nexceptions.NumpyroForecastError()\n\n\nSubclasses may set default_message; instantiating without arguments then carries that message, and a positional message overrides it.\n\n\nParameters\n\n\nmessage: str | None = None\n\nOptional explicit message; defaults to the class default_message.",
+    "text": "A guide specification could not be resolved.\n\n\nUsage\nSource\n\n\nexceptions.GuideResolutionError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.svi.resolve_guide() for a callable shaped like a guide factory (the default message) or for an unsupported type.",
     "crumbs": [
       "Reference",
       "Exceptions",
-      "[exceptions.NumpyroForecastError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
+      "[exceptions.GuideResolutionError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
     ]
   },
   {
-    "objectID": "reference/evaluate.eval_crps.html",
-    "href": "reference/evaluate.eval_crps.html",
-    "title": "evaluate.eval_crps()",
+    "objectID": "reference/evaluate.backtest.html",
+    "href": "reference/evaluate.backtest.html",
+    "title": "evaluate.backtest()",
     "section": "",
-    "text": "Empirical CRPS averaged over all data elements.\n\n\nUsage\nSource\n\n\nevaluate.eval_crps(pred, truth)\n\n\nA pure JAX scalar kernel (see ~numpyro_forecast.typing.Metric).\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first.\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values (matching pred without the sample axis).\n\n\n\n\n\nReturns\n\n\n Array\n\nThe mean empirical CRPS as a scalar array.",
+    "text": "Backtest a forecasting model on a moving window of (train, test) data.\n\n\nUsage\nSource\n\n\nevaluate.backtest(\n    rng_key,\n    data,\n    covariates,\n    model_fn,\n    *,\n    forecaster_fn=Forecaster,\n    metrics=None,\n    per_window_metrics=None,\n    transform=None,\n    window_type=None,\n    train_window=None,\n    min_train_window=1,\n    test_window=None,\n    min_test_window=1,\n    stride=1,\n    num_samples=100,\n    batch_size=None,\n    forecaster_options=None,\n    eval_train=False,\n    keep_predictions=False,\n    reuse_model=True\n)\n\n\nParameters\n\n\nrng_key: Array\n\nBase PRNG key (used for every window, matching Pyro).\n\ndata: Array\n\nDataset with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 (same duration as data).\n\nmodel_fn: ModelFactory\n\nFactory returning a fresh ForecastingModel per window.\n\nforecaster_fn: ForecasterFactory = Forecaster\n\nFactory returning a fitted forecaster (defaults to Forecaster).\n\nmetrics: Mapping[str, Metric] | None = None\n\nMapping of metric name to function; defaults to DEFAULT_METRICS. Each function takes (pred, truth) and returns a scalar array (see ~numpyro_forecast.typing.Metric); bind any metric-specific parameters with functools.partial(), e.g. {**DEFAULT_METRICS, \"coverage\": partial(eval_coverage, alpha=0.8)}.\n\nper_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None\n\nOptional (t0, t1, t2) -&gt; Mapping[str, Metric] callable producing extra metrics merged over metrics for each window. Use it for window-dependent metrics such as a MASE scaled by that window’s training data (numpyro_forecast.metrics.make_mase()).\n\ntransform: Callable[[Array, Array], tuple[Array, Array]] | None = None\n\nOptional (pred, truth) -&gt; (pred, truth) applied before metrics.\n\nwindow_type: WindowType | None = None\n\nWindowing strategy. If None (default) it is inferred from train_window: \"expanding\" when train_window is None and \"rolling\" when it is set, matching the historical behavior. Pass \"expanding\" to always train on all history from t0 = 0, or \"rolling\" to hold the training length fixed at train_window and slide it forward. \"expanding\" and train_window are mutually exclusive, and \"rolling\" requires train_window (both validated).\n\ntrain_window: int | None = None\n\nTraining window size; if None the window expands from the start. Required for window_type=\"rolling\".\n\nmin_train_window: int = 1\n\nMinimum training window size for the expanding strategy (used when train_window is None).\n\ntest_window: int | None = None\n\nTest window size; if None forecasts to the end of the data.\n\nmin_test_window: int = 1\n\nMinimum test window size when test_window is None.\n\nstride: int = 1\n\nStep between successive train/test splits.\n\nnum_samples: int = 100\n\nNumber of forecast samples per window.\n\nbatch_size: int | None = None\n\nOptional forecast-sampling chunk size.\n\nforecaster_options: Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None = None\n\nOptions dict passed to forecaster_fn, or a callable (t0, t1, t2) -&gt; dict returning per-window options.\n\neval_train: bool = False\n\nIf True, also score the in-sample posterior predictive over each training window with the same metrics and store them in BacktestResult.train_metrics. Requires a forecaster exposing predict_in_sample (the built-in Forecaster and HMCForecaster do).\n\nkeep_predictions: bool = False\n\nIf True, store each window’s out-of-sample forecast samples (after transform) on BacktestResult.prediction. Defaults to False to avoid retaining large Monte Carlo arrays.\n\nreuse_model: bool = True\n\nWhen True (default) and the windowing strategy is rolling, the model instance returned by the first model_fn() call is reused for every window so forecast/predict kernels can cache across windows. SVI still recompiles per window; for a single fused fit over all windows use backtest_vectorized(). Ignored for expanding windows and when False.\n\n\n\n\n\nReturns\n\n\n list[BacktestResult]\n\nOne result per backtest window.",
     "crumbs": [
       "Reference",
       "Backtesting & evaluation",
-      "[evaluate.eval_crps()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[evaluate.backtest()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.draw_posterior.html",
-    "href": "reference/functional.draw_posterior.html",
-    "title": "functional.draw_posterior()",
+    "objectID": "reference/evaluate.BacktestResult.html",
+    "href": "reference/evaluate.BacktestResult.html",
+    "title": "evaluate.BacktestResult",
     "section": "",
-    "text": "Draw num_samples posterior samples of the latent sites from a fit.\n\n\nUsage\nSource\n\n\nfunctional.draw_posterior(rng_key, fit, num_samples)\n\n\nDispatches on the fit type (e.g. SVIFit, MCMCFit). The returned dict has the sample axis leading and is ready to pass to forecast() or NumPyro’s Predictive.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nfit: object\n\nA fit result produced by fit_svi() or fit_mcmc().\n\nnum_samples: int\n\nNumber of posterior draws.\n\n\n\n\n\nReturns\n\n\n dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf fit is of an unsupported type.\n\n GuideSampleArgsError\n\nIf the fit holds a hand-written guide but was constructed without its in-sample covariates/data.\n\n\n\n\n\nNotes\nFor an MCMCFit, when num_samples does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an SVIFit the draws are sampled afresh from the fitted guide.",
+    "text": "Per-window result of a :func:backtest run.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.draw_posterior()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Backtesting & evaluation",
+      "[evaluate.BacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/evaluate.BacktestResult.html#to_dict",
+    "href": "reference/evaluate.BacktestResult.html#to_dict",
+    "title": "evaluate.BacktestResult",
+    "section": "to_dict()",
+    "text": "to_dict()\n\nReturn a flat dictionary view (Pyro-style access).\n\n\nUsage\nSource\n\n\nto_dict()\n\n\nReturns\n\n\n dict[str, Any]\n\nAll fields as a plain dictionary.",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[evaluate.BacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.svi.resolve_guide.html",
+    "href": "reference/functional.svi.resolve_guide.html",
+    "title": "functional.svi.resolve_guide()",
+    "section": "",
+    "text": "Normalize a guide specification against model.\n\n\nUsage\nSource\n\n\nfunctional.svi.resolve_guide(guide, model)\n\n\nResolution: None -&gt; AutoNormal(model); an AutoGuide instance -&gt; returned unchanged; an AutoGuide subclass or a functools.partial of one -&gt; called with model; any other callable -&gt; a hand-written guide, after _probe_handwritten_guide(). Anything else -&gt; GuideResolutionError.\n\n\nParameters\n\n\nguide: GuideLike\n\nThe guide specification (see ~numpyro_forecast.typing.GuideLike).\n\nmodel: ForecastModel\n\nThe model the guide is built against.\n\n\n\n\n\nReturns\n\n\n AutoGuide | Callable[…, None]\n\nThe resolved guide.\n\n\n\n\n\nRaises\n\n\n GuideResolutionError\n\nIf guide is neither an AutoGuide (instance/subclass/partial) nor a callable, or if it has the mistyped-factory shape.",
+    "crumbs": [
+      "Reference",
+      "Functional core: fitting",
+      "[functional.svi.resolve_guide()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/contrib.blackjax.BlackjaxNUTSKernel.html",
+    "href": "reference/contrib.blackjax.BlackjaxNUTSKernel.html",
+    "title": "contrib.blackjax.BlackjaxNUTSKernel",
+    "section": "",
+    "text": "BlackJAX NUTS with Stan-style window adaptation.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxNUTSKernel()\n\n\nAdaptation (step size and inverse mass matrix) runs once in ~_BlackjaxKernel.init() via blackjax.window_adaptation; each MCMC step is then a single tuned NUTS step.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nnum_adaptation_steps: int = 500\n\nNumber of window-adaptation steps.\n\ntarget_acceptance_rate: float = 0.8\n\nTarget acceptance probability for dual-averaging step-size adaptation.",
+    "crumbs": [
+      "Reference",
+      "Extensions (contrib)",
+      "[contrib.blackjax.BlackjaxNUTSKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.models.forecasting_model.html",
+    "href": "reference/functional.models.forecasting_model.html",
+    "title": "functional.models.forecasting_model()",
+    "section": "",
+    "text": "Build a NumPyro model from a functional model body.\n\n\nUsage\nSource\n\n\nfunctional.models.forecasting_model(model_fn)\n\n\nThe functional analogue of subclassing ~numpyro_forecast.forecaster.ForecastingModel. model_fn is a pure function (Horizon, covariates) -&gt; None that calls time_series() and predict(); this wraps it into the standard NumPyro model callable (covariates, data=None), deriving the Horizon from the shapes.\n\n\nParameters\n\n\nmodel_fn: Callable[[Horizon, Array], None]\n\nThe model body. It receives the per-call Horizon (use h.zero_data for the Pyro-style zero_data) and the covariates with time at axis -2.\n\n\n\n\n\nReturns\n\n\n ForecastModel\n\nA callable (covariates, data=None) -&gt; None usable with SVI, MCMC, Predictive, ~numpyro_forecast.functional.svi.fit_svi(), ~numpyro_forecast.functional.mcmc.fit_mcmc(), and the OOP forecaster classes.",
+    "crumbs": [
+      "Reference",
+      "Models",
+      "[functional.models.forecasting_model()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -225,27 +252,51 @@
     ]
   },
   {
-    "objectID": "reference/util.zero_data_like.html",
-    "href": "reference/util.zero_data_like.html",
-    "title": "util.zero_data_like()",
+    "objectID": "reference/functional.svi.resolve_optimizer.html",
+    "href": "reference/functional.svi.resolve_optimizer.html",
+    "title": "functional.svi.resolve_optimizer()",
     "section": "",
-    "text": "Return zeros shaped like data but extended to the covariate duration.\n\n\nUsage\nSource\n\n\nutil.zero_data_like(data, covariates)\n\n\nMirrors Pyro’s zero_data: it exposes the shape/dtype of the data over the full forecast horizon without leaking observed values into the model. The functional API exposes the equivalent value as numpyro_forecast.functional.Horizon.zero_data.\n\n\nParameters\n\n\ndata: Array\n\nObserved data with time at axis -2, shape (*batch, t, obs).\n\ncovariates: Array\n\nCovariates with time at axis -2, shape (*batch, duration, cov).\n\n\n\n\n\nReturns\n\n\n Array\n\nZeros of shape (*batch, duration, obs).",
+    "text": "Normalize an optimizer specification into a NumPyro optimizer.\n\n\nUsage\nSource\n\n\nfunctional.svi.resolve_optimizer(optim)\n\n\nAccepted forms: None (Adam(0.01)); a finite positive scalar learning rate (float/int/NumPy scalar/0-d array) giving Adam(lr); an optax.GradientTransformation (wrapped via numpyro.optim.optax_to_numpyro, imported lazily so optax stays a soft dependency); a _NumPyroOptim (returned unchanged).\n\n\nParameters\n\n\noptim: OptimizerLike\n\nThe optimizer specification (see ~numpyro_forecast.typing.OptimizerLike).\n\n\n\n\n\nReturns\n\n\n _NumPyroOptim\n\nThe resolved NumPyro optimizer.\n\n\n\n\n\nRaises\n\n\n OptimizerResolutionError\n\nFor boolean inputs of any form, including 0-d boolean arrays (bool is an int subclass, so a bool would silently mean Adam(1.0)), and for any other unrecognized type; the message lists the accepted forms.\n\n ValueError\n\nFor a non-finite or non-positive learning rate.",
     "crumbs": [
       "Reference",
-      "Utilities",
-      "[util.zero_data_like()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: fitting",
+      "[functional.svi.resolve_optimizer()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.fit_svi.html",
-    "href": "reference/functional.fit_svi.html",
-    "title": "functional.fit_svi()",
+    "objectID": "reference/functional.models.predict.html",
+    "href": "reference/functional.models.predict.html",
+    "title": "functional.models.predict()",
     "section": "",
-    "text": "Fit a forecasting model with stochastic variational inference.\n\n\nUsage\nSource\n\n\nfunctional.fit_svi(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    guide=None,\n    optim=None,\n    num_steps=1001,\n    num_particles=1,\n    progress_bar=False,\n    stable_update=False\n)\n\n\nPRNG: consumes rng_key once for the SVI run; nothing is retained.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nguide: GuideLike = None\n\nGuide specification resolved by resolve_guide(): None (AutoNormal), an AutoGuide instance, an AutoGuide subclass or functools.partial factory of one, or a hand-written guide function.\n\noptim: OptimizerLike = None\n\nOptimizer specification resolved by resolve_optimizer(): None (Adam(0.01)), a positive scalar learning rate, an optax.GradientTransformation, or a _NumPyroOptim. For example, a cosine-decayed, gradient-clipped Adam:\nimport optax\nschedule = optax.cosine_decay_schedule(1e-2, decay_steps=1_000)\noptim = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))\n\nnum_steps: int = 1001\n\nNumber of SVI steps.\n\nnum_particles: int = 1\n\nNumber of ELBO particles.\n\nprogress_bar: bool = False\n\nWhether to display the SVI progress bar.\n\nstable_update: bool = False\n\nWhether SVI skips parameter updates whose new value is non-finite (NumPyro’s stable_update).\n\n\n\n\n\nReturns\n\n\n SVIFit\n\nThe fitted guide, variational parameters, loss history, and the in-sample data/covariates (kept by identity, not copied).\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations.",
+    "text": "Register the observation/forecast sites for the model.\n\n\nUsage\nSource\n\n\nfunctional.models.predict(h, noise_dist, prediction)\n\n\nnoise_dist is a zero-centered observation noise distribution and prediction the deterministic mean over the full horizon. While training the residual is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the \"forecast\" deterministic site. A thin wrapper over predict_glm() with the location-shift link lambda mu: shift_loc(noise_dist, mu).\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nnoise_dist: dist.Distribution\n\nZero-centered observation noise (e.g. Normal(0, sigma)).\n\nprediction: Array\n\nDeterministic mean with time at axis -2, shape (*batch, duration, obs).\n\n\n\n\n\nRaises\n\n\n RuntimeError\n\nIf forecasting (future &gt; 0) but no observed data is available.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.fit_svi()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: model primitives",
+      "[functional.models.predict()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/evaluate.VectorizedBacktestResult.html",
+    "href": "reference/evaluate.VectorizedBacktestResult.html",
+    "title": "evaluate.VectorizedBacktestResult",
+    "section": "",
+    "text": "Result of a :func:backtest_vectorized run (all windows at once).",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[evaluate.VectorizedBacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/evaluate.VectorizedBacktestResult.html#to_dict",
+    "href": "reference/evaluate.VectorizedBacktestResult.html#to_dict",
+    "title": "evaluate.VectorizedBacktestResult",
+    "section": "to_dict()",
+    "text": "to_dict()\n\nReturn a flat dictionary view.\n\n\nUsage\nSource\n\n\nto_dict()\n\n\nReturns\n\n\n dict[str, Any]\n\nAll fields as a plain dictionary.",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[evaluate.VectorizedBacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
     ]
   },
   {
@@ -261,63 +312,99 @@
     ]
   },
   {
-    "objectID": "reference/evaluate.backtest_vectorized.html",
-    "href": "reference/evaluate.backtest_vectorized.html",
-    "title": "evaluate.backtest_vectorized()",
+    "objectID": "reference/functional.prediction.predict_in_sample.html",
+    "href": "reference/functional.prediction.predict_in_sample.html",
+    "title": "functional.prediction.predict_in_sample()",
     "section": "",
-    "text": "Rolling-window backtest with all windows fitted in one vmapped SVI run.\n\n\nUsage\nSource\n\n\nevaluate.backtest_vectorized(\n    rng_key,\n    data,\n    covariates,\n    model_fn,\n    *,\n    train_window,\n    test_window,\n    stride=1,\n    num_steps=1001,\n    optim=None,\n    guide=None,\n    num_samples=100,\n    metrics=None,\n    keep_predictions=False\n)\n\n\nEstimator-equivalent to backtest() with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows, giving order-of-magnitude wall-clock wins for tens of windows on small models.\nPRNG: fold_in(rng_key, -1) seeds a discarded eager warm-up init; fold_in(rng_key, i) is the window-i parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see _window_key_streams()).\n\n\nParameters\n\n\nrng_key: Array\n\nBase PRNG key.\n\ndata: Array\n\nDataset with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 (same duration as data).\n\nmodel_fn: ModelFactory\n\nFactory returning a fresh model; called exactly once (per-window model variation is unsupported here, use backtest()).\n\ntrain_window: int\n\nFixed training-window length (&gt;= 1).\n\ntest_window: int\n\nFixed test-window length (&gt;= 1).\n\nstride: int = 1\n\nStep between successive windows (&gt;= 1).\n\nnum_steps: int = 1001\n\nNumber of SVI steps per window.\n\noptim: OptimizerLike = None\n\nOptimizer specification resolved by ~numpyro_forecast.functional.resolve_optimizer().\n\nguide: GuideLike = None\n\nGuide specification; must resolve to an AutoGuide (hand-written guides are not vmappable, use backtest()).\n\nnum_samples: int = 100\n\nNumber of forecast samples drawn per window.\n\nmetrics: Mapping[str, Metric] | None = None\n\nMapping of metric name to function; defaults to DEFAULT_METRICS. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as {**DEFAULT_METRICS, \"coverage\": partial(eval_coverage, alpha=0.5)}, is scored inside the single fused computation. Host-side metrics are unsupported here; use backtest(), or keep_predictions=True and score on the host.\n\nkeep_predictions: bool = False\n\nIf True, retain the stacked forecast samples on the result.\n\n\n\n\n\nReturns\n\n\n VectorizedBacktestResult\n\nThe stacked per-window losses, metrics, and window indices.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates durations differ.\n\n BacktestWindowError\n\nIf train_window, test_window, or stride is &lt; 1, or there is no room for a single window.\n\n VectorizedGuideError\n\nIf the resolved guide is not an AutoGuide.\n\n VectorizedMetricError\n\nIf a metric forces a host conversion under vmap (it is not a pure JAX function).",
+    "text": "Sample the in-sample posterior predictive of the obs site.\n\n\nUsage\nSource\n\n\nfunctional.prediction.predict_in_sample(\n    rng_key, model, posterior, covariates, *, batch_size=None, parallel=True\n)\n\n\nRuns Predictive with the in-sample covariates and the supplied posterior latent draws. Unlike forecast() there is no forecast horizon: covariates span only the observed window, so the model’s obs site is sampled at every step. The number of predictive samples equals the leading (sample) axis of posterior (see ~numpyro_forecast.functional.posterior.draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the observed window. Its time length must match the data the posterior was fit on, since the in-sample latent sites are sized to that window.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). See forecast() for how this interacts with batch_size.\n\n\n\n\n\nReturns\n\n\n Num[Array, \" sample *batch time obs\"]\n\nIn-sample posterior-predictive draws of the obs site.",
+    "crumbs": [
+      "Reference",
+      "Functional core: posterior and prediction",
+      "[functional.prediction.predict_in_sample()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.models.Horizon.html",
+    "href": "reference/functional.models.Horizon.html",
+    "title": "functional.models.Horizon",
+    "section": "",
+    "text": "The train/forecast split for a single model call.",
+    "crumbs": [
+      "Reference",
+      "Functional core: model primitives",
+      "[functional.models.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.models.Horizon.html#zero_data",
+    "href": "reference/functional.models.Horizon.html#zero_data",
+    "title": "functional.models.Horizon",
+    "section": "zero_data",
+    "text": "zero_data\n\nZeros shaped like data extended to the full horizon.\n\n\nzero_data: Array | None\n\n\nMirrors Pyro’s zero_data (and numpyro_forecast.util.zero_data_like()): it exposes the shape/dtype of the data over the forecast horizon without leaking observed values. None when there is no data.",
+    "crumbs": [
+      "Reference",
+      "Functional core: model primitives",
+      "[functional.models.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.models.Horizon.html#post_init__",
+    "href": "reference/functional.models.Horizon.html#post_init__",
+    "title": "functional.models.Horizon",
+    "section": "__post_init__()",
+    "text": "__post_init__()\n\nValidate that the horizon fields are internally consistent.\n\n\nUsage\nSource\n\n\n__post_init__()",
+    "crumbs": [
+      "Reference",
+      "Functional core: model primitives",
+      "[functional.models.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.models.Horizon.html#from_data",
+    "href": "reference/functional.models.Horizon.html#from_data",
+    "title": "functional.models.Horizon",
+    "section": "from_data()",
+    "text": "from_data()\n\nDerive the horizon from covariate and data shapes.\n\n\nUsage\nSource\n\n\nfrom_data(covariates, data)\n\n\nParameters\n\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the full horizon.\n\ndata: Array | None\n\nObserved data with time at axis -2 (None for prior sampling).\n\n\n\n\n\nReturns\n\n\n Horizon\n\nThe horizon with duration = covariates.shape[-2], t_obs = data.shape[-2] (or duration when data is None), and future = duration - t_obs.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data is longer than covariates along the time axis.",
+    "crumbs": [
+      "Reference",
+      "Functional core: model primitives",
+      "[functional.models.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+    ]
+  },
+  {
+    "objectID": "reference/exceptions.MVNLayoutError.html",
+    "href": "reference/exceptions.MVNLayoutError.html",
+    "title": "exceptions.MVNLayoutError",
+    "section": "",
+    "text": "A MultivariateNormal layout is unsupported for time-axis surgery.\n\n\nUsage\nSource\n\n\nexceptions.MVNLayoutError(message=None)\n\n\nRaised by ~numpyro_forecast.util.shift_loc(), ~numpyro_forecast.util.slice_time(), and ~numpyro_forecast.util.prefix_condition() on MVN noise whose loc/covariance_matrix shapes do not match the supported time-leading layout.",
+    "crumbs": [
+      "Reference",
+      "Exceptions",
+      "[exceptions.MVNLayoutError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
+    ]
+  },
+  {
+    "objectID": "reference/metrics.eval_pinball.html",
+    "href": "reference/metrics.eval_pinball.html",
+    "title": "metrics.eval_pinball()",
+    "section": "",
+    "text": "Mean pinball (quantile) loss of the forecast quantile.\n\n\nUsage\nSource\n\n\nmetrics.eval_pinball(pred, truth, *, quantile=0.5)\n\n\nThe pinball loss for the forecast \\(\\hat q\\) of quantile \\(\\tau\\) is \\(\\max(\\tau (y - \\hat q), (\\tau - 1)(y - \\hat q))\\), averaged over all data elements. At quantile=0.5 it is half the mean absolute error. A pure JAX scalar kernel (see ~numpyro_forecast.typing.Metric); quantile is static so each level specializes its own branch.\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first.\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values (matching pred without the sample axis).\n\nquantile: float = 0.5\n\nTarget quantile in (0, 1).\n\n\n\n\n\nReturns\n\n\n Array\n\nThe mean pinball loss as a scalar array.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf quantile is not strictly inside (0, 1).",
     "crumbs": [
       "Reference",
       "Backtesting & evaluation",
-      "[evaluate.backtest_vectorized()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[metrics.eval_pinball()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/exceptions.KernelResolutionError.html",
-    "href": "reference/exceptions.KernelResolutionError.html",
-    "title": "exceptions.KernelResolutionError",
+    "objectID": "reference/util.periodic_repeat.html",
+    "href": "reference/util.periodic_repeat.html",
+    "title": "util.periodic_repeat()",
     "section": "",
-    "text": "A kernel specification could not be resolved.\n\n\nUsage\nSource\n\n\nexceptions.KernelResolutionError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.resolve_kernel() for a type that is neither None, an MCMCKernel subclass, nor an MCMCKernel instance.",
+    "text": "Tile a seasonal pattern to cover duration time steps.\n\n\nUsage\nSource\n\n\nutil.periodic_repeat(x, duration, *, axis=-1)\n\n\nParameters\n\n\nx: ArrayLike\n\nSeasonal pattern; the repeated axis has length equal to the period. Accepts any array-like (e.g. a raw numpyro.sample draw).\n\nduration: int\n\nTarget length along axis.\n\naxis: int = -1\n\nAxis to repeat along (defaults to -1).\n\n\n\n\n\nReturns\n\n\n Array\n\nx periodically repeated to length duration along axis.",
     "crumbs": [
       "Reference",
-      "Exceptions",
-      "[exceptions.KernelResolutionError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.predict_in_sample.html",
-    "href": "reference/functional.predict_in_sample.html",
-    "title": "functional.predict_in_sample()",
-    "section": "",
-    "text": "Sample the in-sample posterior predictive of the obs site.\n\n\nUsage\nSource\n\n\nfunctional.predict_in_sample(\n    rng_key, model, posterior, covariates, *, batch_size=None, parallel=True\n)\n\n\nRuns Predictive with the in-sample covariates and the supplied posterior latent draws. Unlike forecast() there is no forecast horizon: covariates span only the observed window, so the model’s obs site is sampled at every step. The number of predictive samples equals the leading (sample) axis of posterior (see draw_posterior()).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key.\n\nmodel: ForecastModel\n\nThe forecasting model callable (the same one that produced posterior).\n\nposterior: dict[str, Array]\n\nPosterior samples of the latent sites, sample axis leading.\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the observed window. Its time length must match the data the posterior was fit on, since the in-sample latent sites are sized to that window.\n\nbatch_size: int | None = None\n\nOptional chunk size for sampling (caps peak memory).\n\nparallel: bool = True\n\nWhether Predictive vectorizes over the sample axis with vmap (True, faster, higher peak memory) or maps it serially with lax.map (False). See forecast() for how this interacts with batch_size.\n\n\n\n\n\nReturns\n\n\n Num[Array, \" sample *batch time obs\"]\n\nIn-sample posterior-predictive draws of the obs site.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.predict_in_sample()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/exceptions.VectorizedMetricError.html",
-    "href": "reference/exceptions.VectorizedMetricError.html",
-    "title": "exceptions.VectorizedMetricError",
-    "section": "",
-    "text": "A metric is not vmappable in the vectorized backtest.\n\n\nUsage\nSource\n\n\nexceptions.VectorizedMetricError(message=None)\n\n\nRaised by ~numpyro_forecast.evaluate.backtest_vectorized() when a metric forces a host conversion (e.g. float(...) or numpy calls) under vmap. Metrics must be pure JAX functions returning a scalar array; see ~numpyro_forecast.typing.Metric.",
-    "crumbs": [
-      "Reference",
-      "Exceptions",
-      "[exceptions.VectorizedMetricError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.markov_time_series.html",
-    "href": "reference/functional.markov_time_series.html",
-    "title": "functional.markov_time_series()",
-    "section": "",
-    "text": "Sample a Markov (state-space) latent over the full horizon.\n\n\nUsage\nSource\n\n\nfunctional.markov_time_series(\n    h,\n    name,\n    init_carry,\n    transition,\n    xs=None,\n    *,\n    plates=(),\n    reparam_config=None\n)\n\n\nIn-sample steps run in a numpyro.contrib.control_flow.scan with site name; when forecasting, horizon steps run in a second scan with site f\"{name}_future\" seeded by the final in-sample carry. The guide never sees the future site (same invariant as time_series()), and under posterior replay the carry is a deterministic function of the replayed draws, so the forecast is conditioned through the state.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nname: str\n\nBase sample-site name for the in-sample latent scan.\n\ninit_carry: Any\n\nInitial carry passed to the first transition.\n\ntransition: Transition\n\nPer-step (carry, x_t) -&gt; (dist_t, carry_fn) callable; the wrapper owns the numpyro.sample statement.\n\nxs: Array | None = None\n\nOptional exogenous inputs over the full horizon with time at axis -2, moved into scan layout internally; None for autonomous dynamics.\n\nplates: Sequence[tuple[str, int]] = ()\n\n(name, size) pairs opened inside the scan body around the sample statement (the only placement NumPyro supports for scan + plate).\n\nreparam_config: Mapping[str, Reparam] | None = None\n\nSite-name -&gt; ~numpyro.infer.reparam.Reparam mapping applied inside the scan body.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon in package layout (*plate_batch, duration, obs).\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf forecasting without observed data, if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.markov_time_series()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Utilities",
+      "[util.periodic_repeat()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -325,7 +412,7 @@
     "href": "reference/forecaster.Forecaster.html",
     "title": "forecaster.Forecaster",
     "section": "",
-    "text": "Fit a forecasting model with stochastic variational inference.\n\n\nUsage\nSource\n\n\nforecaster.Forecaster()\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nguide: GuideLike = None\n\nGuide specification resolved by ~numpyro_forecast.functional.resolve_guide(): None (AutoNormal), an AutoGuide instance, an AutoGuide subclass or functools.partial factory of one, or a hand-written guide function.\n\noptim: OptimizerLike = None\n\nOptimizer specification resolved by ~numpyro_forecast.functional.resolve_optimizer(): None (Adam(0.01)), a positive scalar learning rate, an optax.GradientTransformation, or a _NumPyroOptim.\n\nnum_steps: int = 1001\n\nNumber of SVI steps.\n\nnum_particles: int = 1\n\nNumber of ELBO particles.\n\nprogress_bar: bool = False\n\nWhether to display the SVI progress bar.\n\nstable_update: bool = False\n\nWhether SVI skips non-finite parameter updates.",
+    "text": "Fit a forecasting model with stochastic variational inference.\n\n\nUsage\nSource\n\n\nforecaster.Forecaster()\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nguide: GuideLike = None\n\nGuide specification resolved by ~numpyro_forecast.functional.svi.resolve_guide(): None (AutoNormal), an AutoGuide instance, an AutoGuide subclass or functools.partial factory of one, or a hand-written guide function.\n\noptim: OptimizerLike = None\n\nOptimizer specification resolved by ~numpyro_forecast.functional.svi.resolve_optimizer(): None (Adam(0.01)), a positive scalar learning rate, an optax.GradientTransformation, or a _NumPyroOptim.\n\nnum_steps: int = 1001\n\nNumber of SVI steps.\n\nnum_particles: int = 1\n\nNumber of ELBO particles.\n\nprogress_bar: bool = False\n\nWhether to display the SVI progress bar.\n\nstable_update: bool = False\n\nWhether SVI skips non-finite parameter updates.",
     "crumbs": [
       "Reference",
       "Forecasters",
@@ -397,7 +484,7 @@
     "href": "reference/forecaster.ForecastingModel.html#markov_time_series",
     "title": "forecaster.ForecastingModel",
     "section": "markov_time_series()",
-    "text": "markov_time_series()\n\nSample a Markov (state-space) latent over the full horizon.\n\n\nUsage\nSource\n\n\nmarkov_time_series(\n    name, init_carry, transition, xs=None, *, plates=(), reparam_config=None\n)\n\n\nThin wrapper over numpyro_forecast.functional.markov_time_series() that threads this model’s train/forecast horizon. In-sample steps run in a scan under site name; the forecast horizon runs in a second scan under f\"{name}_future\" seeded by the final in-sample carry, so the guide never sees the future site.\n\n\nParameters\n\n\nname: str\n\nSample-site name for the in-sample scan; the forecast scan uses f\"{name}_future\".\n\ninit_carry: Any\n\nInitial carry PyTree fed to the first transition step.\n\ntransition: Transition\n\nCallable (carry, x_t) -&gt; (dist_t, carry_fn): dist_t is the per-step observation distribution (its per-step shape must carry the trailing observation dimension) and carry_fn(z_t) builds the next carry from the sampled latent z_t. The wrapper owns the sample statement, so the Markov structure cannot be broken by resampling.\n\nxs: Array | None = None\n\nOptional exogenous inputs spanning the full horizon with time at axis -2; split and moved into scan layout internally. None for autonomous dynamics.\n\nplates: Sequence[tuple[str, int]] = ()\n\n(name, size) pairs opened inside the scan body around the sample statement (the only placement NumPyro accepts around a scan).\n\nreparam_config: Mapping[str, Reparam] | None = None\n\nOptional site-name to ~numpyro.infer.reparam.Reparam mapping applied inside the scan body.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon in package layout (*plate_batch, duration, obs) (time at axis -2).",
+    "text": "markov_time_series()\n\nSample a Markov (state-space) latent over the full horizon.\n\n\nUsage\nSource\n\n\nmarkov_time_series(\n    name, init_carry, transition, xs=None, *, plates=(), reparam_config=None\n)\n\n\nThin wrapper over numpyro_forecast.functional.models.markov_time_series() that threads this model’s train/forecast horizon. In-sample steps run in a scan under site name; the forecast horizon runs in a second scan under f\"{name}_future\" seeded by the final in-sample carry, so the guide never sees the future site.\n\n\nParameters\n\n\nname: str\n\nSample-site name for the in-sample scan; the forecast scan uses f\"{name}_future\".\n\ninit_carry: Any\n\nInitial carry PyTree fed to the first transition step.\n\ntransition: Transition\n\nCallable (carry, x_t) -&gt; (dist_t, carry_fn): dist_t is the per-step observation distribution (its per-step shape must carry the trailing observation dimension) and carry_fn(z_t) builds the next carry from the sampled latent z_t. The wrapper owns the sample statement, so the Markov structure cannot be broken by resampling.\n\nxs: Array | None = None\n\nOptional exogenous inputs spanning the full horizon with time at axis -2; split and moved into scan layout internally. None for autonomous dynamics.\n\nplates: Sequence[tuple[str, int]] = ()\n\n(name, size) pairs opened inside the scan body around the sample statement (the only placement NumPyro accepts around a scan).\n\nreparam_config: Mapping[str, Reparam] | None = None\n\nOptional site-name to ~numpyro.infer.reparam.Reparam mapping applied inside the scan body.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon in package layout (*plate_batch, duration, obs) (time at axis -2).",
     "crumbs": [
       "Reference",
       "Models",
@@ -421,7 +508,7 @@
     "href": "reference/forecaster.ForecastingModel.html#predict",
     "title": "forecaster.ForecastingModel",
     "section": "predict()",
-    "text": "predict()\n\nRegister the observation/forecast sites for the model.\n\n\nUsage\nSource\n\n\npredict(noise_dist, prediction)\n\n\nThin wrapper over numpyro_forecast.functional.predict().\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nZero-centered observation noise (e.g. Normal(0, sigma)).\n\nprediction: Array\n\nDeterministic mean with time at axis -2, shape (*batch, duration, obs).",
+    "text": "predict()\n\nRegister the observation/forecast sites for the model.\n\n\nUsage\nSource\n\n\npredict(noise_dist, prediction)\n\n\nThin wrapper over numpyro_forecast.functional.models.predict().\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nZero-centered observation noise (e.g. Normal(0, sigma)).\n\nprediction: Array\n\nDeterministic mean with time at axis -2, shape (*batch, duration, obs).",
     "crumbs": [
       "Reference",
       "Models",
@@ -433,7 +520,7 @@
     "href": "reference/forecaster.ForecastingModel.html#predict_glm",
     "title": "forecaster.ForecastingModel",
     "section": "predict_glm()",
-    "text": "predict_glm()\n\nRegister GLM-style observation/forecast sites from a latent predictor.\n\n\nUsage\nSource\n\n\npredict_glm(obs_dist_fn, latent)\n\n\nThin wrapper over numpyro_forecast.functional.predict_glm().\n\n\nParameters\n\n\nobs_dist_fn: Callable[[Array], dist.Distribution]\n\nLink mapping the full-horizon latent predictor to the observation distribution (e.g. lambda eta: Poisson(jnp.exp(eta))).\n\nlatent: Array\n\nThe deterministic latent predictor over the full horizon, time at axis -2.",
+    "text": "predict_glm()\n\nRegister GLM-style observation/forecast sites from a latent predictor.\n\n\nUsage\nSource\n\n\npredict_glm(obs_dist_fn, latent)\n\n\nThin wrapper over numpyro_forecast.functional.models.predict_glm().\n\n\nParameters\n\n\nobs_dist_fn: Callable[[Array], dist.Distribution]\n\nLink mapping the full-horizon latent predictor to the observation distribution (e.g. lambda eta: Poisson(jnp.exp(eta))).\n\nlatent: Array\n\nThe deterministic latent predictor over the full horizon, time at axis -2.",
     "crumbs": [
       "Reference",
       "Models",
@@ -445,7 +532,7 @@
     "href": "reference/forecaster.ForecastingModel.html#time_series",
     "title": "forecaster.ForecastingModel",
     "section": "time_series()",
-    "text": "time_series()\n\nSample a time-varying latent over the full horizon.\n\n\nUsage\nSource\n\n\ntime_series(name, dist_fn, *, reparam=None)\n\n\nThin wrapper over numpyro_forecast.functional.time_series().\n\n\nParameters\n\n\nname: str\n\nBase sample-site name for the in-sample latent.\n\ndist_fn: Callable[[], dist.Distribution]\n\nZero-argument callable returning the per-step prior distribution.\n\nreparam: Reparam | None = None\n\nOptional reparameterization (e.g. LocScaleReparam) applied to both the in-sample and forecast sites.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon with time at axis -2.",
+    "text": "time_series()\n\nSample a time-varying latent over the full horizon.\n\n\nUsage\nSource\n\n\ntime_series(name, dist_fn, *, reparam=None)\n\n\nThin wrapper over numpyro_forecast.functional.models.time_series().\n\n\nParameters\n\n\nname: str\n\nBase sample-site name for the in-sample latent.\n\ndist_fn: Callable[[], dist.Distribution]\n\nZero-argument callable returning the per-step prior distribution.\n\nreparam: Reparam | None = None\n\nOptional reparameterization (e.g. LocScaleReparam) applied to both the in-sample and forecast sites.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon with time at axis -2.",
     "crumbs": [
       "Reference",
       "Models",
@@ -465,15 +552,15 @@
     ]
   },
   {
-    "objectID": "reference/contrib.blackjax.fit_pathfinder.html",
-    "href": "reference/contrib.blackjax.fit_pathfinder.html",
-    "title": "contrib.blackjax.fit_pathfinder()",
+    "objectID": "reference/functional.mcmc.MCMCFit.html",
+    "href": "reference/functional.mcmc.MCMCFit.html",
+    "title": "functional.mcmc.MCMCFit",
     "section": "",
-    "text": "Fit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.fit_pathfinder(\n    rng_key, model, data, covariates, *, num_elbo_samples=200, ftol=1e-05\n)\n\n\nPRNG: rng_key is split into a model-initialization stream and a Pathfinder-approximation stream.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for initialization and the Pathfinder run.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nnum_elbo_samples: int = 200\n\nNumber of Monte Carlo samples used to estimate the ELBO along the L-BFGS optimization path.\n\nftol: float = 1e-05\n\nL-BFGS relative function-value tolerance (convergence criterion).\n\n\n\n\n\nReturns\n\n\n PathfinderFit\n\nThe fitted variational approximation.",
+    "text": "The result of fitting a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.mcmc.MCMCFit(samples, num_chains=1)\n\n\nParameter Attributes\n\n\nsamples: dict[str, Array]\n\n\n\nnum_chains: int = 1\n\n\n\n\n\n\n\nAttributes\n\n\nsamples: dict[str, Array]\n\nThe posterior samples of the latent sites, sample axis leading and stored flattened (group_by_chain=False).\n\nnum_chains: int\n\nThe number of chains the fit was run with (frozen; default 1), so chain structure survives into ~numpyro_forecast.convert.to_datatree().",
     "crumbs": [
       "Reference",
-      "Extensions (contrib)",
-      "[contrib.blackjax.fit_pathfinder()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: fitting",
+      "[functional.mcmc.MCMCFit]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
     ]
   },
   {
@@ -489,18 +576,6 @@
     ]
   },
   {
-    "objectID": "reference/functional.predict_glm.html",
-    "href": "reference/functional.predict_glm.html",
-    "title": "functional.predict_glm()",
-    "section": "",
-    "text": "Register GLM-style observation/forecast sites from a latent predictor.\n\n\nUsage\nSource\n\n\nfunctional.predict_glm(h, obs_dist_fn, latent)\n\n\nThe generalized-linear counterpart of predict(): instead of a zero-centered noise distribution shifted by a mean, the caller supplies a link obs_dist_fn that maps the full-horizon latent predictor to the observation distribution directly (e.g. lambda eta: Poisson(jnp.exp(eta))). The prefix/suffix mirroring is identical to predict(): while training the observation is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the \"forecast\" deterministic site. The observation distribution must support time-axis surgery (~numpyro_forecast.util.slice_time() / ~numpyro_forecast.util.prefix_condition()), i.e. an elementwise family.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nobs_dist_fn: Callable[[Array], dist.Distribution]\n\nLink mapping the full-horizon latent to the observation distribution (time at axis -2, shape (*batch, duration, obs)).\n\nlatent: Array\n\nThe deterministic latent predictor over the full horizon, time at axis -2.\n\n\n\n\n\nRaises\n\n\n RuntimeError\n\nIf forecasting (future &gt; 0) but no observed data is available.\n\n ValueError\n\nIf the observation distribution has discrete support but h.data is not integer-dtyped (the usual mistake for count models).",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.predict_glm()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
     "objectID": "reference/util.prefix_condition.html",
     "href": "reference/util.prefix_condition.html",
     "title": "util.prefix_condition()",
@@ -513,39 +588,39 @@
     ]
   },
   {
-    "objectID": "reference/functional.resolve_guide.html",
-    "href": "reference/functional.resolve_guide.html",
-    "title": "functional.resolve_guide()",
+    "objectID": "reference/exceptions.OptimizerResolutionError.html",
+    "href": "reference/exceptions.OptimizerResolutionError.html",
+    "title": "exceptions.OptimizerResolutionError",
     "section": "",
-    "text": "Normalize a guide specification against model.\n\n\nUsage\nSource\n\n\nfunctional.resolve_guide(guide, model)\n\n\nResolution: None -&gt; AutoNormal(model); an AutoGuide instance -&gt; returned unchanged; an AutoGuide subclass or a functools.partial of one -&gt; called with model; any other callable -&gt; a hand-written guide, after _probe_handwritten_guide(). Anything else -&gt; GuideResolutionError.\n\n\nParameters\n\n\nguide: GuideLike\n\nThe guide specification (see ~numpyro_forecast.typing.GuideLike).\n\nmodel: ForecastModel\n\nThe model the guide is built against.\n\n\n\n\n\nReturns\n\n\n AutoGuide | Callable[…, None]\n\nThe resolved guide.\n\n\n\n\n\nRaises\n\n\n GuideResolutionError\n\nIf guide is neither an AutoGuide (instance/subclass/partial) nor a callable, or if it has the mistyped-factory shape.",
+    "text": "An optimizer specification could not be resolved.\n\n\nUsage\nSource\n\n\nexceptions.OptimizerResolutionError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.svi.resolve_optimizer() for boolean inputs of any form (bool is an int subclass, so a bool would silently mean Adam(1.0); the default message) and for any other unrecognized type.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.resolve_guide()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Exceptions",
+      "[exceptions.OptimizerResolutionError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
     ]
   },
   {
-    "objectID": "reference/datasets.bart_available.html",
-    "href": "reference/datasets.bart_available.html",
-    "title": "datasets.bart_available()",
+    "objectID": "reference/functional.mcmc.resolve_kernel.html",
+    "href": "reference/functional.mcmc.resolve_kernel.html",
+    "title": "functional.mcmc.resolve_kernel()",
     "section": "",
-    "text": "Return whether the BART dataset can be loaded (download succeeds).\n\n\nUsage\nSource\n\n\ndatasets.bart_available()\n\n\nReturns\n\n\n bool\n\nTrue if load_bart_od() loads without error.",
+    "text": "Normalize a kernel specification.\n\n\nUsage\nSource\n\n\nfunctional.mcmc.resolve_kernel(kernel, model, kernel_kwargs)\n\n\nNone -&gt; NUTS(model, **kernel_kwargs) (kwargs tune the default kernel without naming it); a kernel class -&gt; kernel(model, **kernel_kwargs); a kernel instance -&gt; returned unchanged, and combining an instance with non-empty kernel_kwargs raises ValueError (ambiguous). Anything else -&gt; TypeError.\n\n\nParameters\n\n\nkernel: KernelLike\n\nThe kernel specification (see ~numpyro_forecast.typing.KernelLike).\n\nmodel: ForecastModel\n\nThe model the kernel is built against.\n\nkernel_kwargs: Mapping[str, Any] | None\n\nExtra keyword arguments forwarded to the kernel constructor (ignored, and rejected, for an already-constructed instance).\n\n\n\n\n\nReturns\n\n\n MCMCKernel\n\nThe resolved kernel.\n\n\n\n\n\nRaises\n\n\n KernelConfigError\n\nIf a kernel instance is combined with non-empty kernel_kwargs.\n\n KernelResolutionError\n\nIf kernel is neither None, an MCMCKernel subclass, nor an MCMCKernel instance.",
     "crumbs": [
       "Reference",
-      "Datasets",
-      "[datasets.bart_available()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: fitting",
+      "[functional.mcmc.resolve_kernel()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.resolve_kernel.html",
-    "href": "reference/functional.resolve_kernel.html",
-    "title": "functional.resolve_kernel()",
+    "objectID": "reference/functional.models.predict_glm.html",
+    "href": "reference/functional.models.predict_glm.html",
+    "title": "functional.models.predict_glm()",
     "section": "",
-    "text": "Normalize a kernel specification.\n\n\nUsage\nSource\n\n\nfunctional.resolve_kernel(kernel, model, kernel_kwargs)\n\n\nNone -&gt; NUTS(model, **kernel_kwargs) (kwargs tune the default kernel without naming it); a kernel class -&gt; kernel(model, **kernel_kwargs); a kernel instance -&gt; returned unchanged, and combining an instance with non-empty kernel_kwargs raises ValueError (ambiguous). Anything else -&gt; TypeError.\n\n\nParameters\n\n\nkernel: KernelLike\n\nThe kernel specification (see ~numpyro_forecast.typing.KernelLike).\n\nmodel: ForecastModel\n\nThe model the kernel is built against.\n\nkernel_kwargs: Mapping[str, Any] | None\n\nExtra keyword arguments forwarded to the kernel constructor (ignored, and rejected, for an already-constructed instance).\n\n\n\n\n\nReturns\n\n\n MCMCKernel\n\nThe resolved kernel.\n\n\n\n\n\nRaises\n\n\n KernelConfigError\n\nIf a kernel instance is combined with non-empty kernel_kwargs.\n\n KernelResolutionError\n\nIf kernel is neither None, an MCMCKernel subclass, nor an MCMCKernel instance.",
+    "text": "Register GLM-style observation/forecast sites from a latent predictor.\n\n\nUsage\nSource\n\n\nfunctional.models.predict_glm(h, obs_dist_fn, latent)\n\n\nThe generalized-linear counterpart of predict(): instead of a zero-centered noise distribution shifted by a mean, the caller supplies a link obs_dist_fn that maps the full-horizon latent predictor to the observation distribution directly (e.g. lambda eta: Poisson(jnp.exp(eta))). The prefix/suffix mirroring is identical to predict(): while training the observation is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the \"forecast\" deterministic site. The observation distribution must support time-axis surgery (~numpyro_forecast.util.slice_time() / ~numpyro_forecast.util.prefix_condition()), i.e. an elementwise family.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nobs_dist_fn: Callable[[Array], dist.Distribution]\n\nLink mapping the full-horizon latent to the observation distribution (time at axis -2, shape (*batch, duration, obs)).\n\nlatent: Array\n\nThe deterministic latent predictor over the full horizon, time at axis -2.\n\n\n\n\n\nRaises\n\n\n RuntimeError\n\nIf forecasting (future &gt; 0) but no observed data is available.\n\n ValueError\n\nIf the observation distribution has discrete support but h.data is not integer-dtyped (the usual mistake for count models).",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.resolve_kernel()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: model primitives",
+      "[functional.models.predict_glm()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -553,7 +628,7 @@
     "href": "reference/exceptions.KernelConfigError.html",
     "title": "exceptions.KernelConfigError",
     "section": "",
-    "text": "A kernel is combined with an invalid configuration.\n\n\nUsage\nSource\n\n\nexceptions.KernelConfigError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.resolve_kernel() when kernel_kwargs accompany an already-constructed instance, and by ~numpyro_forecast.functional.fit_mcmc() for run-config constraints (ensemble samplers need multiple vectorized chains; BlackJAX kernels need sequential chains).",
+    "text": "A kernel is combined with an invalid configuration.\n\n\nUsage\nSource\n\n\nexceptions.KernelConfigError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.mcmc.resolve_kernel() when kernel_kwargs accompany an already-constructed instance, and by ~numpyro_forecast.functional.mcmc.fit_mcmc() for run-config constraints (ensemble samplers need multiple vectorized chains; BlackJAX kernels need sequential chains).",
     "crumbs": [
       "Reference",
       "Exceptions",
@@ -852,7 +927,7 @@
     "href": "skills.html",
     "title": "Skills",
     "section": "",
-    "text": "A skill is a package of structured files that teaches an AI coding agent how to work with a specific tool or framework. The skill below was generated by Great Docs from this project’s documentation. Install it in your agent and it will be able to run commands, edit configuration, write content, and troubleshoot problems without step-by-step guidance from you.\n\n  \n    ▶    Install this skill\n  \n  \n    \n      \nAny agent — install with npx:\nnpx skills add https://juanitorduz.github.io/numpyro_forecast/\nCodex / OpenCode\nTell the agent:Fetch the skill file at https://juanitorduz.github.io/numpyro_forecast/skill.md and follow the instructions.\nManual — download the skill file:\ncurl -O https://juanitorduz.github.io/numpyro_forecast/skill.md\nOr browse the SKILL.md file.\n      \n    \n  \n\n\nSKILL.md\n---\nname: numpyro-forecast\ndescription: &gt;\n  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.\nlicense: Apache-2.0\ncompatibility: Requires Python &gt;=3.12.\n---\n\n# numpyro_forecast\n\nA JAX/NumPyro port of Pyro's forecasting module.\n\n## Installation\n\n```bash\npip install numpyro-forecast\n```\n\n## API overview\n\n### Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n- `forecaster.Forecaster`\n- `forecaster.HMCForecaster`\n- `forecaster.PathfinderForecaster`\n\n### Models\n\nBuilding forecasting models (object-oriented and functional).\n\n- `forecaster.ForecastingModel`\n- `functional.forecasting_model`\n\n### Functional core\n\nPure functional primitives for the train/forecast split.\n\n- `functional.Horizon`\n- `functional.time_series`\n- `functional.markov_time_series`\n- `functional.predict`\n- `functional.predict_glm`\n- `functional.resolve_optimizer`\n- `functional.resolve_guide`\n- `functional.fit_svi`\n- `functional.draw_posterior`\n- `functional.resolve_kernel`\n- `functional.fit_mcmc`\n- `functional.forecast`\n- `functional.predict_in_sample`\n- `functional.SVIFit`\n- `functional.MCMCFit`\n\n### Backtesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n- `evaluate.backtest`\n- `evaluate.backtest_vectorized`\n- `evaluate.BacktestResult`\n- `evaluate.VectorizedBacktestResult`\n- `evaluate.evaluate_forecast`\n- `evaluate.results_to_dataframe`\n- `evaluate.eval_crps`\n- `evaluate.eval_mae`\n- `evaluate.eval_rmse`\n- `evaluate.eval_coverage`\n- `metrics.crps_empirical`\n- `metrics.eval_pinball`\n- `metrics.eval_interval_score`\n- `metrics.make_mase`\n\n### Utilities\n\nArray helpers and feature builders.\n\n- `util.fourier_features`\n- `util.periodic_repeat`\n- `util.zero_data_like`\n- `util.concat_future`\n- `util.shift_loc`\n- `util.slice_time`\n- `util.prefix_condition`\n- `util.register_elementwise`\n- `util.require`\n\n### Exceptions\n\nPackage exception hierarchy raised at resolution and validation boundaries.\n\n- `exceptions.NumpyroForecastError`\n- `exceptions.BacktestWindowError`\n- `exceptions.VectorizedGuideError`\n- `exceptions.VectorizedMetricError`\n- `exceptions.OptimizerResolutionError`\n- `exceptions.GuideResolutionError`\n- `exceptions.GuideSampleArgsError`\n- `exceptions.KernelResolutionError`\n- `exceptions.KernelConfigError`\n- `exceptions.MVNLayoutError`\n\n### ArviZ export\n\nConvert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.\n\n- `convert.to_datatree`\n- `convert.add_forecast_groups`\n\n### Extensions (contrib)\n\nOptional backends behind pyproject extras (never imported by default).\n\n- `contrib.blackjax.BlackjaxNUTSKernel`\n- `contrib.blackjax.BlackjaxMCLMCKernel`\n- `contrib.blackjax.BlackjaxCustomKernel`\n- `contrib.blackjax.PathfinderFit`\n- `contrib.blackjax.fit_pathfinder`\n\n### Datasets\n\nExample datasets used in the tutorials.\n\n- `datasets.load_bart_weekly`\n- `datasets.load_bart_hierarchical`\n- `datasets.load_victoria_electricity`\n- `datasets.bart_available`\n\n## Resources\n\n- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)\n- [llms.txt](llms.txt) — Indexed API reference for LLMs\n- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs\n- [Source code](https://github.com/juanitorduz/numpyro_forecast)"
+    "text": "A skill is a package of structured files that teaches an AI coding agent how to work with a specific tool or framework. The skill below was generated by Great Docs from this project’s documentation. Install it in your agent and it will be able to run commands, edit configuration, write content, and troubleshoot problems without step-by-step guidance from you.\n\n  \n    ▶    Install this skill\n  \n  \n    \n      \nAny agent — install with npx:\nnpx skills add https://juanitorduz.github.io/numpyro_forecast/\nCodex / OpenCode\nTell the agent:Fetch the skill file at https://juanitorduz.github.io/numpyro_forecast/skill.md and follow the instructions.\nManual — download the skill file:\ncurl -O https://juanitorduz.github.io/numpyro_forecast/skill.md\nOr browse the SKILL.md file.\n      \n    \n  \n\n\nSKILL.md\n---\nname: numpyro-forecast\ndescription: &gt;\n  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.\nlicense: Apache-2.0\ncompatibility: Requires Python &gt;=3.12.\n---\n\n# numpyro_forecast\n\nA JAX/NumPyro port of Pyro's forecasting module.\n\n## Installation\n\n```bash\npip install numpyro-forecast\n```\n\n## API overview\n\n### Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n- `forecaster.Forecaster`\n- `forecaster.HMCForecaster`\n- `forecaster.PathfinderForecaster`\n\n### Models\n\nBuilding forecasting models (object-oriented and functional).\n\n- `forecaster.ForecastingModel`\n- `functional.models.forecasting_model`\n\n### Functional core: model primitives\n\nPure functional primitives for the train/forecast split.\n\n- `functional.models.Horizon`\n- `functional.models.time_series`\n- `functional.models.markov_time_series`\n- `functional.models.predict`\n- `functional.models.predict_glm`\n\n### Functional core: fitting\n\nOptimizer/guide/kernel resolution and the SVI and MCMC fit entry points.\n\n- `functional.svi.resolve_optimizer`\n- `functional.svi.resolve_guide`\n- `functional.svi.fit_svi`\n- `functional.svi.SVIFit`\n- `functional.mcmc.resolve_kernel`\n- `functional.mcmc.fit_mcmc`\n- `functional.mcmc.MCMCFit`\n\n### Functional core: posterior and prediction\n\nDrawing posterior samples and generating forecasts and in-sample predictions.\n\n- `functional.posterior.draw_posterior`\n- `functional.prediction.forecast`\n- `functional.prediction.predict_in_sample`\n\n### Backtesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n- `evaluate.backtest`\n- `evaluate.backtest_vectorized`\n- `evaluate.BacktestResult`\n- `evaluate.VectorizedBacktestResult`\n- `evaluate.evaluate_forecast`\n- `evaluate.results_to_dataframe`\n- `evaluate.eval_crps`\n- `evaluate.eval_mae`\n- `evaluate.eval_rmse`\n- `evaluate.eval_coverage`\n- `metrics.crps_empirical`\n- `metrics.eval_pinball`\n- `metrics.eval_interval_score`\n- `metrics.make_mase`\n\n### Utilities\n\nArray helpers and feature builders.\n\n- `util.fourier_features`\n- `util.periodic_repeat`\n- `util.zero_data_like`\n- `util.concat_future`\n- `util.shift_loc`\n- `util.slice_time`\n- `util.prefix_condition`\n- `util.register_elementwise`\n- `util.require`\n\n### Exceptions\n\nPackage exception hierarchy raised at resolution and validation boundaries.\n\n- `exceptions.NumpyroForecastError`\n- `exceptions.BacktestWindowError`\n- `exceptions.VectorizedGuideError`\n- `exceptions.VectorizedMetricError`\n- `exceptions.OptimizerResolutionError`\n- `exceptions.GuideResolutionError`\n- `exceptions.GuideSampleArgsError`\n- `exceptions.KernelResolutionError`\n- `exceptions.KernelConfigError`\n- `exceptions.MVNLayoutError`\n\n### ArviZ export\n\nConvert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.\n\n- `convert.to_datatree`\n- `convert.add_forecast_groups`\n\n### Extensions (contrib)\n\nOptional backends behind pyproject extras (never imported by default).\n\n- `contrib.blackjax.BlackjaxNUTSKernel`\n- `contrib.blackjax.BlackjaxMCLMCKernel`\n- `contrib.blackjax.BlackjaxCustomKernel`\n- `contrib.blackjax.PathfinderFit`\n- `contrib.blackjax.fit_pathfinder`\n\n### Datasets\n\nExample datasets used in the tutorials.\n\n- `datasets.load_bart_weekly`\n- `datasets.load_bart_hierarchical`\n- `datasets.load_victoria_electricity`\n- `datasets.bart_available`\n\n## Resources\n\n- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)\n- [llms.txt](llms.txt) — Indexed API reference for LLMs\n- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs\n- [Source code](https://github.com/juanitorduz/numpyro_forecast)"
   },
   {
     "objectID": "reference/exceptions.BacktestWindowError.html",
@@ -871,7 +946,7 @@
     "href": "reference/contrib.blackjax.PathfinderFit.html",
     "title": "contrib.blackjax.PathfinderFit",
     "section": "",
-    "text": "The result of fitting a forecasting model with BlackJAX Pathfinder.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.PathfinderFit(state, model, covariates, data, elbo)\n\n\nA plain-data (picklable) container: it holds the raw blackjax PathfinderState, the model and its data/covariates (needed to rebuild the unconstrained-to-constrained transform when drawing), and the fitted ELBO. Draws are produced lazily by ~numpyro_forecast.functional.draw_posterior().\n\n\nParameter Attributes\n\n\nstate: Any\n\n\n\nmodel: ForecastModel\n\n\n\ncovariates: Array\n\n\n\ndata: Array\n\n\n\nelbo: float\n\n\n\n\n\n\n\nAttributes\n\n\nstate: Any\n\nThe blackjax PathfinderState (the variational approximation).\n\nmodel: ForecastModel\n\nThe forecasting model that was fit.\n\ncovariates: Array\n\nIn-sample covariates used at fit time (time at axis -2).\n\ndata: Array\n\nIn-sample data used at fit time (time at axis -2).\n\nelbo: float\n\nThe evidence lower bound of the fitted approximation.",
+    "text": "The result of fitting a forecasting model with BlackJAX Pathfinder.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.PathfinderFit(state, model, covariates, data, elbo)\n\n\nA plain-data (picklable) container: it holds the raw blackjax PathfinderState, the model and its data/covariates (needed to rebuild the unconstrained-to-constrained transform when drawing), and the fitted ELBO. Draws are produced lazily by ~numpyro_forecast.functional.posterior.draw_posterior().\n\n\nParameter Attributes\n\n\nstate: Any\n\n\n\nmodel: ForecastModel\n\n\n\ncovariates: Array\n\n\n\ndata: Array\n\n\n\nelbo: float\n\n\n\n\n\n\n\nAttributes\n\n\nstate: Any\n\nThe blackjax PathfinderState (the variational approximation).\n\nmodel: ForecastModel\n\nThe forecasting model that was fit.\n\ncovariates: Array\n\nIn-sample covariates used at fit time (time at axis -2).\n\ndata: Array\n\nIn-sample data used at fit time (time at axis -2).\n\nelbo: float\n\nThe evidence lower bound of the fitted approximation.",
     "crumbs": [
       "Reference",
       "Extensions (contrib)",
@@ -891,15 +966,15 @@
     ]
   },
   {
-    "objectID": "reference/exceptions.OptimizerResolutionError.html",
-    "href": "reference/exceptions.OptimizerResolutionError.html",
-    "title": "exceptions.OptimizerResolutionError",
+    "objectID": "reference/datasets.bart_available.html",
+    "href": "reference/datasets.bart_available.html",
+    "title": "datasets.bart_available()",
     "section": "",
-    "text": "An optimizer specification could not be resolved.\n\n\nUsage\nSource\n\n\nexceptions.OptimizerResolutionError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.resolve_optimizer() for boolean inputs of any form (bool is an int subclass, so a bool would silently mean Adam(1.0); the default message) and for any other unrecognized type.",
+    "text": "Return whether the BART dataset can be loaded (download succeeds).\n\n\nUsage\nSource\n\n\ndatasets.bart_available()\n\n\nReturns\n\n\n bool\n\nTrue if load_bart_od() loads without error.",
     "crumbs": [
       "Reference",
-      "Exceptions",
-      "[exceptions.OptimizerResolutionError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
+      "Datasets",
+      "[datasets.bart_available()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -927,23 +1002,11 @@
     ]
   },
   {
-    "objectID": "reference/functional.resolve_optimizer.html",
-    "href": "reference/functional.resolve_optimizer.html",
-    "title": "functional.resolve_optimizer()",
-    "section": "",
-    "text": "Normalize an optimizer specification into a NumPyro optimizer.\n\n\nUsage\nSource\n\n\nfunctional.resolve_optimizer(optim)\n\n\nAccepted forms: None (Adam(0.01)); a finite positive scalar learning rate (float/int/NumPy scalar/0-d array) giving Adam(lr); an optax.GradientTransformation (wrapped via numpyro.optim.optax_to_numpyro, imported lazily so optax stays a soft dependency); a _NumPyroOptim (returned unchanged).\n\n\nParameters\n\n\noptim: OptimizerLike\n\nThe optimizer specification (see ~numpyro_forecast.typing.OptimizerLike).\n\n\n\n\n\nReturns\n\n\n _NumPyroOptim\n\nThe resolved NumPyro optimizer.\n\n\n\n\n\nRaises\n\n\n OptimizerResolutionError\n\nFor boolean inputs of any form, including 0-d boolean arrays (bool is an int subclass, so a bool would silently mean Adam(1.0)), and for any other unrecognized type; the message lists the accepted forms.\n\n ValueError\n\nFor a non-finite or non-positive learning rate.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.resolve_optimizer()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
     "objectID": "reference/convert.add_forecast_groups.html",
     "href": "reference/convert.add_forecast_groups.html",
     "title": "convert.add_forecast_groups()",
     "section": "",
-    "text": "Attach out-of-sample forecast groups to a copy of tree.\n\n\nUsage\nSource\n\n\nconvert.add_forecast_groups(\n    tree, forecast_samples, covariates_future, *, time_coord=None\n)\n\n\nAdds a predictions group (the forecast obs draws) and a predictions_constant_data group (the future covariates). The forecast time coordinate continues the in-sample one: integer continuation by default, or explicit values via time_coord.\n\n\nParameters\n\n\ntree: xarray.DataTree\n\nA tree from to_datatree() (its observed_data time coordinate is continued).\n\nforecast_samples: Array\n\nForecast draws shaped (num_samples, future, obs) from ~numpyro_forecast.functional.forecast().\n\ncovariates_future: Array\n\nFuture covariates shaped (future, covariate_dim).\n\ntime_coord: Sequence[Any] | None = None\n\nOptional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g. datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.\n\n\n\n\n\nReturns\n\n\n xarray.DataTree\n\nA new tree with the predictions and predictions_constant_data groups added.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf time_coord is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.",
+    "text": "Attach out-of-sample forecast groups to a copy of tree.\n\n\nUsage\nSource\n\n\nconvert.add_forecast_groups(\n    tree, forecast_samples, covariates_future, *, time_coord=None\n)\n\n\nAdds a predictions group (the forecast obs draws) and a predictions_constant_data group (the future covariates). The forecast time coordinate continues the in-sample one: integer continuation by default, or explicit values via time_coord.\n\n\nParameters\n\n\ntree: xarray.DataTree\n\nA tree from to_datatree() (its observed_data time coordinate is continued).\n\nforecast_samples: Array\n\nForecast draws shaped (num_samples, future, obs) from ~numpyro_forecast.functional.prediction.forecast().\n\ncovariates_future: Array\n\nFuture covariates shaped (future, covariate_dim).\n\ntime_coord: Sequence[Any] | None = None\n\nOptional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g. datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.\n\n\n\n\n\nReturns\n\n\n xarray.DataTree\n\nA new tree with the predictions and predictions_constant_data groups added.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf time_coord is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.",
     "crumbs": [
       "Reference",
       "ArviZ export",
@@ -951,15 +1014,15 @@
     ]
   },
   {
-    "objectID": "reference/functional.SVIFit.html",
-    "href": "reference/functional.SVIFit.html",
-    "title": "functional.SVIFit",
+    "objectID": "reference/contrib.blackjax.fit_pathfinder.html",
+    "href": "reference/contrib.blackjax.fit_pathfinder.html",
+    "title": "contrib.blackjax.fit_pathfinder()",
     "section": "",
-    "text": "The result of fitting a forecasting model with SVI.\n\n\nUsage\nSource\n\n\nfunctional.SVIFit(guide, params, losses, data=None, covariates=None)\n\n\nParameter Attributes\n\n\nguide: AutoGuide | Callable[…, None]\n\n\n\nparams: dict[str, Array]\n\n\n\nlosses: Array\n\n\n\ndata: Array | None = None\n\n\n\ncovariates: Array | None = None\n\n\n\n\n\n\n\nAttributes\n\n\nguide: AutoGuide | Callable[…, None]\n\nThe fitted variational guide.\n\nparams: dict[str, Array]\n\nThe learned variational parameters.\n\nlosses: Array\n\nThe ELBO loss per SVI step (shape (num_steps,)).\n\ndata: Array | None\n\nThe in-sample data the model was fit on (needed to draw from hand-written guides and by ~numpyro_forecast.convert.to_datatree()). None for fits constructed without it.\n\ncovariates: Array | None\n\nThe in-sample covariates the model was fit on. None for fits constructed without it.",
+    "text": "Fit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.fit_pathfinder(\n    rng_key, model, data, covariates, *, num_elbo_samples=200, ftol=1e-05\n)\n\n\nPRNG: rng_key is split into a model-initialization stream and a Pathfinder-approximation stream.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for initialization and the Pathfinder run.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nnum_elbo_samples: int = 200\n\nNumber of Monte Carlo samples used to estimate the ELBO along the L-BFGS optimization path.\n\nftol: float = 1e-05\n\nL-BFGS relative function-value tolerance (convergence criterion).\n\n\n\n\n\nReturns\n\n\n PathfinderFit\n\nThe fitted variational approximation.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.SVIFit]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "Extensions (contrib)",
+      "[contrib.blackjax.fit_pathfinder()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -979,7 +1042,7 @@
     "href": "reference/exceptions.GuideSampleArgsError.html",
     "title": "exceptions.GuideSampleArgsError",
     "section": "",
-    "text": "Drawing from a hand-written guide needs the in-sample arguments.\n\n\nUsage\nSource\n\n\nexceptions.GuideSampleArgsError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.draw_posterior() when an ~numpyro_forecast.functional.SVIFit holding a hand-written guide was constructed without its in-sample covariates/data.",
+    "text": "Drawing from a hand-written guide needs the in-sample arguments.\n\n\nUsage\nSource\n\n\nexceptions.GuideSampleArgsError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.posterior.draw_posterior() when an ~numpyro_forecast.functional.svi.SVIFit holding a hand-written guide was constructed without its in-sample covariates/data.",
     "crumbs": [
       "Reference",
       "Exceptions",
@@ -999,51 +1062,51 @@
     ]
   },
   {
-    "objectID": "reference/util.periodic_repeat.html",
-    "href": "reference/util.periodic_repeat.html",
-    "title": "util.periodic_repeat()",
+    "objectID": "reference/exceptions.VectorizedMetricError.html",
+    "href": "reference/exceptions.VectorizedMetricError.html",
+    "title": "exceptions.VectorizedMetricError",
     "section": "",
-    "text": "Tile a seasonal pattern to cover duration time steps.\n\n\nUsage\nSource\n\n\nutil.periodic_repeat(x, duration, *, axis=-1)\n\n\nParameters\n\n\nx: ArrayLike\n\nSeasonal pattern; the repeated axis has length equal to the period. Accepts any array-like (e.g. a raw numpyro.sample draw).\n\nduration: int\n\nTarget length along axis.\n\naxis: int = -1\n\nAxis to repeat along (defaults to -1).\n\n\n\n\n\nReturns\n\n\n Array\n\nx periodically repeated to length duration along axis.",
-    "crumbs": [
-      "Reference",
-      "Utilities",
-      "[util.periodic_repeat()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/metrics.eval_pinball.html",
-    "href": "reference/metrics.eval_pinball.html",
-    "title": "metrics.eval_pinball()",
-    "section": "",
-    "text": "Mean pinball (quantile) loss of the forecast quantile.\n\n\nUsage\nSource\n\n\nmetrics.eval_pinball(pred, truth, *, quantile=0.5)\n\n\nThe pinball loss for the forecast \\(\\hat q\\) of quantile \\(\\tau\\) is \\(\\max(\\tau (y - \\hat q), (\\tau - 1)(y - \\hat q))\\), averaged over all data elements. At quantile=0.5 it is half the mean absolute error. A pure JAX scalar kernel (see ~numpyro_forecast.typing.Metric); quantile is static so each level specializes its own branch.\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first.\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values (matching pred without the sample axis).\n\nquantile: float = 0.5\n\nTarget quantile in (0, 1).\n\n\n\n\n\nReturns\n\n\n Array\n\nThe mean pinball loss as a scalar array.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf quantile is not strictly inside (0, 1).",
-    "crumbs": [
-      "Reference",
-      "Backtesting & evaluation",
-      "[metrics.eval_pinball()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.time_series.html",
-    "href": "reference/functional.time_series.html",
-    "title": "functional.time_series()",
-    "section": "",
-    "text": "Sample a time-varying latent over the full horizon.\n\n\nUsage\nSource\n\n\nfunctional.time_series(h, name, dist_fn, *, reparam=None)\n\n\nThe in-sample portion is sampled under plate(\"time\", t) with the fixed site name; when forecasting, the horizon portion is sampled under a separate site f\"{name}_future\" and concatenated. The separate site keeps the guide shape fixed and lets Predictive draw the forecast suffix from the prior.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nname: str\n\nBase sample-site name for the in-sample latent.\n\ndist_fn: Callable[[], dist.Distribution]\n\nZero-argument callable returning the per-step prior distribution.\n\nreparam: Reparam | None = None\n\nOptional reparameterization (e.g. LocScaleReparam) applied to both the in-sample and forecast sites.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon with time at axis -2.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.time_series()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/exceptions.MVNLayoutError.html",
-    "href": "reference/exceptions.MVNLayoutError.html",
-    "title": "exceptions.MVNLayoutError",
-    "section": "",
-    "text": "A MultivariateNormal layout is unsupported for time-axis surgery.\n\n\nUsage\nSource\n\n\nexceptions.MVNLayoutError(message=None)\n\n\nRaised by ~numpyro_forecast.util.shift_loc(), ~numpyro_forecast.util.slice_time(), and ~numpyro_forecast.util.prefix_condition() on MVN noise whose loc/covariance_matrix shapes do not match the supported time-leading layout.",
+    "text": "A metric is not vmappable in the vectorized backtest.\n\n\nUsage\nSource\n\n\nexceptions.VectorizedMetricError(message=None)\n\n\nRaised by ~numpyro_forecast.evaluate.backtest_vectorized() when a metric forces a host conversion (e.g. float(...) or numpy calls) under vmap. Metrics must be pure JAX functions returning a scalar array; see ~numpyro_forecast.typing.Metric.",
     "crumbs": [
       "Reference",
       "Exceptions",
-      "[exceptions.MVNLayoutError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
+      "[exceptions.VectorizedMetricError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
+    ]
+  },
+  {
+    "objectID": "reference/exceptions.KernelResolutionError.html",
+    "href": "reference/exceptions.KernelResolutionError.html",
+    "title": "exceptions.KernelResolutionError",
+    "section": "",
+    "text": "A kernel specification could not be resolved.\n\n\nUsage\nSource\n\n\nexceptions.KernelResolutionError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.mcmc.resolve_kernel() for a type that is neither None, an MCMCKernel subclass, nor an MCMCKernel instance.",
+    "crumbs": [
+      "Reference",
+      "Exceptions",
+      "[exceptions.KernelResolutionError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.svi.fit_svi.html",
+    "href": "reference/functional.svi.fit_svi.html",
+    "title": "functional.svi.fit_svi()",
+    "section": "",
+    "text": "Fit a forecasting model with stochastic variational inference.\n\n\nUsage\nSource\n\n\nfunctional.svi.fit_svi(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    guide=None,\n    optim=None,\n    num_steps=1001,\n    num_particles=1,\n    progress_bar=False,\n    stable_update=False\n)\n\n\nPRNG: consumes rng_key once for the SVI run; nothing is retained.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nguide: GuideLike = None\n\nGuide specification resolved by resolve_guide(): None (AutoNormal), an AutoGuide instance, an AutoGuide subclass or functools.partial factory of one, or a hand-written guide function.\n\noptim: OptimizerLike = None\n\nOptimizer specification resolved by resolve_optimizer(): None (Adam(0.01)), a positive scalar learning rate, an optax.GradientTransformation, or a _NumPyroOptim. For example, a cosine-decayed, gradient-clipped Adam:\nimport optax\nschedule = optax.cosine_decay_schedule(1e-2, decay_steps=1_000)\noptim = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))\n\nnum_steps: int = 1001\n\nNumber of SVI steps.\n\nnum_particles: int = 1\n\nNumber of ELBO particles.\n\nprogress_bar: bool = False\n\nWhether to display the SVI progress bar.\n\nstable_update: bool = False\n\nWhether SVI skips parameter updates whose new value is non-finite (NumPyro’s stable_update).\n\n\n\n\n\nReturns\n\n\n SVIFit\n\nThe fitted guide, variational parameters, loss history, and the in-sample data/covariates (kept by identity, not copied).\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations.",
+    "crumbs": [
+      "Reference",
+      "Functional core: fitting",
+      "[functional.svi.fit_svi()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/evaluate.backtest_vectorized.html",
+    "href": "reference/evaluate.backtest_vectorized.html",
+    "title": "evaluate.backtest_vectorized()",
+    "section": "",
+    "text": "Rolling-window backtest with all windows fitted in one vmapped SVI run.\n\n\nUsage\nSource\n\n\nevaluate.backtest_vectorized(\n    rng_key,\n    data,\n    covariates,\n    model_fn,\n    *,\n    train_window,\n    test_window,\n    stride=1,\n    num_steps=1001,\n    optim=None,\n    guide=None,\n    num_samples=100,\n    metrics=None,\n    keep_predictions=False\n)\n\n\nEstimator-equivalent to backtest() with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows, giving order-of-magnitude wall-clock wins for tens of windows on small models.\nPRNG: fold_in(rng_key, -1) seeds a discarded eager warm-up init; fold_in(rng_key, i) is the window-i parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see _window_key_streams()).\n\n\nParameters\n\n\nrng_key: Array\n\nBase PRNG key.\n\ndata: Array\n\nDataset with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 (same duration as data).\n\nmodel_fn: ModelFactory\n\nFactory returning a fresh model; called exactly once (per-window model variation is unsupported here, use backtest()).\n\ntrain_window: int\n\nFixed training-window length (&gt;= 1).\n\ntest_window: int\n\nFixed test-window length (&gt;= 1).\n\nstride: int = 1\n\nStep between successive windows (&gt;= 1).\n\nnum_steps: int = 1001\n\nNumber of SVI steps per window.\n\noptim: OptimizerLike = None\n\nOptimizer specification resolved by ~numpyro_forecast.functional.svi.resolve_optimizer().\n\nguide: GuideLike = None\n\nGuide specification; must resolve to an AutoGuide (hand-written guides are not vmappable, use backtest()).\n\nnum_samples: int = 100\n\nNumber of forecast samples drawn per window.\n\nmetrics: Mapping[str, Metric] | None = None\n\nMapping of metric name to function; defaults to DEFAULT_METRICS. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as {**DEFAULT_METRICS, \"coverage\": partial(eval_coverage, alpha=0.5)}, is scored inside the single fused computation. Host-side metrics are unsupported here; use backtest(), or keep_predictions=True and score on the host.\n\nkeep_predictions: bool = False\n\nIf True, retain the stacked forecast samples on the result.\n\n\n\n\n\nReturns\n\n\n VectorizedBacktestResult\n\nThe stacked per-window losses, metrics, and window indices.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates durations differ.\n\n BacktestWindowError\n\nIf train_window, test_window, or stride is &lt; 1, or there is no room for a single window.\n\n VectorizedGuideError\n\nIf the resolved guide is not an AutoGuide.\n\n VectorizedMetricError\n\nIf a metric forces a host conversion under vmap (it is not a pure JAX function).",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[evaluate.backtest_vectorized()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -1051,7 +1114,7 @@
     "href": "reference/forecaster.HMCForecaster.html",
     "title": "forecaster.HMCForecaster",
     "section": "",
-    "text": "Fit a forecasting model with MCMC (NUTS by default).\n\n\nUsage\nSource\n\n\nforecaster.HMCForecaster()\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by ~numpyro_forecast.functional.resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains.\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.",
+    "text": "Fit a forecasting model with MCMC (NUTS by default).\n\n\nUsage\nSource\n\n\nforecaster.HMCForecaster()\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by ~numpyro_forecast.functional.mcmc.resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains.\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.",
     "crumbs": [
       "Reference",
       "Forecasters",
@@ -1071,27 +1134,27 @@
     ]
   },
   {
-    "objectID": "reference/evaluate.VectorizedBacktestResult.html",
-    "href": "reference/evaluate.VectorizedBacktestResult.html",
-    "title": "evaluate.VectorizedBacktestResult",
+    "objectID": "reference/util.zero_data_like.html",
+    "href": "reference/util.zero_data_like.html",
+    "title": "util.zero_data_like()",
     "section": "",
-    "text": "Result of a :func:backtest_vectorized run (all windows at once).",
+    "text": "Return zeros shaped like data but extended to the covariate duration.\n\n\nUsage\nSource\n\n\nutil.zero_data_like(data, covariates)\n\n\nMirrors Pyro’s zero_data: it exposes the shape/dtype of the data over the full forecast horizon without leaking observed values into the model. The functional API exposes the equivalent value as numpyro_forecast.functional.models.Horizon.zero_data.\n\n\nParameters\n\n\ndata: Array\n\nObserved data with time at axis -2, shape (*batch, t, obs).\n\ncovariates: Array\n\nCovariates with time at axis -2, shape (*batch, duration, cov).\n\n\n\n\n\nReturns\n\n\n Array\n\nZeros of shape (*batch, duration, obs).",
     "crumbs": [
       "Reference",
-      "Backtesting & evaluation",
-      "[evaluate.VectorizedBacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "Utilities",
+      "[util.zero_data_like()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/evaluate.VectorizedBacktestResult.html#to_dict",
-    "href": "reference/evaluate.VectorizedBacktestResult.html#to_dict",
-    "title": "evaluate.VectorizedBacktestResult",
-    "section": "to_dict()",
-    "text": "to_dict()\n\nReturn a flat dictionary view.\n\n\nUsage\nSource\n\n\nto_dict()\n\n\nReturns\n\n\n dict[str, Any]\n\nAll fields as a plain dictionary.",
+    "objectID": "reference/functional.models.time_series.html",
+    "href": "reference/functional.models.time_series.html",
+    "title": "functional.models.time_series()",
+    "section": "",
+    "text": "Sample a time-varying latent over the full horizon.\n\n\nUsage\nSource\n\n\nfunctional.models.time_series(h, name, dist_fn, *, reparam=None)\n\n\nThe in-sample portion is sampled under plate(\"time\", t) with the fixed site name; when forecasting, the horizon portion is sampled under a separate site f\"{name}_future\" and concatenated. The separate site keeps the guide shape fixed and lets Predictive draw the forecast suffix from the prior.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nname: str\n\nBase sample-site name for the in-sample latent.\n\ndist_fn: Callable[[], dist.Distribution]\n\nZero-argument callable returning the per-step prior distribution.\n\nreparam: Reparam | None = None\n\nOptional reparameterization (e.g. LocScaleReparam) applied to both the in-sample and forecast sites.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon with time at axis -2.",
     "crumbs": [
       "Reference",
-      "Backtesting & evaluation",
-      "[evaluate.VectorizedBacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "Functional core: model primitives",
+      "[functional.models.time_series()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
@@ -1119,63 +1182,27 @@
     ]
   },
   {
-    "objectID": "reference/functional.Horizon.html",
-    "href": "reference/functional.Horizon.html",
-    "title": "functional.Horizon",
+    "objectID": "reference/evaluate.eval_crps.html",
+    "href": "reference/evaluate.eval_crps.html",
+    "title": "evaluate.eval_crps()",
     "section": "",
-    "text": "The train/forecast split for a single model call.",
+    "text": "Empirical CRPS averaged over all data elements.\n\n\nUsage\nSource\n\n\nevaluate.eval_crps(pred, truth)\n\n\nA pure JAX scalar kernel (see ~numpyro_forecast.typing.Metric).\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first.\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values (matching pred without the sample axis).\n\n\n\n\n\nReturns\n\n\n Array\n\nThe mean empirical CRPS as a scalar array.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "Backtesting & evaluation",
+      "[evaluate.eval_crps()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.Horizon.html#zero_data",
-    "href": "reference/functional.Horizon.html#zero_data",
-    "title": "functional.Horizon",
-    "section": "zero_data",
-    "text": "zero_data\n\nZeros shaped like data extended to the full horizon.\n\n\nzero_data: Array | None\n\n\nMirrors Pyro’s zero_data (and numpyro_forecast.util.zero_data_like()): it exposes the shape/dtype of the data over the forecast horizon without leaking observed values. None when there is no data.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.Horizon.html#post_init__",
-    "href": "reference/functional.Horizon.html#post_init__",
-    "title": "functional.Horizon",
-    "section": "__post_init__()",
-    "text": "__post_init__()\n\nValidate that the horizon fields are internally consistent.\n\n\nUsage\nSource\n\n\n__post_init__()",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.Horizon.html#from_data",
-    "href": "reference/functional.Horizon.html#from_data",
-    "title": "functional.Horizon",
-    "section": "from_data()",
-    "text": "from_data()\n\nDerive the horizon from covariate and data shapes.\n\n\nUsage\nSource\n\n\nfrom_data(covariates, data)\n\n\nParameters\n\n\ncovariates: Array\n\nCovariates with time at axis -2 spanning the full horizon.\n\ndata: Array | None\n\nObserved data with time at axis -2 (None for prior sampling).\n\n\n\n\n\nReturns\n\n\n Horizon\n\nThe horizon with duration = covariates.shape[-2], t_obs = data.shape[-2] (or duration when data is None), and future = duration - t_obs.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data is longer than covariates along the time axis.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.Horizon]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
-    ]
-  },
-  {
-    "objectID": "reference/contrib.blackjax.BlackjaxNUTSKernel.html",
-    "href": "reference/contrib.blackjax.BlackjaxNUTSKernel.html",
-    "title": "contrib.blackjax.BlackjaxNUTSKernel",
+    "objectID": "reference/exceptions.NumpyroForecastError.html",
+    "href": "reference/exceptions.NumpyroForecastError.html",
+    "title": "exceptions.NumpyroForecastError",
     "section": "",
-    "text": "BlackJAX NUTS with Stan-style window adaptation.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxNUTSKernel()\n\n\nAdaptation (step size and inverse mass matrix) runs once in ~_BlackjaxKernel.init() via blackjax.window_adaptation; each MCMC step is then a single tuned NUTS step.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nnum_adaptation_steps: int = 500\n\nNumber of window-adaptation steps.\n\ntarget_acceptance_rate: float = 0.8\n\nTarget acceptance probability for dual-averaging step-size adaptation.",
+    "text": "Base class for all deliberate numpyro_forecast errors.\n\n\nUsage\nSource\n\n\nexceptions.NumpyroForecastError()\n\n\nSubclasses may set default_message; instantiating without arguments then carries that message, and a positional message overrides it.\n\n\nParameters\n\n\nmessage: str | None = None\n\nOptional explicit message; defaults to the class default_message.",
     "crumbs": [
       "Reference",
-      "Extensions (contrib)",
-      "[contrib.blackjax.BlackjaxNUTSKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
+      "Exceptions",
+      "[exceptions.NumpyroForecastError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
     ]
   },
   {
@@ -1191,111 +1218,98 @@
     ]
   },
   {
-    "objectID": "reference/evaluate.BacktestResult.html",
-    "href": "reference/evaluate.BacktestResult.html",
-    "title": "evaluate.BacktestResult",
+    "objectID": "reference/evaluate.results_to_dataframe.html",
+    "href": "reference/evaluate.results_to_dataframe.html",
+    "title": "evaluate.results_to_dataframe()",
     "section": "",
-    "text": "Per-window result of a :func:backtest run.",
+    "text": "Flatten backtest results into a tidy one-row-per-window DataFrame.\n\n\nUsage\nSource\n\n\nevaluate.results_to_dataframe(results)\n\n\nColumns are prefix-namespaced so metric, in-sample-metric, and parameter names never collide: window metrics become metric_&lt;name&gt;, in-sample metrics train_metric_&lt;name&gt;, and scalar parameters param_&lt;name&gt;, alongside the window indices t0/t1/t2, num_samples, and train_walltime/test_walltime. Forecast samples are excluded. Windows may carry different metric sets (e.g. via backtest(per_window_metrics=...)); the union of columns is used and missing entries are left as NaN.\nA VectorizedBacktestResult from backtest_vectorized() is also accepted; it produces the same metric_&lt;name&gt; columns for the same metric set, but has no train_metric_*, param_*, or walltime columns (a vectorized run has no per-window walltimes), which are simply absent.\n\n\nParameters\n\n\nresults: Sequence[BacktestResult] | VectorizedBacktestResult\n\nA sequence of BacktestResult from backtest(), or a single VectorizedBacktestResult from backtest_vectorized().\n\n\n\n\n\nReturns\n\n\n pandas.DataFrame\n\nOne row per window with the namespaced columns described above.\n\n\n\n\n\nRaises\n\n\n ImportError\n\nIf pandas is not installed (pip install numpyro_forecast[dataframes]).",
     "crumbs": [
       "Reference",
       "Backtesting & evaluation",
-      "[evaluate.BacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "[evaluate.results_to_dataframe()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/evaluate.BacktestResult.html#to_dict",
-    "href": "reference/evaluate.BacktestResult.html#to_dict",
-    "title": "evaluate.BacktestResult",
-    "section": "to_dict()",
-    "text": "to_dict()\n\nReturn a flat dictionary view (Pyro-style access).\n\n\nUsage\nSource\n\n\nto_dict()\n\n\nReturns\n\n\n dict[str, Any]\n\nAll fields as a plain dictionary.",
+    "objectID": "reference/metrics.crps_empirical.html",
+    "href": "reference/metrics.crps_empirical.html",
+    "title": "metrics.crps_empirical()",
+    "section": "",
+    "text": "Compute the empirical Continuous Ranked Probability Score (CRPS).\n\n\nUsage\nSource\n\n\nmetrics.crps_empirical(pred, truth)\n\n\nThe CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as\n\\[\n\\mathrm{CRPS}(F, y) = \\mathbb{E}|X - y| - \\tfrac{1}{2}\\,\\mathbb{E}|X - X'|,\n\\]\nwhere \\(X, X'\\) are independent draws from the forecast distribution \\(F\\). The expectations are estimated from the forecast sample axis using the sorted-sample \\(O(n \\log n)\\) identity.\n\n\nParameters\n\n\npred: Float[Array, \" sample *batch\"]\n\nForecast samples with the sample axis first, shape (sample, *batch).\n\ntruth: Float[Array, \" *batch\"]\n\nGround-truth values with shape (*batch) (broadcastable to pred).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"*batch\"]\n\nElementwise CRPS, one value per batch location.\n\n\n\n\n\nReferences\nTilmann Gneiting, Adrian E. Raftery (2007). “Strictly Proper Scoring Rules, Prediction, and Estimation”. Journal of the American Statistical Association.",
     "crumbs": [
       "Reference",
       "Backtesting & evaluation",
-      "[evaluate.BacktestResult]{.doc-object-name .doc-class .doc-label .doc-label-dataclass}"
+      "[metrics.crps_empirical()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/evaluate.backtest.html",
-    "href": "reference/evaluate.backtest.html",
-    "title": "evaluate.backtest()",
+    "objectID": "reference/util.require.html",
+    "href": "reference/util.require.html",
+    "title": "util.require()",
     "section": "",
-    "text": "Backtest a forecasting model on a moving window of (train, test) data.\n\n\nUsage\nSource\n\n\nevaluate.backtest(\n    rng_key,\n    data,\n    covariates,\n    model_fn,\n    *,\n    forecaster_fn=Forecaster,\n    metrics=None,\n    per_window_metrics=None,\n    transform=None,\n    window_type=None,\n    train_window=None,\n    min_train_window=1,\n    test_window=None,\n    min_test_window=1,\n    stride=1,\n    num_samples=100,\n    batch_size=None,\n    forecaster_options=None,\n    eval_train=False,\n    keep_predictions=False,\n    reuse_model=True\n)\n\n\nParameters\n\n\nrng_key: Array\n\nBase PRNG key (used for every window, matching Pyro).\n\ndata: Array\n\nDataset with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 (same duration as data).\n\nmodel_fn: ModelFactory\n\nFactory returning a fresh ForecastingModel per window.\n\nforecaster_fn: ForecasterFactory = Forecaster\n\nFactory returning a fitted forecaster (defaults to Forecaster).\n\nmetrics: Mapping[str, Metric] | None = None\n\nMapping of metric name to function; defaults to DEFAULT_METRICS. Each function takes (pred, truth) and returns a scalar array (see ~numpyro_forecast.typing.Metric); bind any metric-specific parameters with functools.partial(), e.g. {**DEFAULT_METRICS, \"coverage\": partial(eval_coverage, alpha=0.8)}.\n\nper_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None\n\nOptional (t0, t1, t2) -&gt; Mapping[str, Metric] callable producing extra metrics merged over metrics for each window. Use it for window-dependent metrics such as a MASE scaled by that window’s training data (numpyro_forecast.metrics.make_mase()).\n\ntransform: Callable[[Array, Array], tuple[Array, Array]] | None = None\n\nOptional (pred, truth) -&gt; (pred, truth) applied before metrics.\n\nwindow_type: WindowType | None = None\n\nWindowing strategy. If None (default) it is inferred from train_window: \"expanding\" when train_window is None and \"rolling\" when it is set, matching the historical behavior. Pass \"expanding\" to always train on all history from t0 = 0, or \"rolling\" to hold the training length fixed at train_window and slide it forward. \"expanding\" and train_window are mutually exclusive, and \"rolling\" requires train_window (both validated).\n\ntrain_window: int | None = None\n\nTraining window size; if None the window expands from the start. Required for window_type=\"rolling\".\n\nmin_train_window: int = 1\n\nMinimum training window size for the expanding strategy (used when train_window is None).\n\ntest_window: int | None = None\n\nTest window size; if None forecasts to the end of the data.\n\nmin_test_window: int = 1\n\nMinimum test window size when test_window is None.\n\nstride: int = 1\n\nStep between successive train/test splits.\n\nnum_samples: int = 100\n\nNumber of forecast samples per window.\n\nbatch_size: int | None = None\n\nOptional forecast-sampling chunk size.\n\nforecaster_options: Mapping[str, Any] | Callable[…, Mapping[str, Any]] | None = None\n\nOptions dict passed to forecaster_fn, or a callable (t0, t1, t2) -&gt; dict returning per-window options.\n\neval_train: bool = False\n\nIf True, also score the in-sample posterior predictive over each training window with the same metrics and store them in BacktestResult.train_metrics. Requires a forecaster exposing predict_in_sample (the built-in Forecaster and HMCForecaster do).\n\nkeep_predictions: bool = False\n\nIf True, store each window’s out-of-sample forecast samples (after transform) on BacktestResult.prediction. Defaults to False to avoid retaining large Monte Carlo arrays.\n\nreuse_model: bool = True\n\nWhen True (default) and the windowing strategy is rolling, the model instance returned by the first model_fn() call is reused for every window so forecast/predict kernels can cache across windows. SVI still recompiles per window; for a single fused fit over all windows use backtest_vectorized(). Ignored for expanding windows and when False.\n\n\n\n\n\nReturns\n\n\n list[BacktestResult]\n\nOne result per backtest window.",
-    "crumbs": [
-      "Reference",
-      "Backtesting & evaluation",
-      "[evaluate.backtest()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/exceptions.GuideResolutionError.html",
-    "href": "reference/exceptions.GuideResolutionError.html",
-    "title": "exceptions.GuideResolutionError",
-    "section": "",
-    "text": "A guide specification could not be resolved.\n\n\nUsage\nSource\n\n\nexceptions.GuideResolutionError(message=None)\n\n\nRaised by ~numpyro_forecast.functional.resolve_guide() for a callable shaped like a guide factory (the default message) or for an unsupported type.",
-    "crumbs": [
-      "Reference",
-      "Exceptions",
-      "[exceptions.GuideResolutionError]{.doc-object-name .doc-class .doc-label .doc-label-exception}"
-    ]
-  },
-  {
-    "objectID": "reference/functional.predict.html",
-    "href": "reference/functional.predict.html",
-    "title": "functional.predict()",
-    "section": "",
-    "text": "Register the observation/forecast sites for the model.\n\n\nUsage\nSource\n\n\nfunctional.predict(h, noise_dist, prediction)\n\n\nnoise_dist is a zero-centered observation noise distribution and prediction the deterministic mean over the full horizon. While training the residual is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the \"forecast\" deterministic site. A thin wrapper over predict_glm() with the location-shift link lambda mu: shift_loc(noise_dist, mu).\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nnoise_dist: dist.Distribution\n\nZero-centered observation noise (e.g. Normal(0, sigma)).\n\nprediction: Array\n\nDeterministic mean with time at axis -2, shape (*batch, duration, obs).\n\n\n\n\n\nRaises\n\n\n RuntimeError\n\nIf forecasting (future &gt; 0) but no observed data is available.",
-    "crumbs": [
-      "Reference",
-      "Functional core",
-      "[functional.predict()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
-    ]
-  },
-  {
-    "objectID": "reference/util.shift_loc.html",
-    "href": "reference/util.shift_loc.html",
-    "title": "util.shift_loc()",
-    "section": "",
-    "text": "Re-center a zero-centered noise distribution at loc.\n\n\nUsage\nSource\n\n\nutil.shift_loc(noise_dist, loc)\n\n\nThis converts Pyro’s obs = data - prediction idiom into an additive shift of the observation distribution’s location.\n\n\nParameters\n\n\nnoise_dist: dist.Distribution\n\nA zero-centered location-family distribution.\n\nloc: Array\n\nThe deterministic mean to add to the distribution’s location.\n\n\n\n\n\nReturns\n\n\n dist.Distribution\n\nA distribution centered at loc.\n\n\n\n\n\nRaises\n\n\n NotImplementedError\n\nIf noise_dist is of an unsupported type.",
+    "text": "Import an optional dependency, or raise a targeted ImportError.\n\n\nUsage\nSource\n\n\nutil.require(module, *, extra)\n\n\nOptional features (dataframes, blackjax, optax) live behind pyproject extras and are never imported at package import time. This helper imports the backing module lazily at first use and, when it is missing, raises an ImportError naming the exact pip install invocation that provides it.\n\n\nParameters\n\n\nmodule: str\n\nThe importable module name (e.g. \"pandas\").\n\nextra: str\n\nThe numpyro_forecast extra that installs it (e.g. \"dataframes\").\n\n\n\n\n\nReturns\n\n\n ModuleType\n\nThe imported module.\n\n\n\n\n\nRaises\n\n\n ImportError\n\nIf module is not importable, with an actionable install hint.",
     "crumbs": [
       "Reference",
       "Utilities",
-      "[util.shift_loc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "[util.require()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/functional.fit_mcmc.html",
-    "href": "reference/functional.fit_mcmc.html",
-    "title": "functional.fit_mcmc()",
+    "objectID": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
+    "href": "reference/contrib.blackjax.BlackjaxCustomKernel.html",
+    "title": "contrib.blackjax.BlackjaxCustomKernel",
     "section": "",
-    "text": "Fit a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.fit_mcmc(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    kernel=None,\n    kernel_kwargs=None,\n    num_warmup=1000,\n    num_samples=1000,\n    num_chains=1,\n    chain_method=\"sequential\",\n    progress_bar=False\n)\n\n\nPRNG: consumed entirely by ~numpyro.infer.MCMC.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class; rejected with an instance).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains (stored on the returned MCMCFit).\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.\n\n\n\n\n\nReturns\n\n\n MCMCFit\n\nThe posterior samples (flattened) and num_chains.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations.\n\n KernelConfigError\n\nIf a run-config constraint is violated (see _validate_kernel_run_config()).",
+    "text": "Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\n\nUsage\nSource\n\n\ncontrib.blackjax.BlackjaxCustomKernel()\n\n\nThe escape hatch for kernels without a dedicated wrapper. build_fn receives (rng_key, logdensity_fn, position, num_warmup) and must return (inner_state, step_fn), where inner_state exposes .position over the same sites as the model and step_fn has signature (rng_key, inner_state) -&gt; (inner_state, info). The base class validates the returned state’s key set and raises TypeError if it is malformed.\n\n\nParameters\n\n\nmodel: ForecastModel | None = None\n\nThe NumPyro model to sample from.\n\nbuild_fn: BlackjaxBuildFn\n\nThe blackjax build callable described above.",
     "crumbs": [
       "Reference",
-      "Functional core",
-      "[functional.fit_mcmc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Extensions (contrib)",
+      "[contrib.blackjax.BlackjaxCustomKernel]{.doc-object-name .doc-class .doc-label .doc-label-class}"
     ]
   },
   {
-    "objectID": "reference/convert.to_datatree.html",
-    "href": "reference/convert.to_datatree.html",
-    "title": "convert.to_datatree()",
+    "objectID": "reference/functional.models.markov_time_series.html",
+    "href": "reference/functional.models.markov_time_series.html",
+    "title": "functional.models.markov_time_series()",
     "section": "",
-    "text": "Convert a fit into an ArviZ-schema :class:xarray.DataTree.\n\n\nUsage\nSource\n\n\nconvert.to_datatree(\n    rng_key,\n    fit,\n    model,\n    data,\n    covariates,\n    *,\n    num_predictive_samples=None,\n    coords=None,\n    time_coord=None,\n    posterior_dims=None\n)\n\n\nPRNG: rng_key is consumed by the in-sample posterior-predictive draws (and, for a variational fit, the posterior draws).\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for the predictive (and variational posterior) draws.\n\nfit: object\n\nA fit from ~numpyro_forecast.functional.fit_mcmc(), ~numpyro_forecast.functional.fit_svi(), or ~numpyro_forecast.contrib.blackjax.fit_pathfinder().\n\nmodel: ForecastModel\n\nThe forecasting model that produced fit.\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nIn-sample covariates with time at axis -2.\n\nnum_predictive_samples: int | None = None\n\nNumber of posterior draws for a variational fit (ignored for ~numpyro_forecast.functional.MCMCFit, which uses its own draws). Defaults to 1_000.\n\ncoords: Mapping[str, Sequence[Any]] | None = None\n\nOptional extra coordinates; these take precedence over the generated time coordinate.\n\ntime_coord: Sequence[Any] | None = None\n\nOptional explicit in-sample time coordinate values; defaults to range(n_time).\n\nposterior_dims: Mapping[str, Sequence[str]] | None = None\n\nOptional mapping from a posterior site name to its non-sample dimension names, e.g. {\"drift\": [\"time\"]}. Sites listed here share the tree-wide time coordinate; unlisted sites keep ArviZ’s auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental n_params == n_time would misattribute the axis).\n\n\n\n\n\nReturns\n\n\n xarray.DataTree\n\nA tree with posterior ((chain, draw, ...); a single pseudo-chain plus variational: True attrs for SVI/Pathfinder), posterior_predictive (in-sample obs), observed_data, and constant_data groups.\n\n\n\n\n\nNotes\nrng_key is split internally: one subkey drives the posterior draws (for variational fits) and the other the in-sample predictive. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the two sample sets.",
+    "text": "Sample a Markov (state-space) latent over the full horizon.\n\n\nUsage\nSource\n\n\nfunctional.models.markov_time_series(\n    h,\n    name,\n    init_carry,\n    transition,\n    xs=None,\n    *,\n    plates=(),\n    reparam_config=None\n)\n\n\nIn-sample steps run in a numpyro.contrib.control_flow.scan with site name; when forecasting, horizon steps run in a second scan with site f\"{name}_future\" seeded by the final in-sample carry. The guide never sees the future site (same invariant as time_series()), and under posterior replay the carry is a deterministic function of the replayed draws, so the forecast is conditioned through the state.\n\n\nParameters\n\n\nh: Horizon\n\nThe horizon for the current model call (see Horizon).\n\nname: str\n\nBase sample-site name for the in-sample latent scan.\n\ninit_carry: Any\n\nInitial carry passed to the first transition.\n\ntransition: Transition\n\nPer-step (carry, x_t) -&gt; (dist_t, carry_fn) callable; the wrapper owns the numpyro.sample statement.\n\nxs: Array | None = None\n\nOptional exogenous inputs over the full horizon with time at axis -2, moved into scan layout internally; None for autonomous dynamics.\n\nplates: Sequence[tuple[str, int]] = ()\n\n(name, size) pairs opened inside the scan body around the sample statement (the only placement NumPyro supports for scan + plate).\n\nreparam_config: Mapping[str, Reparam] | None = None\n\nSite-name -&gt; ~numpyro.infer.reparam.Reparam mapping applied inside the scan body.\n\n\n\n\n\nReturns\n\n\n Array\n\nThe latent over the full horizon in package layout (*plate_batch, duration, obs).\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf forecasting without observed data, if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.",
     "crumbs": [
       "Reference",
-      "ArviZ export",
-      "[convert.to_datatree()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+      "Functional core: model primitives",
+      "[functional.models.markov_time_series()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {
-    "objectID": "reference/forecaster.PathfinderForecaster.html",
-    "href": "reference/forecaster.PathfinderForecaster.html",
-    "title": "forecaster.PathfinderForecaster",
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "Reference",
     "section": "",
-    "text": "Fit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\nUsage\nSource\n\n\nforecaster.PathfinderForecaster()\n\n\nA thin shim over numpyro_forecast.contrib.blackjax.fit_pathfinder(). BlackJAX is an optional dependency (pip install numpyro_forecast[blackjax]) imported lazily here, so constructing this class is the opt-in that pulls it in; importing numpyro_forecast never does. The constructor mirrors Forecaster without guide/optim (Pathfinder has neither) and adds num_elbo_samples/ftol.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model to fit (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nnum_elbo_samples: int = 200\n\nNumber of Monte Carlo samples used to estimate the ELBO along the L-BFGS path.\n\nftol: float = 1e-05\n\nL-BFGS relative function-value tolerance (convergence criterion).",
+    "text": "Forecasters\n\nHigh-level interfaces for fitting and forecasting.\n\n\nforecaster.Forecaster\n\nFit a forecasting model with stochastic variational inference.\n\nforecaster.HMCForecaster\n\nFit a forecasting model with MCMC (NUTS by default).\n\nforecaster.PathfinderForecaster\n\nFit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\n\n\nModels\n\nBuilding forecasting models (object-oriented and functional).\n\n\nforecaster.ForecastingModel\n\nAbstract base class for forecasting models.\n\nfunctional.models.forecasting_model()\n\nBuild a NumPyro model from a functional model body.\n\n\n\n\nFunctional core: model primitives\n\nPure functional primitives for the train/forecast split.\n\n\nfunctional.models.Horizon\n\nThe train/forecast split for a single model call.\n\nfunctional.models.time_series()\n\nSample a time-varying latent over the full horizon.\n\nfunctional.models.markov_time_series()\n\nSample a Markov (state-space) latent over the full horizon.\n\nfunctional.models.predict()\n\nRegister the observation/forecast sites for the model.\n\nfunctional.models.predict_glm()\n\nRegister GLM-style observation/forecast sites from a latent predictor.\n\n\n\n\nFunctional core: fitting\n\nOptimizer/guide/kernel resolution and the SVI and MCMC fit entry points.\n\n\nfunctional.svi.resolve_optimizer()\n\nNormalize an optimizer specification into a NumPyro optimizer.\n\nfunctional.svi.resolve_guide()\n\nNormalize a guide specification against model.\n\nfunctional.svi.fit_svi()\n\nFit a forecasting model with stochastic variational inference.\n\nfunctional.svi.SVIFit\n\nThe result of fitting a forecasting model with SVI.\n\nfunctional.mcmc.resolve_kernel()\n\nNormalize a kernel specification.\n\nfunctional.mcmc.fit_mcmc()\n\nFit a forecasting model with MCMC.\n\nfunctional.mcmc.MCMCFit\n\nThe result of fitting a forecasting model with MCMC.\n\n\n\n\nFunctional core: posterior and prediction\n\nDrawing posterior samples and generating forecasts and in-sample predictions.\n\n\nfunctional.posterior.draw_posterior()\n\nDraw num_samples posterior samples of the latent sites from a fit.\n\nfunctional.prediction.forecast()\n\nSample forecasts for the steps in [t, duration) from a posterior.\n\nfunctional.prediction.predict_in_sample()\n\nSample the in-sample posterior predictive of the obs site.\n\n\n\n\nBacktesting & evaluation\n\nRolling-window backtesting and forecast metrics.\n\n\nevaluate.backtest()\n\nBacktest a forecasting model on a moving window of (train, test) data.\n\nevaluate.backtest_vectorized()\n\nRolling-window backtest with all windows fitted in one vmapped SVI run.\n\nevaluate.BacktestResult\n\nPer-window result of a :func:backtest run.\n\nevaluate.VectorizedBacktestResult\n\nResult of a :func:backtest_vectorized run (all windows at once).\n\nevaluate.evaluate_forecast()\n\nEvaluate forecast samples against ground truth for several metrics at once.\n\nevaluate.results_to_dataframe()\n\nFlatten backtest results into a tidy one-row-per-window DataFrame.\n\nevaluate.eval_crps()\n\nEmpirical CRPS averaged over all data elements.\n\nevaluate.eval_mae()\n\nMean absolute error using the forecast sample median as point estimate.\n\nevaluate.eval_rmse()\n\nRoot mean squared error using the forecast sample mean as point estimate.\n\nevaluate.eval_coverage()\n\nEmpirical coverage of the central alpha prediction interval.\n\nmetrics.crps_empirical()\n\nCompute the empirical Continuous Ranked Probability Score (CRPS).\n\nmetrics.eval_pinball()\n\nMean pinball (quantile) loss of the forecast quantile.\n\nmetrics.eval_interval_score()\n\nMean Winkler interval score for the central alpha prediction interval.\n\nmetrics.make_mase()\n\nBuild a Mean Absolute Scaled Error metric scaled by train_data.\n\n\n\n\nUtilities\n\nArray helpers and feature builders.\n\n\nutil.fourier_features()\n\nBuild a Fourier seasonality design matrix.\n\nutil.periodic_repeat()\n\nTile a seasonal pattern to cover duration time steps.\n\nutil.zero_data_like()\n\nReturn zeros shaped like data but extended to the covariate duration.\n\nutil.concat_future()\n\nConcatenate in-sample and forecast-horizon arrays along the time axis.\n\nutil.shift_loc()\n\nRe-center a zero-centered noise distribution at loc.\n\nutil.slice_time()\n\nSlice an elementwise distribution along the time axis -2.\n\nutil.prefix_condition()\n\nCondition a (t+f)-length distribution on a t-length data prefix.\n\nutil.register_elementwise()\n\nDeclare a distribution family elementwise (usable as a decorator).\n\nutil.require()\n\nImport an optional dependency, or raise a targeted ImportError.\n\n\n\n\nExceptions\n\nPackage exception hierarchy raised at resolution and validation boundaries.\n\n\nexceptions.NumpyroForecastError\n\nBase class for all deliberate numpyro_forecast errors.\n\nexceptions.BacktestWindowError\n\nA backtest window configuration is invalid.\n\nexceptions.VectorizedGuideError\n\nThe vectorized backtest requires an AutoGuide.\n\nexceptions.VectorizedMetricError\n\nA metric is not vmappable in the vectorized backtest.\n\nexceptions.OptimizerResolutionError\n\nAn optimizer specification could not be resolved.\n\nexceptions.GuideResolutionError\n\nA guide specification could not be resolved.\n\nexceptions.GuideSampleArgsError\n\nDrawing from a hand-written guide needs the in-sample arguments.\n\nexceptions.KernelResolutionError\n\nA kernel specification could not be resolved.\n\nexceptions.KernelConfigError\n\nA kernel is combined with an invalid configuration.\n\nexceptions.MVNLayoutError\n\nA MultivariateNormal layout is unsupported for time-axis surgery.\n\n\n\n\nArviZ export\n\nConvert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.\n\n\nconvert.to_datatree()\n\nConvert a fit into an ArviZ-schema :class:xarray.DataTree.\n\nconvert.add_forecast_groups()\n\nAttach out-of-sample forecast groups to a copy of tree.\n\n\n\n\nExtensions (contrib)\n\nOptional backends behind pyproject extras (never imported by default).\n\n\ncontrib.blackjax.BlackjaxNUTSKernel\n\nBlackJAX NUTS with Stan-style window adaptation.\n\ncontrib.blackjax.BlackjaxMCLMCKernel\n\nBlackJAX Microcanonical Langevin Monte Carlo (MCLMC).\n\ncontrib.blackjax.BlackjaxCustomKernel\n\nAdapt an arbitrary BlackJAX sampler via a user-supplied build_fn.\n\ncontrib.blackjax.PathfinderFit\n\nThe result of fitting a forecasting model with BlackJAX Pathfinder.\n\ncontrib.blackjax.fit_pathfinder()\n\nFit a forecasting model with BlackJAX Pathfinder variational inference.\n\n\n\n\nDatasets\n\nExample datasets used in the tutorials.\n\n\ndatasets.load_bart_weekly()\n\nLoad total weekly BART ridership (log scale) for the univariate example.\n\ndatasets.load_bart_hierarchical()\n\nLoad the windowed hierarchical BART panel for the hierarchical example.\n\ndatasets.load_victoria_electricity()\n\nLoad hourly Victoria (Australia) electricity demand and temperature.\n\ndatasets.bart_available()\n\nReturn whether the BART dataset can be loaded (download succeeds).",
     "crumbs": [
       "Reference",
-      "Forecasters",
-      "[forecaster.PathfinderForecaster]{.doc-object-name .doc-class .doc-label .doc-label-class}"
+      "API Index"
+    ]
+  },
+  {
+    "objectID": "reference/metrics.make_mase.html",
+    "href": "reference/metrics.make_mase.html",
+    "title": "metrics.make_mase()",
+    "section": "",
+    "text": "Build a Mean Absolute Scaled Error metric scaled by train_data.\n\n\nUsage\nSource\n\n\nmetrics.make_mase(train_data, *, seasonality=1)\n\n\nMASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on train_data, mean(|y_t - y_{t-seasonality}|). The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see ~numpyro_forecast.typing.Metric).\n\n\nParameters\n\n\ntrain_data: Float[Array, \"*batch time obs_dim\"]\n\nTraining data with time at axis -2; leading batch axes are allowed and the seasonal-naive scale is averaged over all axes.\n\nseasonality: int = 1\n\nSeasonal period (&gt;= 1); 1 is the random-walk naive baseline.\n\n\n\n\n\nReturns\n\n\n Metric\n\nA (pred, truth) callable computing MASE as a scalar array.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf seasonality &lt; 1, train_data is not longer than seasonality along the time axis, or the seasonal-naive scale is zero (a constant series, for which MASE is undefined).",
+    "crumbs": [
+      "Reference",
+      "Backtesting & evaluation",
+      "[metrics.make_mase()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
+    ]
+  },
+  {
+    "objectID": "reference/functional.mcmc.fit_mcmc.html",
+    "href": "reference/functional.mcmc.fit_mcmc.html",
+    "title": "functional.mcmc.fit_mcmc()",
+    "section": "",
+    "text": "Fit a forecasting model with MCMC.\n\n\nUsage\nSource\n\n\nfunctional.mcmc.fit_mcmc(\n    rng_key,\n    model,\n    data,\n    covariates,\n    *,\n    kernel=None,\n    kernel_kwargs=None,\n    num_warmup=1000,\n    num_samples=1000,\n    num_chains=1,\n    chain_method=\"sequential\",\n    progress_bar=False\n)\n\n\nPRNG: consumed entirely by ~numpyro.infer.MCMC.\n\n\nParameters\n\n\nrng_key: Array\n\nPRNG key for inference.\n\nmodel: ForecastModel\n\nThe forecasting model callable (OOP instance or functional model).\n\ndata: Array\n\nIn-sample data with time at axis -2.\n\ncovariates: Array\n\nCovariates with time at axis -2 and the same duration as data.\n\nkernel: KernelLike = None\n\nKernel specification resolved by resolve_kernel(): None (NUTS), an MCMCKernel instance, or an MCMCKernel subclass.\n\nkernel_kwargs: Mapping[str, Any] | None = None\n\nExtra keyword arguments for the kernel constructor (only with None or a kernel class; rejected with an instance).\n\nnum_warmup: int = 1000\n\nNumber of warmup steps.\n\nnum_samples: int = 1000\n\nNumber of posterior samples.\n\nnum_chains: int = 1\n\nNumber of MCMC chains (stored on the returned MCMCFit).\n\nchain_method: str = \"sequential\"\n\nNumPyro chain method (\"sequential\"/\"parallel\"/\"vectorized\").\n\nprogress_bar: bool = False\n\nWhether to display the MCMC progress bar.\n\n\n\n\n\nReturns\n\n\n MCMCFit\n\nThe posterior samples (flattened) and num_chains.\n\n\n\n\n\nRaises\n\n\n ValueError\n\nIf data and covariates have different durations.\n\n KernelConfigError\n\nIf a run-config constraint is violated (see _validate_kernel_run_config()).",
+    "crumbs": [
+      "Reference",
+      "Functional core: fitting",
+      "[functional.mcmc.fit_mcmc()]{.doc-object-name .doc-function .doc-label .doc-label-function}"
     ]
   },
   {

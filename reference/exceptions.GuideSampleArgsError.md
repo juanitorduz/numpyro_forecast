@@ -11,4 +11,4 @@ exceptions.GuideSampleArgsError(message=None)
 ```
 
 
-Raised by `~numpyro_forecast.functional.draw_posterior()` when an `~numpyro_forecast.functional.SVIFit` holding a hand-written guide was constructed without its in-sample covariates/data.
+Raised by `~numpyro_forecast.functional.posterior.draw_posterior()` when an `~numpyro_forecast.functional.svi.SVIFit` holding a hand-written guide was constructed without its in-sample covariates/data.

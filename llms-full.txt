@@ -24,12 +24,12 @@ covariates
     Covariates with time at axis ``-2`` and the same duration as ``data``.
 guide
     Guide specification resolved by
-    :func:`~numpyro_forecast.functional.resolve_guide`: ``None``
+    :func:`~numpyro_forecast.functional.svi.resolve_guide`: ``None``
     (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
     ``functools.partial`` factory of one, or a hand-written guide function.
 optim
     Optimizer specification resolved by
-    :func:`~numpyro_forecast.functional.resolve_optimizer`: ``None``
+    :func:`~numpyro_forecast.functional.svi.resolve_optimizer`: ``None``
     (``Adam(0.01)``), a positive scalar learning rate, an
     ``optax.GradientTransformation``, or a ``_NumPyroOptim``.
 num_steps
@@ -57,7 +57,7 @@ covariates
     Covariates with time at axis ``-2`` and the same duration as ``data``.
 kernel
     Kernel specification resolved by
-    :func:`~numpyro_forecast.functional.resolve_kernel`: ``None`` (``NUTS``),
+    :func:`~numpyro_forecast.functional.mcmc.resolve_kernel`: ``None`` (``NUTS``),
     an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
 kernel_kwargs
     Extra keyword arguments for the kernel constructor (only with ``None``
@@ -118,9 +118,9 @@ from the shapes (``future = covariates.shape[-2] - data.shape[-2]``).
 This is the object-oriented façade over the functional API: :meth:`time_series`
 and :meth:`predict` delegate to the free functions in
 :mod:`numpyro_forecast.functional`, passing the current
-:class:`~numpyro_forecast.functional.Horizon`.
+:class:`~numpyro_forecast.functional.models.Horizon`.
 
-forecasting_model(model_fn: collections.abc.Callable[[numpyro_forecast.functional.Horizon, jax.Array], None]) -> collections.abc.Callable[..., None]
+forecasting_model(model_fn: collections.abc.Callable[[numpyro_forecast.functional.models.Horizon, jax.Array], None]) -> collections.abc.Callable[..., None]
 
 Build a NumPyro model from a functional model body.
 
@@ -141,11 +141,12 @@ Returns
 -------
 ForecastModel
     A callable ``(covariates, data=None) -> None`` usable with ``SVI``,
-    ``MCMC``, ``Predictive``, :func:`fit_svi`, :func:`fit_mcmc`, and the
-    OOP forecaster classes.
+    ``MCMC``, ``Predictive``, :func:`~numpyro_forecast.functional.svi.fit_svi`,
+    :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`, and the OOP forecaster
+    classes.
 
 
-## Functional core
+## Functional core: model primitives
 
 Pure functional primitives for the train/forecast split.
 
@@ -171,7 +172,7 @@ future
 duration
     Total horizon length ``t + future`` (in time steps).
 
-time_series(h: numpyro_forecast.functional.Horizon, name: str, dist_fn: collections.abc.Callable[[], numpyro.distributions.distribution.Distribution], *, reparam: numpyro.infer.reparam.Reparam | None = None) -> jax.Array
+time_series(h: numpyro_forecast.functional.models.Horizon, name: str, dist_fn: collections.abc.Callable[[], numpyro.distributions.distribution.Distribution], *, reparam: numpyro.infer.reparam.Reparam | None = None) -> jax.Array
 
 Sample a time-varying latent over the full horizon.
 
@@ -198,7 +199,7 @@ Returns
 Array
     The latent over the full horizon with time at axis ``-2``.
 
-markov_time_series(h: numpyro_forecast.functional.Horizon, name: str, init_carry: Any, transition: collections.abc.Callable[[typing.Any, jax.Array | None], tuple[numpyro.distributions.distribution.Distribution, collections.abc.Callable[[jax.Array], typing.Any]]], xs: jax.Array | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
+markov_time_series(h: numpyro_forecast.functional.models.Horizon, name: str, init_carry: Any, transition: collections.abc.Callable[[typing.Any, jax.Array | None], tuple[numpyro.distributions.distribution.Distribution, collections.abc.Callable[[jax.Array], typing.Any]]], xs: jax.Array | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
 
 Sample a Markov (state-space) latent over the full horizon.
 
@@ -242,7 +243,7 @@ ValueError
     If forecasting without observed data, if the per-step shape lacks the
     observation dimension, or if an enclosing plate is detected.
 
-predict(h: numpyro_forecast.functional.Horizon, noise_dist: numpyro.distributions.distribution.Distribution, prediction: jax.Array) -> None
+predict(h: numpyro_forecast.functional.models.Horizon, noise_dist: numpyro.distributions.distribution.Distribution, prediction: jax.Array) -> None
 
 Register the observation/forecast sites for the model.
 
@@ -268,7 +269,7 @@ Raises
 RuntimeError
     If forecasting (``future > 0``) but no observed data is available.
 
-predict_glm(h: numpyro_forecast.functional.Horizon, obs_dist_fn: collections.abc.Callable[[jax.Array], numpyro.distributions.distribution.Distribution], latent: jax.Array) -> None
+predict_glm(h: numpyro_forecast.functional.models.Horizon, obs_dist_fn: collections.abc.Callable[[jax.Array], numpyro.distributions.distribution.Distribution], latent: jax.Array) -> None
 
 Register GLM-style observation/forecast sites from a latent predictor.
 
@@ -301,6 +302,12 @@ RuntimeError
 ValueError
     If the observation distribution has discrete support but ``h.data`` is
     not integer-dtyped (the usual mistake for count models).
+
+
+## Functional core: fitting
+
+Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
+
 
 resolve_optimizer(optim: 'OptimizerLike') -> numpyro.optim._NumPyroOptim
 
@@ -359,7 +366,7 @@ GuideResolutionError
     If ``guide`` is neither an ``AutoGuide`` (instance/subclass/partial) nor
     a callable, or if it has the mistyped-factory shape.
 
-fit_svi(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, guide: 'GuideLike' = None, optim: 'OptimizerLike' = None, num_steps: int = 1001, num_particles: int = 1, progress_bar: bool = False, stable_update: bool = False) -> numpyro_forecast.functional.SVIFit
+fit_svi(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, guide: 'GuideLike' = None, optim: 'OptimizerLike' = None, num_steps: int = 1001, num_particles: int = 1, progress_bar: bool = False, stable_update: bool = False) -> numpyro_forecast.functional.svi.SVIFit
 
 Fit a forecasting model with stochastic variational inference.
 
@@ -411,43 +418,25 @@ Raises
 ValueError
     If ``data`` and ``covariates`` have different durations.
 
-draw_posterior(rng_key: jax.Array, fit: object, num_samples: int) -> dict[str, jax.Array]
+SVIFit(guide: 'AutoGuide | Callable[..., None]', params: dict[str, jax.Array], losses: jax.Array, data: jax.Array | None = None, covariates: jax.Array | None = None) -> None
 
-Draw ``num_samples`` posterior samples of the latent sites from a fit.
+The result of fitting a forecasting model with SVI.
 
-Dispatches on the fit type (e.g. :class:`SVIFit`, :class:`MCMCFit`). The
-returned dict has the sample axis leading and is ready to pass to
-:func:`forecast` or NumPyro's ``Predictive``.
-
-Parameters
+Attributes
 ----------
-rng_key
-    PRNG key.
-fit
-    A fit result produced by :func:`fit_svi` or :func:`fit_mcmc`.
-num_samples
-    Number of posterior draws.
-
-Returns
--------
-dict[str, Array]
-    Posterior samples of the latent sites, sample axis leading.
-
-Raises
-------
-NotImplementedError
-    If ``fit`` is of an unsupported type.
-GuideSampleArgsError
-    If the fit holds a hand-written guide but was constructed without its
-    in-sample covariates/data.
-
-Notes
------
-For an :class:`MCMCFit`, when ``num_samples`` does not exceed the number of
-draws in the chain the draws are thinned on an evenly spaced grid (no
-duplicates); only when more samples are requested than the chain holds are
-they resampled with replacement. For an :class:`SVIFit` the draws are sampled
-afresh from the fitted guide.
+guide
+    The fitted variational guide.
+params
+    The learned variational parameters.
+losses
+    The ELBO loss per SVI step (shape ``(num_steps,)``).
+data
+    The in-sample data the model was fit on (needed to draw from
+    hand-written guides and by :func:`~numpyro_forecast.convert.to_datatree`).
+    ``None`` for fits constructed without it.
+covariates
+    The in-sample covariates the model was fit on. ``None`` for fits
+    constructed without it.
 
 resolve_kernel(kernel: 'KernelLike', model: collections.abc.Callable[..., None], kernel_kwargs: collections.abc.Mapping[str, Any] | None) -> numpyro.infer.mcmc.MCMCKernel
 
@@ -482,7 +471,7 @@ KernelResolutionError
     If ``kernel`` is neither ``None``, an ``MCMCKernel`` subclass, nor an
     ``MCMCKernel`` instance.
 
-fit_mcmc(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, kernel: 'KernelLike' = None, kernel_kwargs: collections.abc.Mapping[str, Any] | None = None, num_warmup: int = 1000, num_samples: int = 1000, num_chains: int = 1, chain_method: str = 'sequential', progress_bar: bool = False) -> numpyro_forecast.functional.MCMCFit
+fit_mcmc(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, kernel: 'KernelLike' = None, kernel_kwargs: collections.abc.Mapping[str, Any] | None = None, num_warmup: int = 1000, num_samples: int = 1000, num_chains: int = 1, chain_method: str = 'sequential', progress_bar: bool = False) -> numpyro_forecast.functional.mcmc.MCMCFit
 
 Fit a forecasting model with MCMC.
 
@@ -528,6 +517,66 @@ KernelConfigError
     If a run-config constraint is violated (see
     :func:`_validate_kernel_run_config`).
 
+MCMCFit(samples: dict[str, jax.Array], num_chains: int = 1) -> None
+
+The result of fitting a forecasting model with MCMC.
+
+Attributes
+----------
+samples
+    The posterior samples of the latent sites, sample axis leading and
+    stored flattened (``group_by_chain=False``).
+num_chains
+    The number of chains the fit was run with (frozen; default ``1``), so
+    chain structure survives into :func:`~numpyro_forecast.convert.to_datatree`.
+
+
+## Functional core: posterior and prediction
+
+Drawing posterior samples and generating forecasts and in-sample predictions.
+
+
+draw_posterior(rng_key: jax.Array, fit: object, num_samples: int) -> dict[str, jax.Array]
+
+Draw ``num_samples`` posterior samples of the latent sites from a fit.
+
+Dispatches on the fit type (e.g. :class:`~numpyro_forecast.functional.svi.SVIFit`,
+:class:`~numpyro_forecast.functional.mcmc.MCMCFit`). The returned dict has the
+sample axis leading and is ready to pass to
+:func:`~numpyro_forecast.functional.prediction.forecast` or NumPyro's ``Predictive``.
+
+Parameters
+----------
+rng_key
+    PRNG key.
+fit
+    A fit result produced by :func:`~numpyro_forecast.functional.svi.fit_svi`
+    or :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
+num_samples
+    Number of posterior draws.
+
+Returns
+-------
+dict[str, Array]
+    Posterior samples of the latent sites, sample axis leading.
+
+Raises
+------
+NotImplementedError
+    If ``fit`` is of an unsupported type.
+GuideSampleArgsError
+    If the fit holds a hand-written guide but was constructed without its
+    in-sample covariates/data.
+
+Notes
+-----
+For an :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, when
+``num_samples`` does not exceed the number of draws in the chain the draws
+are thinned on an evenly spaced grid (no duplicates); only when more samples
+are requested than the chain holds are they resampled with replacement. For
+an :class:`~numpyro_forecast.functional.svi.SVIFit` the draws are sampled
+afresh from the fitted guide.
+
 forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch future obs']
 
 Sample forecasts for the steps in ``[t, duration)`` from a posterior.
@@ -536,7 +585,7 @@ Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
 ``data``: the in-sample latent sites are drawn from ``posterior`` while the
 ``_future`` suffix is drawn from the prior, and the ``"forecast"`` site is
 returned. The number of forecast samples equals the leading (sample) axis of
-``posterior`` (see :func:`draw_posterior`).
+``posterior`` (see :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
 
 Parameters
 ----------
@@ -565,7 +614,7 @@ Returns
 Num[Array, " sample *batch future obs"]
     Forecast samples over the ``future = duration - t`` horizon (floating
     point for continuous observations, integer for discrete/count models
-    built with :func:`predict_glm`).
+    built with :func:`~numpyro_forecast.functional.models.predict_glm`).
 
 Raises
 ------
@@ -588,7 +637,7 @@ Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
 latent draws. Unlike :func:`forecast` there is no forecast horizon: ``covariates``
 span only the observed window, so the model's ``obs`` site is sampled at every
 step. The number of predictive samples equals the leading (sample) axis of
-``posterior`` (see :func:`draw_posterior`).
+``posterior`` (see :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
 
 Parameters
 ----------
@@ -614,39 +663,6 @@ Returns
 -------
 Num[Array, " sample *batch time obs"]
     In-sample posterior-predictive draws of the ``obs`` site.
-
-SVIFit(guide: 'AutoGuide | Callable[..., None]', params: dict[str, jax.Array], losses: jax.Array, data: jax.Array | None = None, covariates: jax.Array | None = None) -> None
-
-The result of fitting a forecasting model with SVI.
-
-Attributes
-----------
-guide
-    The fitted variational guide.
-params
-    The learned variational parameters.
-losses
-    The ELBO loss per SVI step (shape ``(num_steps,)``).
-data
-    The in-sample data the model was fit on (needed to draw from
-    hand-written guides and by :func:`~numpyro_forecast.convert.to_datatree`).
-    ``None`` for fits constructed without it.
-covariates
-    The in-sample covariates the model was fit on. ``None`` for fits
-    constructed without it.
-
-MCMCFit(samples: dict[str, jax.Array], num_chains: int = 1) -> None
-
-The result of fitting a forecasting model with MCMC.
-
-Attributes
-----------
-samples
-    The posterior samples of the latent sites, sample axis leading and
-    stored flattened (``group_by_chain=False``).
-num_chains
-    The number of chains the fit was run with (frozen; default ``1``), so
-    chain structure survives into :func:`~numpyro_forecast.convert.to_datatree`.
 
 
 ## Backtesting & evaluation
@@ -769,7 +785,7 @@ num_steps
     Number of SVI steps per window.
 optim
     Optimizer specification resolved by
-    :func:`~numpyro_forecast.functional.resolve_optimizer`.
+    :func:`~numpyro_forecast.functional.svi.resolve_optimizer`.
 guide
     Guide specification; must resolve to an ``AutoGuide`` (hand-written
     guides are not vmappable, use :func:`backtest`).
@@ -1181,7 +1197,7 @@ Return zeros shaped like ``data`` but extended to the covariate duration.
 Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
 full forecast horizon without leaking observed values into the model. The
 functional API exposes the equivalent value as
-:attr:`numpyro_forecast.functional.Horizon.zero_data`.
+:attr:`numpyro_forecast.functional.models.Horizon.zero_data`.
 
 Parameters
 ----------
@@ -1387,7 +1403,7 @@ OptimizerResolutionError(message: str | None = None) -> None
 
 An optimizer specification could not be resolved.
 
-Raised by :func:`~numpyro_forecast.functional.resolve_optimizer` for
+Raised by :func:`~numpyro_forecast.functional.svi.resolve_optimizer` for
 boolean inputs of any form (``bool`` is an ``int`` subclass, so a bool
 would silently mean ``Adam(1.0)``; the default message) and for any other
 unrecognized type.
@@ -1396,7 +1412,7 @@ GuideResolutionError(message: str | None = None) -> None
 
 A guide specification could not be resolved.
 
-Raised by :func:`~numpyro_forecast.functional.resolve_guide` for a
+Raised by :func:`~numpyro_forecast.functional.svi.resolve_guide` for a
 callable shaped like a guide *factory* (the default message) or for an
 unsupported type.
 
@@ -1404,15 +1420,15 @@ GuideSampleArgsError(message: str | None = None) -> None
 
 Drawing from a hand-written guide needs the in-sample arguments.
 
-Raised by :func:`~numpyro_forecast.functional.draw_posterior` when an
-:class:`~numpyro_forecast.functional.SVIFit` holding a hand-written guide
+Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` when an
+:class:`~numpyro_forecast.functional.svi.SVIFit` holding a hand-written guide
 was constructed without its in-sample covariates/data.
 
 KernelResolutionError(message: str | None = None) -> None
 
 A kernel specification could not be resolved.
 
-Raised by :func:`~numpyro_forecast.functional.resolve_kernel` for a type
+Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` for a type
 that is neither ``None``, an ``MCMCKernel`` subclass, nor an ``MCMCKernel``
 instance.
 
@@ -1420,9 +1436,9 @@ KernelConfigError(message: str | None = None) -> None
 
 A kernel is combined with an invalid configuration.
 
-Raised by :func:`~numpyro_forecast.functional.resolve_kernel` when
+Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when
 ``kernel_kwargs`` accompany an already-constructed instance, and by
-:func:`~numpyro_forecast.functional.fit_mcmc` for run-config constraints
+:func:`~numpyro_forecast.functional.mcmc.fit_mcmc` for run-config constraints
 (ensemble samplers need multiple vectorized chains; BlackJAX kernels need
 sequential chains).
 
@@ -1454,8 +1470,8 @@ Parameters
 rng_key
     PRNG key for the predictive (and variational posterior) draws.
 fit
-    A fit from :func:`~numpyro_forecast.functional.fit_mcmc`,
-    :func:`~numpyro_forecast.functional.fit_svi`, or
+    A fit from :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`,
+    :func:`~numpyro_forecast.functional.svi.fit_svi`, or
     :func:`~numpyro_forecast.contrib.blackjax.fit_pathfinder`.
 model
     The forecasting model that produced ``fit``.
@@ -1465,7 +1481,7 @@ covariates
     In-sample covariates with time at axis ``-2``.
 num_predictive_samples
     Number of posterior draws for a variational fit (ignored for
-    :class:`~numpyro_forecast.functional.MCMCFit`, which uses its own draws).
+    :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
     Defaults to ``1_000``.
 coords
     Optional extra coordinates; these take precedence over the generated
@@ -1511,7 +1527,7 @@ tree
     continued).
 forecast_samples
     Forecast draws shaped ``(num_samples, future, obs)`` from
-    :func:`~numpyro_forecast.functional.forecast`.
+    :func:`~numpyro_forecast.functional.prediction.forecast`.
 covariates_future
     Future covariates shaped ``(future, covariate_dim)``.
 time_coord

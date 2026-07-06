@@ -247,7 +247,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="27" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="28" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -1012,7 +1012,7 @@ vectorized mean 94% coverage: 0.95  (nominal 0.94)</code></pre>
 <div id="785f55bb" class="cell markdown">
 <section id="functional-api" class="level1">
 <h1>Functional API</h1>
-<p>Everything so far went through the object-oriented <a href="../../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a>, but that class is only a thin shim over a functional core in <code>numpyro_forecast.functional</code>. The same model can be written as a plain function <code>(Horizon, covariates) -&gt; None</code> that calls the free functions <a href="../../../reference/functional.time_series.html#numpyro_forecast.functional.time_series" class="gdls-link gdls-code">time_series</a> and <a href="../../../reference/functional.predict.html#numpyro_forecast.functional.predict" class="gdls-link gdls-code">predict</a> (the exact counterparts of the <code>self.time_series(...)</code> and <code>self.predict(...)</code> methods used above). The <a href="../../../reference/functional.Horizon.html#numpyro_forecast.functional.Horizon" class="gdls-link gdls-code">Horizon</a> carries the train/forecast split that the class otherwise tracks as mutable state.</p>
+<p>Everything so far went through the object-oriented <a href="../../../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="gdls-link gdls-code">ForecastingModel</a>, but that class is only a thin shim over a functional core in <code>numpyro_forecast.functional</code>. The same model can be written as a plain function <code>(Horizon, covariates) -&gt; None</code> that calls the free functions <a href="../../../reference/functional.models.time_series.html#numpyro_forecast.functional.models.time_series" class="gdls-link gdls-code">time_series</a> and <a href="../../../reference/functional.models.predict.html#numpyro_forecast.functional.models.predict" class="gdls-link gdls-code">predict</a> (the exact counterparts of the <code>self.time_series(...)</code> and <code>self.predict(...)</code> methods used above). The <a href="../../../reference/functional.models.Horizon.html#numpyro_forecast.functional.models.Horizon" class="gdls-link gdls-code">Horizon</a> carries the train/forecast split that the class otherwise tracks as mutable state.</p>
 <p><code>forecasting_model(...)</code> then wraps that body into the standard <code>(covariates, data=None)</code> NumPyro model, so the result is a drop-in replacement for a <code>UnivariateForecaster()</code> instance: it works with <a href="../../../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="gdls-link gdls-code">Forecaster</a>, <code>Predictive</code>, and <a href="../../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> just the same. We rewrite the model below and confirm the two are interchangeable.</p>
 </section>
 </div>

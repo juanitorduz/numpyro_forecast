@@ -249,7 +249,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="27" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="28" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -477,7 +477,7 @@ covariates shape: (1344, 2)</code></pre>
 <span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    obs<span class="op">=</span>beta_temperature[temperature_prior_idx],</span>
 <span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <p>In <code>numpyro_forecast</code> a single model handles both training and forecasting, so <code>covariates</code> (and therefore <code>beta_temperature</code>) change length between the two regimes and a fixed integer index does not translate cleanly. The idiomatic, jit-safe equivalent is a <em>masked</em> likelihood: we build a boolean mask from the temperature covariate and apply it with <code>numpyro.handlers.mask</code>.</p>
-<p>These two formulations are mathematically identical at training time. <code>numpyro.handlers.mask</code> multiplies each element’s <code>log_prob</code> by the <code>0/1</code> mask, so the calibration factor is the sum of <code>Normal(0.13, 0.01).log_prob(beta_temperature[t])</code> over exactly the timesteps where <code>temperature[t] &gt; 32 °C</code>, the same terms the index version sums. The mask form has static shapes, works for both the in-sample fit and the forecast horizon, and during forecasting is harmless because <code>beta_temperature</code> is deterministic given the posterior and the forecast only reads the <a href="../../../reference/functional.forecast.html#numpyro_forecast.functional.forecast" class="gdls-link gdls-code">forecast</a> site.</p>
+<p>These two formulations are mathematically identical at training time. <code>numpyro.handlers.mask</code> multiplies each element’s <code>log_prob</code> by the <code>0/1</code> mask, so the calibration factor is the sum of <code>Normal(0.13, 0.01).log_prob(beta_temperature[t])</code> over exactly the timesteps where <code>temperature[t] &gt; 32 °C</code>, the same terms the index version sums. The mask form has static shapes, works for both the in-sample fit and the forecast horizon, and during forecasting is harmless because <code>beta_temperature</code> is deterministic given the posterior and the forecast only reads the <a href="../../../reference/functional.prediction.forecast.html#numpyro_forecast.functional.prediction.forecast" class="gdls-link gdls-code">forecast</a> site.</p>
 </section>
 </div>
 <div id="1e8de1a9" class="cell markdown">

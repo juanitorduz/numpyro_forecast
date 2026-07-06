@@ -32,7 +32,7 @@ PRNG: `rng_key` is consumed by the in-sample posterior-predictive draws (and, fo
 PRNG key for the predictive (and variational posterior) draws.
 
 `fit: object`  
-A fit from `~numpyro_forecast.functional.fit_mcmc()`, `~numpyro_forecast.functional.fit_svi()`, or `~numpyro_forecast.contrib.blackjax.fit_pathfinder()`.
+A fit from `~numpyro_forecast.functional.mcmc.fit_mcmc()`, `~numpyro_forecast.functional.svi.fit_svi()`, or `~numpyro_forecast.contrib.blackjax.fit_pathfinder()`.
 
 `model: ForecastModel`  
 The forecasting model that produced `fit`.
@@ -44,7 +44,7 @@ In-sample data with time at axis `-2`.
 In-sample covariates with time at axis `-2`.
 
 `num_predictive_samples: int | None = None`  
-Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.MCMCFit`, which uses its own draws). Defaults to `1_000`.
+Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws). Defaults to `1_000`.
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
 Optional extra coordinates; these take precedence over the generated `time` coordinate.

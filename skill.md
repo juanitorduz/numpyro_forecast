@@ -31,27 +31,37 @@ High-level interfaces for fitting and forecasting.
 Building forecasting models (object-oriented and functional).
 
 - `forecaster.ForecastingModel`
-- `functional.forecasting_model`
+- `functional.models.forecasting_model`
 
-### Functional core
+### Functional core: model primitives
 
 Pure functional primitives for the train/forecast split.
 
-- `functional.Horizon`
-- `functional.time_series`
-- `functional.markov_time_series`
-- `functional.predict`
-- `functional.predict_glm`
-- `functional.resolve_optimizer`
-- `functional.resolve_guide`
-- `functional.fit_svi`
-- `functional.draw_posterior`
-- `functional.resolve_kernel`
-- `functional.fit_mcmc`
-- `functional.forecast`
-- `functional.predict_in_sample`
-- `functional.SVIFit`
-- `functional.MCMCFit`
+- `functional.models.Horizon`
+- `functional.models.time_series`
+- `functional.models.markov_time_series`
+- `functional.models.predict`
+- `functional.models.predict_glm`
+
+### Functional core: fitting
+
+Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
+
+- `functional.svi.resolve_optimizer`
+- `functional.svi.resolve_guide`
+- `functional.svi.fit_svi`
+- `functional.svi.SVIFit`
+- `functional.mcmc.resolve_kernel`
+- `functional.mcmc.fit_mcmc`
+- `functional.mcmc.MCMCFit`
+
+### Functional core: posterior and prediction
+
+Drawing posterior samples and generating forecasts and in-sample predictions.
+
+- `functional.posterior.draw_posterior`
+- `functional.prediction.forecast`
+- `functional.prediction.predict_in_sample`
 
 ### Backtesting & evaluation
 
