@@ -66,6 +66,7 @@ def test_all_matches_exported_names() -> None:
         "PathfinderForecaster",
         "VectorizedBacktestResult",
         "VectorizedGuideError",
+        "VectorizedMetricError",
         "__version__",
         "add_forecast_groups",
         "backtest",

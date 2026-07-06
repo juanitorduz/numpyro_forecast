@@ -40,6 +40,7 @@ from numpyro_forecast.exceptions import (
     NumpyroForecastError,
     OptimizerResolutionError,
     VectorizedGuideError,
+    VectorizedMetricError,
 )
 from numpyro_forecast.forecaster import (
     Forecaster,
@@ -72,6 +73,7 @@ __all__ = [
     "PathfinderForecaster",
     "VectorizedBacktestResult",
     "VectorizedGuideError",
+    "VectorizedMetricError",
     "__version__",
     "add_forecast_groups",
     "backtest",
