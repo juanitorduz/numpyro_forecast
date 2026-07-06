@@ -139,6 +139,7 @@ reference:
       - exceptions.NumpyroForecastError
       - exceptions.BacktestWindowError
       - exceptions.VectorizedGuideError
+      - exceptions.VectorizedMetricError
       - exceptions.OptimizerResolutionError
       - exceptions.GuideResolutionError
       - exceptions.GuideSampleArgsError

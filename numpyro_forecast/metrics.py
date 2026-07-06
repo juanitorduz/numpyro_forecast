@@ -76,25 +76,20 @@ def crps_empirical(
     return _crps_empirical(pred, truth)
 
 
-@partial(jax.jit, static_argnums=(2,))
-def _pinball(pred: Array, truth: Array, quantile: float) -> Array:
-    """Jitted mean pinball loss at ``quantile`` (static so the branch specializes)."""
-    estimate = jnp.quantile(pred, quantile, axis=0)
-    diff = truth - estimate
-    return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
-
-
+@partial(jax.jit, static_argnames=("quantile",))
 def eval_pinball(
     pred: Float[Array, " sample *batch"],
     truth: Float[Array, " *batch"],
     *,
     quantile: float = 0.5,
-) -> float:
+) -> Array:
     r"""Mean pinball (quantile) loss of the forecast ``quantile``.
 
     The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
     :math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
-    data elements. At ``quantile=0.5`` it is half the mean absolute error.
+    data elements. At ``quantile=0.5`` it is half the mean absolute error. A
+    pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`);
+    ``quantile`` is static so each level specializes its own branch.
 
     Parameters
     ----------
@@ -107,8 +102,8 @@ def eval_pinball(
 
     Returns
     -------
-    float
-        The mean pinball loss.
+    Array
+        The mean pinball loss as a scalar array.
 
     Raises
     ------
@@ -118,27 +113,18 @@ def eval_pinball(
     if not 0.0 < quantile < 1.0:
         msg = f"quantile must be in (0, 1), got {quantile}"
         raise ValueError(msg)
-    return float(_pinball(pred, truth, quantile))
+    estimate = jnp.quantile(pred, quantile, axis=0)
+    diff = truth - estimate
+    return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
 
 
-@partial(jax.jit, static_argnums=(2,))
-def _interval_score(pred: Array, truth: Array, alpha: float) -> Array:
-    """Jitted mean Winkler interval score for the central ``alpha`` interval."""
-    tail = (1.0 - alpha) / 2.0
-    lo = jnp.quantile(pred, tail, axis=0)
-    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    penalty = 2.0 / (1.0 - alpha)
-    below = penalty * (lo - truth) * (truth < lo)
-    above = penalty * (truth - hi) * (truth > hi)
-    return (hi - lo + below + above).mean()
-
-
+@partial(jax.jit, static_argnames=("alpha",))
 def eval_interval_score(
     pred: Float[Array, " sample *batch"],
     truth: Float[Array, " *batch"],
     *,
     alpha: float = 0.9,
-) -> float:
+) -> Array:
     r"""Mean Winkler interval score for the central ``alpha`` prediction interval.
 
     For the central ``alpha`` interval :math:`[l, u]` (the :math:`(1-\alpha)/2`
@@ -146,6 +132,7 @@ def eval_interval_score(
     :math:`(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y<l} + (y -
     u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
     intervals and penalizes ground truth falling outside them; lower is better.
+    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
 
     Parameters
     ----------
@@ -158,8 +145,8 @@ def eval_interval_score(
 
     Returns
     -------
-    float
-        The mean interval score.
+    Array
+        The mean interval score as a scalar array.
 
     Raises
     ------
@@ -169,7 +156,13 @@ def eval_interval_score(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    return float(_interval_score(pred, truth, alpha))
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    penalty = 2.0 / (1.0 - alpha)
+    below = penalty * (lo - truth) * (truth < lo)
+    above = penalty * (truth - hi) * (truth > hi)
+    return (hi - lo + below + above).mean()
 
 
 def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: int = 1) -> Metric:
@@ -178,8 +171,8 @@ def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: i
     MASE divides the forecast MAE (using the sample median as point estimate) by
     the in-sample MAE of the seasonal-naive forecast on ``train_data``,
     ``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
-    time; the returned metric has the standard ``(pred, truth) -> float``
-    signature.
+    time; the returned metric has the standard scalar-array signature (see
+    :data:`~numpyro_forecast.typing.Metric`).
 
     Parameters
     ----------
@@ -192,7 +185,7 @@ def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: i
     Returns
     -------
     Metric
-        A ``(pred, truth) -> float`` callable computing MASE.
+        A ``(pred, truth)`` callable computing MASE as a scalar array.
 
     Raises
     ------
@@ -220,8 +213,8 @@ def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: i
         )
         raise ValueError(msg)
 
-    def mase(pred: Array, truth: Array) -> float:
+    def mase(pred: Array, truth: Array) -> Array:
         mae = jnp.abs(jnp.median(pred, axis=0) - truth).mean()
-        return float(mae / scale)
+        return mae / scale
 
     return mase

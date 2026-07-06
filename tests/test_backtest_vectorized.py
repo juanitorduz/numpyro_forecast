@@ -10,6 +10,7 @@ guide runs without an ``UnexpectedTracerError``.
 import types
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from functools import partial
 
 import jax.numpy as jnp
 import numpyro
@@ -18,12 +19,18 @@ import pytest
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
+    DEFAULT_METRICS,
     VectorizedBacktestResult,
     _window_key_streams,
     backtest,
     backtest_vectorized,
+    eval_coverage,
 )
-from numpyro_forecast.exceptions import BacktestWindowError, VectorizedGuideError
+from numpyro_forecast.exceptions import (
+    BacktestWindowError,
+    VectorizedGuideError,
+    VectorizedMetricError,
+)
 from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.functional import fit_svi, forecast
 
@@ -378,3 +385,74 @@ def test_result_schema_and_dataframe_row_shape() -> None:
     # A vectorized run has no per-window walltimes or params.
     assert not any(c.startswith("train_metric_") or c.startswith("param_") for c in df.columns)
     assert "train_walltime" not in df.columns
+
+
+def test_custom_coverage_alpha_stays_vectorized() -> None:
+    """A partial-bound coverage level runs through the same fused vmapped scoring.
+
+    Regression for the PR #47 review finding: a custom ``metrics`` mapping used
+    to silently fall back to a per-window host loop, so a non-default coverage
+    alpha lost the single fused computation. Under the array-metric contract the
+    custom mapping is vmapped exactly like the default one.
+    """
+    duration = 50
+    data, cov = _series(duration)
+    metrics_50 = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}
+    vec_default = backtest_vectorized(
+        random.PRNGKey(5),
+        data,
+        cov,
+        _RandomWalk,
+        train_window=TRAIN,
+        test_window=TEST,
+        stride=5,
+        num_steps=50,
+        num_samples=100,
+        keep_predictions=True,
+    )
+    vec_50 = backtest_vectorized(
+        random.PRNGKey(5),
+        data,
+        cov,
+        _RandomWalk,
+        train_window=TRAIN,
+        test_window=TEST,
+        stride=5,
+        num_steps=50,
+        num_samples=100,
+        metrics=metrics_50,
+        keep_predictions=True,
+    )
+    # Same key, same fits: everything but the coverage level is identical.
+    for name in ("mae", "rmse", "crps"):
+        assert jnp.array_equal(vec_50.metrics[name], vec_default.metrics[name])
+    # Central quantile intervals are nested, so coverage is monotone in alpha.
+    assert bool(jnp.all(vec_50.metrics["coverage"] <= vec_default.metrics["coverage"]))
+    # The vectorized values match scoring each window's kept predictions directly.
+    assert vec_50.predictions is not None
+    for i in range(int(vec_50.t0.shape[0])):
+        t1, t2 = int(vec_50.t1[i]), int(vec_50.t2[i])
+        expected = eval_coverage(vec_50.predictions[i], data[t1:t2], alpha=0.5)
+        assert float(vec_50.metrics["coverage"][i]) == pytest.approx(float(expected))
+
+
+def test_host_metric_raises_actionable_error() -> None:
+    """A metric that forces a host conversion raises ``VectorizedMetricError``."""
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+
+    def host_mae(pred: Array, truth: Array) -> Array:
+        return jnp.asarray(float(jnp.abs(pred - truth).mean()))
+
+    with pytest.raises(VectorizedMetricError):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            data,
+            cov,
+            _RandomWalk,
+            train_window=TRAIN,
+            test_window=TEST,
+            num_steps=1,
+            num_samples=10,
+            metrics={"host_mae": host_mae},
+        )

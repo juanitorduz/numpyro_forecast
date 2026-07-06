@@ -1,5 +1,8 @@
 """Tests for the empirical CRPS implementation."""
 
+from functools import partial
+
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -184,3 +187,38 @@ def test_make_mase_rejects_short_train() -> None:
 def test_make_mase_rejects_constant_series() -> None:
     with pytest.raises(ValueError, match="scale is zero"):
         make_mase(jnp.ones((10, 1)), seasonality=1)
+
+
+# --- The array-metric contract: scalar-array returns, vmap composability -----
+
+
+def test_metrics_return_scalar_arrays() -> None:
+    """Every metric returns a 0-d array (host floats only at result boundaries)."""
+    pred = random.normal(random.PRNGKey(0), (100, 6, 1))
+    truth = random.normal(random.PRNGKey(1), (6, 1))
+    mase = make_mase(jnp.arange(10.0)[:, None], seasonality=1)
+    for value in (
+        eval_pinball(pred, truth, quantile=0.3),
+        eval_interval_score(pred, truth, alpha=0.8),
+        mase(pred, truth),
+    ):
+        assert value.shape == ()
+
+
+def test_metrics_are_vmappable() -> None:
+    """Metrics are pure JAX functions: vmapping over a leading axis works.
+
+    This is the property ``backtest_vectorized`` relies on to score every
+    window in one fused computation, including partial-bound variants.
+    """
+    pred = random.normal(random.PRNGKey(0), (4, 100, 6, 1))
+    truth = random.normal(random.PRNGKey(1), (4, 6, 1))
+    mase = make_mase(jnp.arange(10.0)[:, None], seasonality=1)
+    for metric in (
+        partial(eval_pinball, quantile=0.3),
+        partial(eval_interval_score, alpha=0.8),
+        mase,
+    ):
+        values = jax.vmap(metric)(pred, truth)
+        assert values.shape == (4,)
+        assert bool(jnp.all(jnp.isfinite(values)))

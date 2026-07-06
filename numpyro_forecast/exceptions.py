@@ -45,6 +45,22 @@ class VectorizedGuideError(NumpyroForecastError, ValueError):
     )
 
 
+class VectorizedMetricError(NumpyroForecastError, TypeError):
+    """A metric is not vmappable in the vectorized backtest.
+
+    Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when a
+    metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
+    under ``vmap``. Metrics must be pure JAX functions returning a scalar
+    array; see :data:`~numpyro_forecast.typing.Metric`.
+    """
+
+    default_message = (
+        "backtest_vectorized metrics must be pure JAX functions returning a scalar "
+        "array; one forced a host conversion (e.g. float(...) or numpy) under vmap. "
+        "Use backtest(), or keep_predictions=True and score on the host."
+    )
+
+
 class OptimizerResolutionError(NumpyroForecastError, TypeError):
     """An optimizer specification could not be resolved.
 

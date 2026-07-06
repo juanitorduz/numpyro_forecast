@@ -20,7 +20,11 @@ from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
 
-from numpyro_forecast.exceptions import BacktestWindowError, VectorizedGuideError
+from numpyro_forecast.exceptions import (
+    BacktestWindowError,
+    VectorizedGuideError,
+    VectorizedMetricError,
+)
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.functional import resolve_guide, resolve_optimizer
 from numpyro_forecast.metrics import crps_empirical
@@ -33,40 +37,16 @@ if TYPE_CHECKING:
     from numpyro_forecast.typing import GuideLike, OptimizerLike
 
 
-@jax.jit
-def _mae(pred: Array, truth: Array) -> Array:
-    """Jitted scalar MAE kernel (sample median as point estimate)."""
-    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
-
-
-@jax.jit
-def _rmse(pred: Array, truth: Array) -> Array:
-    """Jitted scalar RMSE kernel (sample mean as point estimate)."""
-    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
-
-
-@jax.jit
-def _crps(pred: Array, truth: Array) -> Array:
-    """Jitted scalar mean-CRPS kernel."""
-    return crps_empirical(pred, truth).mean()
-
-
 _DEFAULT_COVERAGE_ALPHA = 0.9
 """Default nominal level for the central coverage interval."""
 
 
-@partial(jax.jit, static_argnums=(2,))
-def _coverage(pred: Array, truth: Array, alpha: float) -> Array:
-    """Jitted scalar coverage kernel for the central ``alpha`` interval."""
-    tail = (1.0 - alpha) / 2.0
-    lo = jnp.quantile(pred, tail, axis=0)
-    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    return ((truth >= lo) & (truth <= hi)).mean()
-
-
-def eval_mae(pred: Array, truth: Array) -> float:
+@jax.jit
+def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
+    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
     Parameters
     ----------
     pred
@@ -76,15 +56,18 @@ def eval_mae(pred: Array, truth: Array) -> float:
 
     Returns
     -------
-    float
-        The mean absolute error.
+    Array
+        The mean absolute error as a scalar array.
     """
-    return float(_mae(pred, truth))
+    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
 
 
-def eval_rmse(pred: Array, truth: Array) -> float:
+@jax.jit
+def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
+    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
     Parameters
     ----------
     pred
@@ -94,15 +77,18 @@ def eval_rmse(pred: Array, truth: Array) -> float:
 
     Returns
     -------
-    float
-        The root mean squared error.
+    Array
+        The root mean squared error as a scalar array.
     """
-    return float(_rmse(pred, truth))
+    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
 
 
-def eval_crps(pred: Array, truth: Array) -> float:
+@jax.jit
+def eval_crps(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
     """Empirical CRPS averaged over all data elements.
 
+    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
     Parameters
     ----------
     pred
@@ -112,19 +98,27 @@ def eval_crps(pred: Array, truth: Array) -> float:
 
     Returns
     -------
-    float
-        The mean empirical CRPS.
+    Array
+        The mean empirical CRPS as a scalar array.
     """
-    return float(_crps(pred, truth))
+    return crps_empirical(pred, truth).mean()
 
 
-def eval_coverage(pred: Array, truth: Array, *, alpha: float = _DEFAULT_COVERAGE_ALPHA) -> float:
+@partial(jax.jit, static_argnames=("alpha",))
+def eval_coverage(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+    *,
+    alpha: float = _DEFAULT_COVERAGE_ALPHA,
+) -> Array:
     """Empirical coverage of the central ``alpha`` prediction interval.
 
     The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
     ``1 - (1 - alpha) / 2`` quantiles of the forecast samples; the metric is the
     fraction of ground-truth values that fall inside it. A well-calibrated
-    forecast has coverage close to ``alpha``.
+    forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
+    :data:`~numpyro_forecast.typing.Metric`); bind a non-default level with
+    ``functools.partial(eval_coverage, alpha=...)``.
 
     Parameters
     ----------
@@ -133,15 +127,26 @@ def eval_coverage(pred: Array, truth: Array, *, alpha: float = _DEFAULT_COVERAGE
     truth
         Ground-truth values (matching ``pred`` without the sample axis).
     alpha
-        Nominal interval level in ``(0, 1)``; when omitted, uses the module
-        default ``_DEFAULT_COVERAGE_ALPHA``.
+        Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
 
     Returns
     -------
-    float
-        The fraction of ground-truth values inside the central ``alpha`` interval.
+    Array
+        The fraction of ground truth inside the central ``alpha`` interval, as
+        a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``alpha`` is not strictly inside ``(0, 1)``.
     """
-    return float(_coverage(pred, truth, alpha))
+    if not 0.0 < alpha < 1.0:
+        msg = f"alpha must be in (0, 1), got {alpha}"
+        raise ValueError(msg)
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    return ((truth >= lo) & (truth <= hi)).mean()
 
 
 DEFAULT_METRICS: dict[str, Metric] = {
@@ -150,7 +155,7 @@ DEFAULT_METRICS: dict[str, Metric] = {
     "crps": eval_crps,
     "coverage": eval_coverage,
 }
-"""Default metrics used by :func:`backtest`."""
+"""Default metrics used by :func:`backtest` and :func:`backtest_vectorized`."""
 
 
 def evaluate_forecast(
@@ -162,9 +167,9 @@ def evaluate_forecast(
     """Evaluate forecast samples against ground truth for several metrics at once.
 
     A one-call convenience that applies each metric in ``metrics`` to the same
-    forecast samples and ground truth. It is the one-shot counterpart to
-    :func:`backtest` and is also used internally by :func:`backtest` to score
-    each rolling window.
+    forecast samples and ground truth, converting to host floats at the end. It
+    is the one-shot counterpart to :func:`backtest` and is also used internally
+    by :func:`backtest` to score each rolling window.
 
     Metric-specific parameters live with the metric in the ``metrics`` mapping,
     not on this function. To tune a metric, bind its keyword with
@@ -184,29 +189,22 @@ def evaluate_forecast(
     metrics
         Mapping of metric name to function; when ``None`` defaults to
         :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-        Each function takes ``(pred, truth)`` and returns a float; bind any extra
-        parameters with :func:`functools.partial` (see above).
+        Each function takes ``(pred, truth)`` and returns a scalar array (see
+        :data:`~numpyro_forecast.typing.Metric`); bind any extra parameters
+        with :func:`functools.partial` (see above).
 
     Returns
     -------
     dict[str, float]
         Each metric name mapped to its value.
     """
-    if metrics is None or metrics is DEFAULT_METRICS:
-        # Default path: evaluate the four jitted kernels, then pull the whole
-        # batch across the device boundary in a single host transfer instead of
-        # one ``float(...)`` sync per metric.
-        stacked = jnp.stack(
-            [
-                _mae(pred, truth),
-                _rmse(pred, truth),
-                _crps(pred, truth),
-                _coverage(pred, truth, _DEFAULT_COVERAGE_ALPHA),
-            ]
-        )
-        mae, rmse, crps, coverage = stacked.tolist()
-        return {"mae": mae, "rmse": rmse, "crps": crps, "coverage": coverage}
-    return {name: fn(pred, truth) for name, fn in metrics.items()}
+    metrics = DEFAULT_METRICS if metrics is None else metrics
+    if not metrics:
+        return {}
+    # Evaluate every metric kernel, then pull the whole batch across the device
+    # boundary in a single host transfer instead of one sync per metric.
+    stacked = jnp.stack([fn(pred, truth) for fn in metrics.values()])
+    return dict(zip(metrics, stacked.tolist(), strict=True))
 
 
 @dataclass(frozen=True)
@@ -659,8 +657,9 @@ def backtest(
         Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
     metrics
         Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
-        Each function takes ``(pred, truth)`` and returns a float; bind any
-        metric-specific parameters with :func:`functools.partial`, e.g.
+        Each function takes ``(pred, truth)`` and returns a scalar array (see
+        :data:`~numpyro_forecast.typing.Metric`); bind any metric-specific
+        parameters with :func:`functools.partial`, e.g.
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
     per_window_metrics
         Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
@@ -816,25 +815,15 @@ def _vmapped_metrics(
 ) -> dict[str, Array]:
     """Score every window at once, returning ``name -> (num_windows,)`` arrays.
 
-    The default metric set maps to its jitted array kernels vmapped over the
-    window axis (one device→host transfer deferred to the caller). Any other
-    metric mapping falls back to scoring each window through
-    :func:`evaluate_forecast` (host floats), mirroring its dual-path design.
+    Metrics are pure JAX scalar kernels (see
+    :data:`~numpyro_forecast.typing.Metric`), so any mapping, default or
+    custom, is scored by one ``vmap`` per metric over the leading window axis;
+    the single device-to-host transfer is deferred to the caller.
     """
-    if metrics is DEFAULT_METRICS:
-        kernels: dict[str, Callable[[Array, Array], Array]] = {
-            "mae": _mae,
-            "rmse": _rmse,
-            "crps": _crps,
-            "coverage": lambda pred, tr: _coverage(pred, tr, _DEFAULT_COVERAGE_ALPHA),
-        }
-        return {name: jax.vmap(kern)(predictions, truth) for name, kern in kernels.items()}
-    num_windows = int(predictions.shape[0])
-    scored = [
-        evaluate_forecast(predictions[i], truth[i], metrics=metrics) for i in range(num_windows)
-    ]
-    names = list(scored[0]) if scored else list(metrics)
-    return {name: jnp.asarray([row[name] for row in scored]) for name in names}
+    try:
+        return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
+    except (jax.errors.ConcretizationTypeError, jax.errors.TracerArrayConversionError) as err:
+        raise VectorizedMetricError() from err
 
 
 def _window_key_streams(rng_key: Array, num_windows: int) -> tuple[Array, Array, Array]:
@@ -920,6 +909,12 @@ def backtest_vectorized(
         Number of forecast samples drawn per window.
     metrics
         Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+        Each metric is vmapped over the window axis, so any pure-JAX mapping,
+        including partial-bound variants such as
+        ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
+        is scored inside the single fused computation. Host-side metrics are
+        unsupported here; use :func:`backtest`, or ``keep_predictions=True``
+        and score on the host.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 
@@ -937,6 +932,9 @@ def backtest_vectorized(
         there is no room for a single window.
     VectorizedGuideError
         If the resolved guide is not an ``AutoGuide``.
+    VectorizedMetricError
+        If a metric forces a host conversion under ``vmap`` (it is not a pure
+        JAX function).
     """
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"

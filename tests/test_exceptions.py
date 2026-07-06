@@ -12,6 +12,7 @@ from numpyro_forecast.exceptions import (
     NumpyroForecastError,
     OptimizerResolutionError,
     VectorizedGuideError,
+    VectorizedMetricError,
 )
 
 
@@ -20,6 +21,7 @@ from numpyro_forecast.exceptions import (
     [
         (BacktestWindowError, ValueError),
         (VectorizedGuideError, ValueError),
+        (VectorizedMetricError, TypeError),
         (OptimizerResolutionError, TypeError),
         (GuideResolutionError, TypeError),
         (GuideSampleArgsError, ValueError),
@@ -40,6 +42,7 @@ def test_exception_subclasses_base_and_builtin(
     "exc_cls",
     [
         VectorizedGuideError,
+        VectorizedMetricError,
         OptimizerResolutionError,
         GuideResolutionError,
         GuideSampleArgsError,

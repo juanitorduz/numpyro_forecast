@@ -119,12 +119,12 @@ def test_eval_rmse_uses_mean() -> None:
     assert eval_rmse(pred, truth) == 2.0
 
 
-def test_eval_crps_returns_float() -> None:
+def test_eval_crps_returns_scalar_array() -> None:
     pred = random.normal(random.PRNGKey(0), (50, 4))
     truth = random.normal(random.PRNGKey(1), (4,))
     value = eval_crps(pred, truth)
-    assert isinstance(value, float)
-    assert value >= 0.0
+    assert value.shape == ()
+    assert float(value) >= 0.0
 
 
 def test_eval_coverage_perfect_and_zero() -> None:
@@ -135,12 +135,18 @@ def test_eval_coverage_perfect_and_zero() -> None:
     assert eval_coverage(pred, jnp.array([100.0])) == 0.0
 
 
-def test_eval_coverage_returns_float() -> None:
+def test_eval_coverage_returns_scalar_array() -> None:
     pred = random.normal(random.PRNGKey(0), (200, 4))
     truth = random.normal(random.PRNGKey(1), (4,))
     value = eval_coverage(pred, truth, alpha=0.8)
-    assert isinstance(value, float)
-    assert 0.0 <= value <= 1.0
+    assert value.shape == ()
+    assert 0.0 <= float(value) <= 1.0
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1, 1.5])
+def test_eval_coverage_rejects_out_of_range_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match=r"alpha must be in"):
+        eval_coverage(jnp.zeros((5, 2)), jnp.zeros((2,)), alpha=alpha)
 
 
 def test_default_metrics_keys() -> None:

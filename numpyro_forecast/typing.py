@@ -57,8 +57,19 @@ rng-key-first convention. Consumed by
 :class:`~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
 """
 
-Metric = Callable[[Array, Array], float]
-"""A metric maps ``(pred, truth)`` forecast/ground-truth arrays to a scalar."""
+Metric = Callable[[Array, Array], Array]
+"""A metric maps ``(pred, truth)`` forecast samples and ground truth to a scalar array.
+
+``pred`` has the sample axis first, shape ``(sample, *batch)``; ``truth`` has
+shape ``(*batch)``; the result is a 0-d array. Metrics must be pure JAX
+functions (jit- and vmap-compatible): host floats appear only at result
+boundaries (:func:`~numpyro_forecast.evaluate.evaluate_forecast`,
+:class:`~numpyro_forecast.evaluate.BacktestResult`), never inside metrics, so
+:func:`~numpyro_forecast.evaluate.backtest_vectorized` can vmap any metric over
+the window axis. Parametrize by closure: ``functools.partial`` for keywords
+(e.g. ``partial(eval_coverage, alpha=0.5)``) or a factory like
+:func:`~numpyro_forecast.metrics.make_mase`.
+"""
 
 ForecastModel = Callable[..., None]
 """A NumPyro forecasting model callable ``(covariates, data=None) -> None``.
