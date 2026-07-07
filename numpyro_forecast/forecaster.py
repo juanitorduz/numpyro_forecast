@@ -519,6 +519,10 @@ class PathfinderForecaster(_BaseForecaster):
         L-BFGS path.
     ftol
         L-BFGS relative function-value tolerance (convergence criterion).
+    maxiter
+        Maximum number of L-BFGS iterations (see
+        :func:`~numpyro_forecast.contrib.blackjax.fit_pathfinder`; models with
+        per-step time latents typically need far more than the default ``30``).
     """
 
     def __init__(
@@ -530,6 +534,7 @@ class PathfinderForecaster(_BaseForecaster):
         *,
         num_elbo_samples: int = 200,
         ftol: float = 1e-5,
+        maxiter: int = 30,
     ) -> None:
         super().__init__(model, data.shape[-2])
         # Lazy import: registers the PathfinderFit draw dispatch and defers the
@@ -543,6 +548,7 @@ class PathfinderForecaster(_BaseForecaster):
             covariates,
             num_elbo_samples=num_elbo_samples,
             ftol=ftol,
+            maxiter=maxiter,
         )
         self.elbo: float = self._fit.elbo
 

@@ -14,11 +14,13 @@ kernels run one blackjax step per NumPyro sampling step; adaptation happens once
 :func:`numpyro_forecast.functional.mcmc._validate_kernel_run_config`).
 """
 
+import importlib
 from collections import namedtuple
 from dataclasses import dataclass
 from typing import Any, cast
 
 import jax
+import jax.numpy as jnp
 from jax import random
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
@@ -361,6 +363,84 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
         return cast("tuple[Any, Any]", result)
 
 
+def _stable_bfgs_sample(
+    rng_key: Array,
+    num_samples: int | tuple[int, ...],
+    position: Array,
+    grad_position: Array,
+    alpha: Array,
+    beta: Array,
+    gamma: Array,
+) -> tuple[Array, Array]:
+    """Numerically stable drop-in for blackjax's ``bfgs_sample``.
+
+    Implements Algorithm 4 of Zhang et al. (2022), like the upstream function, but
+    computes the log determinant as ``sum(log(alpha))`` plus twice the log diagonal
+    of the Cholesky factor. Upstream (blackjax <= 1.5) uses
+    ``log(prod(alpha)) + 2 * log(det(L))``, whose product/determinant underflow to
+    ``0`` once the problem has more than a few hundred dimensions, collapsing every
+    ELBO estimate to ``-inf`` and the approximation's log density to ``+inf``.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for the draws.
+    num_samples
+        Number of samples (or a shape tuple of sample axes).
+    position
+        Flattened current position on the L-BFGS path.
+    grad_position
+        Gradient of the target log density at ``position``.
+    alpha
+        Diagonal factor of the inverse-Hessian estimate.
+    beta
+        Low-rank factor of the inverse-Hessian estimate.
+    gamma
+        Core matrix of the low-rank factor.
+
+    Returns
+    -------
+    tuple
+        ``(samples, log_density)`` of the local normal approximation.
+    """
+    if not isinstance(num_samples, tuple):
+        num_samples = (num_samples,)
+
+    q_mat, r_mat = jnp.linalg.qr(jnp.diag(jnp.sqrt(1 / alpha)) @ beta)
+    param_dims = beta.shape[0]
+    identity_mat = jnp.identity(r_mat.shape[0])
+    chol = jnp.linalg.cholesky(identity_mat + r_mat @ gamma @ r_mat.T)
+
+    logdet = jnp.sum(jnp.log(alpha)) + 2 * jnp.sum(jnp.log(jnp.diagonal(chol)))
+    mu = position + jnp.diag(alpha) @ grad_position + beta @ gamma @ beta.T @ grad_position
+
+    u = jax.random.normal(rng_key, (*num_samples, param_dims, 1))
+    phi = mu[..., None] + jnp.diag(jnp.sqrt(alpha)) @ (
+        q_mat @ (chol - identity_mat) @ (q_mat.T @ u) + u
+    )
+
+    logdensity = -0.5 * (
+        logdet + jnp.einsum("...ji,...ji->...", u, u) + param_dims * jnp.log(2.0 * jnp.pi)
+    )
+    return phi[..., 0], logdensity
+
+
+def _ensure_stable_bfgs_sample() -> None:
+    """Swap blackjax's ``bfgs_sample`` for :func:`_stable_bfgs_sample` (idempotent).
+
+    ``blackjax.vi.pathfinder.approximate`` scores every point on the L-BFGS path
+    with an ELBO estimate built on ``bfgs_sample``; the upstream log-determinant
+    underflow (see :func:`_stable_bfgs_sample`) makes those estimates ``-inf``
+    for any model beyond a few hundred parameters, so Pathfinder silently returns
+    a garbage state. Until the fix lands upstream, the pathfinder entry points in
+    this module patch both namespaces that hold the symbol before running.
+    """
+    lbfgs_module = importlib.import_module("blackjax.optimizers.lbfgs")
+    pathfinder_module = importlib.import_module("blackjax.vi.pathfinder")
+    lbfgs_module.bfgs_sample = _stable_bfgs_sample  # ty: ignore[invalid-assignment]
+    pathfinder_module.bfgs_sample = _stable_bfgs_sample  # ty: ignore[invalid-assignment]
+
+
 @dataclass(frozen=True)
 class PathfinderFit:
     """The result of fitting a forecasting model with BlackJAX Pathfinder.
@@ -399,6 +479,7 @@ def fit_pathfinder(
     *,
     num_elbo_samples: int = 200,
     ftol: float = 1e-5,
+    maxiter: int = 30,
 ) -> PathfinderFit:
     """Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -420,13 +501,26 @@ def fit_pathfinder(
         L-BFGS optimization path.
     ftol
         L-BFGS relative function-value tolerance (convergence criterion).
+    maxiter
+        Maximum number of L-BFGS iterations (blackjax's default is ``30``).
+        Models with per-step time latents typically need far more: the default
+        suits tens of parameters, while a few hundred parameters (e.g. a
+        400-step random walk) converge around ``1_000``.
 
     Returns
     -------
     PathfinderFit
         The fitted variational approximation.
+
+    Notes
+    -----
+    Runs with :func:`_stable_bfgs_sample` patched into blackjax (via
+    :func:`_ensure_stable_bfgs_sample`): upstream's ``bfgs_sample`` underflows its
+    log-determinant beyond a few hundred parameters, which floors every path ELBO
+    at ``-inf`` and makes the returned state garbage.
     """
     blackjax = require("blackjax", extra="blackjax")
+    _ensure_stable_bfgs_sample()
     init_key, approx_key = random.split(rng_key)
     param_info, potential_fn_gen, _postprocess_fn, _ = initialize_model(
         init_key,
@@ -445,6 +539,7 @@ def fit_pathfinder(
         param_info.z,
         num_samples=num_elbo_samples,
         ftol=ftol,
+        maxiter=maxiter,
     )
     return PathfinderFit(
         state=state,
@@ -459,6 +554,7 @@ def fit_pathfinder(
 def _(fit: PathfinderFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
+    _ensure_stable_bfgs_sample()
     # Split so the discarded init draws and the pathfinder draws use distinct
     # streams (the init param draws are unused, but keep the streams isolated).
     key_init, key_sample = random.split(rng_key)
