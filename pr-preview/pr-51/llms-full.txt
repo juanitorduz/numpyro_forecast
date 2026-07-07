@@ -1,0 +1,1650 @@
+----------------------------------------------------------------------
+This is the API documentation for the numpyro_forecast library.
+----------------------------------------------------------------------
+
+
+## Forecasters
+
+High-level interfaces for fitting and forecasting.
+
+
+Forecaster(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, guide: 'GuideLike' = None, optim: 'OptimizerLike' = None, num_steps: int = 1001, num_particles: int = 1, progress_bar: bool = False, stable_update: bool = False) -> None
+
+Fit a forecasting model with stochastic variational inference.
+
+Parameters
+----------
+rng_key
+    PRNG key for inference.
+model
+    The forecasting model to fit (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+guide
+    Guide specification resolved by
+    :func:`~numpyro_forecast.functional.svi.resolve_guide`: ``None``
+    (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
+    ``functools.partial`` factory of one, or a hand-written guide function.
+optim
+    Optimizer specification resolved by
+    :func:`~numpyro_forecast.functional.svi.resolve_optimizer`: ``None``
+    (``Adam(0.01)``), a positive scalar learning rate, an
+    ``optax.GradientTransformation``, or a ``_NumPyroOptim``.
+num_steps
+    Number of SVI steps.
+num_particles
+    Number of ELBO particles.
+progress_bar
+    Whether to display the SVI progress bar.
+stable_update
+    Whether SVI skips non-finite parameter updates.
+
+HMCForecaster(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, kernel: 'KernelLike' = None, kernel_kwargs: collections.abc.Mapping[str, Any] | None = None, num_warmup: int = 1000, num_samples: int = 1000, num_chains: int = 1, chain_method: str = 'sequential', progress_bar: bool = False) -> None
+
+Fit a forecasting model with MCMC (NUTS by default).
+
+Parameters
+----------
+rng_key
+    PRNG key for inference.
+model
+    The forecasting model to fit (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+kernel
+    Kernel specification resolved by
+    :func:`~numpyro_forecast.functional.mcmc.resolve_kernel`: ``None`` (``NUTS``),
+    an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
+kernel_kwargs
+    Extra keyword arguments for the kernel constructor (only with ``None``
+    or a kernel class).
+num_warmup
+    Number of warmup steps.
+num_samples
+    Number of posterior samples.
+num_chains
+    Number of MCMC chains.
+chain_method
+    NumPyro chain method (``"sequential"``/``"parallel"``/``"vectorized"``).
+progress_bar
+    Whether to display the MCMC progress bar.
+
+PathfinderForecaster(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05) -> None
+
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
+A thin shim over :func:`numpyro_forecast.contrib.blackjax.fit_pathfinder`.
+BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``)
+imported lazily here, so constructing this class is the opt-in that pulls it
+in; importing :mod:`numpyro_forecast` never does. The
+constructor mirrors :class:`Forecaster` without ``guide``/``optim`` (Pathfinder
+has neither) and adds ``num_elbo_samples``/``ftol``.
+
+Parameters
+----------
+rng_key
+    PRNG key for inference.
+model
+    The forecasting model to fit (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+num_elbo_samples
+    Number of Monte Carlo samples used to estimate the ELBO along the
+    L-BFGS path.
+ftol
+    L-BFGS relative function-value tolerance (convergence criterion).
+
+
+## Models
+
+Building forecasting models (object-oriented and functional).
+
+
+ForecastingModel() -> None
+
+Abstract base class for forecasting models.
+
+Subclasses implement :meth:`model`, which must call :meth:`predict` exactly
+once. The instance itself is the (pure) NumPyro model function with signature
+``model_instance(covariates, data=None)``: the forecast horizon is inferred
+from the shapes (``future = covariates.shape[-2] - data.shape[-2]``).
+
+This is the object-oriented façade over the functional API: :meth:`time_series`
+and :meth:`predict` delegate to the free functions in
+:mod:`numpyro_forecast.functional`, passing the current
+:class:`~numpyro_forecast.functional.models.Horizon`.
+
+forecasting_model(model_fn: collections.abc.Callable[[numpyro_forecast.functional.models.Horizon, jax.Array], None]) -> collections.abc.Callable[..., None]
+
+Build a NumPyro model from a functional model body.
+
+The functional analogue of subclassing
+:class:`~numpyro_forecast.forecaster.ForecastingModel`. ``model_fn`` is a
+pure function ``(Horizon, covariates) -> None`` that calls :func:`time_series`
+and :func:`predict`; this wraps it into the standard NumPyro model callable
+``(covariates, data=None)``, deriving the :class:`Horizon` from the shapes.
+
+Parameters
+----------
+model_fn
+    The model body. It receives the per-call :class:`Horizon` (use
+    ``h.zero_data`` for the Pyro-style ``zero_data``) and the covariates with
+    time at axis ``-2``.
+
+Returns
+-------
+ForecastModel
+    A callable ``(covariates, data=None) -> None`` usable with ``SVI``,
+    ``MCMC``, ``Predictive``, :func:`~numpyro_forecast.functional.svi.fit_svi`,
+    :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`, and the OOP forecaster
+    classes.
+
+
+## Functional core: model primitives
+
+Pure functional primitives for the train/forecast split.
+
+
+Horizon(data: jax.Array | None, t_obs: int, future: int, duration: int) -> None
+
+The train/forecast split for a single model call.
+
+Replaces the mutable ``self._*`` state of the OOP base class with an
+immutable value derived from the covariate and data shapes via
+:meth:`from_data`. The functional primitives (:func:`time_series`,
+:func:`predict`) take it as their first argument.
+
+Attributes
+----------
+data
+    Observed in-sample data with time at axis ``-2`` (``None`` during pure
+    prior sampling).
+t_obs
+    Number of observed (in-sample) time steps ``t``.
+future
+    Number of forecast time steps ``f`` (``0`` while training).
+duration
+    Total horizon length ``t + future`` (in time steps).
+
+time_series(h: numpyro_forecast.functional.models.Horizon, name: str, dist_fn: collections.abc.Callable[[], numpyro.distributions.distribution.Distribution], *, reparam: numpyro.infer.reparam.Reparam | None = None) -> jax.Array
+
+Sample a time-varying latent over the full horizon.
+
+The in-sample portion is sampled under ``plate("time", t)`` with the fixed
+site ``name``; when forecasting, the horizon portion is sampled under a
+separate site ``f"{name}_future"`` and concatenated. The separate site keeps
+the guide shape fixed and lets ``Predictive`` draw the forecast suffix from
+the prior.
+
+Parameters
+----------
+h
+    The horizon for the current model call (see :class:`Horizon`).
+name
+    Base sample-site name for the in-sample latent.
+dist_fn
+    Zero-argument callable returning the per-step prior distribution.
+reparam
+    Optional reparameterization (e.g. ``LocScaleReparam``) applied to both
+    the in-sample and forecast sites.
+
+Returns
+-------
+Array
+    The latent over the full horizon with time at axis ``-2``.
+
+markov_time_series(h: numpyro_forecast.functional.models.Horizon, name: str, init_carry: Any, transition: collections.abc.Callable[[typing.Any, jax.Array | None], tuple[numpyro.distributions.distribution.Distribution, collections.abc.Callable[[jax.Array], typing.Any]]], xs: jax.Array | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
+
+Sample a Markov (state-space) latent over the full horizon.
+
+In-sample steps run in a ``numpyro.contrib.control_flow.scan`` with site
+``name``; when forecasting, horizon steps run in a second scan with site
+``f"{name}_future"`` **seeded by the final in-sample carry**. The guide
+never sees the future site (same invariant as :func:`time_series`), and
+under posterior replay the carry is a deterministic function of the replayed
+draws, so the forecast is conditioned through the state.
+
+Parameters
+----------
+h
+    The horizon for the current model call (see :class:`Horizon`).
+name
+    Base sample-site name for the in-sample latent scan.
+init_carry
+    Initial carry passed to the first transition.
+transition
+    Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
+    owns the ``numpyro.sample`` statement.
+xs
+    Optional exogenous inputs over the full horizon with time at axis ``-2``,
+    moved into scan layout internally; ``None`` for autonomous dynamics.
+plates
+    ``(name, size)`` pairs opened **inside** the scan body around the sample
+    statement (the only placement NumPyro supports for scan + plate).
+reparam_config
+    Site-name -> :class:`~numpyro.infer.reparam.Reparam` mapping applied
+    **inside** the scan body.
+
+Returns
+-------
+Array
+    The latent over the full horizon in package layout
+    ``(*plate_batch, duration, obs)``.
+
+Raises
+------
+ValueError
+    If forecasting without observed data, if the per-step shape lacks the
+    observation dimension, or if an enclosing plate is detected.
+
+predict(h: numpyro_forecast.functional.models.Horizon, noise_dist: numpyro.distributions.distribution.Distribution, prediction: jax.Array) -> None
+
+Register the observation/forecast sites for the model.
+
+``noise_dist`` is a zero-centered observation noise distribution and
+``prediction`` the deterministic mean over the full horizon. While training
+the residual is observed; while forecasting the in-sample prefix is observed
+and the forecast suffix is sampled and exposed as the ``"forecast"``
+deterministic site. A thin wrapper over :func:`predict_glm` with the
+location-shift link ``lambda mu: shift_loc(noise_dist, mu)``.
+
+Parameters
+----------
+h
+    The horizon for the current model call (see :class:`Horizon`).
+noise_dist
+    Zero-centered observation noise (e.g. ``Normal(0, sigma)``).
+prediction
+    Deterministic mean with time at axis ``-2``, shape
+    ``(*batch, duration, obs)``.
+
+Raises
+------
+RuntimeError
+    If forecasting (``future > 0``) but no observed data is available.
+
+predict_glm(h: numpyro_forecast.functional.models.Horizon, obs_dist_fn: collections.abc.Callable[[jax.Array], numpyro.distributions.distribution.Distribution], latent: jax.Array) -> None
+
+Register GLM-style observation/forecast sites from a latent predictor.
+
+The generalized-linear counterpart of :func:`predict`: instead of a
+zero-centered noise distribution shifted by a mean, the caller supplies a link
+``obs_dist_fn`` that maps the full-horizon ``latent`` predictor to the
+observation distribution directly (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
+The prefix/suffix mirroring is identical to :func:`predict`: while training the
+observation is observed; while forecasting the in-sample prefix is observed and
+the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
+site. The observation distribution must support time-axis surgery
+(:func:`~numpyro_forecast.surgery.slice_time` /
+:func:`~numpyro_forecast.surgery.prefix_condition`), i.e. an elementwise family.
+
+Parameters
+----------
+h
+    The horizon for the current model call (see :class:`Horizon`).
+obs_dist_fn
+    Link mapping the full-horizon ``latent`` to the observation distribution
+    (time at axis ``-2``, shape ``(*batch, duration, obs)``).
+latent
+    The deterministic latent predictor over the full horizon, time at axis
+    ``-2``.
+
+Raises
+------
+RuntimeError
+    If forecasting (``future > 0``) but no observed data is available.
+ValueError
+    If the observation distribution has discrete support but ``h.data`` is
+    not integer-dtyped (the usual mistake for count models).
+
+
+## Functional core: fitting
+
+Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
+
+
+resolve_optimizer(optim: 'OptimizerLike') -> numpyro.optim._NumPyroOptim
+
+Normalize an optimizer specification into a NumPyro optimizer.
+
+Accepted forms: ``None`` (``Adam(0.01)``); a finite positive scalar learning
+rate (``float``/``int``/NumPy scalar/0-d array) giving ``Adam(lr)``; an
+``optax.GradientTransformation`` (wrapped via
+``numpyro.optim.optax_to_numpyro``, imported lazily so optax stays a soft
+dependency); a ``_NumPyroOptim`` (returned unchanged).
+
+Parameters
+----------
+optim
+    The optimizer specification (see :data:`~numpyro_forecast.typing.OptimizerLike`).
+
+Returns
+-------
+_NumPyroOptim
+    The resolved NumPyro optimizer.
+
+Raises
+------
+OptimizerResolutionError
+    For boolean inputs of any form, including 0-d boolean arrays (``bool`` is
+    an ``int`` subclass, so a bool would silently mean ``Adam(1.0)``), and for
+    any other unrecognized type; the message lists the accepted forms.
+ValueError
+    For a non-finite or non-positive learning rate.
+
+resolve_guide(guide: 'GuideLike', model: collections.abc.Callable[..., None]) -> 'AutoGuide | Callable[..., None]'
+
+Normalize a guide specification against ``model``.
+
+Resolution: ``None`` -> ``AutoNormal(model)``; an ``AutoGuide`` instance ->
+returned unchanged; an ``AutoGuide`` subclass or a ``functools.partial`` of
+one -> called with ``model``; any other callable -> a hand-written guide,
+after :func:`_probe_handwritten_guide`. Anything else ->
+:class:`GuideResolutionError`.
+
+Parameters
+----------
+guide
+    The guide specification (see :data:`~numpyro_forecast.typing.GuideLike`).
+model
+    The model the guide is built against.
+
+Returns
+-------
+AutoGuide | Callable[..., None]
+    The resolved guide.
+
+Raises
+------
+GuideResolutionError
+    If ``guide`` is neither an ``AutoGuide`` (instance/subclass/partial) nor
+    a callable, or if it has the mistyped-factory shape.
+
+fit_svi(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, guide: 'GuideLike' = None, optim: 'OptimizerLike' = None, num_steps: int = 1001, num_particles: int = 1, progress_bar: bool = False, stable_update: bool = False) -> numpyro_forecast.functional.svi.SVIFit
+
+Fit a forecasting model with stochastic variational inference.
+
+PRNG: consumes ``rng_key`` once for the SVI run; nothing is retained.
+
+Parameters
+----------
+rng_key
+    PRNG key for inference.
+model
+    The forecasting model callable (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+guide
+    Guide specification resolved by :func:`resolve_guide`: ``None``
+    (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or
+    ``functools.partial`` factory of one, or a hand-written guide function.
+optim
+    Optimizer specification resolved by :func:`resolve_optimizer`: ``None``
+    (``Adam(0.01)``), a positive scalar learning rate, an
+    ``optax.GradientTransformation``, or a ``_NumPyroOptim``. For example, a
+    cosine-decayed, gradient-clipped Adam::
+
+        import optax
+
+        schedule = optax.cosine_decay_schedule(1e-2, decay_steps=1_000)
+        optim = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
+
+num_steps
+    Number of SVI steps.
+num_particles
+    Number of ELBO particles.
+progress_bar
+    Whether to display the SVI progress bar.
+stable_update
+    Whether SVI skips parameter updates whose new value is non-finite
+    (NumPyro's ``stable_update``).
+
+Returns
+-------
+SVIFit
+    The fitted guide, variational parameters, loss history, and the
+    in-sample ``data``/``covariates`` (kept by identity, not copied).
+
+Raises
+------
+ValueError
+    If ``data`` and ``covariates`` have different durations.
+
+SVIFit(guide: 'AutoGuide | Callable[..., None]', params: dict[str, jax.Array], losses: jax.Array, data: jax.Array | None = None, covariates: jax.Array | None = None) -> None
+
+The result of fitting a forecasting model with SVI.
+
+Attributes
+----------
+guide
+    The fitted variational guide.
+params
+    The learned variational parameters.
+losses
+    The ELBO loss per SVI step (shape ``(num_steps,)``).
+data
+    The in-sample data the model was fit on (needed to draw from
+    hand-written guides and by :func:`~numpyro_forecast.convert.to_datatree`).
+    ``None`` for fits constructed without it.
+covariates
+    The in-sample covariates the model was fit on. ``None`` for fits
+    constructed without it.
+
+resolve_kernel(kernel: 'KernelLike', model: collections.abc.Callable[..., None], kernel_kwargs: collections.abc.Mapping[str, Any] | None) -> numpyro.infer.mcmc.MCMCKernel
+
+Normalize a kernel specification.
+
+``None`` -> ``NUTS(model, **kernel_kwargs)`` (kwargs tune the default kernel
+without naming it); a kernel class -> ``kernel(model, **kernel_kwargs)``; a
+kernel instance -> returned unchanged, and combining an instance with
+non-empty ``kernel_kwargs`` raises ``ValueError`` (ambiguous). Anything else
+-> ``TypeError``.
+
+Parameters
+----------
+kernel
+    The kernel specification (see :data:`~numpyro_forecast.typing.KernelLike`).
+model
+    The model the kernel is built against.
+kernel_kwargs
+    Extra keyword arguments forwarded to the kernel constructor (ignored,
+    and rejected, for an already-constructed instance).
+
+Returns
+-------
+MCMCKernel
+    The resolved kernel.
+
+Raises
+------
+KernelConfigError
+    If a kernel instance is combined with non-empty ``kernel_kwargs``.
+KernelResolutionError
+    If ``kernel`` is neither ``None``, an ``MCMCKernel`` subclass, nor an
+    ``MCMCKernel`` instance.
+
+fit_mcmc(rng_key: jax.Array, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, kernel: 'KernelLike' = None, kernel_kwargs: collections.abc.Mapping[str, Any] | None = None, num_warmup: int = 1000, num_samples: int = 1000, num_chains: int = 1, chain_method: str = 'sequential', progress_bar: bool = False) -> numpyro_forecast.functional.mcmc.MCMCFit
+
+Fit a forecasting model with MCMC.
+
+PRNG: consumed entirely by :class:`~numpyro.infer.MCMC`.
+
+Parameters
+----------
+rng_key
+    PRNG key for inference.
+model
+    The forecasting model callable (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+kernel
+    Kernel specification resolved by :func:`resolve_kernel`: ``None``
+    (``NUTS``), an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
+kernel_kwargs
+    Extra keyword arguments for the kernel constructor (only with ``None``
+    or a kernel class; rejected with an instance).
+num_warmup
+    Number of warmup steps.
+num_samples
+    Number of posterior samples.
+num_chains
+    Number of MCMC chains (stored on the returned :class:`MCMCFit`).
+chain_method
+    NumPyro chain method (``"sequential"``/``"parallel"``/``"vectorized"``).
+progress_bar
+    Whether to display the MCMC progress bar.
+
+Returns
+-------
+MCMCFit
+    The posterior samples (flattened) and ``num_chains``.
+
+Raises
+------
+ValueError
+    If ``data`` and ``covariates`` have different durations.
+KernelConfigError
+    If a run-config constraint is violated (see
+    :func:`_validate_kernel_run_config`).
+
+MCMCFit(samples: dict[str, jax.Array], num_chains: int = 1) -> None
+
+The result of fitting a forecasting model with MCMC.
+
+Attributes
+----------
+samples
+    The posterior samples of the latent sites, sample axis leading and
+    stored flattened (``group_by_chain=False``).
+num_chains
+    The number of chains the fit was run with (frozen; default ``1``), so
+    chain structure survives into :func:`~numpyro_forecast.convert.to_datatree`.
+
+
+## Functional core: posterior and prediction
+
+Drawing posterior samples and generating forecasts and in-sample predictions.
+
+
+draw_posterior(rng_key: jax.Array, fit: object, num_samples: int) -> dict[str, jax.Array]
+
+Draw ``num_samples`` posterior samples of the latent sites from a fit.
+
+Dispatches on the fit type (e.g. :class:`~numpyro_forecast.functional.svi.SVIFit`,
+:class:`~numpyro_forecast.functional.mcmc.MCMCFit`). The returned dict has the
+sample axis leading and is ready to pass to
+:func:`~numpyro_forecast.functional.prediction.forecast` or NumPyro's ``Predictive``.
+
+Parameters
+----------
+rng_key
+    PRNG key.
+fit
+    A fit result produced by :func:`~numpyro_forecast.functional.svi.fit_svi`
+    or :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
+num_samples
+    Number of posterior draws.
+
+Returns
+-------
+dict[str, Array]
+    Posterior samples of the latent sites, sample axis leading.
+
+Raises
+------
+NotImplementedError
+    If ``fit`` is of an unsupported type.
+GuideSampleArgsError
+    If the fit holds a hand-written guide but was constructed without its
+    in-sample covariates/data.
+
+Notes
+-----
+For an :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, when
+``num_samples`` does not exceed the number of draws in the chain the draws
+are thinned on an evenly spaced grid (no duplicates); only when more samples
+are requested than the chain holds are they resampled with replacement. For
+an :class:`~numpyro_forecast.functional.svi.SVIFit` the draws are sampled
+afresh from the fitted guide.
+
+forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch future obs']
+
+Sample forecasts for the steps in ``[t, duration)`` from a posterior.
+
+Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
+``data``: the in-sample latent sites are drawn from ``posterior`` while the
+``_future`` suffix is drawn from the prior, and the ``"forecast"`` site is
+returned. The number of forecast samples equals the leading (sample) axis of
+``posterior`` (see :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
+
+Parameters
+----------
+rng_key
+    PRNG key.
+model
+    The forecasting model callable (the same one that produced ``posterior``).
+posterior
+    Posterior samples of the latent sites, sample axis leading.
+data
+    Observed data with time at axis ``-2`` and length ``t``.
+covariates
+    Covariates with time at axis ``-2`` and length ``duration > t``.
+batch_size
+    Optional chunk size for sampling (caps peak memory).
+parallel
+    Whether ``Predictive`` vectorizes over the sample axis with ``vmap``
+    (``True``, faster, higher peak memory) or maps it serially with
+    ``lax.map`` (``False``). With ``parallel=True`` the samples in each
+    ``batch_size`` chunk are vectorized while the chunks are looped over, so
+    ``batch_size`` remains the peak-memory governor. The two settings produce
+    the same draws up to floating-point reduction order.
+
+Returns
+-------
+Num[Array, " sample *batch future obs"]
+    Forecast samples over the ``future = duration - t`` horizon (floating
+    point for continuous observations, integer for discrete/count models
+    built with :func:`~numpyro_forecast.functional.models.predict_glm`).
+
+Raises
+------
+ValueError
+    If ``covariates`` does not extend beyond ``data`` along the time axis.
+
+Notes
+-----
+Chunking is a memory knob, not a reproducibility knob: reproducibility is
+per ``(rng_key, batch_size)``. Each chunk is padded to a whole multiple of
+``batch_size`` so the underlying ``_predict`` compiles exactly once for a
+fixed shape (the pad draws are discarded), but changing ``batch_size``
+changes the PRNG stream layout and therefore the exact draws.
+
+predict_in_sample(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch time obs']
+
+Sample the in-sample posterior predictive of the ``obs`` site.
+
+Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
+latent draws. Unlike :func:`forecast` there is no forecast horizon: ``covariates``
+span only the observed window, so the model's ``obs`` site is sampled at every
+step. The number of predictive samples equals the leading (sample) axis of
+``posterior`` (see :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
+
+Parameters
+----------
+rng_key
+    PRNG key.
+model
+    The forecasting model callable (the same one that produced ``posterior``).
+posterior
+    Posterior samples of the latent sites, sample axis leading.
+covariates
+    Covariates with time at axis ``-2`` spanning the observed window. Its time
+    length must match the data the ``posterior`` was fit on, since the in-sample
+    latent sites are sized to that window.
+batch_size
+    Optional chunk size for sampling (caps peak memory).
+parallel
+    Whether ``Predictive`` vectorizes over the sample axis with ``vmap``
+    (``True``, faster, higher peak memory) or maps it serially with
+    ``lax.map`` (``False``). See :func:`forecast` for how this interacts with
+    ``batch_size``.
+
+Returns
+-------
+Num[Array, " sample *batch time obs"]
+    In-sample posterior-predictive draws of the ``obs`` site.
+
+
+## Backtesting & evaluation
+
+Rolling-window backtesting and forecast metrics.
+
+
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, forecaster_fn: collections.abc.Callable[..., '_BaseForecaster'] = <class 'numpyro_forecast.forecaster.Forecaster'>, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, forecaster_options: collections.abc.Mapping[str, Any] | collections.abc.Callable[..., collections.abc.Mapping[str, Any]] | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
+
+Backtest a forecasting model on a moving window of ``(train, test)`` data.
+
+Parameters
+----------
+rng_key
+    Base PRNG key (used for every window, matching Pyro).
+data
+    Dataset with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` (same duration as ``data``).
+model_fn
+    Factory returning a fresh :class:`ForecastingModel` per window.
+forecaster_fn
+    Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
+metrics
+    Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+    Each function takes ``(pred, truth)`` and returns a scalar array (see
+    :data:`~numpyro_forecast.typing.Metric`); bind any metric-specific
+    parameters with :func:`functools.partial`, e.g.
+    ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
+per_window_metrics
+    Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
+    extra metrics merged over ``metrics`` for each window. Use it for
+    window-dependent metrics such as a MASE scaled by that window's training
+    data (:func:`numpyro_forecast.metrics.make_mase`).
+transform
+    Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+window_type
+    Windowing strategy. If ``None`` (default) it is inferred from
+    ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and
+    ``"rolling"`` when it is set, matching the historical behavior. Pass
+    ``"expanding"`` to always train on all history from ``t0 = 0``, or
+    ``"rolling"`` to hold the training length fixed at ``train_window`` and
+    slide it forward. ``"expanding"`` and ``train_window`` are mutually
+    exclusive, and ``"rolling"`` requires ``train_window`` (both validated).
+train_window
+    Training window size; if ``None`` the window expands from the start.
+    Required for ``window_type="rolling"``.
+min_train_window
+    Minimum training window size for the expanding strategy (used when
+    ``train_window`` is ``None``).
+test_window
+    Test window size; if ``None`` forecasts to the end of the data.
+min_test_window
+    Minimum test window size when ``test_window`` is ``None``.
+stride
+    Step between successive train/test splits.
+num_samples
+    Number of forecast samples per window.
+batch_size
+    Optional forecast-sampling chunk size.
+forecaster_options
+    Options dict passed to ``forecaster_fn``, or a callable
+    ``(t0, t1, t2) -> dict`` returning per-window options.
+eval_train
+    If ``True``, also score the in-sample posterior predictive over each training
+    window with the same ``metrics`` and store them in
+    ``BacktestResult.train_metrics``. Requires a forecaster exposing
+    ``predict_in_sample`` (the built-in :class:`Forecaster` and
+    :class:`HMCForecaster` do).
+keep_predictions
+    If ``True``, store each window's out-of-sample forecast samples (after
+    ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
+    avoid retaining large Monte Carlo arrays.
+reuse_model
+    When ``True`` (default) and the windowing strategy is rolling, the model
+    instance returned by the first ``model_fn()`` call is reused for every
+    window so forecast/predict kernels can cache across windows. SVI still
+    recompiles per window; for a single fused fit over all windows use
+    :func:`backtest_vectorized`. Ignored for expanding windows and when
+    ``False``.
+
+Returns
+-------
+list[BacktestResult]
+    One result per backtest window.
+
+backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], collections.abc.Callable[..., None]], *, train_window: int, test_window: int, stride: int = 1, num_steps: int = 1001, optim: 'OptimizerLike' = None, guide: 'GuideLike' = None, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
+
+Rolling-window backtest with all windows fitted in one vmapped SVI run.
+
+Estimator-equivalent to :func:`backtest` with rolling windows; it differs
+only in PRNG stream layout and float reduction order, so the equivalence is
+statistical, not bitwise. Model, guide, and SVI compile once regardless of
+the number of windows, giving order-of-magnitude wall-clock wins for tens
+of windows on small models.
+
+PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
+``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
+posterior-draw, and forecast subkeys (the parent itself is never consumed;
+see :func:`_window_key_streams`).
+
+Parameters
+----------
+rng_key
+    Base PRNG key.
+data
+    Dataset with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` (same duration as ``data``).
+model_fn
+    Factory returning a fresh model; called exactly once (per-window model
+    variation is unsupported here, use :func:`backtest`).
+train_window
+    Fixed training-window length (``>= 1``).
+test_window
+    Fixed test-window length (``>= 1``).
+stride
+    Step between successive windows (``>= 1``).
+num_steps
+    Number of SVI steps per window.
+optim
+    Optimizer specification resolved by
+    :func:`~numpyro_forecast.functional.svi.resolve_optimizer`.
+guide
+    Guide specification; must resolve to an ``AutoGuide`` (hand-written
+    guides are not vmappable, use :func:`backtest`).
+num_samples
+    Number of forecast samples drawn per window.
+metrics
+    Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+    Each metric is vmapped over the window axis, so any pure-JAX mapping,
+    including partial-bound variants such as
+    ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
+    is scored inside the single fused computation. Host-side metrics are
+    unsupported here; use :func:`backtest`, or ``keep_predictions=True``
+    and score on the host.
+keep_predictions
+    If ``True``, retain the stacked forecast samples on the result.
+
+Returns
+-------
+VectorizedBacktestResult
+    The stacked per-window losses, metrics, and window indices.
+
+Raises
+------
+ValueError
+    If ``data`` and ``covariates`` durations differ.
+BacktestWindowError
+    If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
+    there is no room for a single window.
+VectorizedGuideError
+    If the resolved guide is not an ``AutoGuide``.
+VectorizedMetricError
+    If a metric forces a host conversion under ``vmap`` (it is not a pure
+    JAX function).
+
+BacktestResult(t0: int, t1: int, t2: int, num_samples: int, train_walltime: float, test_walltime: float, metrics: dict[str, float], params: dict[str, float] = <factory>, train_metrics: dict[str, float] = <factory>, prediction: jax.Array | None = None) -> None
+
+Per-window result of a :func:`backtest` run.
+
+Attributes
+----------
+t0, t1, t2
+    Train-begin, train/test split, and test-end time indices.
+num_samples
+    Number of forecast samples drawn.
+train_walltime, test_walltime
+    Wall-clock seconds for fitting and forecasting.
+metrics
+    Mapping of metric name to value for the window.
+params
+    Mapping of scalar parameter name to value (when available).
+train_metrics
+    Mapping of metric name to in-sample value for the window. Empty unless
+    ``backtest`` was called with ``eval_train=True``.
+prediction
+    Out-of-sample forecast samples for the window (sample axis leading), or
+    ``None`` unless ``backtest`` was called with ``keep_predictions=True``.
+
+VectorizedBacktestResult(t0: jax.Array, t1: jax.Array, t2: jax.Array, num_samples: int, losses: jax.Array, metrics: dict[str, jax.Array], predictions: jax.Array | None = None) -> None
+
+Result of a :func:`backtest_vectorized` run (all windows at once).
+
+Unlike :class:`BacktestResult` this holds every window's values stacked
+along a leading window axis, because the windows are fitted, drawn, and
+scored in single vmapped passes rather than one call each. There are no
+per-window walltimes (a single fused computation covers all windows).
+
+Attributes
+----------
+t0, t1, t2
+    Train-begin, train/test split, and test-end time indices, each an
+    integer array of shape ``(num_windows,)``.
+num_samples
+    Number of forecast samples drawn per window.
+losses
+    SVI loss history with shape ``(num_windows, num_steps)``.
+metrics
+    Mapping of metric name to a ``(num_windows,)`` array of per-window
+    values.
+predictions
+    Stacked out-of-sample forecast samples with shape
+    ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
+    unless ``keep_predictions=True``.
+
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
+
+Evaluate forecast samples against ground truth for several metrics at once.
+
+A one-call convenience that applies each metric in ``metrics`` to the same
+forecast samples and ground truth, converting to host floats at the end. It
+is the one-shot counterpart to :func:`backtest` and is also used internally
+by :func:`backtest` to score each rolling window.
+
+Metric-specific parameters live with the metric in the ``metrics`` mapping,
+not on this function. To tune a metric, bind its keyword with
+:func:`functools.partial`; for example, to score coverage at the 80% level::
+
+    from functools import partial
+
+    metrics = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}
+    evaluate_forecast(pred, truth, metrics=metrics)
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+truth
+    Ground-truth values with shape ``(*batch)``.
+metrics
+    Mapping of metric name to function; when ``None`` defaults to
+    :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
+    Each function takes ``(pred, truth)`` and returns a scalar array (see
+    :data:`~numpyro_forecast.typing.Metric`); bind any extra parameters
+    with :func:`functools.partial` (see above).
+
+Returns
+-------
+dict[str, float]
+    Each metric name mapped to its value.
+
+results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
+
+Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
+
+Columns are prefix-namespaced so metric, in-sample-metric, and parameter
+names never collide: window metrics become ``metric_<name>``, in-sample
+metrics ``train_metric_<name>``, and scalar parameters ``param_<name>``,
+alongside the window indices ``t0``/``t1``/``t2``, ``num_samples``, and
+``train_walltime``/``test_walltime``. Forecast samples are excluded.
+Windows may carry different metric sets (e.g. via
+``backtest(per_window_metrics=...)``); the union of columns is used and
+missing entries are left as ``NaN``.
+
+A :class:`VectorizedBacktestResult` from :func:`backtest_vectorized` is also
+accepted; it produces the same ``metric_<name>`` columns for the same metric
+set, but has no ``train_metric_*``, ``param_*``, or walltime columns (a
+vectorized run has no per-window walltimes), which are simply absent.
+
+Parameters
+----------
+results
+    A sequence of :class:`BacktestResult` from :func:`backtest`, or a single
+    :class:`VectorizedBacktestResult` from :func:`backtest_vectorized`.
+
+Returns
+-------
+pandas.DataFrame
+    One row per window with the namespaced columns described above.
+
+Raises
+------
+ImportError
+    If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
+
+eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+
+Empirical CRPS averaged over all data elements.
+
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+
+Returns
+-------
+Array
+    The mean empirical CRPS as a scalar array.
+
+eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+
+Mean absolute error using the forecast sample median as point estimate.
+
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+
+Returns
+-------
+Array
+    The mean absolute error as a scalar array.
+
+eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+
+Root mean squared error using the forecast sample mean as point estimate.
+
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+
+Returns
+-------
+Array
+    The root mean squared error as a scalar array.
+
+eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
+
+Empirical coverage of the central ``alpha`` prediction interval.
+
+The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
+``1 - (1 - alpha) / 2`` quantiles of the forecast samples; the metric is the
+fraction of ground-truth values that fall inside it. A well-calibrated
+forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
+:data:`~numpyro_forecast.typing.Metric`); bind a non-default level with
+``functools.partial(eval_coverage, alpha=...)``.
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+alpha
+    Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
+
+Returns
+-------
+Array
+    The fraction of ground truth inside the central ``alpha`` interval, as
+    a scalar array.
+
+Raises
+------
+ValueError
+    If ``alpha`` is not strictly inside ``(0, 1)``.
+
+crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jaxtyping.Float[Array, '*batch']
+
+Compute the empirical Continuous Ranked Probability Score (CRPS).
+
+The CRPS generalises the mean absolute error to probabilistic forecasts and
+is computed elementwise as
+
+.. math::
+
+    \mathrm{CRPS}(F, y) = \mathbb{E}|X - y| - \tfrac{1}{2}\,\mathbb{E}|X - X'|,
+
+where :math:`X, X'` are independent draws from the forecast distribution
+:math:`F`. The expectations are estimated from the forecast ``sample`` axis
+using the sorted-sample :math:`O(n \log n)` identity.
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+truth
+    Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
+
+Returns
+-------
+Float[Array, "*batch"]
+    Elementwise CRPS, one value per ``batch`` location.
+
+References
+----------
+Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
+Prediction, and Estimation". *Journal of the American Statistical
+Association*.
+
+eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, quantile: float = 0.5) -> jax.Array
+
+Mean pinball (quantile) loss of the forecast ``quantile``.
+
+The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
+:math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
+data elements. At ``quantile=0.5`` it is half the mean absolute error. A
+pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`);
+``quantile`` is static so each level specializes its own branch.
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+quantile
+    Target quantile in ``(0, 1)``.
+
+Returns
+-------
+Array
+    The mean pinball loss as a scalar array.
+
+Raises
+------
+ValueError
+    If ``quantile`` is not strictly inside ``(0, 1)``.
+
+eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
+
+Mean Winkler interval score for the central ``alpha`` prediction interval.
+
+For the central ``alpha`` interval :math:`[l, u]` (the :math:`(1-\alpha)/2`
+and :math:`1-(1-\alpha)/2` quantiles), the interval score is
+:math:`(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y<l} + (y -
+u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
+intervals and penalizes ground truth falling outside them; lower is better.
+A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+
+Parameters
+----------
+pred
+    Forecast samples with the sample axis first.
+truth
+    Ground-truth values (matching ``pred`` without the sample axis).
+alpha
+    Nominal interval level in ``(0, 1)``.
+
+Returns
+-------
+Array
+    The mean interval score as a scalar array.
+
+Raises
+------
+ValueError
+    If ``alpha`` is not strictly inside ``(0, 1)``.
+
+make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
+
+Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
+
+MASE divides the forecast MAE (using the sample median as point estimate) by
+the in-sample MAE of the seasonal-naive forecast on ``train_data``,
+``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
+time; the returned metric has the standard scalar-array signature (see
+:data:`~numpyro_forecast.typing.Metric`).
+
+Parameters
+----------
+train_data
+    Training data with time at axis ``-2``; leading batch axes are allowed
+    and the seasonal-naive scale is averaged over all axes.
+seasonality
+    Seasonal period (``>= 1``); ``1`` is the random-walk naive baseline.
+
+Returns
+-------
+Metric
+    A ``(pred, truth)`` callable computing MASE as a scalar array.
+
+Raises
+------
+ValueError
+    If ``seasonality < 1``, ``train_data`` is not longer than
+    ``seasonality`` along the time axis, or the seasonal-naive scale is zero
+    (a constant series, for which MASE is undefined).
+
+
+## Seasonal features
+
+Fourier design matrices and seasonal tiling.
+
+
+fourier_features(duration: int, period: float, num_terms: int) -> jaxtyping.Float[Array, 'duration two_num_terms']
+
+Build a Fourier seasonality design matrix.
+
+Parameters
+----------
+duration
+    Number of time steps.
+period
+    Seasonal period (in time steps).
+num_terms
+    Number of harmonics; the output has ``2 * num_terms`` columns
+    (sine then cosine).
+
+Returns
+-------
+Float[Array, "duration two_num_terms"]
+    The design matrix of shape ``(duration, 2 * num_terms)``.
+
+periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int, *, axis: int = -1) -> jax.Array
+
+Tile a seasonal pattern to cover ``duration`` time steps.
+
+Parameters
+----------
+x
+    Seasonal pattern; the repeated axis has length equal to the period.
+    Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
+duration
+    Target length along ``axis``.
+axis
+    Axis to repeat along (defaults to ``-1``).
+
+Returns
+-------
+Array
+    ``x`` periodically repeated to length ``duration`` along ``axis``.
+
+
+## Array helpers
+
+Time-axis array shaping for the train/forecast split.
+
+
+zero_data_like(data: jax.Array, covariates: jax.Array) -> jax.Array
+
+Return zeros shaped like ``data`` but extended to the covariate duration.
+
+Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
+full forecast horizon without leaking observed values into the model. The
+functional API exposes the equivalent value as
+:attr:`numpyro_forecast.functional.models.Horizon.zero_data`.
+
+Parameters
+----------
+data
+    Observed data with time at axis ``-2``, shape ``(*batch, t, obs)``.
+covariates
+    Covariates with time at axis ``-2``, shape ``(*batch, duration, cov)``.
+
+Returns
+-------
+Array
+    Zeros of shape ``(*batch, duration, obs)``.
+
+concat_future(prefix: jax.Array, suffix: jax.Array, *, axis: int = -2) -> jax.Array
+
+Concatenate in-sample and forecast-horizon arrays along the time axis.
+
+Parameters
+----------
+prefix
+    In-sample array.
+suffix
+    Forecast-horizon array (same shape as ``prefix`` except along ``axis``).
+axis
+    Time axis to concatenate along (defaults to ``-2``).
+
+Returns
+-------
+Array
+    The concatenation of ``prefix`` and ``suffix`` along ``axis``.
+
+
+## Distribution surgery
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+
+shift_loc(noise_dist: numpyro.distributions.distribution.Distribution, loc: jax.Array) -> numpyro.distributions.distribution.Distribution
+
+Re-center a zero-centered noise distribution at ``loc``.
+
+This converts Pyro's ``obs = data - prediction`` idiom into an additive
+shift of the observation distribution's location.
+
+Parameters
+----------
+noise_dist
+    A zero-centered location-family distribution.
+loc
+    The deterministic mean to add to the distribution's location.
+
+Returns
+-------
+dist.Distribution
+    A distribution centered at ``loc``.
+
+Raises
+------
+NotImplementedError
+    If ``noise_dist`` is of an unsupported type.
+
+slice_time(noise_dist: numpyro.distributions.distribution.Distribution, index: slice) -> numpyro.distributions.distribution.Distribution
+
+Slice an elementwise distribution along the time axis ``-2``.
+
+The default implementation handles registered elementwise families (empty
+``event_shape``, ``batch_shape`` ending in ``(time, obs)``; e.g. ``Normal``,
+``StudentT``, ``Poisson``) by slicing each broadcast parameter. Correlated
+families register a dedicated dispatch instead.
+
+Parameters
+----------
+noise_dist
+    The distribution to slice.
+index
+    A ``slice`` applied to the time axis ``-2`` of the batch shape.
+
+Returns
+-------
+dist.Distribution
+    The same distribution family restricted to the selected time steps.
+
+Raises
+------
+NotImplementedError
+    If ``noise_dist`` is not a registered elementwise family (and has no
+    dedicated dispatch).
+
+prefix_condition(noise_dist: numpyro.distributions.distribution.Distribution, data: jax.Array) -> numpyro.distributions.distribution.Distribution
+
+Condition a ``(t+f)``-length distribution on a ``t``-length data prefix.
+
+For independent-over-time noise (the elementwise default) the conditional
+reduces to the forecast-horizon marginal, i.e. a time slice ``[t:]``. Only
+registered elementwise families take this path; correlated families (e.g.
+``MultivariateNormal``) need a dedicated dispatch implementing a genuine
+Gaussian conditional, which is checked here rather than silently reduced to
+a slice (the R1 fix).
+
+Parameters
+----------
+noise_dist
+    The observation distribution over the full horizon ``(*batch, t+f, obs)``.
+data
+    The observed prefix with shape ``(*batch, t, obs)``.
+
+Returns
+-------
+dist.Distribution
+    The forecast-horizon distribution over ``(*batch, f, obs)``.
+
+Raises
+------
+NotImplementedError
+    If ``noise_dist`` is not a registered elementwise family (and has no
+    dedicated dispatch).
+
+register_elementwise(cls: type[numpyro.distributions.distribution.Distribution]) -> type[numpyro.distributions.distribution.Distribution]
+
+Declare a distribution family elementwise (usable as a decorator).
+
+An elementwise family is independent across every batch cell with an empty
+event shape, so :func:`slice_time` may slice its broadcast parameters along
+the time axis and :func:`prefix_condition` may reduce to the horizon
+marginal. Membership is by exact type; register each concrete subclass you
+rely on.
+
+Parameters
+----------
+cls
+    The distribution class to register.
+
+Returns
+-------
+type[dist.Distribution]
+    ``cls`` unchanged, so this can decorate a class definition.
+
+
+## Optional dependencies
+
+Lazy imports behind pyproject extras.
+
+
+require(module: str, *, extra: str) -> module
+
+Import an optional dependency, or raise a targeted ``ImportError``.
+
+Optional features (dataframes, blackjax, optax) live behind ``pyproject``
+extras and are never imported at package import time. This helper imports
+the backing module lazily at first use and, when it is missing, raises an
+``ImportError`` naming the exact ``pip install`` invocation that provides it.
+
+Parameters
+----------
+module
+    The importable module name (e.g. ``"pandas"``).
+extra
+    The ``numpyro_forecast`` extra that installs it (e.g. ``"dataframes"``).
+
+Returns
+-------
+ModuleType
+    The imported module.
+
+Raises
+------
+ImportError
+    If ``module`` is not importable, with an actionable install hint.
+
+
+## Exceptions
+
+Package exception hierarchy raised at resolution and validation boundaries.
+
+
+NumpyroForecastError(message: str | None = None) -> None
+
+Base class for all deliberate ``numpyro_forecast`` errors.
+
+Subclasses may set :attr:`default_message`; instantiating without arguments
+then carries that message, and a positional message overrides it.
+
+Parameters
+----------
+message
+    Optional explicit message; defaults to the class
+    :attr:`default_message`.
+
+BacktestWindowError(message: str | None = None) -> None
+
+A backtest window configuration is invalid.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
+``train_window``, ``test_window``, or ``stride`` is below 1, or when the
+series has no room for a single window.
+
+VectorizedGuideError(message: str | None = None) -> None
+
+The vectorized backtest requires an ``AutoGuide``.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when the
+resolved guide is hand-written: those are not vmappable, use
+:func:`~numpyro_forecast.evaluate.backtest` instead.
+
+VectorizedMetricError(message: str | None = None) -> None
+
+A metric is not vmappable in the vectorized backtest.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when a
+metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
+under ``vmap``. Metrics must be pure JAX functions returning a scalar
+array; see :data:`~numpyro_forecast.typing.Metric`.
+
+OptimizerResolutionError(message: str | None = None) -> None
+
+An optimizer specification could not be resolved.
+
+Raised by :func:`~numpyro_forecast.functional.svi.resolve_optimizer` for
+boolean inputs of any form (``bool`` is an ``int`` subclass, so a bool
+would silently mean ``Adam(1.0)``; the default message) and for any other
+unrecognized type.
+
+GuideResolutionError(message: str | None = None) -> None
+
+A guide specification could not be resolved.
+
+Raised by :func:`~numpyro_forecast.functional.svi.resolve_guide` for a
+callable shaped like a guide *factory* (the default message) or for an
+unsupported type.
+
+GuideSampleArgsError(message: str | None = None) -> None
+
+Drawing from a hand-written guide needs the in-sample arguments.
+
+Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` when an
+:class:`~numpyro_forecast.functional.svi.SVIFit` holding a hand-written guide
+was constructed without its in-sample covariates/data.
+
+KernelResolutionError(message: str | None = None) -> None
+
+A kernel specification could not be resolved.
+
+Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` for a type
+that is neither ``None``, an ``MCMCKernel`` subclass, nor an ``MCMCKernel``
+instance.
+
+KernelConfigError(message: str | None = None) -> None
+
+A kernel is combined with an invalid configuration.
+
+Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when
+``kernel_kwargs`` accompany an already-constructed instance, and by
+:func:`~numpyro_forecast.functional.mcmc.fit_mcmc` for run-config constraints
+(ensemble samplers need multiple vectorized chains; BlackJAX kernels need
+sequential chains).
+
+MVNLayoutError(message: str | None = None) -> None
+
+A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
+
+Raised by :func:`~numpyro_forecast.surgery.shift_loc`,
+:func:`~numpyro_forecast.surgery.slice_time`, and
+:func:`~numpyro_forecast.surgery.prefix_condition` on MVN noise whose
+``loc``/``covariance_matrix`` shapes do not match the supported
+time-leading layout.
+
+
+## ArviZ export
+
+Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+
+to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None) -> 'xarray.DataTree'
+
+Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
+
+PRNG: ``rng_key`` is consumed by the in-sample posterior-predictive draws (and,
+for a variational fit, the posterior draws).
+
+Parameters
+----------
+rng_key
+    PRNG key for the predictive (and variational posterior) draws.
+fit
+    A fit from :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`,
+    :func:`~numpyro_forecast.functional.svi.fit_svi`, or
+    :func:`~numpyro_forecast.contrib.blackjax.fit_pathfinder`.
+model
+    The forecasting model that produced ``fit``.
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    In-sample covariates with time at axis ``-2``.
+num_predictive_samples
+    Number of posterior draws for a variational fit (ignored for
+    :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
+    Defaults to ``1_000``.
+coords
+    Optional extra coordinates; these take precedence over the generated
+    ``time`` coordinate.
+time_coord
+    Optional explicit in-sample time coordinate values; defaults to
+    ``range(n_time)``.
+posterior_dims
+    Optional mapping from a posterior site name to its non-sample dimension
+    names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
+    ``time`` coordinate; unlisted sites keep ArviZ's auto-named dims. This is
+    an explicit opt-in on purpose: inferring time-indexed sites from trace
+    shapes is fragile (a coincidental ``n_params == n_time`` would misattribute
+    the axis).
+
+Returns
+-------
+xarray.DataTree
+    A tree with ``posterior`` (``(chain, draw, ...)``; a single pseudo-chain
+    plus ``variational: True`` attrs for SVI/Pathfinder), ``posterior_predictive``
+    (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups.
+
+Notes
+-----
+``rng_key`` is split internally: one subkey drives the posterior draws (for
+variational fits) and the other the in-sample predictive. The split is a
+deterministic derivation applied for every fit type, so passing the same key
+twice never correlates the two sample sets.
+
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
+
+Attach out-of-sample forecast groups to a copy of ``tree``.
+
+Adds a ``predictions`` group (the forecast ``obs`` draws) and a
+``predictions_constant_data`` group (the future covariates). The forecast
+``time`` coordinate continues the in-sample one: integer continuation by
+default, or explicit values via ``time_coord``.
+
+Parameters
+----------
+tree
+    A tree from :func:`to_datatree` (its ``observed_data`` time coordinate is
+    continued).
+forecast_samples
+    Forecast draws shaped ``(num_samples, future, obs)`` from
+    :func:`~numpyro_forecast.functional.prediction.forecast`.
+covariates_future
+    Future covariates shaped ``(future, covariate_dim)``.
+time_coord
+    Optional explicit forecast time coordinate; defaults to integer
+    continuation of the in-sample time. Required when the in-sample time
+    coordinate is non-integer (e.g. datetime64): auto-continuing would have
+    to guess the frequency, so explicit values are demanded instead.
+
+Returns
+-------
+xarray.DataTree
+    A new tree with the ``predictions`` and ``predictions_constant_data``
+    groups added.
+
+Raises
+------
+ValueError
+    If ``time_coord`` is given but its length differs from the forecast
+    horizon, or if it is omitted while the in-sample time coordinate is
+    non-integer.
+
+
+## Extensions (contrib)
+
+Optional backends behind pyproject extras (never imported by default).
+
+
+
+## Datasets
+
+Example datasets used in the tutorials.
+
+
+load_bart_weekly() -> jaxtyping.Float[Array, 'weeks 1']
+
+Load total weekly BART ridership (log scale) for the univariate example.
+
+Hourly counts are summed over all origin-destination pairs, aggregated into
+non-overlapping weeks, and log-transformed.
+
+Returns
+-------
+Float[Array, " weeks 1"]
+    Log weekly totals with time at axis ``-2`` and a single observation dim.
+
+load_bart_hierarchical(train_days: int = 90, test_weeks: int = 2) -> tuple[jaxtyping.Float[Array, 'origin time destin'], int, list[str]]
+
+Load the windowed hierarchical BART panel for the hierarchical example.
+
+The counts are ``log1p``-transformed and transposed to the
+``(origin, time, destin)`` convention, then restricted to a ``train_days``
+training window followed by a ``test_weeks`` test window.
+
+Parameters
+----------
+train_days
+    Number of training days (24 hours each).
+test_weeks
+    Number of test weeks (``24 * 7`` hours each).
+
+Returns
+-------
+y : Float[Array, " origin time destin"]
+    Log counts over the train+test window with time at axis ``-2``.
+split : int
+    Index along the time axis separating train from test.
+stations : list[str]
+    Station names.
+
+Raises
+------
+ValueError
+    If the requested ``train_days`` + ``test_weeks`` window exceeds the
+    available history (which would otherwise wrap a negative slice index).
+
+load_victoria_electricity() -> tuple[jaxtyping.Float[Array, 'time 1'], jaxtyping.Float[Array, 'time']]
+
+Load hourly Victoria (Australia) electricity demand and temperature.
+
+The series covers the first eight weeks of 2014, sampled hourly, from the
+Victoria electricity demand dataset used in the TensorFlow Probability
+structural-time-series case study and in Hyndman and Athanasopoulos'
+*Forecasting: Principles and Practice*. The original half-hourly data is
+downsampled to hourly by taking every other step. The values are bundled as a
+small CSV next to this module.
+
+Returns
+-------
+demand : Float[Array, " time 1"]
+    Hourly electricity demand (GW) with time at axis ``-2`` and a single
+    observation dimension.
+temperature : Float[Array, " time"]
+    Hourly temperature (degrees Celsius), aligned with ``demand``.
+
+bart_available() -> bool
+
+Return whether the BART dataset can be loaded (download succeeds).
+
+Returns
+-------
+bool
+    ``True`` if :func:`load_bart_od` loads without error.
