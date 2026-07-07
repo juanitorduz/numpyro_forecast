@@ -1,10 +1,15 @@
-.PHONY: setup tests prek docs docs-preview
+.PHONY: setup tests store-durations prek docs docs-preview
 
 setup:
 	uv sync --all-extras
 
 tests:
-	uv run pytest
+	uv run pytest -n auto
+
+# Re-record per-test runtimes for pytest-split (must run sequentially, without
+# xdist) and refresh the committed .test_durations file.
+store-durations:
+	uv run pytest --store-durations
 
 prek:
 	uv run prek run --all-files
