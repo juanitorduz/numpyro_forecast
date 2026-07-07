@@ -19,8 +19,8 @@ from numpyro_forecast.functional import (
     predict_glm,
     time_series,
 )
+from numpyro_forecast.surgery import shift_loc
 from numpyro_forecast.typing import Array, ForecastModel
-from numpyro_forecast.util import shift_loc
 
 
 def test_horizon_from_data_training() -> None:

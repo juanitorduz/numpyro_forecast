@@ -1,155 +1,22 @@
-"""Utility helpers: array shaping, distribution surgery, and seasonal features.
+"""Distribution surgery: time-axis operations on observation distributions.
 
-The distribution helpers (:func:`shift_loc`, :func:`slice_time`,
-:func:`prefix_condition`) are implemented with :func:`functools.singledispatch`
-so new distribution families can be registered without modifying call sites —
-the functional analogue of Pyro's messenger-based dispatch.
+:func:`shift_loc`, :func:`slice_time`, and :func:`prefix_condition` are
+implemented with :func:`functools.singledispatch` so new distribution families
+can be registered without modifying call sites, the functional analogue of
+Pyro's messenger-based dispatch. Elementwise families (independent per time/obs
+cell) are declared with :func:`register_elementwise`; correlated families such
+as ``MultivariateNormal`` register dedicated dispatches for all three
+surgeries.
 """
 
-import importlib
-from collections.abc import Sequence
-from functools import lru_cache, singledispatch
-from types import ModuleType
+from functools import singledispatch
 
 import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
-from jax.typing import ArrayLike
-from jaxtyping import Float
 
 from numpyro_forecast.exceptions import MVNLayoutError
 from numpyro_forecast.typing import Array
-
-
-def require(module: str, *, extra: str) -> ModuleType:
-    """Import an optional dependency, or raise a targeted ``ImportError``.
-
-    Optional features (dataframes, blackjax, optax) live behind ``pyproject``
-    extras and are never imported at package import time. This helper imports
-    the backing module lazily at first use and, when it is missing, raises an
-    ``ImportError`` naming the exact ``pip install`` invocation that provides it.
-
-    Parameters
-    ----------
-    module
-        The importable module name (e.g. ``"pandas"``).
-    extra
-        The ``numpyro_forecast`` extra that installs it (e.g. ``"dataframes"``).
-
-    Returns
-    -------
-    ModuleType
-        The imported module.
-
-    Raises
-    ------
-    ImportError
-        If ``module`` is not importable, with an actionable install hint.
-    """
-    try:
-        return importlib.import_module(module)
-    except ImportError as exc:
-        msg = (
-            f"{module!r} is required for this feature; install it with "
-            f"'pip install numpyro_forecast[{extra}]'."
-        )
-        raise ImportError(msg) from exc
-
-
-def _api_canary(module: str, attrs: Sequence[str]) -> None:
-    """Assert that ``module`` exposes every attribute in ``attrs``.
-
-    A tripwire for optional-dependency API drift: extension modules call this at
-    import (or in a dedicated canary test) so a renamed or removed upstream
-    symbol fails with a precise message instead of a cryptic ``AttributeError``
-    deep inside a call.
-
-    Parameters
-    ----------
-    module
-        The importable module name to probe.
-    attrs
-        Dotted attribute paths expected to resolve on the module (e.g.
-        ``"vi.pathfinder.approximate"``).
-
-    Raises
-    ------
-    AttributeError
-        If any attribute path does not resolve; the message names the module,
-        the missing path, and the installed version when available.
-    """
-    mod = importlib.import_module(module)
-    missing: list[str] = []
-    for attr in attrs:
-        obj: object = mod
-        for part in attr.split("."):
-            if not hasattr(obj, part):
-                missing.append(attr)
-                break
-            obj = getattr(obj, part)
-    if missing:
-        version = getattr(mod, "__version__", "unknown")
-        msg = (
-            f"{module} (version {version}) is missing expected attributes "
-            f"{missing}; the pinned API surface has drifted."
-        )
-        raise AttributeError(msg)
-
-
-def _zeros_like_data(data: Array, duration: int) -> Array:
-    """Return zeros shaped like ``data`` with the time axis ``-2`` set to ``duration``.
-
-    Shared core of :func:`zero_data_like` and
-    :attr:`numpyro_forecast.functional.models.Horizon.zero_data`: it exposes the
-    shape/dtype of the data over the full forecast horizon without leaking
-    observed values into the model.
-    """
-    shape = (*data.shape[:-2], duration, data.shape[-1])
-    return jnp.zeros(shape, dtype=data.dtype)
-
-
-def zero_data_like(data: Array, covariates: Array) -> Array:
-    """Return zeros shaped like ``data`` but extended to the covariate duration.
-
-    Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
-    full forecast horizon without leaking observed values into the model. The
-    functional API exposes the equivalent value as
-    :attr:`numpyro_forecast.functional.models.Horizon.zero_data`.
-
-    Parameters
-    ----------
-    data
-        Observed data with time at axis ``-2``, shape ``(*batch, t, obs)``.
-    covariates
-        Covariates with time at axis ``-2``, shape ``(*batch, duration, cov)``.
-
-    Returns
-    -------
-    Array
-        Zeros of shape ``(*batch, duration, obs)``.
-    """
-    return _zeros_like_data(data, covariates.shape[-2])
-
-
-def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:
-    """Concatenate in-sample and forecast-horizon arrays along the time axis.
-
-    Parameters
-    ----------
-    prefix
-        In-sample array.
-    suffix
-        Forecast-horizon array (same shape as ``prefix`` except along ``axis``).
-    axis
-        Time axis to concatenate along (defaults to ``-2``).
-
-    Returns
-    -------
-    Array
-        The concatenation of ``prefix`` and ``suffix`` along ``axis``.
-    """
-    return jnp.concatenate([prefix, suffix], axis=axis)
-
 
 _ELEMENTWISE_FAMILIES: set[type[dist.Distribution]] = set()
 """Distribution families declared elementwise (independent per time/obs cell).
@@ -499,70 +366,3 @@ register_elementwise(dist.AsymmetricLaplace)
 register_elementwise(dist.Gumbel)
 register_elementwise(dist.Poisson)
 register_elementwise(dist.NegativeBinomial2)
-
-
-@lru_cache(maxsize=128)
-def _fourier_features(
-    duration: int,
-    period: float,
-    num_terms: int,
-) -> Float[Array, " duration two_num_terms"]:
-    """Memoized Fourier-feature core.
-
-    The design matrix is fully determined by ``(duration, period, num_terms)``
-    and is built host-side, never inside a trace, so the result is cached per
-    argument tuple rather than recomputed (see :func:`fourier_features`).
-    """
-    time = jnp.arange(duration)[:, None]
-    harmonics = jnp.arange(1, num_terms + 1)[None, :]
-    angles = 2.0 * jnp.pi * harmonics * time / period
-    return jnp.concatenate([jnp.sin(angles), jnp.cos(angles)], axis=-1)
-
-
-def fourier_features(
-    duration: int,
-    period: float,
-    num_terms: int,
-) -> Float[Array, " duration two_num_terms"]:
-    """Build a Fourier seasonality design matrix.
-
-    Parameters
-    ----------
-    duration
-        Number of time steps.
-    period
-        Seasonal period (in time steps).
-    num_terms
-        Number of harmonics; the output has ``2 * num_terms`` columns
-        (sine then cosine).
-
-    Returns
-    -------
-    Float[Array, "duration two_num_terms"]
-        The design matrix of shape ``(duration, 2 * num_terms)``.
-    """
-    return _fourier_features(duration, float(period), num_terms)
-
-
-def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:
-    """Tile a seasonal pattern to cover ``duration`` time steps.
-
-    Parameters
-    ----------
-    x
-        Seasonal pattern; the repeated axis has length equal to the period.
-        Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
-    duration
-        Target length along ``axis``.
-    axis
-        Axis to repeat along (defaults to ``-1``).
-
-    Returns
-    -------
-    Array
-        ``x`` periodically repeated to length ``duration`` along ``axis``.
-    """
-    array = jnp.asarray(x)
-    period = array.shape[axis]
-    indices = jnp.arange(duration) % period
-    return jnp.take(array, indices, axis=axis)

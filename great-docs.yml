@@ -128,18 +128,30 @@ reference:
       - metrics.eval_interval_score
       - metrics.make_mase
 
-  - title: Utilities
-    desc: Array helpers and feature builders.
+  - title: Seasonal features
+    desc: Fourier design matrices and seasonal tiling.
     contents:
-      - util.fourier_features
-      - util.periodic_repeat
-      - util.zero_data_like
-      - util.concat_future
-      - util.shift_loc
-      - util.slice_time
-      - util.prefix_condition
-      - util.register_elementwise
-      - util.require
+      - features.fourier_features
+      - features.periodic_repeat
+
+  - title: Array helpers
+    desc: Time-axis array shaping for the train/forecast split.
+    contents:
+      - arrays.zero_data_like
+      - arrays.concat_future
+
+  - title: Distribution surgery
+    desc: Time-axis operations on observation distributions, extensible via singledispatch.
+    contents:
+      - surgery.shift_loc
+      - surgery.slice_time
+      - surgery.prefix_condition
+      - surgery.register_elementwise
+
+  - title: Optional dependencies
+    desc: Lazy imports behind pyproject extras.
+    contents:
+      - optional.require
 
   - title: Exceptions
     desc: Package exception hierarchy raised at resolution and validation boundaries.

@@ -18,14 +18,9 @@ import numpyro.distributions as dist
 from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 
+from numpyro_forecast.arrays import _zeros_like_data, concat_future
+from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array, ForecastModel
-from numpyro_forecast.util import (
-    _zeros_like_data,
-    concat_future,
-    prefix_condition,
-    shift_loc,
-    slice_time,
-)
 
 
 @dataclass(frozen=True)
@@ -68,7 +63,7 @@ class Horizon:
     def zero_data(self) -> Array | None:
         """Zeros shaped like ``data`` extended to the full horizon.
 
-        Mirrors Pyro's ``zero_data`` (and :func:`numpyro_forecast.util.zero_data_like`):
+        Mirrors Pyro's ``zero_data`` (and :func:`numpyro_forecast.arrays.zero_data_like`):
         it exposes the shape/dtype of the data over the forecast horizon without
         leaking observed values. ``None`` when there is no data.
 
@@ -318,8 +313,8 @@ def predict_glm(
     observation is observed; while forecasting the in-sample prefix is observed and
     the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
     site. The observation distribution must support time-axis surgery
-    (:func:`~numpyro_forecast.util.slice_time` /
-    :func:`~numpyro_forecast.util.prefix_condition`), i.e. an elementwise family.
+    (:func:`~numpyro_forecast.surgery.slice_time` /
+    :func:`~numpyro_forecast.surgery.prefix_condition`), i.e. an elementwise family.
 
     Parameters
     ----------

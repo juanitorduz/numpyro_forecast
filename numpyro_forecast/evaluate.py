@@ -28,8 +28,8 @@ from numpyro_forecast.exceptions import (
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.functional import resolve_guide, resolve_optimizer
 from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, ForecasterFactory, ForecastModel, Metric, ModelFactory
-from numpyro_forecast.util import require
 
 if TYPE_CHECKING:
     import pandas as pd
