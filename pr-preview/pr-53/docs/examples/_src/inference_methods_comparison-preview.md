@@ -209,7 +209,7 @@ print(f"NUTS: 4 chains x 1_000 draws in {nuts_seconds:.1f}s")
 ```
 
 
-    NUTS: 4 chains x 1_000 draws in 33.4s
+    NUTS: 4 chains x 1_000 draws in 33.2s
 
 
 ## SVI
@@ -282,7 +282,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI: 20_000 steps in 3.8s
+    SVI: 20_000 steps in 3.7s
 
 
 <figure class="figure">
@@ -318,7 +318,7 @@ print(f"Pathfinder: best ELBO {pathfinder_fit.elbo:.2f} in {pathfinder_seconds:.
 
 
     per-path ELBO: [-1620.3, -2197.9, -1690.8, -1234.4]
-    Pathfinder: best ELBO -1234.40 in 13.5s
+    Pathfinder: best ELBO -1234.40 in 14.5s
 
 
 ## MCLMC
@@ -351,7 +351,7 @@ print(f"MCLMC: 1 chain x 10_000 draws in {mclmc_seconds:.1f}s")
 ```
 
 
-    MCLMC: 1 chain x 10_000 draws in 4.4s
+    MCLMC: 1 chain x 10_000 draws in 4.6s
 
 
 # Exporting fits to ArviZ
@@ -428,7 +428,7 @@ Group: /
 │           sigma                   (chain, draw) float32 16kB 0.01851 ... 0.01748
 │           weight                  (chain, draw, weight_dim_0) float32 832kB -0.0008...
 │       Attributes:
-│           created_at:                 2026-07-07T17:23:46.949014+00:00
+│           created_at:                 2026-07-07T17:45:55.610440+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -443,7 +443,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time) float32 7MB 14.41 14.47 14.39 ... 14.73 14.46
 │       Attributes:
-│           created_at:                 2026-07-07T17:23:47.491131+00:00
+│           created_at:                 2026-07-07T17:45:56.144832+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -456,7 +456,7 @@ Group: /
 │       Data variables:
 │           obs      (time) float32 2kB 14.41 14.45 14.42 14.53 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-07-07T17:23:47.491408+00:00
+│           created_at:                 2026-07-07T17:45:56.145093+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -470,7 +470,7 @@ Group: /
 │           covariates     (time, covariate_dim) float32 87kB 0.0 0.0 ... -0.2376
 │           week           (time) float64 3kB 0.0 1.0 2.0 3.0 ... 414.0 415.0 416.0
 │       Attributes:
-│           created_at:                 2026-07-07T17:23:47.491592+00:00
+│           created_at:                 2026-07-07T17:45:56.145267+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -485,7 +485,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time) float32 832kB 14.4 14.68 14.59 ... 14.76 14.33
 │       Attributes:
-│           created_at:                 2026-07-07T17:23:47.921436+00:00
+│           created_at:                 2026-07-07T17:45:56.577019+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -499,7 +499,7 @@ Group: /
             covariates     (time, covariate_dim) float32 11kB -0.05158 -0.103 ... 0.3138
             week           (time) float64 416B 417.0 418.0 419.0 ... 466.0 467.0 468.0
         Attributes:
-            created_at:                 2026-07-07T17:23:47.921814+00:00
+            created_at:                 2026-07-07T17:45:56.577256+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -834,7 +834,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-07T17:23:46.949014+00:00
+2026-07-07T17:45:55.610440+00:00
 
 creation_library :  
 ArviZ
@@ -969,7 +969,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-07T17:23:47.491131+00:00
+2026-07-07T17:45:56.144832+00:00
 
 creation_library :  
 ArviZ
@@ -1062,7 +1062,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-07T17:23:47.491408+00:00
+2026-07-07T17:45:56.145093+00:00
 
 creation_library :  
 ArviZ
@@ -1176,7 +1176,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-07T17:23:47.491592+00:00
+2026-07-07T17:45:56.145267+00:00
 
 creation_library :  
 ArviZ
@@ -1311,7 +1311,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-07T17:23:47.921436+00:00
+2026-07-07T17:45:56.577019+00:00
 
 creation_library :  
 ArviZ
@@ -1425,7 +1425,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-07T17:23:47.921814+00:00
+2026-07-07T17:45:56.577256+00:00
 
 creation_library :  
 ArviZ
@@ -1513,10 +1513,10 @@ comparison.round(4)
 
 |            | train CRPS | test CRPS | walltime (s) |
 |------------|------------|-----------|--------------|
-| NUTS       | 0.0242     | 0.0301    | 33.4441      |
-| SVI        | 0.0270     | 0.0340    | 3.7874       |
-| Pathfinder | 0.0300     | 0.0325    | 13.4627      |
-| MCLMC      | 0.0268     | 0.0336    | 4.4493       |
+| NUTS       | 0.0242     | 0.0301    | 33.1974      |
+| SVI        | 0.0270     | 0.0340    | 3.6987       |
+| Pathfinder | 0.0300     | 0.0325    | 14.5304      |
+| MCLMC      | 0.0268     | 0.0336    | 4.6177       |
 
 
 # Forecast visualization

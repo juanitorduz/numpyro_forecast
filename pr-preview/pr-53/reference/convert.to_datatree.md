@@ -47,7 +47,7 @@ Covariates with time at axis `-2`. When `covariates` extends beyond `data` along
 Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to `1_000`.
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
-Optional extra coordinates; these take precedence over the generated `time` coordinate.
+Optional extra coordinates; these take precedence over the generated `time` coordinate. They also propagate to the forecast groups, where the generated forecast `time` takes precedence instead (a user `time` entry covers the in-sample window; use `time_coord` for explicit forecast time values).
 
 `time_coord: Sequence[Any] | None = None`  
 Optional explicit time coordinate values. Without a forecast horizon it covers the in-sample window (defaults to `range(n_time)`); with a horizon it must cover the full `covariates` length and is split into the in-sample and forecast time coordinates (the default is the integer continuation).
@@ -67,7 +67,7 @@ A tree with `posterior` (`(chain, draw, ...)`; a single pseudo-chain plus `varia
 
 
 `ValueError`  
-If `time_coord` is given but its length does not match the in-sample window plus the forecast horizon.
+If `covariates` is shorter than `data` along the time axis, or if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon.
 
 
 ## Notes

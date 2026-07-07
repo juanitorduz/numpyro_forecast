@@ -764,7 +764,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L109-L288" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L119-L304" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -813,7 +813,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional extra coordinates; these take precedence over the generated <code>time</code> coordinate.</p>
+<p>Optional extra coordinates; these take precedence over the generated <code>time</code> coordinate. They also propagate to the forecast groups, where the generated forecast <code>time</code> takes precedence instead (a user <code>time</code> entry covers the in-sample window; use <code>time_coord</code> for explicit forecast time values).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -843,7 +843,7 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single ps
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.
+If <code>covariates</code> is shorter than <code>data</code> along the time axis, or if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.
 </dd>
 </dl>
 </div>

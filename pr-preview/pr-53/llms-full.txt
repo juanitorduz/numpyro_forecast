@@ -1514,7 +1514,10 @@ num_predictive_samples
     to ``1_000``.
 coords
     Optional extra coordinates; these take precedence over the generated
-    ``time`` coordinate.
+    ``time`` coordinate. They also propagate to the forecast groups, where
+    the generated forecast ``time`` takes precedence instead (a user
+    ``time`` entry covers the in-sample window; use ``time_coord`` for
+    explicit forecast time values).
 time_coord
     Optional explicit time coordinate values. Without a forecast horizon it
     covers the in-sample window (defaults to ``range(n_time)``); with a
@@ -1542,7 +1545,8 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``time_coord`` is given but its length does not match the in-sample
+    If ``covariates`` is shorter than ``data`` along the time axis, or if
+    ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon.
 
 Notes
