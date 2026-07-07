@@ -274,9 +274,10 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
 class BlackjaxMCLMCKernel(_BlackjaxKernel):
     """BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 
-    The step size and trajectory length ``L`` are tuned once in
-    :meth:`~_BlackjaxKernel.init` via ``blackjax.mclmc_find_L_and_step_size``; each
-    MCMC step is then a single tuned MCLMC step.
+    The step size, trajectory length ``L``, and diagonal preconditioner (inverse
+    mass matrix) are tuned once in :meth:`~_BlackjaxKernel.init` via
+    ``blackjax.mclmc_find_L_and_step_size``; each MCMC step is then a single
+    tuned MCLMC step.
 
     Parameters
     ----------
@@ -321,7 +322,15 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
             state=init_state,
             rng_key=tune_key,
         )
-        algorithm = blackjax.mclmc(logdensity_fn, L=params.L, step_size=params.step_size)
+        # The tuner adapts step_size and L *for* the diagonal preconditioner it
+        # estimates; dropping params.inverse_mass_matrix here would run a
+        # mistuned identity-mass kernel on anisotropic posteriors.
+        algorithm = blackjax.mclmc(
+            logdensity_fn,
+            L=params.L,
+            step_size=params.step_size,
+            inverse_mass_matrix=params.inverse_mass_matrix,
+        )
         return tuned_state, algorithm.step
 
 
