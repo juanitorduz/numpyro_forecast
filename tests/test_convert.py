@@ -254,6 +254,43 @@ def test_to_datatree_forecast_rejects_insample_length_time_coord() -> None:
         )
 
 
+def test_to_datatree_rejects_short_covariates() -> None:
+    """Covariates shorter than the data raise a clear error instead of a shape failure."""
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    with pytest.raises(ValueError, match="covariates cover"):
+        to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n - 3))
+
+
+def test_to_datatree_coords_reach_forecast_groups() -> None:
+    """User coords propagate to the forecast groups; the forecast time coordinate wins."""
+    data = _series()
+    n = data.shape[-2]
+    fit = fit_mcmc(
+        random.PRNGKey(1),
+        RandomWalkModel(),
+        data,
+        jnp.zeros((n, 2)),
+        num_warmup=50,
+        num_samples=50,
+        num_chains=1,
+    )
+    labels = ["x0", "x1"]
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        jnp.zeros((n + 3, 2)),
+        coords={"covariate_dim": labels},
+    )
+    np.testing.assert_array_equal(tree["constant_data"].coords["covariate_dim"].values, labels)
+    np.testing.assert_array_equal(
+        tree["predictions_constant_data"].coords["covariate_dim"].values, labels
+    )
+    np.testing.assert_array_equal(tree["predictions"].coords["time"].values, np.arange(n, n + 3))
+
+
 def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
     """The forecast groups also go through arviz_base.dict_to_dataset (normative rule)."""
     calls = {"count": 0}

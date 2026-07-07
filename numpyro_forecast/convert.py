@@ -22,6 +22,7 @@ import xarray
 from jax import random
 
 from numpyro_forecast.functional import MCMCFit, draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.functional._validation import _require_covariates_cover_data
 from numpyro_forecast.typing import Array, ForecastModel
 
 _DEFAULT_NUM_PREDICTIVE_SAMPLES = 1_000
@@ -83,14 +84,23 @@ def _forecast_group_datasets(
     forecast_draws: "np.ndarray",
     covariates_future: Array,
     future_time: "np.ndarray",
+    coords: Mapping[str, Sequence[Any]] | None = None,
 ) -> tuple["xarray.Dataset", "xarray.Dataset"]:
     """Build the ``predictions`` and ``predictions_constant_data`` datasets.
 
     ``forecast_draws`` must already carry the ``(chain, draw, future, obs)``
     layout; callers own the chain reshape (:func:`to_datatree` applies the fit's
     real chain structure, :func:`add_forecast_groups` a single pseudo-chain).
+
+    ``coords`` are user coordinates to share with the forecast groups, but with
+    the precedence inverted relative to :func:`_merge_coords`: ``future_time``
+    always wins over a user ``time`` entry, because that entry covers the
+    in-sample window (``time_coord`` is the sanctioned route for explicit
+    forecast time values).
     """
-    future_coords = cast("dict[Any, Any]", {"time": future_time})
+    merged_future: dict[str, Any] = dict(coords) if coords is not None else {}
+    merged_future["time"] = future_time
+    future_coords = cast("dict[Any, Any]", merged_future)
     predictions_ds = arviz_base.dict_to_dataset(
         {"obs": forecast_draws},
         sample_dims=_SAMPLE_DIMS,
@@ -150,7 +160,10 @@ def to_datatree(
         to ``1_000``.
     coords
         Optional extra coordinates; these take precedence over the generated
-        ``time`` coordinate.
+        ``time`` coordinate. They also propagate to the forecast groups, where
+        the generated forecast ``time`` takes precedence instead (a user
+        ``time`` entry covers the in-sample window; use ``time_coord`` for
+        explicit forecast time values).
     time_coord
         Optional explicit time coordinate values. Without a forecast horizon it
         covers the in-sample window (defaults to ``range(n_time)``); with a
@@ -178,7 +191,8 @@ def to_datatree(
     Raises
     ------
     ValueError
-        If ``time_coord`` is given but its length does not match the in-sample
+        If ``covariates`` is shorter than ``data`` along the time axis, or if
+        ``time_coord`` is given but its length does not match the in-sample
         window plus the forecast horizon.
 
     Notes
@@ -191,6 +205,7 @@ def to_datatree(
     custom ``batch_size``), build the in-sample tree with matching-length
     covariates and attach the horizon with :func:`add_forecast_groups`.
     """
+    _require_covariates_cover_data(data, covariates)
     n_time = data.shape[-2]
     horizon = covariates.shape[-2] - n_time
 
@@ -213,18 +228,18 @@ def to_datatree(
 
     if time_coord is not None:
         time_values = np.asarray(time_coord)
-        expected = n_time + max(horizon, 0)
+        expected = n_time + horizon
         if time_values.shape[0] != expected:
             msg = (
                 f"time_coord has length {time_values.shape[0]} but must cover "
-                f"{expected} steps ({n_time} in-sample plus {max(horizon, 0)} forecast)"
+                f"{expected} steps ({n_time} in-sample plus {horizon} forecast)"
             )
             raise ValueError(msg)
         time = time_values[:n_time]
         future_time = time_values[n_time:]
     else:
         time = np.arange(n_time)
-        future_time = np.arange(n_time, n_time + max(horizon, 0))
+        future_time = np.arange(n_time, n_time + horizon)
     merged_coords = _merge_coords(time, coords)
 
     merged_arg = cast("dict[Any, Any]", merged_coords)
@@ -273,6 +288,7 @@ def to_datatree(
             _reshape_predictive(fit, forecast_samples),
             covariates[..., n_time:, :],
             future_time,
+            coords=coords,
         )
         groups["predictions"] = predictions_ds
         groups["predictions_constant_data"] = predictions_constant_ds

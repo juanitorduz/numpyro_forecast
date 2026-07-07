@@ -22,3 +22,13 @@ def _require_covariates_extend_data(data: Array, covariates: Array) -> None:
     if data.shape[-2] >= covariates.shape[-2]:
         msg = "covariates must extend beyond data along the time axis"
         raise ValueError(msg)
+
+
+def _require_covariates_cover_data(data: Array, covariates: Array) -> None:
+    """Raise ``ValueError`` unless ``covariates`` is at least as long as ``data`` in time."""
+    if covariates.shape[-2] < data.shape[-2]:
+        msg = (
+            f"covariates cover {covariates.shape[-2]} time steps but data has "
+            f"{data.shape[-2]}; covariates must cover at least the in-sample window"
+        )
+        raise ValueError(msg)
