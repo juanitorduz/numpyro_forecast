@@ -1,4 +1,4 @@
-## util.fourier_features()
+## features.fourier_features()
 
 
 Build a Fourier seasonality design matrix.
@@ -7,7 +7,7 @@ Build a Fourier seasonality design matrix.
 Usage
 
 ``` python
-util.fourier_features(
+features.fourier_features(
     duration,
     period,
     num_terms,

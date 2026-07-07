@@ -1,4 +1,4 @@
-## util.shift_loc()
+## surgery.shift_loc()
 
 
 Re-center a zero-centered noise distribution at `loc`.
@@ -7,7 +7,7 @@ Re-center a zero-centered noise distribution at `loc`.
 Usage
 
 ``` python
-util.shift_loc(
+surgery.shift_loc(
     noise_dist,
     loc,
 )

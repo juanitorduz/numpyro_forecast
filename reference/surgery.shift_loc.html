@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>util.require() – numpyro_forecast | numpyro_forecast</title>
+<title>surgery.shift_loc() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/util.require.html">
-  <meta name="description" content="Import an optional dependency, or raise a targeted ImportError.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html">
+  <meta name="description" content="Re-center a zero-centered noise distribution at loc.">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "util.require - numpyro_forecast",
+    "name": "surgery.shift_loc - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/util.require.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="util.require() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Import an optional dependency, or raise a targeted ImportError.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/util.require.html">
+  <meta property="og:title" content="surgery.shift_loc() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Re-center a zero-centered noise distribution at loc.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="util.require() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Import an optional dependency, or raise a targeted ImportError.">
+  <meta name="twitter:title" content="surgery.shift_loc() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Re-center a zero-centered noise distribution at loc.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">util.require()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">surgery.shift_loc()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -479,61 +479,85 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Utilities</span></a>
+ <span class="menu-text">Seasonal features</span></a>
 </div>
       <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.fourier_features.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.fourier_features()</span></span></a>
+  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">features.fourier_features()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.periodic_repeat.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.periodic_repeat()</span></span></a>
+  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">features.periodic_repeat()</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Array helpers</span></a>
+</div>
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.zero_data_like()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.zero_data_like.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.zero_data_like()</span></span></a>
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.concat_future()</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Distribution surgery</span></a>
+</div>
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.shift_loc()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.concat_future.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.concat_future()</span></span></a>
+  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.slice_time()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.shift_loc()</span></span></a>
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.prefix_condition()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.slice_time()</span></span></a>
+  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.register_elementwise()</span></span></a>
   </div>
 </li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Optional dependencies</span></a>
+</div>
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.prefix_condition()</span></span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/util.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.register_elementwise()</span></span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/util.require.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.require()</span></span></a>
+  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">optional.require()</span></span></a>
   </div>
 </li>
       </ul>
@@ -543,7 +567,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Exceptions</span></a>
 </div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -611,7 +635,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -631,7 +655,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -669,7 +693,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -717,7 +741,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">util.require()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.shift_loc()</span></h2>
 </div>
 
 
@@ -735,33 +759,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Import an optional dependency, or raise a targeted <code>ImportError</code>.</p>
+<p>Re-center a zero-centered noise distribution at <code>loc</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/util.py#L24-L56" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L112-L137" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">util</span><span class="op">.</span><span class="sig-name">require</span>(
-    <span class="va">module</span>,
-    <span class="op">*</span>,
-    <span class="va">extra</span>,
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">shift_loc</span>(
+    <span class="va">noise_dist</span>,
+    <span class="va">loc</span>,
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Optional features (dataframes, blackjax, optax) live behind <code>pyproject</code> extras and are never imported at package import time. This helper imports the backing module lazily at first use and, when it is missing, raises an <code>ImportError</code> naming the exact <code>pip install</code> invocation that provides it.</p>
+<p>This converts Pyro’s <code>obs = data - prediction</code> idiom into an additive shift of the observation distribution’s location.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">module</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span></code></dt>
+<dt><code><span class="doc-parameter-name">noise_dist</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
-<p>The importable module name (e.g.&nbsp;<code>"pandas"</code>).</p>
+<p>A zero-centered location-family distribution.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">extra</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span></code></dt>
+<dt><code><span class="doc-parameter-name">loc</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-The <code>numpyro_forecast</code> extra that installs it (e.g.&nbsp;<code>"dataframes"</code>).
+The deterministic mean to add to the distribution’s location.
 </dd>
 </dl>
 </div>
@@ -770,9 +793,9 @@ The <code>numpyro_forecast</code> extra that installs it (e.g.&nbsp;<code>"dataf
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">ModuleType</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
-The imported module.
+A distribution centered at <code>loc</code>.
 </dd>
 </dl>
 </div>
@@ -781,9 +804,9 @@ The imported module.
 <h2 class="doc-raises">Raises</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">ImportError</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">NotImplementedError</span></code></dt>
 <dd>
-If <code>module</code> is not importable, with an actionable install hint.
+If <code>noise_dist</code> is of an unsupported type.
 </dd>
 </dl>
 </div>

@@ -7,7 +7,7 @@ Here we present an introduction to the `numpyro_forecast` package. This notebook
 
 Instead of hand-writing the NumPyro model and a bespoke prediction loop, we subclass [numpyro_forecast.forecaster.ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) and let [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) handle the *fit-once / forecast-any-horizon* mechanics (the forecast horizon is drawn from separate `_future` latent sites, so the variational guide is never resized).
 
-> **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism (rather than re-running the guide over the full covariates), and the seasonal design uses [fourier_features](../../reference/util.fourier_features.md#numpyro_forecast.util.fourier_features), an equivalent Fourier basis.
+> **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism (rather than re-running the guide over the full covariates), and the seasonal design uses [fourier_features](../../reference/features.fourier_features.md#numpyro_forecast.features.fourier_features), an equivalent Fourier basis.
 
 
 # Prepare notebook
@@ -37,9 +37,9 @@ from numpyro_forecast import (
     eval_crps,
 )
 from numpyro_forecast.datasets import load_bart_weekly
+from numpyro_forecast.features import fourier_features
 from numpyro_forecast.functional import Horizon, forecasting_model, predict, time_series
 from numpyro_forecast.typing import Array
-from numpyro_forecast.util import fourier_features
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [10, 6]
@@ -680,7 +680,7 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 2.1s (incl. compile)  |  loop 19.9s
+    wall-clock: vectorized 2.0s (incl. compile)  |  loop 19.2s
     vectorized mean out-of-sample CRPS: 0.0434
     loop       mean out-of-sample CRPS: 0.0473
     vectorized mean 50% coverage: 0.50  (nominal 0.50)

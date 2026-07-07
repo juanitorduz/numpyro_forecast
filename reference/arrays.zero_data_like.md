@@ -1,4 +1,4 @@
-## util.zero_data_like()
+## arrays.zero_data_like()
 
 
 Return zeros shaped like `data` but extended to the covariate duration.
@@ -7,7 +7,7 @@ Return zeros shaped like `data` but extended to the covariate duration.
 Usage
 
 ``` python
-util.zero_data_like(
+arrays.zero_data_like(
     data,
     covariates,
 )

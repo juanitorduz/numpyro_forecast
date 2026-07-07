@@ -145,37 +145,58 @@ Mean Winkler interval score for the central `alpha` prediction interval.
 Build a Mean Absolute Scaled Error metric scaled by `train_data`.
 
 
-## Utilities
+## Seasonal features
 
 
-Array helpers and feature builders.
+Fourier design matrices and seasonal tiling.
 
 
-[util.fourier_features()](util.fourier_features.md#numpyro_forecast.util.fourier_features)  
+[features.fourier_features()](features.fourier_features.md#numpyro_forecast.features.fourier_features)  
 Build a Fourier seasonality design matrix.
 
-[util.periodic_repeat()](util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat)  
+[features.periodic_repeat()](features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat)  
 Tile a seasonal pattern to cover `duration` time steps.
 
-[util.zero_data_like()](util.zero_data_like.md#numpyro_forecast.util.zero_data_like)  
+
+## Array helpers
+
+
+Time-axis array shaping for the train/forecast split.
+
+
+[arrays.zero_data_like()](arrays.zero_data_like.md#numpyro_forecast.arrays.zero_data_like)  
 Return zeros shaped like `data` but extended to the covariate duration.
 
-[util.concat_future()](util.concat_future.md#numpyro_forecast.util.concat_future)  
+[arrays.concat_future()](arrays.concat_future.md#numpyro_forecast.arrays.concat_future)  
 Concatenate in-sample and forecast-horizon arrays along the time axis.
 
-[util.shift_loc()](util.shift_loc.md#numpyro_forecast.util.shift_loc)  
+
+## Distribution surgery
+
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+
+[surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
 Re-center a zero-centered noise distribution at `loc`.
 
-[util.slice_time()](util.slice_time.md#numpyro_forecast.util.slice_time)  
+[surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
 Slice an elementwise distribution along the time axis `-2`.
 
-[util.prefix_condition()](util.prefix_condition.md#numpyro_forecast.util.prefix_condition)  
+[surgery.prefix_condition()](surgery.prefix_condition.md#numpyro_forecast.surgery.prefix_condition)  
 Condition a `(t+f)`-length distribution on a `t`-length data prefix.
 
-[util.register_elementwise()](util.register_elementwise.md#numpyro_forecast.util.register_elementwise)  
+[surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
 Declare a distribution family elementwise (usable as a decorator).
 
-[util.require()](util.require.md#numpyro_forecast.util.require)  
+
+## Optional dependencies
+
+
+Lazy imports behind pyproject extras.
+
+
+[optional.require()](optional.require.md#numpyro_forecast.optional.require)  
 Import an optional dependency, or raise a targeted `ImportError`.
 
 

@@ -64,18 +64,30 @@
 - [metrics.eval_interval_score](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_interval_score.html)
 - [metrics.make_mase](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.make_mase.html)
 
-#### Utilities
-> Array helpers and feature builders.
+#### Seasonal features
+> Fourier design matrices and seasonal tiling.
 
-- [util.fourier_features](https://juanitorduz.github.io/numpyro_forecast/reference/util.fourier_features.html)
-- [util.periodic_repeat](https://juanitorduz.github.io/numpyro_forecast/reference/util.periodic_repeat.html)
-- [util.zero_data_like](https://juanitorduz.github.io/numpyro_forecast/reference/util.zero_data_like.html)
-- [util.concat_future](https://juanitorduz.github.io/numpyro_forecast/reference/util.concat_future.html)
-- [util.shift_loc](https://juanitorduz.github.io/numpyro_forecast/reference/util.shift_loc.html)
-- [util.slice_time](https://juanitorduz.github.io/numpyro_forecast/reference/util.slice_time.html)
-- [util.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/util.prefix_condition.html)
-- [util.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/util.register_elementwise.html)
-- [util.require](https://juanitorduz.github.io/numpyro_forecast/reference/util.require.html)
+- [features.fourier_features](https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html)
+- [features.periodic_repeat](https://juanitorduz.github.io/numpyro_forecast/reference/features.periodic_repeat.html)
+
+#### Array helpers
+> Time-axis array shaping for the train/forecast split.
+
+- [arrays.zero_data_like](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.zero_data_like.html)
+- [arrays.concat_future](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html)
+
+#### Distribution surgery
+> Time-axis operations on observation distributions, extensible via singledispatch.
+
+- [surgery.shift_loc](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html)
+- [surgery.slice_time](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.slice_time.html)
+- [surgery.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html)
+- [surgery.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html)
+
+#### Optional dependencies
+> Lazy imports behind pyproject extras.
+
+- [optional.require](https://juanitorduz.github.io/numpyro_forecast/reference/optional.require.html)
 
 #### Exceptions
 > Package exception hierarchy raised at resolution and validation boundaries.

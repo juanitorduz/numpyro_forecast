@@ -281,8 +281,8 @@ The prefix/suffix mirroring is identical to :func:`predict`: while training the
 observation is observed; while forecasting the in-sample prefix is observed and
 the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
 site. The observation distribution must support time-axis surgery
-(:func:`~numpyro_forecast.util.slice_time` /
-:func:`~numpyro_forecast.util.prefix_condition`), i.e. an elementwise family.
+(:func:`~numpyro_forecast.surgery.slice_time` /
+:func:`~numpyro_forecast.surgery.prefix_condition`), i.e. an elementwise family.
 
 Parameters
 ----------
@@ -1147,9 +1147,9 @@ ValueError
     (a constant series, for which MASE is undefined).
 
 
-## Utilities
+## Seasonal features
 
-Array helpers and feature builders.
+Fourier design matrices and seasonal tiling.
 
 
 fourier_features(duration: int, period: float, num_terms: int) -> jaxtyping.Float[Array, 'duration two_num_terms']
@@ -1190,6 +1190,12 @@ Returns
 Array
     ``x`` periodically repeated to length ``duration`` along ``axis``.
 
+
+## Array helpers
+
+Time-axis array shaping for the train/forecast split.
+
+
 zero_data_like(data: jax.Array, covariates: jax.Array) -> jax.Array
 
 Return zeros shaped like ``data`` but extended to the covariate duration.
@@ -1228,6 +1234,12 @@ Returns
 -------
 Array
     The concatenation of ``prefix`` and ``suffix`` along ``axis``.
+
+
+## Distribution surgery
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
 
 shift_loc(noise_dist: numpyro.distributions.distribution.Distribution, loc: jax.Array) -> numpyro.distributions.distribution.Distribution
 
@@ -1328,6 +1340,12 @@ Returns
 -------
 type[dist.Distribution]
     ``cls`` unchanged, so this can decorate a class definition.
+
+
+## Optional dependencies
+
+Lazy imports behind pyproject extras.
+
 
 require(module: str, *, extra: str) -> module
 
@@ -1446,9 +1464,9 @@ MVNLayoutError(message: str | None = None) -> None
 
 A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
 
-Raised by :func:`~numpyro_forecast.util.shift_loc`,
-:func:`~numpyro_forecast.util.slice_time`, and
-:func:`~numpyro_forecast.util.prefix_condition` on MVN noise whose
+Raised by :func:`~numpyro_forecast.surgery.shift_loc`,
+:func:`~numpyro_forecast.surgery.slice_time`, and
+:func:`~numpyro_forecast.surgery.prefix_condition` on MVN noise whose
 ``loc``/``covariance_matrix`` shapes do not match the supported
 time-leading layout.
 

@@ -38,8 +38,8 @@ from numpyro.optim import Adam
 
 from numpyro_forecast import Forecaster, ForecastingModel, evaluate_forecast
 from numpyro_forecast.datasets import load_victoria_electricity
+from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.typing import Array
-from numpyro_forecast.util import periodic_repeat
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -298,7 +298,7 @@ length_scale_params, ax = pz.maxent(pz.InverseGamma(), lower=3, upper=10)
 </figure>
 
 
-These two `maxent` calls return the Inverse-Gamma parameters we plug into the model below (the hour-of-day effect is tiled over the horizon with the package helper [periodic_repeat](../../../reference/util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat)).
+These two `maxent` calls return the Inverse-Gamma parameters we plug into the model below (the hour-of-day effect is tiled over the horizon with the package helper [periodic_repeat](../../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat)).
 
 
     In [11]:

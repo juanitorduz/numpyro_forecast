@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>util.concat_future() – numpyro_forecast | numpyro_forecast</title>
+<title>surgery.register_elementwise() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/util.concat_future.html">
-  <meta name="description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html">
+  <meta name="description" content="Declare a distribution family elementwise (usable as a decorator).">
   <script type="application/ld+json">
 [
   {
@@ -140,23 +140,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "util.concat_future - numpyro_forecast",
+    "name": "surgery.register_elementwise - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/util.concat_future.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="util.concat_future() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/util.concat_future.html">
+  <meta property="og:title" content="surgery.register_elementwise() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Declare a distribution family elementwise (usable as a decorator).">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="util.concat_future() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
+  <meta name="twitter:title" content="surgery.register_elementwise() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Declare a distribution family elementwise (usable as a decorator).">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -206,7 +206,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">util.concat_future()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">surgery.register_elementwise()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -479,61 +479,85 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Utilities</span></a>
+ <span class="menu-text">Seasonal features</span></a>
 </div>
       <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.fourier_features.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.fourier_features()</span></span></a>
+  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">features.fourier_features()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.periodic_repeat.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.periodic_repeat()</span></span></a>
+  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">features.periodic_repeat()</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Array helpers</span></a>
+</div>
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.zero_data_like()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.zero_data_like.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.zero_data_like()</span></span></a>
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.concat_future()</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Distribution surgery</span></a>
+</div>
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.shift_loc()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.concat_future.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.concat_future()</span></span></a>
+  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.slice_time()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.shift_loc()</span></span></a>
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.prefix_condition()</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.slice_time()</span></span></a>
+  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.register_elementwise()</span></span></a>
   </div>
 </li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Optional dependencies</span></a>
+</div>
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/util.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.prefix_condition()</span></span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/util.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.register_elementwise()</span></span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/util.require.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">util.require()</span></span></a>
+  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">optional.require()</span></span></a>
   </div>
 </li>
       </ul>
@@ -543,7 +567,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Exceptions</span></a>
 </div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -611,7 +635,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -631,7 +655,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -669,7 +693,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -716,7 +740,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">util.concat_future()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.register_elementwise()</span></h2>
 </div>
 
 
@@ -734,35 +758,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Concatenate in-sample and forecast-horizon arrays along the time axis.</p>
+<p>Declare a distribution family elementwise (usable as a decorator).</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/util.py#L134-L151" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L34-L54" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">util</span><span class="op">.</span><span class="sig-name">concat_future</span>(
-    <span class="va">prefix</span>,
-    <span class="va">suffix</span>,
-    <span class="op">*</span>,
-    <span class="va">axis</span><span class="op">=-</span><span class="dv">2</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">register_elementwise</span>(<span class="bu">cls</span>)</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>An elementwise family is independent across every batch cell with an empty event shape, so <a href="surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="gdls-link gdls-code">slice_time()</a> may slice its broadcast parameters along the time axis and <a href="surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="gdls-link gdls-code">prefix_condition()</a> may reduce to the horizon marginal. Membership is by exact type; register each concrete subclass you rely on.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">prefix</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">cls</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">type[dist.Distribution]</span></code></dt>
 <dd>
-<p>In-sample array.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">suffix</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
-<dd>
-<p>Forecast-horizon array (same shape as <code>prefix</code> except along <code>axis</code>).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">axis</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">-2</span><br></span></code></dt>
-<dd>
-Time axis to concatenate along (defaults to <code>-2</code>).
+The distribution class to register.
 </dd>
 </dl>
 </div>
@@ -771,9 +785,9 @@ Time axis to concatenate along (defaults to <code>-2</code>).
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">type[dist.Distribution]</span></code></dt>
 <dd>
-The concatenation of <code>prefix</code> and <code>suffix</code> along <code>axis</code>.
+<code>cls</code> unchanged, so this can decorate a class definition.
 </dd>
 </dl>
 </div>

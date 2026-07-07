@@ -31,8 +31,8 @@ from numpyro.optim import Adam
 
 from numpyro_forecast import Forecaster, ForecastingModel, eval_crps
 from numpyro_forecast.datasets import load_bart_hierarchical
+from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.typing import Array
-from numpyro_forecast.util import periodic_repeat
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -122,7 +122,7 @@ The structure mirrors part I but spreads the effects across two hierarchies, ori
 
 \\\begin{align\*} \mu & = \text{level} + (\text{origin\\seasonal} + \text{destin\\seasonal}) + \text{pairwise} \\ y & \sim \text{Normal}(\mu,\\ \text{origin\\scale} + \text{destin\\scale}) \end{align\*}\\
 
-We declare three plates, `origin` (dim `-3`), `hour_of_week` (dim `-2`) and `destin` (dim `-1`), and open each effect under the plates it depends on. The per-destination level is sampled with `self.time_series(...)` under the `destin` plate, and the seasonal effect is tiled across the full horizon with [periodic_repeat](../../../reference/util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat). Broadcasting over the three plate dimensions assembles the `(origin, time, destin)` mean.
+We declare three plates, `origin` (dim `-3`), `hour_of_week` (dim `-2`) and `destin` (dim `-1`), and open each effect under the plates it depends on. The per-destination level is sampled with `self.time_series(...)` under the `destin` plate, and the seasonal effect is tiled across the full horizon with [periodic_repeat](../../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Broadcasting over the three plate dimensions assembles the `(origin, time, destin)` mean.
 
 
     In [4]:
@@ -314,7 +314,7 @@ fig.tight_layout();
     prior band shape: (500, 8, 504)
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_36442/741911304.py:98: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_58116/741911304.py:98: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -517,7 +517,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_36442/2085423411.py:106: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_58116/2085423411.py:106: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

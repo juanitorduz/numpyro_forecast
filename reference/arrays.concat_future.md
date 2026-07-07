@@ -1,4 +1,4 @@
-## util.concat_future()
+## arrays.concat_future()
 
 
 Concatenate in-sample and forecast-horizon arrays along the time axis.
@@ -7,7 +7,7 @@ Concatenate in-sample and forecast-horizon arrays along the time axis.
 Usage
 
 ``` python
-util.concat_future(
+arrays.concat_future(
     prefix,
     suffix,
     *,

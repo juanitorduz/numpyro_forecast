@@ -1,4 +1,4 @@
-## util.prefix_condition()
+## surgery.prefix_condition()
 
 
 Condition a `(t+f)`-length distribution on a `t`-length data prefix.
@@ -7,7 +7,7 @@ Condition a `(t+f)`-length distribution on a `t`-length data prefix.
 Usage
 
 ``` python
-util.prefix_condition(
+surgery.prefix_condition(
     noise_dist,
     data,
 )

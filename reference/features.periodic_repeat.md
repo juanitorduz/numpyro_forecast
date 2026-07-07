@@ -1,4 +1,4 @@
-## util.periodic_repeat()
+## features.periodic_repeat()
 
 
 Tile a seasonal pattern to cover [duration](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.duration) time steps.
@@ -7,7 +7,7 @@ Tile a seasonal pattern to cover [duration](forecaster.ForecastingModel.md#numpy
 Usage
 
 ``` python
-util.periodic_repeat(
+features.periodic_repeat(
     x,
     duration,
     *,

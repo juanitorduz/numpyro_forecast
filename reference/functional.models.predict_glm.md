@@ -15,7 +15,7 @@ functional.models.predict_glm(
 ```
 
 
-The generalized-linear counterpart of [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict): instead of a zero-centered noise distribution shifted by a mean, the caller supplies a link `obs_dist_fn` that maps the full-horizon `latent` predictor to the observation distribution directly (e.g. `lambda eta: Poisson(jnp.exp(eta))`). The prefix/suffix mirroring is identical to [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict): while training the observation is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the `"forecast"` deterministic site. The observation distribution must support time-axis surgery (`~numpyro_forecast.util.slice_time()` / `~numpyro_forecast.util.prefix_condition()`), i.e. an elementwise family.
+The generalized-linear counterpart of [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict): instead of a zero-centered noise distribution shifted by a mean, the caller supplies a link `obs_dist_fn` that maps the full-horizon `latent` predictor to the observation distribution directly (e.g. `lambda eta: Poisson(jnp.exp(eta))`). The prefix/suffix mirroring is identical to [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict): while training the observation is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled and exposed as the `"forecast"` deterministic site. The observation distribution must support time-axis surgery (`~numpyro_forecast.surgery.slice_time()` / `~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise family.
 
 
 ## Parameters

@@ -60,7 +60,7 @@ Zeros shaped like `data` extended to the full horizon.
 `zero_data: Array | None`
 
 
-Mirrors Pyro's [zero_data](functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon.zero_data) (and [numpyro_forecast.util.zero_data_like()](util.zero_data_like.md#numpyro_forecast.util.zero_data_like)): it exposes the shape/dtype of the data over the forecast horizon without leaking observed values. `None` when there is no data.
+Mirrors Pyro's [zero_data](functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon.zero_data) (and [numpyro_forecast.arrays.zero_data_like()](arrays.zero_data_like.md#numpyro_forecast.arrays.zero_data_like)): it exposes the shape/dtype of the data over the forecast horizon without leaking observed values. `None` when there is no data.
 
 
 ## Methods

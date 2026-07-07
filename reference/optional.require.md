@@ -1,4 +1,4 @@
-## util.require()
+## optional.require()
 
 
 Import an optional dependency, or raise a targeted `ImportError`.
@@ -7,7 +7,7 @@ Import an optional dependency, or raise a targeted `ImportError`.
 Usage
 
 ``` python
-util.require(
+optional.require(
     module,
     *,
     extra,

@@ -29,8 +29,8 @@ from numpyro.optim import Adam
 
 from numpyro_forecast import Forecaster, ForecastingModel, eval_crps
 from numpyro_forecast.datasets import load_bart_hierarchical
+from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.typing import Array
-from numpyro_forecast.util import periodic_repeat
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -116,7 +116,7 @@ This is the univariate model lifted to a panel. Each series \\s\\ gets its own r
 
 \\\begin{align\*} \mu\_{t,s} & = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s} \\ \ell\_{t,s} & = \ell\_{t-1,s} + \delta\_{t,s} \\ \delta\_{t,s} & \sim \text{Normal}(0, \sigma\_\text{drift}) \\ y\_{t,s} & \sim \text{Normal}(\mu\_{t,s}, \sigma). \end{align\*}\\
 
-The hierarchy is expressed with `numpyro.plate`. We wrap `self.time_series(...)` in an `n_series` plate so the drift (and its forecast `_future` companion) is sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../reference/util.periodic_repeat.md#numpyro_forecast.util.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together.
+The hierarchy is expressed with `numpyro.plate`. We wrap `self.time_series(...)` in an `n_series` plate so the drift (and its forecast `_future` companion) is sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together.
 
 
 ``` python

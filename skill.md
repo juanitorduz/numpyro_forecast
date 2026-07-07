@@ -82,19 +82,34 @@ Rolling-window backtesting and forecast metrics.
 - `metrics.eval_interval_score`
 - `metrics.make_mase`
 
-### Utilities
+### Seasonal features
 
-Array helpers and feature builders.
+Fourier design matrices and seasonal tiling.
 
-- `util.fourier_features`
-- `util.periodic_repeat`
-- `util.zero_data_like`
-- `util.concat_future`
-- `util.shift_loc`
-- `util.slice_time`
-- `util.prefix_condition`
-- `util.register_elementwise`
-- `util.require`
+- `features.fourier_features`
+- `features.periodic_repeat`
+
+### Array helpers
+
+Time-axis array shaping for the train/forecast split.
+
+- `arrays.zero_data_like`
+- `arrays.concat_future`
+
+### Distribution surgery
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+- `surgery.shift_loc`
+- `surgery.slice_time`
+- `surgery.prefix_condition`
+- `surgery.register_elementwise`
+
+### Optional dependencies
+
+Lazy imports behind pyproject extras.
+
+- `optional.require`
 
 ### Exceptions
 

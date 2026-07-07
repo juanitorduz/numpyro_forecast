@@ -1,4 +1,4 @@
-## util.slice_time()
+## surgery.slice_time()
 
 
 Slice an elementwise distribution along the time axis `-2`.
@@ -7,7 +7,7 @@ Slice an elementwise distribution along the time axis `-2`.
 Usage
 
 ``` python
-util.slice_time(
+surgery.slice_time(
     noise_dist,
     index,
 )
