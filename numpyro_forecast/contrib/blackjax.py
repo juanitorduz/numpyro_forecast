@@ -7,7 +7,7 @@ algorithms to the NumPyro ``MCMCKernel`` interface so they can be passed straigh
 
 BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``) and is
 never imported at package import time: it is pulled in lazily, via
-:func:`numpyro_forecast.util.require`, the first time a kernel is initialized. All three
+:func:`numpyro_forecast.optional.require`, the first time a kernel is initialized. All three
 kernels run one blackjax step per NumPyro sampling step; adaptation happens once inside
 :meth:`_BlackjaxKernel.init`, so these kernels require ``chain_method="sequential"`` and
 ``num_warmup=0`` (enforced/warned by
@@ -26,8 +26,8 @@ from numpyro.util import identity
 
 from numpyro_forecast.functional._validation import _require_positive_num_samples
 from numpyro_forecast.functional.posterior import _draw_posterior_impl
+from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
-from numpyro_forecast.util import require
 
 _BJState = namedtuple("_BJState", ["position", "inner", "rng_key"])
 """MCMC state threaded by every :class:`_BlackjaxKernel`.

@@ -14,7 +14,7 @@ from numpyro_forecast.functional import (
     forecasting_model,
     predict,
 )
-from numpyro_forecast.util import (
+from numpyro_forecast.surgery import (
     _mvn_time_params,
     prefix_condition,
     shift_loc,

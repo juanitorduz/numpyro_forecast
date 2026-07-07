@@ -13,9 +13,9 @@ import numpyro
 import numpyro.distributions as dist
 from numpyro.infer.reparam import LocScaleReparam
 
+from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.typing import Array
-from numpyro_forecast.util import periodic_repeat
 
 
 class UnivariateForecaster(ForecastingModel):
@@ -24,7 +24,7 @@ class UnivariateForecaster(ForecastingModel):
     The mean is ``bias + level_t + weight @ covariates_t`` where ``level`` is a
     Gaussian random walk (``LocScaleReparam`` improves the SVI geometry). The
     regression design ``covariates`` is supplied by the caller (e.g. Fourier
-    features from :func:`numpyro_forecast.util.fourier_features`).
+    features from :func:`numpyro_forecast.features.fourier_features`).
     """
 
     def model(self, zero_data: Array | None, covariates: Array) -> None:

@@ -3,7 +3,7 @@
 import jax.numpy as jnp
 import numpyro.distributions as dist
 
-from numpyro_forecast.util import (
+from numpyro_forecast.surgery import (
     _ELEMENTWISE_FAMILIES,
     prefix_condition,
     shift_loc,

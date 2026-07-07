@@ -1,21 +1,16 @@
-"""Tests for array/distribution/seasonality utilities."""
+"""Tests for the distribution-surgery dispatchers and the elementwise registry."""
 
 import jax.numpy as jnp
-import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from numpyro_forecast import util as nf_util
-from numpyro_forecast.util import (
+from numpyro_forecast import surgery
+from numpyro_forecast.surgery import (
     _ELEMENTWISE_FAMILIES,
-    concat_future,
-    fourier_features,
-    periodic_repeat,
     prefix_condition,
     register_elementwise,
     shift_loc,
     slice_time,
-    zero_data_like,
 )
 
 
@@ -26,30 +21,15 @@ def restore_elementwise_registry():
     Tests that register throwaway families must not leak them into the
     process-wide registry (which other tests inspect).
     """
-    families = set(nf_util._ELEMENTWISE_FAMILIES)
-    checked = set(nf_util._ELEMENTWISE_CHECKED)
+    families = set(surgery._ELEMENTWISE_FAMILIES)
+    checked = set(surgery._ELEMENTWISE_CHECKED)
     try:
         yield
     finally:
-        nf_util._ELEMENTWISE_FAMILIES.clear()
-        nf_util._ELEMENTWISE_FAMILIES.update(families)
-        nf_util._ELEMENTWISE_CHECKED.clear()
-        nf_util._ELEMENTWISE_CHECKED.update(checked)
-
-
-def test_zero_data_like_extends_to_covariate_duration() -> None:
-    data = jnp.ones((3, 10, 2))
-    covariates = jnp.ones((3, 17, 5))
-    zero = zero_data_like(data, covariates)
-    assert zero.shape == (3, 17, 2)
-    assert bool(jnp.all(zero == 0))
-
-
-def test_concat_future_default_time_axis() -> None:
-    prefix = jnp.ones((4, 2))
-    suffix = jnp.zeros((3, 2))
-    out = concat_future(prefix, suffix)
-    assert out.shape == (7, 2)
+        surgery._ELEMENTWISE_FAMILIES.clear()
+        surgery._ELEMENTWISE_FAMILIES.update(families)
+        surgery._ELEMENTWISE_CHECKED.clear()
+        surgery._ELEMENTWISE_CHECKED.update(checked)
 
 
 def test_shift_loc_normal() -> None:
@@ -131,44 +111,6 @@ def test_prefix_condition_iid_returns_future_slice() -> None:
     assert isinstance(future, dist.Normal)
     assert future.batch_shape == (2, 1)
     assert jnp.allclose(future.loc, loc[4:])
-
-
-def test_fourier_features_shape_and_values() -> None:
-    feats = fourier_features(duration=12, period=12.0, num_terms=3)
-    assert feats.shape == (12, 6)
-    # First column is sin(2*pi*1*t/12); at t=0 it is 0, at t=3 it is 1.
-    assert jnp.allclose(feats[0, 0], 0.0, atol=1e-6)
-    assert jnp.allclose(feats[3, 0], 1.0, atol=1e-6)
-
-
-def test_fourier_features_memoizes_identical_calls() -> None:
-    # The design matrix is cached per (duration, period, num_terms) tuple, so an
-    # identical call is served from the cache (same object), while different
-    # arguments produce a distinct array.
-    first = fourier_features(duration=12, period=12.0, num_terms=3)
-    assert fourier_features(duration=12, period=12.0, num_terms=3) is first
-    assert fourier_features(duration=12, period=12.0, num_terms=2) is not first
-
-
-def test_periodic_repeat_tiles_pattern() -> None:
-    season = jnp.array([1.0, 2.0, 3.0])
-    repeated = periodic_repeat(season, 7)
-    assert jnp.allclose(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
-
-
-def test_periodic_repeat_along_axis() -> None:
-    season = jnp.arange(6.0).reshape(2, 3)  # period 3 along axis -1
-    repeated = periodic_repeat(season, 5, axis=-1)
-    assert repeated.shape == (2, 5)
-    assert jnp.allclose(repeated[0], jnp.array([0.0, 1.0, 2.0, 0.0, 1.0]))
-
-
-def test_periodic_repeat_accepts_array_like() -> None:
-    # ArrayLike inputs (here a NumPy array, not a traced jax.Array) are accepted
-    # and converted internally, so callers need no explicit cast.
-    repeated = periodic_repeat(np.array([1.0, 2.0, 3.0]), 7)
-    assert repeated.shape == (7,)
-    assert jnp.allclose(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
 
 
 # --- P6: elementwise registry ------------------------------------------------
@@ -305,25 +247,3 @@ def test_mvn_subclass_dispatches_to_mvn_handler() -> None:
     sliced = slice_time(d, slice(None, 2))
     assert isinstance(sliced, dist.MultivariateNormal)
     assert sliced.loc.shape == (5, 2)
-
-
-# --- P0: require / _api_canary error branches --------------------------------
-
-
-def test_require_missing_module_message() -> None:
-    """require() on a missing module names the extra and the pip install command."""
-    with pytest.raises(ImportError) as excinfo:
-        nf_util.require("definitely_not_a_module_xyz", extra="blackjax")
-    msg = str(excinfo.value)
-    assert "blackjax" in msg
-    assert "pip install numpyro_forecast[blackjax]" in msg
-
-
-def test_api_canary_missing_attr_message() -> None:
-    """_api_canary on a real module with a fabricated attr raises a drift error."""
-    with pytest.raises(AttributeError) as excinfo:
-        nf_util._api_canary("math", ["definitely_not_an_attr"])
-    msg = str(excinfo.value)
-    assert "math" in msg
-    assert "definitely_not_an_attr" in msg
-    assert "drifted" in msg

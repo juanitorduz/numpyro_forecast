@@ -66,8 +66,8 @@ from jax import random
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.evaluate import eval_crps
+from numpyro_forecast.features import fourier_features
 from numpyro_forecast.forecaster import Forecaster, ForecastingModel
-from numpyro_forecast.util import fourier_features
 
 
 class SeasonalForecaster(ForecastingModel):
@@ -150,6 +150,7 @@ from jax import random
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.evaluate import eval_crps
+from numpyro_forecast.features import fourier_features
 from numpyro_forecast.functional import (
     Horizon,
     draw_posterior,
@@ -159,7 +160,6 @@ from numpyro_forecast.functional import (
     predict,
     time_series,
 )
-from numpyro_forecast.util import fourier_features
 
 
 def seasonal_body(h: Horizon, covariates):

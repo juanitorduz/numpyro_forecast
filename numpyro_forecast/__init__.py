@@ -6,14 +6,17 @@ from jaxtyping import install_import_hook
 
 with install_import_hook("numpyro_forecast", "beartype.beartype"):
     from numpyro_forecast import (  # noqa: F401
+        arrays,
         convert,
         datasets,
         evaluate,
         exceptions,
+        features,
         forecaster,
         functional,
         metrics,
-        util,
+        optional,
+        surgery,
     )
 
 from numpyro_forecast.convert import add_forecast_groups, to_datatree
@@ -49,7 +52,7 @@ from numpyro_forecast.forecaster import (
     PathfinderForecaster,
 )
 from numpyro_forecast.functional import forecasting_model
-from numpyro_forecast.util import register_elementwise
+from numpyro_forecast.surgery import register_elementwise
 
 try:
     __version__ = version("numpyro_forecast")

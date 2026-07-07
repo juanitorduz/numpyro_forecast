@@ -17,7 +17,7 @@ from numpyro.infer.reparam import LocScaleReparam
 from numpyro_forecast.forecaster import ForecastingModel, PathfinderForecaster
 from numpyro_forecast.functional import draw_posterior, fit_mcmc, forecast
 from numpyro_forecast.metrics import crps_empirical
-from numpyro_forecast.util import _api_canary
+from numpyro_forecast.optional import _api_canary
 
 pytest.importorskip("blackjax")
 

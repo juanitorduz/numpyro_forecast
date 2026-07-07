@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 `numpyro_forecast` is a JAX/NumPyro port of Pyro's `pyro.contrib.forecast`
 module. The design context lives in the module docstrings (`forecaster.py`,
-`evaluate.py`, `util.py`) and the example notebooks under `docs/examples/` — read
+`evaluate.py`, `surgery.py`) and the example notebooks under `docs/examples/` — read
 the relevant ones before making non-trivial changes.
 
 ## Conventions
