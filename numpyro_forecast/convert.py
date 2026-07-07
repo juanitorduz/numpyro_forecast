@@ -21,7 +21,7 @@ import numpy as np
 import xarray
 from jax import random
 
-from numpyro_forecast.functional import MCMCFit, draw_posterior, predict_in_sample
+from numpyro_forecast.functional import MCMCFit, draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
 
 _DEFAULT_NUM_PREDICTIVE_SAMPLES = 1_000
@@ -79,6 +79,33 @@ def _merge_coords(
     return merged
 
 
+def _forecast_group_datasets(
+    forecast_draws: "np.ndarray",
+    covariates_future: Array,
+    future_time: "np.ndarray",
+) -> tuple["xarray.Dataset", "xarray.Dataset"]:
+    """Build the ``predictions`` and ``predictions_constant_data`` datasets.
+
+    ``forecast_draws`` must already carry the ``(chain, draw, future, obs)``
+    layout; callers own the chain reshape (:func:`to_datatree` applies the fit's
+    real chain structure, :func:`add_forecast_groups` a single pseudo-chain).
+    """
+    future_coords = cast("dict[Any, Any]", {"time": future_time})
+    predictions_ds = arviz_base.dict_to_dataset(
+        {"obs": forecast_draws},
+        sample_dims=_SAMPLE_DIMS,
+        dims={"obs": ["time", "obs_dim"]},
+        coords=future_coords,
+    )
+    predictions_constant_ds = arviz_base.dict_to_dataset(
+        {"covariates": np.asarray(covariates_future)},
+        sample_dims=[],
+        dims={"covariates": ["time", "covariate_dim"]},
+        coords=future_coords,
+    )
+    return predictions_ds, predictions_constant_ds
+
+
 def to_datatree(
     rng_key: Array,
     fit: object,
@@ -93,8 +120,9 @@ def to_datatree(
 ) -> "xarray.DataTree":
     r"""Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
 
-    PRNG: ``rng_key`` is consumed by the in-sample posterior-predictive draws (and,
-    for a variational fit, the posterior draws).
+    PRNG: ``rng_key`` is consumed by the in-sample posterior-predictive draws (for
+    a variational fit, also the posterior draws) and, when a forecast horizon is
+    present, the forecast draws.
 
     Parameters
     ----------
@@ -109,17 +137,26 @@ def to_datatree(
     data
         In-sample data with time at axis ``-2``.
     covariates
-        In-sample covariates with time at axis ``-2``.
+        Covariates with time at axis ``-2``. When ``covariates`` extends beyond
+        ``data`` along the time axis (the package-wide shape convention for a
+        forecast horizon), the trailing rows are treated as future covariates:
+        the returned tree additionally carries ``predictions`` (forecast ``obs``
+        draws from :func:`~numpyro_forecast.functional.prediction.forecast`) and
+        ``predictions_constant_data`` groups.
     num_predictive_samples
         Number of posterior draws for a variational fit (ignored for
         :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
-        Defaults to ``1_000``.
+        The same draws drive the in-sample predictive and the forecast. Defaults
+        to ``1_000``.
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate.
     time_coord
-        Optional explicit in-sample time coordinate values; defaults to
-        ``range(n_time)``.
+        Optional explicit time coordinate values. Without a forecast horizon it
+        covers the in-sample window (defaults to ``range(n_time)``); with a
+        horizon it must cover the full ``covariates`` length and is split into
+        the in-sample and forecast time coordinates (the default is the integer
+        continuation).
     posterior_dims
         Optional mapping from a posterior site name to its non-sample dimension
         names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
@@ -133,16 +170,35 @@ def to_datatree(
     xarray.DataTree
         A tree with ``posterior`` (``(chain, draw, ...)``; a single pseudo-chain
         plus ``variational: True`` attrs for SVI/Pathfinder), ``posterior_predictive``
-        (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups.
+        (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups. When
+        ``covariates`` extends beyond ``data``, also ``predictions`` and
+        ``predictions_constant_data`` groups (the forecast keeps an MCMC fit's real
+        chain structure).
+
+    Raises
+    ------
+    ValueError
+        If ``time_coord`` is given but its length does not match the in-sample
+        window plus the forecast horizon.
 
     Notes
     -----
     ``rng_key`` is split internally: one subkey drives the posterior draws (for
-    variational fits) and the other the in-sample predictive. The split is a
-    deterministic derivation applied for every fit type, so passing the same key
-    twice never correlates the two sample sets.
+    variational fits), one the in-sample predictive, and, when a horizon is
+    present, a third the forecast. The split is a deterministic derivation
+    applied for every fit type, so passing the same key twice never correlates
+    the sample sets. For step-by-step control over the forecast draws (e.g. a
+    custom ``batch_size``), build the in-sample tree with matching-length
+    covariates and attach the horizon with :func:`add_forecast_groups`.
     """
-    key_post, key_pred = random.split(rng_key)
+    n_time = data.shape[-2]
+    horizon = covariates.shape[-2] - n_time
+
+    if horizon > 0:
+        key_post, key_pred, key_forecast = random.split(rng_key, 3)
+    else:
+        key_post, key_pred = random.split(rng_key)
+        key_forecast = None
 
     is_mcmc = isinstance(fit, MCMCFit)
     if is_mcmc:
@@ -155,8 +211,20 @@ def to_datatree(
         )
         samples = draw_posterior(key_post, fit, num)
 
-    n_time = data.shape[-2]
-    time = np.asarray(time_coord) if time_coord is not None else np.arange(n_time)
+    if time_coord is not None:
+        time_values = np.asarray(time_coord)
+        expected = n_time + max(horizon, 0)
+        if time_values.shape[0] != expected:
+            msg = (
+                f"time_coord has length {time_values.shape[0]} but must cover "
+                f"{expected} steps ({n_time} in-sample plus {max(horizon, 0)} forecast)"
+            )
+            raise ValueError(msg)
+        time = time_values[:n_time]
+        future_time = time_values[n_time:]
+    else:
+        time = np.arange(n_time)
+        future_time = np.arange(n_time, n_time + max(horizon, 0))
     merged_coords = _merge_coords(time, coords)
 
     merged_arg = cast("dict[Any, Any]", merged_coords)
@@ -171,7 +239,8 @@ def to_datatree(
         attrs=posterior_attrs,
     )
 
-    predictive = predict_in_sample(key_pred, model, samples, covariates)
+    covariates_insample = covariates[..., :n_time, :]
+    predictive = predict_in_sample(key_pred, model, samples, covariates_insample)
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_predictive(fit, predictive)},
         sample_dims=_SAMPLE_DIMS,
@@ -186,20 +255,29 @@ def to_datatree(
         coords=merged_arg,
     )
     constant_ds = arviz_base.dict_to_dataset(
-        {"covariates": np.asarray(covariates)},
+        {"covariates": np.asarray(covariates_insample)},
         sample_dims=[],
         dims={"covariates": ["time", "covariate_dim"]},
         coords=merged_arg,
     )
 
-    tree = xarray.DataTree.from_dict(
-        {
-            "posterior": posterior_ds,
-            "posterior_predictive": pp_ds,
-            "observed_data": observed_ds,
-            "constant_data": constant_ds,
-        }
-    )
+    groups: dict[str, Any] = {
+        "posterior": posterior_ds,
+        "posterior_predictive": pp_ds,
+        "observed_data": observed_ds,
+        "constant_data": constant_ds,
+    }
+    if key_forecast is not None:
+        forecast_samples = forecast(key_forecast, model, samples, data, covariates)
+        predictions_ds, predictions_constant_ds = _forecast_group_datasets(
+            _reshape_predictive(fit, forecast_samples),
+            covariates[..., n_time:, :],
+            future_time,
+        )
+        groups["predictions"] = predictions_ds
+        groups["predictions_constant_data"] = predictions_constant_ds
+
+    tree = xarray.DataTree.from_dict(groups)
     tree.attrs.update(
         {
             "inference_library": "numpyro",
@@ -222,7 +300,9 @@ def add_forecast_groups(
     Adds a ``predictions`` group (the forecast ``obs`` draws) and a
     ``predictions_constant_data`` group (the future covariates). The forecast
     ``time`` coordinate continues the in-sample one: integer continuation by
-    default, or explicit values via ``time_coord``.
+    default, or explicit values via ``time_coord``. This is the step-by-step
+    route for draws you produced yourself; :func:`to_datatree` attaches the same
+    groups automatically when its ``covariates`` extend beyond ``data``.
 
     Parameters
     ----------
@@ -272,19 +352,8 @@ def add_forecast_groups(
             "pass explicit time_coord for the forecast horizon"
         )
         raise ValueError(msg)
-    future_coords = cast("dict[Any, Any]", {"time": future_time})
-
-    predictions_ds = arviz_base.dict_to_dataset(
-        {"obs": np.asarray(forecast_samples)[None]},
-        sample_dims=_SAMPLE_DIMS,
-        dims={"obs": ["time", "obs_dim"]},
-        coords=future_coords,
-    )
-    predictions_constant_ds = arviz_base.dict_to_dataset(
-        {"covariates": np.asarray(covariates_future)},
-        sample_dims=[],
-        dims={"covariates": ["time", "covariate_dim"]},
-        coords=future_coords,
+    predictions_ds, predictions_constant_ds = _forecast_group_datasets(
+        np.asarray(forecast_samples)[None], covariates_future, future_time
     )
 
     groups: dict[str, Any] = {name: node.dataset for name, node in tree.children.items()}

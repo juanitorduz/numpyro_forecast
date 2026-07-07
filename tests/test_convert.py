@@ -178,6 +178,99 @@ def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, future_days)
 
 
+def test_to_datatree_forecast_covariates_add_prediction_groups() -> None:
+    """Covariates extending beyond the data attach the forecast groups in one call."""
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n + 5))
+    assert "predictions" in tree.children
+    assert "predictions_constant_data" in tree.children
+    np.testing.assert_array_equal(tree["predictions"].coords["time"].values, np.arange(n, n + 5))
+    # constant_data holds only the in-sample slice; the future rows live in
+    # predictions_constant_data.
+    assert tree["constant_data"].sizes["time"] == n
+    assert tree["predictions_constant_data"].sizes["time"] == 5
+
+
+def test_to_datatree_forecast_keeps_mcmc_chain_structure() -> None:
+    """The predictions group preserves the fit's real (chain, draw) layout."""
+    fit, data, _ = _mcmc_fit(num_chains=2)
+    n = data.shape[-2]
+    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n + 4))
+    preds = tree["predictions"]
+    assert preds.sizes["chain"] == 2
+    assert preds.sizes["draw"] == 50
+    assert preds.sizes["time"] == 4
+
+
+def test_to_datatree_forecast_variational_draw_count() -> None:
+    """A variational fit forecasts with the same draws as the in-sample predictive."""
+    data = _series()
+    n = data.shape[-2]
+    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, empty_covariates(n), num_steps=40)
+    tree = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        empty_covariates(n + 3),
+        num_predictive_samples=20,
+    )
+    preds = tree["predictions"]
+    assert preds.sizes["chain"] == 1
+    assert preds.sizes["draw"] == 20
+    assert tree["posterior_predictive"].sizes["draw"] == 20
+
+
+def test_to_datatree_forecast_full_length_time_coord_splits() -> None:
+    """With a horizon, an explicit time_coord covers the full covariates length."""
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    custom_time = list(range(300, 300 + n + 3))
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        empty_covariates(n + 3),
+        time_coord=custom_time,
+    )
+    np.testing.assert_array_equal(tree["observed_data"].coords["time"].values, custom_time[:n])
+    np.testing.assert_array_equal(tree["predictions"].coords["time"].values, custom_time[n:])
+
+
+def test_to_datatree_forecast_rejects_insample_length_time_coord() -> None:
+    """An in-sample-length time_coord with a horizon present raises by name."""
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    with pytest.raises(ValueError, match="time_coord has length"):
+        to_datatree(
+            random.PRNGKey(2),
+            fit,
+            RandomWalkModel(),
+            data,
+            empty_covariates(n + 3),
+            time_coord=list(range(n)),
+        )
+
+
+def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The forecast groups also go through arviz_base.dict_to_dataset (normative rule)."""
+    calls = {"count": 0}
+    real = arviz_base.dict_to_dataset
+
+    def spy(*args: object, **kwargs: object) -> object:
+        calls["count"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(arviz_base, "dict_to_dataset", spy)
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n + 2))
+    # The four in-sample groups plus predictions and predictions_constant_data.
+    assert calls["count"] == 6
+
+
 def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every group must be built through arviz_base.dict_to_dataset (normative rule)."""
     calls = {"count": 0}
