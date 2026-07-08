@@ -761,13 +761,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L272-L323" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L274-L334" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">BlackjaxMCLMCKernel</span>()</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The step size and trajectory length <code>L</code> are tuned once in <code>~_BlackjaxKernel.init()</code> via <code>blackjax.mclmc_find_L_and_step_size</code>; each MCMC step is then a single tuned MCLMC step.</p>
+<p>The step size, trajectory length <code>L</code>, and diagonal preconditioner (inverse mass matrix) are tuned once in <code>~_BlackjaxKernel.init()</code> via <code>blackjax.mclmc_find_L_and_step_size</code>; each MCMC step is then a single tuned MCLMC step.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

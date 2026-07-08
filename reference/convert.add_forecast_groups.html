@@ -763,7 +763,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L213-L295" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L307-L380" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast_groups</span>(</span>
@@ -771,7 +771,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>.</p>
+<p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>. This is the step-by-step route for draws you produced yourself; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> attaches the same groups automatically when its <code>covariates</code> extend beyond <code>data</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

@@ -732,6 +732,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
     </div>
@@ -762,12 +763,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L394-L455" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L483-L559" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">fit_pathfinder</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>, <span class="va">model</span>, <span class="va">data</span>, <span class="va">covariates</span>, <span class="op">*</span>, <span class="va">num_elbo_samples</span><span class="op">=</span><span class="dv">200</span>, <span class="va">ftol</span><span class="op">=</span><span class="fl">1e-05</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">model</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">data</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_elbo_samples</span><span class="op">=</span><span class="dv">200</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">ftol</span><span class="op">=</span><span class="fl">1e-05</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">maxiter</span><span class="op">=</span><span class="dv">30</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>PRNG: <code>rng_key</code> is split into a model-initialization stream and a Pathfinder-approximation stream.</p>
@@ -798,7 +806,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">ftol</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">float</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="fl">1e-05</span></span></code></dt>
 <dd>
-L-BFGS relative function-value tolerance (convergence criterion).
+<p>L-BFGS relative function-value tolerance (convergence criterion).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">maxiter</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">30</span></span></code></dt>
+<dd>
+Maximum number of L-BFGS iterations (blackjax’s default is <code>30</code>). Models with per-step time latents typically need far more: the default suits tens of parameters, while a few hundred parameters (e.g.&nbsp;a 400-step random walk) converge around <code>1_000</code>.
 </dd>
 </dl>
 </div>
@@ -813,6 +825,10 @@ The fitted variational approximation.
 </dd>
 </dl>
 </div>
+</section>
+<section id="notes" class="level2 doc-notes">
+<h2 class="doc-notes">Notes</h2>
+<p>Runs with <code>_stable_bfgs_sample()</code> patched into blackjax (via <code>_ensure_stable_bfgs_sample()</code>): upstream’s <code>bfgs_sample</code> underflows its log-determinant beyond a few hundred parameters, which floors every path ELBO at <code>-inf</code> and makes the returned state garbage.</p>
 
 
 </section>

@@ -22,7 +22,7 @@ convert.to_datatree(
 ```
 
 
-PRNG: `rng_key` is consumed by the in-sample posterior-predictive draws (and, for a variational fit, the posterior draws).
+PRNG: `rng_key` is consumed by the in-sample posterior-predictive draws (for a variational fit, also the posterior draws) and, when a forecast horizon is present, the forecast draws.
 
 
 ## Parameters
@@ -41,16 +41,16 @@ The forecasting model that produced `fit`.
 In-sample data with time at axis `-2`.
 
 `covariates: Array`  
-In-sample covariates with time at axis `-2`.
+Covariates with time at axis `-2`. When `covariates` extends beyond `data` along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries `predictions` (forecast `obs` draws from `~numpyro_forecast.functional.prediction.forecast()`) and `predictions_constant_data` groups.
 
 `num_predictive_samples: int | None = None`  
-Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws). Defaults to `1_000`.
+Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to `1_000`.
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
-Optional extra coordinates; these take precedence over the generated `time` coordinate.
+Optional extra coordinates; these take precedence over the generated `time` coordinate. They also propagate to the forecast groups, where the generated forecast `time` takes precedence instead (a user `time` entry covers the in-sample window; use `time_coord` for explicit forecast time values).
 
 `time_coord: Sequence[Any] | None = None`  
-Optional explicit in-sample time coordinate values; defaults to `range(n_time)`.
+Optional explicit time coordinate values. Without a forecast horizon it covers the in-sample window (defaults to `range(n_time)`); with a horizon it must cover the full `covariates` length and is split into the in-sample and forecast time coordinates (the default is the integer continuation).
 
 `posterior_dims: Mapping[str, Sequence[str]] | None = None`  
 Optional mapping from a posterior site name to its non-sample dimension names, e.g. `{"drift": ["time"]}`. Sites listed here share the tree-wide `time` coordinate; unlisted sites keep ArviZ's auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental `n_params == n_time` would misattribute the axis).
@@ -60,9 +60,16 @@ Optional mapping from a posterior site name to its non-sample dimension names, e
 
 
 `xarray.DataTree`  
-A tree with `posterior` (`(chain, draw, ...)`; a single pseudo-chain plus `variational: True` attrs for SVI/Pathfinder), `posterior_predictive` (in-sample `obs`), `observed_data`, and `constant_data` groups.
+A tree with `posterior` (`(chain, draw, ...)`; a single pseudo-chain plus `variational: True` attrs for SVI/Pathfinder), `posterior_predictive` (in-sample `obs`), `observed_data`, and `constant_data` groups. When `covariates` extends beyond `data`, also `predictions` and `predictions_constant_data` groups (the forecast keeps an MCMC fit's real chain structure).
+
+
+## Raises
+
+
+`ValueError`  
+If `covariates` is shorter than `data` along the time axis, or if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon.
 
 
 ## Notes
 
-`rng_key` is split internally: one subkey drives the posterior draws (for variational fits) and the other the in-sample predictive. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the two sample sets.
+`rng_key` is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. For step-by-step control over the forecast draws (e.g. a custom `batch_size`), build the in-sample tree with matching-length covariates and attach the horizon with [add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups).

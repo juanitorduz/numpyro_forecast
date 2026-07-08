@@ -13,7 +13,7 @@ convert.add_forecast_groups(
 ```
 
 
-Adds a `predictions` group (the forecast `obs` draws) and a `predictions_constant_data` group (the future covariates). The forecast `time` coordinate continues the in-sample one: integer continuation by default, or explicit values via `time_coord`.
+Adds a `predictions` group (the forecast `obs` draws) and a `predictions_constant_data` group (the future covariates). The forecast `time` coordinate continues the in-sample one: integer continuation by default, or explicit values via `time_coord`. This is the step-by-step route for draws you produced yourself; [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) attaches the same groups automatically when its `covariates` extend beyond `data`.
 
 
 ## Parameters

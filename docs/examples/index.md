@@ -35,3 +35,9 @@ Hierarchical forecasting I
 
 
 Hierarchical forecasting II
+
+
+<a href="../../docs/examples/inference_methods_comparison.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"></a>
+
+
+Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC

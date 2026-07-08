@@ -11,7 +11,7 @@ contrib.blackjax.BlackjaxMCLMCKernel()
 ```
 
 
-The step size and trajectory length `L` are tuned once in `~_BlackjaxKernel.init()` via `blackjax.mclmc_find_L_and_step_size`; each MCMC step is then a single tuned MCLMC step.
+The step size, trajectory length `L`, and diagonal preconditioner (inverse mass matrix) are tuned once in `~_BlackjaxKernel.init()` via `blackjax.mclmc_find_L_and_step_size`; each MCMC step is then a single tuned MCLMC step.
 
 
 ## Parameters

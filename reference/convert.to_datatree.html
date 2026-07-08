@@ -732,6 +732,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
@@ -763,7 +764,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L82-L210" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L119-L304" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -780,7 +781,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>PRNG: <code>rng_key</code> is consumed by the in-sample posterior-predictive draws (and, for a variational fit, the posterior draws).</p>
+<p>PRNG: <code>rng_key</code> is consumed by the in-sample posterior-predictive draws (for a variational fit, also the posterior draws) and, when a forecast horizon is present, the forecast draws.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -804,19 +805,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>In-sample covariates with time at axis <code>-2</code>.</p>
+<p>Covariates with time at axis <code>-2</code>. When <code>covariates</code> extends beyond <code>data</code> along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries <code>predictions</code> (forecast <code>obs</code> draws from <code>~numpyro_forecast.functional.prediction.forecast()</code>) and <code>predictions_constant_data</code> groups.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">num_predictive_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Number of posterior draws for a variational fit (ignored for <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>, which uses its own draws). Defaults to <code>1_000</code>.</p>
+<p>Number of posterior draws for a variational fit (ignored for <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to <code>1_000</code>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional extra coordinates; these take precedence over the generated <code>time</code> coordinate.</p>
+<p>Optional extra coordinates; these take precedence over the generated <code>time</code> coordinate. They also propagate to the forecast groups, where the generated forecast <code>time</code> takes precedence instead (a user <code>time</code> entry covers the in-sample window; use <code>time_coord</code> for explicit forecast time values).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional explicit in-sample time coordinate values; defaults to <code>range(n_time)</code>.</p>
+<p>Optional explicit time coordinate values. Without a forecast horizon it covers the in-sample window (defaults to <code>range(n_time)</code>); with a horizon it must cover the full <code>covariates</code> length and is split into the in-sample and forecast time coordinates (the default is the integer continuation).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">posterior_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[str]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -831,14 +832,25 @@ Optional mapping from a posterior site name to its non-sample dimension names, e
 <dl>
 <dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single pseudo-chain plus <code>variational: True</code> attrs for SVI/Pathfinder), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups.
+A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single pseudo-chain plus <code>variational: True</code> attrs for SVI/Pathfinder), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (the forecast keeps an MCMC fit’s real chain structure).
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>covariates</code> is shorter than <code>data</code> along the time axis, or if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.
 </dd>
 </dl>
 </div>
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p><code>rng_key</code> is split internally: one subkey drives the posterior draws (for variational fits) and the other the in-sample predictive. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the two sample sets.</p>
+<p><code>rng_key</code> is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. For step-by-step control over the forecast draws (e.g.&nbsp;a custom <code>batch_size</code>), build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
 
 
 </section>

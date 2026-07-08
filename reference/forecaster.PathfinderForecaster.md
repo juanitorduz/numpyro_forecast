@@ -34,3 +34,6 @@ Number of Monte Carlo samples used to estimate the ELBO along the L-BFGS path.
 
 `ftol: float = ``1e-05`  
 L-BFGS relative function-value tolerance (convergence criterion).
+
+`maxiter: int = ``30`  
+Maximum number of L-BFGS iterations (see `~numpyro_forecast.contrib.blackjax.fit_pathfinder()`; models with per-step time latents typically need far more than the default `30`).
