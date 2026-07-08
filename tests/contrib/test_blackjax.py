@@ -238,6 +238,9 @@ def test_blackjax_api_canaries() -> None:
     """Pin the exact BlackJAX symbols the adapters rely on (risk K1)."""
     _api_canary("blackjax", ["nuts", "window_adaptation", "mclmc", "mclmc_find_L_and_step_size"])
     _api_canary("blackjax.mcmc.mclmc", ["init", "build_kernel"])
+    # The stable-sampler patch replaces this exact symbol in both namespaces.
+    _api_canary("blackjax.optimizers.lbfgs", ["bfgs_sample", "minimize_lbfgs"])
+    _api_canary("blackjax.vi.pathfinder", ["bfgs_sample"])
 
 
 # --- Pathfinder (P11) --------------------------------------------------------
@@ -341,6 +344,110 @@ def test_pathfinder_fit_pickle_round_trip() -> None:
     # The restored fit still draws a valid constrained posterior.
     post = draw_posterior(random.PRNGKey(2), restored, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
+
+
+def test_stable_bfgs_sample_matches_dense_gaussian_low_dim() -> None:
+    """The stable sampler's log density equals the dense MVN logpdf it factorizes.
+
+    The factors ``(alpha, beta, gamma)`` define the approximation's covariance
+    ``Sigma = diag(alpha) + beta @ gamma @ beta.T`` (formula II.1 of Zhang et al.),
+    so the returned log density must match the explicit multivariate normal.
+    """
+    from jax.scipy.stats import multivariate_normal
+
+    from numpyro_forecast.contrib.blackjax import _stable_bfgs_sample
+
+    key_factors, key_sample = random.split(random.PRNGKey(0))
+    k1, k2, k3, k4 = random.split(key_factors, 4)
+    dim, rank = 5, 4
+    alpha = random.uniform(k1, (dim,), minval=0.5, maxval=1.5)
+    beta = 0.3 * random.normal(k2, (dim, rank))
+    core = 0.3 * random.normal(k3, (rank, rank))
+    gamma = core @ core.T  # PSD keeps both Sigma and I + R @ gamma @ R.T valid
+    position = random.normal(k4, (dim,))
+    grad_position = jnp.zeros(dim)
+
+    phi, logq = _stable_bfgs_sample(key_sample, 100, position, grad_position, alpha, beta, gamma)
+    sigma_dense = jnp.diag(alpha) + beta @ gamma @ beta.T
+    expected = multivariate_normal.logpdf(phi, position, sigma_dense)
+    assert bool(jnp.allclose(logq, expected, rtol=1e-3, atol=1e-3))
+
+
+def test_stable_bfgs_sample_finite_beyond_float_underflow() -> None:
+    """Regression: upstream's ``log(prod(alpha))`` underflows to ``-inf`` in high dim.
+
+    With 600 curvature scales of ``1e-3`` the product underflows in float32 and
+    float64 alike, so upstream floors the log density at ``+inf`` and every path
+    ELBO at ``-inf``. The sum-of-logs form must stay finite.
+    """
+    from numpyro_forecast.contrib.blackjax import _stable_bfgs_sample
+
+    dim, rank = 600, 4
+    alpha = jnp.full((dim,), 1e-3)
+    beta = 1e-3 * random.normal(random.PRNGKey(0), (dim, rank))
+    gamma = 0.1 * jnp.eye(rank)
+    assert bool(jnp.isneginf(jnp.log(jnp.prod(alpha))))  # the upstream failure mode
+
+    _phi, logq = _stable_bfgs_sample(
+        random.PRNGKey(1), 20, jnp.zeros(dim), jnp.zeros(dim), alpha, beta, gamma
+    )
+    assert bool(jnp.all(jnp.isfinite(logq)))
+
+
+def test_stable_bfgs_sample_patch_applied() -> None:
+    import blackjax.optimizers.lbfgs as lbfgs_module
+    import blackjax.vi.pathfinder as pathfinder_module
+
+    from numpyro_forecast.contrib.blackjax import (
+        _ensure_stable_bfgs_sample,
+        _stable_bfgs_sample,
+    )
+
+    _ensure_stable_bfgs_sample()
+    assert lbfgs_module.bfgs_sample is _stable_bfgs_sample
+    assert pathfinder_module.bfgs_sample is _stable_bfgs_sample
+
+
+def test_fit_pathfinder_high_dim_finite_elbo() -> None:
+    """Regression: a 300-step random walk (302 parameters) gets a finite ELBO.
+
+    Without the stable sampler every ELBO on the L-BFGS path is ``-inf`` for a
+    model of this size and the returned state is the degenerate first iterate.
+    """
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (300, 1)), axis=-2)
+    fit = fit_pathfinder(
+        random.PRNGKey(1),
+        ReparamModel(),
+        data,
+        _empty_covariates(300),
+        num_elbo_samples=100,
+        maxiter=50,
+    )
+    assert bool(jnp.isfinite(jnp.asarray(fit.elbo)))
+
+
+def test_fit_pathfinder_maxiter_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
+    import blackjax
+
+    captured: dict[str, object] = {}
+    real_approximate = blackjax.vi.pathfinder.approximate
+
+    def spy_approximate(*args: object, **kwargs: object) -> object:
+        captured["maxiter"] = kwargs["maxiter"]
+        return real_approximate(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(blackjax.vi.pathfinder, "approximate", spy_approximate)
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    fit_pathfinder(
+        random.PRNGKey(1),
+        RandomWalkForCustom(),
+        data,
+        _empty_covariates(24),
+        num_elbo_samples=50,
+        maxiter=17,
+    )
+    assert captured["maxiter"] == 17
 
 
 def test_pathfinder_as_backtest_forecaster_fn() -> None:
