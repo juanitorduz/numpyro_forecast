@@ -21,6 +21,27 @@ prek install
 - **All hooks:** `prek run --all-files`
 
 
+# Example notebooks
+
+Example notebooks live in `docs/examples/` (only the executed `.ipynb` is committed; see `AGENTS.md` for the jupytext authoring workflow). The docs build generates a `.qmd` wrapper page per notebook, and the Examples index renders each page as a card with a thumbnail image and a short description. Both are derived from the notebook itself by `scripts/build_docs.py`:
+
+- **Description:** set a `description` key in the notebook-level metadata (in JupyterLab: the Property Inspector under "Advanced Tools"; in VS Code: `...` menu of the notebook toolbar, "Customize Notebook Metadata"). Keep it to one or two sentences of plain text: no markdown, LaTeX, or HTML special characters (`<`, `>`, `&`), since it is injected into raw HTML. It also appears under the page title.
+- **Thumbnail:** add a `thumbnail` cell tag to the code cell whose figure should be the card image (in JupyterLab or VS Code: the cell's tag editor). Pick a representative results plot, for example the forecast with its HDI bands, rather than the raw-data plot, and prefer a wide figure so the card grid stays even.
+
+Alternatively, set both programmatically:
+
+``` python
+import nbformat
+
+nb = nbformat.read("docs/examples/my_example.ipynb", as_version=4)
+nb.metadata["description"] = "One or two plain-text sentences for the card."
+nb.cells[42].metadata.setdefault("tags", []).append("thumbnail")
+nbformat.write(nb, "docs/examples/my_example.ipynb")
+```
+
+If they are missing, the build falls back to the first sentence of the notebook's intro paragraph and to the first figure in the notebook, so set them explicitly to control how the card reads and looks. Check the result on the Examples index with `make docs-preview`.
+
+
 # Guidelines
 
 - Every function (public and private) must have complete input and return type hints. Type checking is enforced with `ty`.
