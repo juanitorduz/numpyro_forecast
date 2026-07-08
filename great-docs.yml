@@ -199,6 +199,15 @@ sections:
     index: true
     index_columns: 2
 
+# Versioned Documentation
+# ------------------------
+# The `versions:` block is injected at build time by scripts/build_docs.py (and
+# removed again afterwards), so it is deliberately absent here: the newest
+# semver git tag becomes the stable site root and this checkout becomes
+# /v/dev/, with the release's API snapshot generated on demand into the
+# gitignored .great-docs-cache/. Releases therefore need no docs steps; see the
+# Documentation section of AGENTS.md.
+
 # GitHub Integration
 # ------------------
 # Repository URL is auto-detected from the git remote / pyproject URLs.

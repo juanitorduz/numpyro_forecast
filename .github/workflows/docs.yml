@@ -6,10 +6,12 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
-  # Rebuild after a release is published so the navbar version badge (fetched
-  # from the latest GitHub Release at build time) reflects the new release. A
-  # merge that bumps the version can otherwise build the docs moments before the
-  # release exists, leaving the badge stuck on the previous version.
+  # Rebuild after a release is published: this is what flips the stable site
+  # root to the new version, because scripts/build_docs.py derives the versioned
+  # site (stable root + /v/dev/) from the newest semver git tag, which only
+  # exists once the release is published. It also refreshes the navbar version
+  # badge (fetched from the latest GitHub Release at build time), which a
+  # version-bump merge would otherwise leave stuck on the previous release.
   release:
     types: [published]
   workflow_dispatch:
