@@ -13,6 +13,10 @@ not resolve are dropped with a notice: those symbols (or their module paths) do 
 that package tree, which is exactly what the versioned build needs to prune the corresponding
 reference pages from that release's docs.
 
+It is normally invoked by ``scripts/build_docs.py`` at build time, against a temporary
+worktree of the newest release tag, with the output cached in the gitignored
+``.great-docs-cache/``. Manual runs are only for debugging.
+
 Usage::
 
     uv run python scripts/api_snapshot.py                          # snapshot the working tree
@@ -32,8 +36,8 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "great-docs.yml"
-# Committed snapshots consumed by the `versions:` entries in great-docs.yml.
-SNAPSHOT_DIR = REPO_ROOT / "api-snapshots"
+# Default output location: the gitignored build-time snapshot cache.
+SNAPSHOT_DIR = REPO_ROOT / ".great-docs-cache" / "api-snapshots"
 PACKAGE = "numpyro_forecast"
 
 _MISSING = object()
@@ -163,7 +167,7 @@ def main() -> int:
         "--output",
         type=Path,
         default=None,
-        help="output file (default: api-snapshots/<version>.json)",
+        help="output file (default: .great-docs-cache/api-snapshots/<version>.json)",
     )
     args = parser.parse_args()
 

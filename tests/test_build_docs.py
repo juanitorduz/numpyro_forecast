@@ -15,6 +15,7 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+import yaml
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "build_docs.py"
 
@@ -113,6 +114,52 @@ class TestExtractThumbnail:
         dest = tmp_path / "thumb.png"
         assert not build_docs.extract_thumbnail(notebook, dest)
         assert not dest.exists()
+
+
+class TestNewestSemver:
+    def test_max_by_numeric_tuple(self, build_docs: ModuleType) -> None:
+        assert build_docs.newest_semver(["0.1.3", "0.1.10", "0.0.9"]) == "0.1.10"
+
+    def test_non_semver_tags_ignored(self, build_docs: ModuleType) -> None:
+        assert build_docs.newest_semver(["v1.0", "foo", "0.2.0", "1.0"]) == "0.2.0"
+
+    def test_none_without_release_tags(self, build_docs: ModuleType) -> None:
+        assert build_docs.newest_semver([]) is None
+        assert build_docs.newest_semver(["foo", "v1.2.3"]) is None
+
+
+class TestInjectVersions:
+    def test_dev_first_then_pinned_release(self, build_docs: ModuleType) -> None:
+        original = 'site_url: "https://example.org/proj/"\nparser: numpy\n'
+        patched = yaml.safe_load(
+            build_docs.inject_versions(original, "0.1.3", ".great-docs-cache/x.json")
+        )
+        assert patched["versions"] == [
+            {"label": "dev", "tag": "dev", "prerelease": True},
+            {
+                "label": "0.1.3",
+                "tag": "0.1.3",
+                "latest": True,
+                "api_snapshot": ".great-docs-cache/x.json",
+            },
+        ]
+        assert patched["site_url"] == "https://example.org/proj/"
+        assert patched["parser"] == "numpy"
+
+
+class TestEnsureReleaseSnapshot:
+    def test_cached_snapshot_short_circuits(
+        self, build_docs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(build_docs, "CACHE_SNAPSHOT_DIR", tmp_path)
+        cached = tmp_path / "0.1.3.json"
+        cached.write_text("{}", encoding="utf-8")
+
+        def explode(*args: object, **kwargs: object) -> None:
+            raise AssertionError("cached snapshots must not shell out")
+
+        monkeypatch.setattr(build_docs.subprocess, "run", explode)
+        assert build_docs.ensure_release_snapshot("0.1.3") == cached
 
 
 class TestFixAliasRedirects:

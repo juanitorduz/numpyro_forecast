@@ -4,18 +4,11 @@ The ``reference:`` section of ``great-docs.yml`` is curated by hand (see
 ``AGENTS.md``). These tests make forgetting to update it a red test rather than a
 silent omission: every public function/class defined in a package submodule must
 be listed, and every listed name must still resolve.
-
-The ``versions:`` section drives the multi-version docs site and is release
-maintained: the entry marked ``latest`` must track the ``pyproject.toml`` version
-and ship a committed API snapshot (see the release step in ``AGENTS.md``). The
-tests below turn a forgotten release step into a red test on the version-bump PR.
 """
 
 import importlib
 import inspect
-import json
 import pkgutil
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -24,9 +17,7 @@ import numpyro_forecast
 
 yaml = pytest.importorskip("yaml")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-GREAT_DOCS_YML = REPO_ROOT / "great-docs.yml"
-PYPROJECT = REPO_ROOT / "pyproject.toml"
+GREAT_DOCS_YML = Path(__file__).resolve().parent.parent / "great-docs.yml"
 
 # Internal submodules whose public symbols are intentionally undocumented.
 IGNORED_MODULES: set[str] = set()
@@ -126,42 +117,3 @@ def test_documented_names_resolve():
         if not hasattr(module, attr):
             unresolved.append(qualified)
     assert not unresolved, f"great-docs.yml references names that no longer exist: {unresolved}."
-
-
-def _versions_config() -> list[dict]:
-    config = yaml.safe_load(GREAT_DOCS_YML.read_text(encoding="utf-8"))
-    return config.get("versions", [])
-
-
-def test_versions_dev_entry_is_first():
-    versions = _versions_config()
-    assert versions, "great-docs.yml must configure `versions:` for the multi-version site."
-    dev = versions[0]
-    assert dev.get("tag") == "dev" and dev.get("prerelease") is True, (
-        "The first `versions:` entry must be the dev (main) prerelease so it renders at /v/dev/."
-    )
-
-
-def test_versions_latest_entry_tracks_release():
-    versions = _versions_config()
-    latest = [entry for entry in versions if entry.get("latest")]
-    assert len(latest) == 1, "Exactly one `versions:` entry must be marked `latest: true`."
-    entry = latest[0]
-
-    pyproject = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
-    release = pyproject["project"]["version"]
-    assert entry.get("tag") == release, (
-        f"The `latest` versions entry ({entry.get('tag')!r}) must match the pyproject.toml "
-        f"version ({release!r}). When bumping the version for a release, run "
-        "`uv run python scripts/api_snapshot.py` and update `versions:` in great-docs.yml."
-    )
-
-    assert "api_snapshot" in entry, "The `latest` versions entry must set `api_snapshot`."
-    snapshot = json.loads((REPO_ROOT / entry["api_snapshot"]).read_text(encoding="utf-8"))
-    assert snapshot["version"] == release
-    assert snapshot["symbols"], "The API snapshot must record at least one symbol."
-    undotted = [name for name in snapshot["symbols"] if "." not in name]
-    assert not undotted, (
-        f"Snapshot symbols must be keyed like reference entries (module.name): {undotted}. "
-        "Regenerate the snapshot with scripts/api_snapshot.py, not `great-docs api-snapshot`."
-    )
