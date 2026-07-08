@@ -229,4 +229,5 @@ uv.lock
 # Example pages are generated at build time by scripts/build_docs.py
 /docs/examples/*.qmd
 /docs/examples/_src/
+/docs/examples/thumbnails/
 .DS_Store
