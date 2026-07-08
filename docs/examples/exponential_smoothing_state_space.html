@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Write seasonal damped-trend exponential smoothing in innovations state space form so forecast uncertainty is propagated correctly, and fit it with Hamiltonian Monte Carlo.">
 
 <title>Exponential Smoothing in State Space Form – numpyro_forecast | numpyro_forecast</title>
 <style>
@@ -154,15 +155,14 @@ window.Quarto = {
 </script>
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html">
-  <meta name="description" content="Exponential Smoothing in State Space Form with numpyro_forecast">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Exponential Smoothing in State Space Form – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Exponential Smoothing in State Space Form with numpyro_forecast">
+  <meta property="og:description" content="Write seasonal damped-trend exponential smoothing in innovations state space form so forecast uncertainty is propagated correctly, and fit it with Hamiltonian Monte Carlo.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Exponential Smoothing in State Space Form – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Exponential Smoothing in State Space Form with numpyro_forecast">
+  <meta name="twitter:description" content="Write seasonal damped-trend exponential smoothing in innovations state space form so forecast uncertainty is propagated correctly, and fit it with Hamiltonian Monte Carlo.">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -288,6 +288,11 @@ window.Quarto = {
 <h1 class="title d-none d-lg-block">Exponential Smoothing in State Space Form</h1>
 </div>
 
+<div>
+  <div class="description">
+    Write seasonal damped-trend exponential smoothing in innovations state space form so forecast uncertainty is propagated correctly, and fit it with Hamiltonian Monte Carlo.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -731,7 +736,7 @@ forecast samples: (2000, 48, 1)</code></pre>
 </div>
 </div>
 <p>We visualize both the in-sample fit and the forecast with <code>az.plot_lm</code>, showing the <span class="math inline">\(50\%\)</span> and <span class="math inline">\(94\%\)</span> HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.</p>
-<div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:33.614181Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:33.614115Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:34.081656Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:34.081163Z&quot;}}" data-execution_count="11">
+<div id="24b1083d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-06T09:43:33.614181Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-06T09:43:33.614115Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-06T09:43:34.081656Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-06T09:43:34.081163Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>crps_train <span class="op">=</span> eval_crps(in_sample_pp, train_data)</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>crps_test <span class="op">=</span> eval_crps(forecast_samples, test_data)</span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>

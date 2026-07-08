@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Forecast hourly electricity demand in Victoria, Australia with a varying-coefficient temperature effect built from a Hilbert space Gaussian process, hour-of-day and day-of-week seasonality, and a Student-t likelihood fit with SVI.">
 
 <title>Electricity demand forecasting – numpyro_forecast | numpyro_forecast</title>
 <style>
@@ -154,15 +155,14 @@ window.Quarto = {
 </script>
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast.html">
-  <meta name="description" content="Electricity demand forecasting with numpyro_forecast">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Electricity demand forecasting – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Electricity demand forecasting with numpyro_forecast">
+  <meta property="og:description" content="Forecast hourly electricity demand in Victoria, Australia with a varying-coefficient temperature effect built from a Hilbert space Gaussian process, hour-of-day and day-of-week seasonality, and a Student-t likelihood fit with SVI.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Electricity demand forecasting – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Electricity demand forecasting with numpyro_forecast">
+  <meta name="twitter:description" content="Forecast hourly electricity demand in Victoria, Australia with a varying-coefficient temperature effect built from a Hilbert space Gaussian process, hour-of-day and day-of-week seasonality, and a Student-t likelihood fit with SVI.">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -288,6 +288,11 @@ window.Quarto = {
 <h1 class="title d-none d-lg-block">Electricity demand forecasting</h1>
 </div>
 
+<div>
+  <div class="description">
+    Forecast hourly electricity demand in Victoria, Australia with a varying-coefficient temperature effect built from a Hilbert space Gaussian process, hour-of-day and day-of-week seasonality, and a Student-t likelihood fit with SVI.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -774,7 +779,7 @@ covariates shape: (1344, 2)</code></pre>
 </div>
 </div>
 <p>The held-out scores land in the same ballpark as the in-sample ones (here even a touch sharper), and the central 90% interval is well calibrated in-sample (coverage near <code>0.9</code>) and conservative out-of-sample, so the model generalizes to the held-out two weeks rather than overfitting. We can now compare the posterior predictive distribution with the training and test data.</p>
-<div id="605267ec" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:44:19.748818Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:44:19.748734Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:44:20.090232Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:44:20.089722Z&quot;}}" data-execution_count="17">
+<div id="605267ec" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:44:19.748818Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:44:19.748734Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:44:20.090232Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:44:20.089722Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="17">
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>train_obs <span class="op">=</span> train_posterior[<span class="st">"obs"</span>][..., <span class="dv">0</span>]</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>forecast_obs <span class="op">=</span> forecast[..., <span class="dv">0</span>]</span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>

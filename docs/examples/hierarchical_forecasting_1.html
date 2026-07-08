@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Forecast hourly BART arrivals from eight origin stations to a fixed destination with a hierarchical model that pools information across series, fit with SVI.">
 
 <title>Hierarchical forecasting I – numpyro_forecast | numpyro_forecast</title>
 <style>
@@ -151,15 +152,14 @@ window.Quarto = {
 </script>
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_1.html">
-  <meta name="description" content="Hierarchical forecasting I with numpyro_forecast">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Hierarchical forecasting I – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Hierarchical forecasting I with numpyro_forecast">
+  <meta property="og:description" content="Forecast hourly BART arrivals from eight origin stations to a fixed destination with a hierarchical model that pools information across series, fit with SVI.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_1.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Hierarchical forecasting I – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Hierarchical forecasting I with numpyro_forecast">
+  <meta name="twitter:description" content="Forecast hourly BART arrivals from eight origin stations to a fixed destination with a hierarchical model that pools information across series, fit with SVI.">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -285,6 +285,11 @@ window.Quarto = {
 <h1 class="title d-none d-lg-block">Hierarchical forecasting I</h1>
 </div>
 
+<div>
+  <div class="description">
+    Forecast hourly BART arrivals from eight origin stations to a fixed destination with a hierarchical model that pools information across series, fit with SVI.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -348,7 +353,7 @@ window.Quarto = {
 <section id="read-data" class="level1">
 <h1>Read data</h1>
 <p>We load the windowed origin-destination panel (<code>log1p</code> counts, <code>90</code> training days plus <code>2</code> test weeks) and select arrivals to <code>EMBR</code> from every origin. The <code>log1p</code> transform tames the multiplicative growth while staying defined at zero rides, which matters for hourly counts. The result is a <code>(time, n_series)</code> array where each of the <code>50</code> origins is one series, time is at axis <code>-2</code>, and the series dimension is at axis <code>-1</code>.</p>
-<div id="4d28aa13" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:44:42.646773Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:44:42.646644Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:44:43.863261Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:44:43.862847Z&quot;}}" data-execution_count="2">
+<div id="4d28aa13" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:44:42.646773Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:44:42.646644Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:44:43.863261Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:44:43.862847Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>y_full, split, stations <span class="op">=</span> load_bart_hierarchical()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>embr <span class="op">=</span> stations.index(<span class="st">"EMBR"</span>)</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>data <span class="op">=</span> jnp.swapaxes(y_full[:, :, embr], <span class="dv">0</span>, <span class="dv">1</span>)  <span class="co"># (time, n_series)</span></span>

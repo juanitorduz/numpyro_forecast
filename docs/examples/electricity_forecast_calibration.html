@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Calibrate the priors of the electricity demand model against domain knowledge about the temperature effect, iterating with prior predictive checks before refitting.">
 
 <title>Electricity demand forecasting: prior calibration – numpyro_forecast | numpyro_forecast</title>
 <style>
@@ -154,15 +155,14 @@ window.Quarto = {
 </script>
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast_calibration.html">
-  <meta name="description" content="Electricity demand forecasting: prior calibration with numpyro_forecast">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Electricity demand forecasting: prior calibration – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Electricity demand forecasting: prior calibration with numpyro_forecast">
+  <meta property="og:description" content="Calibrate the priors of the electricity demand model against domain knowledge about the temperature effect, iterating with prior predictive checks before refitting.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast_calibration.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Electricity demand forecasting: prior calibration – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Electricity demand forecasting: prior calibration with numpyro_forecast">
+  <meta name="twitter:description" content="Calibrate the priors of the electricity demand model against domain knowledge about the temperature effect, iterating with prior predictive checks before refitting.">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -288,6 +288,11 @@ window.Quarto = {
 <h1 class="title d-none d-lg-block">Electricity demand forecasting: prior calibration</h1>
 </div>
 
+<div>
+  <div class="description">
+    Calibrate the priors of the electricity demand model against domain knowledge about the temperature effect, iterating with prior predictive checks before refitting.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -846,7 +851,7 @@ covariates shape: (1344, 2)</code></pre>
 <section id="temperature-effect-on-demand" class="level2">
 <h2 class="anchored" data-anchor-id="temperature-effect-on-demand">Temperature effect on demand</h2>
 <p>This is where the calibration shows up. We plot the posterior distribution of the Gaussian Process component <code>beta_temperature</code> against temperature, sorting by temperature so the HDI band reads cleanly. The vertical line marks the <code>32 °C</code> threshold and the shaded band shows the calibration target of <code>0.13 ± 0.01</code> for temperatures above it.</p>
-<div id="f79e7f25" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:44:39.411328Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:44:39.411254Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:44:39.739493Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:44:39.739125Z&quot;}}" data-execution_count="15">
+<div id="f79e7f25" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:44:39.411328Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:44:39.411254Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:44:39.739493Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:44:39.739125Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="15">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>temperature_train <span class="op">=</span> np.asarray(temperature[:t_train])</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>order <span class="op">=</span> np.argsort(temperature_train)</span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>beta_temperature <span class="op">=</span> train_posterior[<span class="st">"beta_temperature"</span>]</span>

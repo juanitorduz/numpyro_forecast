@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Scale the hierarchical model to the full 50 by 50 origin-destination panel of hourly BART ridership, forecasting all 2,500 series jointly with SVI.">
 
 <title>Hierarchical forecasting II – numpyro_forecast | numpyro_forecast</title>
 <style>
@@ -151,15 +152,14 @@ window.Quarto = {
 </script>
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_2.html">
-  <meta name="description" content="Hierarchical forecasting II with numpyro_forecast">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Hierarchical forecasting II – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Hierarchical forecasting II with numpyro_forecast">
+  <meta property="og:description" content="Scale the hierarchical model to the full 50 by 50 origin-destination panel of hourly BART ridership, forecasting all 2,500 series jointly with SVI.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_2.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Hierarchical forecasting II – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Hierarchical forecasting II with numpyro_forecast">
+  <meta name="twitter:description" content="Scale the hierarchical model to the full 50 by 50 origin-destination panel of hourly BART ridership, forecasting all 2,500 series jointly with SVI.">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -285,6 +285,11 @@ window.Quarto = {
 <h1 class="title d-none d-lg-block">Hierarchical forecasting II</h1>
 </div>
 
+<div>
+  <div class="description">
+    Scale the hierarchical model to the full 50 by 50 origin-destination panel of hourly BART ridership, forecasting all 2,500 series jointly with SVI.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -478,7 +483,7 @@ y &amp; \sim \text{Normal}(\mu,\ \text{origin\_scale} + \text{destin\_scale})
 <section id="prior-predictive-checks" class="level1">
 <h1>Prior predictive checks</h1>
 <p>As usual (highly recommended!), we run prior predictive checks. The full panel is large, so we draw the samples in memory-bounded batches with the <code>batched_obs</code> helper and keep only what we plot (eight origins arriving at <code>ANTC</code>, last three training weeks). The prior ranges look reasonable, if anything a touch too wide.</p>
-<div id="8dc4d277" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:45:41.666497Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:45:41.666429Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:46:28.494459Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:46:28.494001Z&quot;}}" data-execution_count="6">
+<div id="8dc4d277" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T08:45:41.666497Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T08:45:41.666429Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T08:46:28.494459Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T08:46:28.494001Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>n_plot <span class="op">=</span> <span class="dv">8</span>  <span class="co"># origins shown in the facet grid</span></span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>dest <span class="op">=</span> <span class="st">"ANTC"</span></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>series <span class="op">=</span> <span class="bu">list</span>(<span class="bu">range</span>(n_plot))</span>

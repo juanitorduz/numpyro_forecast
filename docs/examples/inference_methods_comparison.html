@@ -6,6 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="description" content="Fit the same weekly BART ridership model with NUTS, SVI, Pathfinder, and MCLMC without touching the model code, and compare their forecasts with CRPS.">
 
 <title>Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC – numpyro_forecast | numpyro_forecast</title>
 <style>
@@ -153,15 +154,14 @@ window.Quarto = {
 </script>
 
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/inference_methods_comparison.html">
-  <meta name="description" content="Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with numpyro_forecast">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with numpyro_forecast">
+  <meta property="og:description" content="Fit the same weekly BART ridership model with NUTS, SVI, Pathfinder, and MCLMC without touching the model code, and compare their forecasts with CRPS.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/docs/examples/inference_methods_comparison.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with numpyro_forecast">
+  <meta name="twitter:description" content="Fit the same weekly BART ridership model with NUTS, SVI, Pathfinder, and MCLMC without touching the model code, and compare their forecasts with CRPS.">
 </head>
 
 <body class="nav-sidebar floating nav-fixed quarto-light">
@@ -287,6 +287,11 @@ window.Quarto = {
 <h1 class="title d-none d-lg-block">Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC</h1>
 </div>
 
+<div>
+  <div class="description">
+    Fit the same weekly BART ridership model with NUTS, SVI, Pathfinder, and MCLMC without touching the model code, and compare their forecasts with CRPS.
+  </div>
+</div>
 
 
 <div class="quarto-title-meta">
@@ -1540,7 +1545,7 @@ Group: /
 <section id="trade-offs" class="level1">
 <h1>Trade-offs</h1>
 <p>The summary plot puts the four engines side by side.</p>
-<div id="889cbe17" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T17:46:02.314639Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T17:46:02.314534Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T17:46:02.399272Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T17:46:02.398923Z&quot;}}" data-execution_count="18">
+<div id="889cbe17" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-07-07T17:46:02.314639Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-07-07T17:46:02.314534Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-07-07T17:46:02.399272Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-07-07T17:46:02.398923Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="18">
 <div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>methods <span class="op">=</span> <span class="bu">list</span>(crps_results)</span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>train_scores <span class="op">=</span> [crps_results[m][<span class="st">"train"</span>] <span class="cf">for</span> m <span class="kw">in</span> methods]</span>
 <span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>test_scores <span class="op">=</span> [crps_results[m][<span class="st">"test"</span>] <span class="cf">for</span> m <span class="kw">in</span> methods]</span>
