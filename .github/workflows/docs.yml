@@ -9,7 +9,10 @@ on:
   # Rebuild after a release is published so the navbar version badge (fetched
   # from the latest GitHub Release at build time) reflects the new release. A
   # merge that bumps the version can otherwise build the docs moments before the
-  # release exists, leaving the badge stuck on the previous version.
+  # release exists, leaving the badge stuck on the previous version. The
+  # versioned site itself (stable root + /v/dev/, from the `versions:` block in
+  # great-docs.yml) needs no release trigger: the release PR already updated the
+  # config, so the push build publishes the same site.
   release:
     types: [published]
   workflow_dispatch:

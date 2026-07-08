@@ -19,6 +19,11 @@ All of that is pure boilerplate derived from the notebooks, so instead of
 committing it we generate it just before building and remove it again afterwards
 (even if the build fails). The notebooks themselves stay in ``docs/examples/``.
 
+After a successful ``build``, the ``/v/latest/`` and ``/v/stable/`` alias
+redirects of the versioned site are rewritten to absolute URLs: great-docs
+writes them with root-relative targets, which on a GitHub Pages project site
+escape the ``/numpyro_forecast/`` prefix.
+
 Usage::
 
     python scripts/build_docs.py build      # generate, build, clean up
@@ -34,6 +39,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "docs" / "examples"
 # Notebooks are copied here at build time so great-docs stages them for the
 # embed shortcode; the leading underscore stops Quarto rendering them as pages.
@@ -45,6 +52,11 @@ THUMBNAILS_DIR = EXAMPLES_DIR / "thumbnails"
 TITLE_SUFFIX = " with `numpyro_forecast`"
 # Cell tag marking the figure to use as the notebook's index-card thumbnail.
 THUMBNAIL_TAG = "thumbnail"
+# Site config (source of `site_url`) and the built site with the /v/<alias>/
+# redirect stubs that need absolute targets on a GitHub Pages project site.
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "great-docs.yml"
+SITE_DIR = Path(__file__).resolve().parent.parent / "great-docs" / "_site"
+ALIAS_STUBS = ("latest", "stable")
 
 
 def load_notebook(path: Path) -> dict[str, Any]:
@@ -256,6 +268,43 @@ def clean_pages(wrappers: list[Path]) -> None:
     shutil.rmtree(THUMBNAILS_DIR, ignore_errors=True)
 
 
+def fix_alias_redirects(site_dir: Path, site_url: str) -> None:
+    """Point the ``/v/latest/`` and ``/v/stable/`` alias redirects at the site root.
+
+    great-docs writes these alias stubs with root-relative targets (``/``),
+    which on a GitHub Pages project site resolve to ``juanitorduz.github.io/``
+    instead of the site. Both aliases target the root, which serves the latest
+    release.
+
+    Parameters
+    ----------
+    site_dir
+        The built ``_site`` directory.
+    site_url
+        Absolute URL of the deployed site root.
+    """
+    target = site_url if site_url.endswith("/") else f"{site_url}/"
+    for name in ALIAS_STUBS:
+        stub = site_dir / "v" / name / "index.html"
+        if not stub.exists():
+            continue
+        stub.write_text(
+            "<!DOCTYPE html>\n"
+            '<html lang="en">\n'
+            "<head>\n"
+            '  <meta charset="utf-8">\n'
+            f'  <meta http-equiv="refresh" content="0; url={target}">\n'
+            f'  <link rel="canonical" href="{target}">\n'
+            "  <title>Redirecting…</title>\n"
+            "</head>\n"
+            "<body>\n"
+            f'  <p>Redirecting to <a href="{target}">{target}</a>…</p>\n'
+            "</body>\n"
+            "</html>\n",
+            encoding="utf-8",
+        )
+
+
 def main() -> int:
     """Generate pages, run the requested great-docs command, then clean up.
 
@@ -267,7 +316,11 @@ def main() -> int:
     command = sys.argv[1] if len(sys.argv) > 1 else "build"
     wrappers = generate_pages()
     try:
-        return subprocess.run(["great-docs", command], check=False).returncode  # noqa: S603, S607
+        code = subprocess.run(["great-docs", command], check=False).returncode  # noqa: S603, S607
+        if code == 0 and command == "build":
+            config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+            fix_alias_redirects(SITE_DIR, config["site_url"])
+        return code
     finally:
         clean_pages(wrappers)
 

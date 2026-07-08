@@ -113,3 +113,30 @@ class TestExtractThumbnail:
         dest = tmp_path / "thumb.png"
         assert not build_docs.extract_thumbnail(notebook, dest)
         assert not dest.exists()
+
+
+class TestFixAliasRedirects:
+    def test_stubs_point_at_absolute_site_url(
+        self, build_docs: ModuleType, tmp_path: Path
+    ) -> None:
+        for name in ("latest", "stable"):
+            stub = tmp_path / "v" / name / "index.html"
+            stub.parent.mkdir(parents=True)
+            stub.write_text('<meta http-equiv="refresh" content="0; url=/">', encoding="utf-8")
+        build_docs.fix_alias_redirects(tmp_path, "https://example.org/proj/")
+        for name in ("latest", "stable"):
+            content = (tmp_path / "v" / name / "index.html").read_text(encoding="utf-8")
+            assert 'url=https://example.org/proj/"' in content
+            assert 'href="https://example.org/proj/"' in content
+            assert 'url=/"' not in content
+
+    def test_missing_trailing_slash_is_added(self, build_docs: ModuleType, tmp_path: Path) -> None:
+        stub = tmp_path / "v" / "stable" / "index.html"
+        stub.parent.mkdir(parents=True)
+        stub.write_text("placeholder", encoding="utf-8")
+        build_docs.fix_alias_redirects(tmp_path, "https://example.org/proj")
+        assert 'url=https://example.org/proj/"' in stub.read_text(encoding="utf-8")
+
+    def test_missing_stubs_are_tolerated(self, build_docs: ModuleType, tmp_path: Path) -> None:
+        build_docs.fix_alias_redirects(tmp_path, "https://example.org/proj/")
+        assert not (tmp_path / "v").exists()

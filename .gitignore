@@ -226,6 +226,10 @@ uv.lock
 
 # great-docs ephemeral build output
 /great-docs/
+# great-docs versioned-build staging, snapshot autosaves, and introspection cache
+/_great_docs_build/
+/.great-docs/
+/.great-docs-cache/
 # Example pages are generated at build time by scripts/build_docs.py
 /docs/examples/*.qmd
 /docs/examples/_src/
