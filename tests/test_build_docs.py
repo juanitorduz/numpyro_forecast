@@ -161,6 +161,24 @@ class TestEnsureReleaseSnapshot:
         monkeypatch.setattr(build_docs.subprocess, "run", explode)
         assert build_docs.ensure_release_snapshot("0.1.3") == cached
 
+    def test_failed_worktree_add_leaves_no_tempdir(
+        self, build_docs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`git worktree remove` cannot clean a dir the failed add never registered."""
+        monkeypatch.setattr(build_docs, "CACHE_SNAPSHOT_DIR", tmp_path / "cache")
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        monkeypatch.setattr(build_docs.tempfile, "mkdtemp", lambda **kwargs: str(worktree))
+
+        def fake_run(cmd: list[str], **kwargs: object) -> None:
+            if cmd[:3] == ["git", "worktree", "add"]:
+                raise build_docs.subprocess.CalledProcessError(128, cmd)
+
+        monkeypatch.setattr(build_docs.subprocess, "run", fake_run)
+        with pytest.raises(build_docs.subprocess.CalledProcessError):
+            build_docs.ensure_release_snapshot("0.1.3")
+        assert not worktree.exists()
+
 
 class TestFixAliasRedirects:
     def test_stubs_point_at_absolute_site_url(

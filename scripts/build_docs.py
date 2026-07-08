@@ -375,6 +375,9 @@ def ensure_release_snapshot(tag: str) -> Path:
             check=False,
             capture_output=True,
         )
+        # If `git worktree add` itself failed, the directory was never a
+        # registered worktree, so the remove above cannot delete it.
+        shutil.rmtree(worktree, ignore_errors=True)
     return dest
 
 
