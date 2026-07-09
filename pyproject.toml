@@ -64,6 +64,7 @@ dev = [
     "ty==0.0.56",
     "optax>=0.2",
     "blackjax>=1.2,<2",
+    "huggingface-hub>=1.22.0",
 ]
 docs = [
     "great-docs>=0.14",
