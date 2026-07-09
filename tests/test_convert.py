@@ -8,7 +8,7 @@ import pytest
 from conftest import RandomWalkModel, empty_covariates
 from jax import Array, random
 
-from numpyro_forecast.convert import add_forecast_groups, to_datatree
+from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
 from numpyro_forecast.functional import draw_posterior, fit_mcmc, fit_svi, forecast
 from numpyro_forecast.typing import ForecastModel
 
@@ -407,3 +407,128 @@ def test_to_datatree_deterministic_given_key() -> None:
         np.asarray(a["posterior"]["drift"]),
         np.asarray(b["posterior"]["drift"]),
     )
+
+
+def _prediction_draws(
+    sample: int = 40, time: int = 12, series: int = 3
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    rng = np.random.default_rng(0)
+    predictions = rng.normal(1.0, 0.3, size=(sample, time, series))
+    x = np.linspace(0.0, 1.0, time)
+    labels = [f"s{i}" for i in range(series)]
+    return predictions, x, labels
+
+
+def test_predictions_to_datatree_groups_and_dims() -> None:
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, labels)
+    assert set(tree.children) == {"posterior_predictive", "observed_data", "constant_data"}
+    obs = tree["posterior_predictive"]["obs"]
+    assert obs.dims == ("chain", "draw", "time", "series")
+    assert tree["constant_data"]["t"].dims == ("time", "series")
+    np.testing.assert_array_equal(np.asarray(tree["observed_data"].coords["time"]), x)
+    assert list(tree["observed_data"].coords["series"].values) == labels
+    assert tree.attrs["creation_library"] == "numpyro_forecast"
+
+
+def test_predictions_to_datatree_sample_axis_becomes_chain_draw() -> None:
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, labels)
+    obs = tree["posterior_predictive"]["obs"]
+    assert obs.sizes["chain"] == 1
+    assert obs.sizes["draw"] == predictions.shape[0]
+    np.testing.assert_allclose(np.asarray(obs)[0], predictions)
+
+
+def test_predictions_to_datatree_custom_group() -> None:
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, labels, group="prior_predictive")
+    assert set(tree.children) == {"prior_predictive", "observed_data", "constant_data"}
+    assert tree["prior_predictive"]["obs"].sizes["draw"] == predictions.shape[0]
+
+
+def test_predictions_to_datatree_default_observed_is_zeros() -> None:
+    # plot_lm requires the observed_data group even with observed_scatter disabled,
+    # so the default is a zeros placeholder rather than omitting the group.
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, labels)
+    np.testing.assert_array_equal(
+        np.asarray(tree["observed_data"]["obs"]), np.zeros(predictions.shape[1:])
+    )
+
+
+def test_predictions_to_datatree_observed_passthrough() -> None:
+    predictions, x, labels = _prediction_draws()
+    observed = np.arange(predictions[0].size, dtype=float).reshape(predictions.shape[1:])
+    tree = predictions_to_datatree(predictions, x, labels, observed=observed)
+    np.testing.assert_allclose(np.asarray(tree["observed_data"]["obs"]), observed)
+
+
+def test_predictions_to_datatree_non_str_labels() -> None:
+    predictions, x, _ = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, [0, 1, 2])
+    picked = tree["posterior_predictive"]["obs"].sel(series=2)
+    np.testing.assert_allclose(np.asarray(picked)[0], predictions[:, :, 2])
+
+
+def test_predictions_to_datatree_x_grid_broadcast() -> None:
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, labels)
+    grid = np.asarray(tree["constant_data"]["t"])
+    for column in range(len(labels)):
+        np.testing.assert_array_equal(grid[:, column], x)
+
+
+def test_predictions_to_datatree_label_length_mismatch_raises() -> None:
+    predictions, x, labels = _prediction_draws()
+    with pytest.raises(ValueError, match="series has length"):
+        predictions_to_datatree(predictions, x, labels[:-1])
+
+
+def test_predictions_to_datatree_accepts_jax_arrays() -> None:
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(jnp.asarray(predictions), jnp.asarray(x), labels)
+    np.testing.assert_allclose(
+        np.asarray(tree["posterior_predictive"]["obs"])[0], predictions, rtol=1e-6
+    )
+
+
+def test_predictions_to_datatree_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All three groups must be built through arviz_base.dict_to_dataset (normative rule)."""
+    calls = {"count": 0}
+    real = arviz_base.dict_to_dataset
+
+    def spy(*args: object, **kwargs: object) -> object:
+        calls["count"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(arviz_base, "dict_to_dataset", spy)
+    predictions, x, labels = _prediction_draws()
+    predictions_to_datatree(predictions, x, labels)
+    assert calls["count"] == 3
+
+
+def test_predictions_to_datatree_plot_lm_smoke() -> None:
+    """The tree drives az.plot_lm faceting end to end (band artists retrievable)."""
+    pytest.importorskip("arviz_plots")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import arviz as az
+
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, labels)
+    pc = az.plot_lm(
+        tree,
+        y="obs",
+        x="t",
+        plot_dim="time",
+        ci_kind="hdi",
+        ci_prob=(0.5, 0.94),
+        smooth=False,
+        col_wrap=1,
+        visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
+    )
+    band = pc.viz["ci_band"]["t"].sel(series=labels[-1], prob=0.94).item()
+    assert band is not None
+    assert pc.get_target("t", {"series": labels[0]}) is not None

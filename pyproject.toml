@@ -119,6 +119,8 @@ convention = "numpy"
     "E402",
     "E702",
     "E703",
+    # jaxtyping's runtime shape checks use `assert isinstance(x, Float[Array, ...])`.
+    "S101",
 ]
 
 [tool.ruff.lint.pycodestyle]

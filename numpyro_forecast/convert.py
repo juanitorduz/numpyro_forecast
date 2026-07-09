@@ -20,6 +20,7 @@ import arviz_base
 import numpy as np
 import xarray
 from jax import random
+from jaxtyping import Float, Num
 
 from numpyro_forecast.functional import MCMCFit, draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.functional._validation import _require_covariates_cover_data
@@ -378,3 +379,91 @@ def add_forecast_groups(
     new_tree = xarray.DataTree.from_dict(groups)
     new_tree.attrs.update(dict(tree.attrs))
     return new_tree
+
+
+def predictions_to_datatree(
+    predictions: Float[np.ndarray | Array, " sample time series"],
+    x: Num[np.ndarray | Array, " time"],
+    series: Sequence[Any],
+    *,
+    group: str = "posterior_predictive",
+    observed: Float[np.ndarray | Array, " time series"] | None = None,
+) -> "xarray.DataTree":
+    """Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
+
+    The array-level counterpart of :func:`to_datatree`: instead of a fit, it takes
+    prediction draws from **any** predictive group (prior predictive, posterior
+    predictive, or forecasts), possibly already transformed (rescaled to original
+    units, clipped at zero, subset to a few series). The draws get a single
+    pseudo-chain, and ``constant_data`` carries the independent variable ``"t"``
+    broadcast to ``(time, series)`` so that
+    ``arviz.plot_lm(tree, y="obs", x="t", plot_dim="time", ...)`` facets one panel
+    per series; band artists are then reachable via ``pc.viz["ci_band"]["t"]`` and
+    axes via ``pc.get_target("t", {"series": label})``.
+
+    ``plot_lm`` requires an ``observed_data`` group even when the observation
+    scatter is disabled, so when ``observed`` is ``None`` a zeros placeholder is
+    stored; it is never drawn under ``visuals={"observed_scatter": False}``.
+
+    Parameters
+    ----------
+    predictions
+        Prediction draws with the sample axis first, shape ``(sample, time, series)``.
+    x
+        Independent-variable values, shape ``(time,)``. Must be numeric:
+        ``plot_lm`` cannot draw ``datetime64`` values (it concatenates ``x`` with
+        the float predictions internally), so pass
+        :func:`matplotlib.dates.date2num` floats and re-format the tick labels
+        with :class:`matplotlib.dates.ConciseDateFormatter`.
+    series
+        One label per series, defining the ``series`` coordinate.
+    group
+        Predictive group to store the draws under (e.g. ``"prior_predictive"``,
+        ``"posterior_predictive"``, ``"predictions"``).
+    observed
+        Optional observations, shape ``(time, series)``, stored in
+        ``observed_data``; when ``None`` a zeros placeholder is stored instead.
+
+    Returns
+    -------
+    xarray.DataTree
+        A tree with the ``group``, ``observed_data``, and ``constant_data``
+        groups; ``obs`` has dims ``(chain, draw, time, series)`` and ``t`` has
+        dims ``(time, series)``.
+
+    Raises
+    ------
+    ValueError
+        If ``series`` does not have one label per series in ``predictions``.
+    """
+    preds = np.asarray(predictions)[None]
+    if len(series) != preds.shape[-1]:
+        msg = f"series has length {len(series)} but predictions carry {preds.shape[-1]} series"
+        raise ValueError(msg)
+    x_values = np.asarray(x)
+    x_grid = np.broadcast_to(x_values[:, None], preds.shape[2:])
+    coords = cast("dict[Any, Any]", {"time": x_values, "series": list(series)})
+    predictive_ds = arviz_base.dict_to_dataset(
+        {"obs": preds},
+        sample_dims=_SAMPLE_DIMS,
+        dims={"obs": ["time", "series"]},
+        coords=coords,
+    )
+    observed_values = np.zeros(preds.shape[2:]) if observed is None else np.asarray(observed)
+    observed_ds = arviz_base.dict_to_dataset(
+        {"obs": observed_values},
+        sample_dims=[],
+        dims={"obs": ["time", "series"]},
+        coords=coords,
+    )
+    constant_ds = arviz_base.dict_to_dataset(
+        {"t": x_grid},
+        sample_dims=[],
+        dims={"t": ["time", "series"]},
+        coords=coords,
+    )
+    tree = xarray.DataTree.from_dict(
+        {group: predictive_ds, "observed_data": observed_ds, "constant_data": constant_ds}
+    )
+    tree.attrs.update({"creation_library": "numpyro_forecast", "sample_dims": _SAMPLE_DIMS})
+    return tree

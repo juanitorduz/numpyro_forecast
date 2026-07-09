@@ -77,6 +77,7 @@ def test_all_matches_exported_names() -> None:
         "eval_rmse",
         "evaluate_forecast",
         "forecasting_model",
+        "predictions_to_datatree",
         "register_elementwise",
         "results_to_dataframe",
         "to_datatree",

@@ -172,6 +172,7 @@ reference:
     contents:
       - convert.to_datatree
       - convert.add_forecast_groups
+      - convert.predictions_to_datatree
 
   - title: Extensions (contrib)
     desc: Optional backends behind pyproject extras (never imported by default).
