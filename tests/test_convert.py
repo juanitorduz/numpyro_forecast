@@ -291,6 +291,65 @@ def test_to_datatree_coords_reach_forecast_groups() -> None:
     np.testing.assert_array_equal(tree["predictions"].coords["time"].values, np.arange(n, n + 3))
 
 
+def test_to_datatree_covariate_dims_panel_tensor() -> None:
+    """3-D (channel, time, series) covariates keep their layout under covariate_dims."""
+    data = _series()
+    n = data.shape[-2]
+    labels = ["availability", "discount", "holiday"]
+    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, jnp.zeros((3, n, 1)), num_steps=60)
+    tree = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        jnp.zeros((3, n + 2, 1)),
+        num_predictive_samples=40,
+        coords={"channel": labels},
+        covariate_dims=["channel", "time", "series"],
+    )
+    const = tree["constant_data"]["covariates"]
+    assert const.dims == ("channel", "time", "series")
+    assert const.sizes == {"channel": 3, "time": n, "series": 1}
+    np.testing.assert_array_equal(const.coords["channel"].values, labels)
+    future = tree["predictions_constant_data"]["covariates"]
+    assert future.dims == ("channel", "time", "series")
+    assert future.sizes == {"channel": 3, "time": 2, "series": 1}
+    np.testing.assert_array_equal(future.coords["channel"].values, labels)
+
+
+def test_to_datatree_rejects_wrong_covariate_dims_length() -> None:
+    """A covariate_dims length mismatch raises a clear error before any sampling."""
+    fit, data, covariates = _mcmc_fit()
+    with pytest.raises(ValueError, match="covariate_dims"):
+        to_datatree(
+            random.PRNGKey(2),
+            fit,
+            RandomWalkModel(),
+            data,
+            covariates,
+            covariate_dims=["time"],
+        )
+
+
+def test_add_forecast_groups_covariate_dims() -> None:
+    """add_forecast_groups stores tensor covariates under the given dim names."""
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    future_covariates = jnp.zeros((2, n + 5, 1))
+    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n))
+    out = add_forecast_groups(
+        tree,
+        fc,
+        future_covariates[..., n:, :],
+        covariate_dims=["channel", "time", "series"],
+    )
+    future = out["predictions_constant_data"]["covariates"]
+    assert future.dims == ("channel", "time", "series")
+    assert future.sizes == {"channel": 2, "time": 5, "series": 1}
+
+
 def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
     """The forecast groups also go through arviz_base.dict_to_dataset (normative rule)."""
     calls = {"count": 0}
