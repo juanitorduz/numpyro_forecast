@@ -61,7 +61,7 @@ dev = [
     "pytest-xdist",
     "pytest>=8.0",
     "ruff==0.15.21",
-    "ty==0.0.56",
+    "ty==0.0.58",
     "optax>=0.2",
     "blackjax>=1.2,<2",
 ]
