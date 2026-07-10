@@ -1,0 +1,32 @@
+codecov:
+  # The test suite runs as 4 parallel pytest-split groups (see ci.yml), each
+  # uploading its own partial coverage.xml. Wait for all of them before Codecov
+  # computes status checks/comments, otherwise it would report on the first
+  # group alone.
+  notify:
+    after_n_builds: 4
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "80...100"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "tests/*"
+  - "docs/*"
+  - "scripts/*"
