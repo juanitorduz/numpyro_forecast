@@ -1,0 +1,20 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 2%
+    patch:
+      default:
+        target: 94%
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+# The `test` job in ci.yml splits the suite into 4 parallel pytest-split
+# groups, each uploading its own coverage.xml. Wait for all four uploads
+# before posting a status/comment instead of reporting on the first group.
+notify:
+  after_n_builds: 4
