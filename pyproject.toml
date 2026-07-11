@@ -71,6 +71,7 @@ docs = [
 ]
 cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
+all_cuda = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs,cuda]"]
 
 [project.urls]
 Homepage = "https://juanitorduz.github.io"
