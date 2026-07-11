@@ -65,6 +65,7 @@ dev = [
     "optax>=0.2",
     "blackjax>=1.2,<2",
     "huggingface-hub>=1.22.0",
+    "scikit-learn>=1.6",
 ]
 docs = [
     "great-docs>=0.14",
