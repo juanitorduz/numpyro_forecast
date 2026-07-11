@@ -69,6 +69,7 @@ dev = [
 docs = [
     "great-docs>=0.14",
 ]
+cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
 
 [project.urls]

@@ -1,7 +1,7 @@
 .PHONY: setup tests store-durations prek docs docs-preview
 
 setup:
-	uv sync --all-extras
+	uv sync --extra al
 
 tests:
 	uv run pytest -n auto
