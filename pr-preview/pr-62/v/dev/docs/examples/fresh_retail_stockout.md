@@ -38,6 +38,7 @@ import polars as pl
 import preliz as pz
 import xarray as xr
 from huggingface_hub import hf_hub_download
+from huggingface_hub import logging as hf_logging
 from jax import random
 from jaxtyping import Float, Int
 from matplotlib import ticker as mtick
@@ -69,6 +70,11 @@ plt.rcParams["figure.facecolor"] = "white"
 pl.Config.set_fmt_str_lengths(100)
 pl.Config.set_tbl_hide_dataframe_shape(True)
 pl.Config.set_tbl_hide_column_data_types(True)
+
+# The Hub intermittently sends an unauthenticated-request warning header on
+# responses, which huggingface_hub logs to stderr; the example needs no token,
+# so keep the rendered document clean.
+hf_logging.set_verbosity_error()
 
 numpyro.set_host_device_count(n=4)
 
@@ -1317,7 +1323,7 @@ fig.suptitle("Priors for the level and trend dynamics", fontsize=18, fontweight=
 </figure>
 
 
-Finally, the noise scale is \\f\_{t,s} \left(\sigma_s + \lambda_s \\ \text{softplus}(\ell\_{t,s})\right) + \sigma_0\\. It has three parts: a per-series base scale \\\sigma_s\\, a level-dependent component \\\lambda_s \\ \text{softplus}(\ell\_{t,s})\\ (busier days are noisier in absolute terms, and its coverage payoff is quantified in the evaluation section), and the availability factor \\f\_{t,s}\\ shrinking the spread on stockout days, where sales are pinned near zero. The remaining piece is a small **constant** basal term \\\sigma_0 = 0.02\\ on the scaled axis, which keeps the scale bounded away from zero. Three design questions hide in this one constant:
+Finally, the noise scale is \\f\_{t,s} \left(\sigma_s + \lambda_s \\ \text{softplus}(\ell\_{t,s})\right) + \sigma_0\\. It has three parts: a per-series base scale \\\sigma_s\\, a level-dependent component \\\lambda_s \\ \text{softplus}(\ell\_{t,s})\\, sampled as `noise_loading` in the code (busier days are noisier in absolute terms, and its coverage payoff is quantified in the evaluation section), and the availability factor \\f\_{t,s}\\ shrinking the spread on stockout days, where sales are pinned near zero. The remaining piece is a small **constant** basal term \\\sigma_0 = 0.02\\ on the scaled axis, which keeps the scale bounded away from zero. Three design questions hide in this one constant:
 
 - **Why not a learned basal term?** Many series sell exactly zero on their stockout days, where the mean is also pinned near zero. A Normal density at a perfectly fit point grows without bound as its scale shrinks, so the ELBO rewards collapsing the total noise scale at those observations; with a learned basal term the collapse runs away and the optimization hits `NaN` mid-run (the first non-finite ELBO appears around step \\6{,}000\\ on this panel). A constant cannot collapse.
 - **Why not a tiny epsilon like \\10^{-6}\\?** The constant is not there to avoid division by zero; it must remove the *reward* for collapse. With \\\sigma_0 = 10^{-6}\\ the density at an exactly fit zero can still contribute \\\log\left(1 / (\sigma_0 \sqrt{2\pi})\right) \approx 12.9\\ per observation, and such a fit banks roughly a thousand nats of ELBO from these spikes while every predictive metric stays identical to the \\0.02\\ fit: the "improvement" is purely the degenerate optimum being exploited, and stability is then at the mercy of the learning-rate schedule (the learned-term variant diverged through exactly this mechanism).
@@ -1325,6 +1331,40 @@ Finally, the noise scale is \\f\_{t,s} \left(\sigma_s + \lambda_s \\ \text{softp
 
 
 ``` python
+def availability_factor(
+    availability: Float[np.ndarray | Array, " ..."],
+    b_avail: Float[np.ndarray | Array, " ..."],
+    floor: Float[np.ndarray | Array, " ..."],
+) -> Float[np.ndarray | Array, " ..."]:
+    """Floored, normalized saturating availability factor.
+
+    The model-specification curve
+    ``floor + (1 - floor) * expm1(-b_avail * availability) / expm1(-b_avail)``:
+    ``floor`` at zero availability, exactly ``1`` at full availability, with the
+    curvature set by ``b_avail``. Defined once and shared by the model and the
+    prior/posterior diagnostic cells below, so the plotted curves can never
+    drift from what the model computes. Inputs broadcast together per NumPy
+    rules. NumPy inputs are accepted (``xarray.apply_ufunc`` passes them in
+    the posterior diagnostic below) and computed with ``jax.numpy``.
+
+    Parameters
+    ----------
+    availability
+        Sales-weighted availability in ``[0, 1]``.
+    b_avail
+        Saturation rate (the purchase-opportunity intensity).
+    floor
+        The factor at zero availability, in ``(0, 1)``.
+
+    Returns
+    -------
+    Array
+        The multiplicative availability factor.
+    """
+    saturation = jnp.expm1(-b_avail * availability) / jnp.expm1(-b_avail)
+    return floor + (1.0 - floor) * saturation
+
+
 class FreshRetailModel(ForecastingModel):
     """Damped-trend hierarchical panel model with a floored availability factor.
 
@@ -1394,7 +1434,7 @@ class FreshRetailModel(ForecastingModel):
             b_avail = cast("Array", numpyro.sample("b_avail", dist.LogNormal(1.0, 0.5)))
             floor = cast("Array", numpyro.sample("floor", dist.Beta(2.0, 18.0)))
             sigma = cast("Array", numpyro.sample("sigma", dist.HalfNormal(0.5)))
-            sigma_slope = cast("Array", numpyro.sample("sigma_slope", dist.HalfNormal(0.2)))
+            noise_loading = cast("Array", numpyro.sample("noise_loading", dist.HalfNormal(0.2)))
             seasonal = cast(
                 "Array",
                 numpyro.sample("seasonal", dist.ZeroSumNormal(seasonal_scale, event_shape=(7,))),
@@ -1433,14 +1473,13 @@ class FreshRetailModel(ForecastingModel):
         level = init_level + jnp.cumsum(drift, axis=-2) + jnp.cumsum(slope, axis=-2)
         seasonal_rep = periodic_repeat(seasonal.T, duration, axis=-2)
         covariates_contribution = (features * b[:, None, :]).sum(axis=0)
-        saturation = jnp.expm1(-b_avail * availability) / jnp.expm1(-b_avail)
-        factor = floor + (1.0 - floor) * saturation
+        factor = cast("Array", availability_factor(availability, b_avail, floor))
         mu = factor * (level + seasonal_rep + covariates_contribution)
         # The constant basal noise bounds the likelihood at exact-zero sales: a
         # learned basal term collapses there and NaNs the optimization, and a tiny
         # epsilon (e.g. 1e-6) leaves that degenerate optimum in play; 0.02 sits just
         # below one physical sale unit on the scaled axis (see the markdown above).
-        sigma_t = factor * (sigma + sigma_slope * jax.nn.softplus(level)) + 0.02
+        sigma_t = factor * (sigma + noise_loading * jax.nn.softplus(level)) + 0.02
         self.predict_glm(lambda m: dist.Normal(m, sigma_t), mu)
 
 
@@ -1497,8 +1536,7 @@ rng_key, key_floor, key_b = random.split(rng_key, 3)
 floor_prior = dist.Beta(2.0, 18.0).sample(key_floor, (500,))
 b_prior = dist.LogNormal(1.0, 0.5).sample(key_b, (500,))
 grid_jax = jnp.asarray(availability_grid, dtype=jnp.float32)
-saturation_prior = jnp.expm1(-b_prior[:, None] * grid_jax) / jnp.expm1(-b_prior[:, None])
-factor_prior = floor_prior[:, None] + (1.0 - floor_prior[:, None]) * saturation_prior
+factor_prior = availability_factor(grid_jax, b_prior[:, None], floor_prior[:, None])
 
 pc = az.plot_lm(
     predictions_to_datatree(
@@ -1681,8 +1719,8 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 12.5 s, sys: 619 ms, total: 13.1 s
-    Wall time: 7.03 s
+    CPU times: user 12 s, sys: 556 ms, total: 12.6 s
+    Wall time: 6.45 s
 
 
 ``` python
@@ -1695,8 +1733,8 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 21s, sys: 6min 46s, total: 16min 7s
-    Wall time: 3min 12s
+    CPU times: user 9min 31s, sys: 6min 51s, total: 16min 23s
+    Wall time: 3min 17s
 
 
 <figure class="figure">
@@ -1748,7 +1786,7 @@ tree = to_datatree(
         "b_avail": ["series"],
         "floor": ["series"],
         "sigma": ["series"],
-        "sigma_slope": ["series"],
+        "noise_loading": ["series"],
     },
 )
 tree
@@ -1783,14 +1821,14 @@ Group: /
 │           b_scale_store     (chain, draw, covariate, store) float32 8MB 0.4211 ... ...
 │           centered_b        (chain, draw) float32 4kB 0.2623 0.2655 ... 0.2611 0.2609
 │           ...                ...
+│           phi_trend         (chain, draw, series) float32 4MB 0.4503 0.352 ... 0.4761
 │           seasonal          (chain, draw, series, day_of_week) float32 28MB 0.00956...
 │           seasonal_scale    (chain, draw) float32 4kB 0.04323 0.04336 ... 0.04362
 │           sigma             (chain, draw, series) float32 4MB 0.1728 0.1769 ... 0.3151
-│           sigma_slope       (chain, draw, series) float32 4MB 0.063 0.03913 ... 0.1161
 │           slope             (chain, draw, time, series) float32 304MB -0.03345 ... ...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02124 ... 0.04133
 │       Attributes:
-│           created_at:                 2026-07-11T22:24:17.519600+00:00
+│           created_at:                 2026-07-12T08:01:34.009523+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1806,7 +1844,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 304MB 0.09489 ... 0.6046
 │       Attributes:
-│           created_at:                 2026-07-11T22:24:19.553068+00:00
+│           created_at:                 2026-07-12T08:01:35.587957+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1819,7 +1857,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-11T22:24:19.553703+00:00
+│           created_at:                 2026-07-12T08:01:35.588481+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1833,7 +1871,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-11T22:24:19.554201+00:00
+│           created_at:                 2026-07-12T08:01:35.588963+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1848,7 +1886,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 56MB 0.7749 1.083 ... 0.8734
 │       Attributes:
-│           created_at:                 2026-07-11T22:24:21.850389+00:00
+│           created_at:                 2026-07-12T08:01:38.036898+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1862,7 +1900,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-11T22:24:21.851036+00:00
+            created_at:                 2026-07-12T08:01:38.037527+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2130,7 +2168,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-0801568, 0.1750502 , ..., 0.28481746,0.16037919, 0.31000838],[0.01012316, 0.28337845, 0.04082821, ..., 0.09619088,0.1300085 , 0.7776074 ],[0.01284789, 0.03248451, 0.04190164, ..., 0.03807579,0.05285703, 0.05782085]]]],shape=(1, 1000, 4, 520), dtype=float32)
+    array([[[[0.42105007, 0.1383232 , 0.18002   , ..., 0.2038652 ,0.05850126, 0.5463838 ],[0.31641024, 0.02595679, 0.5805648 , ..., 0.21245587,0.16396692, 0.64148325],[0.05801855, 0.23624426, 0.07748052, ..., 0.07111645,0.04147619, 0.0851369 ],[0.06826492, 0.00454931, 0.10656209, ..., 0.0725597 ,0.03779022, 0.02867362]],[[0.48034543, 0.1528588 , 0.21853566, ..., 0.20255598,0.22881883, 0.5677708 ],[0.20059258, 0.07014091, 0.09907395, ..., 0.1572279 ,0.11306201, 0.38199198],[0.02575796, 0.23308755, 0.03157636, ..., 0.01804068,0.04207972, 0.08006065],[0.00495191, 0.01390419, 0.02763122, ..., 0.09513751,0.13219555, 0.09192435]],[[0.434429  , 0.09746231, 0.23265637, ..., 0.14950104,0.23741223, 0.09606674],...0.02629862, 0.06952746]],[[0.5804471 , 0.34387618, 0.31099313, ..., 0.20951234,0.458105  , 0.14025812],[0.338149  , 0.17689268, 0.42562014, ..., 0.22784273,0.3030713 , 0.53049713],[0.02049752, 0.2602991 , 0.03141032, ..., 0.00986498,0.04508592, 0.13850527],[0.02642063, 0.02895456, 0.02190295, ..., 0.03528734,0.26742893, 0.05654936]],[[0.22688743, 0.0677025 , 0.19491038, ..., 0.22725148,0.21071336, 0.42996585],[0.11351094, 0.10801568, 0.1750502 , ..., 0.28481746,0.16037919, 0.31000838],[0.01012316, 0.28337845, 0.04082821, ..., 0.09619088,0.1300085 , 0.7776074 ],[0.01284789, 0.03248451, 0.04190164, ..., 0.03807579,0.05285703, 0.05782085]]]],shape=(1, 1000, 4, 520), dtype=float32)
 
 
 centered_b
@@ -2210,7 +2248,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.3274039 ,  0.8124239 , -0.5890946 , ...,  0.5498305 ,-0.28900805,  0.280123  ],[-0.58647746,  0.19489063,  1.2497972 , ..., -0.06875094,0.30393487,  1.0483221 ],[-0.56932366,  0.40478313, -0.00315506, ...,  0.43459326,-0.17499541,  0.62746674],...,[-0.78179884, -0.19071212,  0.4067585 , ..., -0.85089356,-0.28551975,  0.528902  ],[ 0.05975357, -0.64145786, -0.17003818, ..., -0.2656106 ,-0.5638832 ,  0.9390198 ],[-0.58407646,  0.36907423, -0.9127421 , ...,  0.3426406 ,-0.6222278 ,  1.1543348 ]],[[-0.24850877, -0.21949759, -0.14907843, ...,  0.23381662,-0.32858893, -0.05924674],[-0.59170103, -0.21910162, -1.098985  , ..., -0.46430868,-0.79398507, -0.07265472],[ 0.30138633, -0.20854439,  0.6028717 , ...,  0.10527086,0.81862825,  0.25512734],...0.29416224,  1.4914079 ],[-0.21773407, -0.14288896,  1.1872112 , ..., -0.73009396,-0.34800684, -0.01442043],[-0.25001338, -0.91724694,  0.10957339, ..., -0.13286415,0.5721363 ,  0.01433882]],[[-0.35150638,  0.0503104 ,  0.8073027 , ..., -0.43244722,0.5487591 ,  0.06339869],[ 0.56149113,  0.87646765, -0.05320831, ..., -0.49547133,-0.9092784 , -1.8484576 ],[-1.8001591 ,  0.42748156, -0.61763734, ...,  0.02083357,-0.45419908, -0.21427032],...,[-0.09327636, -0.7945091 ,  0.06713613, ...,  0.6773235 ,0.7428661 , -0.4580191 ],[-0.56242466, -0.5086783 , -0.5215774 , ...,  0.20903222,0.25494924,  0.76767313],[ 1.345033  ,  0.67812514,  0.02597879, ...,  1.0495869 ,0.6139055 ,  0.5427303 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+ 0.76767313],[ 1.345033  ,  0.67812514,  0.02597879, ...,  1.0495869 ,0.6139055 ,  0.5427303 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 drift_scale
@@ -2273,6 +2311,26 @@ float32
     array([[[1.0315595 , 1.0054557 , 1.0512366 , ..., 0.6835014 ,0.8497987 , 0.40620345],[0.9901402 , 0.991026  , 1.0456327 , ..., 0.6507294 ,0.8222531 , 0.5003004 ],[1.0578299 , 1.0598993 , 0.98908925, ..., 0.6331284 ,0.8472848 , 0.6067999 ],...,[1.0135481 , 1.0334213 , 0.97165596, ..., 0.67463905,0.82708234, 0.5061352 ],[0.98273915, 1.0241371 , 0.9545655 , ..., 0.6881134 ,0.79352987, 0.4945127 ],[0.97720075, 0.98367965, 1.0147444 , ..., 0.61759174,0.8267136 , 0.5117955 ]]], shape=(1, 1000, 1000), dtype=float32)
 
 
+noise_loading
+
+
+(chain, draw, series)
+
+
+float32
+
+
+0.063 0.03913 ... 0.04601 0.1161
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[[0.06300467, 0.03912514, 0.04147755, ..., 0.03326455,0.03198916, 0.18956716],[0.05048452, 0.03433239, 0.0786994 , ..., 0.04368647,0.06976815, 0.13635592],[0.04070584, 0.04562899, 0.03758578, ..., 0.04108103,0.03204321, 0.161661  ],...,[0.03843369, 0.05684227, 0.03812158, ..., 0.05204021,0.03857201, 0.08197345],[0.02596977, 0.0618213 , 0.04851258, ..., 0.0292407 ,0.03745   , 0.08897512],[0.03431905, 0.02765489, 0.0211112 , ..., 0.02465225,0.04600977, 0.11610676]]], shape=(1, 1000, 1000), dtype=float32)
+
+
 phi_trend
 
 
@@ -2330,7 +2388,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-963, 0.04319448,0.04291925, 0.04360227, 0.0433718 , 0.04278955, 0.04401878,0.04350941, 0.04354069, 0.04338023, 0.04366054, 0.04298465,0.04321781, 0.0434421 , 0.04297736, 0.04319046, 0.04277753,0.04280677, 0.04310729, 0.04387914, 0.04390493, 0.0436245 ]],dtype=float32)
+    array([[0.04322875, 0.04336356, 0.04304946, 0.04366585, 0.04287754,0.04339037, 0.04316967, 0.0421982 , 0.04382411, 0.04372697,0.04336275, 0.04341173, 0.04309391, 0.04325411, 0.04358628,0.04361146, 0.04314669, 0.04291718, 0.04249483, 0.04304069,0.04299839, 0.04350255, 0.04282907, 0.04341662, 0.04339822,0.04330965, 0.04359376, 0.04282482, 0.04383216, 0.04294991,0.04315653, 0.04327794, 0.04329769, 0.04324136, 0.04346867,0.04304013, 0.04307001, 0.04348217, 0.04337754, 0.04343932,0.04332095, 0.04354927, 0.04354881, 0.04301328, 0.04324969,0.04275395, 0.04373461, 0.04289543, 0.04312428, 0.04303712,0.04326146, 0.04331559, 0.042978  , 0.04321187, 0.04288776,0.04269573, 0.04374782, 0.04348957, 0.04282869, 0.04326428,0.0436417 , 0.04337151, 0.04354994, 0.04338058, 0.04302223,0.04335397, 0.04256213, 0.04267624, 0.04331248, 0.04309619,0.04338168, 0.04312943, 0.04310658, 0.04324235, 0.04417701,0.04273943, 0.04358589, 0.04403514, 0.04294303, 0.04275084,0.04314898, 0.0426501 , 0.0430967 , 0.0428238 , 0.04323477,0.04396377, 0.04270663, 0.04389881, 0.04294789, 0.04321359,0.04336986, 0.04347366, 0.04375276, 0.0431978 , 0.0435106 ,0.04400306, 0.04304588, 0.0430486 , 0.04350229, 0.0426559 ,...0.043154  , 0.04280531, 0.04402635, 0.0433495 , 0.04361435,0.04309192, 0.04341808, 0.04294398, 0.0427666 , 0.04328386,0.04324624, 0.04339274, 0.04257418, 0.04353574, 0.04297961,0.04350844, 0.04358373, 0.04310221, 0.04333892, 0.04301902,0.04353072, 0.04294636, 0.04278408, 0.04253123, 0.04320271,0.04314634, 0.04341194, 0.04304275, 0.04330185, 0.0431014 ,0.04294265, 0.04277737, 0.043323  , 0.04354027, 0.04334927,0.04365484, 0.04345117, 0.04291986, 0.0430706 , 0.04316252,0.04306724, 0.0430001 , 0.04347942, 0.04343528, 0.04324457,0.04297731, 0.04358321, 0.04374049, 0.04363283, 0.04309112,0.04374257, 0.04260633, 0.04320884, 0.04332821, 0.04310523,0.04370182, 0.0434755 , 0.04310061, 0.04291433, 0.04361084,0.04303801, 0.04347458, 0.04333552, 0.04258454, 0.04293197,0.04312298, 0.04381014, 0.04251461, 0.04314465, 0.04277023,0.04311198, 0.04333933, 0.04343827, 0.04284963, 0.04319448,0.04291925, 0.04360227, 0.0433718 , 0.04278955, 0.04401878,0.04350941, 0.04354069, 0.04338023, 0.04366054, 0.04298465,0.04321781, 0.0434421 , 0.04297736, 0.04319046, 0.04277753,0.04280677, 0.04310729, 0.04387914, 0.04390493, 0.0436245 ]],dtype=float32)
 
 
 sigma
@@ -2351,26 +2409,6 @@ float32
 
 
     array([[[0.17282921, 0.17693496, 0.28679824, ..., 0.12429476,0.13206822, 0.30941185],[0.22862288, 0.18526997, 0.22020298, ..., 0.12397757,0.13065411, 0.42027494],[0.18432698, 0.18071245, 0.28276148, ..., 0.14982738,0.14725825, 0.3430943 ],...,[0.1847771 , 0.17919493, 0.21319161, ..., 0.13862173,0.12925315, 0.46628648],[0.1960159 , 0.17813471, 0.26120156, ..., 0.16013558,0.11549912, 0.36633798],[0.19741094, 0.24743408, 0.24587268, ..., 0.12912403,0.18536991, 0.31512374]]], shape=(1, 1000, 1000), dtype=float32)
-
-
-sigma_slope
-
-
-(chain, draw, series)
-
-
-float32
-
-
-0.063 0.03913 ... 0.04601 0.1161
-
-
-<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
-
-<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
-
-
-    array([[[0.06300467, 0.03912514, 0.04147755, ..., 0.03326455,0.03198916, 0.18956716],[0.05048452, 0.03433239, 0.0786994 , ..., 0.04368647,0.06976815, 0.13635592],[0.04070584, 0.04562899, 0.03758578, ..., 0.04108103,0.03204321, 0.161661  ],...,[0.03843369, 0.05684227, 0.03812158, ..., 0.05204021,0.03857201, 0.08197345],[0.02596977, 0.0618213 , 0.04851258, ..., 0.0292407 ,0.03745   , 0.08897512],[0.03431905, 0.02765489, 0.0211112 , ..., 0.02465225,0.04600977, 0.11610676]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 slope
@@ -2417,7 +2455,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-11T22:24:17.519600+00:00
+2026-07-12T08:01:34.009523+00:00
 
 creation_library :  
 ArviZ
@@ -2556,7 +2594,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-11T22:24:19.553068+00:00
+2026-07-12T08:01:35.587957+00:00
 
 creation_library :  
 ArviZ
@@ -2650,7 +2688,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-11T22:24:19.553703+00:00
+2026-07-12T08:01:35.588481+00:00
 
 creation_library :  
 ArviZ
@@ -2765,7 +2803,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-11T22:24:19.554201+00:00
+2026-07-12T08:01:35.588963+00:00
 
 creation_library :  
 ArviZ
@@ -2901,7 +2939,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-11T22:24:21.850389+00:00
+2026-07-12T08:01:38.036898+00:00
 
 creation_library :  
 ArviZ
@@ -3016,7 +3054,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-11T22:24:21.851036+00:00
+2026-07-12T08:01:38.037527+00:00
 
 creation_library :  
 ArviZ
@@ -3771,10 +3809,9 @@ posterior_factor = (
     .isel(sample=slice(None, 250))
 )
 a_grid_da = xr.DataArray(availability_grid, dims=["a_grid"])
-saturation_draws = np.expm1(-posterior_factor["b_avail"] * a_grid_da) / np.expm1(
-    -posterior_factor["b_avail"]
+factor_draws = xr.apply_ufunc(
+    availability_factor, a_grid_da, posterior_factor["b_avail"], posterior_factor["floor"]
 )
-factor_draws = posterior_factor["floor"] + (1.0 - posterior_factor["floor"]) * saturation_draws
 factor_panel_curves = factor_draws.mean("series")
 
 availability_bin_da = (

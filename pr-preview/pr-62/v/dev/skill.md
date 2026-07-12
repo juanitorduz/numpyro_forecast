@@ -124,6 +124,7 @@ Package exception hierarchy raised at resolution and validation boundaries.
 - `exceptions.GuideSampleArgsError`
 - `exceptions.KernelResolutionError`
 - `exceptions.KernelConfigError`
+- `exceptions.CovariateDimsError`
 - `exceptions.MVNLayoutError`
 
 ### ArviZ export

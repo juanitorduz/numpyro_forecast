@@ -360,41 +360,42 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-124"><a href="#cb1-124" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.GuideSampleArgsError`</span></span>
 <span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.KernelResolutionError`</span></span>
 <span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.KernelConfigError`</span></span>
-<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.MVNLayoutError`</span></span>
-<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a><span class="fu">### ArviZ export</span></span>
-<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a>Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.</span>
-<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`convert.to_datatree`</span></span>
-<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`convert.add_forecast_groups`</span></span>
-<span id="cb1-135"><a href="#cb1-135" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`convert.predictions_to_datatree`</span></span>
-<span id="cb1-136"><a href="#cb1-136" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-137"><a href="#cb1-137" aria-hidden="true" tabindex="-1"></a><span class="fu">### Extensions (contrib)</span></span>
-<span id="cb1-138"><a href="#cb1-138" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-139"><a href="#cb1-139" aria-hidden="true" tabindex="-1"></a>Optional backends behind pyproject extras (never imported by default).</span>
-<span id="cb1-140"><a href="#cb1-140" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-141"><a href="#cb1-141" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.BlackjaxNUTSKernel`</span></span>
-<span id="cb1-142"><a href="#cb1-142" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.BlackjaxMCLMCKernel`</span></span>
-<span id="cb1-143"><a href="#cb1-143" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.BlackjaxCustomKernel`</span></span>
-<span id="cb1-144"><a href="#cb1-144" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.PathfinderFit`</span></span>
-<span id="cb1-145"><a href="#cb1-145" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.fit_pathfinder`</span></span>
-<span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a><span class="fu">### Datasets</span></span>
-<span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a>Example datasets used in the tutorials.</span>
-<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_weekly`</span></span>
-<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_hierarchical`</span></span>
-<span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_victoria_electricity`</span></span>
-<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.bart_available`</span></span>
-<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a><span class="fu">## Resources</span></span>
-<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Full documentation</span><span class="co">](https://juanitorduz.github.io/numpyro_forecast/)</span></span>
-<span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms.txt</span><span class="co">](llms.txt)</span> — Indexed API reference for LLMs</span>
-<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms-full.txt</span><span class="co">](llms-full.txt)</span> — Comprehensive documentation for LLMs</span>
-<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Source code</span><span class="co">](https://github.com/juanitorduz/numpyro_forecast)</span></span></code></pre></div>
+<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.CovariateDimsError`</span></span>
+<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.MVNLayoutError`</span></span>
+<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a><span class="fu">### ArviZ export</span></span>
+<span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a>Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.</span>
+<span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`convert.to_datatree`</span></span>
+<span id="cb1-135"><a href="#cb1-135" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`convert.add_forecast_groups`</span></span>
+<span id="cb1-136"><a href="#cb1-136" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`convert.predictions_to_datatree`</span></span>
+<span id="cb1-137"><a href="#cb1-137" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-138"><a href="#cb1-138" aria-hidden="true" tabindex="-1"></a><span class="fu">### Extensions (contrib)</span></span>
+<span id="cb1-139"><a href="#cb1-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-140"><a href="#cb1-140" aria-hidden="true" tabindex="-1"></a>Optional backends behind pyproject extras (never imported by default).</span>
+<span id="cb1-141"><a href="#cb1-141" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-142"><a href="#cb1-142" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.BlackjaxNUTSKernel`</span></span>
+<span id="cb1-143"><a href="#cb1-143" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.BlackjaxMCLMCKernel`</span></span>
+<span id="cb1-144"><a href="#cb1-144" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.BlackjaxCustomKernel`</span></span>
+<span id="cb1-145"><a href="#cb1-145" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.PathfinderFit`</span></span>
+<span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`contrib.blackjax.fit_pathfinder`</span></span>
+<span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a><span class="fu">### Datasets</span></span>
+<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a>Example datasets used in the tutorials.</span>
+<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_weekly`</span></span>
+<span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_hierarchical`</span></span>
+<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_victoria_electricity`</span></span>
+<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.bart_available`</span></span>
+<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a><span class="fu">## Resources</span></span>
+<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Full documentation</span><span class="co">](https://juanitorduz.github.io/numpyro_forecast/)</span></span>
+<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms.txt</span><span class="co">](llms.txt)</span> — Indexed API reference for LLMs</span>
+<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms-full.txt</span><span class="co">](llms-full.txt)</span> — Comprehensive documentation for LLMs</span>
+<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Source code</span><span class="co">](https://github.com/juanitorduz/numpyro_forecast)</span></span></code></pre></div>
 </pre>
 
 

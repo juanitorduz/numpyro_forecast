@@ -233,6 +233,9 @@ A kernel specification could not be resolved.
 [exceptions.KernelConfigError](exceptions.KernelConfigError.md#numpyro_forecast.exceptions.KernelConfigError)  
 A kernel is combined with an invalid configuration.
 
+[exceptions.CovariateDimsError](exceptions.CovariateDimsError.md#numpyro_forecast.exceptions.CovariateDimsError)  
+Covariate dimension names are inconsistent or malformed.
+
 [exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
 A `MultivariateNormal` layout is unsupported for time-axis surgery.
 

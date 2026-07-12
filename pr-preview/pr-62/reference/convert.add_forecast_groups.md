@@ -37,7 +37,7 @@ Future covariates shaped `(future, covariate_dim)`, or any layout with time at a
 Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g. datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.
 
 `covariate_dims: Sequence[str] | None = None`  
-Optional dimension names for `covariates_future`, one per axis; defaults to `("time", "covariate_dim")`. See [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
+Optional dimension names for `covariates_future`, one per axis. When omitted, the names are inherited from the tree's `constant_data["covariates"]` variable (falling back to `("time", "covariate_dim")` if the tree carries no stored covariates), so the forecast covariates always share the in-sample axis names. When given explicitly, the names must match the stored ones. See [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
 
 
 ## Returns
@@ -51,4 +51,7 @@ A new tree with the `predictions` and `predictions_constant_data` groups added.
 
 
 `ValueError`  
-If `time_coord` is given but its length differs from the forecast horizon, if it is omitted while the in-sample time coordinate is non-integer, or if `covariate_dims` does not name every `covariates_future` axis.
+If `time_coord` is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.
+
+`CovariateDimsError`  
+If the resolved `covariate_dims` (explicit or inherited) do not name every `covariates_future` axis, or if explicit names disagree with the dimension names already stored on the tree's `constant_data["covariates"]`.

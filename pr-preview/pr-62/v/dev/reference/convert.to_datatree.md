@@ -71,7 +71,10 @@ A tree with `posterior` (`(chain, draw, ...)`; a single pseudo-chain plus `varia
 
 
 `ValueError`  
-If `covariates` is shorter than `data` along the time axis, if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon, or if `covariate_dims` does not name every `covariates` axis.
+If `covariates` is shorter than `data` along the time axis, or if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon.
+
+`CovariateDimsError`  
+If `covariate_dims` does not name every `covariates` axis.
 
 
 ## Notes

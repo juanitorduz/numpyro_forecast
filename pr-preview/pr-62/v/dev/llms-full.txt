@@ -1464,6 +1464,17 @@ Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when
 (ensemble samplers need multiple vectorized chains; BlackJAX kernels need
 sequential chains).
 
+CovariateDimsError(message: str | None = None) -> None
+
+Covariate dimension names are inconsistent or malformed.
+
+Raised by :func:`~numpyro_forecast.convert.to_datatree` and
+:func:`~numpyro_forecast.convert.add_forecast_groups` when
+``covariate_dims`` does not name every covariates axis, or when the names
+passed to (or inherited by) :func:`~numpyro_forecast.convert.add_forecast_groups`
+disagree with the dimension names already stored on the tree's
+``constant_data`` covariates.
+
 MVNLayoutError(message: str | None = None) -> None
 
 A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
@@ -1553,10 +1564,11 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``covariates`` is shorter than ``data`` along the time axis, if
+    If ``covariates`` is shorter than ``data`` along the time axis, or if
     ``time_coord`` is given but its length does not match the in-sample
-    window plus the forecast horizon, or if ``covariate_dims`` does not
-    name every ``covariates`` axis.
+    window plus the forecast horizon.
+CovariateDimsError
+    If ``covariate_dims`` does not name every ``covariates`` axis.
 
 Notes
 -----
@@ -1596,8 +1608,13 @@ time_coord
     coordinate is non-integer (e.g. datetime64): auto-continuing would have
     to guess the frequency, so explicit values are demanded instead.
 covariate_dims
-    Optional dimension names for ``covariates_future``, one per axis;
-    defaults to ``("time", "covariate_dim")``. See :func:`to_datatree`.
+    Optional dimension names for ``covariates_future``, one per axis. When
+    omitted, the names are inherited from the tree's
+    ``constant_data["covariates"]`` variable (falling back to
+    ``("time", "covariate_dim")`` if the tree carries no stored
+    covariates), so the forecast covariates always share the in-sample
+    axis names. When given explicitly, the names must match the stored
+    ones. See :func:`to_datatree`.
 
 Returns
 -------
@@ -1609,9 +1626,13 @@ Raises
 ------
 ValueError
     If ``time_coord`` is given but its length differs from the forecast
-    horizon, if it is omitted while the in-sample time coordinate is
-    non-integer, or if ``covariate_dims`` does not name every
-    ``covariates_future`` axis.
+    horizon, or if it is omitted while the in-sample time coordinate is
+    non-integer.
+CovariateDimsError
+    If the resolved ``covariate_dims`` (explicit or inherited) do not name
+    every ``covariates_future`` axis, or if explicit names disagree with
+    the dimension names already stored on the tree's
+    ``constant_data["covariates"]``.
 
 predictions_to_datatree(predictions: jaxtyping.Float[ndarray, 'sample time series'] | jaxtyping.Float[Array, 'sample time series'], x: jaxtyping.Num[ndarray, 'time'] | jaxtyping.Num[Array, 'time'], series: collections.abc.Sequence[typing.Any], *, group: str = 'posterior_predictive', observed: jaxtyping.Float[ndarray, 'time series'] | jaxtyping.Float[Array, 'time series'] | None = None) -> 'xarray.DataTree'
 

@@ -766,7 +766,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L158-L355" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L221-L419" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -850,7 +850,11 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single ps
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>covariates</code> is shorter than <code>data</code> along the time axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, or if <code>covariate_dims</code> does not name every <code>covariates</code> axis.
+<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, or if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
+<dd>
+If <code>covariate_dims</code> does not name every <code>covariates</code> axis.
 </dd>
 </dl>
 </div>

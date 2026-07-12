@@ -178,6 +178,10 @@
       "dev",
       "0.2.0"
     ],
+    "reference/exceptions.CovariateDimsError.html": [
+      "dev",
+      "0.2.0"
+    ],
     "reference/exceptions.GuideResolutionError.html": [
       "dev",
       "0.2.0"

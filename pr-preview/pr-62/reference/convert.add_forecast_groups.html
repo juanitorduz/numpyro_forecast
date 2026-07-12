@@ -765,7 +765,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L358-L440" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L422-L514" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast_groups</span>(</span>
@@ -802,7 +802,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional dimension names for <code>covariates_future</code>, one per axis; defaults to <code>("time", "covariate_dim")</code>. See <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>.
+Optional dimension names for <code>covariates_future</code>, one per axis. When omitted, the names are inherited from the tree’s <code>constant_data["covariates"]</code> variable (falling back to <code>("time", "covariate_dim")</code> if the tree carries no stored covariates), so the forecast covariates always share the in-sample axis names. When given explicitly, the names must match the stored ones. See <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>.
 </dd>
 </dl>
 </div>
@@ -824,7 +824,11 @@ A new tree with the <code>predictions</code> and <code>predictions_constant_data
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>time_coord</code> is given but its length differs from the forecast horizon, if it is omitted while the in-sample time coordinate is non-integer, or if <code>covariate_dims</code> does not name every <code>covariates_future</code> axis.
+<p>If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
+<dd>
+If the resolved <code>covariate_dims</code> (explicit or inherited) do not name every <code>covariates_future</code> axis, or if explicit names disagree with the dimension names already stored on the tree’s <code>constant_data["covariates"]</code>.
 </dd>
 </dl>
 </div>
