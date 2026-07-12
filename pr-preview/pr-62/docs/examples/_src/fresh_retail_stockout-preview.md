@@ -1271,6 +1271,40 @@ fig.suptitle("Sales and promotion covariates", fontsize=18, fontweight="bold");
 </figure>
 
 
+    In [20]:
+
+
+``` python
+# The facet plot shows the top series only; these panel-wide shares back the
+# feature-quality discussion below.
+panel_covariate_shares = (
+    data_lf.pipe(keep_top_series, top_series_df)
+    .with_columns(cleaned_discount_magnitude())
+    .group_by("store_id", "product_id")
+    .agg(
+        (pl.col("activity_flag") > 0).any().alias("any_activity"),
+        (pl.col("discount_magnitude") > 0).any().alias("any_discount"),
+        (pl.col("discount") == 0).mean().alias("placeholder_share"),
+    )
+    .select(
+        pl.col("any_activity").mean(),
+        pl.col("any_discount").mean(),
+        pl.col("placeholder_share").mean(),
+    )
+    .collect(engine="streaming")
+)
+promo_share, discount_share, placeholder_share = panel_covariate_shares.row(0)
+print(f"panel series with at least one active-promotion day: {promo_share:.1%}")
+print(f"panel series with at least one real discount day: {discount_share:.1%}")
+print(f"placeholder discount = 0 share of the panel's day-rows: {placeholder_share:.1%}")
+```
+
+
+    panel series with at least one active-promotion day: 46.8%
+    panel series with at least one real discount day: 65.6%
+    placeholder discount = 0 share of the panel's day-rows: 17.7%
+
+
 Two patterns jump out. The holiday flag repeats weekly (weekends plus a solid block around the May Day week), and several series show local sales spikes on those shaded days; promotion activity and priced discounts, by contrast, are entirely absent from the twenty series shown, even though roughly half of the panel's series have active promotion days and about two thirds see at least one real discount: the flagship launch product that dominates both rankings is simply never promoted. The flat discount line is also the placeholder cleanup at work: for these series the raw `discount` column is zero on most days (the placeholder flagged in the EDA at \\0.4\\\\ dataset-wide covers about \\18\\\\ of this panel's days, concentrated in exactly the launch product), so the cleaned magnitude sits at an honest zero instead of reading as a \\100\\\\ discount. This heterogeneity in feature quality is one more argument for pooling the covariate effects by store rather than fitting one global discount effect: where the feature is quiet the coefficient is weakly identified and shrinks toward its store-level prior, and where the feature is informative it can act.
 
 
@@ -1312,7 +1346,7 @@ The factor \\f\_{t,s}\\ deserves a close look, because its three ingredients eac
 - **The normalization by \\1 - e^{-b_s}\\.** Without it, the factor at full availability is \\1 - e^{-b_s} \< 1\\, and the model can trade the factor's overall scale against the level \\\ell\_{t,s}\\ (multiply one, divide the other), leaving both non-identified. Anchoring \\f\_{t,s} = 1\\ at \\a = 1\\ removes that degeneracy: the level is the demand at full availability, \\\phi_s\\ is exactly the share of demand still sold on a fully flagged-out day, and \\b_s\\ only controls the curvature. Numerically we compute the ratio with `expm1`, which avoids the catastrophic cancellation in \\1 - e^{-b_s}\\ for small \\b_s\\, where the naive expression degrades toward \\0/0\\.
 
 
-    In [20]:
+    In [21]:
 
 
 ``` python
@@ -1330,11 +1364,11 @@ ax.set(xlabel=r"floor $\phi_s$", ylabel="density", title="Floor prior");
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-21-output-1.png" class="figure-img" width="976" height="636" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-22-output-1.png" class="figure-img" width="976" height="636" /></p>
 </figure>
 
 
-    In [21]:
+    In [22]:
 
 
 ``` python
@@ -1391,7 +1425,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-22-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-23-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -1404,7 +1438,7 @@ Three priors govern how much the level is allowed to move, and they are worth ch
 - \\\tau^{\text{trend}}\_s \sim \text{LogNormal}(-4, 1)\\, the slope innovation scale: median \\\approx 0.018\\, deliberately well below the drift and observation scales, so the slope only accumulates persistent day-over-day signals and cannot chase daily noise.
 
 
-    In [22]:
+    In [23]:
 
 
 ``` python
@@ -1434,7 +1468,7 @@ fig.suptitle("Priors for the level and trend dynamics", fontsize=18, fontweight=
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-23-output-1.png" class="figure-img" width="1511" height="461" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-24-output-1.png" class="figure-img" width="1511" height="461" /></p>
 </figure>
 
 
@@ -1445,7 +1479,7 @@ Finally, the noise scale is \\f\_{t,s} \left(\sigma_s + \lambda_s \\ \text{softp
 - **Why \\0.02\\ specifically?** It sits at the data's resolution: one physical sale unit is between \\0.06\\ and \\0.25\\ on the per-series scaled axis, so a basal noise of \\0.02\\ is below measurement granularity and cannot distort any interval the data could support. Fits with \\\sigma_0 \in \\0.01, 0.02, 0.05\\\\ give the same CRPS and coverage to within noise.
 
 
-    In [23]:
+    In [24]:
 
 
 ``` python
@@ -1579,7 +1613,7 @@ model = FreshRetailModel(
 Let us visualize the model structure:
 
 
-    In [24]:
+    In [25]:
 
 
 ``` python
@@ -1592,7 +1626,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-25-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-26-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1605,7 +1639,7 @@ The plots in this and the following sections lean on the package helper [predict
 Every banded plot shares two styling conventions, set once here. The `hdi_label` helper formats the legend entries from the probability itself (the `\%` escape is what mathtext requires), and each `az.plot_lm` call maps the band transparency explicitly onto the `prob` dimension via `aes={"alpha": ["prob"]}` with the `hdi_alphas` values below, so the narrower \\50\\\\ band sits more opaque on top of the lighter \\94\\\\ band in every figure.
 
 
-    In [25]:
+    In [26]:
 
 
 ``` python
@@ -1620,7 +1654,7 @@ hdi_alphas = [0.6, 0.3]
 ```
 
 
-    In [26]:
+    In [27]:
 
 
 ``` python
@@ -1677,14 +1711,14 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-27-output-2.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-28-output-2.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
 Next the full prior predictive on the training window for our six focus series, with the scaled observations overlaid. We want wide but sane bands on the unit scale of the normalized data. The bands also dip below zero: a Normal likelihood on the scaled axis pays for its simplicity with prior (and posterior) mass on negative sales, a compromise we accept here and revisit in the next steps with a strictly positive observation model.
 
 
-    In [27]:
+    In [28]:
 
 
 ``` python
@@ -1776,7 +1810,7 @@ fig.suptitle("Prior predictive check", fontsize=16, fontweight="bold", y=1.02);
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-28-output-2.png" class="figure-img" width="1511" height="933" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-29-output-2.png" class="figure-img" width="1511" height="933" /></p>
 </figure>
 
 
@@ -1787,7 +1821,7 @@ We fit with [fit_svi](../../../reference/functional.svi.fit_svi.md#numpyro_forec
 We set `progress_bar=False`, and not only because the scanned update loop compiles to a single `lax.scan` that finishes all \\60{,}000\\ steps in a few seconds on CPU. The step-by-step execution path behind the progress bar compiles to slightly different floating-point arithmetic, and on this panel that tiny perturbation is enough to steer the optimizer into a distinctly worse ELBO optimum (the evaluation section returns to this sensitivity). The scanned path is both the fast and the well-behaved one here.
 
 
-    In [28]:
+    In [29]:
 
 
 ``` python
@@ -1826,11 +1860,11 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 12.3 s, sys: 618 ms, total: 12.9 s
-    Wall time: 6.68 s
+    CPU times: user 12 s, sys: 591 ms, total: 12.6 s
+    Wall time: 6.44 s
 
 
-    In [29]:
+    In [30]:
 
 
 ``` python
@@ -1843,12 +1877,12 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 25s, sys: 7min 9s, total: 16min 35s
-    Wall time: 3min 14s
+    CPU times: user 9min 30s, sys: 7min 33s, total: 17min 3s
+    Wall time: 3min 26s
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-30-output-2.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-31-output-2.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -1857,7 +1891,7 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 A single [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call wraps everything: it draws the posterior from the guide, runs the in-sample posterior predictive, and, because the covariates extend \\14\\ days past the training data, also generates the forecast and stores it in the `predictions` group. We label every dimension so downstream selections read naturally; in particular, `covariate_dims` tells the export the covariates are an `(input, time, series)` tensor, so `constant_data` keeps the layout the model consumes instead of a flattened matrix, with the five inputs named on the `input` coordinate.
 
 
-    In [30]:
+    In [31]:
 
 
 ``` python
@@ -1941,7 +1975,7 @@ Group: /
 │           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04177
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:18.356058+00:00
+│           created_at:                 2026-07-12T18:44:46.630472+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1957,7 +1991,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 304MB 0.09493 ... 0.5744
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.409178+00:00
+│           created_at:                 2026-07-12T18:44:48.617393+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1970,7 +2004,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.409689+00:00
+│           created_at:                 2026-07-12T18:44:48.618090+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1984,7 +2018,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.410149+00:00
+│           created_at:                 2026-07-12T18:44:48.618585+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1999,7 +2033,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 56MB 0.775 0.7038 ... 0.7256
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:22.506876+00:00
+│           created_at:                 2026-07-12T18:44:51.007324+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2013,7 +2047,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-12T18:09:22.507609+00:00
+            created_at:                 2026-07-12T18:44:51.008605+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2541,7 +2575,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-3970e-03,  6.12596609e-03, ...,-2.13378295e-02,  1.16972970e-02, -7.07395189e-03],[-5.42618148e-02, -7.95199070e-03,  9.12392139e-03, ...,2.91108023e-02,  4.57442887e-02,  7.57671893e-02],...,[-2.56397203e-02, -2.04663277e-02, -1.41346175e-02, ...,-1.38552757e-02,  1.82142504e-03, -5.08594960e-02],[ 7.18436809e-03,  1.83785483e-02,  1.04629863e-02, ...,-2.02519111e-02,  6.49535330e-03, -1.78559572e-02],[-4.01894785e-02,  2.46601701e-02, -3.20701022e-03, ...,-8.28444259e-04, -1.29074659e-02, -5.93876950e-02]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[-3.32962386e-02,  2.11742762e-02,  2.58160885e-02, ...,-9.15047433e-03,  1.04005132e-02, -3.61570530e-02],[-5.17329480e-03,  1.17070461e-02,  1.40882526e-02, ...,1.37485936e-03, -1.10842241e-02, -2.07597408e-02],[ 1.61540543e-03, -6.05788035e-03, -5.89835830e-03, ...,-3.21475118e-02, -1.34998618e-03, -3.85936722e-02],...,[-1.85818542e-02,  1.57728214e-02, -2.65973154e-02, ...,5.11599239e-03, -6.25019893e-05, -6.13992885e-02],[-9.02442914e-03,  1.03055555e-02, -1.67679992e-02, ...,2.57735495e-02,  6.52527669e-03, -4.46098857e-02],[ 5.90557121e-02,  9.43517964e-03, -3.81967351e-02, ...,-1.71826445e-02, -2.94222683e-02,  2.34022569e-02]],[[-1.11166639e-02,  1.70546528e-02,  2.91580660e-03, ...,-3.39097865e-02,  2.58990610e-03,  1.14269778e-02],[-9.76557471e-03, -4.59053414e-03,  2.19698120e-02, ...,-1.15612680e-02, -3.43027525e-04, -5.41803427e-03],[ 3.71786617e-02, -6.72534015e-03, -2.04165075e-02, ...,-7.46806851e-03, -3.29635362e-03, -4.14671004e-02],...-2.83314176e-02, -7.99531024e-03,  7.90758990e-03],[-6.73930068e-03,  9.75069962e-03, -1.13364402e-02, ...,2.28236429e-03,  3.11778784e-02, -4.07446064e-02],[ 3.71454656e-02,  7.26855081e-03,  8.72700009e-03, ...,-1.03926361e-02,  1.69235170e-02,  1.46265086e-02]],[[ 4.14782502e-02, -1.94277260e-02,  1.19675845e-02, ...,-1.19477762e-02,  2.17103381e-02,  2.01585554e-02],[-2.84336731e-02, -5.97823970e-03,  6.12596609e-03, ...,-2.13378295e-02,  1.16972970e-02, -7.07395189e-03],[-5.42618148e-02, -7.95199070e-03,  9.12392139e-03, ...,2.91108023e-02,  4.57442887e-02,  7.57671893e-02],...,[-2.56397203e-02, -2.04663277e-02, -1.41346175e-02, ...,-1.38552757e-02,  1.82142504e-03, -5.08594960e-02],[ 7.18436809e-03,  1.83785483e-02,  1.04629863e-02, ...,-2.02519111e-02,  6.49535330e-03, -1.78559572e-02],[-4.01894785e-02,  2.46601701e-02, -3.20701022e-03, ...,-8.28444259e-04, -1.29074659e-02, -5.93876950e-02]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 tau_trend
@@ -2568,7 +2602,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-12T18:09:18.356058+00:00
+2026-07-12T18:44:46.630472+00:00
 
 creation_library :  
 ArviZ
@@ -2707,7 +2741,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.409178+00:00
+2026-07-12T18:44:48.617393+00:00
 
 creation_library :  
 ArviZ
@@ -2801,7 +2835,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.409689+00:00
+2026-07-12T18:44:48.618090+00:00
 
 creation_library :  
 ArviZ
@@ -2916,7 +2950,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.410149+00:00
+2026-07-12T18:44:48.618585+00:00
 
 creation_library :  
 ArviZ
@@ -3052,7 +3086,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:22.506876+00:00
+2026-07-12T18:44:51.007324+00:00
 
 creation_library :  
 ArviZ
@@ -3160,14 +3194,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.7830641 , 1.        , 0.6330469 , ..., 0.8421403 ,0.8601887 , 0.98133034],[0.9787071 , 1.        , 0.9787071 , ..., 0.7932324 ,0.92897886, 1.        ],[0.912419  , 1.        , 0.94239163, ..., 0.7125343 ,0.96694404, 0.8145253 ],...,[0.8736015 , 0.6884277 , 0.55782074, ..., 0.91093045,0.8523086 , 1.        ],[0.98133034, 0.9835787 , 0.9259704 , ..., 0.7932324 ,0.89900625, 0.73382723],[1.        , 1.        , 0.9787071 , ..., 0.9787071 ,0.89900625, 0.6360862 ]],[[0.        , 0.167     , 0.        , ..., 0.        ,0.        , 0.127     ],[0.        , 0.171     , 0.        , ..., 0.        ,0.        , 0.183     ],[0.        , 0.17      , 0.        , ..., 0.        ,0.        , 0.183     ],...[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.        ],[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.        ]],[[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],...,[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ]]], shape=(5, 14, 1000), dtype=float32)
+      , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],...,[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ]]], shape=(5, 14, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:22.507609+00:00
+2026-07-12T18:44:51.008605+00:00
 
 creation_library :  
 ArviZ
@@ -3202,7 +3236,7 @@ We score on the original sales scale (rescaling the draws by each series' traini
 We score with \\1{,}000\\ predictive draws obtained through the functional API ([draw_posterior](../../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [predict_in_sample](../../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample), [forecast](../../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast)), the same draw count the DataTree export above uses. The count is set by the far tails: each \\3\\\\ tail of the central \\94\\\\ interval rests on about \\30\\ of the \\1{,}000\\ draws, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first \\500\\ draws moves both coverages by about \\0.002\\.
 
 
-    In [31]:
+    In [32]:
 
 
 ``` python
@@ -3303,7 +3337,7 @@ The model beats the seasonal-naive baseline on test CRPS by a wide margin. Calib
 One artifact to rule out before reading the coverage numbers at face value is the point mass at zero: the draws are clipped at zero and sales are exactly zero on stockout days, so whenever the interval's lower edge touches zero a zero-sales day is covered "for free", which could flatter the coverage without the forecast earning it. The panel makes this easy to check:
 
 
-    In [32]:
+    In [33]:
 
 
 ``` python
@@ -3335,7 +3369,7 @@ print(
 The artifact is ruled out. Zero-sales days are rare in this test panel (\\1.7\\\\: these are the top sellers, and the test window sits after the launch with mostly high availability), and on them the intervals cover *less* than nominal, since the factor floor and the level often push the whole central band strictly above zero. The positive-sales days (\\0.54\\ and \\0.92\\) sit almost exactly at the panel-wide coverages, so the aggregate numbers reflect ordinary days, not zero-day bookkeeping. What the aggregates do hide is a drift over the horizon, which the per-day plots below make visible; the in-sample over-coverage already hints at one half of the story (daily sales fluctuations are heavier-tailed than a Normal, so the fitted noise scale widens the whole bell to accommodate the tail days, and in-sample the central band over-covers at \\0.69\\). The per-day breakdown shows where the CRPS margin comes from:
 
 
-    In [33]:
+    In [34]:
 
 
 ``` python
@@ -3371,14 +3405,14 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-34-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-35-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
 The coverage diagnostic below resolves the calibration story day by day: observed central-interval coverage per forecast day against the nominal levels. Both intervals start the horizon *above* their nominal line, the in-sample over-coverage carrying over into the first few days, and then drift down through it as the horizon grows. The aggregate \\50\\\\ coverage lands close to nominal only because these two regimes cancel in the average, a coincidence the next diagnostic unpacks.
 
 
-    In [34]:
+    In [35]:
 
 
 ``` python
@@ -3406,7 +3440,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-35-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-36-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -3415,7 +3449,7 @@ ax.set(
 Two sharper views of the same calibration question. The top panel tracks the PIT, the fraction of forecast draws below the observed value (ties, which the zero clipping makes common, count half), by horizon day: a value of \\0.5\\ means the truth sits at the forecast median, and a calibrated forecast keeps the interquartile band centered on \\0.5\\. The bottom panel splits the \\94\\\\-interval misses by direction against the nominal \\3\\\\ per side; this is where a trend miss shows up most directly, since a level that cannot extrapolate drift produces an above-side excess that grows with the horizon.
 
 
-    In [35]:
+    In [36]:
 
 
 ``` python
@@ -3456,7 +3490,7 @@ fig.suptitle("Interval diagnostics on the test window", fontsize=18, fontweight=
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-36-output-1.png" class="figure-img" width="1211" height="911" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-37-output-1.png" class="figure-img" width="1211" height="911" /></p>
 </figure>
 
 
@@ -3470,7 +3504,7 @@ One methodological remark before leaving the evaluation. The per-series scale wa
 The package's [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper leaves room for exactly this: its `forecaster_fn` is any callable `(rng_key, model, data, covariates, **options)` returning a fitted forecaster, and it slices the *raw* data per window before calling it. So the clean way to fold the scaling in is a [Forecaster](../../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) subclass that derives the scale from whatever training window it is handed, fits on the scaled data, and returns forecasts on the original scale. We define it here but do not run it (the single split above is already scored); the next steps point to it for the backtesting extension.
 
 
-    In [36]:
+    In [37]:
 
 
 ``` python
@@ -3539,7 +3573,7 @@ class ScaledForecaster(Forecaster):
 The in-sample posterior predictive (blue) and the \\14\\-day forecast (orange) for the same series we explored before modeling (the ten largest by volume and the ten with the most zero-availability days), with the \\50\\\\ and \\94\\\\ HDI bands, the observed sales in black, and the availability input in red on a secondary axis. Note how the bands collapse toward zero whenever availability drops, including in the forecast window: the factor propagates the known future availability into the predictive distribution. The next section removes exactly that ingredient to forecast demand instead of sales, and reuses the same panel layout, so the plotting code lives in a small helper that takes the test-window ensemble (and the forecast bands' color and legend label) as arguments.
 
 
-    In [37]:
+    In [38]:
 
 
 ``` python
@@ -3691,7 +3725,7 @@ plot_forecast_panel(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-38-output-2.png" class="figure-img" width="1511" height="5115" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-39-output-2.png" class="figure-img" width="1511" height="5115" /></p>
 </figure>
 
 
@@ -3704,7 +3738,7 @@ Because expected sales factor into demand times availability, that counterfactua
 One thing this forecast deliberately is *not*: a prediction of the observed test sales. Observed sales are censored by the very stockouts we are removing, so on stockout days the demand forecast *should* sit above the black line, and scoring it against observed sales (as the CRPS table did for the sales forecast) would penalize it for being right. The printouts quantify how much demand the sales forecast leaves on the table over the test window.
 
 
-    In [38]:
+    In [39]:
 
 
 ``` python
@@ -3741,7 +3775,7 @@ print(
 The correction is meaningful in aggregate, roughly \\9\\\\ of the forecast test-window volume, and its anatomy follows the saturating factor: near full availability the factor is almost flat, so a day that loses a few sales-weighted hours contributes nothing visible, while a day that drops to low availability contributes a lot. Deep dips are scattered widely across the panel's two forecast weeks, so the uplift is broad (\\81\\\\ of the series gain more than \\1\\\\) but very uneven, running past \\+150\\\\ for the most stockout-prone series. The faceted view below shows this series by series, in the same layout as the forecast plot above but with the demand bands in green. One detail changes deliberately: the red availability line now shows the *input these predictions actually consumed*, the observed availability in-sample and a constant one over the forecast window, because a plot of a forecast should represent the features that produced it. To see where availability actually dipped in the test window, compare with the sales-forecast panel above; the single-series comparison further below makes that contrast explicit.
 
 
-    In [39]:
+    In [40]:
 
 
 ``` python
@@ -3760,7 +3794,7 @@ plot_forecast_panel(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-40-output-2.png" class="figure-img" width="1511" height="5115" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-41-output-2.png" class="figure-img" width="1511" height="5115" /></p>
 </figure>
 
 
@@ -3772,7 +3806,7 @@ On fully stocked days the green bands reproduce the orange ones exactly (shared 
 The panel view compresses fourteen days into a thin strip, so let us zoom into the series where the counterfactual matters most in this test window: `22::267`, whose recorded availability drops sharply late in the forecast window, down to \\0.42\\ on the worst day. The two rows below show the test window only, on a shared sales axis: the top row is the sales forecast conditioned on the observed availability, the bottom row the demand forecast at availability one, and the red line in each row is the availability input that row's forecast consumed.
 
 
-    In [40]:
+    In [41]:
 
 
 ``` python
@@ -3912,7 +3946,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-41-output-3.png" class="figure-img" width="1211" height="750" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-42-output-3.png" class="figure-img" width="1211" height="750" /></p>
 </figure>
 
 
@@ -3924,7 +3958,7 @@ The comparison makes the counterfactual concrete, and the printout puts numbers 
 The factor parameters are per series, so we can ask what the model actually learned about stockouts. First the floor \\\phi_s\\ and the saturation rate \\b_s\\ across the panel:
 
 
-    In [41]:
+    In [42]:
 
 
 ``` python
@@ -3952,14 +3986,14 @@ fig.suptitle("Posterior availability-factor parameters", fontsize=16, fontweight
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-42-output-1.png" class="figure-img" width="1411" height="511" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-43-output-1.png" class="figure-img" width="1411" height="511" /></p>
 </figure>
 
 
 And the implied factor curve, averaged over series, against the panel's own empirical curve, with the per-series posterior-mean curves of the six focus series in gray for scale. To compare the two shapes on equal footing, the binned means are rescaled so that the top availability bin equals one: the factor is anchored at \\f(1) = 1\\, while raw scaled sales on fully available days average above one on this launch-driven panel (post-launch days have both high availability and a high level).
 
 
-    In [42]:
+    In [43]:
 
 
 ``` python
@@ -4050,7 +4084,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-43-output-2.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-44-output-2.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -4062,7 +4096,7 @@ The posterior factor reproduces the saturating shape and the positive floor. The
 The covariate effects are pooled by store. Plotting each series' discount effect against its store-level location shows the partial pooling: series means line up along the identity line, shrunk toward their store's location, more strongly where the store scale \\\sigma^{\text{store}}\\ is small. Read the tightness with the store-size caveat from the panel build in mind: with a median of one series per store, many points sit near the line simply because the store location is informed by that single series, and the genuine cross-series pooling acts in the multi-series stores, where the vertical spread around the line is the shrinkage at work. The plot also shows why the cleaned discount encoding and the launch indicator matter: without them, a cluster of series escapes to coefficients an order of magnitude above their store locations (the spurious launch-step optimum described in the evaluation section); with them, the scatter hugs the identity line.
 
 
-    In [43]:
+    In [44]:
 
 
 ``` python
@@ -4100,7 +4134,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-44-output-1.png" class="figure-img" width="811" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-45-output-1.png" class="figure-img" width="811" height="711" /></p>
 </figure>
 
 
@@ -4109,7 +4143,7 @@ ax.set(
 The reason to keep every promotion feature in the model is to read off what each one contributes to sales. On the scaled axis a contribution of \\0.1\\ means "one tenth of an average day's sales", so the units are directly comparable across series. For each series we take the posterior-mean coefficient times the feature's average value on its *active* days (days where the feature is positive) over the training window, and summarize that quantity across the panel with a forest plot: per feature, the open circle marks the cross-series median, the thick segment the \\50\\\\ HDI, and the thin line the \\94\\\\ HDI of the contribution across series. The plot stays entirely in named-tensor land: `az.plot_forest` consumes the `(covariate, series)` contributions array directly, treating the series axis as the sample dimension, and the `skipna` entries in its `stats` mapping drop the series where a feature has no active training day (whose active-day mean is NaN) instead of blanking that feature's row.
 
 
-    In [44]:
+    In [45]:
 
 
 ``` python
@@ -4161,7 +4195,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/cell-45-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/cell-46-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 

@@ -1210,6 +1210,37 @@ fig.suptitle("Sales and promotion covariates", fontsize=18, fontweight="bold");
 </figure>
 
 
+``` python
+# The facet plot shows the top series only; these panel-wide shares back the
+# feature-quality discussion below.
+panel_covariate_shares = (
+    data_lf.pipe(keep_top_series, top_series_df)
+    .with_columns(cleaned_discount_magnitude())
+    .group_by("store_id", "product_id")
+    .agg(
+        (pl.col("activity_flag") > 0).any().alias("any_activity"),
+        (pl.col("discount_magnitude") > 0).any().alias("any_discount"),
+        (pl.col("discount") == 0).mean().alias("placeholder_share"),
+    )
+    .select(
+        pl.col("any_activity").mean(),
+        pl.col("any_discount").mean(),
+        pl.col("placeholder_share").mean(),
+    )
+    .collect(engine="streaming")
+)
+promo_share, discount_share, placeholder_share = panel_covariate_shares.row(0)
+print(f"panel series with at least one active-promotion day: {promo_share:.1%}")
+print(f"panel series with at least one real discount day: {discount_share:.1%}")
+print(f"placeholder discount = 0 share of the panel's day-rows: {placeholder_share:.1%}")
+```
+
+
+    panel series with at least one active-promotion day: 46.8%
+    panel series with at least one real discount day: 65.6%
+    placeholder discount = 0 share of the panel's day-rows: 17.7%
+
+
 Two patterns jump out. The holiday flag repeats weekly (weekends plus a solid block around the May Day week), and several series show local sales spikes on those shaded days; promotion activity and priced discounts, by contrast, are entirely absent from the twenty series shown, even though roughly half of the panel's series have active promotion days and about two thirds see at least one real discount: the flagship launch product that dominates both rankings is simply never promoted. The flat discount line is also the placeholder cleanup at work: for these series the raw `discount` column is zero on most days (the placeholder flagged in the EDA at \\0.4\\\\ dataset-wide covers about \\18\\\\ of this panel's days, concentrated in exactly the launch product), so the cleaned magnitude sits at an honest zero instead of reading as a \\100\\\\ discount. This heterogeneity in feature quality is one more argument for pooling the covariate effects by store rather than fitting one global discount effect: where the feature is quiet the coefficient is weakly identified and shrinks toward its store-level prior, and where the feature is informative it can act.
 
 
@@ -1266,7 +1297,7 @@ ax.set(xlabel=r"floor $\phi_s$", ylabel="density", title="Floor prior");
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-21-output-1.png" class="figure-img" width="976" height="636" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-22-output-1.png" class="figure-img" width="976" height="636" /></p>
 </figure>
 
 
@@ -1324,7 +1355,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-22-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-23-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -1364,7 +1395,7 @@ fig.suptitle("Priors for the level and trend dynamics", fontsize=18, fontweight=
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-23-output-1.png" class="figure-img" width="1511" height="461" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-24-output-1.png" class="figure-img" width="1511" height="461" /></p>
 </figure>
 
 
@@ -1516,7 +1547,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-25-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-26-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1591,7 +1622,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-27-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-28-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -1683,7 +1714,7 @@ fig.suptitle("Prior predictive check", fontsize=16, fontweight="bold", y=1.02);
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-28-output-1.png" class="figure-img" width="1511" height="933" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-29-output-1.png" class="figure-img" width="1511" height="933" /></p>
 </figure>
 
 
@@ -1730,8 +1761,8 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 12.3 s, sys: 618 ms, total: 12.9 s
-    Wall time: 6.68 s
+    CPU times: user 12 s, sys: 591 ms, total: 12.6 s
+    Wall time: 6.44 s
 
 
 ``` python
@@ -1744,12 +1775,12 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 25s, sys: 7min 9s, total: 16min 35s
-    Wall time: 3min 14s
+    CPU times: user 9min 30s, sys: 7min 33s, total: 17min 3s
+    Wall time: 3min 26s
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-30-output-2.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-31-output-2.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -1839,7 +1870,7 @@ Group: /
 │           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04177
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:18.356058+00:00
+│           created_at:                 2026-07-12T18:44:46.630472+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1855,7 +1886,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 304MB 0.09493 ... 0.5744
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.409178+00:00
+│           created_at:                 2026-07-12T18:44:48.617393+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1868,7 +1899,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.409689+00:00
+│           created_at:                 2026-07-12T18:44:48.618090+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1882,7 +1913,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.410149+00:00
+│           created_at:                 2026-07-12T18:44:48.618585+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1897,7 +1928,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 56MB 0.775 0.7038 ... 0.7256
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:22.506876+00:00
+│           created_at:                 2026-07-12T18:44:51.007324+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1911,7 +1942,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-12T18:09:22.507609+00:00
+            created_at:                 2026-07-12T18:44:51.008605+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2219,7 +2250,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.10117728, 0.10063716, 0.10101034, 0.09988818, 0.09963614,0.10035985, 0.09962759, 0.10059638, 0.10105675, 0.10007892,0.10090808, 0.09976391, 0.10099351, 0.10143735, 0.10024744,0.10064639, 0.10105958, 0.1013891 , 0.09935083, 0.10076426,0.1006263 , 0.10079291, 0.10043755, 0.09987115, 0.09994762,0.10067121, 0.10103623, 0.10035503, 0.10071459, 0.10055725,0.09996932, 0.10013182, 0.10019209, 0.10068265, 0.10122539,0.10148513, 0.10067294, 0.10047071, 0.10048569, 0.10017265,0.10044067, 0.10068764, 0.10071436, 0.10027467, 0.10063481,0.10058857, 0.10004047, 0.10150599, 0.1015557 , 0.10000341,0.09960766, 0.10086159, 0.1003819 , 0.10091818, 0.10094874,0.10041834, 0.10168338, 0.10064993, 0.10066155, 0.09999502,0.10061338, 0.10065206, 0.10079451, 0.10056103, 0.09973662,0.10035114, 0.10040486, 0.10082141, 0.10118714, 0.10101593,0.10036259, 0.09996747, 0.10082001, 0.10132276, 0.10000785,0.10084306, 0.10066819, 0.1003226 , 0.10036457, 0.10049732,0.09988821, 0.10071287, 0.10043568, 0.10178205, 0.10089469,0.10051523, 0.10009576, 0.09992371, 0.10147976, 0.10070693,0.10094994, 0.10117881, 0.10030089, 0.10081898, 0.10047236,0.10099563, 0.09963786, 0.1012475 , 0.10072396, 0.1011081 ,...0.10090732, 0.10058621, 0.10067901, 0.1011343 , 0.10071424,0.10119787, 0.10045289, 0.10129439, 0.10102984, 0.10005101,0.10077307, 0.10139006, 0.10112797, 0.10214133, 0.10086603,0.10008532, 0.10054851, 0.09977545, 0.10035418, 0.10024825,0.10026067, 0.1004795 , 0.09998547, 0.10098349, 0.10144562,0.09971137, 0.10053453, 0.1007405 , 0.10017423, 0.10076528,0.10000167, 0.1011304 , 0.10031868, 0.10051943, 0.10005859,0.10111786, 0.1010704 , 0.10153043, 0.10034074, 0.09973086,0.1003729 , 0.09980242, 0.09984679, 0.09988402, 0.1019925 ,0.10094021, 0.10043298, 0.10075045, 0.1007159 , 0.10105072,0.10078828, 0.0999698 , 0.10092846, 0.09984177, 0.10049844,0.10090578, 0.10137676, 0.1004374 , 0.10056002, 0.10140379,0.101005  , 0.09992337, 0.10094198, 0.10058194, 0.10049765,0.1006695 , 0.10087704, 0.10012431, 0.10022523, 0.1006132 ,0.10000871, 0.09976721, 0.10098877, 0.10123806, 0.09960989,0.10037103, 0.100921  , 0.10098187, 0.1014665 , 0.10035293,0.10004221, 0.10010578, 0.10062061, 0.10025251, 0.10048885,0.10081119, 0.10063152, 0.10064318, 0.10081887, 0.1002536 ,0.10016289, 0.10048062, 0.10004595, 0.09961905, 0.10000081]],dtype=float32)
+99698 , 0.10092846, 0.09984177, 0.10049844,0.10090578, 0.10137676, 0.1004374 , 0.10056002, 0.10140379,0.101005  , 0.09992337, 0.10094198, 0.10058194, 0.10049765,0.1006695 , 0.10087704, 0.10012431, 0.10022523, 0.1006132 ,0.10000871, 0.09976721, 0.10098877, 0.10123806, 0.09960989,0.10037103, 0.100921  , 0.10098187, 0.1014665 , 0.10035293,0.10004221, 0.10010578, 0.10062061, 0.10025251, 0.10048885,0.10081119, 0.10063152, 0.10064318, 0.10081887, 0.1002536 ,0.10016289, 0.10048062, 0.10004595, 0.09961905, 0.10000081]],dtype=float32)
 
 
 drift
@@ -2466,7 +2497,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-12T18:09:18.356058+00:00
+2026-07-12T18:44:46.630472+00:00
 
 creation_library :  
 ArviZ
@@ -2605,7 +2636,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.409178+00:00
+2026-07-12T18:44:48.617393+00:00
 
 creation_library :  
 ArviZ
@@ -2699,7 +2730,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.409689+00:00
+2026-07-12T18:44:48.618090+00:00
 
 creation_library :  
 ArviZ
@@ -2807,14 +2838,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.        , 0.8421403 , 0.9677307 , ..., 0.30402568,0.72536546, 0.30627406],[0.9685388 , 0.9519042 , 0.9685388 , ..., 0.18424696,0.58969885, 0.40329787],[1.        , 0.9685388 , 1.        , ..., 0.0914353 ,0.56669945, 0.47482857],...,[0.94906104, 0.40329787, 1.        , ..., 0.7932324 ,0.8911261 , 1.        ],[0.85718024, 0.7174059 , 0.94957167, ..., 0.7932324 ,0.954318  , 1.        ],[0.79585564, 0.970851  , 1.        , ..., 0.85493183,0.9865872 , 0.798104  ]],[[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.118     ],[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.118     ],[0.        , 0.003     , 0.        , ..., 0.        ,0.        , 0.118     ],...[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.        ]],[[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.        ],[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.        ],[0.        , 0.        , 0.        , ..., 0.        ,0.        , 0.        ],...,[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ],[1.        , 1.        , 1.        , ..., 1.        ,1.        , 1.        ]]], shape=(5, 76, 1000), dtype=float32)
+        , 1.        ]]], shape=(5, 76, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.410149+00:00
+2026-07-12T18:44:48.618585+00:00
 
 creation_library :  
 ArviZ
@@ -2943,14 +2974,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.775013  ,  0.7038019 ,  0.60583746, ...,  1.4732215 ,1.185732  ,  0.55308115],[ 0.639045  ,  0.73330396,  0.63362086, ...,  1.3089033 ,0.66509664,  0.42448616],[ 0.5856512 ,  0.16507648,  1.0340562 , ...,  1.2702425 ,1.0644864 ,  1.821726  ],...,[ 1.4786826 ,  0.79826814,  0.91546607, ...,  1.614745  ,1.536659  ,  0.6840328 ],[ 0.7961534 ,  0.13653263,  0.86690366, ...,  1.1085007 ,1.2506667 , -0.09636877],[ 0.6797254 ,  0.01569243,  0.36297697, ...,  1.4407654 ,1.2283511 , -0.37653875]],[[-0.02129121,  1.0327919 ,  0.91020447, ...,  1.2962862 ,1.1860493 , -0.11162868],[ 0.0492505 ,  0.2979488 ,  0.6579582 , ...,  1.7483541 ,1.4456373 ,  0.9173959 ],[ 0.59357226,  0.43907368,  0.2264443 , ...,  1.5134435 ,0.75700516,  1.0567597 ],...1.629995  ,  2.27777   ],[ 0.48643842,  0.17710246,  1.6109328 , ...,  1.1258163 ,0.97892714,  0.69633615],[ 0.8050502 ,  0.3058908 ,  0.6840292 , ...,  1.6416472 ,1.0762745 , -0.01668853]],[[ 0.4568788 ,  0.5048955 ,  0.5010051 , ...,  1.5152612 ,1.1986841 ,  0.28442886],[ 0.81069976,  0.25562972,  0.3840338 , ...,  1.1560541 ,1.0791116 ,  0.01919828],[ 0.9529131 ,  0.7947233 ,  1.090155  , ...,  1.1323543 ,0.5923376 , -0.06137251],...,[ 1.3531021 ,  0.6624559 ,  1.0003564 , ...,  1.7090652 ,1.9702067 ,  0.8309316 ],[ 0.88431835,  0.8633512 ,  0.67938274, ...,  0.96747065,1.1199558 ,  0.06559236],[ 0.96739435,  0.5275386 ,  1.1155543 , ...,  1.4792143 ,0.84630144,  0.72564346]]]],shape=(1, 1000, 14, 1000), dtype=float32)
+065,1.1199558 ,  0.06559236],[ 0.96739435,  0.5275386 ,  1.1155543 , ...,  1.4792143 ,0.84630144,  0.72564346]]]],shape=(1, 1000, 14, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:22.506876+00:00
+2026-07-12T18:44:51.007324+00:00
 
 creation_library :  
 ArviZ
@@ -3065,7 +3096,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:22.507609+00:00
+2026-07-12T18:44:51.008605+00:00
 
 creation_library :  
 ArviZ
@@ -3260,7 +3291,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-34-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-35-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -3292,7 +3323,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-35-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-36-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -3339,7 +3370,7 @@ fig.suptitle("Interval diagnostics on the test window", fontsize=18, fontweight=
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-36-output-1.png" class="figure-img" width="1211" height="911" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-37-output-1.png" class="figure-img" width="1211" height="911" /></p>
 </figure>
 
 
@@ -3564,7 +3595,7 @@ plot_forecast_panel(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-38-output-1.png" class="figure-img" width="1511" height="5115" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-39-output-1.png" class="figure-img" width="1511" height="5115" /></p>
 </figure>
 
 
@@ -3623,7 +3654,7 @@ plot_forecast_panel(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-40-output-1.png" class="figure-img" width="1511" height="5115" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-41-output-1.png" class="figure-img" width="1511" height="5115" /></p>
 </figure>
 
 
@@ -3768,7 +3799,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-41-output-2.png" class="figure-img" width="1211" height="750" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-42-output-2.png" class="figure-img" width="1211" height="750" /></p>
 </figure>
 
 
@@ -3805,7 +3836,7 @@ fig.suptitle("Posterior availability-factor parameters", fontsize=16, fontweight
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-42-output-1.png" class="figure-img" width="1411" height="511" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-43-output-1.png" class="figure-img" width="1411" height="511" /></p>
 </figure>
 
 
@@ -3896,7 +3927,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-43-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-44-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -3943,7 +3974,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-44-output-1.png" class="figure-img" width="811" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-45-output-1.png" class="figure-img" width="811" height="711" /></p>
 </figure>
 
 
@@ -4001,7 +4032,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-45-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-46-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 

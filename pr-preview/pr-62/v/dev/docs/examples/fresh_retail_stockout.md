@@ -1210,6 +1210,37 @@ fig.suptitle("Sales and promotion covariates", fontsize=18, fontweight="bold");
 </figure>
 
 
+``` python
+# The facet plot shows the top series only; these panel-wide shares back the
+# feature-quality discussion below.
+panel_covariate_shares = (
+    data_lf.pipe(keep_top_series, top_series_df)
+    .with_columns(cleaned_discount_magnitude())
+    .group_by("store_id", "product_id")
+    .agg(
+        (pl.col("activity_flag") > 0).any().alias("any_activity"),
+        (pl.col("discount_magnitude") > 0).any().alias("any_discount"),
+        (pl.col("discount") == 0).mean().alias("placeholder_share"),
+    )
+    .select(
+        pl.col("any_activity").mean(),
+        pl.col("any_discount").mean(),
+        pl.col("placeholder_share").mean(),
+    )
+    .collect(engine="streaming")
+)
+promo_share, discount_share, placeholder_share = panel_covariate_shares.row(0)
+print(f"panel series with at least one active-promotion day: {promo_share:.1%}")
+print(f"panel series with at least one real discount day: {discount_share:.1%}")
+print(f"placeholder discount = 0 share of the panel's day-rows: {placeholder_share:.1%}")
+```
+
+
+    panel series with at least one active-promotion day: 46.8%
+    panel series with at least one real discount day: 65.6%
+    placeholder discount = 0 share of the panel's day-rows: 17.7%
+
+
 Two patterns jump out. The holiday flag repeats weekly (weekends plus a solid block around the May Day week), and several series show local sales spikes on those shaded days; promotion activity and priced discounts, by contrast, are entirely absent from the twenty series shown, even though roughly half of the panel's series have active promotion days and about two thirds see at least one real discount: the flagship launch product that dominates both rankings is simply never promoted. The flat discount line is also the placeholder cleanup at work: for these series the raw `discount` column is zero on most days (the placeholder flagged in the EDA at \\0.4\\\\ dataset-wide covers about \\18\\\\ of this panel's days, concentrated in exactly the launch product), so the cleaned magnitude sits at an honest zero instead of reading as a \\100\\\\ discount. This heterogeneity in feature quality is one more argument for pooling the covariate effects by store rather than fitting one global discount effect: where the feature is quiet the coefficient is weakly identified and shrinks toward its store-level prior, and where the feature is informative it can act.
 
 
@@ -1266,7 +1297,7 @@ ax.set(xlabel=r"floor $\phi_s$", ylabel="density", title="Floor prior");
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-21-output-1.png" class="figure-img" width="976" height="636" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-22-output-1.png" class="figure-img" width="976" height="636" /></p>
 </figure>
 
 
@@ -1324,7 +1355,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-22-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-23-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -1364,7 +1395,7 @@ fig.suptitle("Priors for the level and trend dynamics", fontsize=18, fontweight=
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-23-output-1.png" class="figure-img" width="1511" height="461" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-24-output-1.png" class="figure-img" width="1511" height="461" /></p>
 </figure>
 
 
@@ -1516,7 +1547,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-25-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-26-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1591,7 +1622,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-27-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-28-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -1683,7 +1714,7 @@ fig.suptitle("Prior predictive check", fontsize=16, fontweight="bold", y=1.02);
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-28-output-1.png" class="figure-img" width="1511" height="933" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-29-output-1.png" class="figure-img" width="1511" height="933" /></p>
 </figure>
 
 
@@ -1730,8 +1761,8 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 12.3 s, sys: 618 ms, total: 12.9 s
-    Wall time: 6.68 s
+    CPU times: user 12 s, sys: 591 ms, total: 12.6 s
+    Wall time: 6.44 s
 
 
 ``` python
@@ -1744,12 +1775,12 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 25s, sys: 7min 9s, total: 16min 35s
-    Wall time: 3min 14s
+    CPU times: user 9min 30s, sys: 7min 33s, total: 17min 3s
+    Wall time: 3min 26s
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-30-output-2.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-31-output-2.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -1839,7 +1870,7 @@ Group: /
 │           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04177
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:18.356058+00:00
+│           created_at:                 2026-07-12T18:44:46.630472+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1855,7 +1886,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 304MB 0.09493 ... 0.5744
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.409178+00:00
+│           created_at:                 2026-07-12T18:44:48.617393+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1868,7 +1899,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.409689+00:00
+│           created_at:                 2026-07-12T18:44:48.618090+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1882,7 +1913,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:20.410149+00:00
+│           created_at:                 2026-07-12T18:44:48.618585+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1897,7 +1928,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 56MB 0.775 0.7038 ... 0.7256
 │       Attributes:
-│           created_at:                 2026-07-12T18:09:22.506876+00:00
+│           created_at:                 2026-07-12T18:44:51.007324+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1911,7 +1942,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-12T18:09:22.507609+00:00
+            created_at:                 2026-07-12T18:44:51.008605+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2466,7 +2497,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-12T18:09:18.356058+00:00
+2026-07-12T18:44:46.630472+00:00
 
 creation_library :  
 ArviZ
@@ -2605,7 +2636,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.409178+00:00
+2026-07-12T18:44:48.617393+00:00
 
 creation_library :  
 ArviZ
@@ -2699,7 +2730,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.409689+00:00
+2026-07-12T18:44:48.618090+00:00
 
 creation_library :  
 ArviZ
@@ -2814,7 +2845,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:20.410149+00:00
+2026-07-12T18:44:48.618585+00:00
 
 creation_library :  
 ArviZ
@@ -2950,7 +2981,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:22.506876+00:00
+2026-07-12T18:44:51.007324+00:00
 
 creation_library :  
 ArviZ
@@ -3065,7 +3096,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T18:09:22.507609+00:00
+2026-07-12T18:44:51.008605+00:00
 
 creation_library :  
 ArviZ
@@ -3260,7 +3291,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-34-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-35-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -3292,7 +3323,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-35-output-1.png" class="figure-img" width="1211" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-36-output-1.png" class="figure-img" width="1211" height="711" /></p>
 </figure>
 
 
@@ -3339,7 +3370,7 @@ fig.suptitle("Interval diagnostics on the test window", fontsize=18, fontweight=
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-36-output-1.png" class="figure-img" width="1211" height="911" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-37-output-1.png" class="figure-img" width="1211" height="911" /></p>
 </figure>
 
 
@@ -3564,7 +3595,7 @@ plot_forecast_panel(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-38-output-1.png" class="figure-img" width="1511" height="5115" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-39-output-1.png" class="figure-img" width="1511" height="5115" /></p>
 </figure>
 
 
@@ -3623,7 +3654,7 @@ plot_forecast_panel(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-40-output-1.png" class="figure-img" width="1511" height="5115" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-41-output-1.png" class="figure-img" width="1511" height="5115" /></p>
 </figure>
 
 
@@ -3768,7 +3799,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-41-output-2.png" class="figure-img" width="1211" height="750" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-42-output-2.png" class="figure-img" width="1211" height="750" /></p>
 </figure>
 
 
@@ -3805,7 +3836,7 @@ fig.suptitle("Posterior availability-factor parameters", fontsize=16, fontweight
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-42-output-1.png" class="figure-img" width="1411" height="511" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-43-output-1.png" class="figure-img" width="1411" height="511" /></p>
 </figure>
 
 
@@ -3896,7 +3927,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-43-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-44-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -3943,7 +3974,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-44-output-1.png" class="figure-img" width="811" height="711" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-45-output-1.png" class="figure-img" width="811" height="711" /></p>
 </figure>
 
 
@@ -4001,7 +4032,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-45-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="fresh_retail_stockout_files/figure-html/_src-fresh_retail_stockout-cell-46-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
