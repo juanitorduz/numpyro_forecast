@@ -108,6 +108,18 @@ class GuideSampleArgsError(NumpyroForecastError, ValueError):
     )
 
 
+class CovariateDimsError(NumpyroForecastError, ValueError):
+    """Covariate dimension names are inconsistent or malformed.
+
+    Raised by :func:`~numpyro_forecast.convert.to_datatree` and
+    :func:`~numpyro_forecast.convert.add_forecast_groups` when
+    ``covariate_dims`` does not name every covariates axis, or when the names
+    passed to (or inherited by) :func:`~numpyro_forecast.convert.add_forecast_groups`
+    disagree with the dimension names already stored on the tree's
+    ``constant_data`` covariates.
+    """
+
+
 class KernelResolutionError(NumpyroForecastError, TypeError):
     """A kernel specification could not be resolved.
 

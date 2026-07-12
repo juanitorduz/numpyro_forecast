@@ -5,7 +5,8 @@ algorithms to the NumPyro ``MCMCKernel`` interface so they can be passed straigh
 :func:`numpyro_forecast.functional.mcmc.fit_mcmc` (and thus
 :class:`~numpyro_forecast.forecaster.HMCForecaster`).
 
-BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``) and is
+BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``,
+requiring ``blackjax>=1.6`` whose MCLMC tuning API this module targets) and is
 never imported at package import time: it is pulled in lazily, via
 :func:`numpyro_forecast.optional.require`, the first time a kernel is initialized. All three
 kernels run one blackjax step per NumPyro sampling step; adaptation happens once inside
@@ -308,19 +309,15 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
         init_state = blackjax.mcmc.mclmc.init(
             position=position, logdensity_fn=logdensity_fn, rng_key=init_key
         )
-
-        def kernel(inverse_mass_matrix: Array) -> Any:
-            return blackjax.mcmc.mclmc.build_kernel(
-                logdensity_fn=logdensity_fn,
-                integrator=blackjax.mcmc.integrators.isokinetic_mclachlan,
-                inverse_mass_matrix=inverse_mass_matrix,
-            )
-
+        kernel = blackjax.mcmc.mclmc.build_kernel(
+            integrator=blackjax.mcmc.integrators.isokinetic_mclachlan,
+        )
         tuned_state, params, _ = blackjax.mclmc_find_L_and_step_size(
             mclmc_kernel=kernel,
             num_steps=self.num_tuning_steps,
             state=init_state,
             rng_key=tune_key,
+            logdensity_fn=logdensity_fn,
         )
         # The tuner adapts step_size and L *for* the diagonal preconditioner it
         # estimates; dropping params.inverse_mass_matrix here would run a
@@ -330,6 +327,7 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
             L=params.L,
             step_size=params.step_size,
             inverse_mass_matrix=params.inverse_mass_matrix,
+            integrator=blackjax.mcmc.integrators.isokinetic_mclachlan,
         )
         return tuned_state, algorithm.step
 
@@ -385,7 +383,7 @@ def _stable_bfgs_sample(
 
     Implements Algorithm 4 of Zhang et al. (2022), like the upstream function, but
     computes the log determinant as ``sum(log(alpha))`` plus twice the log diagonal
-    of the Cholesky factor. Upstream (blackjax <= 1.5) uses
+    of the Cholesky factor. Upstream (still as of blackjax 1.6) uses
     ``log(prod(alpha)) + 2 * log(det(L))``, whose product/determinant underflow to
     ``0`` once the problem has more than a few hundred dimensions, collapsing every
     ELBO estimate to ``-inf`` and the approximation's log density to ``+inf``.

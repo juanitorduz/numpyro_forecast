@@ -47,7 +47,7 @@ optax = [
     "optax>=0.2",
 ]
 blackjax = [
-    "blackjax>=1.2,<2",
+    "blackjax>=1.6,<2",
 ]
 dev = [
     "graphviz>=0.20",
@@ -63,12 +63,16 @@ dev = [
     "ruff==0.15.21",
     "ty==0.0.58",
     "optax>=0.2",
-    "blackjax>=1.2,<2",
+    "blackjax>=1.6,<2",
+    "huggingface-hub>=1.22.0",
+    "scikit-learn>=1.6",
 ]
 docs = [
     "great-docs>=0.14",
 ]
+cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
+all_cuda = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs,cuda]"]
 
 [project.urls]
 Homepage = "https://juanitorduz.github.io"
@@ -118,6 +122,8 @@ convention = "numpy"
     "E402",
     "E702",
     "E703",
+    # jaxtyping's runtime shape checks use `assert isinstance(x, Float[Array, ...])`.
+    "S101",
 ]
 
 [tool.ruff.lint.pycodestyle]

@@ -19,7 +19,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         surgery,
     )
 
-from numpyro_forecast.convert import add_forecast_groups, to_datatree
+from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
@@ -35,6 +35,7 @@ from numpyro_forecast.evaluate import (
 )
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
+    CovariateDimsError,
     GuideResolutionError,
     GuideSampleArgsError,
     KernelConfigError,
@@ -63,6 +64,7 @@ __all__ = [
     "DEFAULT_METRICS",
     "BacktestResult",
     "BacktestWindowError",
+    "CovariateDimsError",
     "Forecaster",
     "ForecastingModel",
     "GuideResolutionError",
@@ -87,6 +89,7 @@ __all__ = [
     "eval_rmse",
     "evaluate_forecast",
     "forecasting_model",
+    "predictions_to_datatree",
     "register_elementwise",
     "results_to_dataframe",
     "to_datatree",
