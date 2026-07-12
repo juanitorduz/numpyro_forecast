@@ -338,7 +338,14 @@ def test_add_forecast_groups_covariate_dims() -> None:
     future_covariates = jnp.zeros((2, n + 5, 1))
     post = draw_posterior(random.PRNGKey(3), fit, 100)
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n))
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        future_covariates[..., :n, :],
+        covariate_dims=["channel", "time", "series"],
+    )
     out = add_forecast_groups(
         tree,
         fc,
@@ -348,6 +355,77 @@ def test_add_forecast_groups_covariate_dims() -> None:
     future = out["predictions_constant_data"]["covariates"]
     assert future.dims == ("channel", "time", "series")
     assert future.sizes == {"channel": 2, "time": 5, "series": 1}
+
+
+def test_add_forecast_groups_inherits_covariate_dims() -> None:
+    """Omitted covariate_dims inherits the names stored on the tree's constant_data.
+
+    Before the cross-check, custom but still 2-D names (here ``feature`` for the
+    trailing axis) were silently replaced by the default ``covariate_dim``,
+    leaving constant_data and predictions_constant_data disagreeing on axis
+    names.
+    """
+    fit, data, covariates = _mcmc_fit()
+    n = data.shape[-2]
+    future_covariates = empty_covariates(n + 5)
+    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        covariates,
+        covariate_dims=["time", "feature"],
+    )
+    out = add_forecast_groups(tree, fc, future_covariates[n:])
+    assert out["constant_data"]["covariates"].dims == ("time", "feature")
+    assert out["predictions_constant_data"]["covariates"].dims == ("time", "feature")
+
+
+def test_add_forecast_groups_rejects_mismatched_covariate_dims() -> None:
+    """Explicit covariate_dims disagreeing with the tree's stored names raise."""
+    from numpyro_forecast.exceptions import CovariateDimsError
+
+    fit, data, covariates = _mcmc_fit()
+    n = data.shape[-2]
+    future_covariates = empty_covariates(n + 5)
+    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        covariates,
+        covariate_dims=["time", "feature"],
+    )
+    with pytest.raises(CovariateDimsError, match="disagree with the names"):
+        add_forecast_groups(
+            tree, fc, future_covariates[n:], covariate_dims=["time", "covariate_dim"]
+        )
+
+
+def test_add_forecast_groups_inherited_dims_reject_wrong_ndim() -> None:
+    """Inherited dims that cannot cover every covariates_future axis raise by name."""
+    from numpyro_forecast.exceptions import CovariateDimsError
+
+    fit, data, _ = _mcmc_fit()
+    n = data.shape[-2]
+    insample_covariates = jnp.zeros((2, n, 1))
+    future_covariates = empty_covariates(n + 5)
+    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        insample_covariates,
+        covariate_dims=["channel", "time", "series"],
+    )
+    with pytest.raises(CovariateDimsError, match="carry 3 axis names"):
+        add_forecast_groups(tree, fc, future_covariates[n:])
 
 
 def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:

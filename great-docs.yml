@@ -165,6 +165,7 @@ reference:
       - exceptions.GuideSampleArgsError
       - exceptions.KernelResolutionError
       - exceptions.KernelConfigError
+      - exceptions.CovariateDimsError
       - exceptions.MVNLayoutError
 
   - title: ArviZ export

@@ -35,6 +35,7 @@ from numpyro_forecast.evaluate import (
 )
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
+    CovariateDimsError,
     GuideResolutionError,
     GuideSampleArgsError,
     KernelConfigError,
@@ -63,6 +64,7 @@ __all__ = [
     "DEFAULT_METRICS",
     "BacktestResult",
     "BacktestWindowError",
+    "CovariateDimsError",
     "Forecaster",
     "ForecastingModel",
     "GuideResolutionError",

@@ -53,6 +53,7 @@ def test_all_matches_exported_names() -> None:
         "DEFAULT_METRICS",
         "BacktestResult",
         "BacktestWindowError",
+        "CovariateDimsError",
         "Forecaster",
         "ForecastingModel",
         "GuideResolutionError",

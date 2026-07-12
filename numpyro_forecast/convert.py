@@ -22,6 +22,7 @@ import xarray
 from jax import random
 from jaxtyping import Float, Num
 
+from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.functional import MCMCFit, draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.functional._validation import _require_covariates_cover_data
 from numpyro_forecast.typing import Array, ForecastModel
@@ -54,7 +55,7 @@ def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | N
 
     Raises
     ------
-    ValueError
+    CovariateDimsError
         If the number of names does not match ``covariates.ndim``.
     """
     dims = _DEFAULT_COVARIATE_DIMS if covariate_dims is None else covariate_dims
@@ -64,8 +65,70 @@ def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | N
             f"covariate_dims has {len(dims)} names {list(dims)} but covariates "
             f"has {ndim} dimensions; pass one name per axis"
         )
-        raise ValueError(msg)
+        raise CovariateDimsError(msg)
     return list(dims)
+
+
+def _reconcile_tree_covariate_dims(
+    tree: "xarray.DataTree",
+    covariates_future: Array,
+    covariate_dims: Sequence[str] | None,
+) -> Sequence[str] | None:
+    """Inherit or validate ``covariate_dims`` against the tree's stored covariates.
+
+    :func:`add_forecast_groups` must name the future covariates' axes exactly
+    like the in-sample ones already stored on ``constant_data["covariates"]``,
+    or the two groups silently disagree on axis names. When the tree carries
+    stored covariates, an omitted ``covariate_dims`` inherits their names and an
+    explicit one is cross-checked; trees without stored covariates pass through
+    unchanged (the downstream default applies).
+
+    Parameters
+    ----------
+    tree
+        The tree being extended.
+    covariates_future
+        The future covariates whose axes the names must cover.
+    covariate_dims
+        The user-supplied dimension names, or ``None`` to inherit.
+
+    Returns
+    -------
+    Sequence[str] | None
+        The reconciled dimension names (``None`` only when the tree has no
+        stored covariates and none were supplied).
+
+    Raises
+    ------
+    CovariateDimsError
+        If inherited names do not cover every ``covariates_future`` axis, or if
+        explicit names disagree with the stored ones.
+    """
+    constant_node = tree.children.get("constant_data")
+    if constant_node is None or "covariates" not in constant_node.dataset:
+        return covariate_dims
+    stored_dims = [str(dim) for dim in constant_node.dataset["covariates"].dims]
+    if covariate_dims is None:
+        ndim = np.asarray(covariates_future).ndim
+        if len(stored_dims) != ndim:
+            msg = (
+                f"covariates_future has {ndim} dimensions but the tree's "
+                f"constant_data covariates carry {len(stored_dims)} axis names "
+                f"{stored_dims}; pass covariates_future with the same layout as "
+                "the in-sample covariates (time at axis -2) or explicit "
+                "covariate_dims"
+            )
+            raise CovariateDimsError(msg)
+        return stored_dims
+    if list(covariate_dims) != stored_dims:
+        msg = (
+            f"covariate_dims {list(covariate_dims)} disagree with the names "
+            f"{stored_dims} already stored on the tree's constant_data covariates "
+            "(set by the earlier to_datatree(covariate_dims=...) call); omit "
+            "covariate_dims to inherit them, or pass matching names"
+        )
+        raise CovariateDimsError(msg)
+    return covariate_dims
 
 
 @singledispatch
@@ -239,10 +302,11 @@ def to_datatree(
     Raises
     ------
     ValueError
-        If ``covariates`` is shorter than ``data`` along the time axis, if
+        If ``covariates`` is shorter than ``data`` along the time axis, or if
         ``time_coord`` is given but its length does not match the in-sample
-        window plus the forecast horizon, or if ``covariate_dims`` does not
-        name every ``covariates`` axis.
+        window plus the forecast horizon.
+    CovariateDimsError
+        If ``covariate_dims`` does not name every ``covariates`` axis.
 
     Notes
     -----
@@ -389,8 +453,13 @@ def add_forecast_groups(
         coordinate is non-integer (e.g. datetime64): auto-continuing would have
         to guess the frequency, so explicit values are demanded instead.
     covariate_dims
-        Optional dimension names for ``covariates_future``, one per axis;
-        defaults to ``("time", "covariate_dim")``. See :func:`to_datatree`.
+        Optional dimension names for ``covariates_future``, one per axis. When
+        omitted, the names are inherited from the tree's
+        ``constant_data["covariates"]`` variable (falling back to
+        ``("time", "covariate_dim")`` if the tree carries no stored
+        covariates), so the forecast covariates always share the in-sample
+        axis names. When given explicitly, the names must match the stored
+        ones. See :func:`to_datatree`.
 
     Returns
     -------
@@ -402,10 +471,15 @@ def add_forecast_groups(
     ------
     ValueError
         If ``time_coord`` is given but its length differs from the forecast
-        horizon, if it is omitted while the in-sample time coordinate is
-        non-integer, or if ``covariate_dims`` does not name every
-        ``covariates_future`` axis.
+        horizon, or if it is omitted while the in-sample time coordinate is
+        non-integer.
+    CovariateDimsError
+        If the resolved ``covariate_dims`` (explicit or inherited) do not name
+        every ``covariates_future`` axis, or if explicit names disagree with
+        the dimension names already stored on the tree's
+        ``constant_data["covariates"]``.
     """
+    covariate_dims = _reconcile_tree_covariate_dims(tree, covariates_future, covariate_dims)
     in_time = np.asarray(tree["observed_data"].coords["time"].values)
     future_len = forecast_samples.shape[-2]
     if time_coord is not None:
