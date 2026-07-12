@@ -47,7 +47,7 @@ optax = [
     "optax>=0.2",
 ]
 blackjax = [
-    "blackjax>=1.2,<2",
+    "blackjax>=1.6,<2",
 ]
 dev = [
     "graphviz>=0.20",
@@ -63,7 +63,7 @@ dev = [
     "ruff==0.15.21",
     "ty==0.0.58",
     "optax>=0.2",
-    "blackjax>=1.2,<2",
+    "blackjax>=1.6,<2",
     "huggingface-hub>=1.22.0",
     "scikit-learn>=1.6",
 ]

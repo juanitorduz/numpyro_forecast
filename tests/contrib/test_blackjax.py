@@ -243,6 +243,30 @@ def test_blackjax_api_canaries() -> None:
     _api_canary("blackjax.vi.pathfinder", ["bfgs_sample"])
 
 
+def test_blackjax_mclmc_tuning_signature_canary() -> None:
+    """Pin the blackjax>=1.6 MCLMC tuning contract the adapter targets (risk K1).
+
+    In 1.6 ``build_kernel`` stopped closing over ``logdensity_fn``/
+    ``inverse_mass_matrix`` (both moved to the per-step kernel call) and
+    ``mclmc_find_L_and_step_size`` grew a required ``logdensity_fn`` parameter
+    taking the kernel directly instead of a mass-matrix factory. If upstream
+    flips either back, fail here with a precise message rather than deep inside
+    ``BlackjaxMCLMCKernel._build``.
+    """
+    import inspect
+
+    import blackjax
+
+    build_params = inspect.signature(blackjax.mcmc.mclmc.build_kernel).parameters
+    assert "integrator" in build_params
+    assert "logdensity_fn" not in build_params
+    assert "inverse_mass_matrix" not in build_params
+
+    tune_params = inspect.signature(blackjax.mclmc_find_L_and_step_size).parameters
+    assert "logdensity_fn" in tune_params
+    assert "mclmc_kernel" in tune_params
+
+
 # --- Pathfinder (P11) --------------------------------------------------------
 
 
