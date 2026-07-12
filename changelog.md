@@ -3,6 +3,22 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.2.1
+
+*2026-07-12* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.1)
+
+
+## What's Changed
+
+- Bump ty from 0.0.56 to 0.0.58 by [<span class="citation" cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/58
+- Bump ruff from 0.15.20 to 0.15.21 by [<span class="citation" cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/59
+- Add Codecov configuration and README badge by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/61
+- Fresh retail stockout example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/62
+- Bump version from 0.2.0 to 0.2.1 by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/63
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0…0.2.1](https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0...0.2.1)
+
+
 # 0.2.0
 
 *2026-07-08* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.0)
