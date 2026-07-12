@@ -395,7 +395,7 @@ data_lf.select(
 
 Instead of counting stockout hours uniformly, we weight each hour by its share of global sales, so that losing a night hour costs almost nothing and losing the morning peak costs a lot:
 
-\\a\_{t,s} = \sum\_{h=0}^{23} w_h \left(1 - \text{stockout}\_{t,s,h}\right), \qquad w_h = \frac{\text{total sales in hour } h}{\text{total sales}}.\\
+\\\begin{align\*} a\_{t,s} &= \sum\_{h=0}^{23} w_h \left(1 - \text{stockout}\_{t,s,h}\right), \\ w_h &= \frac{\text{total sales in hour } h}{\text{total sales}}. \end{align\*}\\
 
 One note on hygiene: the weights \\w_h\\ are a global hour-of-day profile computed over the full dataset, test window included, whereas a deployed system would compute them on history only. We keep the dataset-wide profile for simplicity; the effect of \\14\\ extra days on a fixed \\24\\-number profile is negligible, and the availability feature itself is treated as a known future input in the retrospective evaluation set up below anyway.
 
@@ -571,12 +571,12 @@ data_lf.select(
 | "scaled_no_holiday"        | 0.922419 |
 
 
-Discounts are common (about half of all days, with a mean magnitude near \\9\\\\), and both promotion activity and holidays lift scaled sales by roughly \\20\\\\ on average. All three are worth including as regression covariates, with effects pooled hierarchically by store. One anomaly to keep in mind: a small share of days (\\0.4\\\\ dataset-wide) records `discount = 0`, which read literally would be a \\100\\\\ discount and is far more plausibly an unpriced placeholder; it looks negligible here, but we will meet it again in the modeling panel, where it turns out to be concentrated in exactly the series we model.
+Discounts are common (about half of all days, with a mean magnitude near \\9\\\\), promotion activity lifts scaled sales by roughly \\20\\\\ on average, and holidays by roughly a quarter. All three are worth including as regression covariates, with effects pooled hierarchically by store. One anomaly to keep in mind: a small share of days (\\0.4\\\\ dataset-wide) records `discount = 0`, which read literally would be a \\100\\\\ discount and is far more plausibly an unpriced placeholder; it looks negligible here, but we will meet it again in the modeling panel, where it turns out to be concentrated in exactly the series we model.
 
 
 # Build the modeling panel
 
-We model the top \\1{,}000\\ series by total sales. The last \\14\\ days are held out as a test set; the model trains on the first \\76\\ days and receives the *actual* covariates (availability, discount, promotion, holiday, launch indicator) over the forecast window, which is the standard retrospective evaluation setup.
+We model the top \\1{,}000\\ series by total sales over the training window: ranking on the full window would let test-period spikes decide which series get modeled and scored, the same class of leak the scaling discussion below is careful to keep out of the fold. The last \\14\\ days are held out as a test set; the model trains on the first \\76\\ days and receives the *actual* covariates (availability, discount, promotion, holiday, launch indicator) over the forecast window, which is the standard retrospective evaluation setup.
 
 Getting from the long dataframe to model-ready arrays is worth doing carefully, because every shape convention we set here is relied on by the model and by the ArviZ export. We proceed in five steps: pivot the long panel into dense `(time, series)` arrays, scale each series by its own training mean, build the integer store index that drives the hierarchical pooling, add the panel-wide launch indicator, and stack all exogenous inputs into a single tensor with named axes.
 
@@ -628,12 +628,22 @@ def cleaned_discount_magnitude() -> pl.Expr:
     )
 
 
-top_series_df = data_lf.pipe(top_series_by_total_sales, n_series_panel).collect(engine="streaming")
+# Rank on the training window only: the modeled panel must be chosen before
+# observing the test window, the same fold discipline the per-series scale
+# gets in the scaling section below.
+in_train_window = pl.col("dt").str.to_date() < (
+    pl.col("dt").str.to_date().min() + pl.duration(days=t_train)
+)
+top_series_df = (
+    data_lf.filter(in_train_window)
+    .pipe(top_series_by_total_sales, n_series_panel)
+    .collect(engine="streaming")
+)
 
 panel_df = (
     data_lf.pipe(keep_top_series, top_series_df)
     .with_columns(
-        pl.col("dt").cast(pl.Date),
+        pl.col("dt").str.to_date(),
         series_unique_id(),
         availability_expr,
         cleaned_discount_magnitude(),
@@ -825,7 +835,7 @@ sale_amount
 float64
 
 
-0.3 3.5 5.1 3.9 ... 32.7 13.7 1.7
+0.3 3.5 5.1 3.6 ... 32.7 13.7 1.7
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -984,14 +994,14 @@ print(
 ```
 
 
-    sale units per scaled unit: min 3.43 | median 4.95 | max 18.10
+    sale units per scaled unit: min 3.96 | median 4.95 | max 18.10
 
 
 ## The store index `series_to_store`
 
 The covariate effects \\\beta\_{c,s}\\ are pooled by store: series from the same store share a store-level location and scale. To express that inside the model we need a lookup from the series axis to the store axis, and that is exactly what `series_to_store` is: an integer vector with one entry per series, `series_to_store[s] = m(s)`, aligned with the same sorted `series_ids` order as every pivot (both come from sorting by `unique_id`). We build it with scikit-learn's `LabelEncoder`, which consumes the polars column directly: `fit_transform` maps each store id to its position among the sorted unique ids, and the fitted `classes_` are exactly those sorted ids, so the same encoder yields both the integer index the model gathers with and the `store` coordinate labels the ArviZ export uses below. Inside the model, the advanced indexing `b_loc_store[:, series_to_store]` gathers the `(n_cov, n_stores)` store-level parameters into an `(n_cov, n_series)` array of per-series prior locations, a vectorized dictionary lookup. The jaxtyping annotation records the contract in the code: one integer per series.
 
-The printout below carries a caveat worth keeping in mind: the panel spreads its \\1{,}000\\ series over \\520\\ stores with a median of *one* series per store. For a singleton store the store-level location is informed by a single series, so the hierarchy there acts as regularization toward the global hyperpriors rather than as cross-series pooling; the genuine pooling happens in the multi-series stores (up to eight series here). We revisit this when inspecting the fitted hierarchy.
+The printout below carries a caveat worth keeping in mind: the panel spreads its \\1{,}000\\ series over \\525\\ stores with a median of *one* series per store. For a singleton store the store-level location is informed by a single series, so the hierarchy there acts as regularization toward the global hyperpriors rather than as cross-series pooling; the genuine pooling happens in the multi-series stores (up to eight series here). We revisit this when inspecting the fitted hierarchy.
 
 
     In [15]:
@@ -1021,7 +1031,7 @@ print(f"train: {t_train} days | test: {horizon} days")
 ```
 
 
-    panel: 1000 series map to 520 stores
+    panel: 1000 series map to 525 stores
     series per store: min 1 | median 1 | max 8
     train: 76 days | test: 14 days
 
@@ -1030,7 +1040,7 @@ print(f"train: {t_train} days | test: {horizon} days")
 
 The sales plots below share a striking pattern: most series jump to a new level in late April, when this panel's flagship product ramps up across the assortment. That jump is a one-off structural event, not demand dynamics, so we give the model an explicit launch indicator: without a dedicated regressor for the step, any feature that happens to flip around the launch can absorb it and come out with a nonsense coefficient, putting the promotion effects in a tug-of-war with the level. Alternatives that do not work here: relying on the cleaned discount encoding alone (it shrinks the launch-aligned placeholder step, but a shrunken step is still a step a coefficient can latch onto), and per-series change-point detection (a thousand extra change points for an event the data show is panel-wide and sharply dated).
 
-We therefore fix one shared launch date: the day with the largest week-over-week jump falls on \\2024\\-\\04\\-\\27\\ for more series than any other date, and the panel-mean daily sales step up by more than \\50\\\\ on exactly that day (both facts are printed below). The indicator is \\0\\ before the launch date and \\1\\ from that day onward, so over the forecast window it is constantly \\1\\: a known future covariate.
+We therefore fix one shared launch date, \\2024\\-\\04\\-\\27\\: the panel-mean daily sales step up by more than \\60\\\\ day over day on exactly that date, the largest jump in the window, and \\39\\\\ of the series place their largest week-over-week jump between \\2024\\-\\04\\-\\27\\ and \\2024\\-\\05\\-\\01\\ (the per-series jump dates scatter a few days into that cluster, so the panel-level step, not the per-series modal date, pins down the event's first day; the printout below has the numbers). The indicator is \\0\\ before the launch date and \\1\\ from that day onward, so over the forecast window it is constantly \\1\\: a known future covariate.
 
 
     In [16]:
@@ -1078,10 +1088,10 @@ print(f"panel-mean sales step on 2024-04-27: {step_ratio:.2f}x day over day")
 ```
 
 
-    modal largest-weekly-jump date: 2024-04-27
+    modal largest-weekly-jump date: 2024-04-30
     share of series with their largest weekly jump on 2024-04-27: 0.12
-    share with it between 2024-04-27 and 2024-05-01: 0.34
-    panel-mean sales step on 2024-04-27: 1.56x day over day
+    share with it between 2024-04-27 and 2024-05-01: 0.39
+    panel-mean sales step on 2024-04-27: 1.62x day over day
 
 
 <figure class="figure">
@@ -1261,7 +1271,7 @@ fig.suptitle("Sales and promotion covariates", fontsize=18, fontweight="bold");
 </figure>
 
 
-Two patterns jump out. The holiday flag repeats weekly (weekends plus a solid block around the May Day week), and several series show local sales spikes on those shaded days; promotion activity is rarer and highly series-specific, absent for most of these series but covering most of the window for `409::309` in the last panel. The discount line also shows the placeholder cleanup at work: for many of the highest-volume series the raw `discount` column is zero on most days (the placeholder flagged in the EDA, concentrated in exactly this panel), so their cleaned magnitude sits at zero except on genuinely priced promotions, while series like `409::309` keep their real time-varying discounts. This heterogeneity in feature quality is one more argument for pooling the covariate effects by store rather than fitting one global discount effect: where the feature is quiet the coefficient is weakly identified and shrinks toward its store-level prior, and where the feature is informative it can act.
+Two patterns jump out. The holiday flag repeats weekly (weekends plus a solid block around the May Day week), and several series show local sales spikes on those shaded days; promotion activity and priced discounts, by contrast, are entirely absent from the twenty series shown, even though roughly half of the panel's series have active promotion days and about two thirds see at least one real discount: the flagship launch product that dominates both rankings is simply never promoted. The flat discount line is also the placeholder cleanup at work: for these series the raw `discount` column is zero on most days (the placeholder flagged in the EDA at \\0.4\\\\ dataset-wide covers about \\18\\\\ of this panel's days, concentrated in exactly the launch product), so the cleaned magnitude sits at an honest zero instead of reading as a \\100\\\\ discount. This heterogeneity in feature quality is one more argument for pooling the covariate effects by store rather than fitting one global discount effect: where the feature is quiet the coefficient is weakly identified and shrinks toward its store-level prior, and where the feature is informative it can act.
 
 
 # Model specification
@@ -1278,7 +1288,7 @@ The model is a panel state space model on the scaled sales, with five components
 
 where \\d(t)\\ is the day of week, \\m(s)\\ the store of series \\s\\, \\a\_{t,s}\\ the sales-weighted availability, \\x\_{c,t,s}\\ the four regression features (discount magnitude, promotion activity, holiday, and the launch indicator), \\\lambda_s\\ the loading of the level-dependent noise component, and \\\sigma_0 = 0.02\\ a small constant basal noise; the last two are discussed with the noise scale below. The remaining priors, all on the scaled axis where \\1\\ is an average day for the series:
 
-\\ \begin{align\*} \ell\_{0,s} &\sim \text{Normal}(1, 0.5), \quad \tau_s \sim \text{LogNormal}(-3, 1), \quad \phi^{\text{trend}}\_s \sim \text{Beta}(8, 2), \quad \tau^{\text{trend}}\_s \sim \text{LogNormal}(-4, 1) \\ \gamma\_{\cdot,s} &\sim \text{ZeroSumNormal}(\sigma\_\gamma, 7), \quad \sigma\_\gamma \sim \text{HalfNormal}(0.2) \\ \mu^{\text{store}}\_{c,m} &\sim \text{Normal}(0, 0.5), \quad \sigma^{\text{store}}\_{c,m} \sim \text{HalfNormal}(0.3) \\ \phi_s &\sim \text{Beta}(2, 18), \quad b_s \sim \text{LogNormal}(1, 0.5) \\ \sigma_s &\sim \text{HalfNormal}(0.5), \quad \lambda_s \sim \text{HalfNormal}(0.2) \end{align\*} \\
+\\ \begin{align\*} \ell\_{0,s} &\sim \text{Normal}(1, 0.5), & \tau_s &\sim \text{LogNormal}(-3, 1) \\ \phi^{\text{trend}}\_s &\sim \text{Beta}(8, 2), & \tau^{\text{trend}}\_s &\sim \text{LogNormal}(-4, 1) \\ \gamma\_{\cdot,s} &\sim \text{ZeroSumNormal}(\sigma\_\gamma, 7), & \sigma\_\gamma &\sim \text{HalfNormal}(0.2) \\ \mu^{\text{store}}\_{c,m} &\sim \text{Normal}(0, 0.5), & \sigma^{\text{store}}\_{c,m} &\sim \text{HalfNormal}(0.3) \\ \phi_s &\sim \text{Beta}(2, 18), & b_s &\sim \text{LogNormal}(1, 0.5) \\ \sigma_s &\sim \text{HalfNormal}(0.5), & \lambda_s &\sim \text{HalfNormal}(0.2) \end{align\*} \\
 
 The random-walk drift \\\varepsilon\\ and the coefficients \\\beta\\ use `LocScaleReparam` with learned centeredness parameters (each a global \\\text{Uniform}(0, 1)\\ latent), as in the other hierarchical examples. The sections below motivate the trend, dynamics, and availability-factor priors in detail.
 
@@ -1328,12 +1338,47 @@ ax.set(xlabel=r"floor $\phi_s$", ylabel="density", title="Floor prior");
 
 
 ``` python
+def availability_factor(
+    availability: Float[np.ndarray | Array, " ..."] | float,
+    b_avail: Float[np.ndarray | Array, " ..."] | float,
+    floor: Float[np.ndarray | Array, " ..."] | float,
+) -> Float[np.ndarray | Array, " ..."]:
+    """Floored, normalized saturating availability factor.
+
+    The model-specification curve
+    ``floor + (1 - floor) * expm1(-b_avail * availability) / expm1(-b_avail)``:
+    ``floor`` at zero availability, exactly ``1`` at full availability, with the
+    curvature set by ``b_avail``. Defined once, at first use, and shared by the
+    illustrative curves here, the model, and the prior/posterior diagnostic
+    cells below, so the plotted curves can never drift from what the model
+    computes. Inputs broadcast together per NumPy rules. NumPy and scalar
+    inputs are accepted (``xarray.apply_ufunc`` passes NumPy arrays in the
+    posterior diagnostic below) and computed with ``jax.numpy``.
+
+    Parameters
+    ----------
+    availability
+        Sales-weighted availability in ``[0, 1]``.
+    b_avail
+        Saturation rate (the purchase-opportunity intensity).
+    floor
+        The factor at zero availability, in ``(0, 1)``.
+
+    Returns
+    -------
+    Array
+        The multiplicative availability factor.
+    """
+    saturation = jnp.expm1(-b_avail * availability) / jnp.expm1(-b_avail)
+    return floor + (1.0 - floor) * saturation
+
+
 a_grid = jnp.linspace(0, 1, 200)  # availability from 0 to 1
 b_vals = [0.5, 1.5, 5.0, 12.0]  # some example b_s values
 
 fig, ax = plt.subplots()
 for b in b_vals:
-    f = (1 - jnp.exp(-b * a_grid)) / (1 - jnp.exp(-b))
+    f = availability_factor(a_grid, b, 0.0)
     ax.plot(a_grid, f, label=f"$b_s={b}$")
 fig.text(0.7, 0.42, r"$\frac{1 - e^{-b_s a_{t,s}}}{1 - e^{-b_s}}$", fontsize=36)
 ax.legend(loc="lower right")
@@ -1397,47 +1442,13 @@ Finally, the noise scale is \\f\_{t,s} \left(\sigma_s + \lambda_s \\ \text{softp
 
 - **Why not a learned basal term?** Many series sell exactly zero on their stockout days, where the mean is also pinned near zero. A Normal density at a perfectly fit point grows without bound as its scale shrinks, so the ELBO rewards collapsing the total noise scale at those observations; with a learned basal term the collapse runs away and the optimization hits `NaN` mid-run (the first non-finite ELBO appears around step \\6{,}000\\ on this panel). A constant cannot collapse.
 - **Why not a tiny epsilon like \\10^{-6}\\?** The constant is not there to avoid division by zero; it must remove the *reward* for collapse. With \\\sigma_0 = 10^{-6}\\ the density at an exactly fit zero can still contribute \\\log\left(1 / (\sigma_0 \sqrt{2\pi})\right) \approx 12.9\\ per observation, and such a fit banks roughly a thousand nats of ELBO from these spikes while every predictive metric stays identical to the \\0.02\\ fit: the "improvement" is purely the degenerate optimum being exploited, and stability is then at the mercy of the learning-rate schedule (the learned-term variant diverged through exactly this mechanism).
-- **Why \\0.02\\ specifically?** It sits at the data's resolution: one physical sale unit is between \\0.06\\ and \\0.29\\ on the per-series scaled axis, so a basal noise of \\0.02\\ is below measurement granularity and cannot distort any interval the data could support. Fits with \\\sigma_0 \in \\0.01, 0.02, 0.05\\\\ give the same CRPS and coverage to within noise.
+- **Why \\0.02\\ specifically?** It sits at the data's resolution: one physical sale unit is between \\0.06\\ and \\0.25\\ on the per-series scaled axis, so a basal noise of \\0.02\\ is below measurement granularity and cannot distort any interval the data could support. Fits with \\\sigma_0 \in \\0.01, 0.02, 0.05\\\\ give the same CRPS and coverage to within noise.
 
 
     In [23]:
 
 
 ``` python
-def availability_factor(
-    availability: Float[np.ndarray | Array, " ..."],
-    b_avail: Float[np.ndarray | Array, " ..."],
-    floor: Float[np.ndarray | Array, " ..."],
-) -> Float[np.ndarray | Array, " ..."]:
-    """Floored, normalized saturating availability factor.
-
-    The model-specification curve
-    ``floor + (1 - floor) * expm1(-b_avail * availability) / expm1(-b_avail)``:
-    ``floor`` at zero availability, exactly ``1`` at full availability, with the
-    curvature set by ``b_avail``. Defined once and shared by the model and the
-    prior/posterior diagnostic cells below, so the plotted curves can never
-    drift from what the model computes. Inputs broadcast together per NumPy
-    rules. NumPy inputs are accepted (``xarray.apply_ufunc`` passes them in
-    the posterior diagnostic below) and computed with ``jax.numpy``.
-
-    Parameters
-    ----------
-    availability
-        Sales-weighted availability in ``[0, 1]``.
-    b_avail
-        Saturation rate (the purchase-opportunity intensity).
-    floor
-        The factor at zero availability, in ``(0, 1)``.
-
-    Returns
-    -------
-    Array
-        The multiplicative availability factor.
-    """
-    saturation = jnp.expm1(-b_avail * availability) / jnp.expm1(-b_avail)
-    return floor + (1.0 - floor) * saturation
-
-
 class FreshRetailModel(ForecastingModel):
     """Damped-trend hierarchical panel model with a floored availability factor.
 
@@ -1815,8 +1826,8 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 12 s, sys: 556 ms, total: 12.6 s
-    Wall time: 6.45 s
+    CPU times: user 12.3 s, sys: 618 ms, total: 12.9 s
+    Wall time: 6.68 s
 
 
     In [29]:
@@ -1832,8 +1843,8 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 31s, sys: 6min 51s, total: 16min 23s
-    Wall time: 3min 17s
+    CPU times: user 9min 25s, sys: 7min 9s, total: 16min 35s
+    Wall time: 3min 14s
 
 
 <figure class="figure">
@@ -1906,7 +1917,7 @@ Group: /
 │       sample_dims:        ['chain', 'draw']
 ├── Group: /posterior
 │       Dimensions:           (chain: 1, draw: 1000, covariate: 4, series: 1000,
-│                              store: 520, time: 76, day_of_week: 7)
+│                              store: 525, time: 76, day_of_week: 7)
 │       Coordinates:
 │         * chain             (chain) int64 8B 0
 │         * draw              (draw) int64 8kB 0 1 2 3 4 5 6 ... 994 995 996 997 998 999
@@ -1916,21 +1927,21 @@ Group: /
 │         * time              (time) datetime64[s] 608B 2024-03-28 ... 2024-06-11
 │         * day_of_week       (day_of_week) <U3 84B 'Thu' 'Fri' 'Sat' ... 'Tue' 'Wed'
 │       Data variables: (12/19)
-│           b                 (chain, draw, covariate, series) float32 16MB 0.7327 .....
-│           b_avail           (chain, draw, series) float32 4MB 0.9059 0.8302 ... 10.85
-│           b_decentered      (chain, draw, covariate, series) float32 16MB 0.2937 .....
-│           b_loc_store       (chain, draw, covariate, store) float32 8MB 0.6704 ... ...
-│           b_scale_store     (chain, draw, covariate, store) float32 8MB 0.4211 ... ...
-│           centered_b        (chain, draw) float32 4kB 0.2623 0.2655 ... 0.2611 0.2609
+│           b                 (chain, draw, covariate, series) float32 16MB 0.7183 .....
+│           b_avail           (chain, draw, series) float32 4MB 0.9061 0.8295 ... 10.84
+│           b_decentered      (chain, draw, covariate, series) float32 16MB 0.2872 .....
+│           b_loc_store       (chain, draw, covariate, store) float32 8MB 0.6634 ... ...
+│           b_scale_store     (chain, draw, covariate, store) float32 8MB 0.423 ... 0...
+│           centered_b        (chain, draw) float32 4kB 0.279 0.282 ... 0.2778 0.2776
 │           ...                ...
-│           phi_trend         (chain, draw, series) float32 4MB 0.4503 0.352 ... 0.4761
-│           seasonal          (chain, draw, series, day_of_week) float32 28MB 0.00956...
-│           seasonal_scale    (chain, draw) float32 4kB 0.04323 0.04336 ... 0.04362
-│           sigma             (chain, draw, series) float32 4MB 0.1728 0.1769 ... 0.3151
-│           slope             (chain, draw, time, series) float32 304MB -0.03345 ... ...
-│           tau_trend         (chain, draw, series) float32 4MB 0.02124 ... 0.04133
+│           phi_trend         (chain, draw, series) float32 4MB 0.4502 0.3519 ... 0.4754
+│           seasonal          (chain, draw, series, day_of_week) float32 28MB 0.00966...
+│           seasonal_scale    (chain, draw) float32 4kB 0.04305 0.04319 ... 0.04345
+│           sigma             (chain, draw, series) float32 4MB 0.1733 0.1775 ... 0.3182
+│           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
+│           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04177
 │       Attributes:
-│           created_at:                 2026-07-12T08:01:34.009523+00:00
+│           created_at:                 2026-07-12T18:09:18.356058+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1944,9 +1955,9 @@ Group: /
 │         * time     (time) datetime64[s] 608B 2024-03-28 2024-03-29 ... 2024-06-11
 │         * obs_dim  (obs_dim) <U8 32kB '0::117' '0::691' '0::70' ... '99::589' '9::4'
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 304MB 0.09489 ... 0.6046
+│           obs      (chain, draw, time, obs_dim) float32 304MB 0.09493 ... 0.5744
 │       Attributes:
-│           created_at:                 2026-07-12T08:01:35.587957+00:00
+│           created_at:                 2026-07-12T18:09:20.409178+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1959,7 +1970,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-12T08:01:35.588481+00:00
+│           created_at:                 2026-07-12T18:09:20.409689+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1973,7 +1984,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-12T08:01:35.588963+00:00
+│           created_at:                 2026-07-12T18:09:20.410149+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1986,9 +1997,9 @@ Group: /
 │         * time     (time) datetime64[s] 112B 2024-06-12 2024-06-13 ... 2024-06-25
 │         * obs_dim  (obs_dim) <U8 32kB '0::117' '0::691' '0::70' ... '99::589' '9::4'
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 56MB 0.7749 1.083 ... 0.8734
+│           obs      (chain, draw, time, obs_dim) float32 56MB 0.775 0.7038 ... 0.7256
 │       Attributes:
-│           created_at:                 2026-07-12T08:01:38.036898+00:00
+│           created_at:                 2026-07-12T18:09:22.506876+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2002,7 +2013,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-12T08:01:38.037527+00:00
+            created_at:                 2026-07-12T18:09:22.507609+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2022,7 +2033,7 @@ Dimensions:
 - draw: 1000
 - covariate: 4
 - series: 1000
-- store: 520
+- store: 525
 - time: 76
 - day_of_week: 7
 
@@ -2127,7 +2138,7 @@ int64
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([  0,   1,   2, ..., 894, 896, 897], shape=(520,))
+    array([  0,   1,   2, ..., 894, 896, 897], shape=(525,))
 
 
 time
@@ -2182,7 +2193,7 @@ b
 float32
 
 
-0.7327 0.5352 ... -0.06066 -0.09926
+0.7183 0.5221 ... -0.1268 0.08806
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2190,7 +2201,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.7327015 ,  0.53517944,  0.58960736, ..., -0.4654757 ,0.45798087, -0.24595201],[ 0.21725501, -0.01030174,  0.00951051, ..., -0.8323779 ,-0.90406096,  0.09329031],[ 0.4049259 ,  0.4471735 ,  0.4085952 , ...,  0.3050568 ,0.32771415,  0.82860446],[-0.06217518, -0.1816787 , -0.20172696, ...,  0.82235193,-0.09970709, -0.08217292]],[[-0.11629076, -0.6525044 , -0.48076352, ...,  0.13252778,-0.64504236, -0.43378443],[-0.2418315 , -0.21309458, -0.63033175, ...,  0.05837838,-0.5871965 ,  0.26923087],[ 0.41184786,  0.48219496,  0.41113168, ...,  0.13552561,0.36682132,  0.8448245 ],[-0.1256606 , -0.1337784 , -0.1355328 , ...,  0.68275195,-0.01197849, -0.20233664]],[[ 0.56549406,  0.71846354,  1.0728538 , ..., -0.5624208 ,-0.8872545 ,  0.7249411 ],...-0.13660231, -0.28972152]],[[-0.32099184,  0.20441207, -1.7419033 , ...,  0.5771687 ,0.18680775, -0.01424128],[ 0.32904643,  0.36141235,  0.08917232, ..., -0.1455566 ,-0.90750074,  0.24665368],[ 0.36775553,  0.39903358,  0.3800826 , ...,  0.22436182,0.32496247,  0.9293406 ],[-0.18231729, -0.16127662, -0.14998025, ...,  0.76510495,-0.05744955, -0.16515183]],[[-0.09423722, -0.5923356 , -0.49523684, ..., -0.7479476 ,0.5707611 ,  0.2813222 ],[ 0.08421418,  0.50272197, -0.21997993, ..., -0.12335297,0.28789365, -0.13072014],[ 0.3391319 ,  0.34419033,  0.3264452 , ...,  0.30604604,0.34597763,  1.322784  ],[-0.16628475, -0.17143168, -0.16125275, ...,  0.742573  ,-0.06065665, -0.09926093]]]],shape=(1, 1000, 4, 1000), dtype=float32)
+    array([[[[ 0.71834385,  0.52205825,  0.5759805 , ..., -0.10950093,-0.11408986, -0.24224868],[-0.28660682, -0.43024766, -0.41841942, ..., -1.0898994 ,-0.8721027 ,  0.20773795],[ 0.3704557 ,  0.40348497,  0.372277  , ...,  0.28202042,0.3460965 ,  1.1572014 ],[-0.06084472, -0.14725131, -0.16407742, ...,  0.8052639 ,-0.18367565, -0.20366566]],[[ 0.58529437,  0.09320547,  0.2506853 , ..., -0.8621409 ,-0.28071767, -1.0596714 ],[ 0.281895  ,  0.31315163, -0.22949603, ...,  0.2633355 ,0.871447  ,  0.09527075],[ 0.41637677,  0.46973428,  0.4152726 , ...,  0.16806798,0.33247313,  1.0032283 ],[-0.09623573, -0.13265821, -0.1427871 , ...,  0.7213457 ,-0.07299303, -0.17404771]],[[-0.05494183,  0.07589232,  0.37921867, ...,  0.07025582,0.32738358,  0.9057722 ],...-0.12959543, -0.06700025]],[[-0.35320464, -0.00136566, -1.3050704 , ..., -0.24088532,-0.78828746,  0.51458436],[ 0.44747883,  0.4842337 ,  0.08656681, ..., -0.08689025,0.03632694, -0.20281212],[ 0.3757716 ,  0.42420238,  0.39396304, ...,  0.19226901,0.3686526 ,  1.0544542 ],[-0.14846219, -0.14046839, -0.13693355, ...,  0.8258627 ,-0.08989415, -0.04958764]],[[ 0.26962012, -0.0039118 ,  0.04937467, ..., -0.11159419,0.47116616,  0.23801689],[-0.04969029,  0.7243639 , -0.62749594, ..., -0.579315  ,-0.09578086, -0.13507245],[ 0.43411794,  0.44226205,  0.41321   , ...,  0.35320407,0.30329838,  1.0043385 ],[-0.14224283, -0.14902703, -0.13438341, ...,  0.74894613,-0.12678197,  0.08805816]]]],shape=(1, 1000, 4, 1000), dtype=float32)
 
 
 b_avail
@@ -2202,7 +2213,7 @@ b_avail
 float32
 
 
-0.9059 0.8302 ... 0.7767 10.85
+0.9061 0.8295 ... 0.7766 10.84
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2210,7 +2221,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[ 0.9058789 ,  0.83021224,  0.43924472, ...,  1.2430522 ,0.8291931 , 18.861685  ],[ 1.2929732 ,  0.5864446 ,  1.0245391 , ...,  0.9944278 ,1.2943091 ,  9.479123  ],[ 0.8335112 ,  0.75110525,  0.87743783, ...,  1.1896479 ,1.364799  , 12.192536  ],...,[ 0.8872638 ,  1.6542561 ,  0.5688779 , ...,  1.2341172 ,1.0077349 , 18.024633  ],[ 1.0031425 ,  1.1143782 ,  1.0505452 , ...,  1.1344355 ,1.5414153 ,  8.943121  ],[ 0.6858928 ,  1.1106776 ,  0.5392324 , ...,  1.3235066 ,0.7767347 , 10.849131  ]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[ 0.90607923,  0.8295497 ,  0.43900228, ...,  1.2439649 ,0.8290564 , 18.818155  ],[ 1.2925425 ,  0.58580524,  1.0245402 , ...,  0.9955716 ,1.2946302 ,  9.470085  ],[ 0.83380365,  0.7504426 ,  0.87734985, ...,  1.1906186 ,1.3652047 , 12.174866  ],...,[ 0.8874887 ,  1.6538951 ,  0.56865996, ...,  1.2350397 ,1.007751  , 17.984644  ],[ 1.003205  ,  1.1137648 ,  1.0505635 , ...,  1.1354618 ,1.5420475 ,  8.935618  ],[ 0.6863419 ,  1.1100631 ,  0.53900695, ...,  1.3243235 ,0.7765595 , 10.835903  ]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 b_decentered
@@ -2222,7 +2233,7 @@ b_decentered
 float32
 
 
-0.2937 -0.08013 ... -0.04432 0.1851
+0.2872 -0.07781 ... -0.03689 0.1675
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2230,7 +2241,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 2.93748766e-01, -8.01303908e-02,  2.28934214e-02, ...,-7.92792797e-01,  4.02963221e-01,  1.02302104e-01],[ 6.40261948e-01,  1.08475596e-01,  1.54775634e-01, ...,-2.50375926e-01, -1.55803108e+00,  4.66273695e-01],[ 4.07457948e-02,  3.85790199e-01,  7.07135648e-02, ...,2.40119845e-01,  1.16837338e-01,  1.59059525e-01],[ 6.93688512e-01, -1.71980277e-01, -3.17207426e-01, ...,3.53094488e-01, -2.15473443e-01, -2.91391462e-01]],[[ 2.48366445e-01, -6.70473278e-01, -3.76183212e-01, ...,-7.67537594e-01, -8.32740188e-01, -9.56300020e-01],[ 4.26516235e-01,  5.20034552e-01, -8.37776840e-01, ...,8.33343118e-02,  5.32736957e-01,  2.72843421e-01],[-1.27726734e-01,  9.06098366e-01, -1.38251752e-01, ...,-9.29040387e-02, -4.34324890e-03,  2.07521141e-01],[ 2.35558569e-01, -1.64984912e-01, -2.51549602e-01, ...,1.73847273e-01,  5.31734601e-02, -3.84902716e-01]],[[-3.59059006e-01, -7.66977519e-02,  5.77459395e-01, ...,-9.56864595e-01,  4.57581045e-04,  7.99997449e-01],...3.45631421e-01, -1.94450065e-01, -5.37208796e-01]],[[ 3.40368867e-01,  1.12568724e+00, -1.78345966e+00, ...,4.98287529e-01, -1.04069807e-01, -5.88475943e-01],[ 6.48384035e-01,  7.20498621e-01,  1.13919757e-01, ...,-7.95638710e-02, -8.51521492e-01, -1.68375373e-01],[-3.91097933e-01,  1.61869645e-01, -1.73166230e-01, ...,-4.15601581e-02,  9.30436552e-02,  3.45719576e-01],[-5.43934822e-01, -2.35571116e-01, -7.00159073e-02, ...,3.97237539e-01,  2.11958930e-01, -1.21341258e-01]],[[ 8.47829461e-01, -6.42952681e-01, -3.52341264e-01, ...,-5.91994166e-01, -3.57748955e-01,  1.99150056e-01],[-7.21614242e-01,  1.36813271e+00, -2.24055552e+00, ...,-1.15310812e+00,  7.41244316e-01,  2.44284794e-01],[ 2.62654543e-01,  4.13392276e-01, -1.15399219e-01, ...,1.92226648e-01, -4.25348952e-02,  8.18791866e-01],[ 1.64605215e-01,  3.60036902e-02,  2.90335804e-01, ...,4.31081831e-01, -4.43213284e-02,  1.85060605e-01]]]],shape=(1, 1000, 4, 1000), dtype=float32)
+    array([[[[ 2.87173003e-01, -7.78111145e-02,  2.24547517e-02, ...,-7.82545924e-01,  3.83551747e-01,  1.05503514e-01],[ 6.36111021e-01,  1.03387475e-01,  1.47255167e-01, ...,-2.41961479e-01, -1.51525187e+00,  4.56915021e-01],[ 5.82726672e-02,  3.85159820e-01,  7.62975663e-02, ...,2.45698631e-01,  1.26787603e-01,  1.81183249e-01],[ 6.45359576e-01, -1.52973130e-01, -3.08434010e-01, ...,3.66978943e-01, -2.04772487e-01, -3.00757378e-01]],[[ 2.42907941e-01, -6.53711379e-01, -3.66772383e-01, ...,-7.57868648e-01, -7.98854709e-01, -9.20701444e-01],[ 4.26991731e-01,  5.03737569e-01, -8.28650415e-01, ...,8.44187587e-02,  5.16687691e-01,  2.68065304e-01],[-1.01110011e-01,  8.83092999e-01, -1.21477380e-01, ...,-7.06039369e-02,  1.02831125e-02,  2.27335140e-01],[ 2.12534979e-01, -1.46451637e-01, -2.46283635e-01, ...,1.93319231e-01,  5.87385371e-02, -3.92655760e-01]],[[-3.49563867e-01, -7.44624510e-02,  5.63333631e-01, ...,-9.42863166e-01, -1.59346359e-03,  7.81846762e-01],...3.59748513e-01, -1.84151024e-01, -5.42334795e-01]],[[ 3.32645416e-01,  1.09850633e+00, -1.73931611e+00, ...,4.78989780e-01, -1.01612501e-01, -5.64134181e-01],[ 6.44057274e-01,  6.98741972e-01,  1.07084535e-01, ...,-7.49013424e-02, -8.28621507e-01, -1.62705138e-01],[-3.50271165e-01,  1.70868620e-01, -1.54522136e-01, ...,-2.18380541e-02,  1.03912055e-01,  3.58946919e-01],[-5.23902237e-01, -2.12256327e-01, -7.44475126e-02, ...,4.09745961e-01,  2.14488402e-01, -1.33640245e-01]],[[ 8.27613294e-01, -6.26864016e-01, -3.43518883e-01, ...,-5.86342335e-01, -3.44350278e-01,  1.99387550e-01],[-6.96288109e-01,  1.32873762e+00, -2.20790219e+00, ...,-1.12486494e+00,  7.19328284e-01,  2.40182951e-01],[ 2.68208444e-01,  4.11574930e-01, -9.98486280e-02, ...,2.00210169e-01, -2.64347941e-02,  8.09472084e-01],[ 1.45500809e-01,  4.09220085e-02,  2.66654134e-01, ...,4.42535281e-01, -3.68923843e-02,  1.67476758e-01]]]],shape=(1, 1000, 4, 1000), dtype=float32)
 
 
 b_loc_store
@@ -2242,7 +2253,7 @@ b_loc_store
 float32
 
 
-0.6704 0.3138 ... 0.6402 0.5791
+0.6634 0.6169 ... 0.417 0.6432
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2250,7 +2261,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.6704295 ,  0.31378347, -0.29407752, ..., -0.273412  ,0.31995007,  0.26481318],[-0.06389178,  0.0674229 ,  0.13447534, ..., -0.16502619,-0.7032891 , -0.453522  ],[ 0.4132095 ,  0.43112522,  0.23895185, ...,  0.0961524 ,0.276298  ,  0.08649287],[-0.16387181, -0.12068717, -0.1540474 , ...,  0.24648267,0.67795366,  0.5277432 ]],[[-0.30912578,  0.21265057, -0.8063265 , ...,  0.2927245 ,0.26728678,  0.43142498],[-0.40601778, -0.00560521,  0.785333  , ..., -0.14988421,-0.5219016 ,  0.32269156],[ 0.42827606,  0.35327542,  0.25929588, ...,  0.17660142,0.34791428,  0.10271136],[-0.13114028, -0.14638393, -0.17883688, ...,  0.26493987,0.5927017 ,  0.5921562 ]],[[ 0.8873062 ,  0.5245105 , -1.0319564 , ..., -0.04479774,-0.10824993,  0.514835  ],...0.6331313 ,  0.47760954]],[[-0.6648563 ,  0.2347194 , -0.18899907, ..., -0.6213142 ,0.02422936, -0.5619592 ],[ 0.04309398,  0.04816489,  0.44132936, ..., -0.06960069,-0.08832747, -0.12124352],[ 0.39572227,  0.3741486 ,  0.35571873, ...,  0.12785394,0.25890088,  0.2345597 ],[-0.14783679, -0.13017501, -0.21209653, ...,  0.2814543 ,0.64379495,  0.5463222 ]],[[-0.41356906,  0.5106293 ,  0.4756703 , ...,  0.2904767 ,-0.14705971,  0.1513821 ],[ 0.24134147, -0.0044094 , -0.52075356, ...,  0.81762606,-0.33850962,  1.062957  ],[ 0.33323568,  0.39088345,  0.2545932 , ...,  0.09935924,0.3244992 ,  0.21726802],[-0.174697  , -0.10738784, -0.13876465, ...,  0.26119906,0.6401926 ,  0.5791291 ]]]],shape=(1, 1000, 4, 520), dtype=float32)
+    array([[[[ 0.6634378 ,  0.6169362 , -0.06777032, ...,  0.24090117,0.51582766, -0.03503984],[-0.4953873 ,  0.08388099, -0.16834725, ..., -0.70010644,-0.7867058 , -0.6633706 ],[ 0.375142  ,  0.38232404,  0.4597589 , ...,  0.08939397,0.32362548,  0.07644345],[-0.13476345, -0.05726664, -0.14684613, ...,  0.30758998,0.4406914 ,  0.61211264]],[[ 0.53475296,  0.69193393,  0.24098027, ..., -0.29567444,-0.20738937,  0.16145243],[ 0.12200642,  0.12122802, -0.19147074, ...,  0.49909022,-0.41766465, -0.1287129 ],[ 0.42840877,  0.41377234,  0.5296445 , ...,  0.15172422,0.36883867,  0.15153559],[-0.12126946, -0.07619072, -0.19315448, ...,  0.329552  ,0.45088553,  0.50865555]],[[ 0.1285008 ,  0.7096842 ,  0.420928  , ..., -1.2165122 ,-0.3483736 ,  0.9254668 ],...0.5159744 ,  0.61111456]],[[-0.58004427,  0.75999916, -0.1207087 , ..., -0.45734277,-0.04799496,  0.0933107 ],[ 0.01794273,  0.03139809, -0.04133908, ..., -1.0406882 ,-0.626698  , -0.19803485],[ 0.41914323,  0.36795348,  0.45770162, ...,  0.14247032,0.39140967,  0.09570883],[-0.13599291, -0.0720389 , -0.16114299, ...,  0.29342052,0.38109827,  0.56052613]],[[ 0.12025568,  0.71024704, -0.00507576, ..., -0.58472   ,-0.2070006 , -0.42924836],[ 0.24215773,  0.122634  , -0.16413112, ...,  0.00517759,-0.01605069, -0.3563016 ],[ 0.4255935 ,  0.38550544,  0.52204   , ...,  0.06299126,0.39817476,  0.10812786],[-0.1544634 , -0.06394437, -0.19075403, ...,  0.2736828 ,0.41701454,  0.6431729 ]]]],shape=(1, 1000, 4, 525), dtype=float32)
 
 
 b_scale_store
@@ -2262,7 +2273,7 @@ b_scale_store
 float32
 
 
-0.4211 0.1383 ... 0.05286 0.05782
+0.423 0.1396 ... 0.07771 0.07452
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2270,7 +2281,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.42105007, 0.1383232 , 0.18002   , ..., 0.2038652 ,0.05850126, 0.5463838 ],[0.31641024, 0.02595679, 0.5805648 , ..., 0.21245587,0.16396692, 0.64148325],[0.05801855, 0.23624426, 0.07748052, ..., 0.07111645,0.04147619, 0.0851369 ],[0.06826492, 0.00454931, 0.10656209, ..., 0.0725597 ,0.03779022, 0.02867362]],[[0.48034543, 0.1528588 , 0.21853566, ..., 0.20255598,0.22881883, 0.5677708 ],[0.20059258, 0.07014091, 0.09907395, ..., 0.1572279 ,0.11306201, 0.38199198],[0.02575796, 0.23308755, 0.03157636, ..., 0.01804068,0.04207972, 0.08006065],[0.00495191, 0.01390419, 0.02763122, ..., 0.09513751,0.13219555, 0.09192435]],[[0.434429  , 0.09746231, 0.23265637, ..., 0.14950104,0.23741223, 0.09606674],...0.02629862, 0.06952746]],[[0.5804471 , 0.34387618, 0.31099313, ..., 0.20951234,0.458105  , 0.14025812],[0.338149  , 0.17689268, 0.42562014, ..., 0.22784273,0.3030713 , 0.53049713],[0.02049752, 0.2602991 , 0.03141032, ..., 0.00986498,0.04508592, 0.13850527],[0.02642063, 0.02895456, 0.02190295, ..., 0.03528734,0.26742893, 0.05654936]],[[0.22688743, 0.0677025 , 0.19491038, ..., 0.22725148,0.21071336, 0.42996585],[0.11351094, 0.10801568, 0.1750502 , ..., 0.28481746,0.16037919, 0.31000838],[0.01012316, 0.28337845, 0.04082821, ..., 0.09619088,0.1300085 , 0.7776074 ],[0.01284789, 0.03248451, 0.04190164, ..., 0.03807579,0.05285703, 0.05782085]]]],shape=(1, 1000, 4, 520), dtype=float32)
+    array([[[[0.4230475 , 0.13955264, 0.16155809, ..., 0.6550917 ,0.16059199, 0.12655844],[0.162384  , 0.09552284, 0.14037772, ..., 0.10241273,0.07137632, 0.34291345],[0.04162382, 0.26114225, 0.34638175, ..., 0.04502593,0.03886238, 0.16847722],[0.04578863, 0.02978355, 0.04536707, ..., 0.11769857,0.17123345, 0.06802452]],[[0.43359065, 0.228409  , 0.06642503, ..., 0.12547252,0.13275412, 0.22317304],[0.286182  , 0.14006773, 0.15636557, ..., 0.32379112,0.18927151, 0.20385468],[0.01725207, 0.21060364, 0.47097138, ..., 0.04963075,0.05020684, 0.06287124],[0.0412991 , 0.00584011, 0.00533977, ..., 0.07292826,0.13651115, 0.0255849 ]],[[0.35551077, 0.21033037, 0.09092309, ..., 0.08433606,0.19185735, 0.27723262],...0.11782194, 0.0119146 ]],[[0.34061763, 0.15142506, 0.06434652, ..., 0.30605352,0.13350068, 0.1968162 ],[0.57687616, 0.08719654, 0.08686897, ..., 0.19955218,0.10932659, 0.44803646],[0.0372652 , 0.30796817, 0.45720205, ..., 0.19686785,0.07692018, 0.02881929],[0.00626899, 0.05113015, 0.01511661, ..., 0.02853952,0.07433058, 0.19686562]],[[0.09895271, 0.34303504, 0.7393347 , ..., 0.8095851 ,0.10997299, 0.06580724],[0.2641446 , 0.19088712, 0.05009541, ..., 0.16627003,0.19560875, 0.1780622 ],[0.01886827, 0.2315493 , 0.42209992, ..., 0.06372315,0.11896034, 0.10059914],[0.02267507, 0.00925326, 0.01021966, ..., 0.05208332,0.07770833, 0.07452239]]]],shape=(1, 1000, 4, 525), dtype=float32)
 
 
 centered_b
@@ -2282,7 +2293,7 @@ centered_b
 float32
 
 
-0.2623 0.2655 ... 0.2611 0.2609
+0.279 0.282 ... 0.2778 0.2776
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2290,7 +2301,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.26233548, 0.26549035, 0.26480514, 0.27075672, 0.2645799 ,0.25479868, 0.27248734, 0.26280552, 0.26650658, 0.26932094,0.26730692, 0.26439437, 0.26215747, 0.26810533, 0.26142687,0.2647225 , 0.26326337, 0.26595047, 0.26900443, 0.26258862,0.26737693, 0.26513466, 0.26389733, 0.26666996, 0.26159397,0.25834355, 0.2617045 , 0.26345554, 0.26948476, 0.26459652,0.26470765, 0.26578158, 0.26507854, 0.26038003, 0.26427913,0.26780644, 0.26221538, 0.26024058, 0.26643884, 0.26383096,0.2625572 , 0.25497437, 0.26644352, 0.26738983, 0.27038604,0.268384  , 0.26131558, 0.27050158, 0.2701728 , 0.26418036,0.26525983, 0.26156303, 0.2642218 , 0.2624453 , 0.2632251 ,0.2688676 , 0.26596558, 0.26000926, 0.26312163, 0.26687527,0.26388362, 0.26027644, 0.26883367, 0.26514766, 0.25908163,0.2669189 , 0.26677173, 0.26325932, 0.2623442 , 0.2601748 ,0.26557723, 0.2635987 , 0.26475415, 0.2682131 , 0.26537776,0.26832917, 0.2649922 , 0.26484057, 0.2659333 , 0.26063088,0.26039165, 0.26054186, 0.26932883, 0.2596511 , 0.2644878 ,0.26578188, 0.26611432, 0.26501253, 0.2569378 , 0.2669405 ,0.26172683, 0.26511312, 0.26498663, 0.27080092, 0.2653688 ,0.25942817, 0.26441082, 0.26284462, 0.27209255, 0.26539022,...0.26358685, 0.26320064, 0.2693098 , 0.25939497, 0.26086462,0.26869366, 0.26402253, 0.2662033 , 0.26436332, 0.26991302,0.25727707, 0.2706602 , 0.25924942, 0.26426548, 0.26351097,0.25967494, 0.26724434, 0.26044452, 0.2711084 , 0.26092464,0.26567104, 0.27035886, 0.2618136 , 0.262139  , 0.26658416,0.2649269 , 0.26400897, 0.2660365 , 0.2593376 , 0.2623409 ,0.2629965 , 0.26420066, 0.26925722, 0.2609797 , 0.2677085 ,0.27090248, 0.25864026, 0.26765764, 0.2633785 , 0.2655388 ,0.26392406, 0.26510254, 0.2620825 , 0.25972676, 0.26731643,0.27035835, 0.2697992 , 0.2637028 , 0.26549315, 0.26483706,0.26661128, 0.2652191 , 0.26892903, 0.2616572 , 0.27020648,0.26719013, 0.2677627 , 0.26460782, 0.26312158, 0.26523906,0.2647263 , 0.26443425, 0.26351357, 0.2676804 , 0.2658947 ,0.26398864, 0.26336983, 0.26456368, 0.26373973, 0.2634533 ,0.26370606, 0.26270792, 0.2611336 , 0.26478115, 0.26357445,0.2669539 , 0.25916097, 0.2592719 , 0.26496696, 0.26689798,0.26138535, 0.2642705 , 0.26630583, 0.2657603 , 0.26549116,0.25885347, 0.27451038, 0.26526484, 0.2676412 , 0.262451  ,0.26600066, 0.26307383, 0.2669383 , 0.26111427, 0.26093325]],dtype=float32)
+    array([[0.27896762, 0.28203326, 0.28136772, 0.28714398, 0.28114888,0.27163142, 0.2888216 , 0.2794246 , 0.28302014, 0.28575143,0.28379712, 0.28096867, 0.2787946 , 0.284572  , 0.27808416,0.28128743, 0.27986962, 0.28248012, 0.2854444 , 0.27921376,0.28386506, 0.28168783, 0.28048572, 0.28317878, 0.27824667,0.2750842 , 0.27835417, 0.2800564 , 0.2859104 , 0.28116506,0.28127304, 0.28231615, 0.28163332, 0.27706596, 0.2808567 ,0.2842819 , 0.2788509 , 0.2769303 , 0.28295437, 0.28042123,0.2791832 , 0.27180263, 0.28295892, 0.28387755, 0.28678453,0.2848424 , 0.27797595, 0.2868966 , 0.28657773, 0.28076074,0.28180942, 0.2782166 , 0.28080097, 0.27907443, 0.27983242,0.28531164, 0.2824948 , 0.27670524, 0.27973184, 0.2833781 ,0.28047237, 0.2769652 , 0.28527874, 0.28170046, 0.2758026 ,0.2834204 , 0.28327754, 0.27986568, 0.27897614, 0.27686632,0.28211764, 0.28019553, 0.28131816, 0.2846766 , 0.28192395,0.28478923, 0.28154945, 0.28140214, 0.2824635 , 0.27730998,0.27707726, 0.27722338, 0.28575912, 0.2763568 , 0.28105944,0.28231642, 0.28263924, 0.28156918, 0.27371544, 0.2834414 ,0.2783759 , 0.28166687, 0.28154403, 0.28718683, 0.28191522,0.27613983, 0.28098464, 0.2794626 , 0.288439  , 0.28193602,...0.280184  , 0.27980867, 0.2857406 , 0.27610755, 0.27753732,0.28514287, 0.28060737, 0.28272566, 0.2809385 , 0.28632575,0.27404585, 0.28705037, 0.2759659 , 0.28084347, 0.28011024,0.27637994, 0.28373635, 0.27712873, 0.28748494, 0.27759573,0.28220877, 0.28675815, 0.2784603 , 0.27877662, 0.28309545,0.28148603, 0.28059417, 0.2825637 , 0.27605173, 0.27897292,0.27961025, 0.28078046, 0.28568965, 0.27764928, 0.2841869 ,0.2872853 , 0.27537304, 0.28413752, 0.27998152, 0.28208035,0.2805117 , 0.28165662, 0.27872166, 0.27643037, 0.28380635,0.28675768, 0.28621536, 0.28029668, 0.28203604, 0.2813987 ,0.2831218 , 0.28176984, 0.28537124, 0.27830818, 0.28661036,0.28368375, 0.28423947, 0.28117606, 0.27973178, 0.28178924,0.28129113, 0.2810074 , 0.28011277, 0.2841596 , 0.282426  ,0.2805744 , 0.27997312, 0.28113315, 0.28033257, 0.2800542 ,0.2802998 , 0.27932972, 0.27779898, 0.2813444 , 0.28017193,0.28345442, 0.2758798 , 0.27598774, 0.28152493, 0.28340012,0.2780438 , 0.28084832, 0.2828252 , 0.28229547, 0.2820341 ,0.27558053, 0.29078162, 0.28181425, 0.28412154, 0.27907997,0.28252888, 0.2796854 , 0.28343928, 0.27778015, 0.27760407]],dtype=float32)
 
 
 centered_drift
@@ -2302,7 +2313,7 @@ centered_drift
 float32
 
 
-0.102 0.1015 ... 0.1005 0.1008
+0.1012 0.1006 0.101 ... 0.09962 0.1
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2310,7 +2321,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.10200903, 0.10147061, 0.10184262, 0.10072391, 0.10047265,0.10119418, 0.10046414, 0.10142997, 0.10188889, 0.10091409,0.10174067, 0.10060004, 0.10182583, 0.10226828, 0.10108209,0.10147981, 0.10189167, 0.10222016, 0.10018819, 0.1015973 ,0.10145976, 0.10162587, 0.10127162, 0.10070696, 0.10078317,0.10150455, 0.10186842, 0.10118937, 0.10154779, 0.10139094,0.10080479, 0.10096683, 0.10102694, 0.10151596, 0.102057  ,0.10231588, 0.10150627, 0.10130467, 0.10131959, 0.10100754,0.10127474, 0.10152092, 0.10154755, 0.10110923, 0.10146827,0.10142217, 0.10087577, 0.10233668, 0.10238623, 0.10083882,0.10044427, 0.10169434, 0.10121613, 0.10175073, 0.10178118,0.10125247, 0.10251349, 0.10148335, 0.10149491, 0.10083044,0.1014469 , 0.10148546, 0.10162747, 0.10139471, 0.10057282,0.10118549, 0.10123903, 0.10165429, 0.10201883, 0.10184818,0.10119689, 0.10080298, 0.10165287, 0.10215403, 0.10084324,0.10167587, 0.10150154, 0.10115702, 0.10119887, 0.1013312 ,0.10072396, 0.10154606, 0.10126975, 0.10261185, 0.10172734,0.10134908, 0.10093088, 0.10075936, 0.10231053, 0.10154015,0.1017824 , 0.10201056, 0.10113538, 0.10165185, 0.10130633,0.10182794, 0.10047434, 0.10207901, 0.10155714, 0.10194006,...0.10173994, 0.10141982, 0.10151231, 0.10196619, 0.10154743,0.10202955, 0.1012869 , 0.10212576, 0.10186205, 0.10088629,0.10160609, 0.10222112, 0.10195988, 0.10296995, 0.10169876,0.10092045, 0.10138222, 0.10061155, 0.1011885 , 0.1010829 ,0.10109528, 0.10131344, 0.10082092, 0.10181584, 0.10227651,0.10054763, 0.10136829, 0.1015736 , 0.10100912, 0.10159831,0.10083707, 0.1019623 , 0.10115312, 0.10135324, 0.10089383,0.1019498 , 0.10190248, 0.10236104, 0.10117512, 0.10056707,0.10120717, 0.10063843, 0.10068265, 0.10071977, 0.10282162,0.1017727 , 0.10126705, 0.10158356, 0.10154911, 0.10188287,0.10162127, 0.1008053 , 0.10176098, 0.10067765, 0.10133233,0.10173839, 0.10220788, 0.10127144, 0.10139368, 0.10223482,0.1018373 , 0.10075901, 0.10177448, 0.10141557, 0.10133152,0.10150285, 0.10170973, 0.10095934, 0.10105994, 0.10144672,0.10084407, 0.1006033 , 0.10182112, 0.10206961, 0.10044647,0.10120528, 0.10175355, 0.10181423, 0.10229731, 0.10118724,0.1008775 , 0.10094085, 0.10145411, 0.10108715, 0.10132276,0.1016441 , 0.10146501, 0.10147661, 0.10165174, 0.10108821,0.1009978 , 0.10131455, 0.10088122, 0.1004556 , 0.10083622]],dtype=float32)
+    array([[0.10117728, 0.10063716, 0.10101034, 0.09988818, 0.09963614,0.10035985, 0.09962759, 0.10059638, 0.10105675, 0.10007892,0.10090808, 0.09976391, 0.10099351, 0.10143735, 0.10024744,0.10064639, 0.10105958, 0.1013891 , 0.09935083, 0.10076426,0.1006263 , 0.10079291, 0.10043755, 0.09987115, 0.09994762,0.10067121, 0.10103623, 0.10035503, 0.10071459, 0.10055725,0.09996932, 0.10013182, 0.10019209, 0.10068265, 0.10122539,0.10148513, 0.10067294, 0.10047071, 0.10048569, 0.10017265,0.10044067, 0.10068764, 0.10071436, 0.10027467, 0.10063481,0.10058857, 0.10004047, 0.10150599, 0.1015557 , 0.10000341,0.09960766, 0.10086159, 0.1003819 , 0.10091818, 0.10094874,0.10041834, 0.10168338, 0.10064993, 0.10066155, 0.09999502,0.10061338, 0.10065206, 0.10079451, 0.10056103, 0.09973662,0.10035114, 0.10040486, 0.10082141, 0.10118714, 0.10101593,0.10036259, 0.09996747, 0.10082001, 0.10132276, 0.10000785,0.10084306, 0.10066819, 0.1003226 , 0.10036457, 0.10049732,0.09988821, 0.10071287, 0.10043568, 0.10178205, 0.10089469,0.10051523, 0.10009576, 0.09992371, 0.10147976, 0.10070693,0.10094994, 0.10117881, 0.10030089, 0.10081898, 0.10047236,0.10099563, 0.09963786, 0.1012475 , 0.10072396, 0.1011081 ,...0.10090732, 0.10058621, 0.10067901, 0.1011343 , 0.10071424,0.10119787, 0.10045289, 0.10129439, 0.10102984, 0.10005101,0.10077307, 0.10139006, 0.10112797, 0.10214133, 0.10086603,0.10008532, 0.10054851, 0.09977545, 0.10035418, 0.10024825,0.10026067, 0.1004795 , 0.09998547, 0.10098349, 0.10144562,0.09971137, 0.10053453, 0.1007405 , 0.10017423, 0.10076528,0.10000167, 0.1011304 , 0.10031868, 0.10051943, 0.10005859,0.10111786, 0.1010704 , 0.10153043, 0.10034074, 0.09973086,0.1003729 , 0.09980242, 0.09984679, 0.09988402, 0.1019925 ,0.10094021, 0.10043298, 0.10075045, 0.1007159 , 0.10105072,0.10078828, 0.0999698 , 0.10092846, 0.09984177, 0.10049844,0.10090578, 0.10137676, 0.1004374 , 0.10056002, 0.10140379,0.101005  , 0.09992337, 0.10094198, 0.10058194, 0.10049765,0.1006695 , 0.10087704, 0.10012431, 0.10022523, 0.1006132 ,0.10000871, 0.09976721, 0.10098877, 0.10123806, 0.09960989,0.10037103, 0.100921  , 0.10098187, 0.1014665 , 0.10035293,0.10004221, 0.10010578, 0.10062061, 0.10025251, 0.10048885,0.10081119, 0.10063152, 0.10064318, 0.10081887, 0.1002536 ,0.10016289, 0.10048062, 0.10004595, 0.09961905, 0.10000081]],dtype=float32)
 
 
 drift
@@ -2322,7 +2333,7 @@ drift
 float32
 
 
--0.002989 0.01071 ... 0.00557
+-0.002985 0.01072 ... 0.005596
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2330,7 +2341,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-2.98885047e-03,  1.07113663e-02, -1.00465706e-02, ...,1.16400998e-02, -1.83755509e-03,  1.18578393e-02],[-5.35391737e-03,  2.56952690e-03,  2.13143639e-02, ...,-1.45548093e-03,  1.93246198e-03,  4.43763435e-02],[-5.19732106e-03,  5.33684483e-03, -5.38071363e-05, ...,9.20048822e-03, -1.11264619e-03,  2.65611894e-02],...,[-7.13699404e-03, -2.51443544e-03,  6.93696411e-03, ...,-1.80137083e-02, -1.81537587e-03,  2.23888606e-02],[ 5.45486691e-04, -8.45727231e-03, -2.89987493e-03, ...,-5.62306726e-03, -3.58525105e-03,  3.97494882e-02],[-5.33199869e-03,  4.86604264e-03, -1.55661386e-02, ...,7.25381915e-03, -3.95621452e-03,  4.88639511e-02]],[[-3.35268211e-03, -6.41041494e-04, -1.32722897e-03, ...,2.84257787e-03, -2.39744247e-03, -7.95080035e-04],[-7.98275787e-03, -6.39885082e-04, -9.78414249e-03, ...,-5.64473774e-03, -5.79305459e-03, -9.75012546e-04],[ 4.06606402e-03, -6.09052717e-04,  5.36730094e-03, ...,1.27980905e-03,  5.97285572e-03,  3.42376065e-03],...2.08267812e-02,  2.32245098e-03,  2.57462226e-02],[-2.67390232e-03, -1.07359339e-03,  1.18538961e-02, ...,-1.25873536e-02, -2.74756155e-03, -2.48940341e-04],[-3.07031139e-03, -6.89171627e-03,  1.09405280e-03, ...,-2.29067495e-03,  4.51709377e-03,  2.47531483e-04]],[[-3.97022162e-03,  5.69164113e-04,  2.02960558e-02, ...,-4.84618684e-03,  5.81624219e-03,  6.50619040e-04],[ 6.34197332e-03,  9.91552416e-03, -1.33768760e-03, ...,-5.55246184e-03, -9.63734929e-03, -1.89695042e-02],[-2.03325767e-02,  4.83612111e-03, -1.55277587e-02, ...,2.33469778e-04, -4.81401011e-03, -2.19891546e-03],...,[-1.05354504e-03, -8.98832269e-03,  1.68784102e-03, ...,7.59037444e-03,  7.87356310e-03, -4.70034871e-03],[-6.35251729e-03, -5.75470412e-03, -1.31127564e-02, ...,2.34250375e-03,  2.70218123e-03,  7.87812471e-03],[ 1.51919834e-02,  7.67166493e-03,  6.53121737e-04, ...,1.17621152e-02,  6.50672242e-03,  5.56968385e-03]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[-2.98453611e-03,  1.07197389e-02, -1.00880796e-02, ...,1.16754649e-02, -1.82326033e-03,  1.18516451e-02],[-5.34413755e-03,  2.55829166e-03,  2.13366766e-02, ...,-1.47428585e-03,  1.92795461e-03,  4.43835594e-02],[-5.19011589e-03,  5.34082437e-03, -6.05897840e-05, ...,9.24146362e-03, -1.10151467e-03,  2.65969038e-02],...,[-7.12744612e-03, -2.52354611e-03,  6.95315236e-03, ...,-1.81192774e-02, -1.80662586e-03,  2.24016290e-02],[ 5.44686394e-04, -8.48154817e-03, -2.90423771e-03, ...,-5.65724261e-03, -3.56679945e-03,  3.97514068e-02],[-5.32461656e-03,  4.87960828e-03, -1.55994762e-02, ...,7.29289884e-03, -3.93646769e-03,  4.88681868e-02]],[[-3.35338153e-03, -6.39075704e-04, -1.33155019e-03, ...,2.83864862e-03, -2.38075526e-03, -8.01277172e-04],[-7.98149873e-03, -6.36599667e-04, -9.77581833e-03, ...,-5.64204529e-03, -5.77809522e-03, -9.82625526e-04],[ 4.06948430e-03, -6.07740309e-04,  5.36739919e-03, ...,1.27415138e-03,  5.92890754e-03,  3.43945366e-03],...2.09248457e-02,  2.31279782e-03,  2.58294623e-02],[-2.67382665e-03, -1.07374624e-03,  1.18557736e-02, ...,-1.26505867e-02, -2.73674913e-03, -2.48583645e-04],[-3.06990044e-03, -6.88877329e-03,  1.09469076e-03, ...,-2.30204244e-03,  4.49879467e-03,  2.48966448e-04]],[[-3.96813313e-03,  5.60333603e-04,  2.03911066e-02, ...,-4.86969808e-03,  5.79264807e-03,  6.51504961e-04],[ 6.33711740e-03,  9.89574566e-03, -1.35269552e-03, ...,-5.54752396e-03, -9.63224564e-03, -1.90676507e-02],[-2.03256570e-02,  4.83606989e-03, -1.56136500e-02, ...,2.23776660e-04, -4.78371698e-03, -2.21509603e-03],...,[-1.05320697e-03, -9.00771748e-03,  1.69532874e-03, ...,7.61329150e-03,  7.85449054e-03, -4.72100358e-03],[-6.34991471e-03, -5.76646859e-03, -1.31597752e-02, ...,2.34867795e-03,  2.69524311e-03,  7.91497901e-03],[ 1.51852118e-02,  7.68641662e-03,  6.57123281e-04, ...,1.17993280e-02,  6.49070647e-03,  5.59609383e-03]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 drift_decentered
@@ -2342,7 +2353,7 @@ drift_decentered
 float32
 
 
--0.3274 0.8124 ... 0.6139 0.5427
+-0.3287 0.8143 ... 0.6163 0.5451
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2350,7 +2361,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.3274039 ,  0.8124239 , -0.5890946 , ...,  0.5498305 ,-0.28900805,  0.280123  ],[-0.58647746,  0.19489063,  1.2497972 , ..., -0.06875094,0.30393487,  1.0483221 ],[-0.56932366,  0.40478313, -0.00315506, ...,  0.43459326,-0.17499541,  0.62746674],...,[-0.78179884, -0.19071212,  0.4067585 , ..., -0.85089356,-0.28551975,  0.528902  ],[ 0.05975357, -0.64145786, -0.17003818, ..., -0.2656106 ,-0.5638832 ,  0.9390198 ],[-0.58407646,  0.36907423, -0.9127421 , ...,  0.3426406 ,-0.6222278 ,  1.1543348 ]],[[-0.24850877, -0.21949759, -0.14907843, ...,  0.23381662,-0.32858893, -0.05924674],[-0.59170103, -0.21910162, -1.098985  , ..., -0.46430868,-0.79398507, -0.07265472],[ 0.30138633, -0.20854439,  0.6028717 , ...,  0.10527086,0.81862825,  0.25512734],...0.29416224,  1.4914079 ],[-0.21773407, -0.14288896,  1.1872112 , ..., -0.73009396,-0.34800684, -0.01442043],[-0.25001338, -0.91724694,  0.10957339, ..., -0.13286415,0.5721363 ,  0.01433882]],[[-0.35150638,  0.0503104 ,  0.8073027 , ..., -0.43244722,0.5487591 ,  0.06339869],[ 0.56149113,  0.87646765, -0.05320831, ..., -0.49547133,-0.9092784 , -1.8484576 ],[-1.8001591 ,  0.42748156, -0.61763734, ...,  0.02083357,-0.45419908, -0.21427032],...,[-0.09327636, -0.7945091 ,  0.06713613, ...,  0.6773235 ,0.7428661 , -0.4580191 ],[-0.56242466, -0.5086783 , -0.5215774 , ...,  0.20903222,0.25494924,  0.76767313],[ 1.345033  ,  0.67812514,  0.02597879, ...,  1.0495869 ,0.6139055 ,  0.5427303 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[-0.32874167,  0.8142943 , -0.59268385, ...,  0.550921  ,-0.28938136,  0.28118688],[-0.58864784,  0.1943333 ,  1.2535491 , ..., -0.06956597,0.30599806,  1.0530246 ],[-0.57168263,  0.40570045, -0.0035597 , ...,  0.43606973,-0.17482847,  0.6310263 ],...,[-0.7850763 , -0.19169396,  0.408504  , ..., -0.8549802 ,-0.2867412 ,  0.5314911 ],[ 0.0599963 , -0.6442765 , -0.17062661, ..., -0.26694387,-0.56610966,  0.9431243 ],[-0.58649766,  0.3706655 , -0.9164834 , ...,  0.34412432,-0.6247821 ,  1.1594249 ]],[[-0.24952   , -0.22105698, -0.15025268, ...,  0.23371087,-0.32903874, -0.05974253],[-0.59389114, -0.22020051, -1.1031075 , ..., -0.46451938,-0.7985773 , -0.0732637 ],[ 0.3028041 , -0.21021804,  0.6056596 , ...,  0.10490309,0.8194207 ,  0.2564427 ],...0.2952684 ,  1.4983544 ],[-0.21865469, -0.14358534,  1.1923046 , ..., -0.7335213 ,-0.34939307, -0.01442022],[-0.251044  , -0.92119235,  0.11009023, ..., -0.13347974,0.57434845,  0.01444242]],[[-0.3529439 ,  0.04964776,  0.81137764, ..., -0.4350752 ,0.5500046 ,  0.06346655],[ 0.56365216,  0.87680185, -0.05382478, ..., -0.49563444,-0.91456956, -1.8574809 ],[-1.8078568 ,  0.42849475, -0.621279  , ...,  0.01999296,-0.45420787, -0.21578424],...,[-0.09367704, -0.79811907,  0.06745842, ...,  0.68019706,0.745774  , -0.459898  ],[-0.5647904 , -0.51093173, -0.5236375 , ...,  0.20983878,0.25590992,  0.7710401 ],[ 1.3506421 ,  0.68104666,  0.02614744, ...,  1.0541916 ,0.6162844 ,  0.54514515]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 drift_scale
@@ -2362,7 +2373,7 @@ drift_scale
 float32
 
 
-0.005355 0.008063 ... 0.006141
+0.005348 0.008086 ... 0.006172
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2370,7 +2381,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.00535464, 0.00806319, 0.01073926, ..., 0.01366267,0.00357928, 0.02955624],[0.00829617, 0.00151088, 0.00522363, ..., 0.00738853,0.00418577, 0.00824733],[0.01448783, 0.00995138, 0.00645197, ..., 0.00821516,0.00729921, 0.01327808],...,[0.00611331, 0.00402399, 0.00715354, ..., 0.00342364,0.00558669, 0.008528  ],[0.00751337, 0.00435139, 0.00596913, ..., 0.01095532,0.0045978 , 0.01097107],[0.00683161, 0.00684384, 0.0166336 , ..., 0.00677214,0.00636509, 0.00614071]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.00534766, 0.00808557, 0.01076103, ..., 0.01373313,0.00356174, 0.02951076],[0.00829748, 0.00150295, 0.00522238, ..., 0.00741454,0.00416817, 0.00827884],[0.01451711, 0.00998908, 0.00645471, ..., 0.00824639,0.00728659, 0.01330221],...,[0.00610804, 0.00402172, 0.00715889, ..., 0.00342869,0.00557038, 0.00855938],[0.00751207, 0.00435057, 0.0059702 , ..., 0.01100537,0.00458039, 0.01099982],[0.00682826, 0.00685743, 0.01669024, ..., 0.0067944 ,0.00635021, 0.00617181]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 floor
@@ -2382,7 +2393,7 @@ floor
 float32
 
 
-0.04987 0.09404 ... 0.02281 0.0975
+0.04989 0.09414 ... 0.02286 0.09757
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2390,7 +2401,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.04987008, 0.09403825, 0.02455026, ..., 0.0471703 ,0.0264982 , 0.18505833],[0.03545643, 0.03019552, 0.04755045, ..., 0.07297904,0.05487986, 0.11232934],[0.06460002, 0.12286674, 0.01205032, ..., 0.05606999,0.03977155, 0.03879504],...,[0.08200859, 0.09337291, 0.01362799, ..., 0.0370608 ,0.04156823, 0.09276836],[0.04082322, 0.00847312, 0.01645038, ..., 0.04436991,0.09965207, 0.14226629],[0.01980396, 0.04671904, 0.01851355, ..., 0.0437461 ,0.02280968, 0.09749652]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.04988556, 0.09413762, 0.02455633, ..., 0.04724199,0.0265544 , 0.18520959],[0.03545798, 0.03020883, 0.04754414, ..., 0.07299061,0.05502055, 0.11241651],[0.06463285, 0.12301157, 0.01205828, ..., 0.05612478,0.03986605, 0.03881824],...,[0.08206479, 0.09347127, 0.01363603, ..., 0.03714534,0.0416681 , 0.09283796],[0.04082952, 0.00847051, 0.01645827, ..., 0.04444589,0.0999362 , 0.14238022],[0.01979568, 0.04675123, 0.01852116, ..., 0.04382297,0.02285582, 0.09757037]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 init_level
@@ -2402,7 +2413,7 @@ init_level
 float32
 
 
-1.032 1.005 1.051 ... 0.8267 0.5118
+1.032 1.005 1.052 ... 0.8266 0.5136
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2410,7 +2421,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[1.0315595 , 1.0054557 , 1.0512366 , ..., 0.6835014 ,0.8497987 , 0.40620345],[0.9901402 , 0.991026  , 1.0456327 , ..., 0.6507294 ,0.8222531 , 0.5003004 ],[1.0578299 , 1.0598993 , 0.98908925, ..., 0.6331284 ,0.8472848 , 0.6067999 ],...,[1.0135481 , 1.0334213 , 0.97165596, ..., 0.67463905,0.82708234, 0.5061352 ],[0.98273915, 1.0241371 , 0.9545655 , ..., 0.6881134 ,0.79352987, 0.4945127 ],[0.97720075, 0.98367965, 1.0147444 , ..., 0.61759174,0.8267136 , 0.5117955 ]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[1.0315963 , 1.0052552 , 1.0516688 , ..., 0.6833679 ,0.8497165 , 0.40748718],[0.9902873 , 0.99090177, 1.0460571 , ..., 0.6506574 ,0.8221901 , 0.5020469 ],[1.0577967 , 1.0594106 , 0.98943436, ..., 0.6330895 ,0.8472043 , 0.6090702 ],...,[1.0136329 , 1.0330727 , 0.9719767 , ..., 0.67452216,0.82701594, 0.50791043],[0.982906  , 1.0238377 , 0.95486236, ..., 0.6879712 ,0.7934869 , 0.49623075],[0.9773823 , 0.9835943 , 1.0151255 , ..., 0.61758196,0.82664746, 0.51359856]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 noise_loading
@@ -2422,7 +2433,7 @@ noise_loading
 float32
 
 
-0.063 0.03913 ... 0.04601 0.1161
+0.06268 0.03881 ... 0.04618 0.1144
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2430,7 +2441,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.06300467, 0.03912514, 0.04147755, ..., 0.03326455,0.03198916, 0.18956716],[0.05048452, 0.03433239, 0.0786994 , ..., 0.04368647,0.06976815, 0.13635592],[0.04070584, 0.04562899, 0.03758578, ..., 0.04108103,0.03204321, 0.161661  ],...,[0.03843369, 0.05684227, 0.03812158, ..., 0.05204021,0.03857201, 0.08197345],[0.02596977, 0.0618213 , 0.04851258, ..., 0.0292407 ,0.03745   , 0.08897512],[0.03431905, 0.02765489, 0.0211112 , ..., 0.02465225,0.04600977, 0.11610676]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.06267647, 0.03881234, 0.04150421, ..., 0.03326485,0.0322169 , 0.187872  ],[0.05026092, 0.0340413 , 0.07860138, ..., 0.04375925,0.06976935, 0.13458848],[0.04055644, 0.04529017, 0.03762088, ..., 0.04113409,0.03227085, 0.15990098],...,[0.03830041, 0.05646647, 0.03815557, ..., 0.05218233,0.0387807 , 0.08040461],[0.02591563, 0.06143182, 0.04852134, ..., 0.02921808,0.03766271, 0.08736055],[0.03421373, 0.02739829, 0.02116689, ..., 0.02460766,0.04618474, 0.11437476]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 phi_trend
@@ -2442,7 +2453,7 @@ phi_trend
 float32
 
 
-0.4503 0.352 ... 0.3154 0.4761
+0.4502 0.3519 ... 0.3158 0.4754
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2450,7 +2461,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.45032   , 0.35195625, 0.25650853, ..., 0.26384676,0.32993296, 0.37358183],[0.52015275, 0.30666614, 0.46984968, ..., 0.21059105,0.35017806, 0.35172603],[0.5205934 , 0.35759333, 0.41276425, ..., 0.23865275,0.39957234, 0.4769194 ],...,[0.5014282 , 0.42440665, 0.2874285 , ..., 0.3466804 ,0.4057308 , 0.5295952 ],[0.42061874, 0.24605444, 0.33961415, ..., 0.34252936,0.53967166, 0.56564397],[0.40888572, 0.23757204, 0.47105423, ..., 0.39403316,0.3154485 , 0.4761041 ]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.4502436 , 0.3518548 , 0.25644842, ..., 0.26350144,0.33031818, 0.3728614 ],[0.52007675, 0.30657065, 0.46977085, ..., 0.21028255,0.35057315, 0.35101846],[0.52051735, 0.35749125, 0.41268763, ..., 0.23832329,0.3999854 , 0.47617915],...,[0.5013518 , 0.42429948, 0.28736392, ..., 0.34630126,0.40614545, 0.5288697 ],[0.420543  , 0.24597   , 0.3395433 , ..., 0.34215125,0.54008967, 0.56493783],[0.4088104 , 0.23748939, 0.47097537, ..., 0.39364627,0.3158258 , 0.47536373]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 seasonal
@@ -2462,7 +2473,7 @@ seasonal
 float32
 
 
-0.009561 -0.05798 ... -0.02125
+0.009669 -0.05778 ... -0.02144
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2470,7 +2481,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.00956087, -0.05797532,  0.01289185, ..., -0.01124135,-0.03108806,  0.06137533],[-0.03505449, -0.01905084,  0.11745142, ..., -0.01761758,-0.01758564, -0.00868104],[ 0.00233679,  0.02875559,  0.01504036, ...,  0.02948423,-0.0647293 , -0.05234095],...,[ 0.01067861,  0.00135523,  0.00159928, ..., -0.0748648 ,0.02878699, -0.01405538],[-0.03071514, -0.06157556,  0.06039578, ...,  0.03289732,-0.04549565, -0.01135569],[-0.04460856, -0.02146848,  0.00622398, ...,  0.0888956 ,-0.06263438,  0.02473539]],[[ 0.00296343, -0.02826936,  0.04682698, ...,  0.01206401,-0.02870766, -0.06217404],[-0.07371726, -0.00524618,  0.01244427, ...,  0.03855678,0.07853024, -0.08444241],[ 0.00361296, -0.00821699,  0.02820244, ...,  0.04848316,-0.01702142, -0.0147264 ],...0.03695434,  0.03298304],[-0.06623142, -0.01187318, -0.0132759 , ...,  0.05821058,0.02281078, -0.03975384],[ 0.0002784 , -0.00566969,  0.05026106, ...,  0.04504954,-0.0684071 ,  0.04364699]],[[-0.00299481, -0.02949455,  0.01396809, ..., -0.01490754,-0.02046689,  0.02984412],[-0.03801716,  0.02309235,  0.01445361, ...,  0.00361767,-0.00694137, -0.00613675],[-0.07295831,  0.04749529,  0.03288661, ..., -0.03070429,-0.04326733,  0.0262346 ],...,[ 0.00869107, -0.03245062, -0.02355226, ...,  0.01526209,0.05470578, -0.10482976],[-0.00756898, -0.09592773,  0.0639357 , ...,  0.06290121,-0.05788342, -0.01242638],[-0.02203647,  0.04108404,  0.01294765, ..., -0.0363759 ,0.00833636, -0.02125402]]]],shape=(1, 1000, 1000, 7), dtype=float32)
+    array([[[[ 0.00966931, -0.05778065,  0.01265628, ..., -0.01108061,-0.03090854,  0.06136181],[-0.03477122, -0.01897597,  0.11683023, ..., -0.0175207 ,-0.0174277 , -0.00847934],[ 0.00236645,  0.02875946,  0.01487165, ...,  0.0294683 ,-0.06452661, -0.05218247],...,[ 0.01059692,  0.0012698 ,  0.00192449, ..., -0.07499223,0.02855649, -0.01410497],[-0.0305584 , -0.06145993,  0.06016925, ...,  0.03288057,-0.04544658, -0.01125214],[-0.04452954, -0.02143588,  0.00651977, ...,  0.08872873,-0.06271436,  0.02446105]],[[ 0.00308242, -0.02812478,  0.04653259, ...,  0.01215717,-0.02854483, -0.0619942 ],[-0.07336221, -0.00517656,  0.01205607, ...,  0.03863324,0.07845505, -0.0840665 ],[ 0.00364938, -0.00814708,  0.02801563, ...,  0.04844074,-0.01690595, -0.01461865],...0.03670835,  0.03283986],[-0.06605519, -0.01187449, -0.01316834, ...,  0.05814498,0.02277204, -0.0397224 ],[ 0.00027192, -0.00567071,  0.05053806, ...,  0.04493921,-0.06848256,  0.04333288]],[[-0.00286666, -0.02934645,  0.01373013, ..., -0.01474367,-0.02031078,  0.02988032],[-0.03773141,  0.02310123,  0.014058  , ...,  0.00369391,-0.00680977, -0.00594394],[-0.07274664,  0.04746445,  0.03268386, ..., -0.03064125,-0.04310394,  0.02624916],...,[ 0.00861286, -0.03249858, -0.023198  , ...,  0.01515118,0.05439434, -0.10477582],[-0.00744769, -0.09575678,  0.06368633, ...,  0.06285559,-0.05782579, -0.01233104],[-0.02199998,  0.04097938,  0.0132631 , ..., -0.03636422,0.00816225, -0.02144237]]]],shape=(1, 1000, 1000, 7), dtype=float32)
 
 
 seasonal_scale
@@ -2482,7 +2493,7 @@ seasonal_scale
 float32
 
 
-0.04323 0.04336 ... 0.0439 0.04362
+0.04305 0.04319 ... 0.04373 0.04345
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2490,7 +2501,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.04322875, 0.04336356, 0.04304946, 0.04366585, 0.04287754,0.04339037, 0.04316967, 0.0421982 , 0.04382411, 0.04372697,0.04336275, 0.04341173, 0.04309391, 0.04325411, 0.04358628,0.04361146, 0.04314669, 0.04291718, 0.04249483, 0.04304069,0.04299839, 0.04350255, 0.04282907, 0.04341662, 0.04339822,0.04330965, 0.04359376, 0.04282482, 0.04383216, 0.04294991,0.04315653, 0.04327794, 0.04329769, 0.04324136, 0.04346867,0.04304013, 0.04307001, 0.04348217, 0.04337754, 0.04343932,0.04332095, 0.04354927, 0.04354881, 0.04301328, 0.04324969,0.04275395, 0.04373461, 0.04289543, 0.04312428, 0.04303712,0.04326146, 0.04331559, 0.042978  , 0.04321187, 0.04288776,0.04269573, 0.04374782, 0.04348957, 0.04282869, 0.04326428,0.0436417 , 0.04337151, 0.04354994, 0.04338058, 0.04302223,0.04335397, 0.04256213, 0.04267624, 0.04331248, 0.04309619,0.04338168, 0.04312943, 0.04310658, 0.04324235, 0.04417701,0.04273943, 0.04358589, 0.04403514, 0.04294303, 0.04275084,0.04314898, 0.0426501 , 0.0430967 , 0.0428238 , 0.04323477,0.04396377, 0.04270663, 0.04389881, 0.04294789, 0.04321359,0.04336986, 0.04347366, 0.04375276, 0.0431978 , 0.0435106 ,0.04400306, 0.04304588, 0.0430486 , 0.04350229, 0.0426559 ,...0.043154  , 0.04280531, 0.04402635, 0.0433495 , 0.04361435,0.04309192, 0.04341808, 0.04294398, 0.0427666 , 0.04328386,0.04324624, 0.04339274, 0.04257418, 0.04353574, 0.04297961,0.04350844, 0.04358373, 0.04310221, 0.04333892, 0.04301902,0.04353072, 0.04294636, 0.04278408, 0.04253123, 0.04320271,0.04314634, 0.04341194, 0.04304275, 0.04330185, 0.0431014 ,0.04294265, 0.04277737, 0.043323  , 0.04354027, 0.04334927,0.04365484, 0.04345117, 0.04291986, 0.0430706 , 0.04316252,0.04306724, 0.0430001 , 0.04347942, 0.04343528, 0.04324457,0.04297731, 0.04358321, 0.04374049, 0.04363283, 0.04309112,0.04374257, 0.04260633, 0.04320884, 0.04332821, 0.04310523,0.04370182, 0.0434755 , 0.04310061, 0.04291433, 0.04361084,0.04303801, 0.04347458, 0.04333552, 0.04258454, 0.04293197,0.04312298, 0.04381014, 0.04251461, 0.04314465, 0.04277023,0.04311198, 0.04333933, 0.04343827, 0.04284963, 0.04319448,0.04291925, 0.04360227, 0.0433718 , 0.04278955, 0.04401878,0.04350941, 0.04354069, 0.04338023, 0.04366054, 0.04298465,0.04321781, 0.0434421 , 0.04297736, 0.04319046, 0.04277753,0.04280677, 0.04310729, 0.04387914, 0.04390493, 0.0436245 ]],dtype=float32)
+    array([[0.0430522 , 0.04318643, 0.04287371, 0.04348738, 0.04270255,0.04321312, 0.04299339, 0.04202619, 0.04364495, 0.04354823,0.04318562, 0.04323438, 0.04291796, 0.04307747, 0.04340817,0.04343323, 0.0429705 , 0.04274201, 0.04232152, 0.04286498,0.04282287, 0.04332481, 0.04265428, 0.04323926, 0.04322094,0.04313275, 0.04341561, 0.04265007, 0.04365297, 0.04277461,0.04298031, 0.04310119, 0.04312085, 0.04306477, 0.04329108,0.04286443, 0.04289418, 0.04330451, 0.04320034, 0.04326186,0.043144  , 0.04337133, 0.04337086, 0.04283769, 0.04307305,0.0425795 , 0.04355584, 0.04272037, 0.0429482 , 0.04286142,0.04308477, 0.04313868, 0.04280256, 0.04303541, 0.04271273,0.04252154, 0.04356901, 0.04331189, 0.04265391, 0.0430876 ,0.04346335, 0.04319434, 0.04337199, 0.04320337, 0.04284661,0.04317688, 0.04238853, 0.04250212, 0.04313558, 0.04292024,0.04320446, 0.04295334, 0.04293058, 0.04306576, 0.04399631,0.04256505, 0.04340778, 0.04385504, 0.04276774, 0.04257641,0.0429728 , 0.0424761 , 0.04292074, 0.04264904, 0.04305821,0.043784  , 0.04253239, 0.04371933, 0.04277259, 0.04303712,0.04319271, 0.04329605, 0.04357391, 0.0430214 , 0.04333282,0.04382311, 0.04287015, 0.04287285, 0.04332455, 0.04248188,...0.04297779, 0.04263063, 0.0438463 , 0.04317242, 0.04343612,0.04291598, 0.0432407 , 0.04276869, 0.0425921 , 0.04310709,0.04306962, 0.04321548, 0.04240052, 0.04335784, 0.04280417,0.04333066, 0.04340562, 0.04292623, 0.0431619 , 0.04284341,0.04335286, 0.04277106, 0.0426095 , 0.04235776, 0.04302628,0.04297017, 0.0432346 , 0.04286703, 0.04312499, 0.04292542,0.04276737, 0.04260281, 0.04314604, 0.04336237, 0.04317221,0.04347643, 0.04327366, 0.04274468, 0.04289476, 0.04298628,0.04289141, 0.04282457, 0.04330178, 0.04325783, 0.04306796,0.04280188, 0.04340511, 0.0435617 , 0.04345452, 0.04291519,0.04356378, 0.04243252, 0.04303239, 0.04315124, 0.04292924,0.0435232 , 0.04329788, 0.04292463, 0.04273916, 0.04343262,0.04286231, 0.04329696, 0.04315851, 0.04241083, 0.04275674,0.0429469 , 0.04363104, 0.04234121, 0.04296847, 0.04259571,0.04293596, 0.04316231, 0.04326081, 0.04267476, 0.04301809,0.04274407, 0.04342409, 0.04319463, 0.04261494, 0.04383877,0.04333164, 0.04336278, 0.04320301, 0.04348211, 0.04280917,0.04304133, 0.04326462, 0.04280193, 0.04301409, 0.04260298,0.0426321 , 0.04293128, 0.04369973, 0.04372541, 0.04344622]],dtype=float32)
 
 
 sigma
@@ -2502,7 +2513,7 @@ sigma
 float32
 
 
-0.1728 0.1769 ... 0.1854 0.3151
+0.1733 0.1775 ... 0.185 0.3182
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2510,7 +2521,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.17282921, 0.17693496, 0.28679824, ..., 0.12429476,0.13206822, 0.30941185],[0.22862288, 0.18526997, 0.22020298, ..., 0.12397757,0.13065411, 0.42027494],[0.18432698, 0.18071245, 0.28276148, ..., 0.14982738,0.14725825, 0.3430943 ],...,[0.1847771 , 0.17919493, 0.21319161, ..., 0.13862173,0.12925315, 0.46628648],[0.1960159 , 0.17813471, 0.26120156, ..., 0.16013558,0.11549912, 0.36633798],[0.19741094, 0.24743408, 0.24587268, ..., 0.12912403,0.18536991, 0.31512374]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.17331633, 0.17754981, 0.28588304, ..., 0.1234877 ,0.13155226, 0.31246585],[0.22943617, 0.18588568, 0.21979226, ..., 0.12317152,0.13013566, 0.4226145 ],[0.18487784, 0.18132785, 0.28187928, ..., 0.1489472 ,0.14677486, 0.3459818 ],...,[0.1853305 , 0.17981014, 0.21282862, ..., 0.13777168,0.12873223, 0.46820334],[0.19663352, 0.17874977, 0.26049057, ..., 0.15923014,0.11495923, 0.36908358],[0.19803667, 0.24802075, 0.24527799, ..., 0.12830189,0.18500619, 0.31815296]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 slope
@@ -2522,7 +2533,7 @@ slope
 float32
 
 
--0.03345 0.02106 ... -0.05876
+-0.0333 0.02117 ... -0.05939
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2530,7 +2541,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-3.34495157e-02,  2.10635327e-02,  2.58427057e-02, ...,-9.36982594e-03,  1.04181087e-02, -3.54602337e-02],[-5.11840824e-03,  1.16037577e-02,  1.41344229e-02, ...,1.26542489e-03, -1.10859042e-02, -2.02848185e-02],[ 1.67249294e-03, -6.20954204e-03, -5.88632515e-03, ...,-3.25256474e-02, -1.35209900e-03, -3.78991067e-02],...,[-1.85873471e-02,  1.57818794e-02, -2.66471431e-02, ...,5.11887204e-03, -5.13703562e-05, -6.07833862e-02],[-9.02725197e-03,  1.03124864e-02, -1.68117620e-02, ...,2.58901529e-02,  6.54008798e-03, -4.41747792e-02],[ 5.90714104e-02,  9.43768211e-03, -3.82812694e-02, ...,-1.72540303e-02, -2.94497926e-02,  2.30965726e-02]],[[-1.11487675e-02,  1.69407316e-02,  2.93317414e-03, ...,-3.44030820e-02,  2.59724818e-03,  1.13629168e-02],[-9.71307606e-03, -4.72927606e-03,  2.20265090e-02, ...,-1.17495926e-02, -3.56911682e-04, -5.26362378e-03],[ 3.73242535e-02, -6.88015949e-03, -2.04350092e-02, ...,-7.64415134e-03, -3.29811173e-03, -4.07273360e-02],...-2.84808148e-02, -7.98860379e-03,  7.75046460e-03],[-6.74106460e-03,  9.75709967e-03, -1.13702752e-02, ...,2.28801090e-03,  3.12302858e-02, -4.03537825e-02],[ 3.71551551e-02,  7.26937829e-03,  8.73142667e-03, ...,-1.04343640e-02,  1.69600882e-02,  1.44198323e-02]],[[ 4.17334847e-02, -1.95697881e-02,  1.19886072e-02, ...,-1.21980775e-02,  2.17427798e-02,  1.99548751e-02],[-2.83908844e-02, -6.12000003e-03,  6.16150210e-03, ...,-2.15857774e-02,  1.16697326e-02, -6.88494695e-03],[-5.43437898e-02, -8.11261311e-03,  9.16755013e-03, ...,2.92341877e-02,  4.57335934e-02,  7.46627748e-02],...,[-2.56485306e-02, -2.04821806e-02, -1.41616259e-02, ...,-1.39387678e-02,  1.83360768e-03, -5.03611416e-02],[ 7.18905684e-03,  1.83932073e-02,  1.04689961e-02, ...,-2.03526989e-02,  6.51011895e-03, -1.77273527e-02],[-4.02009971e-02,  2.46744454e-02, -3.22520896e-03, ...,-8.28396063e-04, -1.29121486e-02, -5.87593466e-02]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[-3.32962386e-02,  2.11742762e-02,  2.58160885e-02, ...,-9.15047433e-03,  1.04005132e-02, -3.61570530e-02],[-5.17329480e-03,  1.17070461e-02,  1.40882526e-02, ...,1.37485936e-03, -1.10842241e-02, -2.07597408e-02],[ 1.61540543e-03, -6.05788035e-03, -5.89835830e-03, ...,-3.21475118e-02, -1.34998618e-03, -3.85936722e-02],...,[-1.85818542e-02,  1.57728214e-02, -2.65973154e-02, ...,5.11599239e-03, -6.25019893e-05, -6.13992885e-02],[-9.02442914e-03,  1.03055555e-02, -1.67679992e-02, ...,2.57735495e-02,  6.52527669e-03, -4.46098857e-02],[ 5.90557121e-02,  9.43517964e-03, -3.81967351e-02, ...,-1.71826445e-02, -2.94222683e-02,  2.34022569e-02]],[[-1.11166639e-02,  1.70546528e-02,  2.91580660e-03, ...,-3.39097865e-02,  2.58990610e-03,  1.14269778e-02],[-9.76557471e-03, -4.59053414e-03,  2.19698120e-02, ...,-1.15612680e-02, -3.43027525e-04, -5.41803427e-03],[ 3.71786617e-02, -6.72534015e-03, -2.04165075e-02, ...,-7.46806851e-03, -3.29635362e-03, -4.14671004e-02],...-2.83314176e-02, -7.99531024e-03,  7.90758990e-03],[-6.73930068e-03,  9.75069962e-03, -1.13364402e-02, ...,2.28236429e-03,  3.11778784e-02, -4.07446064e-02],[ 3.71454656e-02,  7.26855081e-03,  8.72700009e-03, ...,-1.03926361e-02,  1.69235170e-02,  1.46265086e-02]],[[ 4.14782502e-02, -1.94277260e-02,  1.19675845e-02, ...,-1.19477762e-02,  2.17103381e-02,  2.01585554e-02],[-2.84336731e-02, -5.97823970e-03,  6.12596609e-03, ...,-2.13378295e-02,  1.16972970e-02, -7.07395189e-03],[-5.42618148e-02, -7.95199070e-03,  9.12392139e-03, ...,2.91108023e-02,  4.57442887e-02,  7.57671893e-02],...,[-2.56397203e-02, -2.04663277e-02, -1.41346175e-02, ...,-1.38552757e-02,  1.82142504e-03, -5.08594960e-02],[ 7.18436809e-03,  1.83785483e-02,  1.04629863e-02, ...,-2.02519111e-02,  6.49535330e-03, -1.78559572e-02],[-4.01894785e-02,  2.46601701e-02, -3.20701022e-03, ...,-8.28444259e-04, -1.29074659e-02, -5.93876950e-02]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 tau_trend
@@ -2542,7 +2553,7 @@ tau_trend
 float32
 
 
-0.02124 0.02133 ... 0.02082 0.04133
+0.02123 0.02131 ... 0.02077 0.04177
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2550,14 +2561,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.02124109, 0.02132846, 0.01879675, ..., 0.0195722 ,0.02059693, 0.04338111],[0.02435392, 0.0172564 , 0.02241057, ..., 0.01742521,0.02357825, 0.0404405 ],[0.02656629, 0.01825685, 0.02437035, ..., 0.01702492,0.02257176, 0.04194565],...,[0.02482002, 0.01839594, 0.01606937, ..., 0.01835628,0.02490854, 0.0372172 ],[0.02741552, 0.01785041, 0.0199393 , ..., 0.01922768,0.02066401, 0.04292585],[0.02377922, 0.0172871 , 0.0204699 , ..., 0.01875438,0.02081667, 0.04133008]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.02123097, 0.02131038, 0.01876643, ..., 0.01949014,0.0205556 , 0.04384252],[0.02434225, 0.01724175, 0.02237419, ..., 0.01735239,0.02353081, 0.0408706 ],[0.02655353, 0.01824137, 0.02433067, ..., 0.01695382,0.02252639, 0.04239178],...,[0.02480813, 0.01838033, 0.01604361, ..., 0.01827946,0.02485836, 0.03761297],[0.02740234, 0.01783527, 0.01990707, ..., 0.0191471 ,0.02062254, 0.04338242],[0.02376784, 0.01727244, 0.02043678, ..., 0.01867584,0.02077489, 0.04176965]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 Attributes: (6)
 
 
 created_at :  
-2026-07-12T08:01:34.009523+00:00
+2026-07-12T18:09:18.356058+00:00
 
 creation_library :  
 ArviZ
@@ -2681,7 +2692,7 @@ obs
 float32
 
 
-0.09489 0.6722 ... 1.475 0.6046
+0.09493 0.6722 ... 1.389 0.5744
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2689,14 +2700,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.09488568,  0.6722131 ,  1.1528677 , ...,  0.3608521 ,0.62936884,  0.07746825],[ 1.0615821 ,  0.71874034,  1.3380088 , ...,  0.21480674,0.54766077,  0.52777964],[ 1.4796339 ,  1.4130722 ,  1.5716678 , ...,  0.23654987,0.82639956,  1.0521206 ],...,[ 1.4127051 ,  0.72606766,  1.1114007 , ...,  1.6873982 ,1.4029967 ,  1.8957828 ],[ 0.9028806 ,  0.7697658 ,  1.5383823 , ...,  1.6141942 ,1.9217857 ,  1.8996933 ],[ 0.9632249 ,  0.05651683,  0.761746  , ...,  1.538854  ,0.90952134,  1.0909214 ]],[[ 0.05661617,  0.9236539 ,  1.0268744 , ...,  0.09166427,0.64716285,  1.336318  ],[ 1.1044478 ,  1.134439  ,  1.0784969 , ...,  0.18125595,0.58157164,  0.6595112 ],[ 1.8264773 ,  1.5527233 ,  1.2951499 , ...,  0.17970549,0.9794669 ,  2.6983528 ],...1.3063308 ,  1.2988968 ],[ 0.8649753 ,  1.0288852 ,  1.501949  , ...,  1.1776692 ,1.3268932 ,  0.8839393 ],[ 0.585702  ,  0.87490857,  1.5517995 , ...,  1.7336043 ,1.2808118 ,  1.1296356 ]],[[-0.00989706,  0.8360924 ,  0.31648713, ...,  0.47984475,0.8471403 ,  0.9642297 ],[ 0.7513049 ,  1.0518695 ,  1.2751569 , ...,  0.2435599 ,0.33145133,  1.2692978 ],[ 1.0334415 ,  0.90518457,  1.2741013 , ...,  0.20082684,1.1675223 ,  1.1041937 ],...,[ 1.4321228 ,  0.45690712,  1.8740747 , ...,  1.8223115 ,1.5109792 ,  2.5885959 ],[ 1.508797  ,  1.3880478 ,  1.7022482 , ...,  1.6485256 ,1.4627122 ,  1.3569854 ],[ 0.8199768 ,  0.81692797,  0.8191836 , ...,  1.7387298 ,1.4745936 ,  0.6046198 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[ 0.09492627,  0.67220116,  1.1529845 , ...,  0.36083895,0.6294743 ,  0.19168642],[ 1.0619589 ,  0.71859944,  1.3377825 , ...,  0.21495533,0.5476814 ,  0.6429945 ],[ 1.4450465 ,  1.3695642 ,  1.5353793 , ...,  0.2322965 ,0.8386003 ,  1.4946028 ],...,[ 1.3790277 ,  0.725304  ,  1.115078  , ...,  1.6563057 ,1.3405644 ,  2.0748048 ],[ 0.87174934,  0.7682971 ,  1.5410172 , ...,  1.5825666 ,1.8562181 ,  2.078146  ],[ 0.9634936 ,  0.09703177,  0.8017172 , ...,  1.526954  ,0.82505906,  1.0555613 ]],[[ 0.05664211,  0.92401624,  1.0273131 , ...,  0.09248792,0.64730686,  1.4480958 ],[ 1.1050311 ,  1.1347845 ,  1.0788448 , ...,  0.18153854,0.58164394,  0.77374744],[ 1.7923169 ,  1.5100033 ,  1.259298  , ...,  0.17535894,0.99277896,  3.1403532 ],...1.2423099 ,  1.4846289 ],[ 0.83403367,  1.0274414 ,  1.5041199 , ...,  1.1468271 ,1.2612101 ,  1.0694638 ],[ 0.58634573,  0.9162643 ,  1.5896533 , ...,  1.7195883 ,1.1955779 ,  1.099617  ]],[[-0.00991347,  0.8363668 ,  0.31823903, ...,  0.47919536,0.8470355 ,  1.0785278 ],[ 0.7509841 ,  1.052108  ,  1.2751677 , ...,  0.24351433,0.33161485,  1.386553  ],[ 0.99812824,  0.861683  ,  1.2382282 , ...,  0.19653021,1.1794114 ,  1.547222  ],...,[ 1.3987529 ,  0.45562243,  1.8768436 , ...,  1.7896644 ,1.448127  ,  2.7718697 ],[ 1.4786196 ,  1.387357  ,  1.7051725 , ...,  1.6161844 ,1.3970882 ,  1.5416782 ],[ 0.8202939 ,  0.85872734,  0.8594986 , ...,  1.7250733 ,1.3891337 ,  0.57439464]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-12T08:01:35.587957+00:00
+2026-07-12T18:09:20.409178+00:00
 
 creation_library :  
 ArviZ
@@ -2790,7 +2801,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T08:01:35.588481+00:00
+2026-07-12T18:09:20.409689+00:00
 
 creation_library :  
 ArviZ
@@ -2905,7 +2916,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T08:01:35.588963+00:00
+2026-07-12T18:09:20.410149+00:00
 
 creation_library :  
 ArviZ
@@ -3026,7 +3037,7 @@ obs
 float32
 
 
-0.7749 1.083 ... 0.9265 0.8734
+0.775 0.7038 ... 0.8463 0.7256
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -3034,14 +3045,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.7749015 ,  1.0831088 ,  0.87458855, ...,  1.4847032 ,1.2633886 ,  0.5862351 ],[ 0.63880116,  1.1125424 ,  1.0156932 , ...,  1.3194916 ,0.7461579 ,  0.45649508],[ 0.58533174,  0.545473  ,  1.4058175 , ...,  1.2805088 ,1.1481304 ,  1.8601927 ],...,[ 1.5106914 ,  1.1341801 ,  0.9137127 , ...,  1.6485139 ,1.5976317 ,  0.5005521 ],[ 0.79584336,  0.51304734,  0.8295214 , ...,  1.1197894 ,1.3308535 ,  0.0521664 ],[ 0.67939126,  0.3968082 ,  0.7444655 , ...,  1.4539548 ,1.3085897 , -0.2281333 ]],[[-0.02084762,  1.4115049 ,  1.2051075 , ...,  1.3065057 ,1.265929  , -0.08376957],[ 0.04979525,  0.6780671 ,  1.0424573 , ...,  1.7595876 ,1.529109  ,  0.9477426 ],[ 0.5930808 ,  0.8193363 ,  0.6022981 , ...,  1.5234557 ,0.8405203 ,  1.0871837 ],...1.6933969 ,  2.0979178 ],[ 0.4859651 ,  0.55426586,  1.57492   , ...,  1.1374562 ,1.0608088 ,  0.8450963 ],[ 0.8039319 ,  0.68722343,  1.0685695 , ...,  1.6560806 ,1.1583278 ,  0.13175844]],[[ 0.45728678,  0.8845994 ,  0.77249104, ...,  1.5282891 ,1.2765863 ,  0.3156627 ],[ 0.81055915,  0.63560724,  0.76543266, ...,  1.1669785 ,1.1610925 ,  0.0500759 ],[ 0.95232135,  1.174329  ,  1.4621426 , ...,  1.142947  ,0.67617637, -0.03002446],...,[ 1.3844055 ,  1.0044492 ,  0.99870586, ...,  1.743335  ,2.031648  ,  0.64790535],[ 0.8840452 ,  1.2393291 ,  0.6417512 , ...,  0.977619  ,1.2002982 ,  0.21185553],[ 0.967027  ,  0.90793353,  1.4985541 , ...,  1.49228   ,0.92647266,  0.87340575]]]],shape=(1, 1000, 14, 1000), dtype=float32)
+    array([[[[ 0.775013  ,  0.7038019 ,  0.60583746, ...,  1.4732215 ,1.185732  ,  0.55308115],[ 0.639045  ,  0.73330396,  0.63362086, ...,  1.3089033 ,0.66509664,  0.42448616],[ 0.5856512 ,  0.16507648,  1.0340562 , ...,  1.2702425 ,1.0644864 ,  1.821726  ],...,[ 1.4786826 ,  0.79826814,  0.91546607, ...,  1.614745  ,1.536659  ,  0.6840328 ],[ 0.7961534 ,  0.13653263,  0.86690366, ...,  1.1085007 ,1.2506667 , -0.09636877],[ 0.6797254 ,  0.01569243,  0.36297697, ...,  1.4407654 ,1.2283511 , -0.37653875]],[[-0.02129121,  1.0327919 ,  0.91020447, ...,  1.2962862 ,1.1860493 , -0.11162868],[ 0.0492505 ,  0.2979488 ,  0.6579582 , ...,  1.7483541 ,1.4456373 ,  0.9173959 ],[ 0.59357226,  0.43907368,  0.2264443 , ...,  1.5134435 ,0.75700516,  1.0567597 ],...1.629995  ,  2.27777   ],[ 0.48643842,  0.17710246,  1.6109328 , ...,  1.1258163 ,0.97892714,  0.69633615],[ 0.8050502 ,  0.3058908 ,  0.6840292 , ...,  1.6416472 ,1.0762745 , -0.01668853]],[[ 0.4568788 ,  0.5048955 ,  0.5010051 , ...,  1.5152612 ,1.1986841 ,  0.28442886],[ 0.81069976,  0.25562972,  0.3840338 , ...,  1.1560541 ,1.0791116 ,  0.01919828],[ 0.9529131 ,  0.7947233 ,  1.090155  , ...,  1.1323543 ,0.5923376 , -0.06137251],...,[ 1.3531021 ,  0.6624559 ,  1.0003564 , ...,  1.7090652 ,1.9702067 ,  0.8309316 ],[ 0.88431835,  0.8633512 ,  0.67938274, ...,  0.96747065,1.1199558 ,  0.06559236],[ 0.96739435,  0.5275386 ,  1.1155543 , ...,  1.4792143 ,0.84630144,  0.72564346]]]],shape=(1, 1000, 14, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-12T08:01:38.036898+00:00
+2026-07-12T18:09:22.506876+00:00
 
 creation_library :  
 ArviZ
@@ -3156,7 +3167,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-12T08:01:38.037527+00:00
+2026-07-12T18:09:22.507609+00:00
 
 creation_library :  
 ArviZ
@@ -3279,12 +3290,12 @@ results_df
 
 | split                   | crps     | coverage_94 | coverage_50 |
 |-------------------------|----------|-------------|-------------|
-| "model (train)"         | 0.855828 | 0.979947    | 0.687224    |
-| "model (test)"          | 1.260417 | 0.9085      | 0.514429    |
-| "seasonal naive (test)" | 2.387625 | null        | null        |
+| "model (train)"         | 0.88715  | 0.979329    | 0.690829    |
+| "model (test)"          | 1.249317 | 0.914643    | 0.534929    |
+| "seasonal naive (test)" | 2.387181 | null        | null        |
 
 
-The model beats the seasonal-naive baseline on test CRPS by a wide margin. Calibration is more nuanced: on the holdout the \\50\\\\ interval covers \\51\\\\, essentially nominal, while the \\94\\\\ interval covers \\91\\\\, a modest under-coverage; in-sample, both intervals *over*-cover (\\0.98\\ and \\0.69\\). The per-day diagnostics below show that these aggregates hide structure worth dissecting. Before that, two of the modeling choices above earn their place directly in these numbers:
+The model beats the seasonal-naive baseline on test CRPS by a wide margin. Calibration is more nuanced: on the holdout the \\50\\\\ interval covers \\53\\\\, close to nominal, while the \\94\\\\ interval covers \\91\\\\, a modest under-coverage; in-sample, both intervals *over*-cover (\\0.98\\ and \\0.69\\). The per-day diagnostics below show that these aggregates hide structure worth dissecting. Before that, two of the modeling choices above earn their place directly in these numbers:
 
 - **The damped trend is what keeps the coverage from decaying with the horizon.** Without it (a pure random-walk level), the median forecast percentile of the truth drifts from about \\0.45\\ on day \\1\\ to \\0.84\\ by day \\14\\ while the forecast fan barely widens: the frozen level cannot extrapolate the panel's upward drift, so the interval misses pile up above the bands. With the slope, test CRPS and both coverages improve together, most visibly on the late-horizon days (the level-dependent noise term \\\lambda_s \\ \text{softplus}(\ell\_{t,s})\\ plays the same role for the in-sample spread).
 - **The cleaned discount encoding and the launch indicator remove a spurious optimum.** Without them, the placeholder discount days hand the optimizer a second ELBO optimum in which a launch-aligned discount step absorbs each series' launch jump with coefficients an order of magnitude too large, and which basin a run lands in depends on nothing more than the compilation path of the update loop (the progress-bar path lands badly; the scanned path lands well). With them, no execution path produces runaway coefficients, and the store-hierarchy plot further below hugs the identity line. The optimization as such remains sensitive to the update-loop compilation on a panel this large, which is why the fit above pins the well-behaved `lax.scan` path with `progress_bar=False`.
@@ -3316,12 +3327,12 @@ print(
 ```
 
 
-    test observations with zero sales: 1.4%
-    50% coverage | zero-sales days: 0.34 | positive days: 0.52
-    94% coverage | zero-sales days: 0.82 | positive days: 0.91
+    test observations with zero sales: 1.7%
+    50% coverage | zero-sales days: 0.33 | positive days: 0.54
+    94% coverage | zero-sales days: 0.83 | positive days: 0.92
 
 
-The artifact is ruled out. Zero-sales days are rare in this test panel (\\1.4\\\\: these are the top sellers, and the test window sits after the launch with mostly high availability), and on them the intervals cover *less* than nominal, since the factor floor and the level often push the whole central band strictly above zero. The positive-sales days (\\0.52\\ and \\0.91\\) sit almost exactly at the panel-wide coverages, so the aggregate numbers reflect ordinary days, not zero-day bookkeeping. What the aggregates do hide is a drift over the horizon, which the per-day plots below make visible; the in-sample over-coverage already hints at one half of the story (daily sales fluctuations are heavier-tailed than a Normal, so the fitted noise scale widens the whole bell to accommodate the tail days, and in-sample the central band over-covers at \\0.69\\). The per-day breakdown shows where the CRPS margin comes from:
+The artifact is ruled out. Zero-sales days are rare in this test panel (\\1.7\\\\: these are the top sellers, and the test window sits after the launch with mostly high availability), and on them the intervals cover *less* than nominal, since the factor floor and the level often push the whole central band strictly above zero. The positive-sales days (\\0.54\\ and \\0.92\\) sit almost exactly at the panel-wide coverages, so the aggregate numbers reflect ordinary days, not zero-day bookkeeping. What the aggregates do hide is a drift over the horizon, which the per-day plots below make visible; the in-sample over-coverage already hints at one half of the story (daily sales fluctuations are heavier-tailed than a Normal, so the fitted noise scale widens the whole bell to accommodate the tail days, and in-sample the central band over-covers at \\0.69\\). The per-day breakdown shows where the CRPS margin comes from:
 
 
     In [33]:
@@ -3364,7 +3375,7 @@ ax.set(
 </figure>
 
 
-The coverage diagnostic below resolves the calibration story day by day: observed central-interval coverage per forecast day against the nominal levels. Both intervals start the horizon *above* their nominal line, the in-sample over-coverage carrying over into the first few days, and then drift down through it as the horizon grows. The aggregate \\50\\\\ coverage lands on nominal only because these two regimes cancel in the average, a coincidence the next diagnostic unpacks.
+The coverage diagnostic below resolves the calibration story day by day: observed central-interval coverage per forecast day against the nominal levels. Both intervals start the horizon *above* their nominal line, the in-sample over-coverage carrying over into the first few days, and then drift down through it as the horizon grows. The aggregate \\50\\\\ coverage lands close to nominal only because these two regimes cancel in the average, a coincidence the next diagnostic unpacks.
 
 
     In [34]:
@@ -3449,7 +3460,7 @@ fig.suptitle("Interval diagnostics on the test window", fontsize=18, fontweight=
 </figure>
 
 
-The two panels pin the story down. The median PIT starts just below \\0.5\\ and drifts upward through the horizon, and the miss directions are sharply asymmetric: below-side misses stay at or under the nominal \\3\\\\ on every day, while above-side misses cross nominal around day \\4\\ and reach the mid-teens in the second week. That asymmetry says the \\94\\\\ under-coverage is a *directional* miss, not a band that is uniformly too narrow: a merely narrow interval would leak on both sides (mean-field variational inference's tendency toward too-narrow posteriors can contribute to the level, but it cannot explain the one-sidedness). Without the damped trend these curves are far worse (median PIT \\0.84\\ and above-misses at \\0.24\\ by day \\14\\); with it much of the drift is gone, but the late days still run hot: the panel's momentum in the test window is at the upper end of what the damped slope extrapolates. The same drift explains the coverage cancellation noted above: early days over-cover with the heavy-tail-widened band, late days under-cover as the truth walks out the top, and the \\50\\\\ aggregate lands on nominal by coincidence rather than by calibration, which is exactly why the directional diagnostics are worth plotting next to the averages. A post-hoc interval calibration would target that residual drift directly; we leave it on the next-steps list rather than pursue it in this notebook.
+The two panels pin the story down. The median PIT starts just below \\0.5\\ and drifts upward through the horizon, and the miss directions are sharply asymmetric: below-side misses stay at or near the nominal \\3\\\\ on every day, while above-side misses cross nominal around day \\4\\ and reach the mid-teens in the second week. That asymmetry says the \\94\\\\ under-coverage is a *directional* miss, not a band that is uniformly too narrow: a merely narrow interval would leak on both sides (mean-field variational inference's tendency toward too-narrow posteriors can contribute to the level, but it cannot explain the one-sidedness). Without the damped trend these curves are far worse (median PIT \\0.84\\ and above-misses at \\0.24\\ by day \\14\\); with it much of the drift is gone, but the late days still run hot: the panel's momentum in the test window is at the upper end of what the damped slope extrapolates. The same drift explains the coverage cancellation noted above: early days over-cover with the heavy-tail-widened band, late days under-cover as the truth walks out the top, and the \\50\\\\ aggregate lands near nominal by coincidence rather than by calibration, which is exactly why the directional diagnostics are worth plotting next to the averages. A post-hoc interval calibration would target that residual drift directly; we leave it on the next-steps list rather than pursue it in this notebook.
 
 
 ## Scaling belongs inside the fold
@@ -3722,12 +3733,12 @@ print(
 ```
 
 
-    expected demand above the sales forecast on the test window: +8.8%
-    series with an uplift above 1%: 84.3% of the panel
-    largest per-series uplift: +168.7% (series 438::300)
+    expected demand above the sales forecast on the test window: +8.6%
+    series with an uplift above 1%: 81.4% of the panel
+    largest per-series uplift: +168.1% (series 438::300)
 
 
-The correction is meaningful in aggregate, roughly \\9\\\\ of the forecast test-window volume, and its anatomy follows the saturating factor: near full availability the factor is almost flat, so a day that loses a few sales-weighted hours contributes nothing visible, while a day that drops to low availability contributes a lot. Deep dips are scattered widely across the panel's two forecast weeks, so the uplift is broad (\\84\\\\ of the series gain more than \\1\\\\) but very uneven, running past \\+150\\\\ for the most stockout-prone series. The faceted view below shows this series by series, in the same layout as the forecast plot above but with the demand bands in green. One detail changes deliberately: the red availability line now shows the *input these predictions actually consumed*, the observed availability in-sample and a constant one over the forecast window, because a plot of a forecast should represent the features that produced it. To see where availability actually dipped in the test window, compare with the sales-forecast panel above; the single-series comparison further below makes that contrast explicit.
+The correction is meaningful in aggregate, roughly \\9\\\\ of the forecast test-window volume, and its anatomy follows the saturating factor: near full availability the factor is almost flat, so a day that loses a few sales-weighted hours contributes nothing visible, while a day that drops to low availability contributes a lot. Deep dips are scattered widely across the panel's two forecast weeks, so the uplift is broad (\\81\\\\ of the series gain more than \\1\\\\) but very uneven, running past \\+150\\\\ for the most stockout-prone series. The faceted view below shows this series by series, in the same layout as the forecast plot above but with the demand bands in green. One detail changes deliberately: the red availability line now shows the *input these predictions actually consumed*, the observed availability in-sample and a constant one over the forecast window, because a plot of a forecast should represent the features that produced it. To see where availability actually dipped in the test window, compare with the sales-forecast panel above; the single-series comparison further below makes that contrast explicit.
 
 
     In [39]:
@@ -3892,8 +3903,8 @@ fig.suptitle(
 ```
 
 
-    22::267 | expected test-window sales 388 units | expected demand 417 units (+7.6%)
-    largest daily gap on 2024-06-22 (availability 0.42): expected sales 18.3 vs demand 34.6
+    22::267 | expected test-window sales 315 units | expected demand 337 units (+7.0%)
+    largest daily gap on 2024-06-22 (availability 0.42): expected sales 13.9 vs demand 26.0
 
 
     /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
@@ -3905,7 +3916,7 @@ fig.suptitle(
 </figure>
 
 
-The comparison makes the counterfactual concrete, and the printout puts numbers on it. In the top row the orange bands are pulled down exactly where the availability input dips, most sharply on \\2024\\-\\06\\-\\22\\: the model expects the stockout to censor sales, and that censored view is precisely what makes the forecast scoreable against the observed black line. In the bottom row the green bands hold the underlying demand level through those same days, because the input that produced them says the shelf never empties; elsewhere the two rows nearly coincide, since availability sits close to one. On the worst day the expected demand (\\34.6\\ units) is nearly twice the expected sale (\\18.3\\ units), and over the full window the demand forecast carries \\7.6\\\\ more volume for this series. That gap is the demand a planner would silently forfeit by ordering to the censored forecast, and the stockout would then repeat itself by construction. This demand fan, not the sales forecast, is the input a replenishment decision should consume; the sales forecast's job was to be scoreable against what was actually observed.
+The comparison makes the counterfactual concrete, and the printout puts numbers on it. In the top row the orange bands are pulled down exactly where the availability input dips, most sharply on \\2024\\-\\06\\-\\22\\: the model expects the stockout to censor sales, and that censored view is precisely what makes the forecast scoreable against the observed black line. In the bottom row the green bands hold the underlying demand level through those same days, because the input that produced them says the shelf never empties; elsewhere the two rows nearly coincide, since availability sits close to one. On the worst day the expected demand (\\26.0\\ units) is nearly twice the expected sale (\\13.9\\ units), and over the full window the demand forecast carries \\7.0\\\\ more volume for this series. That gap is the demand a planner would silently forfeit by ordering to the censored forecast, and the stockout would then repeat itself by construction. This demand fan, not the sales forecast, is the input a replenishment decision should consume; the sales forecast's job was to be scoreable against what was actually observed.
 
 
 # Inspecting the availability factor
