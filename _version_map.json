@@ -46,6 +46,10 @@
       "dev",
       "0.2.0"
     ],
+    "docs/examples/fresh_retail_stockout.html": [
+      "dev",
+      "0.2.0"
+    ],
     "docs/examples/hierarchical_forecasting_1.html": [
       "dev",
       "0.2.0"
@@ -67,6 +71,10 @@
       "0.2.0"
     ],
     "license.html": [
+      "dev",
+      "0.2.0"
+    ],
+    "package-info.html": [
       "dev",
       "0.2.0"
     ],
@@ -99,6 +107,10 @@
       "0.2.0"
     ],
     "reference/convert.add_forecast_groups.html": [
+      "dev",
+      "0.2.0"
+    ],
+    "reference/convert.predictions_to_datatree.html": [
       "dev",
       "0.2.0"
     ],
@@ -163,6 +175,10 @@
       "0.2.0"
     ],
     "reference/exceptions.BacktestWindowError.html": [
+      "dev",
+      "0.2.0"
+    ],
+    "reference/exceptions.CovariateDimsError.html": [
       "dev",
       "0.2.0"
     ],

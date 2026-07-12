@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-4374c486a51c078b4a30d8ae56e0846f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -121,6 +121,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
+  <link rel="alternate" type="text/markdown" href="functional.mcmc.MCMCFit.md">
   <meta name="description" content="The result of fitting a forecasting model with MCMC.">
   <script type="application/ld+json">
 [
@@ -625,6 +626,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
   </div>
@@ -647,6 +654,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
   </div>
 </li>
       </ul>
@@ -731,8 +744,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h3 id="toc-title">On this page</h3>
    
   <ul class="collapse">
-  <li><a href="#parameter-attributes" id="toc-parameter-attributes" class="nav-link active" data-scroll-target="#parameter-attributes">Parameter Attributes</a></li>
-  <li><a href="#attributes" id="toc-attributes" class="nav-link" data-scroll-target="#attributes">Attributes</a></li>
+  <li><a href="#attributes" id="toc-attributes" class="nav-link active" data-scroll-target="#attributes">Attributes</a></li>
   </ul>
 </nav>
     </div>
@@ -771,21 +783,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <span class="va">num_chains</span><span class="op">=</span><span class="dv">1</span>,
 )</span></code></pre></div>
 </div>
-<section id="parameter-attributes" class="level2 doc-parameter-attributes">
-<h2 class="doc-parameter-attributes">Parameter Attributes</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code><span class="doc-parameter-name">samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
-<dd>
-
-</dd>
-<dt><code><span class="doc-parameter-name">num_chains</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
-<dd>
-
-</dd>
-</dl>
-</div>
-</section>
 <section id="attributes" class="level2 doc-attributes">
 <h2 class="doc-attributes">Attributes</h2>
 <div class="doc-definition-items">

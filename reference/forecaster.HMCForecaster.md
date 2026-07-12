@@ -7,7 +7,20 @@ Fit a forecasting model with MCMC (NUTS by default).
 Usage
 
 ``` python
-forecaster.HMCForecaster()
+forecaster.HMCForecaster(
+    rng_key,
+    model,
+    data,
+    covariates,
+    *,
+    kernel=None,
+    kernel_kwargs=None,
+    num_warmup=1000,
+    num_samples=1000,
+    num_chains=1,
+    chain_method="sequential",
+    progress_bar=False
+)
 ```
 
 

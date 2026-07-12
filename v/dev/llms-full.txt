@@ -1464,6 +1464,17 @@ Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when
 (ensemble samplers need multiple vectorized chains; BlackJAX kernels need
 sequential chains).
 
+CovariateDimsError(message: str | None = None) -> None
+
+Covariate dimension names are inconsistent or malformed.
+
+Raised by :func:`~numpyro_forecast.convert.to_datatree` and
+:func:`~numpyro_forecast.convert.add_forecast_groups` when
+``covariate_dims`` does not name every covariates axis, or when the names
+passed to (or inherited by) :func:`~numpyro_forecast.convert.add_forecast_groups`
+disagree with the dimension names already stored on the tree's
+``constant_data`` covariates.
+
 MVNLayoutError(message: str | None = None) -> None
 
 A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
@@ -1480,7 +1491,7 @@ time-leading layout.
 Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
 
@@ -1531,6 +1542,14 @@ posterior_dims
     an explicit opt-in on purpose: inferring time-indexed sites from trace
     shapes is fragile (a coincidental ``n_params == n_time`` would misattribute
     the axis).
+covariate_dims
+    Optional dimension names for the stored covariates, one per axis;
+    defaults to the 2-D ``("time", "covariate_dim")`` layout. Use this when
+    ``covariates`` carries extra batch axes, e.g. a panel tensor shaped
+    ``(channel, time, series)`` with ``covariate_dims=["channel", "time",
+    "series"]``. The time axis is always ``-2`` (the package-wide
+    convention), so its entry should be named ``"time"`` to share the
+    tree-wide time coordinate.
 
 Returns
 -------
@@ -1548,6 +1567,8 @@ ValueError
     If ``covariates`` is shorter than ``data`` along the time axis, or if
     ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon.
+CovariateDimsError
+    If ``covariate_dims`` does not name every ``covariates`` axis.
 
 Notes
 -----
@@ -1559,7 +1580,7 @@ the sample sets. For step-by-step control over the forecast draws (e.g. a
 custom ``batch_size``), build the in-sample tree with matching-length
 covariates and attach the horizon with :func:`add_forecast_groups`.
 
-add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 
@@ -1579,12 +1600,21 @@ forecast_samples
     Forecast draws shaped ``(num_samples, future, obs)`` from
     :func:`~numpyro_forecast.functional.prediction.forecast`.
 covariates_future
-    Future covariates shaped ``(future, covariate_dim)``.
+    Future covariates shaped ``(future, covariate_dim)``, or any layout
+    with time at axis ``-2`` when ``covariate_dims`` names the axes.
 time_coord
     Optional explicit forecast time coordinate; defaults to integer
     continuation of the in-sample time. Required when the in-sample time
     coordinate is non-integer (e.g. datetime64): auto-continuing would have
     to guess the frequency, so explicit values are demanded instead.
+covariate_dims
+    Optional dimension names for ``covariates_future``, one per axis. When
+    omitted, the names are inherited from the tree's
+    ``constant_data["covariates"]`` variable (falling back to
+    ``("time", "covariate_dim")`` if the tree carries no stored
+    covariates), so the forecast covariates always share the in-sample
+    axis names. When given explicitly, the names must match the stored
+    ones. See :func:`to_datatree`.
 
 Returns
 -------
@@ -1598,6 +1628,60 @@ ValueError
     If ``time_coord`` is given but its length differs from the forecast
     horizon, or if it is omitted while the in-sample time coordinate is
     non-integer.
+CovariateDimsError
+    If the resolved ``covariate_dims`` (explicit or inherited) do not name
+    every ``covariates_future`` axis, or if explicit names disagree with
+    the dimension names already stored on the tree's
+    ``constant_data["covariates"]``.
+
+predictions_to_datatree(predictions: jaxtyping.Float[ndarray, 'sample time series'] | jaxtyping.Float[Array, 'sample time series'], x: jaxtyping.Num[ndarray, 'time'] | jaxtyping.Num[Array, 'time'], series: collections.abc.Sequence[typing.Any], *, group: str = 'posterior_predictive', observed: jaxtyping.Float[ndarray, 'time series'] | jaxtyping.Float[Array, 'time series'] | None = None) -> 'xarray.DataTree'
+
+Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
+
+The array-level counterpart of :func:`to_datatree`: instead of a fit, it takes
+prediction draws from **any** predictive group (prior predictive, posterior
+predictive, or forecasts), possibly already transformed (rescaled to original
+units, clipped at zero, subset to a few series). The draws get a single
+pseudo-chain, and ``constant_data`` carries the independent variable ``"t"``
+broadcast to ``(time, series)`` so that
+``arviz.plot_lm(tree, y="obs", x="t", plot_dim="time", ...)`` facets one panel
+per series; band artists are then reachable via ``pc.viz["ci_band"]["t"]`` and
+axes via ``pc.get_target("t", {"series": label})``.
+
+``plot_lm`` requires an ``observed_data`` group even when the observation
+scatter is disabled, so when ``observed`` is ``None`` a zeros placeholder is
+stored; it is never drawn under ``visuals={"observed_scatter": False}``.
+
+Parameters
+----------
+predictions
+    Prediction draws with the sample axis first, shape ``(sample, time, series)``.
+x
+    Independent-variable values, shape ``(time,)``. Must be numeric:
+    ``plot_lm`` cannot draw ``datetime64`` values (it concatenates ``x`` with
+    the float predictions internally), so pass
+    :func:`matplotlib.dates.date2num` floats and re-format the tick labels
+    with :class:`matplotlib.dates.ConciseDateFormatter`.
+series
+    One label per series, defining the ``series`` coordinate.
+group
+    Predictive group to store the draws under (e.g. ``"prior_predictive"``,
+    ``"posterior_predictive"``, ``"predictions"``).
+observed
+    Optional observations, shape ``(time, series)``, stored in
+    ``observed_data``; when ``None`` a zeros placeholder is stored instead.
+
+Returns
+-------
+xarray.DataTree
+    A tree with the ``group``, ``observed_data``, and ``constant_data``
+    groups; ``obs`` has dims ``(chain, draw, time, series)`` and ``t`` has
+    dims ``(time, series)``.
+
+Raises
+------
+ValueError
+    If ``series`` does not have one label per series in ``predictions``.
 
 
 ## Extensions (contrib)

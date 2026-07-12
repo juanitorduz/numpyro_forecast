@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-4374c486a51c078b4a30d8ae56e0846f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -121,6 +121,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
+  <link rel="alternate" type="text/markdown" href="convert.add_forecast_groups.md">
   <meta name="description" content="Attach out-of-sample forecast groups to a copy of tree.">
   <script type="application/ld+json">
 [
@@ -625,6 +626,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
   </div>
@@ -647,6 +654,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
   </div>
 </li>
       </ul>
@@ -764,12 +777,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L307-L380" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L422-L514" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast_groups</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tree</span>, <span class="va">forecast_samples</span>, <span class="va">covariates_future</span>, <span class="op">*</span>, <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tree</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecast_samples</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates_future</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>. This is the step-by-step route for draws you produced yourself; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> attaches the same groups automatically when its <code>covariates</code> extend beyond <code>data</code>.</p>
@@ -788,11 +806,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariates_future</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Future covariates shaped <code>(future, covariate_dim)</code>.</p>
+<p>Future covariates shaped <code>(future, covariate_dim)</code>, or any layout with time at axis <code>-2</code> when <code>covariate_dims</code> names the axes.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g.&nbsp;datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.
+<p>Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g.&nbsp;datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional dimension names for <code>covariates_future</code>, one per axis. When omitted, the names are inherited from the tree’s <code>constant_data["covariates"]</code> variable (falling back to <code>("time", "covariate_dim")</code> if the tree carries no stored covariates), so the forecast covariates always share the in-sample axis names. When given explicitly, the names must match the stored ones. See <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>.
 </dd>
 </dl>
 </div>
@@ -814,7 +836,11 @@ A new tree with the <code>predictions</code> and <code>predictions_constant_data
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.
+<p>If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
+<dd>
+If the resolved <code>covariate_dims</code> (explicit or inherited) do not name every <code>covariates_future</code> axis, or if explicit names disagree with the dimension names already stored on the tree’s <code>constant_data["covariates"]</code>.
 </dd>
 </dl>
 </div>

@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-4374c486a51c078b4a30d8ae56e0846f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -121,6 +121,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
+  <link rel="alternate" type="text/markdown" href="convert.to_datatree.md">
   <meta name="description" content="Convert a fit into an ArviZ-schema xarray.DataTree.">
   <script type="application/ld+json">
 [
@@ -625,6 +626,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
   </div>
@@ -647,6 +654,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
   </div>
 </li>
       </ul>
@@ -765,7 +778,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L119-L304" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L221-L419" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -778,8 +791,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_predictive_samples</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>PRNG: <code>rng_key</code> is consumed by the in-sample posterior-predictive draws (for a variational fit, also the posterior draws) and, when a forecast horizon is present, the forecast draws.</p>
@@ -822,7 +836,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">posterior_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[str]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional mapping from a posterior site name to its non-sample dimension names, e.g.&nbsp;<code>{"drift": ["time"]}</code>. Sites listed here share the tree-wide <code>time</code> coordinate; unlisted sites keep ArviZ’s auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental <code>n_params == n_time</code> would misattribute the axis).
+<p>Optional mapping from a posterior site name to its non-sample dimension names, e.g.&nbsp;<code>{"drift": ["time"]}</code>. Sites listed here share the tree-wide <code>time</code> coordinate; unlisted sites keep ArviZ’s auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental <code>n_params == n_time</code> would misattribute the axis).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional dimension names for the stored covariates, one per axis; defaults to the 2-D <code>("time", "covariate_dim")</code> layout. Use this when <code>covariates</code> carries extra batch axes, e.g.&nbsp;a panel tensor shaped <code>(channel, time, series)</code> with <code>covariate_dims=["channel", "time", "series"]</code>. The time axis is always <code>-2</code> (the package-wide convention), so its entry should be named <code>"time"</code> to share the tree-wide time coordinate.
 </dd>
 </dl>
 </div>
@@ -844,7 +862,11 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single ps
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>covariates</code> is shorter than <code>data</code> along the time axis, or if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.
+<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, or if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
+<dd>
+If <code>covariate_dims</code> does not name every <code>covariates</code> axis.
 </dd>
 </dl>
 </div>

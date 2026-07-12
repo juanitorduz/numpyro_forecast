@@ -7,7 +7,9 @@ BlackJAX NUTS with Stan-style window adaptation.
 Usage
 
 ``` python
-contrib.blackjax.BlackjaxNUTSKernel()
+contrib.blackjax.BlackjaxNUTSKernel(
+    model=None, *, num_adaptation_steps=500, target_acceptance_rate=0.8
+)
 ```
 
 

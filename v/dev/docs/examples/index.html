@@ -43,7 +43,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="../../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-4374c486a51c078b4a30d8ae56e0846f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -87,6 +87,7 @@ ul.task-list li input[type="checkbox"] {
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
+  <link rel="alternate" type="text/markdown" href="index.md">
   <meta name="description" content="A JAX/NumPyro port of Pyro's forecasting module.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Examples – numpyro_forecast (dev) | numpyro_forecast">
@@ -189,6 +190,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/fresh_retail_stockout.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Forecasting retail demand under stockouts</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../../docs/examples/hierarchical_forecasting_1.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Hierarchical forecasting I</span></a>
   </div>
@@ -263,6 +270,13 @@ Univariate forecasting
 </div>
 <div class="section-card-desc" style="font-size: 0.9rem; color: #6c757d; line-height: 1.45;">
 Forecast weekly BART ridership with a random-walk local level, Fourier seasonality, and a Student-t likelihood fit with SVI, then evaluate the model with rolling-origin backtesting.
+</div>
+</a> <a href="../../docs/examples/fresh_retail_stockout.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"> <img src="thumbnails/fresh_retail_stockout.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;">
+<div class="section-card-title" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;">
+Forecasting retail demand under stockouts
+</div>
+<div class="section-card-desc" style="font-size: 0.9rem; color: #6c757d; line-height: 1.45;">
+Forecast 1,000 daily store-product demand series from FreshRetailNet-50K with a damped-trend panel model, store-pooled promotion effects, a launch indicator, and a floored saturating availability factor that handles noisy stockout labels, fit with SVI and a custom optax optimizer, ending with a full-availability counterfactual forecast of uncensored demand for planning.
 </div>
 </a> <a href="../../docs/examples/hierarchical_forecasting_1.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"> <img src="thumbnails/hierarchical_forecasting_1.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;">
 <div class="section-card-title" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;">

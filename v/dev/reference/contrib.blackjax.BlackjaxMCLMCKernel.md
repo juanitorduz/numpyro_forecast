@@ -7,7 +7,11 @@ BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 Usage
 
 ``` python
-contrib.blackjax.BlackjaxMCLMCKernel()
+contrib.blackjax.BlackjaxMCLMCKernel(
+    model=None,
+    *,
+    num_tuning_steps=500,
+)
 ```
 
 
