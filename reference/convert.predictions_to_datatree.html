@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>arrays.concat_future() – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>convert.predictions_to_datatree() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -118,11 +118,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.1&quot;,&quot;label&quot;:&quot;0.2.1&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
-<script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
-  <link rel="alternate" type="text/markdown" href="arrays.concat_future.md">
-  <meta name="description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
+  <link rel="alternate" type="text/markdown" href="convert.predictions_to_datatree.md">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html">
+  <meta name="description" content="Pack prediction draws into a DataTree laid out for per-series plot_lm faceting.">
   <script type="application/ld+json">
 [
   {
@@ -142,23 +142,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "arrays.concat_future - numpyro_forecast",
+    "name": "convert.predictions_to_datatree - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="arrays.concat_future() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html">
+  <meta property="og:title" content="convert.predictions_to_datatree() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Pack prediction draws into a DataTree laid out for per-series plot_lm faceting.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="arrays.concat_future() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
+  <meta name="twitter:title" content="convert.predictions_to_datatree() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Pack prediction draws into a DataTree laid out for per-series plot_lm faceting.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -169,7 +169,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-12">v0.2.1</span></span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-07-12">v0.2.1</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -208,7 +208,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">arrays.concat_future()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">convert.predictions_to_datatree()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -512,7 +512,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.concat_future()</span></span></a>
   </div>
 </li>
@@ -658,7 +658,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
   </div>
 </li>
@@ -746,6 +746,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   </ul>
 </nav>
     </div>
@@ -754,7 +755,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.concat_future()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></h2>
 </div>
 
 
@@ -772,35 +773,44 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Concatenate in-sample and forecast-horizon arrays along the time axis.</p>
+<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/0.2.1/numpyro_forecast/arrays.py#L48-L65" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/0.2.1/numpyro_forecast/convert.py#L517-L602" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">arrays</span><span class="op">.</span><span class="sig-name">concat_future</span>(
-    <span class="va">prefix</span>,
-    <span class="va">suffix</span>,
-    <span class="op">*</span>,
-    <span class="va">axis</span><span class="op">=-</span><span class="dv">2</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">predictions_to_datatree</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictions</span>, <span class="va">x</span>, <span class="va">series</span>, <span class="op">*</span>, <span class="va">group</span><span class="op">=</span><span class="st">&quot;posterior_predictive&quot;</span>, <span class="va">observed</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>The array-level counterpart of <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>: instead of a fit, it takes prediction draws from <strong>any</strong> predictive group (prior predictive, posterior predictive, or forecasts), possibly already transformed (rescaled to original units, clipped at zero, subset to a few series). The draws get a single pseudo-chain, and <code>constant_data</code> carries the independent variable <code>"t"</code> broadcast to <code>(time, series)</code> so that <code>arviz.plot_lm(tree, y="obs", x="t", plot_dim="time", ...)</code> facets one panel per series; band artists are then reachable via <code>pc.viz["ci_band"]["t"]</code> and axes via <code>pc.get_target("t", {"series": label})</code>.</p>
+<p><code>plot_lm</code> requires an <code>observed_data</code> group even when the observation scatter is disabled, so when <code>observed</code> is <code>None</code> a zeros placeholder is stored; it is never drawn under <code>visuals={"observed_scatter": False}</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">prefix</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[np.ndarray | Array, <span class="st">" sample time series"</span>]</span></code></dt>
 <dd>
-<p>In-sample array.</p>
+<p>Prediction draws with the sample axis first, shape <code>(sample, time, series)</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">suffix</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">x</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[np.ndarray | Array, <span class="st">" time"</span>]</span></code></dt>
 <dd>
-<p>Forecast-horizon array (same shape as <code>prefix</code> except along <code>axis</code>).</p>
+<p>Independent-variable values, shape <code>(time,)</code>. Must be numeric: <code>plot_lm</code> cannot draw <code>datetime64</code> values (it concatenates <code>x</code> with the float predictions internally), so pass <code>matplotlib.dates.date2num()</code> floats and re-format the tick labels with <code>matplotlib.dates.ConciseDateFormatter</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">axis</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">-2</span><br></span></code></dt>
+<dt><code><span class="doc-parameter-name">series</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any]</span></code></dt>
 <dd>
-Time axis to concatenate along (defaults to <code>-2</code>).
+<p>One label per series, defining the <code>series</code> coordinate.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">group</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"posterior_predictive"</span></span></code></dt>
+<dd>
+<p>Predictive group to store the draws under (e.g.&nbsp;<code>"prior_predictive"</code>, <code>"posterior_predictive"</code>, <code>"predictions"</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">observed</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[np.ndarray | Array, <span class="st">" time series"</span>] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional observations, shape <code>(time, series)</code>, stored in <code>observed_data</code>; when <code>None</code> a zeros placeholder is stored instead.
 </dd>
 </dl>
 </div>
@@ -809,9 +819,20 @@ Time axis to concatenate along (defaults to <code>-2</code>).
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-The concatenation of <code>prefix</code> and <code>suffix</code> along <code>axis</code>.
+A tree with the <code>group</code>, <code>observed_data</code>, and <code>constant_data</code> groups; <code>obs</code> has dims <code>(chain, draw, time, series)</code> and <code>t</code> has dims <code>(time, series)</code>.
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>series</code> does not have one label per series in <code>predictions</code>.
 </dd>
 </dl>
 </div>
@@ -833,7 +854,7 @@ The concatenation of <code>prefix</code> and <code>suffix</code> along <code>axi
     anchorJS.add('.anchored');
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/juanitorduz\.github\.io\/numpyro_forecast\/v\/dev\/");
+        var filterRegex = new RegExp("https:\/\/juanitorduz\.github\.io\/numpyro_forecast\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }

@@ -82,7 +82,7 @@ ul.task-list li input[type="checkbox"] {
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.0&quot;,&quot;label&quot;:&quot;0.2.0&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.1&quot;,&quot;label&quot;:&quot;0.2.1&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 
 
   <link rel="alternate" type="text/markdown" href="index.md">
@@ -579,6 +579,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
   </div>
@@ -601,6 +607,12 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
   </div>
 </li>
       </ul>
@@ -1018,6 +1030,10 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>A kernel is combined with an invalid configuration.</p>
 </dd>
+<dt><a href="../reference/exceptions.CovariateDimsError.html#numpyro_forecast.exceptions.CovariateDimsError" class="doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</a></dt>
+<dd>
+<p>Covariate dimension names are inconsistent or malformed.</p>
+</dd>
 <dt><a href="../reference/exceptions.MVNLayoutError.html#numpyro_forecast.exceptions.MVNLayoutError" class="doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</a></dt>
 <dd>
 <p>A <code>MultivariateNormal</code> layout is unsupported for time-axis surgery.</p>
@@ -1037,6 +1053,10 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="doc-function doc-label doc-label-function">convert.add_forecast_groups()</a></dt>
 <dd>
 <p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="doc-function doc-label doc-label-function">convert.predictions_to_datatree()</a></dt>
+<dd>
+<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
 </dd>
 </dl>
 </section>

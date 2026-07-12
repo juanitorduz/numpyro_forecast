@@ -233,6 +233,9 @@ A kernel specification could not be resolved.
 [exceptions.KernelConfigError](exceptions.KernelConfigError.md#numpyro_forecast.exceptions.KernelConfigError)  
 A kernel is combined with an invalid configuration.
 
+[exceptions.CovariateDimsError](exceptions.CovariateDimsError.md#numpyro_forecast.exceptions.CovariateDimsError)  
+Covariate dimension names are inconsistent or malformed.
+
 [exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
 A `MultivariateNormal` layout is unsupported for time-axis surgery.
 
@@ -248,6 +251,9 @@ Convert a fit into an ArviZ-schema `xarray.DataTree`.
 
 [convert.add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups)  
 Attach out-of-sample forecast groups to a copy of `tree`.
+
+[convert.predictions_to_datatree()](convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree)  
+Pack prediction draws into a DataTree laid out for per-series `plot_lm` faceting.
 
 
 ## Extensions (contrib)
