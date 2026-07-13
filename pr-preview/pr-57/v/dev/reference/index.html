@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Reference – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>API Reference – numpyro_forecast (dev) | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -42,7 +42,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-4374c486a51c078b4a30d8ae56e0846f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -82,10 +82,11 @@ ul.task-list li input[type="checkbox"] {
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.0&quot;,&quot;label&quot;:&quot;0.2.0&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.1&quot;,&quot;label&quot;:&quot;0.2.1&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
+  <link rel="alternate" type="text/markdown" href="index.md">
   <meta name="description" content="High-level interfaces for fitting and forecasting.">
   <script type="application/ld+json">
 {
@@ -104,12 +105,12 @@ ul.task-list li input[type="checkbox"] {
 }
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Reference – numpyro_forecast (dev) | numpyro_forecast">
+  <meta property="og:title" content="API Reference – numpyro_forecast (dev) | numpyro_forecast">
   <meta property="og:description" content="High-level interfaces for fitting and forecasting.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Reference – numpyro_forecast (dev) | numpyro_forecast">
+  <meta name="twitter:title" content="API Reference – numpyro_forecast (dev) | numpyro_forecast">
   <meta name="twitter:description" content="High-level interfaces for fitting and forecasting.">
 </head>
 
@@ -121,7 +122,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-08">v0.2.0</span></span>
+    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-12">v0.2.1</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -578,6 +579,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
   </div>
@@ -600,6 +607,12 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
   </div>
 </li>
       </ul>
@@ -706,7 +719,7 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Reference</h1>
+<h1 class="title">API Reference</h1>
 </div>
 
 
@@ -1017,6 +1030,10 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>A kernel is combined with an invalid configuration.</p>
 </dd>
+<dt><a href="../reference/exceptions.CovariateDimsError.html#numpyro_forecast.exceptions.CovariateDimsError" class="doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</a></dt>
+<dd>
+<p>Covariate dimension names are inconsistent or malformed.</p>
+</dd>
 <dt><a href="../reference/exceptions.MVNLayoutError.html#numpyro_forecast.exceptions.MVNLayoutError" class="doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</a></dt>
 <dd>
 <p>A <code>MultivariateNormal</code> layout is unsupported for time-axis surgery.</p>
@@ -1036,6 +1053,10 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="doc-function doc-label doc-label-function">convert.add_forecast_groups()</a></dt>
 <dd>
 <p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="doc-function doc-label doc-label-function">convert.predictions_to_datatree()</a></dt>
+<dd>
+<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
 </dd>
 </dl>
 </section>

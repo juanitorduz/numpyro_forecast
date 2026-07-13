@@ -7,32 +7,19 @@ Per-window result of a [backtest()](evaluate.backtest.md#numpyro_forecast.evalua
 Usage
 
 ``` python
-evaluate.BacktestResult()
+evaluate.BacktestResult(
+    t0,
+    t1,
+    t2,
+    num_samples,
+    train_walltime,
+    test_walltime,
+    metrics,
+    params=dict(),
+    train_metrics=dict(),
+    prediction=None
+)
 ```
-
-
-## Parameter Attributes
-
-
-`t0: int`  
-
-`t1: int`  
-
-`t2: int`  
-
-`num_samples: int`  
-
-`train_walltime: float`  
-
-`test_walltime: float`  
-
-`metrics: dict[str, float]`  
-
-`params: dict[str, float] = dict()`    
-
-`train_metrics: dict[str, float] = dict()`    
-
-`prediction: Array | None = None`  
 
 
 ## Attributes

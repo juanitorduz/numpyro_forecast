@@ -17,7 +17,8 @@ convert.to_datatree(
     num_predictive_samples=None,
     coords=None,
     time_coord=None,
-    posterior_dims=None
+    posterior_dims=None,
+    covariate_dims=None
 )
 ```
 
@@ -55,6 +56,9 @@ Optional explicit time coordinate values. Without a forecast horizon it covers t
 `posterior_dims: Mapping[str, Sequence[str]] | None = None`  
 Optional mapping from a posterior site name to its non-sample dimension names, e.g. `{"drift": ["time"]}`. Sites listed here share the tree-wide `time` coordinate; unlisted sites keep ArviZ's auto-named dims. This is an explicit opt-in on purpose: inferring time-indexed sites from trace shapes is fragile (a coincidental `n_params == n_time` would misattribute the axis).
 
+`covariate_dims: Sequence[str] | None = None`  
+Optional dimension names for the stored covariates, one per axis; defaults to the 2-D `("time", "covariate_dim")` layout. Use this when `covariates` carries extra batch axes, e.g. a panel tensor shaped `(channel, time, series)` with `covariate_dims=["channel", "time", "series"]`. The time axis is always `-2` (the package-wide convention), so its entry should be named `"time"` to share the tree-wide time coordinate.
+
 
 ## Returns
 
@@ -68,6 +72,9 @@ A tree with `posterior` (`(chain, draw, ...)`; a single pseudo-chain plus `varia
 
 `ValueError`  
 If `covariates` is shorter than `data` along the time axis, or if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon.
+
+`CovariateDimsError`  
+If `covariate_dims` does not name every `covariates` axis.
 
 
 ## Notes

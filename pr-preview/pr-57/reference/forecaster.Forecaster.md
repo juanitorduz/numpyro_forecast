@@ -7,7 +7,19 @@ Fit a forecasting model with stochastic variational inference.
 Usage
 
 ``` python
-forecaster.Forecaster()
+forecaster.Forecaster(
+    rng_key,
+    model,
+    data,
+    covariates,
+    *,
+    guide=None,
+    optim=None,
+    num_steps=1001,
+    num_particles=1,
+    progress_bar=False,
+    stable_update=False
+)
 ```
 
 

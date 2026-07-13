@@ -17,20 +17,6 @@ functional.svi.SVIFit(
 ```
 
 
-## Parameter Attributes
-
-
-`guide: AutoGuide | Callable[…, None]`  
-
-`params: dict[str, Array]`  
-
-`losses: Array`  
-
-`data: Array | None = None`  
-
-`covariates: Array | None = None`  
-
-
 ## Attributes
 
 

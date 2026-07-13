@@ -7,23 +7,16 @@ The train/forecast split for a single model call.
 Usage
 
 ``` python
-functional.models.Horizon()
+functional.models.Horizon(
+    data,
+    t_obs,
+    future,
+    duration,
+)
 ```
 
 
 Replaces the mutable `self._*` state of the OOP base class with an immutable value derived from the covariate and data shapes via [from_data()](functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon.from_data). The functional primitives ([time_series()](functional.models.time_series.md#numpyro_forecast.functional.models.time_series), [predict()](functional.models.predict.md#numpyro_forecast.functional.models.predict)) take it as their first argument.
-
-
-## Parameter Attributes
-
-
-`data: Array | None`  
-
-`t_obs: int`  
-
-`future: int`  
-
-`duration: int`  
 
 
 ## Attributes

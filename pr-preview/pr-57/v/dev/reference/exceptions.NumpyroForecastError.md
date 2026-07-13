@@ -7,7 +7,7 @@ Base class for all deliberate `numpyro_forecast` errors.
 Usage
 
 ``` python
-exceptions.NumpyroForecastError()
+exceptions.NumpyroForecastError(message=None)
 ```
 
 

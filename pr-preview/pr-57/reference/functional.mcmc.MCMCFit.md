@@ -14,14 +14,6 @@ functional.mcmc.MCMCFit(
 ```
 
 
-## Parameter Attributes
-
-
-`samples: dict[str, Array]`  
-
-`num_chains: int = ``1`  
-
-
 ## Attributes
 
 

@@ -124,6 +124,7 @@ Package exception hierarchy raised at resolution and validation boundaries.
 - `exceptions.GuideSampleArgsError`
 - `exceptions.KernelResolutionError`
 - `exceptions.KernelConfigError`
+- `exceptions.CovariateDimsError`
 - `exceptions.MVNLayoutError`
 
 ### ArviZ export
@@ -132,6 +133,7 @@ Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 - `convert.to_datatree`
 - `convert.add_forecast_groups`
+- `convert.predictions_to_datatree`
 
 ### Extensions (contrib)
 

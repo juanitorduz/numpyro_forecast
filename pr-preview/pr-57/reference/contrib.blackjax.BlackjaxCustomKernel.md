@@ -7,7 +7,11 @@ Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
 Usage
 
 ``` python
-contrib.blackjax.BlackjaxCustomKernel()
+contrib.blackjax.BlackjaxCustomKernel(
+    model=None,
+    *,
+    build_fn,
+)
 ```
 
 

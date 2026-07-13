@@ -101,6 +101,7 @@
 - [exceptions.GuideSampleArgsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.GuideSampleArgsError.html)
 - [exceptions.KernelResolutionError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelResolutionError.html)
 - [exceptions.KernelConfigError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelConfigError.html)
+- [exceptions.CovariateDimsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.CovariateDimsError.html)
 - [exceptions.MVNLayoutError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.MVNLayoutError.html)
 
 #### ArviZ export
@@ -108,6 +109,7 @@
 
 - [convert.to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html)
 - [convert.add_forecast_groups](https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html)
+- [convert.predictions_to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html)
 
 #### Extensions (contrib)
 > Optional backends behind pyproject extras (never imported by default).

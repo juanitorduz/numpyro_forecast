@@ -69,7 +69,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../../site_libs/quarto-search/fuse.min.js"></script>
 <script src="../../site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="../../">
-<link href="../../docs/examples/hierarchical_forecasting_1.html" rel="next">
+<link href="../../docs/examples/fresh_retail_stockout.html" rel="next">
 <link href="../../docs/examples/exponential_smoothing_state_space.html" rel="prev">
 <script src="../../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-4374c486a51c078b4a30d8ae56e0846f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../../theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.0&quot;,&quot;label&quot;:&quot;0.2.0&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.1&quot;,&quot;label&quot;:&quot;0.2.1&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
@@ -153,6 +153,7 @@ window.Quarto = {
 };
 </script>
 
+  <link rel="alternate" type="text/markdown" href="forecasting_univariate.md">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Univariate forecasting – numpyro_forecast (dev) | numpyro_forecast">
   <meta property="og:description" content="Forecast weekly BART ridership with a random-walk local level, Fourier seasonality, and a Student-t likelihood fit with SVI, then evaluate the model with rolling-origin backtesting.">
@@ -171,7 +172,7 @@ window.Quarto = {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../index.html">
-    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-08">v0.2.0</span></span>
+    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-12">v0.2.1</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -256,6 +257,12 @@ window.Quarto = {
   <div class="sidebar-item-container"> 
   <a href="../../docs/examples/forecasting_univariate.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Univariate forecasting</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/fresh_retail_stockout.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Forecasting retail demand under stockouts</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -1385,8 +1392,8 @@ max abs difference: 0.0</code></pre>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="../../docs/examples/hierarchical_forecasting_1.html" class="pagination-link" aria-label="Hierarchical forecasting I">
-        <span class="nav-page-text">Hierarchical forecasting I</span> <i class="bi bi-arrow-right-short"></i>
+      <a href="../../docs/examples/fresh_retail_stockout.html" class="pagination-link" aria-label="Forecasting retail demand under stockouts">
+        <span class="nav-page-text">Forecasting retail demand under stockouts</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

@@ -7,7 +7,16 @@ Fit a forecasting model with BlackJAX Pathfinder variational inference.
 Usage
 
 ``` python
-forecaster.PathfinderForecaster()
+forecaster.PathfinderForecaster(
+    rng_key,
+    model,
+    data,
+    covariates,
+    *,
+    num_elbo_samples=200,
+    ftol=1e-05,
+    maxiter=30
+)
 ```
 
 

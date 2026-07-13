@@ -7,29 +7,13 @@ Result of a [backtest_vectorized()](evaluate.backtest_vectorized.md#numpyro_fore
 Usage
 
 ``` python
-evaluate.VectorizedBacktestResult()
+evaluate.VectorizedBacktestResult(
+    t0, t1, t2, num_samples, losses, metrics, predictions=None
+)
 ```
 
 
 Unlike [BacktestResult](evaluate.BacktestResult.md#numpyro_forecast.evaluate.BacktestResult) this holds every window's values stacked along a leading window axis, because the windows are fitted, drawn, and scored in single vmapped passes rather than one call each. There are no per-window walltimes (a single fused computation covers all windows).
-
-
-## Parameter Attributes
-
-
-`t0: Array`  
-
-`t1: Array`  
-
-`t2: Array`  
-
-`num_samples: int`  
-
-`losses: Array`  
-
-`metrics: dict[str, Array]`  
-
-`predictions: Array | None = None`  
 
 
 ## Attributes
