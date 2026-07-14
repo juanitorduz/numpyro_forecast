@@ -1786,7 +1786,7 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 
 # Export to an ArviZ DataTree
 
- predictive and the forecast would each add another full `(sample, time, series)` array on top, which is exactly how this notebook ran out of memory on a GPU instance. `predictive_batch_size=250` instead runs both stages in chunks of \\250\\ draws, sampling the posterior and the predictive \\250\\ draws at a time and moving each chunk to host memory before the next one is drawn, so accelerator memory is bounded by one chunk. Chunking only changes the PRNG stream layout (draws are reproducible per `rng_key` and batch size); on this CPU run it is purely a demonstration.
+A single [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call wraps everything: it draws the posterior from the guide, runs the in-sample posterior predictive, and, because the covariates extend \\14\\ days past the training data, also generates the forecast and stores it in the `predictions` group. We label every dimension so downstream selections read naturally; in particular, `covariate_dims` tells the export the covariates are an `(input, time, series)` tensor, so `constant_data` keeps the layout the model consumes instead of a flattened matrix, with the five inputs named on the `input` coordinate. This export is also where memory peaks on an accelerator, twice over: drawing the posterior materializes every latent and deterministic site for all \\1{,}000\\ draws at once (on a wide panel this is the single largest allocation of the whole notebook), and the in-sample predictive and the forecast would each add another full `(sample, time, series)` array on top, which is exactly how this notebook ran out of memory on a GPU instance. `predictive_batch_size=250` instead runs both stages in chunks of \\250\\ draws, sampling the posterior and the predictive \\250\\ draws at a time and moving each chunk to host memory before the next one is drawn, so accelerator memory is bounded by one chunk. Chunking only changes the PRNG stream layout (draws are reproducible per `rng_key` and batch size); on this CPU run it is purely a demonstration.
 
 
 ``` python
@@ -4004,7 +4004,7 @@ ax.set(
 
 # Promotion contributions
 
-The reason to keep every promotion feature in the model is to read off what each one contributes to sales. On the scaled axis a contribution of \\0.1\\ means "one tenth of an average day's sales", so the units are directly comparable across series. For each series we take the posterior-mean coefficient times the feature's average value on its *active* days (days where the feature is positive) over the training window, and summarize that quantity across the panel with a forest plot: per feature, the open circle marks the cross-series median, the thick segment the \\50\\\\ HDI, and the thin line the \\94\\\\ HDI of the contribution across series. The plot stays entirely in named-tensor land: `az.plot_forest` consumes the `(covariate, series)` contributions array directly, treating the series axis as the sample dimension, and the `skipna` entries in its `stats` mapping drop the series where a feature has no active training day (whose active-day mean is NaN) instead of blanking that feature's row.
+g day (whose active-day mean is NaN) instead of blanking that feature's row.
 
 
 ``` python

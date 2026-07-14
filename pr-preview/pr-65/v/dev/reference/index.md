@@ -239,6 +239,9 @@ Covariate dimension names are inconsistent or malformed.
 [exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
 A `MultivariateNormal` layout is unsupported for time-axis surgery.
 
+[exceptions.DeviceMemoryError](exceptions.DeviceMemoryError.md#numpyro_forecast.exceptions.DeviceMemoryError)  
+The accelerator ran out of memory during posterior or predictive sampling.
+
 
 ## ArviZ export
 

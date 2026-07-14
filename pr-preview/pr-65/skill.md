@@ -126,6 +126,7 @@ Package exception hierarchy raised at resolution and validation boundaries.
 - `exceptions.KernelConfigError`
 - `exceptions.CovariateDimsError`
 - `exceptions.MVNLayoutError`
+- `exceptions.DeviceMemoryError`
 
 ### ArviZ export
 

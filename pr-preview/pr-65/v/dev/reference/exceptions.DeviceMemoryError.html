@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>metrics.eval_interval_score() – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>exceptions.DeviceMemoryError – numpyro_forecast (dev) | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -120,38 +120,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.1&quot;,&quot;label&quot;:&quot;0.2.1&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
-  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
-
-  <link rel="alternate" type="text/markdown" href="metrics.eval_interval_score.md">
-  <meta name="description" content="Mean Winkler interval score for the central alpha prediction interval.">
+  <link rel="alternate" type="text/markdown" href="exceptions.DeviceMemoryError.md">
+  <meta name="description" content="The accelerator ran out of memory during posterior or predictive sampling.">
   <script type="application/ld+json">
 [
   {
@@ -171,23 +142,23 @@ window.Quarto = {
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "metrics.eval_interval_score - numpyro_forecast",
+    "name": "exceptions.DeviceMemoryError - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_interval_score.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DeviceMemoryError.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="metrics.eval_interval_score() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="Mean Winkler interval score for the central alpha prediction interval.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_interval_score.html">
+  <meta property="og:title" content="exceptions.DeviceMemoryError – numpyro_forecast (dev) | numpyro_forecast">
+  <meta property="og:description" content="The accelerator ran out of memory during posterior or predictive sampling.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DeviceMemoryError.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="metrics.eval_interval_score() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="Mean Winkler interval score for the central alpha prediction interval.">
+  <meta name="twitter:title" content="exceptions.DeviceMemoryError – numpyro_forecast (dev) | numpyro_forecast">
+  <meta name="twitter:description" content="The accelerator ran out of memory during posterior or predictive sampling.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -237,7 +208,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">metrics.eval_interval_score()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">exceptions.DeviceMemoryError</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -495,7 +466,7 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/metrics.eval_interval_score.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/metrics.eval_interval_score.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">metrics.eval_interval_score()</span></span></a>
   </div>
 </li>
@@ -667,7 +638,7 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</span></span></a>
   </div>
 </li>
@@ -774,23 +745,15 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h3 id="toc-title">On this page</h3>
-   
-  <ul class="collapse">
-  <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
-  <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
-  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
-  </ul>
-</nav>
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">metrics.eval_interval_score()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</span></h2>
 </div>
 
 
@@ -808,67 +771,20 @@ window.Quarto = {
 
 
 <div class="doc-subject">
-<p>Mean Winkler interval score for the central <code>alpha</code> prediction interval.</p>
+<p>The accelerator ran out of memory during posterior or predictive sampling.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L122-L166" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L160-L173" target="_blank" rel="noopener">Source</a></p>
 </div>
-<div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">eval_interval_score</span>(
-    <span class="va">pred</span>,
-    <span class="va">truth</span>,
-    <span class="op">*</span>,
-    <span class="va">alpha</span><span class="op">=</span><span class="fl">0.9</span>,
-)</span></code></pre></div>
+<div class="doc-signature doc-Kind.CLASS">
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">DeviceMemoryError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>For the central <code>alpha</code> interval <span class="math inline">\([l, u]\)</span> (the <span class="math inline">\((1-\alpha)/2\)</span> and <span class="math inline">\(1-(1-\alpha)/2\)</span> quantiles), the interval score is <span class="math inline">\((u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y&lt;l} + (y -
-u)\mathbf 1_{y&gt;u}\big]\)</span>, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>).</p>
-</div>
-<section id="parameters" class="level2 doc-parameters">
-<h2 class="doc-parameters">Parameters</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" sample *batch"</span>]</span></code></dt>
-<dd>
-<p>Forecast samples with the sample axis first.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch"</span>]</span></code></dt>
-<dd>
-<p>Ground-truth values (matching <code>pred</code> without the sample axis).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">alpha</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">float</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="fl">0.9</span></span></code></dt>
-<dd>
-Nominal interval level in <code>(0, 1)</code>.
-</dd>
-</dl>
-</div>
-</section>
-<section id="returns" class="level2 doc-returns">
-<h2 class="doc-returns">Returns</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
-<dd>
-The mean interval score as a scalar array.
-</dd>
-</dl>
-</div>
-</section>
-<section id="raises" class="level2 doc-raises">
-<h2 class="doc-raises">Raises</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
-<dd>
-If <code>alpha</code> is not strictly inside <code>(0, 1)</code>.
-</dd>
-</dl>
+<p>Raised by <code>~numpyro_forecast.functional.posterior.draw_posterior()</code> and the predictive drivers (<code>~numpyro_forecast.functional.prediction.forecast()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, and everything built on them, e.g.&nbsp;<code>~numpyro_forecast.convert.to_datatree()</code>) when XLA reports <code>RESOURCE_EXHAUSTED</code>. The message embeds the device’s memory budget and the lever: the per-chunk footprint scales linearly with <code>batch_size</code> times the panel width, so lower (or set) <code>batch_size</code>, free large device arrays still referenced elsewhere, and keep results off the accelerator with <code>device="host"</code>. The original XLA error is chained as <code>__cause__</code>.</p>
 </div>
 
 
-</section>
 
 </main>
 <hr style="padding: 0; margin: 0;">

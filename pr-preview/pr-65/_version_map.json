@@ -182,6 +182,10 @@
       "dev",
       "0.2.1"
     ],
+    "reference/exceptions.DeviceMemoryError.html": [
+      "dev",
+      "0.2.1"
+    ],
     "reference/exceptions.GuideResolutionError.html": [
       "dev",
       "0.2.1"
