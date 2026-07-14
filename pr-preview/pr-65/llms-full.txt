@@ -1009,7 +1009,7 @@ Raises
 ImportError
     If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 
-eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, batch_size: int | None = None) -> 'Array | np.floating'
 
 Empirical CRPS averaged over all data elements.
 
@@ -1021,11 +1021,20 @@ pred
     Forecast samples with the sample axis first.
 truth
     Ground-truth values (matching ``pred`` without the sample axis).
+batch_size
+    Optional number of flattened data cells (the product of the batch
+    shape, e.g. time times series) evaluated on the accelerator per pass;
+    the sample axis is never chunked. With host-resident (NumPy) inputs
+    this bounds accelerator memory by ``sample * batch_size`` values plus
+    the CRPS sort workspace instead of the full panel. Chunking only
+    changes the summation order of the final mean (results are equal to
+    float tolerance, not bitwise); at or above the cell count the
+    single-pass path runs. ``None`` (default) evaluates in one pass.
 
 Returns
 -------
-Array
-    The mean empirical CRPS as a scalar array.
+Array | np.floating
+    The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
 
 eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
 
@@ -1063,7 +1072,7 @@ Returns
 Array
     The root mean squared error as a scalar array.
 
-eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
+eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, alpha: float = 0.9, batch_size: int | None = None) -> 'Array | np.floating'
 
 Empirical coverage of the central ``alpha`` prediction interval.
 
@@ -1082,12 +1091,18 @@ truth
     Ground-truth values (matching ``pred`` without the sample axis).
 alpha
     Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
+batch_size
+    Optional number of flattened data cells evaluated on the accelerator
+    per pass (see :func:`eval_crps`; the sample axis is never chunked).
+    Coverage is a count of exact 0/1 indicators, so chunking recovers
+    the identical count; only the precision of the final division differs
+    from the single pass. ``None`` (default) evaluates in one pass.
 
 Returns
 -------
-Array
+Array | np.floating
     The fraction of ground truth inside the central ``alpha`` interval, as
-    a scalar array.
+    a scalar (a NumPy scalar when chunked).
 
 Raises
 ------

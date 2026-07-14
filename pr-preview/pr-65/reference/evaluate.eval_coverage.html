@@ -777,15 +777,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L108-L150" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L220-L268" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">eval_coverage</span>(
-    <span class="va">pred</span>,
-    <span class="va">truth</span>,
-    <span class="op">*</span>,
-    <span class="va">alpha</span><span class="op">=</span><span class="va">_DEFAULT_COVERAGE_ALPHA</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">eval_coverage</span>(<span class="va">pred</span>: <span class="va">Float</span>[<span class="va">Array</span>, <span class="st">&quot; sample *batch&quot;</span>] <span class="op">|</span> <span class="va">Float</span>[<span class="va">np</span><span class="op">.</span><span class="va">ndarray</span>, <span class="st">&quot; sample *batch&quot;</span>], <span class="va">truth</span>: <span class="va">Float</span>[<span class="va">Array</span>, <span class="st">&quot; *batch&quot;</span>] <span class="op">|</span> <span class="va">Float</span>[<span class="va">np</span><span class="op">.</span><span class="va">ndarray</span>, <span class="st">&quot; *batch&quot;</span>], <span class="va">alpha</span>: <span class="bu">float</span> <span class="op">=</span> <span class="op">...</span>, <span class="va">batch_size</span>: <span class="cn-none">None</span> <span class="op">=</span> <span class="cn-none">None</span>) <span class="op">-&gt;</span> <span class="va">Array</span></span>
+<span id="cb1-2" class="overload-spacer"> </span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">eval_coverage</span>(<span class="va">pred</span>: <span class="va">Float</span>[<span class="va">Array</span>, <span class="st">&quot; sample *batch&quot;</span>] <span class="op">|</span> <span class="va">Float</span>[<span class="va">np</span><span class="op">.</span><span class="va">ndarray</span>, <span class="st">&quot; sample *batch&quot;</span>], <span class="va">truth</span>: <span class="va">Float</span>[<span class="va">Array</span>, <span class="st">&quot; *batch&quot;</span>] <span class="op">|</span> <span class="va">Float</span>[<span class="va">np</span><span class="op">.</span><span class="va">ndarray</span>, <span class="st">&quot; *batch&quot;</span>], <span class="va">alpha</span>: <span class="bu">float</span> <span class="op">=</span> <span class="op">...</span>, <span class="va">batch_size</span>: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="va">Array</span> <span class="op">|</span> <span class="va">np</span><span class="op">.</span><span class="va">floating</span></span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>The central <code>alpha</code> interval is bounded by the <code>(1 - alpha) / 2</code> and <code>1 - (1 - alpha) / 2</code> quantiles of the forecast samples; the metric is the fraction of ground-truth values that fall inside it. A well-calibrated forecast has coverage close to <code>alpha</code>. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>); bind a non-default level with <code>functools.partial(eval_coverage, alpha=...)</code>.</p>
@@ -794,17 +791,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" sample *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" sample *batch"</span>] | Float[np.ndarray, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
 <p>Forecast samples with the sample axis first.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch"</span>] | Float[np.ndarray, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>
 <p>Ground-truth values (matching <code>pred</code> without the sample axis).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">alpha</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">float</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">_DEFAULT_COVERAGE_ALPHA<br></span></code></dt>
 <dd>
-Nominal interval level in <code>(0, 1)</code>; defaults to <code>0.9</code>.
+<p>Nominal interval level in <code>(0, 1)</code>; defaults to <code>0.9</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional number of flattened data cells evaluated on the accelerator per pass (see <a href="evaluate.eval_crps.html#numpyro_forecast.evaluate.eval_crps" class="gdls-link gdls-code">eval_crps()</a>; the sample axis is never chunked). Coverage is a count of exact 0/1 indicators, so chunking recovers the identical count; only the precision of the final division differs from the single pass. <code>None</code> (default) evaluates in one pass.
 </dd>
 </dl>
 </div>
@@ -813,9 +814,9 @@ Nominal interval level in <code>(0, 1)</code>; defaults to <code>0.9</code>.
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Array | np.floating</span></code></dt>
 <dd>
-The fraction of ground truth inside the central <code>alpha</code> interval, as a scalar array.
+The fraction of ground truth inside the central <code>alpha</code> interval, as a scalar (a NumPy scalar when chunked).
 </dd>
 </dl>
 </div>
