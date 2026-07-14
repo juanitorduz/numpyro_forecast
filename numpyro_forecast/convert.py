@@ -273,7 +273,10 @@ def to_datatree(
         largest allocation, since every latent and deterministic site is
         materialized for all draws) and the in-sample/forecast predictive
         sampling run in chunks of this many draws, each chunk moved to
-        ``predictive_device`` before the next is drawn. The batch size must be
+        ``predictive_device`` before the next is drawn. The per-chunk
+        accelerator footprint is a handful of ``(batch_size, time, series)``
+        buffers, so it scales linearly with this value times the panel width:
+        on wide panels lower it until a chunk fits. The batch size must be
         strictly below the draw count for that bound to hold: at or above it,
         sampling falls back to the single-shot path and the full array is
         materialized on the default device before the single transfer.

@@ -8,8 +8,8 @@ result. It dispatches on the fit type via the private singledispatch generic
 blackjax Pathfinder backend) register implementations.
 """
 
-from collections.abc import Mapping
-from functools import singledispatch
+from collections.abc import Callable, Mapping
+from functools import lru_cache, singledispatch
 
 import jax
 import jax.numpy as jnp
@@ -60,6 +60,32 @@ def _index_tree[Leaf: Array | np.ndarray](
     return tree_map(lambda leaf: leaf[index], tree)
 
 
+@lru_cache(maxsize=8)
+def _jitted_sample_posterior(guide: AutoGuide) -> Callable[..., dict[str, Array]]:
+    """Return a jitted, per-guide-cached ``sample_posterior`` with static ``sample_shape``.
+
+    Eagerly, ``sample_posterior`` materializes every latent and deterministic
+    site (and their intermediates) at full sample size with no buffer planning,
+    which is what blows accelerator memory on wide panels. Under ``jax.jit``
+    XLA schedules and reuses those buffers, and caching per guide instance
+    means every chunk of a :func:`draw_posterior` call (and repeated calls
+    with the same fit and sample count) shares one compiled executable, the
+    same single-compile discipline as the predictive drivers.
+
+    Parameters
+    ----------
+    guide
+        The fitted autoguide whose bound ``sample_posterior`` is wrapped.
+
+    Returns
+    -------
+    Callable[..., dict[str, Array]]
+        The jitted ``sample_posterior``; call it exactly like the eager bound
+        method (``sample_shape`` must be passed by keyword).
+    """
+    return jax.jit(guide.sample_posterior, static_argnames=("sample_shape",))
+
+
 @singledispatch
 def _draw_posterior_impl(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
     """Dispatch on the fit type to draw posterior samples (see :func:`draw_posterior`)."""
@@ -74,7 +100,8 @@ def _(fit: SVIFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
         point = fit.guide.sample_posterior(rng_key, fit.params)
         return _ensure_sample_axis_for_delta(point, num_samples)
     if isinstance(fit.guide, AutoGuide):
-        return fit.guide.sample_posterior(rng_key, fit.params, sample_shape=(num_samples,))
+        sample = _jitted_sample_posterior(fit.guide)
+        return sample(rng_key, fit.params, sample_shape=(num_samples,))
     if fit.covariates is None:
         raise GuideSampleArgsError()
     predictive = Predictive(fit.guide, params=fit.params, num_samples=num_samples)
@@ -184,10 +211,14 @@ def draw_posterior(
     _require_positive_num_samples(num_samples)
     num_chunks = -(-num_samples // batch_size)  # ceil; the last chunk overdraws
     keys = random.split(rng_key, num_chunks)
-    chunks = [
-        {name: _transfer(leaf, resolved) for name, leaf in draws.items()}
-        for draws in (_draw_posterior_impl(fit, batch_size, key) for key in keys)
-    ]
+    chunks: list[dict[str, Array | np.ndarray]] = []
+    for key in keys:
+        # An explicit loop with pop-per-leaf keeps the accelerator peak at one
+        # chunk: every device buffer of chunk k is released (each leaf as soon
+        # as its copy lands on ``device``) before chunk k+1 is dispatched.
+        draws = dict(_draw_posterior_impl(fit, batch_size, key))
+        chunks.append({name: _transfer(draws.pop(name), resolved) for name in list(draws)})
+        del draws
     return {
         name: _stitch_chunks([chunk[name] for chunk in chunks], num_samples, resolved)
         for name in chunks[0]

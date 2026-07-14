@@ -1,5 +1,6 @@
 """Tests for drawing posterior samples from fits (``functional.posterior``)."""
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -7,6 +8,7 @@ from conftest import mcmc_fit, svi_fit
 from jax import random
 
 from numpyro_forecast.functional import MCMCFit, draw_posterior
+from numpyro_forecast.functional.posterior import _jitted_sample_posterior
 from numpyro_forecast.typing import Array
 
 
@@ -126,6 +128,29 @@ def test_draw_posterior_chunked_calls_impl_per_fixed_size_chunk(
     assert [n for n, _ in calls] == [4, 4, 4]  # ceil(10 / 4) chunks, fixed size
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for _, k in calls]
     assert len(set(raw)) == len(raw)  # one distinct subkey per chunk
+
+
+def test_draw_posterior_chunked_single_compile(count_compilations) -> None:
+    """The jitted guide sampling compiles once per (guide, chunk shape) and is reused.
+
+    Every chunk shares the fixed ``batch_size`` shape, and the jitted
+    ``sample_posterior`` is cached per guide instance, so a repeat of the same
+    chunked draw (and any later draw with the same batch size, regardless of
+    ``num_samples``) must compile nothing.
+    """
+    fit = svi_fit(t=30)
+    jax.block_until_ready(draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4))  # warm-up
+
+    with count_compilations() as tally:
+        jax.block_until_ready(draw_posterior(random.PRNGKey(3), fit, 10, batch_size=4))
+    assert tally.count == 0
+
+    # A different num_samples with the same batch size reuses the sampling
+    # executable (the chunk shape, not the total, keys the compilation); only
+    # trivial stitching kernels differ, so the jitted sampler stays at one entry.
+    jax.block_until_ready(draw_posterior(random.PRNGKey(4), fit, 7, batch_size=4))
+    sample = _jitted_sample_posterior(fit.guide)
+    assert sample._cache_size() == 1  # ty: ignore[unresolved-attribute]
 
 
 def test_draw_posterior_mcmc_batch_size_is_a_draws_noop() -> None:
