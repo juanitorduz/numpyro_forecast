@@ -778,7 +778,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/prediction.py#L211-L286" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/prediction.py#L211-L288" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">prediction</span><span class="op">.</span><span class="va">forecast</span>(</span>
@@ -830,7 +830,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional device (or platform name like <code>"cpu"</code>) where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. With <code>batch_size</code> set on an accelerator, <code>"cpu"</code> bounds accelerator memory by a single chunk instead of the full <code>(sample, future, obs)</code> array; the draw values are unchanged, only the placement of the result. <code>None</code> keeps everything on the default device.
+Optional device (or platform name like <code>"cpu"</code>) where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. With <code>batch_size</code> set on an accelerator, <code>"cpu"</code> bounds accelerator memory by a single chunk instead of the full <code>(sample, future, obs)</code> array; the draw values are unchanged, only the placement of the result. The bound requires <code>batch_size</code> strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. <code>None</code> keeps everything on the default device.
 </dd>
 </dl>
 </div>

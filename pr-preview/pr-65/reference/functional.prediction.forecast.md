@@ -49,7 +49,7 @@ Optional chunk size for sampling (caps peak memory).
 Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster, higher peak memory) or maps it serially with `lax.map` (`False`). With `parallel=True` the samples in each `batch_size` chunk are vectorized while the chunks are looped over, so `batch_size` remains the peak-memory governor. The two settings produce the same draws up to floating-point reduction order.
 
 `device: jax.Device | str | None = None`  
-Optional device (or platform name like `"cpu"`) where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. With `batch_size` set on an accelerator, `"cpu"` bounds accelerator memory by a single chunk instead of the full `(sample, future, obs)` array; the draw values are unchanged, only the placement of the result. `None` keeps everything on the default device.
+Optional device (or platform name like `"cpu"`) where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. With `batch_size` set on an accelerator, `"cpu"` bounds accelerator memory by a single chunk instead of the full `(sample, future, obs)` array; the draw values are unchanged, only the placement of the result. The bound requires `batch_size` strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. `None` keeps everything on the default device.
 
 
 ## Returns
