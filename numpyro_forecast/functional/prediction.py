@@ -9,8 +9,7 @@ moved off the accelerator before the next one is drawn, so accelerator memory
 is bounded by a single chunk instead of the full draw array.
 """
 
-import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Literal
 
@@ -21,94 +20,13 @@ from jax import random
 from jaxtyping import Num
 from numpyro.infer import Predictive
 
+from numpyro_forecast.functional._offload import _resolve_device, _stitch_chunks, _transfer
 from numpyro_forecast.functional._validation import _require_covariates_extend_data
 from numpyro_forecast.functional.posterior import _index_tree
 from numpyro_forecast.typing import Array, ForecastModel
 
 
-def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["host"] | None:
-    """Resolve a device spec to a :class:`jax.Device` or the ``"host"`` sentinel.
-
-    Parameters
-    ----------
-    device
-        A device, ``"host"`` (plain host memory via :func:`jax.device_get`,
-        needs no CPU backend), a platform name accepted by :func:`jax.devices`
-        (e.g. ``"cpu"``, resolved to the platform's first device), or ``None``.
-
-    Returns
-    -------
-    jax.Device | Literal["host"] | None
-        The resolved device, ``"host"``, or ``None`` when ``device`` is
-        ``None``. ``"cpu"`` also resolves to ``"host"`` (with a
-        :class:`UserWarning`) when the CPU backend is not initialized, e.g.
-        after ``numpyro.set_platform("cuda")`` restricted ``jax_platforms``.
-
-    Raises
-    ------
-    ValueError
-        If ``device`` names any other platform whose backend is not
-        initialized.
-    """
-    if device is None or isinstance(device, jax.Device):
-        return device
-    if device == "host":
-        return "host"
-    try:
-        return jax.devices(device)[0]
-    except RuntimeError as err:
-        available = [d.platform for d in jax.devices()]
-        if device == "cpu":
-            warnings.warn(
-                f"the JAX CPU backend is not initialized (available platforms: {available}), "
-                "so draws fall back to device='host' (host memory, returned as a NumPy "
-                "array). Pass device='host' explicitly, or initialize the CPU backend, "
-                "e.g. numpyro.set_platform('cuda,cpu'), to silence this warning.",
-                UserWarning,
-                stacklevel=3,
-            )
-            return "host"
-        msg = (
-            f"JAX platform {device!r} is not initialized (available platforms: {available}). "
-            "Pass one of those platforms, a jax.Device, 'host' (host memory, NumPy result), "
-            "or initialize the platform via jax_platforms, "
-            f"e.g. numpyro.set_platform('{available[0]},{device}')."
-        )
-        raise ValueError(msg) from err
-
-
-def _transfer(draws: Array, device: jax.Device | Literal["host"] | None) -> Array | np.ndarray:
-    """Move ``draws`` to ``device`` and wait for the transfer to finish.
-
-    Blocking makes the memory profile deterministic: the source buffer is
-    released before the next chunk is drawn, so the accelerator holds at most
-    one chunk of draws at a time. ``device`` ``None`` is the identity;
-    ``"host"`` copies to host memory with :func:`jax.device_get` (a NumPy
-    array, inherently blocking, available regardless of which JAX backends are
-    initialized).
-
-    Parameters
-    ----------
-    draws
-        The draws to move.
-    device
-        Target device, ``"host"``, or ``None`` to leave ``draws`` where they
-        are.
-
-    Returns
-    -------
-    Array | np.ndarray
-        ``draws`` committed to ``device`` (``draws`` itself when ``None``, a
-        NumPy array when ``"host"``).
-    """
-    if device is None:
-        return draws
-    if device == "host":
-        return jax.device_get(draws)
-    return jax.device_put(draws, device).block_until_ready()
-
-
-def _sample_axis_size(posterior: dict[str, Array]) -> int:
+def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     """Validate and return the shared sample-axis length of a posterior.
 
     Parameters
@@ -178,8 +96,8 @@ def _chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
 
 def _chunked_draws(
     rng_key: Array,
-    predict_fn: Callable[[Array, dict[str, Array]], Array],
-    posterior: dict[str, Array],
+    predict_fn: Callable[[Array, Mapping[str, Array | np.ndarray]], Array],
+    posterior: Mapping[str, Array | np.ndarray],
     batch_size: int | None,
     device: jax.Device | Literal["host"] | None = None,
 ) -> Array | np.ndarray:
@@ -228,18 +146,14 @@ def _chunked_draws(
         _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
         for i, idx in enumerate(indices)
     ]
-    if device == "host":
-        stitched: Array | np.ndarray = np.concatenate(chunks, axis=0)
-    else:
-        stitched = jnp.concatenate(chunks, axis=0)
-    return stitched if stitched.shape[0] == num else stitched[:num]
+    return _stitch_chunks(chunks, num, device)
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
 def _predict(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     data: Array,
     covariates: Array,
     *,
@@ -255,7 +169,7 @@ def _predict(
     ``lax.map`` when ``False``).
     """
     predictive = Predictive(
-        model, posterior_samples=posterior, return_sites=["forecast"], parallel=parallel
+        model, posterior_samples=dict(posterior), return_sites=["forecast"], parallel=parallel
     )
     return predictive(rng_key, covariates, data)["forecast"]
 
@@ -263,7 +177,7 @@ def _predict(
 def forecast(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     data: Array,
     covariates: Array,
     *,
@@ -342,7 +256,7 @@ def forecast(
     """
     _require_covariates_extend_data(data, covariates)
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+    def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return _predict(key, model, post, data, covariates, parallel=parallel)
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
@@ -352,7 +266,7 @@ def forecast(
 def _predict_obs(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     covariates: Array,
     *,
     parallel: bool = True,
@@ -364,7 +278,7 @@ def _predict_obs(
     the chunked :func:`predict_in_sample` loop cheap.
     """
     predictive = Predictive(
-        model, posterior_samples=posterior, return_sites=["obs"], parallel=parallel
+        model, posterior_samples=dict(posterior), return_sites=["obs"], parallel=parallel
     )
     return predictive(rng_key, covariates)["obs"]
 
@@ -372,7 +286,7 @@ def _predict_obs(
 def predict_in_sample(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     covariates: Array,
     *,
     batch_size: int | None = None,
@@ -431,7 +345,7 @@ def predict_in_sample(
         array when ``device`` resolves to ``"host"``).
     """
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+    def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return _predict_obs(key, model, post, covariates, parallel=parallel)
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))

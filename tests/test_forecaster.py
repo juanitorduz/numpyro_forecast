@@ -146,6 +146,24 @@ def test_forecaster_host_device_returns_numpy_bitwise_match(rng_key: Array) -> N
     assert np.array_equal(np.asarray(plain), hosted)
 
 
+def test_forecaster_forwards_batch_and_device_to_posterior_draw(rng_key: Array) -> None:
+    """The posterior draw is chunked/offloaded with the same knobs as the predictive."""
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+
+    captured: dict[str, object] = {}
+    real_draw = forecaster._draw_posterior
+
+    def spy_draw(*args: object, **kwargs: object) -> object:
+        captured.update(kwargs)
+        return real_draw(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    forecaster._draw_posterior = spy_draw  # ty: ignore[invalid-assignment]
+    forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3, device="host")
+    assert captured == {"batch_size": 3, "device": "host"}
+
+
 def test_forecaster_conditions_on_data(rng_key: Array) -> None:
     # A roughly constant series at level 5: forecasts must track it (not the
     # zero-mean prior), which is only possible if the posterior conditions on it.

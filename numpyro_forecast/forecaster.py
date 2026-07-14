@@ -249,8 +249,22 @@ class _BaseForecaster(abc.ABC):
         self._t_obs = t_obs
 
     @abc.abstractmethod
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        """Return ``num_samples`` posterior draws of the latent sites."""
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        """Return ``num_samples`` posterior draws of the latent sites.
+
+        ``batch_size`` and ``device`` mirror
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`: they
+        chunk the drawing itself and move each chunk off the accelerator, so
+        the posterior draw (the largest allocation on wide panels) is bounded
+        by one chunk.
+        """
         raise NotImplementedError
 
     def __call__(
@@ -298,7 +312,9 @@ class _BaseForecaster(abc.ABC):
         _require_covariates_extend_data(data, covariates)
         _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
-        posterior = self._draw_posterior(key_post, num_samples)
+        posterior = self._draw_posterior(
+            key_post, num_samples, batch_size=batch_size, device=device
+        )
         return _forecast(
             key_pred,
             self.model,
@@ -369,7 +385,9 @@ class _BaseForecaster(abc.ABC):
             raise ValueError(msg)
         _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
-        posterior = self._draw_posterior(key_post, num_samples)
+        posterior = self._draw_posterior(
+            key_post, num_samples, batch_size=batch_size, device=device
+        )
         return _predict_in_sample(
             key_pred,
             self.model,
@@ -447,8 +465,17 @@ class Forecaster(_BaseForecaster):
         self.params: dict[str, Array] = self._fit.params
         self.losses: Array = self._fit.losses
 
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        return draw_posterior(rng_key, self._fit, num_samples)
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        return draw_posterior(
+            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+        )
 
 
 class HMCForecaster(_BaseForecaster):
@@ -514,8 +541,17 @@ class HMCForecaster(_BaseForecaster):
         )
         self.posterior_samples: dict[str, Array] = self._fit.samples
 
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        return draw_posterior(rng_key, self._fit, num_samples)
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        return draw_posterior(
+            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+        )
 
 
 class PathfinderForecaster(_BaseForecaster):
@@ -576,5 +612,14 @@ class PathfinderForecaster(_BaseForecaster):
         )
         self.elbo: float = self._fit.elbo
 
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        return draw_posterior(rng_key, self._fit, num_samples)
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        return draw_posterior(
+            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+        )

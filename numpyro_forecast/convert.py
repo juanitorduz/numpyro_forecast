@@ -267,22 +267,26 @@ def to_datatree(
         The same draws drive the in-sample predictive and the forecast. Defaults
         to ``1_000``.
     predictive_batch_size
-        Optional chunk size for the predictive sampling. When set, the
-        in-sample posterior predictive and the forecast draws are sampled in
-        chunks of this many posterior draws, and each chunk is moved to
-        ``predictive_device`` before the next is drawn, so accelerator memory
-        is bounded by one chunk instead of the full ``(samples, time, obs)``
-        array. The batch size must be strictly below the draw count for that
-        bound to hold: at or above it, sampling falls back to the single-shot
-        path and the full array is materialized on the default device before
-        the single transfer. Chunking changes the PRNG stream layout, so draws
-        are reproducible per ``(rng_key, predictive_batch_size)``. ``None``
-        (default) samples everything in one shot (the result is still
-        moved to ``predictive_device``).
+        Optional chunk size that bounds how many draws touch the accelerator
+        at once, across both stages of the export. When set, the posterior
+        drawing itself (for variational fits; on a wide panel it is the
+        largest allocation, since every latent and deterministic site is
+        materialized for all draws) and the in-sample/forecast predictive
+        sampling run in chunks of this many draws, each chunk moved to
+        ``predictive_device`` before the next is drawn. The batch size must be
+        strictly below the draw count for that bound to hold: at or above it,
+        sampling falls back to the single-shot path and the full array is
+        materialized on the default device before the single transfer.
+        Chunking changes the PRNG stream layout of both the posterior and the
+        predictive draws (including the ``posterior`` group), so results are
+        reproducible per ``(rng_key, predictive_batch_size)``. ``None``
+        (default) samples everything in one shot (the results are still moved
+        to ``predictive_device``).
     predictive_device
-        Where the predictive draws are moved as they are sampled, forwarded to
-        the ``device`` argument of
-        :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
+        Where the posterior and predictive draws are moved as they are
+        sampled, forwarded to the ``device`` argument of
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`,
+        :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
         :func:`~numpyro_forecast.functional.prediction.forecast`. The default
         ``"host"`` copies every chunk to host memory as a NumPy array (where
         the tree is built anyway); it is what bounds accelerator memory when
@@ -364,14 +368,16 @@ def to_datatree(
 
     is_mcmc = isinstance(fit, MCMCFit)
     if is_mcmc:
-        samples: dict[str, Array] = dict(fit.samples)  # type: ignore[attr-defined]
+        samples: dict[str, Array | np.ndarray] = dict(fit.samples)  # type: ignore[attr-defined]
     else:
         num = (
             _DEFAULT_NUM_PREDICTIVE_SAMPLES
             if num_predictive_samples is None
             else num_predictive_samples
         )
-        samples = draw_posterior(key_post, fit, num)
+        samples = draw_posterior(
+            key_post, fit, num, batch_size=predictive_batch_size, device=predictive_device
+        )
 
     if time_coord is not None:
         time_values = np.asarray(time_coord)

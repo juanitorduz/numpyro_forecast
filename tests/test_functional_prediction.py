@@ -1,5 +1,7 @@
 """Tests for functional predictive sampling (``functional.prediction``)."""
 
+from collections.abc import Mapping
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -15,11 +17,11 @@ from numpyro_forecast.functional import (
     forecasting_model,
     predict_in_sample,
 )
+from numpyro_forecast.functional._offload import _resolve_device
 from numpyro_forecast.functional.prediction import (
     _chunk_indices,
     _chunked_draws,
     _predict,
-    _resolve_device,
     _sample_axis_size,
 )
 from numpyro_forecast.typing import Array, ForecastModel
@@ -151,9 +153,9 @@ def test_chunked_draws_splits_wraps_and_truncates() -> None:
     """The chunk driver feeds fixed-size wrapped chunks, distinct subkeys, and truncates."""
     calls: list[tuple[Array, Array]] = []
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
-        calls.append((key, post["x"]))
-        return post["x"] * 2.0
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        calls.append((key, jnp.asarray(post["x"])))
+        return jnp.asarray(post["x"]) * 2.0
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     out = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
@@ -174,9 +176,9 @@ def test_chunked_draws_unchunked_passthrough(batch_size: int | None) -> None:
     """batch_size None or >= the sample count calls predict_fn once with the parent key."""
     calls: list[Array] = []
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
         calls.append(key)
-        return post["x"]
+        return jnp.asarray(post["x"])
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     parent = random.PRNGKey(0)
@@ -264,8 +266,8 @@ def test_resolve_device_accepts_platform_string_and_device() -> None:
 def test_chunked_draws_device_commits_result() -> None:
     """With ``device`` set the stitched draws are committed there, values unchanged."""
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
-        return post["x"] * 2.0
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        return jnp.asarray(post["x"]) * 2.0
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
@@ -291,7 +293,9 @@ def test_chunked_draws_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(jax, "device_put", spy_device_put)
     posterior = {"x": jnp.arange(10.0)[:, None]}
-    _chunked_draws(random.PRNGKey(0), lambda _key, post: post["x"], posterior, 4, _cpu())
+    _chunked_draws(
+        random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, _cpu()
+    )
     assert transfers == [(4, 1), (4, 1), (4, 1)]  # one transfer per chunk
 
 
@@ -417,8 +421,8 @@ def test_resolve_device_missing_platform_raises_actionable_error(
 
 
 def test_chunked_draws_host_returns_numpy_and_matches_values() -> None:
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
-        return post["x"] * 2.0
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        return jnp.asarray(post["x"]) * 2.0
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
@@ -438,7 +442,9 @@ def test_chunked_draws_host_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(jax, "device_get", spy_device_get)
     posterior = {"x": jnp.arange(10.0)[:, None]}
-    _chunked_draws(random.PRNGKey(0), lambda _key, post: post["x"], posterior, 4, "host")
+    _chunked_draws(
+        random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, "host"
+    )
     assert transfers == [(4, 1), (4, 1), (4, 1)]  # one host copy per chunk
 
 
@@ -467,6 +473,29 @@ def test_predict_in_sample_host_bitwise_matches_default() -> None:
     )
     assert isinstance(hosted, np.ndarray)
     assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_forecast_numpy_posterior_bitwise_matches_jax() -> None:
+    """A host-offloaded (NumPy) posterior streams back through the same draws."""
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    post_np = {name: np.asarray(leaf) for name, leaf in post.items()}
+    from_jax = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
+    from_np = forecast(random.PRNGKey(3), model, post_np, data, empty_covariates(36), batch_size=3)
+    assert np.array_equal(np.asarray(from_jax), np.asarray(from_np))
+
+
+def test_predict_in_sample_numpy_posterior_bitwise_matches_jax() -> None:
+    model, _data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    post_np = {name: np.asarray(leaf) for name, leaf in post.items()}
+    from_jax = predict_in_sample(
+        random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4
+    )
+    from_np = predict_in_sample(
+        random.PRNGKey(3), model, post_np, empty_covariates(30), batch_size=4
+    )
+    assert np.array_equal(np.asarray(from_jax), np.asarray(from_np))
 
 
 def test_forecast_unchunked_host_returns_numpy() -> None:

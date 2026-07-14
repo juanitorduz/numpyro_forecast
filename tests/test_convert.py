@@ -503,9 +503,9 @@ def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
     real_draw = convert_mod.draw_posterior
     real_pred = convert_mod.predict_in_sample
 
-    def spy_draw(rng_key: Array, fit: object, num: int) -> object:
+    def spy_draw(rng_key: Array, fit: object, num: int, **kwargs: object) -> object:
         captured["post"] = rng_key
-        return real_draw(rng_key, fit, num)
+        return real_draw(rng_key, fit, num, **kwargs)  # ty: ignore[invalid-argument-type]
 
     def spy_pred(
         rng_key: Array,
@@ -633,18 +633,31 @@ def test_to_datatree_predictive_batch_size_deterministic_given_key() -> None:
         xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
 
 
-def test_to_datatree_predictive_batch_size_posterior_group_unaffected() -> None:
-    """Chunking consumes only the predictive keys, so the posterior draws are unchanged."""
+def test_to_datatree_forwards_batch_and_device_to_draw_posterior(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The posterior drawing gets the same memory knobs as the predictive sampling.
+
+    On a wide panel the posterior draw is the largest allocation of the whole
+    export, so ``predictive_batch_size``/``predictive_device`` must chunk and
+    offload it too (the GPU OOM behind the second issue #64 follow-up). This
+    also means the ``posterior`` group's draws change when chunking is enabled
+    (reproducible per ``rng_key`` and batch size), which is why no
+    posterior-group-unaffected invariant exists anymore.
+    """
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, object] = {}
+    real_draw = convert_mod.draw_posterior
+
+    def spy_draw(*args: object, **kwargs: object) -> object:
+        captured["batch_size"] = kwargs["batch_size"]
+        captured["device"] = kwargs["device"]
+        return real_draw(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
     svi, data, covariates = _svi_fit_with_horizon()
-    default = to_datatree(
-        random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
-        data,
-        covariates,
-        num_predictive_samples=10,
-    )
-    batched = to_datatree(
+    to_datatree(
         random.PRNGKey(2),
         svi,
         RandomWalkModel(),
@@ -653,7 +666,8 @@ def test_to_datatree_predictive_batch_size_posterior_group_unaffected() -> None:
         num_predictive_samples=10,
         predictive_batch_size=4,
     )
-    xarray_testing.assert_equal(default["posterior"].dataset, batched["posterior"].dataset)
+    assert captured["batch_size"] == 4
+    assert captured["device"] == "host"
 
 
 def test_to_datatree_rejects_non_positive_predictive_batch_size() -> None:
