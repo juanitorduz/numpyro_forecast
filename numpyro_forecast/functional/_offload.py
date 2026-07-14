@@ -12,13 +12,91 @@ them back onto the accelerator.
 """
 
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Literal
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.typing import Array
+
+
+def _memory_budget_line() -> str:
+    """Summarize the default device's memory budget for OOM error messages.
+
+    Returns
+    -------
+    str
+        One line with ``bytes_limit`` / ``bytes_in_use`` / ``peak_bytes_in_use``
+        in GiB, or a placeholder when the backend exposes no memory statistics
+        (e.g. the CPU backend).
+    """
+    try:
+        stats = jax.local_devices()[0].memory_stats()
+    except Exception:  # diagnostics must never mask the OOM itself
+        stats = None
+    if not stats:
+        return "device memory statistics are unavailable on this backend"
+    parts = [
+        f"{key}={stats[key] / 2**30:.2f} GiB"
+        for key in ("bytes_limit", "bytes_in_use", "peak_bytes_in_use")
+        if key in stats
+    ]
+    return "device memory budget: " + ", ".join(parts)
+
+
+@contextmanager
+def _oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
+    """Re-raise device OOM errors from ``stage`` with the budget and the lever.
+
+    Anything whose message does not contain ``RESOURCE_EXHAUSTED`` propagates
+    untouched. A device OOM is re-raised as
+    :class:`~numpyro_forecast.exceptions.DeviceMemoryError` (original error
+    chained) reporting the stage, the active ``batch_size``, the device memory
+    budget, and the actionable knobs.
+
+    Parameters
+    ----------
+    stage
+        Human-readable name of the sampling stage (e.g. ``"posterior
+        drawing"``), used in the error message.
+    batch_size
+        The chunk size active in the failing stage, or ``None`` when the
+        single-shot path ran.
+
+    Yields
+    ------
+    None
+        Context in which the sampling stage runs.
+
+    Raises
+    ------
+    DeviceMemoryError
+        When the wrapped stage fails with an XLA ``RESOURCE_EXHAUSTED`` error.
+    """
+    try:
+        yield
+    except DeviceMemoryError:
+        raise
+    except Exception as err:
+        if "RESOURCE_EXHAUSTED" not in str(err):
+            raise
+        knob = (
+            f"lower batch_size (currently {batch_size})"
+            if batch_size is not None
+            else "set batch_size to sample in chunks"
+        )
+        msg = (
+            f"the accelerator ran out of memory during the {stage}; "
+            f"{_memory_budget_line()}. The per-chunk footprint scales linearly with "
+            f"batch_size times the panel width, so {knob}, free large device arrays "
+            "still referenced by earlier code, and keep results off the accelerator "
+            'with device="host".'
+        )
+        raise DeviceMemoryError(msg) from err
 
 
 def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["host"] | None:

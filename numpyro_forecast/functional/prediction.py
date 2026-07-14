@@ -20,7 +20,12 @@ from jax import random
 from jaxtyping import Num
 from numpyro.infer import Predictive
 
-from numpyro_forecast.functional._offload import _resolve_device, _stitch_chunks, _transfer
+from numpyro_forecast.functional._offload import (
+    _oom_advice,
+    _resolve_device,
+    _stitch_chunks,
+    _transfer,
+)
 from numpyro_forecast.functional._validation import _require_covariates_extend_data
 from numpyro_forecast.functional.posterior import _index_tree
 from numpyro_forecast.typing import Array, ForecastModel
@@ -139,14 +144,16 @@ def _chunked_draws(
     """
     num = _sample_axis_size(posterior)
     if batch_size is None or batch_size >= num:
-        return _transfer(predict_fn(rng_key, posterior), device)
+        with _oom_advice("predictive sampling", batch_size):
+            return _transfer(predict_fn(rng_key, posterior), device)
     indices = _chunk_indices(num, batch_size)
     keys = random.split(rng_key, len(indices))
-    chunks = [
-        _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
-        for i, idx in enumerate(indices)
-    ]
-    return _stitch_chunks(chunks, num, device)
+    with _oom_advice("predictive sampling", batch_size):
+        chunks = [
+            _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
+            for i, idx in enumerate(indices)
+        ]
+        return _stitch_chunks(chunks, num, device)
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))

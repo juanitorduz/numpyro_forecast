@@ -7,6 +7,7 @@ import pytest
 from conftest import mcmc_fit, svi_fit
 from jax import random
 
+from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.functional import MCMCFit, draw_posterior
 from numpyro_forecast.functional.posterior import _jitted_sample_posterior
 from numpyro_forecast.typing import Array
@@ -173,3 +174,50 @@ def test_draw_posterior_rejects_non_positive_batch_size() -> None:
     fit = MCMCFit(samples={"x": jnp.arange(10.0)[:, None]})
     with pytest.raises(ValueError, match="batch_size must be positive"):
         draw_posterior(random.PRNGKey(0), fit, 5, batch_size=0)
+
+
+# --- Self-diagnosing device OOM errors -------------------------------------------
+
+
+def _raise_oom(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
+    msg = "RESOURCE_EXHAUSTED: Out of memory while trying to allocate 3800000000 bytes."
+    raise RuntimeError(msg)
+
+
+def test_draw_posterior_chunked_oom_reports_batch_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A device OOM is re-raised with the budget and the batch-size lever."""
+    import numpyro_forecast.functional.posterior as posterior_mod
+
+    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", _raise_oom)
+    fit = svi_fit(t=30)
+    with pytest.raises(
+        DeviceMemoryError, match=r"posterior drawing.*lower batch_size \(currently 4\)"
+    ) as excinfo:
+        draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
+    assert "RESOURCE_EXHAUSTED" in str(excinfo.value.__cause__)
+
+
+def test_draw_posterior_unchunked_oom_says_set_batch_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpyro_forecast.functional.posterior as posterior_mod
+
+    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", _raise_oom)
+    fit = svi_fit(t=30)
+    with pytest.raises(DeviceMemoryError, match="set batch_size to sample in chunks"):
+        draw_posterior(random.PRNGKey(2), fit, 10)
+
+
+def test_draw_posterior_non_oom_errors_propagate_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpyro_forecast.functional.posterior as posterior_mod
+
+    def raise_other(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
+        msg = "boom"
+        raise ValueError(msg)
+
+    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", raise_other)
+    fit = svi_fit(t=30)
+    with pytest.raises(ValueError, match="boom"):
+        draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)

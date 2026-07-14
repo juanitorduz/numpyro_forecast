@@ -155,3 +155,19 @@ class MVNLayoutError(NumpyroForecastError, NotImplementedError):
         "leading correlation axis (loc shape ``(*batch, time)`` or "
         "``(*batch, time, 1)`` with matching ``(*batch, time, time)`` covariance)."
     )
+
+
+class DeviceMemoryError(NumpyroForecastError, RuntimeError):
+    """The accelerator ran out of memory during posterior or predictive sampling.
+
+    Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
+    the predictive drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
+    :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
+    everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
+    when XLA reports ``RESOURCE_EXHAUSTED``. The message embeds the device's
+    memory budget and the lever: the per-chunk footprint scales linearly with
+    ``batch_size`` times the panel width, so lower (or set) ``batch_size``,
+    free large device arrays still referenced elsewhere, and keep results off
+    the accelerator with ``device="host"``. The original XLA error is chained
+    as ``__cause__``.
+    """

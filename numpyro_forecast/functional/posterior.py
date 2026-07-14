@@ -20,7 +20,12 @@ from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
 from numpyro_forecast.exceptions import GuideSampleArgsError
-from numpyro_forecast.functional._offload import _resolve_device, _stitch_chunks, _transfer
+from numpyro_forecast.functional._offload import (
+    _oom_advice,
+    _resolve_device,
+    _stitch_chunks,
+    _transfer,
+)
 from numpyro_forecast.functional._validation import _require_positive_num_samples
 from numpyro_forecast.functional.mcmc import MCMCFit
 from numpyro_forecast.functional.svi import SVIFit
@@ -206,20 +211,23 @@ def draw_posterior(
         msg = f"batch_size must be positive, got {batch_size}"
         raise ValueError(msg)
     if isinstance(fit, MCMCFit) or batch_size is None or batch_size >= num_samples:
-        samples = _draw_posterior_impl(fit, num_samples, rng_key)
-        return {name: _transfer(leaf, resolved) for name, leaf in samples.items()}
+        with _oom_advice("posterior drawing", batch_size):
+            samples = _draw_posterior_impl(fit, num_samples, rng_key)
+            return {name: _transfer(leaf, resolved) for name, leaf in samples.items()}
     _require_positive_num_samples(num_samples)
     num_chunks = -(-num_samples // batch_size)  # ceil; the last chunk overdraws
     keys = random.split(rng_key, num_chunks)
     chunks: list[dict[str, Array | np.ndarray]] = []
-    for key in keys:
-        # An explicit loop with pop-per-leaf keeps the accelerator peak at one
-        # chunk: every device buffer of chunk k is released (each leaf as soon
-        # as its copy lands on ``device``) before chunk k+1 is dispatched.
-        draws = dict(_draw_posterior_impl(fit, batch_size, key))
-        chunks.append({name: _transfer(draws.pop(name), resolved) for name in list(draws)})
-        del draws
-    return {
-        name: _stitch_chunks([chunk[name] for chunk in chunks], num_samples, resolved)
-        for name in chunks[0]
-    }
+    with _oom_advice("posterior drawing", batch_size):
+        for key in keys:
+            # An explicit loop with pop-per-leaf keeps the accelerator peak at
+            # one chunk: every device buffer of chunk k is released (each leaf
+            # as soon as its copy lands on ``device``) before chunk k+1 is
+            # dispatched.
+            draws = dict(_draw_posterior_impl(fit, batch_size, key))
+            chunks.append({name: _transfer(draws.pop(name), resolved) for name in list(draws)})
+            del draws
+        return {
+            name: _stitch_chunks([chunk[name] for chunk in chunks], num_samples, resolved)
+            for name in chunks[0]
+        }

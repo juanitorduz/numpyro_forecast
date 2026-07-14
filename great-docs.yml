@@ -167,6 +167,7 @@ reference:
       - exceptions.KernelConfigError
       - exceptions.CovariateDimsError
       - exceptions.MVNLayoutError
+      - exceptions.DeviceMemoryError
 
   - title: ArviZ export
     desc: Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.

@@ -9,6 +9,7 @@ import pytest
 from conftest import empty_covariates, rw_body
 from jax import random
 
+from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.functional import (
     SVIFit,
     draw_posterior,
@@ -473,6 +474,31 @@ def test_predict_in_sample_host_bitwise_matches_default() -> None:
     )
     assert isinstance(hosted, np.ndarray)
     assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_predictive_oom_reports_batch_size() -> None:
+    """A device OOM in the predictive chunk loop is re-raised with the lever."""
+
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        msg = "RESOURCE_EXHAUSTED: Out of memory while trying to allocate 3800000000 bytes."
+        raise RuntimeError(msg)
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    with pytest.raises(
+        DeviceMemoryError, match=r"predictive sampling.*lower batch_size \(currently 4\)"
+    ) as excinfo:
+        _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    assert "RESOURCE_EXHAUSTED" in str(excinfo.value.__cause__)
+
+
+def test_predictive_non_oom_errors_propagate_unchanged() -> None:
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        msg = "boom"
+        raise ValueError(msg)
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    with pytest.raises(ValueError, match="boom"):
+        _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
 
 
 def test_forecast_numpy_posterior_bitwise_matches_jax() -> None:
