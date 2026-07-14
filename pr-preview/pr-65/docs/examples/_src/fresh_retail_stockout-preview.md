@@ -1860,8 +1860,8 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 13.7 s, sys: 642 ms, total: 14.3 s
-    Wall time: 8.06 s
+    CPU times: user 17.8 s, sys: 784 ms, total: 18.5 s
+    Wall time: 27.4 s
 
 
     In [30]:
@@ -1877,8 +1877,8 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 32s, sys: 6min 46s, total: 16min 19s
-    Wall time: 3min 28s
+    CPU times: user 9min 52s, sys: 6min 9s, total: 16min 2s
+    Wall time: 4min 6s
 
 
 <figure class="figure">
@@ -1976,7 +1976,7 @@ Group: /
 │           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04177
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:55.049706+00:00
+│           created_at:                 2026-07-14T18:12:15.938838+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1992,7 +1992,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 304MB 0.03932 ... 0.4507
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:56.416773+00:00
+│           created_at:                 2026-07-14T18:12:17.450358+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2005,7 +2005,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:56.417265+00:00
+│           created_at:                 2026-07-14T18:12:17.450960+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2019,7 +2019,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:56.417742+00:00
+│           created_at:                 2026-07-14T18:12:17.451455+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2034,7 +2034,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 56MB 0.9638 0.6089 ... 0.1487
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:57.477640+00:00
+│           created_at:                 2026-07-14T18:12:18.765979+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2048,7 +2048,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-14T13:56:57.478183+00:00
+            created_at:                 2026-07-14T18:12:18.766536+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2376,7 +2376,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-2.98453611e-03,  1.07197389e-02, -1.00880796e-02, ...,1.16754649e-02, -1.82326033e-03,  1.18516451e-02],[-5.34413755e-03,  2.55829166e-03,  2.13366766e-02, ...,-1.47428585e-03,  1.92795461e-03,  4.43835594e-02],[-5.19011589e-03,  5.34082437e-03, -6.05897840e-05, ...,9.24146362e-03, -1.10151467e-03,  2.65969038e-02],...,[-7.12744612e-03, -2.52354611e-03,  6.95315236e-03, ...,-1.81192774e-02, -1.80662586e-03,  2.24016290e-02],[ 5.44686394e-04, -8.48154817e-03, -2.90423771e-03, ...,-5.65724261e-03, -3.56679945e-03,  3.97514068e-02],[-5.32461656e-03,  4.87960828e-03, -1.55994762e-02, ...,7.29289884e-03, -3.93646769e-03,  4.88681868e-02]],[[-3.35338153e-03, -6.39075704e-04, -1.33155019e-03, ...,2.83864862e-03, -2.38075526e-03, -8.01277172e-04],[-7.98149873e-03, -6.36599667e-04, -9.77581833e-03, ...,-5.64204529e-03, -5.77809522e-03, -9.82625526e-04],[ 4.06948430e-03, -6.07740309e-04,  5.36739919e-03, ...,1.27415138e-03,  5.92890754e-03,  3.43945366e-03],...2.09248457e-02,  2.31279782e-03,  2.58294623e-02],[-2.67382665e-03, -1.07374624e-03,  1.18557736e-02, ...,-1.26505867e-02, -2.73674913e-03, -2.48583645e-04],[-3.06990044e-03, -6.88877329e-03,  1.09469076e-03, ...,-2.30204244e-03,  4.49879467e-03,  2.48966448e-04]],[[-3.96813313e-03,  5.60333603e-04,  2.03911066e-02, ...,-4.86969808e-03,  5.79264807e-03,  6.51504961e-04],[ 6.33711740e-03,  9.89574566e-03, -1.35269552e-03, ...,-5.54752396e-03, -9.63224564e-03, -1.90676507e-02],[-2.03256570e-02,  4.83606989e-03, -1.56136500e-02, ...,2.23776660e-04, -4.78371698e-03, -2.21509603e-03],...,[-1.05320697e-03, -9.00771748e-03,  1.69532874e-03, ...,7.61329150e-03,  7.85449054e-03, -4.72100358e-03],[-6.34991471e-03, -5.76646859e-03, -1.31597752e-02, ...,2.34867795e-03,  2.69524311e-03,  7.91497901e-03],[ 1.51852118e-02,  7.68641662e-03,  6.57123281e-04, ...,1.17993280e-02,  6.49070647e-03,  5.59609383e-03]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+96e-03, -9.63224564e-03, -1.90676507e-02],[-2.03256570e-02,  4.83606989e-03, -1.56136500e-02, ...,2.23776660e-04, -4.78371698e-03, -2.21509603e-03],...,[-1.05320697e-03, -9.00771748e-03,  1.69532874e-03, ...,7.61329150e-03,  7.85449054e-03, -4.72100358e-03],[-6.34991471e-03, -5.76646859e-03, -1.31597752e-02, ...,2.34867795e-03,  2.69524311e-03,  7.91497901e-03],[ 1.51852118e-02,  7.68641662e-03,  6.57123281e-04, ...,1.17993280e-02,  6.49070647e-03,  5.59609383e-03]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 drift_decentered
@@ -2603,7 +2603,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-14T13:56:55.049706+00:00
+2026-07-14T18:12:15.938838+00:00
 
 creation_library :  
 ArviZ
@@ -2692,7 +2692,7 @@ datetime64\[s\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['2024-03-28T00:00:00', '2024-03-29T00:00:00', '2024-03-30T00:00:00','2024-03-31T00:00:00', '2024-04-01T00:00:00', '2024-04-02T00:00:00','2024-04-03T00:00:00', '2024-04-04T00:00:00', '2024-04-05T00:00:00','2024-04-06T00:00:00', '2024-04-07T00:00:00', '2024-04-08T00:00:00','2024-04-09T00:00:00', '2024-04-10T00:00:00', '2024-04-11T00:00:00','2024-04-12T00:00:00', '2024-04-13T00:00:00', '2024-04-14T00:00:00','2024-04-15T00:00:00', '2024-04-16T00:00:00', '2024-04-17T00:00:00','2024-04-18T00:00:00', '2024-04-19T00:00:00', '2024-04-20T00:00:00','2024-04-21T00:00:00', '2024-04-22T00:00:00', '2024-04-23T00:00:00','2024-04-24T00:00:00', '2024-04-25T00:00:00', '2024-04-26T00:00:00','2024-04-27T00:00:00', '2024-04-28T00:00:00', '2024-04-29T00:00:00','2024-04-30T00:00:00', '2024-05-01T00:00:00', '2024-05-02T00:00:00','2024-05-03T00:00:00', '2024-05-04T00:00:00', '2024-05-05T00:00:00','2024-05-06T00:00:00', '2024-05-07T00:00:00', '2024-05-08T00:00:00','2024-05-09T00:00:00', '2024-05-10T00:00:00', '2024-05-11T00:00:00','2024-05-12T00:00:00', '2024-05-13T00:00:00', '2024-05-14T00:00:00','2024-05-15T00:00:00', '2024-05-16T00:00:00', '2024-05-17T00:00:00','2024-05-18T00:00:00', '2024-05-19T00:00:00', '2024-05-20T00:00:00','2024-05-21T00:00:00', '2024-05-22T00:00:00', '2024-05-23T00:00:00','2024-05-24T00:00:00', '2024-05-25T00:00:00', '2024-05-26T00:00:00','2024-05-27T00:00:00', '2024-05-28T00:00:00', '2024-05-29T00:00:00','2024-05-30T00:00:00', '2024-05-31T00:00:00', '2024-06-01T00:00:00','2024-06-02T00:00:00', '2024-06-03T00:00:00', '2024-06-04T00:00:00','2024-06-05T00:00:00', '2024-06-06T00:00:00', '2024-06-07T00:00:00','2024-06-08T00:00:00', '2024-06-09T00:00:00', '2024-06-10T00:00:00','2024-06-11T00:00:00'], dtype='datetime64[s]')
+00:00:00', '2024-05-13T00:00:00', '2024-05-14T00:00:00','2024-05-15T00:00:00', '2024-05-16T00:00:00', '2024-05-17T00:00:00','2024-05-18T00:00:00', '2024-05-19T00:00:00', '2024-05-20T00:00:00','2024-05-21T00:00:00', '2024-05-22T00:00:00', '2024-05-23T00:00:00','2024-05-24T00:00:00', '2024-05-25T00:00:00', '2024-05-26T00:00:00','2024-05-27T00:00:00', '2024-05-28T00:00:00', '2024-05-29T00:00:00','2024-05-30T00:00:00', '2024-05-31T00:00:00', '2024-06-01T00:00:00','2024-06-02T00:00:00', '2024-06-03T00:00:00', '2024-06-04T00:00:00','2024-06-05T00:00:00', '2024-06-06T00:00:00', '2024-06-07T00:00:00','2024-06-08T00:00:00', '2024-06-09T00:00:00', '2024-06-10T00:00:00','2024-06-11T00:00:00'], dtype='datetime64[s]')
 
 
 obs_dim
@@ -2742,7 +2742,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:56.416773+00:00
+2026-07-14T18:12:17.450358+00:00
 
 creation_library :  
 ArviZ
@@ -2836,7 +2836,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:56.417265+00:00
+2026-07-14T18:12:17.450960+00:00
 
 creation_library :  
 ArviZ
@@ -2951,7 +2951,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:56.417742+00:00
+2026-07-14T18:12:17.451455+00:00
 
 creation_library :  
 ArviZ
@@ -3087,7 +3087,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:57.477640+00:00
+2026-07-14T18:12:18.765979+00:00
 
 creation_library :  
 ArviZ
@@ -3202,7 +3202,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:57.478183+00:00
+2026-07-14T18:12:18.766536+00:00
 
 creation_library :  
 ArviZ
@@ -3234,7 +3234,7 @@ sample_dims :
 
 We score on the original sales scale (rescaling the draws by each series' training mean and clipping negatives at zero, since sales are non-negative). CRPS is a proper scoring rule for probabilistic forecasts that generalizes the mean absolute error; coverage checks calibration by asking how often the central \\94\\\\ and \\50\\\\ intervals contain the truth. One terminology note to keep the sections consistent: the coverage metrics score *central* (equal-tailed) intervals bounded by fixed quantiles, while the forecast figures further below draw *HDI* bands; for a near-symmetric predictive the two nearly coincide, but on zero-clipped stockout days, where the predictive piles mass at zero, they can differ. As a reference point we use a seasonal-naive ensemble: the weekday-aligned \\14\\-day windows from the training data, stacked as an empirical forecast distribution.
 
-We score with \\1{,}000\\ predictive draws obtained through the functional API ([draw_posterior](../../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [predict_in_sample](../../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample), [forecast](../../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast)), the same draw count the DataTree export above uses. The count is set by the far tails: each \\3\\\\ tail of the central \\94\\\\ interval rests on about \\30\\ of the \\1{,}000\\ draws, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first \\500\\ draws moves both coverages by about a hundredth or less (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="cpu"` commits every chunk (and the stitched ensemble) to host memory, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU.
+We score with \\1{,}000\\ predictive draws obtained through the functional API ([draw_posterior](../../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [predict_in_sample](../../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample), [forecast](../../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast)), the same draw count the DataTree export above uses. The count is set by the far tails: each \\3\\\\ tail of the central \\94\\\\ interval rests on about \\30\\ of the \\1{,}000\\ draws, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first \\500\\ draws moves both coverages by about a hundredth or less (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="host"` copies every chunk (and the stitched ensemble) to host memory as a NumPy array, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU. Unlike `device="cpu"`, the host offload needs no JAX CPU backend, so it also works when `numpyro.set_platform("cuda")` leaves only the cuda backend initialized.
 
 
     In [32]:
@@ -3301,10 +3301,10 @@ def metrics_table(
 rng_key, key_score_post, key_score_in, key_score_fc = random.split(rng_key, 4)
 posterior_draws = draw_posterior(key_score_post, svi_fit, 1_000)
 pp_scaled = predict_in_sample(
-    key_score_in, model, posterior_draws, covariates_train, batch_size=250, device="cpu"
+    key_score_in, model, posterior_draws, covariates_train, batch_size=250, device="host"
 )
 fc_scaled = forecast(
-    key_score_fc, model, posterior_draws, y_train, covariates, batch_size=250, device="cpu"
+    key_score_fc, model, posterior_draws, y_train, covariates, batch_size=250, device="host"
 )
 pred_train = jnp.clip(pp_scaled * scale_jax[None, None, :], min=0.0)
 pred_test = jnp.clip(fc_scaled * scale_jax[None, None, :], min=0.0)
@@ -3776,7 +3776,7 @@ covariates_demand: Float[
 )
 
 fc_demand_scaled = forecast(
-    key_score_fc, model, posterior_draws, y_train, covariates_demand, batch_size=250, device="cpu"
+    key_score_fc, model, posterior_draws, y_train, covariates_demand, batch_size=250, device="host"
 )
 pred_test_demand = jnp.clip(fc_demand_scaled * scale_jax[None, None, :], min=0.0)
 pred_test_demand_da = draws_to_da(pred_test_demand, dates[t_train:])

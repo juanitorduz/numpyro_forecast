@@ -31,10 +31,10 @@ from functools import partial
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"]`  
+`pred: Float[Array, ``" sample *batch"] | Float[np.ndarray, `<span class="st">`" sample *batch"``]`</span>  
 Forecast samples with the sample axis first, shape `(sample, *batch)`.
 
-`truth: Float[Array, ``" *batch"]`  
+`truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
 Ground-truth values with shape `(*batch)`.
 
 `metrics: Mapping[str, Metric] | None = None`  

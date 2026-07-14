@@ -1761,8 +1761,8 @@ svi_fit = fit_svi(
 ```
 
 
-    CPU times: user 13.7 s, sys: 642 ms, total: 14.3 s
-    Wall time: 8.06 s
+    CPU times: user 17.8 s, sys: 784 ms, total: 18.5 s
+    Wall time: 27.4 s
 
 
 ``` python
@@ -1775,8 +1775,8 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 32s, sys: 6min 46s, total: 16min 19s
-    Wall time: 3min 28s
+    CPU times: user 9min 52s, sys: 6min 9s, total: 16min 2s
+    Wall time: 4min 6s
 
 
 <figure class="figure">
@@ -1786,7 +1786,7 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 
 # Export to an ArviZ DataTree
 
-A single [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call wraps everything: it draws the posterior from the guide, runs the in-sample posterior predictive, and, because the covariates extend \\14\\ days past the training data, also generates the forecast and stores it in the `predictions` group. We label every dimension so downstream selections read naturally; in particular, `covariate_dims` tells the export the covariates are an `(input, time, series)` tensor, so `constant_data` keeps the layout the model consumes instead of a flattened matrix, with the five inputs named on the `input` coordinate. This export is also where memory peaks on an accelerator: the in-sample predictive and the forecast would each materialize all \\1{,}000\\ draws as a single `(sample, time, series)` allocation, which is exactly how this notebook ran out of memory on a GPU instance. `predictive_batch_size=250` instead samples the predictive in chunks of \\250\\ posterior draws and moves each chunk to host memory before the next one is drawn, so accelerator memory is bounded by one chunk. Chunking only changes the PRNG stream layout (draws are reproducible per `rng_key` and batch size); on this CPU run it is purely a demonstration.
+ive_batch_size=250` instead samples the predictive in chunks of \\250\\ posterior draws and moves each chunk to host memory before the next one is drawn, so accelerator memory is bounded by one chunk. Chunking only changes the PRNG stream layout (draws are reproducible per `rng_key` and batch size); on this CPU run it is purely a demonstration.
 
 
 ``` python
@@ -1871,7 +1871,7 @@ Group: /
 │           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04177
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:55.049706+00:00
+│           created_at:                 2026-07-14T18:12:15.938838+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1887,7 +1887,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 304MB 0.03932 ... 0.4507
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:56.416773+00:00
+│           created_at:                 2026-07-14T18:12:17.450358+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1900,7 +1900,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:56.417265+00:00
+│           created_at:                 2026-07-14T18:12:17.450960+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1914,7 +1914,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:56.417742+00:00
+│           created_at:                 2026-07-14T18:12:17.451455+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1929,7 +1929,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 56MB 0.9638 0.6089 ... 0.1487
 │       Attributes:
-│           created_at:                 2026-07-14T13:56:57.477640+00:00
+│           created_at:                 2026-07-14T18:12:18.765979+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1943,7 +1943,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-07-14T13:56:57.478183+00:00
+            created_at:                 2026-07-14T18:12:18.766536+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -2471,7 +2471,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-3.32962386e-02,  2.11742762e-02,  2.58160885e-02, ...,-9.15047433e-03,  1.04005132e-02, -3.61570530e-02],[-5.17329480e-03,  1.17070461e-02,  1.40882526e-02, ...,1.37485936e-03, -1.10842241e-02, -2.07597408e-02],[ 1.61540543e-03, -6.05788035e-03, -5.89835830e-03, ...,-3.21475118e-02, -1.34998618e-03, -3.85936722e-02],...,[-1.85818542e-02,  1.57728214e-02, -2.65973154e-02, ...,5.11599239e-03, -6.25019893e-05, -6.13992885e-02],[-9.02442914e-03,  1.03055555e-02, -1.67679992e-02, ...,2.57735495e-02,  6.52527669e-03, -4.46098857e-02],[ 5.90557121e-02,  9.43517964e-03, -3.81967351e-02, ...,-1.71826445e-02, -2.94222683e-02,  2.34022569e-02]],[[-1.11166639e-02,  1.70546528e-02,  2.91580660e-03, ...,-3.39097865e-02,  2.58990610e-03,  1.14269778e-02],[-9.76557471e-03, -4.59053414e-03,  2.19698120e-02, ...,-1.15612680e-02, -3.43027525e-04, -5.41803427e-03],[ 3.71786617e-02, -6.72534015e-03, -2.04165075e-02, ...,-7.46806851e-03, -3.29635362e-03, -4.14671004e-02],...-2.83314176e-02, -7.99531024e-03,  7.90758990e-03],[-6.73930068e-03,  9.75069962e-03, -1.13364402e-02, ...,2.28236429e-03,  3.11778784e-02, -4.07446064e-02],[ 3.71454656e-02,  7.26855081e-03,  8.72700009e-03, ...,-1.03926361e-02,  1.69235170e-02,  1.46265086e-02]],[[ 4.14782502e-02, -1.94277260e-02,  1.19675845e-02, ...,-1.19477762e-02,  2.17103381e-02,  2.01585554e-02],[-2.84336731e-02, -5.97823970e-03,  6.12596609e-03, ...,-2.13378295e-02,  1.16972970e-02, -7.07395189e-03],[-5.42618148e-02, -7.95199070e-03,  9.12392139e-03, ...,2.91108023e-02,  4.57442887e-02,  7.57671893e-02],...,[-2.56397203e-02, -2.04663277e-02, -1.41346175e-02, ...,-1.38552757e-02,  1.82142504e-03, -5.08594960e-02],[ 7.18436809e-03,  1.83785483e-02,  1.04629863e-02, ...,-2.02519111e-02,  6.49535330e-03, -1.78559572e-02],[-4.01894785e-02,  2.46601701e-02, -3.20701022e-03, ...,-8.28444259e-04, -1.29074659e-02, -5.93876950e-02]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+483e-02,  1.04629863e-02, ...,-2.02519111e-02,  6.49535330e-03, -1.78559572e-02],[-4.01894785e-02,  2.46601701e-02, -3.20701022e-03, ...,-8.28444259e-04, -1.29074659e-02, -5.93876950e-02]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 tau_trend
@@ -2498,7 +2498,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-14T13:56:55.049706+00:00
+2026-07-14T18:12:15.938838+00:00
 
 creation_library :  
 ArviZ
@@ -2637,7 +2637,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:56.416773+00:00
+2026-07-14T18:12:17.450358+00:00
 
 creation_library :  
 ArviZ
@@ -2731,7 +2731,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:56.417265+00:00
+2026-07-14T18:12:17.450960+00:00
 
 creation_library :  
 ArviZ
@@ -2846,7 +2846,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:56.417742+00:00
+2026-07-14T18:12:17.451455+00:00
 
 creation_library :  
 ArviZ
@@ -2982,7 +2982,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:57.477640+00:00
+2026-07-14T18:12:18.765979+00:00
 
 creation_library :  
 ArviZ
@@ -3097,7 +3097,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-14T13:56:57.478183+00:00
+2026-07-14T18:12:18.766536+00:00
 
 creation_library :  
 ArviZ
@@ -3129,7 +3129,7 @@ sample_dims :
 
 We score on the original sales scale (rescaling the draws by each series' training mean and clipping negatives at zero, since sales are non-negative). CRPS is a proper scoring rule for probabilistic forecasts that generalizes the mean absolute error; coverage checks calibration by asking how often the central \\94\\\\ and \\50\\\\ intervals contain the truth. One terminology note to keep the sections consistent: the coverage metrics score *central* (equal-tailed) intervals bounded by fixed quantiles, while the forecast figures further below draw *HDI* bands; for a near-symmetric predictive the two nearly coincide, but on zero-clipped stockout days, where the predictive piles mass at zero, they can differ. As a reference point we use a seasonal-naive ensemble: the weekday-aligned \\14\\-day windows from the training data, stacked as an empirical forecast distribution.
 
-We score with \\1{,}000\\ predictive draws obtained through the functional API ([draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample), [forecast](../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast)), the same draw count the DataTree export above uses. The count is set by the far tails: each \\3\\\\ tail of the central \\94\\\\ interval rests on about \\30\\ of the \\1{,}000\\ draws, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first \\500\\ draws moves both coverages by about a hundredth or less (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="cpu"` commits every chunk (and the stitched ensemble) to host memory, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU.
+We score with \\1{,}000\\ predictive draws obtained through the functional API ([draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample), [forecast](../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast)), the same draw count the DataTree export above uses. The count is set by the far tails: each \\3\\\\ tail of the central \\94\\\\ interval rests on about \\30\\ of the \\1{,}000\\ draws, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first \\500\\ draws moves both coverages by about a hundredth or less (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="host"` copies every chunk (and the stitched ensemble) to host memory as a NumPy array, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU. Unlike `device="cpu"`, the host offload needs no JAX CPU backend, so it also works when `numpyro.set_platform("cuda")` leaves only the cuda backend initialized.
 
 
 ``` python
@@ -3193,10 +3193,10 @@ def metrics_table(
 rng_key, key_score_post, key_score_in, key_score_fc = random.split(rng_key, 4)
 posterior_draws = draw_posterior(key_score_post, svi_fit, 1_000)
 pp_scaled = predict_in_sample(
-    key_score_in, model, posterior_draws, covariates_train, batch_size=250, device="cpu"
+    key_score_in, model, posterior_draws, covariates_train, batch_size=250, device="host"
 )
 fc_scaled = forecast(
-    key_score_fc, model, posterior_draws, y_train, covariates, batch_size=250, device="cpu"
+    key_score_fc, model, posterior_draws, y_train, covariates, batch_size=250, device="host"
 )
 pred_train = jnp.clip(pp_scaled * scale_jax[None, None, :], min=0.0)
 pred_test = jnp.clip(fc_scaled * scale_jax[None, None, :], min=0.0)
@@ -3640,7 +3640,7 @@ covariates_demand: Float[
 )
 
 fc_demand_scaled = forecast(
-    key_score_fc, model, posterior_draws, y_train, covariates_demand, batch_size=250, device="cpu"
+    key_score_fc, model, posterior_draws, y_train, covariates_demand, batch_size=250, device="host"
 )
 pred_test_demand = jnp.clip(fc_demand_scaled * scale_jax[None, None, :], min=0.0)
 pred_test_demand_da = draws_to_da(pred_test_demand, dates[t_train:])

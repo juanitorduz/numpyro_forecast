@@ -16,7 +16,7 @@ convert.to_datatree(
     *,
     num_predictive_samples=None,
     predictive_batch_size=None,
-    predictive_device="cpu",
+    predictive_device="host",
     coords=None,
     time_coord=None,
     posterior_dims=None,
@@ -50,10 +50,10 @@ Covariates with time at axis `-2`. When `covariates` extends beyond `data` along
 Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to `1_000`.
 
 `predictive_batch_size: int | None = None`  
-Optional chunk size for the predictive sampling. When set, the in-sample posterior predictive and the forecast draws are sampled in chunks of this many posterior draws, and each chunk is committed to `predictive_device` before the next is drawn, so accelerator memory is bounded by one chunk instead of the full `(samples, time, obs)` array. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout, so draws are reproducible per `(rng_key, predictive_batch_size)`. `None` (default) samples everything in one shot (the result is still committed to `predictive_device`).
+Optional chunk size for the predictive sampling. When set, the in-sample posterior predictive and the forecast draws are sampled in chunks of this many posterior draws, and each chunk is moved to `predictive_device` before the next is drawn, so accelerator memory is bounded by one chunk instead of the full `(samples, time, obs)` array. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout, so draws are reproducible per `(rng_key, predictive_batch_size)`. `None` (default) samples everything in one shot (the result is still moved to `predictive_device`).
 
-`predictive_device: jax.Device | str | None = ``"cpu"`  
-Device (or platform name like `"cpu"`) the predictive draws are committed to, forwarded to the `device` argument of `~numpyro_forecast.functional.prediction.predict_in_sample()` and `~numpyro_forecast.functional.prediction.forecast()`. The default `"cpu"` is what bounds accelerator memory when `predictive_batch_size` is set; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).
+`predictive_device: jax.Device | str | None = ``"host"`  
+Where the predictive draws are moved as they are sampled, forwarded to the `device` argument of `~numpyro_forecast.functional.prediction.predict_in_sample()` and `~numpyro_forecast.functional.prediction.forecast()`. The default `"host"` copies every chunk to host memory as a NumPy array (where the tree is built anyway); it is what bounds accelerator memory when `predictive_batch_size` is set, and it needs no CPU backend, so it works even when `numpyro.set_platform("cuda")` (or `jax_platforms`) leaves only an accelerator backend initialized. A `jax.Device` or platform name like `"cpu"` commits the draws to that device instead; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
 Optional extra coordinates; these take precedence over the generated `time` coordinate. They also propagate to the forecast groups, where the generated forecast `time` takes precedence instead (a user `time` entry covers the in-sample window; use `time_coord` for explicit forecast time values).
