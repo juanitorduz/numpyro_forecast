@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from conftest import empty_covariates, rw_body
 from jax import random
@@ -269,6 +270,7 @@ def test_chunked_draws_device_commits_result() -> None:
     posterior = {"x": jnp.arange(10.0)[:, None]}
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     committed = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, _cpu())
+    assert isinstance(committed, jax.Array)  # a jax.Device target stays a jax.Array
     assert committed.devices() == {_cpu()}
     assert jnp.array_equal(plain, committed)
 
@@ -301,6 +303,7 @@ def test_forecast_device_bitwise_matches_no_device() -> None:
     hosted = forecast(
         random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
     )
+    assert isinstance(hosted, jax.Array)
     assert hosted.devices() == {_cpu()}
     assert jnp.array_equal(plain, hosted)
 
@@ -312,6 +315,7 @@ def test_predict_in_sample_device_bitwise_matches_no_device() -> None:
     hosted = predict_in_sample(
         random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="cpu"
     )
+    assert isinstance(hosted, jax.Array)
     assert hosted.devices() == {_cpu()}
     assert jnp.array_equal(plain, hosted)
 
@@ -326,6 +330,8 @@ def test_forecast_device_string_alias() -> None:
         random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device=_cpu()
     )
     assert jnp.array_equal(by_string, by_device)
+    assert isinstance(by_string, jax.Array)
+    assert isinstance(by_device, jax.Array)
     assert by_string.devices() == by_device.devices() == {_cpu()}
 
 
@@ -335,12 +341,14 @@ def test_forecast_unchunked_device_commits_result() -> None:
     post = draw_posterior(random.PRNGKey(2), fit, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="cpu")
+    assert isinstance(hosted, jax.Array)
     assert hosted.devices() == {_cpu()}
     assert jnp.array_equal(plain, hosted)
 
 
-def test_single_compile_while_chunking_with_device(count_compilations) -> None:
-    """Host transfers must not break the fixed-shape single-compile invariant."""
+@pytest.mark.parametrize("device", ["cpu", "host"])
+def test_single_compile_while_chunking_with_device(count_compilations, device: str) -> None:
+    """Off-accelerator transfers must not break the fixed-shape single-compile invariant."""
     model, data, fit = _fit_data()
     covariates = empty_covariates(36)
     posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
@@ -350,7 +358,7 @@ def test_single_compile_while_chunking_with_device(count_compilations) -> None:
         for post in posteriors:
             jax.block_until_ready(
                 forecast(
-                    random.PRNGKey(3), model, post, data, covariates, batch_size=4, device="cpu"
+                    random.PRNGKey(3), model, post, data, covariates, batch_size=4, device=device
                 )
             )
 
@@ -362,3 +370,110 @@ def test_single_compile_while_chunking_with_device(count_compilations) -> None:
         _sweep()
     assert tally.count == 0
     assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+
+# --- P7: backend-free host offloading (``device="host"``) -----------------------
+
+
+def _fail_devices_for(platform: str) -> "object":
+    """Build a ``jax.devices`` stand-in whose ``platform`` backend is missing."""
+    real_devices = jax.devices
+
+    def fake_devices(backend: str | None = None) -> list[jax.Device]:
+        if backend == platform:
+            msg = f"Unknown backend {platform}. Available backends are ['cuda']"
+            raise RuntimeError(msg)
+        return real_devices(backend)
+
+    return fake_devices
+
+
+def test_resolve_device_host_passthrough() -> None:
+    assert _resolve_device("host") == "host"
+
+
+def test_resolve_device_missing_cpu_falls_back_to_host_with_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``device="cpu"`` degrades gracefully when only an accelerator backend exists.
+
+    ``numpyro.set_platform("cuda")`` sets ``jax_platforms`` and leaves the CPU
+    backend uninitialized; ``"cpu"`` must then resolve to the backend-free host
+    path instead of crashing (the regression behind the GPU ``to_datatree``
+    failure).
+    """
+    monkeypatch.setattr(jax, "devices", _fail_devices_for("cpu"))
+    with pytest.warns(UserWarning, match="falls? back to device='host'"):
+        resolved = _resolve_device("cpu")
+    assert resolved == "host"
+
+
+def test_resolve_device_missing_platform_raises_actionable_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(jax, "devices", _fail_devices_for("tpu"))
+    with pytest.raises(ValueError, match="platform 'tpu' is not initialized"):
+        _resolve_device("tpu")
+
+
+def test_chunked_draws_host_returns_numpy_and_matches_values() -> None:
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        return post["x"] * 2.0
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, "host")
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_chunked_draws_host_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Memory contract of the host path: every chunk is copied off-device via device_get."""
+    transfers: list[tuple[int, ...]] = []
+    real_device_get = jax.device_get
+
+    def spy_device_get(x: Array) -> "np.ndarray":
+        transfers.append(tuple(x.shape))
+        return real_device_get(x)
+
+    monkeypatch.setattr(jax, "device_get", spy_device_get)
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    _chunked_draws(random.PRNGKey(0), lambda _key, post: post["x"], posterior, 4, "host")
+    assert transfers == [(4, 1), (4, 1), (4, 1)]  # one host copy per chunk
+
+
+def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
+    # "host" is a placement/representation knob, never a draws knob.
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
+    cpu = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
+    )
+    hosted = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="host"
+    )
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)
+    assert np.array_equal(np.asarray(cpu), hosted)
+
+
+def test_predict_in_sample_host_bitwise_matches_default() -> None:
+    model, _data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    plain = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4)
+    hosted = predict_in_sample(
+        random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="host"
+    )
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_forecast_unchunked_host_returns_numpy() -> None:
+    # The unchunked passthrough honors "host" too (single device_get of the result).
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
+    hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="host")
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)

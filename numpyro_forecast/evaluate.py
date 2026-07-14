@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import lax, random
 from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
@@ -159,8 +160,8 @@ DEFAULT_METRICS: dict[str, Metric] = {
 
 
 def evaluate_forecast(
-    pred: Float[Array, " sample *batch"],
-    truth: Float[Array, " *batch"],
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
@@ -201,9 +202,12 @@ def evaluate_forecast(
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
+    # NumPy inputs (e.g. draws sampled with device="host") enter the jitted
+    # metric kernels as device arrays either way; convert once up front.
+    pred_arr, truth_arr = jnp.asarray(pred), jnp.asarray(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
-    stacked = jnp.stack([fn(pred, truth) for fn in metrics.values()])
+    stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
     return dict(zip(metrics, stacked.tolist(), strict=True))
 
 
@@ -580,8 +584,13 @@ def _run_window(
         )
     )
     pred, test_walltime = _timed(
-        lambda: forecaster(
-            key_forecast, train_data, test_covariates, num_samples, batch_size=batch_size
+        # Without a device argument the forecaster always returns a jax.Array
+        # (the NumPy variant only arises for device="host").
+        lambda: cast(
+            "Array",
+            forecaster(
+                key_forecast, train_data, test_covariates, num_samples, batch_size=batch_size
+            ),
         )
     )
 

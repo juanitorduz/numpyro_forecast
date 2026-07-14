@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 import jax
+import numpy as np
 import numpyro.distributions as dist
 from jax import random
 from jaxtyping import Num
@@ -262,7 +263,7 @@ class _BaseForecaster(abc.ABC):
         batch_size: int | None = None,
         parallel: bool = True,
         device: jax.Device | str | None = None,
-    ) -> Num[Array, " sample *batch future obs"]:
+    ) -> Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
         Parameters
@@ -282,15 +283,17 @@ class _BaseForecaster(abc.ABC):
             higher peak memory) or map it serially (``False``). See
             :func:`numpyro_forecast.functional.prediction.forecast`.
         device
-            Optional device (or platform name like ``"cpu"``) where each chunk
-            of draws is placed as soon as it is drawn and where the stitched
-            result lives. See :func:`numpyro_forecast.functional.prediction.forecast`.
+            Where each chunk of draws is placed as soon as it is drawn and
+            where the stitched result lives (``"host"`` returns a NumPy array
+            in host memory and needs no CPU backend, the recommended choice on
+            GPU). See :func:`numpyro_forecast.functional.prediction.forecast`.
 
         Returns
         -------
-        Num[Array, " sample *batch future obs"]
+        Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
             Forecast samples over the ``future = duration - t`` horizon (integer
-            for discrete/count models built with ``predict_glm``).
+            for discrete/count models built with ``predict_glm``; a NumPy array
+            when ``device`` resolves to ``"host"``).
         """
         _require_covariates_extend_data(data, covariates)
         _require_positive_num_samples(num_samples)
@@ -316,7 +319,7 @@ class _BaseForecaster(abc.ABC):
         batch_size: int | None = None,
         parallel: bool = True,
         device: jax.Device | str | None = None,
-    ) -> Num[Array, " sample *batch time obs"]:
+    ) -> Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]:
         """Sample the in-sample posterior predictive of the ``obs`` site.
 
         Draws ``num_samples`` posterior latent samples from the fitted forecaster and
@@ -340,15 +343,17 @@ class _BaseForecaster(abc.ABC):
             higher peak memory) or map it serially (``False``). See
             :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
         device
-            Optional device (or platform name like ``"cpu"``) where each chunk
-            of draws is placed as soon as it is drawn and where the stitched
-            result lives. See
+            Where each chunk of draws is placed as soon as it is drawn and
+            where the stitched result lives (``"host"`` returns a NumPy array
+            in host memory and needs no CPU backend, the recommended choice on
+            GPU). See
             :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
 
         Returns
         -------
-        Num[Array, " sample *batch time obs"]
-            In-sample posterior-predictive draws of the ``obs`` site.
+        Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
+            In-sample posterior-predictive draws of the ``obs`` site (a NumPy
+            array when ``device`` resolves to ``"host"``).
 
         Raises
         ------

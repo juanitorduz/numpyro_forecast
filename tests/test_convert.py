@@ -2,6 +2,7 @@
 
 import warnings
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -670,7 +671,8 @@ def test_to_datatree_rejects_non_positive_predictive_batch_size() -> None:
         )
 
 
-def test_to_datatree_predictive_device_none_matches_cpu() -> None:
+@pytest.mark.parametrize("other_device", [None, "host"])
+def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> None:
     """predictive_device is a placement knob, never a draws knob: equal trees."""
     svi, data, covariates = _svi_fit_with_horizon()
     trees = [
@@ -684,17 +686,17 @@ def test_to_datatree_predictive_device_none_matches_cpu() -> None:
             predictive_batch_size=4,
             predictive_device=device,
         )
-        for device in ("cpu", None)
+        for device in ("cpu", other_device)
     ]
     for group in trees[0].children:
         xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
 
 
-@pytest.mark.parametrize("predictive_device", ["cpu", None])
+@pytest.mark.parametrize("predictive_device", ["host", None])
 def test_to_datatree_forwards_predictive_device(
     monkeypatch: pytest.MonkeyPatch, predictive_device: str | None
 ) -> None:
-    """Both predictive calls receive the predictive_device (default ``"cpu"``)."""
+    """Both predictive calls receive the predictive_device (default ``"host"``)."""
     import numpyro_forecast.convert as convert_mod
 
     captured: dict[str, object] = {}
@@ -725,7 +727,7 @@ def test_to_datatree_forwards_predictive_device(
             predictive_device=None,
         )
     else:
-        # The default must forward "cpu", so predictive_device is deliberately omitted.
+        # The default must forward "host", so predictive_device is deliberately omitted.
         to_datatree(
             random.PRNGKey(2),
             svi,
@@ -737,6 +739,40 @@ def test_to_datatree_forwards_predictive_device(
         )
     assert captured["predict_in_sample"] == predictive_device
     assert captured["forecast"] == predictive_device
+
+
+def test_to_datatree_default_works_without_cpu_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for the GPU crash: to_datatree must not need the CPU backend.
+
+    ``numpyro.set_platform("cuda")`` restricts ``jax_platforms`` to cuda only,
+    so ``jax.devices("cpu")`` raises. The default ``predictive_device="host"``
+    never resolves a backend, so the export succeeds with no warning.
+    """
+    real_devices = jax.devices
+
+    def fail_cpu_devices(backend: str | None = None) -> list[jax.Device]:
+        if backend == "cpu":
+            msg = "Unknown backend cpu. Available backends are ['cuda']"
+            raise RuntimeError(msg)
+        return real_devices(backend)
+
+    monkeypatch.setattr(jax, "devices", fail_cpu_devices)
+    svi, data, covariates = _svi_fit_with_horizon()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tree = to_datatree(
+            random.PRNGKey(7),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+        )
+    assert "posterior_predictive" in tree.children
+    assert "predictions" in tree.children
 
 
 def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:

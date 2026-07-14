@@ -133,7 +133,9 @@ def _reconcile_tree_covariate_dims(
 
 
 @singledispatch
-def _posterior_reshape(fit: object, samples: dict[str, Array]) -> dict[str, "np.ndarray"]:
+def _posterior_reshape(
+    fit: object, samples: "dict[str, Array | np.ndarray]"
+) -> dict[str, "np.ndarray"]:
     """Reshape sample-leading draws to ``(chain, draw, ...)`` per fit type.
 
     The default adds a single pseudo-chain (``leaf[None]``), which is correct for
@@ -157,7 +159,7 @@ def _posterior_reshape(fit: object, samples: dict[str, Array]) -> dict[str, "np.
 
 
 @_posterior_reshape.register
-def _(fit: MCMCFit, samples: dict[str, Array]) -> dict[str, "np.ndarray"]:
+def _(fit: MCMCFit, samples: "dict[str, Array | np.ndarray]") -> dict[str, "np.ndarray"]:
     reshaped: dict[str, np.ndarray] = {}
     for name, value in samples.items():
         array = np.asarray(value)
@@ -165,7 +167,7 @@ def _(fit: MCMCFit, samples: dict[str, Array]) -> dict[str, "np.ndarray"]:
     return reshaped
 
 
-def _reshape_predictive(fit: object, predictive: Array) -> "np.ndarray":
+def _reshape_predictive(fit: object, predictive: "Array | np.ndarray") -> "np.ndarray":
     """Apply the fit's chain reshape to a single predictive array."""
     return _posterior_reshape(fit, {"obs": predictive})["obs"]
 
@@ -228,7 +230,7 @@ def to_datatree(
     *,
     num_predictive_samples: int | None = None,
     predictive_batch_size: int | None = None,
-    predictive_device: jax.Device | str | None = "cpu",
+    predictive_device: jax.Device | str | None = "host",
     coords: Mapping[str, Sequence[Any]] | None = None,
     time_coord: Sequence[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
@@ -267,7 +269,7 @@ def to_datatree(
     predictive_batch_size
         Optional chunk size for the predictive sampling. When set, the
         in-sample posterior predictive and the forecast draws are sampled in
-        chunks of this many posterior draws, and each chunk is committed to
+        chunks of this many posterior draws, and each chunk is moved to
         ``predictive_device`` before the next is drawn, so accelerator memory
         is bounded by one chunk instead of the full ``(samples, time, obs)``
         array. The batch size must be strictly below the draw count for that
@@ -276,17 +278,21 @@ def to_datatree(
         the single transfer. Chunking changes the PRNG stream layout, so draws
         are reproducible per ``(rng_key, predictive_batch_size)``. ``None``
         (default) samples everything in one shot (the result is still
-        committed to ``predictive_device``).
+        moved to ``predictive_device``).
     predictive_device
-        Device (or platform name like ``"cpu"``) the predictive draws are
-        committed to, forwarded to the ``device`` argument of
+        Where the predictive draws are moved as they are sampled, forwarded to
+        the ``device`` argument of
         :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
         :func:`~numpyro_forecast.functional.prediction.forecast`. The default
-        ``"cpu"`` is what bounds accelerator memory when
-        ``predictive_batch_size`` is set; pass ``None`` to keep the draws on
-        the default device (chunked compute without per-chunk host transfers,
-        for when the draws fit on the accelerator and transfers would dominate
-        runtime).
+        ``"host"`` copies every chunk to host memory as a NumPy array (where
+        the tree is built anyway); it is what bounds accelerator memory when
+        ``predictive_batch_size`` is set, and it needs no CPU backend, so it
+        works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
+        leaves only an accelerator backend initialized. A :class:`jax.Device`
+        or platform name like ``"cpu"`` commits the draws to that device
+        instead; pass ``None`` to keep the draws on the default device
+        (chunked compute without per-chunk host transfers, for when the draws
+        fit on the accelerator and transfers would dominate runtime).
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -463,7 +469,7 @@ def to_datatree(
 
 def add_forecast_groups(
     tree: "xarray.DataTree",
-    forecast_samples: Array,
+    forecast_samples: "Array | np.ndarray",
     covariates_future: Array,
     *,
     time_coord: Sequence[Any] | None = None,

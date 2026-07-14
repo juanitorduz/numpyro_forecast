@@ -4,16 +4,19 @@
 :func:`predict_in_sample` samples the in-sample posterior predictive of the
 ``obs`` site. Both drive a jitted ``Predictive`` wrapper through the shared
 chunking driver ``_chunked_draws``, which caps peak memory while compiling the
-predictive exactly once. With ``device`` set (e.g. ``"cpu"``), every chunk is
-committed to that device before the next one is drawn, so accelerator memory
+predictive exactly once. With ``device`` set (e.g. ``"host"``), every chunk is
+moved off the accelerator before the next one is drawn, so accelerator memory
 is bounded by a single chunk instead of the full draw array.
 """
 
+import warnings
 from collections.abc import Callable
 from functools import partial
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import random
 from jaxtyping import Num
 from numpyro.infer import Predictive
@@ -23,46 +26,85 @@ from numpyro_forecast.functional.posterior import _index_tree
 from numpyro_forecast.typing import Array, ForecastModel
 
 
-def _resolve_device(device: jax.Device | str | None) -> jax.Device | None:
-    """Resolve a device spec to a concrete :class:`jax.Device`.
+def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["host"] | None:
+    """Resolve a device spec to a :class:`jax.Device` or the ``"host"`` sentinel.
 
     Parameters
     ----------
     device
-        A device, a platform name accepted by :func:`jax.devices` (e.g.
-        ``"cpu"``, resolved to the platform's first device), or ``None``.
+        A device, ``"host"`` (plain host memory via :func:`jax.device_get`,
+        needs no CPU backend), a platform name accepted by :func:`jax.devices`
+        (e.g. ``"cpu"``, resolved to the platform's first device), or ``None``.
 
     Returns
     -------
-    jax.Device | None
-        The resolved device, or ``None`` when ``device`` is ``None``.
+    jax.Device | Literal["host"] | None
+        The resolved device, ``"host"``, or ``None`` when ``device`` is
+        ``None``. ``"cpu"`` also resolves to ``"host"`` (with a
+        :class:`UserWarning`) when the CPU backend is not initialized, e.g.
+        after ``numpyro.set_platform("cuda")`` restricted ``jax_platforms``.
+
+    Raises
+    ------
+    ValueError
+        If ``device`` names any other platform whose backend is not
+        initialized.
     """
     if device is None or isinstance(device, jax.Device):
         return device
-    return jax.devices(device)[0]
+    if device == "host":
+        return "host"
+    try:
+        return jax.devices(device)[0]
+    except RuntimeError as err:
+        available = [d.platform for d in jax.devices()]
+        if device == "cpu":
+            warnings.warn(
+                f"the JAX CPU backend is not initialized (available platforms: {available}), "
+                "so draws fall back to device='host' (host memory, returned as a NumPy "
+                "array). Pass device='host' explicitly, or initialize the CPU backend, "
+                "e.g. numpyro.set_platform('cuda,cpu'), to silence this warning.",
+                UserWarning,
+                stacklevel=3,
+            )
+            return "host"
+        msg = (
+            f"JAX platform {device!r} is not initialized (available platforms: {available}). "
+            "Pass one of those platforms, a jax.Device, 'host' (host memory, NumPy result), "
+            "or initialize the platform via jax_platforms, "
+            f"e.g. numpyro.set_platform('{available[0]},{device}')."
+        )
+        raise ValueError(msg) from err
 
 
-def _transfer(draws: Array, device: jax.Device | None) -> Array:
-    """Commit ``draws`` to ``device`` and wait for the transfer to finish.
+def _transfer(draws: Array, device: jax.Device | Literal["host"] | None) -> Array | np.ndarray:
+    """Move ``draws`` to ``device`` and wait for the transfer to finish.
 
     Blocking makes the memory profile deterministic: the source buffer is
     released before the next chunk is drawn, so the accelerator holds at most
-    one chunk of draws at a time. ``device`` ``None`` is the identity.
+    one chunk of draws at a time. ``device`` ``None`` is the identity;
+    ``"host"`` copies to host memory with :func:`jax.device_get` (a NumPy
+    array, inherently blocking, available regardless of which JAX backends are
+    initialized).
 
     Parameters
     ----------
     draws
         The draws to move.
     device
-        Target device, or ``None`` to leave ``draws`` where they are.
+        Target device, ``"host"``, or ``None`` to leave ``draws`` where they
+        are.
 
     Returns
     -------
-    Array
-        ``draws`` committed to ``device`` (or ``draws`` itself when ``None``).
+    Array | np.ndarray
+        ``draws`` committed to ``device`` (``draws`` itself when ``None``, a
+        NumPy array when ``"host"``).
     """
     if device is None:
         return draws
+    if device == "host":
+        return jax.device_get(draws)
     return jax.device_put(draws, device).block_until_ready()
 
 
@@ -139,8 +181,8 @@ def _chunked_draws(
     predict_fn: Callable[[Array, dict[str, Array]], Array],
     posterior: dict[str, Array],
     batch_size: int | None,
-    device: jax.Device | None = None,
-) -> Array:
+    device: jax.Device | Literal["host"] | None = None,
+) -> Array | np.ndarray:
     """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
 
     Shared chunk driver for :func:`forecast` and :func:`predict_in_sample`.
@@ -152,9 +194,10 @@ def _chunked_draws(
     and the wrapped draws are discarded by a final slice (skipped when the
     sample count is an exact multiple of ``batch_size``, since JAX slices copy
     and nothing wrapped). When ``device`` is
-    given, every chunk is committed there (:func:`_transfer`) before the next
-    one is drawn and the stitched result lives on ``device``, bounding
-    accelerator memory by a single chunk.
+    given, every chunk is moved there (:func:`_transfer`) before the next one
+    is drawn and the stitched result lives on ``device``, bounding accelerator
+    memory by a single chunk; ``"host"`` stitches the NumPy chunks with
+    :func:`numpy.concatenate` so the result never touches an accelerator.
 
     Parameters
     ----------
@@ -167,12 +210,14 @@ def _chunked_draws(
     batch_size
         Optional chunk size (caps peak memory).
     device
-        Optional device each chunk (and the stitched result) is committed to.
+        Optional device (or ``"host"``) each chunk and the stitched result are
+        moved to.
 
     Returns
     -------
-    Array
-        The stitched draws for the original sample count.
+    Array | np.ndarray
+        The stitched draws for the original sample count (a NumPy array when
+        ``device`` is ``"host"``).
     """
     num = _sample_axis_size(posterior)
     if batch_size is None or batch_size >= num:
@@ -183,7 +228,10 @@ def _chunked_draws(
         _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
         for i, idx in enumerate(indices)
     ]
-    stitched = jnp.concatenate(chunks, axis=0)
+    if device == "host":
+        stitched: Array | np.ndarray = np.concatenate(chunks, axis=0)
+    else:
+        stitched = jnp.concatenate(chunks, axis=0)
     return stitched if stitched.shape[0] == num else stitched[:num]
 
 
@@ -222,7 +270,7 @@ def forecast(
     batch_size: int | None = None,
     parallel: bool = True,
     device: jax.Device | str | None = None,
-) -> Num[Array, " sample *batch future obs"]:
+) -> Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
     Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
@@ -253,22 +301,30 @@ def forecast(
         ``batch_size`` remains the peak-memory governor. The two settings produce
         the same draws up to floating-point reduction order.
     device
-        Optional device (or platform name like ``"cpu"``) where each chunk of
-        draws is placed as soon as it is drawn and where the stitched result
-        lives. With ``batch_size`` set on an accelerator, ``"cpu"`` bounds
-        accelerator memory by a single chunk instead of the full
-        ``(sample, future, obs)`` array; the draw values are unchanged, only
-        the placement of the result. The bound requires ``batch_size`` strictly
-        below the sample count: at or above it, the single-shot path runs and
-        the full array is materialized on the default device before the one
-        transfer. ``None`` keeps everything on the default device.
+        Where each chunk of draws is placed as soon as it is drawn and where
+        the stitched result lives. ``"host"`` copies every chunk to host
+        memory with :func:`jax.device_get` and returns a NumPy array; it needs
+        no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
+        (or ``jax_platforms``) leaves only an accelerator backend initialized,
+        which makes it the recommended choice on GPU. A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device instead
+        (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+        the CPU backend is not initialized). With ``batch_size`` set on an
+        accelerator, either bounds accelerator memory by a single chunk
+        instead of the full ``(sample, future, obs)`` array; the draw values
+        are unchanged, only where the result lives. The bound requires
+        ``batch_size`` strictly below the sample count: at or above it, the
+        single-shot path runs and the full array is materialized on the
+        default device before the one transfer. ``None`` keeps everything on
+        the default device.
 
     Returns
     -------
-    Num[Array, " sample *batch future obs"]
+    Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
         Forecast samples over the ``future = duration - t`` horizon (floating
         point for continuous observations, integer for discrete/count models
-        built with :func:`~numpyro_forecast.functional.models.predict_glm`).
+        built with :func:`~numpyro_forecast.functional.models.predict_glm`; a
+        NumPy array when ``device`` resolves to ``"host"``).
 
     Raises
     ------
@@ -322,7 +378,7 @@ def predict_in_sample(
     batch_size: int | None = None,
     parallel: bool = True,
     device: jax.Device | str | None = None,
-) -> Num[Array, " sample *batch time obs"]:
+) -> Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]:
     """Sample the in-sample posterior predictive of the ``obs`` site.
 
     Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
@@ -351,20 +407,28 @@ def predict_in_sample(
         ``lax.map`` (``False``). See :func:`forecast` for how this interacts with
         ``batch_size``.
     device
-        Optional device (or platform name like ``"cpu"``) where each chunk of
-        draws is placed as soon as it is drawn and where the stitched result
-        lives. With ``batch_size`` set on an accelerator, ``"cpu"`` bounds
-        accelerator memory by a single chunk instead of the full
-        ``(sample, time, obs)`` array; the draw values are unchanged, only the
-        placement of the result. The bound requires ``batch_size`` strictly
-        below the sample count: at or above it, the single-shot path runs and
-        the full array is materialized on the default device before the one
-        transfer. ``None`` keeps everything on the default device.
+        Where each chunk of draws is placed as soon as it is drawn and where
+        the stitched result lives. ``"host"`` copies every chunk to host
+        memory with :func:`jax.device_get` and returns a NumPy array; it needs
+        no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
+        (or ``jax_platforms``) leaves only an accelerator backend initialized,
+        which makes it the recommended choice on GPU. A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device instead
+        (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+        the CPU backend is not initialized). With ``batch_size`` set on an
+        accelerator, either bounds accelerator memory by a single chunk
+        instead of the full ``(sample, time, obs)`` array; the draw values are
+        unchanged, only where the result lives. The bound requires
+        ``batch_size`` strictly below the sample count: at or above it, the
+        single-shot path runs and the full array is materialized on the
+        default device before the one transfer. ``None`` keeps everything on
+        the default device.
 
     Returns
     -------
-    Num[Array, " sample *batch time obs"]
-        In-sample posterior-predictive draws of the ``obs`` site.
+    Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
+        In-sample posterior-predictive draws of the ``obs`` site (a NumPy
+        array when ``device`` resolves to ``"host"``).
     """
 
     def predict_fn(key: Array, post: dict[str, Array]) -> Array:

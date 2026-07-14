@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+import jax
 import jax.numpy as jnp
 import pytest
 from example_models import HierarchicalForecaster, UnivariateForecaster
@@ -40,7 +41,9 @@ def _fit_and_forecast_univariate(
     t = duration - future
     key_fit, key_forecast = random.split(rng_key)
     forecaster = make_forecaster(key_fit, UnivariateForecaster(), y[:t], covariates[:t])
-    return forecaster(key_forecast, y[:t], covariates, num_samples=100)
+    pred = forecaster(key_forecast, y[:t], covariates, num_samples=100)
+    assert isinstance(pred, jax.Array)  # no device passed, so never NumPy
+    return pred
 
 
 def test_univariate_synthetic(forecaster_factory: MakeForecaster, rng_key: Array) -> None:
@@ -86,7 +89,9 @@ def _fit_and_forecast_hierarchical(
     forecaster = make_forecaster(
         key_fit, HierarchicalForecaster(period=period), y[:, :t, :], covariates[:, :t, :]
     )
-    return forecaster(key_forecast, y[:, :t, :], covariates, num_samples=50)
+    pred = forecaster(key_forecast, y[:, :t, :], covariates, num_samples=50)
+    assert isinstance(pred, jax.Array)  # no device passed, so never NumPy
+    return pred
 
 
 def test_hierarchical_synthetic(forecaster_factory: MakeForecaster, rng_key: Array) -> None:
