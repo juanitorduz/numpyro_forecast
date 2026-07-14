@@ -1555,7 +1555,8 @@ predictive_batch_size
     path and the full array is materialized on the default device before
     the single transfer. Chunking changes the PRNG stream layout, so draws
     are reproducible per ``(rng_key, predictive_batch_size)``. ``None``
-    (default) samples everything in one shot, exactly as before.
+    (default) samples everything in one shot (the result is still
+    committed to ``predictive_device``).
 predictive_device
     Device (or platform name like ``"cpu"``) the predictive draws are
     committed to, forwarded to the ``device`` argument of

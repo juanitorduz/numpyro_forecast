@@ -778,7 +778,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L222-L460" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L222-L461" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -830,7 +830,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">predictive_batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional chunk size for the predictive sampling. When set, the in-sample posterior predictive and the forecast draws are sampled in chunks of this many posterior draws, and each chunk is committed to <code>predictive_device</code> before the next is drawn, so accelerator memory is bounded by one chunk instead of the full <code>(samples, time, obs)</code> array. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout, so draws are reproducible per <code>(rng_key, predictive_batch_size)</code>. <code>None</code> (default) samples everything in one shot, exactly as before.</p>
+<p>Optional chunk size for the predictive sampling. When set, the in-sample posterior predictive and the forecast draws are sampled in chunks of this many posterior draws, and each chunk is committed to <code>predictive_device</code> before the next is drawn, so accelerator memory is bounded by one chunk instead of the full <code>(samples, time, obs)</code> array. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout, so draws are reproducible per <code>(rng_key, predictive_batch_size)</code>. <code>None</code> (default) samples everything in one shot (the result is still committed to <code>predictive_device</code>).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">predictive_device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"cpu"</span></span></code></dt>
 <dd>
