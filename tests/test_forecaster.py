@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 import pytest
@@ -97,6 +98,35 @@ def test_forecaster_batch_size_matches_single_shot(rng_key: Array) -> None:
     forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
     fc = forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3)
     assert fc.shape == (10, 6, 1)
+
+
+def test_forecaster_device_bitwise_matches_no_device(rng_key: Array) -> None:
+    """The device knob relocates the chunked forecast draws without changing them."""
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+    plain = forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3)
+    hosted = forecaster(
+        rng_key, data, empty_covariates(46), num_samples=10, batch_size=3, device="cpu"
+    )
+    assert hosted.shape == (10, 6, 1)
+    assert hosted.devices() == {jax.devices("cpu")[0]}
+    assert jnp.array_equal(plain, hosted)
+
+
+def test_forecaster_predict_in_sample_device_bitwise_matches_no_device(rng_key: Array) -> None:
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+    plain = forecaster.predict_in_sample(
+        rng_key, empty_covariates(40), num_samples=10, batch_size=4
+    )
+    hosted = forecaster.predict_in_sample(
+        rng_key, empty_covariates(40), num_samples=10, batch_size=4, device="cpu"
+    )
+    assert hosted.shape == (10, 40, 1)
+    assert hosted.devices() == {jax.devices("cpu")[0]}
+    assert jnp.array_equal(plain, hosted)
 
 
 def test_forecaster_conditions_on_data(rng_key: Array) -> None:

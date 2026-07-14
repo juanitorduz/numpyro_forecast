@@ -14,7 +14,13 @@ from numpyro_forecast.functional import (
     forecasting_model,
     predict_in_sample,
 )
-from numpyro_forecast.functional.prediction import _chunked_draws, _pad_posterior, _predict
+from numpyro_forecast.functional.prediction import (
+    _chunk_indices,
+    _chunked_draws,
+    _predict,
+    _resolve_device,
+    _sample_axis_size,
+)
 from numpyro_forecast.typing import Array, ForecastModel
 
 
@@ -102,55 +108,61 @@ def test_predict_in_sample_parallel_matches_serial() -> None:
     assert jnp.allclose(vmapped, serial, atol=1e-4)
 
 
-# --- P5: chunk padding & compile discipline ----------------------------------
+# --- P5: chunk indexing & compile discipline ----------------------------------
 
 
-def test_pad_posterior_rejects_empty() -> None:
+def test_sample_axis_size_rejects_empty() -> None:
     with pytest.raises(ValueError, match="non-empty"):
-        _pad_posterior({}, 4)
+        _sample_axis_size({})
 
 
-def test_pad_posterior_rejects_non_positive_batch() -> None:
-    with pytest.raises(ValueError, match="batch_size must be positive"):
-        _pad_posterior({"x": jnp.zeros((5, 1))}, 0)
-
-
-def test_pad_posterior_rejects_ragged_sample_axis() -> None:
+def test_sample_axis_size_rejects_ragged_sample_axis() -> None:
     posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((6, 1))}
     with pytest.raises(ValueError, match="disagree on the sample axis"):
-        _pad_posterior(posterior, 4)
+        _sample_axis_size(posterior)
 
 
-def test_pad_posterior_pads_to_multiple_and_reports_original() -> None:
-    posterior = {"x": jnp.arange(5.0)[:, None]}
-    padded, num = _pad_posterior(posterior, 4)
-    assert num == 5
-    assert padded["x"].shape == (8, 1)  # next multiple of 4
-    # The original prefix is preserved; pad rows wrap around from the start.
-    assert jnp.array_equal(padded["x"][:5], posterior["x"])
+def test_sample_axis_size_returns_shared_length() -> None:
+    posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((5, 3))}
+    assert _sample_axis_size(posterior) == 5
 
 
-def test_pad_posterior_no_pad_when_already_multiple() -> None:
-    posterior = {"x": jnp.arange(8.0)[:, None]}
-    padded, num = _pad_posterior(posterior, 4)
-    assert num == 8
-    assert padded["x"] is posterior["x"]
+def test_chunk_indices_rejects_non_positive_batch() -> None:
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        _chunk_indices(5, 0)
 
 
-def test_chunked_draws_pads_splits_and_truncates() -> None:
-    """The chunk driver feeds fixed-size chunks, distinct subkeys, and truncates the pad."""
-    calls: list[tuple[Array, tuple[int, ...]]] = []
+def test_chunk_indices_wraps_final_block() -> None:
+    blocks = _chunk_indices(10, 4)
+    assert [tuple(int(i) for i in block) for block in blocks] == [
+        (0, 1, 2, 3),
+        (4, 5, 6, 7),
+        (8, 9, 0, 1),  # the tail wraps around to re-use leading draws
+    ]
+
+
+def test_chunk_indices_no_wrap_when_exact_multiple() -> None:
+    blocks = _chunk_indices(8, 4)
+    assert [tuple(int(i) for i in block) for block in blocks] == [(0, 1, 2, 3), (4, 5, 6, 7)]
+
+
+def test_chunked_draws_splits_wraps_and_truncates() -> None:
+    """The chunk driver feeds fixed-size wrapped chunks, distinct subkeys, and truncates."""
+    calls: list[tuple[Array, Array]] = []
 
     def predict_fn(key: Array, post: dict[str, Array]) -> Array:
-        calls.append((key, post["x"].shape))
+        calls.append((key, post["x"]))
         return post["x"] * 2.0
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     out = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
-    # 10 samples pad to 12 = 3 chunks of 4; the result is cut back to 10.
+    # 10 samples make 3 wrapped chunks of 4; the result is cut back to 10.
     assert out.shape == (10, 1)
     assert jnp.allclose(out, posterior["x"] * 2.0)
-    assert [shape for _, shape in calls] == [(4, 1), (4, 1), (4, 1)]
+    assert [chunk.shape for _, chunk in calls] == [(4, 1), (4, 1), (4, 1)]
+    # The tail chunk wraps around to the leading draws (the old padding scheme,
+    # bit for bit, without the padded posterior copy).
+    assert jnp.array_equal(calls[-1][1][:, 0], jnp.array([8.0, 9.0, 0.0, 1.0]))
     keys = [key for key, _ in calls] + [random.PRNGKey(0)]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
     assert len(set(raw)) == len(raw)  # per-chunk subkeys distinct, parent unused
@@ -225,6 +237,127 @@ def test_single_compile_while_chunking(count_compilations) -> None:
     assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
 
     # Replaying the sweep hits every cached shape, so nothing recompiles.
+    with count_compilations() as tally:
+        _sweep()
+    assert tally.count == 0
+    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+
+# --- P6: host offloading (issue #64) ------------------------------------------
+
+
+def _cpu() -> jax.Device:
+    return jax.devices("cpu")[0]
+
+
+def test_resolve_device_none_passthrough() -> None:
+    assert _resolve_device(None) is None
+
+
+def test_resolve_device_accepts_platform_string_and_device() -> None:
+    cpu = _cpu()
+    assert _resolve_device("cpu") == cpu
+    assert _resolve_device(cpu) is cpu
+
+
+def test_chunked_draws_device_commits_result() -> None:
+    """With ``device`` set the stitched draws are committed there, values unchanged."""
+
+    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+        return post["x"] * 2.0
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    committed = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, _cpu())
+    assert committed.devices() == {_cpu()}
+    assert jnp.array_equal(plain, committed)
+
+
+def test_chunked_draws_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Memory contract: every chunk is committed to the device, not just the result.
+
+    CPU CI cannot observe accelerator memory, so the per-chunk ``device_put``
+    calls are the testable proxy for "each chunk leaves the accelerator before
+    the next is drawn".
+    """
+    transfers: list[tuple[int, ...]] = []
+    real_device_put = jax.device_put
+
+    def spy_device_put(x: Array, device: jax.Device) -> Array:
+        transfers.append(tuple(x.shape))
+        return real_device_put(x, device)
+
+    monkeypatch.setattr(jax, "device_put", spy_device_put)
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    _chunked_draws(random.PRNGKey(0), lambda _key, post: post["x"], posterior, 4, _cpu())
+    assert transfers == [(4, 1), (4, 1), (4, 1)]  # one transfer per chunk
+
+
+def test_forecast_device_bitwise_matches_no_device() -> None:
+    # device is a placement knob, never a draws knob.
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
+    hosted = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
+    )
+    assert hosted.devices() == {_cpu()}
+    assert jnp.array_equal(plain, hosted)
+
+
+def test_predict_in_sample_device_bitwise_matches_no_device() -> None:
+    model, _data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    plain = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4)
+    hosted = predict_in_sample(
+        random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="cpu"
+    )
+    assert hosted.devices() == {_cpu()}
+    assert jnp.array_equal(plain, hosted)
+
+
+def test_forecast_device_string_alias() -> None:
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    by_string = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
+    )
+    by_device = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device=_cpu()
+    )
+    assert jnp.array_equal(by_string, by_device)
+    assert by_string.devices() == by_device.devices() == {_cpu()}
+
+
+def test_forecast_unchunked_device_commits_result() -> None:
+    # The unchunked passthrough honors device too (single transfer of the result).
+    model, data, fit = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
+    hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="cpu")
+    assert hosted.devices() == {_cpu()}
+    assert jnp.array_equal(plain, hosted)
+
+
+def test_single_compile_while_chunking_with_device(count_compilations) -> None:
+    """Host transfers must not break the fixed-shape single-compile invariant."""
+    model, data, fit = _fit_data()
+    covariates = empty_covariates(36)
+    posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
+    jax.block_until_ready(posteriors)
+
+    def _sweep() -> None:
+        for post in posteriors:
+            jax.block_until_ready(
+                forecast(
+                    random.PRNGKey(3), model, post, data, covariates, batch_size=4, device="cpu"
+                )
+            )
+
+    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
+    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
+    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
     with count_compilations() as tally:
         _sweep()
     assert tally.count == 0

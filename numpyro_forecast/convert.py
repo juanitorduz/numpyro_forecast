@@ -17,6 +17,7 @@ from functools import singledispatch
 from typing import Any, cast
 
 import arviz_base
+import jax
 import numpy as np
 import xarray
 from jax import random
@@ -226,6 +227,7 @@ def to_datatree(
     covariates: Array,
     *,
     num_predictive_samples: int | None = None,
+    predictive_batch_size: int | None = None,
     coords: Mapping[str, Sequence[Any]] | None = None,
     time_coord: Sequence[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
@@ -261,6 +263,15 @@ def to_datatree(
         :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
         The same draws drive the in-sample predictive and the forecast. Defaults
         to ``1_000``.
+    predictive_batch_size
+        Optional chunk size for the predictive sampling. When set, the
+        in-sample posterior predictive and the forecast draws are sampled in
+        chunks of this many posterior draws, and each chunk is moved to host
+        (CPU) memory before the next is drawn, so accelerator memory is
+        bounded by one chunk instead of the full ``(samples, time, obs)``
+        array. Chunking changes the PRNG stream layout, so draws are
+        reproducible per ``(rng_key, predictive_batch_size)``. ``None``
+        (default) samples everything in one shot, exactly as before.
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -314,9 +325,10 @@ def to_datatree(
     variational fits), one the in-sample predictive, and, when a horizon is
     present, a third the forecast. The split is a deterministic derivation
     applied for every fit type, so passing the same key twice never correlates
-    the sample sets. For step-by-step control over the forecast draws (e.g. a
-    custom ``batch_size``), build the in-sample tree with matching-length
-    covariates and attach the horizon with :func:`add_forecast_groups`.
+    the sample sets. ``predictive_batch_size`` is the built-in route to
+    memory-bounded predictive sampling; for fully manual control over the
+    forecast draws, build the in-sample tree with matching-length covariates
+    and attach the horizon with :func:`add_forecast_groups`.
     """
     _require_covariates_cover_data(data, covariates)
     cov_dims = _resolve_covariate_dims(covariates, covariate_dims)
@@ -368,8 +380,16 @@ def to_datatree(
         attrs=posterior_attrs,
     )
 
+    host = jax.devices("cpu")[0] if predictive_batch_size is not None else None
     covariates_insample = covariates[..., :n_time, :]
-    predictive = predict_in_sample(key_pred, model, samples, covariates_insample)
+    predictive = predict_in_sample(
+        key_pred,
+        model,
+        samples,
+        covariates_insample,
+        batch_size=predictive_batch_size,
+        device=host,
+    )
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_predictive(fit, predictive)},
         sample_dims=_SAMPLE_DIMS,
@@ -397,7 +417,15 @@ def to_datatree(
         "constant_data": constant_ds,
     }
     if key_forecast is not None:
-        forecast_samples = forecast(key_forecast, model, samples, data, covariates)
+        forecast_samples = forecast(
+            key_forecast,
+            model,
+            samples,
+            data,
+            covariates,
+            batch_size=predictive_batch_size,
+            device=host,
+        )
         predictions_ds, predictions_constant_ds = _forecast_group_datasets(
             _reshape_predictive(fit, forecast_samples),
             covariates[..., n_time:, :],

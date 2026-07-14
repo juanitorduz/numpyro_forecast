@@ -5,6 +5,7 @@ import warnings
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import xarray.testing as xarray_testing
 from conftest import RandomWalkModel, empty_covariates
 from jax import Array, random
 
@@ -506,10 +507,14 @@ def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
         return real_draw(rng_key, fit, num)
 
     def spy_pred(
-        rng_key: Array, model: ForecastModel, posterior: dict[str, Array], covariates: Array
+        rng_key: Array,
+        model: ForecastModel,
+        posterior: dict[str, Array],
+        covariates: Array,
+        **kwargs: object,
     ) -> object:
         captured["pred"] = rng_key
-        return real_pred(rng_key, model, posterior, covariates)
+        return real_pred(rng_key, model, posterior, covariates, **kwargs)  # ty: ignore[invalid-argument-type]
 
     monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
     monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
@@ -544,6 +549,127 @@ def test_to_datatree_deterministic_given_key() -> None:
         np.asarray(a["posterior"]["drift"]),
         np.asarray(b["posterior"]["drift"]),
     )
+
+
+# --- predictive_batch_size (issue #64) ----------------------------------------
+
+
+def _svi_fit_with_horizon(horizon: int = 5):  # type: ignore[no-untyped-def]
+    data = _series()
+    n = data.shape[-2]
+    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, empty_covariates(n), num_steps=40)
+    return svi, data, empty_covariates(n + horizon)
+
+
+def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
+    """Chunked predictive sampling produces the same tree layout as the default."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    n = data.shape[-2]
+    tree = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+        predictive_batch_size=4,
+    )
+    assert set(tree.children) == {
+        "posterior",
+        "posterior_predictive",
+        "observed_data",
+        "constant_data",
+        "predictions",
+        "predictions_constant_data",
+    }
+    pp = tree["posterior_predictive"]["obs"]
+    assert pp.sizes == {"chain": 1, "draw": 10, "time": n, "obs_dim": 1}
+    predictions = tree["predictions"]["obs"]
+    assert predictions.sizes == {"chain": 1, "draw": 10, "time": 5, "obs_dim": 1}
+    assert bool(np.all(np.isfinite(np.asarray(pp))))
+    assert bool(np.all(np.isfinite(np.asarray(predictions))))
+
+
+def test_to_datatree_predictive_batch_size_ge_samples_matches_default() -> None:
+    """A batch size at or above the draw count hits the passthrough: identical tree."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    default = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+    )
+    batched = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+        predictive_batch_size=64,
+    )
+    for group in default.children:
+        xarray_testing.assert_equal(default[group].dataset, batched[group].dataset)
+
+
+def test_to_datatree_predictive_batch_size_deterministic_given_key() -> None:
+    svi, data, covariates = _svi_fit_with_horizon()
+    trees = [
+        to_datatree(
+            random.PRNGKey(7),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+        )
+        for _ in range(2)
+    ]
+    for group in trees[0].children:
+        xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
+
+
+def test_to_datatree_predictive_batch_size_posterior_group_unaffected() -> None:
+    """Chunking consumes only the predictive keys, so the posterior draws are unchanged."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    default = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+    )
+    batched = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+        predictive_batch_size=4,
+    )
+    xarray_testing.assert_equal(default["posterior"].dataset, batched["posterior"].dataset)
+
+
+def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:
+    fit, data, _covariates = _mcmc_fit(num_chains=2)
+    n = data.shape[-2]
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        empty_covariates(n + 4),
+        predictive_batch_size=16,
+    )
+    pp = tree["posterior_predictive"]["obs"]
+    assert pp.sizes == {"chain": 2, "draw": 50, "time": n, "obs_dim": 1}
+    predictions = tree["predictions"]["obs"]
+    assert predictions.sizes == {"chain": 2, "draw": 50, "time": 4, "obs_dim": 1}
 
 
 def _prediction_draws(

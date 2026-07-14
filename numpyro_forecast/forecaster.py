@@ -15,6 +15,7 @@ import abc
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
+import jax
 import numpyro.distributions as dist
 from jax import random
 from jaxtyping import Num
@@ -260,6 +261,7 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
+        device: jax.Device | str | None = None,
     ) -> Num[Array, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
@@ -279,6 +281,10 @@ class _BaseForecaster(abc.ABC):
             Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
             higher peak memory) or map it serially (``False``). See
             :func:`numpyro_forecast.functional.prediction.forecast`.
+        device
+            Optional device (or platform name like ``"cpu"``) where each chunk
+            of draws is placed as soon as it is drawn and where the stitched
+            result lives. See :func:`numpyro_forecast.functional.prediction.forecast`.
 
         Returns
         -------
@@ -298,6 +304,7 @@ class _BaseForecaster(abc.ABC):
             covariates,
             batch_size=batch_size,
             parallel=parallel,
+            device=device,
         )
 
     def predict_in_sample(
@@ -308,6 +315,7 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
+        device: jax.Device | str | None = None,
     ) -> Num[Array, " sample *batch time obs"]:
         """Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -331,6 +339,11 @@ class _BaseForecaster(abc.ABC):
             Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
             higher peak memory) or map it serially (``False``). See
             :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
+        device
+            Optional device (or platform name like ``"cpu"``) where each chunk
+            of draws is placed as soon as it is drawn and where the stitched
+            result lives. See
+            :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
 
         Returns
         -------
@@ -353,7 +366,13 @@ class _BaseForecaster(abc.ABC):
         key_post, key_pred = random.split(rng_key)
         posterior = self._draw_posterior(key_post, num_samples)
         return _predict_in_sample(
-            key_pred, self.model, posterior, covariates, batch_size=batch_size, parallel=parallel
+            key_pred,
+            self.model,
+            posterior,
+            covariates,
+            batch_size=batch_size,
+            parallel=parallel,
+            device=device,
         )
 
 
