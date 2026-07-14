@@ -778,14 +778,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/posterior.py#L95-L135" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/posterior.py#L101-L194" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">posterior</span><span class="op">.</span><span class="va">draw_posterior</span>(
-    <span class="va">rng_key</span>,
-    <span class="va">fit</span>,
-    <span class="va">num_samples</span>,
-)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">posterior</span><span class="op">.</span><span class="va">draw_posterior</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>, <span class="va">fit</span>, <span class="va">num_samples</span>, <span class="op">*</span>, <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>, <span class="va">device</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Dispatches on the fit type (e.g.&nbsp;<code>~numpyro_forecast.functional.svi.SVIFit</code>, <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>). The returned dict has the sample axis leading and is ready to pass to <code>~numpyro_forecast.functional.prediction.forecast()</code> or NumPyro’s <code>Predictive</code>.</p>
@@ -804,7 +802,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
-Number of posterior draws.
+<p>Number of posterior draws.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Optional chunk size for the drawing itself. Sampling a variational posterior materializes every latent and deterministic site for all draws at once, which on a wide panel is the largest allocation of the whole workflow. With <code>batch_size</code> set (strictly below <code>num_samples</code>), the draws are sampled in chunks of exactly this many samples, each chunk is moved per <code>device</code> before the next is drawn, and the final chunk’s overdraw is discarded, so accelerator memory is bounded by one chunk. Chunking changes the PRNG stream layout: draws are reproducible per <code>(rng_key, batch_size)</code>. Ignored for <code>~numpyro_forecast.functional.mcmc.MCMCFit</code> (see Notes).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Where each chunk of draws is moved as soon as it is drawn. <code>"host"</code> copies to host memory with <code>jax.device_get()</code> and returns NumPy leaves; it needs no CPU backend, so it works even when <code>numpyro.set_platform("cuda")</code> (or <code>jax_platforms</code>) leaves only an accelerator backend initialized. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device instead (<code>"cpu"</code> falls back to <code>"host"</code> with a <code>UserWarning</code> when the CPU backend is not initialized). <code>None</code> keeps everything on the default device. <code>device</code> never changes the draw values.
 </dd>
 </dl>
 </div>
@@ -813,9 +819,9 @@ Number of posterior draws.
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">dict[str, Array | np.ndarray]</span></code></dt>
 <dd>
-Posterior samples of the latent sites, sample axis leading.
+Posterior samples of the latent sites, sample axis leading (NumPy leaves when <code>device</code> resolves to <code>"host"</code>).
 </dd>
 </dl>
 </div>
@@ -830,14 +836,18 @@ Posterior samples of the latent sites, sample axis leading.
 </dd>
 <dt><code> <span class="doc-parameter-annotation">GuideSampleArgsError</span></code></dt>
 <dd>
-If the fit holds a hand-written guide but was constructed without its in-sample covariates/data.
+<p>If the fit holds a hand-written guide but was constructed without its in-sample covariates/data.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>batch_size</code> is not positive.
 </dd>
 </dl>
 </div>
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p>For an <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>, when <code>num_samples</code> does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. For an <code>~numpyro_forecast.functional.svi.SVIFit</code> the draws are sampled afresh from the fitted guide.</p>
+<p>For an <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>, when <code>num_samples</code> does not exceed the number of draws in the chain the draws are thinned on an evenly spaced grid (no duplicates); only when more samples are requested than the chain holds are they resampled with replacement. Because that selection is deterministic and the chain draws are already materialized, <code>batch_size</code> is ignored for MCMC fits (there is no drawing peak to bound and chunked selection would duplicate draws); <code>device</code> still applies. For an <code>~numpyro_forecast.functional.svi.SVIFit</code> (or a Pathfinder fit) the draws are sampled afresh from the fitted guide, and chunks drawn from independent subkeys remain valid i.i.d. posterior samples.</p>
 
 
 </section>
