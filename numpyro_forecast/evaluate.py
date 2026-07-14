@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +28,8 @@ from numpyro_forecast.exceptions import (
 )
 from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.functional import resolve_guide, resolve_optimizer
+from numpyro_forecast.functional._offload import _oom_advice, _stitch_chunks, _transfer
+from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, ForecasterFactory, ForecastModel, Metric, ModelFactory
@@ -84,8 +86,82 @@ def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch
     return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
 
 
+_crps_cells = jax.jit(crps_empirical)
+"""Jitted per-cell CRPS kernel for the chunked evaluation path."""
+
+
 @jax.jit
-def eval_crps(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_crps_single_pass(
+    pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]
+) -> Array:
+    """Whole-panel CRPS mean as one fused kernel (the pre-chunking eval_crps graph)."""
+    return crps_empirical(pred, truth).mean()
+
+
+def _chunked_cell_metric(
+    kernel: Callable[..., Array],
+    pred: "Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch']",
+    truth: "Float[Array, ' *batch'] | Float[np.ndarray, ' *batch']",
+    batch_size: int,
+) -> "np.floating":
+    """Average a per-cell metric kernel over fixed-size cell chunks.
+
+    The batch shape is flattened to ``n_cells`` data cells and evaluated in
+    wrapped index blocks of exactly ``batch_size`` cells
+    (:func:`~numpyro_forecast.functional.prediction._chunk_indices`), so the
+    jitted ``kernel`` compiles once; each block's per-cell values are moved to
+    host memory before the next block runs, bounding accelerator memory by
+    ``sample * batch_size`` values plus the kernel workspace. The sample axis
+    is never chunked.
+
+    Parameters
+    ----------
+    kernel
+        Jitted per-cell metric ``(pred_cells, truth_cells) -> values`` with
+        the sample axis first on ``pred_cells``.
+    pred
+        Forecast samples with the sample axis first.
+    truth
+        Ground-truth values (matching ``pred`` without the sample axis).
+    batch_size
+        Number of flattened data cells per device pass.
+
+    Returns
+    -------
+    np.floating
+        The host-side mean of the per-cell metric values.
+    """
+    sample = pred.shape[0]
+    pred_flat = pred.reshape(sample, -1)
+    truth_flat = truth.reshape(-1)
+    n_cells = truth_flat.shape[0]
+    indices = _chunk_indices(n_cells, batch_size)
+    with _oom_advice("metric evaluation", batch_size):
+        chunks = [_transfer(kernel(pred_flat[:, idx], truth_flat[idx]), "host") for idx in indices]
+    values = cast("np.ndarray", _stitch_chunks(chunks, n_cells, "host"))
+    return values.mean()
+
+
+@overload
+def eval_crps(
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    *,
+    batch_size: None = None,
+) -> Array: ...
+@overload
+def eval_crps(
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    *,
+    batch_size: int,
+) -> "Array | np.floating": ...
+def eval_crps(
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    *,
+    batch_size: int | None = None,
+) -> "Array | np.floating":
     """Empirical CRPS averaged over all data elements.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
@@ -96,22 +172,58 @@ def eval_crps(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch
         Forecast samples with the sample axis first.
     truth
         Ground-truth values (matching ``pred`` without the sample axis).
+    batch_size
+        Optional number of flattened data cells (the product of the batch
+        shape, e.g. time times series) evaluated on the accelerator per pass;
+        the sample axis is never chunked. With host-resident (NumPy) inputs
+        this bounds accelerator memory by ``sample * batch_size`` values plus
+        the CRPS sort workspace instead of the full panel. Chunking only
+        changes the summation order of the final mean (results are equal to
+        float tolerance, not bitwise); at or above the cell count the
+        single-pass path runs. ``None`` (default) evaluates in one pass.
 
     Returns
     -------
-    Array
-        The mean empirical CRPS as a scalar array.
+    Array | np.floating
+        The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
     """
-    return crps_empirical(pred, truth).mean()
+    if batch_size is None or batch_size >= truth.size:
+        return _eval_crps_single_pass(pred, truth)
+    return _chunked_cell_metric(_crps_cells, pred, truth, batch_size)
 
 
 @partial(jax.jit, static_argnames=("alpha",))
+def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
+    """Per-cell indicator of the truth falling inside the central ``alpha`` interval."""
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    return (truth >= lo) & (truth <= hi)
+
+
+@overload
 def eval_coverage(
-    pred: Float[Array, " sample *batch"],
-    truth: Float[Array, " *batch"],
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    *,
+    alpha: float = ...,
+    batch_size: None = None,
+) -> Array: ...
+@overload
+def eval_coverage(
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    *,
+    alpha: float = ...,
+    batch_size: int,
+) -> "Array | np.floating": ...
+def eval_coverage(
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
-) -> Array:
+    batch_size: int | None = None,
+) -> "Array | np.floating":
     """Empirical coverage of the central ``alpha`` prediction interval.
 
     The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
@@ -129,12 +241,18 @@ def eval_coverage(
         Ground-truth values (matching ``pred`` without the sample axis).
     alpha
         Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
+    batch_size
+        Optional number of flattened data cells evaluated on the accelerator
+        per pass (see :func:`eval_crps`; the sample axis is never chunked).
+        Coverage is a count of exact 0/1 indicators, so chunking recovers
+        the identical count; only the precision of the final division differs
+        from the single pass. ``None`` (default) evaluates in one pass.
 
     Returns
     -------
-    Array
+    Array | np.floating
         The fraction of ground truth inside the central ``alpha`` interval, as
-        a scalar array.
+        a scalar (a NumPy scalar when chunked).
 
     Raises
     ------
@@ -144,10 +262,10 @@ def eval_coverage(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    tail = (1.0 - alpha) / 2.0
-    lo = jnp.quantile(pred, tail, axis=0)
-    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    return ((truth >= lo) & (truth <= hi)).mean()
+    if batch_size is None or batch_size >= truth.size:
+        return _coverage_indicator(pred, truth, alpha=alpha).mean()
+    kernel = partial(_coverage_indicator, alpha=alpha)
+    return _chunked_cell_metric(kernel, pred, truth, batch_size)
 
 
 DEFAULT_METRICS: dict[str, Metric] = {
