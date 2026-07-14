@@ -103,7 +103,8 @@ def _chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
     Block ``i`` holds ``arange(i * batch_size, (i + 1) * batch_size) % num_samples``:
     every block shares one shape, so the jitted predictive compiles exactly
     once regardless of ``num_samples``, and the final block wraps around to
-    re-use leading draws, which :func:`_chunked_draws` discards with its final
+    re-use leading draws (when ``num_samples`` is not an exact multiple of
+    ``batch_size``), which :func:`_chunked_draws` discards with a final
     ``[:num_samples]`` slice. The blocks reproduce the draws of the former
     posterior-padding scheme bit for bit without materializing a padded copy of
     the posterior.
@@ -148,7 +149,9 @@ def _chunked_draws(
     posterior is gathered into wrapped index blocks of exactly ``batch_size``
     rows (:func:`_chunk_indices`) so every chunk shares one shape and the
     jitted ``predict_fn`` compiles exactly once; one subkey is split per chunk,
-    and the wrapped draws are discarded by the final slice. When ``device`` is
+    and the wrapped draws are discarded by a final slice (skipped when the
+    sample count is an exact multiple of ``batch_size``, since JAX slices copy
+    and nothing wrapped). When ``device`` is
     given, every chunk is committed there (:func:`_transfer`) before the next
     one is drawn and the stitched result lives on ``device``, bounding
     accelerator memory by a single chunk.
@@ -180,7 +183,8 @@ def _chunked_draws(
         _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
         for i, idx in enumerate(indices)
     ]
-    return jnp.concatenate(chunks, axis=0)[:num]
+    stitched = jnp.concatenate(chunks, axis=0)
+    return stitched if stitched.shape[0] == num else stitched[:num]
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
