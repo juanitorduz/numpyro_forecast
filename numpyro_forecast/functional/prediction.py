@@ -87,7 +87,7 @@ def _sample_axis_size(posterior: dict[str, Array]) -> int:
         length (the message names the offending sites).
     """
     if not posterior:
-        msg = "_chunked_draws() requires a non-empty posterior"
+        msg = "posterior must be non-empty"
         raise ValueError(msg)
     sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
     distinct = set(sizes.values())
@@ -254,8 +254,10 @@ def forecast(
         lives. With ``batch_size`` set on an accelerator, ``"cpu"`` bounds
         accelerator memory by a single chunk instead of the full
         ``(sample, future, obs)`` array; the draw values are unchanged, only
-        the placement of the result. ``None`` keeps everything on the default
-        device.
+        the placement of the result. The bound requires ``batch_size`` strictly
+        below the sample count: at or above it, the single-shot path runs and
+        the full array is materialized on the default device before the one
+        transfer. ``None`` keeps everything on the default device.
 
     Returns
     -------
@@ -350,8 +352,10 @@ def predict_in_sample(
         lives. With ``batch_size`` set on an accelerator, ``"cpu"`` bounds
         accelerator memory by a single chunk instead of the full
         ``(sample, time, obs)`` array; the draw values are unchanged, only the
-        placement of the result. ``None`` keeps everything on the default
-        device.
+        placement of the result. The bound requires ``batch_size`` strictly
+        below the sample count: at or above it, the single-shot path runs and
+        the full array is materialized on the default device before the one
+        transfer. ``None`` keeps everything on the default device.
 
     Returns
     -------

@@ -655,6 +655,90 @@ def test_to_datatree_predictive_batch_size_posterior_group_unaffected() -> None:
     xarray_testing.assert_equal(default["posterior"].dataset, batched["posterior"].dataset)
 
 
+def test_to_datatree_rejects_non_positive_predictive_batch_size() -> None:
+    """The batch-size contract is enforced at the public to_datatree surface."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        to_datatree(
+            random.PRNGKey(2),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=0,
+        )
+
+
+def test_to_datatree_predictive_device_none_matches_cpu() -> None:
+    """predictive_device is a placement knob, never a draws knob: equal trees."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    trees = [
+        to_datatree(
+            random.PRNGKey(7),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+            predictive_device=device,
+        )
+        for device in ("cpu", None)
+    ]
+    for group in trees[0].children:
+        xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
+
+
+@pytest.mark.parametrize("predictive_device", ["cpu", None])
+def test_to_datatree_forwards_predictive_device(
+    monkeypatch: pytest.MonkeyPatch, predictive_device: str | None
+) -> None:
+    """Both predictive calls receive the predictive_device (default ``"cpu"``)."""
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, object] = {}
+    real_pred = convert_mod.predict_in_sample
+    real_forecast = convert_mod.forecast
+
+    def spy_pred(*args: object, **kwargs: object) -> object:
+        captured["predict_in_sample"] = kwargs["device"]
+        return real_pred(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    def spy_forecast(*args: object, **kwargs: object) -> object:
+        captured["forecast"] = kwargs["device"]
+        return real_forecast(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
+    monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
+
+    svi, data, covariates = _svi_fit_with_horizon()
+    if predictive_device is None:
+        to_datatree(
+            random.PRNGKey(2),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+            predictive_device=None,
+        )
+    else:
+        # The default must forward "cpu", so predictive_device is deliberately omitted.
+        to_datatree(
+            random.PRNGKey(2),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+        )
+    assert captured["predict_in_sample"] == predictive_device
+    assert captured["forecast"] == predictive_device
+
+
 def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:
     fit, data, _covariates = _mcmc_fit(num_chains=2)
     n = data.shape[-2]

@@ -228,6 +228,7 @@ def to_datatree(
     *,
     num_predictive_samples: int | None = None,
     predictive_batch_size: int | None = None,
+    predictive_device: jax.Device | str | None = "cpu",
     coords: Mapping[str, Sequence[Any]] | None = None,
     time_coord: Sequence[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
@@ -266,12 +267,25 @@ def to_datatree(
     predictive_batch_size
         Optional chunk size for the predictive sampling. When set, the
         in-sample posterior predictive and the forecast draws are sampled in
-        chunks of this many posterior draws, and each chunk is moved to host
-        (CPU) memory before the next is drawn, so accelerator memory is
-        bounded by one chunk instead of the full ``(samples, time, obs)``
-        array. Chunking changes the PRNG stream layout, so draws are
-        reproducible per ``(rng_key, predictive_batch_size)``. ``None``
+        chunks of this many posterior draws, and each chunk is committed to
+        ``predictive_device`` before the next is drawn, so accelerator memory
+        is bounded by one chunk instead of the full ``(samples, time, obs)``
+        array. The batch size must be strictly below the draw count for that
+        bound to hold: at or above it, sampling falls back to the single-shot
+        path and the full array is materialized on the default device before
+        the single transfer. Chunking changes the PRNG stream layout, so draws
+        are reproducible per ``(rng_key, predictive_batch_size)``. ``None``
         (default) samples everything in one shot, exactly as before.
+    predictive_device
+        Device (or platform name like ``"cpu"``) the predictive draws are
+        committed to, forwarded to the ``device`` argument of
+        :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
+        :func:`~numpyro_forecast.functional.prediction.forecast`. The default
+        ``"cpu"`` is what bounds accelerator memory when
+        ``predictive_batch_size`` is set; pass ``None`` to keep the draws on
+        the default device (chunked compute without per-chunk host transfers,
+        for when the draws fit on the accelerator and transfers would dominate
+        runtime).
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -380,7 +394,6 @@ def to_datatree(
         attrs=posterior_attrs,
     )
 
-    host = jax.devices("cpu")[0] if predictive_batch_size is not None else None
     covariates_insample = covariates[..., :n_time, :]
     predictive = predict_in_sample(
         key_pred,
@@ -388,7 +401,7 @@ def to_datatree(
         samples,
         covariates_insample,
         batch_size=predictive_batch_size,
-        device=host,
+        device=predictive_device,
     )
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_predictive(fit, predictive)},
@@ -424,7 +437,7 @@ def to_datatree(
             data,
             covariates,
             batch_size=predictive_batch_size,
-            device=host,
+            device=predictive_device,
         )
         predictions_ds, predictions_constant_ds = _forecast_group_datasets(
             _reshape_predictive(fit, forecast_samples),
