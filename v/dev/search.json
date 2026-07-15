@@ -785,11 +785,18 @@
     "href": "changelog.html#whats-changed",
     "title": "Changelog",
     "section": "What’s Changed",
-    "text": "What’s Changed\n\nBump ty from 0.0.56 to 0.0.58 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/58\nBump ruff from 0.15.20 to 0.15.21 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/59\nAdd Codecov configuration and README badge by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/61\nFresh retail stockout example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/62\nBump version from 0.2.0 to 0.2.1 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/63\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0…0.2.1"
+    "text": "What’s Changed\n\n[Fix] to_datatree OOMs on GPU: in-sample predictive materializes all draws in one allocation by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/65\nBump version from 0.2.1 to 0.2.2 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/66\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1…0.2.2"
   },
   {
     "objectID": "changelog.html#whats-changed-1",
     "href": "changelog.html#whats-changed-1",
+    "title": "Changelog",
+    "section": "What’s Changed",
+    "text": "What’s Changed\n\nBump ty from 0.0.56 to 0.0.58 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/58\nBump ruff from 0.15.20 to 0.15.21 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/59\nAdd Codecov configuration and README badge by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/61\nFresh retail stockout example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/62\nBump version from 0.2.0 to 0.2.1 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/63\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0…0.2.1"
+  },
+  {
+    "objectID": "changelog.html#whats-changed-2",
+    "href": "changelog.html#whats-changed-2",
     "title": "Changelog",
     "section": "What’s Changed",
     "text": "What’s Changed\n\nPrune dependencies by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/36\nUpdate package-ecosystem to ‘uv’ in dependabot config by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/37\nBump astral-sh/setup-uv from 6 to 7 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/42\nBump j178/prek-action from 1 to 2 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/41\nBump actions/download-artifact from 4 to 8 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/40\nBump actions/upload-artifact from 4 to 7 by @dependabot[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/39\nMake pre-commit env aware by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/44\ndummy by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/45\nAllow parallel=True in Predictive when forecasting by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/46\nRefactor by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/47\nModularize functional.py into a functional/ package by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/50\nRedistribute the contents of util.py into meaningful modules by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/51\nParallelize tests using pytest-split by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/52\nExample inference methods by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/53\nAdd grid docs in examples by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/54\nVersioned docs: stable release at root, dev docs at /v/dev/ by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/55\nBump version from 0.1.3 to 0.2.0 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/56"
@@ -802,29 +809,29 @@
     "text": "New Contributors\n\n@dependabot[bot] made their first contribution in https://github.com/juanitorduz/numpyro_forecast/pull/42\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.3…0.2.0"
   },
   {
-    "objectID": "changelog.html#whats-changed-2",
-    "href": "changelog.html#whats-changed-2",
-    "title": "Changelog",
-    "section": "What’s Changed",
-    "text": "What’s Changed\n\nRebuild docs on release so the version badge tracks the latest release by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/30\nAdd exponential smoothing example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/31\nAdd references to notebooks by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/32\nBetter prior plots by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/33\nBacktest improvement by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/35\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3"
-  },
-  {
     "objectID": "changelog.html#whats-changed-3",
     "href": "changelog.html#whats-changed-3",
     "title": "Changelog",
     "section": "What’s Changed",
-    "text": "What’s Changed\n\nImprove the univariate forecasting notebook by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/25\nUse better ArviZ functions by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/27\nBump version from 0.1.1 to 0.1.2 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/28\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2"
+    "text": "What’s Changed\n\nRebuild docs on release so the version badge tracks the latest release by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/30\nAdd exponential smoothing example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/31\nAdd references to notebooks by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/32\nBetter prior plots by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/33\nBacktest improvement by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/35\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3"
   },
   {
     "objectID": "changelog.html#whats-changed-4",
     "href": "changelog.html#whats-changed-4",
     "title": "Changelog",
     "section": "What’s Changed",
-    "text": "What’s Changed\n\nAdd documentation site with great-docs by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/14\nFix production docs deploy + prune old deployments by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/15\nFix merge-time docs deploy cancellation + restore prune workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/16\nAdd .nojekyll so notebook figures load on GitHub Pages by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/17\nAdd electricity demand forecasting example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/19\nAdd electricity forecasting calibration example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/20\nAdd coverage configuration to pyproject.toml by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/23\nOverall improvements after the MVP phase by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/21\nBump version from 0.1.0 to 0.1.1 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/24\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1"
+    "text": "What’s Changed\n\nImprove the univariate forecasting notebook by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/25\nUse better ArviZ functions by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/27\nBump version from 0.1.1 to 0.1.2 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/28\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2"
   },
   {
     "objectID": "changelog.html#whats-changed-5",
     "href": "changelog.html#whats-changed-5",
+    "title": "Changelog",
+    "section": "What’s Changed",
+    "text": "What’s Changed\n\nAdd documentation site with great-docs by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/14\nFix production docs deploy + prune old deployments by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/15\nFix merge-time docs deploy cancellation + restore prune workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/16\nAdd .nojekyll so notebook figures load on GitHub Pages by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/17\nAdd electricity demand forecasting example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/19\nAdd electricity forecasting calibration example by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/20\nAdd coverage configuration to pyproject.toml by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/23\nOverall improvements after the MVP phase by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/21\nBump version from 0.1.0 to 0.1.1 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/24\n\nFull Changelog: https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1"
+  },
+  {
+    "objectID": "changelog.html#whats-changed-6",
+    "href": "changelog.html#whats-changed-6",
     "title": "Changelog",
     "section": "What’s Changed",
     "text": "What’s Changed\n\nInitial configuration by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/1\nAdd claude GitHub actions 1781548272346 by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/3\nAdd examples by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/2\nmore improvements by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/4\nUpdate project name to ‘NumPyro Forecast’ by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/5\nfix prek by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/6\nAdditional cleanup by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/7\nFunctional API by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/8\nMake the random generator array the first argument by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/9\nImprovements by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/10\nImprove notebooks storyline by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/11\nrelease workflow by @juanitorduz in https://github.com/juanitorduz/numpyro_forecast/pull/13"

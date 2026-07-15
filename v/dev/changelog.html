@@ -106,7 +106,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="./index.html">
-    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-12">v0.2.1</span></span>
+    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-15">v0.2.2</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -150,30 +150,34 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul class="collapse">
-  <li><a href="#section" id="toc-section" class="nav-link active" data-scroll-target="#section">0.2.1</a>
+  <li><a href="#section" id="toc-section" class="nav-link active" data-scroll-target="#section">0.2.2</a>
   <ul class="collapse">
   <li><a href="#whats-changed" id="toc-whats-changed" class="nav-link" data-scroll-target="#whats-changed">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-1" id="toc-section-1" class="nav-link" data-scroll-target="#section-1">0.2.0</a>
+  <li><a href="#section-1" id="toc-section-1" class="nav-link" data-scroll-target="#section-1">0.2.1</a>
   <ul class="collapse">
   <li><a href="#whats-changed-1" id="toc-whats-changed-1" class="nav-link" data-scroll-target="#whats-changed-1">What’s Changed</a></li>
-  <li><a href="#new-contributors" id="toc-new-contributors" class="nav-link" data-scroll-target="#new-contributors">New Contributors</a></li>
   </ul></li>
-  <li><a href="#section-2" id="toc-section-2" class="nav-link" data-scroll-target="#section-2">0.1.3</a>
+  <li><a href="#section-2" id="toc-section-2" class="nav-link" data-scroll-target="#section-2">0.2.0</a>
   <ul class="collapse">
   <li><a href="#whats-changed-2" id="toc-whats-changed-2" class="nav-link" data-scroll-target="#whats-changed-2">What’s Changed</a></li>
+  <li><a href="#new-contributors" id="toc-new-contributors" class="nav-link" data-scroll-target="#new-contributors">New Contributors</a></li>
   </ul></li>
-  <li><a href="#section-3" id="toc-section-3" class="nav-link" data-scroll-target="#section-3">0.1.2</a>
+  <li><a href="#section-3" id="toc-section-3" class="nav-link" data-scroll-target="#section-3">0.1.3</a>
   <ul class="collapse">
   <li><a href="#whats-changed-3" id="toc-whats-changed-3" class="nav-link" data-scroll-target="#whats-changed-3">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-4" id="toc-section-4" class="nav-link" data-scroll-target="#section-4">0.1.1</a>
+  <li><a href="#section-4" id="toc-section-4" class="nav-link" data-scroll-target="#section-4">0.1.2</a>
   <ul class="collapse">
   <li><a href="#whats-changed-4" id="toc-whats-changed-4" class="nav-link" data-scroll-target="#whats-changed-4">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-5" id="toc-section-5" class="nav-link" data-scroll-target="#section-5">0.1.0</a>
+  <li><a href="#section-5" id="toc-section-5" class="nav-link" data-scroll-target="#section-5">0.1.1</a>
   <ul class="collapse">
   <li><a href="#whats-changed-5" id="toc-whats-changed-5" class="nav-link" data-scroll-target="#whats-changed-5">What’s Changed</a></li>
+  </ul></li>
+  <li><a href="#section-6" id="toc-section-6" class="nav-link" data-scroll-target="#section-6">0.1.0</a>
+  <ul class="collapse">
+  <li><a href="#whats-changed-6" id="toc-whats-changed-6" class="nav-link" data-scroll-target="#whats-changed-6">What’s Changed</a></li>
   <li><a href="#new-contributors-1" id="toc-new-contributors-1" class="nav-link" data-scroll-target="#new-contributors-1">New Contributors</a></li>
   </ul></li>
   </ul>
@@ -203,10 +207,22 @@ ul.task-list li input[type="checkbox"] {
 
 <p>This changelog is generated automatically from <a href="https://github.com/juanitorduz/numpyro_forecast/releases">GitHub Releases</a>.</p>
 <section id="section" class="level1 changelog-version">
-<h1 class="changelog-version">0.2.1</h1>
-<p><em>2026-07-12</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.1">GitHub</a></p>
+<h1 class="changelog-version">0.2.2</h1>
+<p><em>2026-07-15</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.2">GitHub</a></p>
 <section id="whats-changed" class="level2">
 <h2 class="anchored" data-anchor-id="whats-changed">What’s Changed</h2>
+<ul>
+<li>[Fix] to_datatree OOMs on GPU: in-sample predictive materializes all draws in one allocation by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/65</li>
+<li>Bump version from 0.2.1 to 0.2.2 by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/66</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1...0.2.2">https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1…0.2.2</a></p>
+</section>
+</section>
+<section id="section-1" class="level1 changelog-version">
+<h1 class="changelog-version">0.2.1</h1>
+<p><em>2026-07-12</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.1">GitHub</a></p>
+<section id="whats-changed-1" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-1">What’s Changed</h2>
 <ul>
 <li>Bump ty from 0.0.56 to 0.0.58 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/58</li>
 <li>Bump ruff from 0.15.20 to 0.15.21 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/59</li>
@@ -217,11 +233,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0...0.2.1">https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0…0.2.1</a></p>
 </section>
 </section>
-<section id="section-1" class="level1 changelog-version">
+<section id="section-2" class="level1 changelog-version">
 <h1 class="changelog-version">0.2.0</h1>
 <p><em>2026-07-08</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.0">GitHub</a></p>
-<section id="whats-changed-1" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-1">What’s Changed</h2>
+<section id="whats-changed-2" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-2">What’s Changed</h2>
 <ul>
 <li>Prune dependencies by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/36</li>
 <li>Update package-ecosystem to ‘uv’ in dependabot config by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/37</li>
@@ -250,11 +266,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.3...0.2.0">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.3…0.2.0</a></p>
 </section>
 </section>
-<section id="section-2" class="level1 changelog-version">
+<section id="section-3" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.3</h1>
 <p><em>2026-07-03</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.3">GitHub</a></p>
-<section id="whats-changed-2" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-2">What’s Changed</h2>
+<section id="whats-changed-3" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-3">What’s Changed</h2>
 <ul>
 <li>Rebuild docs on release so the version badge tracks the latest release by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/30</li>
 <li>Add exponential smoothing example by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/31</li>
@@ -265,11 +281,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2...0.1.3">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3</a></p>
 </section>
 </section>
-<section id="section-3" class="level1 changelog-version">
+<section id="section-4" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.2</h1>
 <p><em>2026-06-30</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.2">GitHub</a></p>
-<section id="whats-changed-3" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-3">What’s Changed</h2>
+<section id="whats-changed-4" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-4">What’s Changed</h2>
 <ul>
 <li>Improve the univariate forecasting notebook by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/25</li>
 <li>Use better ArviZ functions by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/27</li>
@@ -278,11 +294,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1...0.1.2">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2</a></p>
 </section>
 </section>
-<section id="section-4" class="level1 changelog-version">
+<section id="section-5" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.1</h1>
 <p><em>2026-06-26</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.1">GitHub</a></p>
-<section id="whats-changed-4" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-4">What’s Changed</h2>
+<section id="whats-changed-5" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-5">What’s Changed</h2>
 <ul>
 <li>Add documentation site with great-docs by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/14</li>
 <li>Fix production docs deploy + prune old deployments by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/15</li>
@@ -297,11 +313,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0...0.1.1">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1</a></p>
 </section>
 </section>
-<section id="section-5" class="level1 changelog-version">
+<section id="section-6" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.0</h1>
 <p><em>2026-06-23</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.0">GitHub</a></p>
-<section id="whats-changed-5" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-5">What’s Changed</h2>
+<section id="whats-changed-6" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-6">What’s Changed</h2>
 <ul>
 <li>Initial configuration by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/1</li>
 <li>Add claude GitHub actions 1781548272346 by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/3</li>
