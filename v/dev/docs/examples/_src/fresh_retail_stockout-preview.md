@@ -14,6 +14,8 @@ There is a catch, though, and it is the heart of this example: **days whose stoc
 
 We proceed in four steps. First, an exploratory analysis of the full \\50{,}000\\-series dataset: we look closely at the stockout and availability labels, quantify the contradiction above, and trace it to label noise concentrated in hours that carry almost no demand, which motivates both a *sales-weighted* availability feature and the *learned floor* in the availability factor. Second, we fit a hierarchical state space model to the top \\1{,}000\\ series with SVI and a custom `optax` optimizer, wrapping the results in an ArviZ `DataTree`. Third, we evaluate the forecasts with CRPS and central-interval coverage on a simple train-test split against a seasonal-naive baseline. Fourth, we re-issue the forecast with availability pinned to one over the horizon: a counterfactual estimate of uncensored demand that is deliberately *not* meant to track the observed (censored) sales, and is exactly what a business should plan against, since nobody knows future availability at prediction time. We close by inspecting what the model learned: the fitted availability factor, the store hierarchy, and the promotion contributions.
 
+> **Scaling:** [Here](https://juanitorduz.github.io/fresh_retail_stockout/) you can find a modified version of this example where we train the same model on the whole dataset (\\50K\\ time series) on a GPU via [Modal](https://modal.com/). The end-to end notebook runs in approximately \\10\\ minutes on GPU 🚀!
+
 
 # Prepare notebook
 

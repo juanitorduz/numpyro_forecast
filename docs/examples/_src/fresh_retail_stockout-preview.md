@@ -14,6 +14,8 @@ There is a catch, though, and it is the heart of this example: **days whose stoc
 
 We proceed in four steps. First, an exploratory analysis of the full \\50{,}000\\-series dataset: we look closely at the stockout and availability labels, quantify the contradiction above, and trace it to label noise concentrated in hours that carry almost no demand, which motivates both a *sales-weighted* availability feature and the *learned floor* in the availability factor. Second, we fit a hierarchical state space model to the top \\1{,}000\\ series with SVI and a custom `optax` optimizer, wrapping the results in an ArviZ `DataTree`. Third, we evaluate the forecasts with CRPS and central-interval coverage on a simple train-test split against a seasonal-naive baseline. Fourth, we re-issue the forecast with availability pinned to one over the horizon: a counterfactual estimate of uncensored demand that is deliberately *not* meant to track the observed (censored) sales, and is exactly what a business should plan against, since nobody knows future availability at prediction time. We close by inspecting what the model learned: the fitted availability factor, the store hierarchy, and the promotion contributions.
 
+> **Scaling:** [Here](https://juanitorduz.github.io/fresh_retail_stockout/) you can find a modified version of this example where we train the same model on the whole dataset (\\50K\\ time series) on a GPU via [Modal](https://modal.com/). The end-to end notebook runs in approximately \\10\\ minutes on GPU 🚀!
+
 
 # Prepare notebook
 
@@ -2519,7 +2521,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.00370806, -0.02375889, -0.00222187, ...,  0.03543464,-0.03082212, -0.02222353],[-0.02620614, -0.03418194,  0.06330831, ...,  0.03830045,0.06659286, -0.11620225],[-0.0037904 ,  0.03649919,  0.01280053, ..., -0.03885782,-0.0082932 ,  0.02884862],...,[ 0.06076236, -0.01289448,  0.03025209, ...,  0.0219386 ,-0.07437515, -0.02828346],[-0.01808404,  0.0347111 ,  0.02351637, ..., -0.04921489,-0.04439977,  0.02546888],[-0.0112855 , -0.01200695, -0.06807072, ...,  0.01965813,0.03531513,  0.01467133]],[[-0.0687041 ,  0.03112254, -0.04120285, ...,  0.0351829 ,0.09774977, -0.12054403],[-0.11155459,  0.01657473,  0.08469622, ..., -0.00881293,0.04711688, -0.06337002],[-0.10007306,  0.01877227, -0.05191411, ..., -0.00965541,0.0834828 ,  0.01475491],...0.03050081,  0.04285786],[-0.07509497, -0.03914259,  0.03333481, ...,  0.01573139,-0.03384735,  0.04663194],[-0.0293646 , -0.00698031,  0.05489082, ..., -0.02085948,0.0479982 , -0.00239991]],[[-0.03150922, -0.02809485, -0.015312  , ..., -0.00339496,0.02986726, -0.00644884],[-0.06565107, -0.02130098,  0.09658525, ..., -0.02455015,0.0395771 , -0.02045913],[-0.0373369 ,  0.04394124,  0.03438158, ...,  0.0077647 ,-0.02974111, -0.0124298 ],...,[-0.07065581, -0.03357014,  0.04384346, ...,  0.0341642 ,0.03236066,  0.00297283],[ 0.01175634,  0.03759706,  0.03831373, ..., -0.07831579,-0.07014603, -0.00280096],[-0.01998356, -0.0252379 , -0.00567991, ..., -0.00265248,0.01709709,  0.00884613]]]],shape=(1, 1000, 1000, 7), dtype=float32)
+58, ...,  0.0077647 ,-0.02974111, -0.0124298 ],...,[-0.07065581, -0.03357014,  0.04384346, ...,  0.0341642 ,0.03236066,  0.00297283],[ 0.01175634,  0.03759706,  0.03831373, ..., -0.07831579,-0.07014603, -0.00280096],[-0.01998356, -0.0252379 , -0.00567991, ..., -0.00265248,0.01709709,  0.00884613]]]],shape=(1, 1000, 1000, 7), dtype=float32)
 
 
 seasonal_scale
@@ -2579,7 +2581,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-1635254, -0.00137215, ...,  0.00469858,-0.03549844,  0.08283371]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[-0.02028235, -0.0065322 , -0.02491123, ..., -0.03067387,-0.01639202,  0.01318246],[ 0.01755293,  0.00099048, -0.00608841, ..., -0.02658547,0.01811148,  0.02450617],[ 0.01331692, -0.01462059, -0.02455509, ...,  0.02924035,0.00630398, -0.01340593],...,[-0.00789803,  0.01681145, -0.00909575, ...,  0.00957821,0.00645671, -0.05231807],[-0.00214585, -0.02429449, -0.00118798, ...,  0.02178018,-0.02960461, -0.05955919],[-0.01692484, -0.01364225, -0.00588414, ...,  0.00473083,-0.00251159,  0.05476693]],[[ 0.02131428,  0.01469055, -0.00637782, ...,  0.01164067,-0.01889226, -0.00614458],[-0.03486631, -0.00016839, -0.02757602, ...,  0.0002137 ,-0.00022349, -0.01353746],[ 0.01135444, -0.01636399,  0.02602559, ..., -0.01602339,0.02493646, -0.05696993],...-0.00291489, -0.06423989],[-0.00657145,  0.00511092, -0.0202633 , ..., -0.02181112,-0.00606563,  0.00338425],[-0.01802973,  0.03320479, -0.01012371, ...,  0.0351245 ,0.00344057, -0.041187  ]],[[-0.02432084,  0.00965636, -0.00979565, ...,  0.01193798,-0.01753534, -0.08471867],[ 0.02470083,  0.0123206 , -0.0235949 , ..., -0.01435402,0.00947402, -0.0212268 ],[-0.00794393, -0.02090218, -0.00916244, ..., -0.01011155,-0.03307952, -0.02106601],...,[ 0.02744413, -0.00401946, -0.00611089, ..., -0.02085862,0.00673393, -0.03024973],[-0.05435934,  0.00498099,  0.01041894, ..., -0.00338049,0.01181954, -0.04293086],[-0.02889618,  0.01635254, -0.00137215, ...,  0.00469858,-0.03549844,  0.08283371]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 tau_trend
@@ -4140,7 +4142,7 @@ ax.set(
 </figure>
 
 
-The posterior factor reproduces the saturating shape and the positive floor. The \\50\\\\ and \\94\\\\ HDI bands are so thin they read as a single line, and that is not a plotting artifact but a consequence of what is being plotted: the bands quantify the posterior uncertainty of the *panel-mean* curve, the average of a thousand per-series factor curves. The genuine heterogeneity across series (visible in the gray per-series posterior means, whose floors and curvatures differ substantially) is averaged away by construction, and what remains is the uncertainty about the average itself, which shrinks roughly like \\1/\sqrt{n\_{\text{series}}}\\ on top of per-series parameters that \\76\\ days of data already pin down well. A per-series version of this plot would show much wider bands; the panel mean is deliberately the sharpest view. The curve sits below the rescaled empirical points over most of the range, and that gap is the endogeneity correction at work: high-demand days both sell more and sell out more often, so part of the raw curve's height belongs to the trend, seasonality, and promotions, and the model attributes it there instead of to availability itself.
+ibutes it there instead of to availability itself.
 
 
 # Inspecting the store hierarchy
