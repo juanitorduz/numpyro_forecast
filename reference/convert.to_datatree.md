@@ -15,6 +15,8 @@ convert.to_datatree(
     covariates,
     *,
     num_predictive_samples=None,
+    predictive_batch_size=None,
+    predictive_device="host",
     coords=None,
     time_coord=None,
     posterior_dims=None,
@@ -46,6 +48,12 @@ Covariates with time at axis `-2`. When `covariates` extends beyond `data` along
 
 `num_predictive_samples: int | None = None`  
 Number of posterior draws for a variational fit (ignored for `~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to `1_000`.
+
+`predictive_batch_size: int | None = None`  
+Optional chunk size that bounds how many draws touch the accelerator at once, across both stages of the export. When set, the posterior drawing itself (for variational fits; on a wide panel it is the largest allocation, since every latent and deterministic site is materialized for all draws) and the in-sample/forecast predictive sampling run in chunks of this many draws, each chunk moved to `predictive_device` before the next is drawn. The per-chunk accelerator footprint is a handful of `(batch_size, time, series)` buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of both the posterior and the predictive draws (including the `posterior` group), so results are reproducible per `(rng_key, predictive_batch_size)`. `None` (default) samples everything in one shot (the results are still moved to `predictive_device`).
+
+`predictive_device: jax.Device | str | None = ``"host"`  
+Where the posterior and predictive draws are moved as they are sampled, forwarded to the `device` argument of `~numpyro_forecast.functional.posterior.draw_posterior()`, `~numpyro_forecast.functional.prediction.predict_in_sample()`, and `~numpyro_forecast.functional.prediction.forecast()`. The default `"host"` copies every chunk to host memory as a NumPy array (where the tree is built anyway); it is what bounds accelerator memory when `predictive_batch_size` is set, and it needs no CPU backend, so it works even when `numpyro.set_platform("cuda")` (or `jax_platforms`) leaves only an accelerator backend initialized. A `jax.Device` or platform name like `"cpu"` commits the draws to that device instead; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
 Optional extra coordinates; these take precedence over the generated `time` coordinate. They also propagate to the forecast groups, where the generated forecast `time` takes precedence instead (a user `time` entry covers the in-sample window; use `time_coord` for explicit forecast time values).
@@ -79,4 +87,4 @@ If `covariate_dims` does not name every `covariates` axis.
 
 ## Notes
 
-`rng_key` is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. For step-by-step control over the forecast draws (e.g. a custom `batch_size`), build the in-sample tree with matching-length covariates and attach the horizon with [add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups).
+`rng_key` is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. `predictive_batch_size` is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with [add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups).

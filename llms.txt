@@ -103,6 +103,7 @@
 - [exceptions.KernelConfigError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelConfigError.html)
 - [exceptions.CovariateDimsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.CovariateDimsError.html)
 - [exceptions.MVNLayoutError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.MVNLayoutError.html)
+- [exceptions.DeviceMemoryError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DeviceMemoryError.html)
 
 #### ArviZ export
 > Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.

@@ -540,7 +540,7 @@ num_chains
 Drawing posterior samples and generating forecasts and in-sample predictions.
 
 
-draw_posterior(rng_key: jax.Array, fit: object, num_samples: int) -> dict[str, jax.Array]
+draw_posterior(rng_key: jax.Array, fit: object, num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
 
 Draw ``num_samples`` posterior samples of the latent sites from a fit.
 
@@ -558,11 +558,33 @@ fit
     or :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
 num_samples
     Number of posterior draws.
+batch_size
+    Optional chunk size for the drawing itself. Sampling a variational
+    posterior materializes every latent and deterministic site for all
+    draws at once, which on a wide panel is the largest allocation of the
+    whole workflow. With ``batch_size`` set (strictly below
+    ``num_samples``), the draws are sampled in chunks of exactly this many
+    samples, each chunk is moved per ``device`` before the next is drawn,
+    and the final chunk's overdraw is discarded, so accelerator memory is
+    bounded by one chunk. Chunking changes the PRNG stream layout: draws
+    are reproducible per ``(rng_key, batch_size)``. Ignored for
+    :class:`~numpyro_forecast.functional.mcmc.MCMCFit` (see Notes).
+device
+    Where each chunk of draws is moved as soon as it is drawn. ``"host"``
+    copies to host memory with :func:`jax.device_get` and returns NumPy
+    leaves; it needs no CPU backend, so it works even when
+    ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves only an
+    accelerator backend initialized. A :class:`jax.Device` or platform
+    name like ``"cpu"`` commits the draws to that device instead
+    (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+    the CPU backend is not initialized). ``None`` keeps everything on the
+    default device. ``device`` never changes the draw values.
 
 Returns
 -------
-dict[str, Array]
-    Posterior samples of the latent sites, sample axis leading.
+dict[str, Array | np.ndarray]
+    Posterior samples of the latent sites, sample axis leading (NumPy
+    leaves when ``device`` resolves to ``"host"``).
 
 Raises
 ------
@@ -571,17 +593,24 @@ NotImplementedError
 GuideSampleArgsError
     If the fit holds a hand-written guide but was constructed without its
     in-sample covariates/data.
+ValueError
+    If ``batch_size`` is not positive.
 
 Notes
 -----
 For an :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, when
 ``num_samples`` does not exceed the number of draws in the chain the draws
 are thinned on an evenly spaced grid (no duplicates); only when more samples
-are requested than the chain holds are they resampled with replacement. For
-an :class:`~numpyro_forecast.functional.svi.SVIFit` the draws are sampled
-afresh from the fitted guide.
+are requested than the chain holds are they resampled with replacement.
+Because that selection is deterministic and the chain draws are already
+materialized, ``batch_size`` is ignored for MCMC fits (there is no drawing
+peak to bound and chunked selection would duplicate draws); ``device``
+still applies. For an :class:`~numpyro_forecast.functional.svi.SVIFit` (or
+a Pathfinder fit) the draws are sampled afresh from the fitted guide, and
+chunks drawn from independent subkeys remain valid i.i.d. posterior
+samples.
 
-forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch future obs']
+forecast(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs']
 
 Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
@@ -612,13 +641,31 @@ parallel
     ``batch_size`` chunk are vectorized while the chunks are looped over, so
     ``batch_size`` remains the peak-memory governor. The two settings produce
     the same draws up to floating-point reduction order.
+device
+    Where each chunk of draws is placed as soon as it is drawn and where
+    the stitched result lives. ``"host"`` copies every chunk to host
+    memory with :func:`jax.device_get` and returns a NumPy array; it needs
+    no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
+    (or ``jax_platforms``) leaves only an accelerator backend initialized,
+    which makes it the recommended choice on GPU. A :class:`jax.Device` or
+    platform name like ``"cpu"`` commits the draws to that device instead
+    (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+    the CPU backend is not initialized). With ``batch_size`` set on an
+    accelerator, either bounds accelerator memory by a single chunk
+    instead of the full ``(sample, future, obs)`` array; the draw values
+    are unchanged, only where the result lives. The bound requires
+    ``batch_size`` strictly below the sample count: at or above it, the
+    single-shot path runs and the full array is materialized on the
+    default device before the one transfer. ``None`` keeps everything on
+    the default device.
 
 Returns
 -------
-Num[Array, " sample *batch future obs"]
+Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
     Forecast samples over the ``future = duration - t`` horizon (floating
     point for continuous observations, integer for discrete/count models
-    built with :func:`~numpyro_forecast.functional.models.predict_glm`).
+    built with :func:`~numpyro_forecast.functional.models.predict_glm`; a
+    NumPy array when ``device`` resolves to ``"host"``).
 
 Raises
 ------
@@ -628,12 +675,13 @@ ValueError
 Notes
 -----
 Chunking is a memory knob, not a reproducibility knob: reproducibility is
-per ``(rng_key, batch_size)``. Each chunk is padded to a whole multiple of
-``batch_size`` so the underlying ``_predict`` compiles exactly once for a
-fixed shape (the pad draws are discarded), but changing ``batch_size``
-changes the PRNG stream layout and therefore the exact draws.
+per ``(rng_key, batch_size)``. Every chunk shares the exact ``batch_size``
+shape (the final chunk wraps around to re-used draws that are discarded),
+so the underlying ``_predict`` compiles exactly once for a fixed shape, but
+changing ``batch_size`` changes the PRNG stream layout and therefore the
+exact draws. ``device`` never changes the draws, only where they live.
 
-predict_in_sample(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: dict[str, jax.Array], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True) -> jaxtyping.Num[Array, 'sample *batch time obs']
+predict_in_sample(rng_key: jax.Array, model: collections.abc.Callable[..., None], posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs'] | jaxtyping.Num[ndarray, 'sample *batch time obs']
 
 Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -662,11 +710,29 @@ parallel
     (``True``, faster, higher peak memory) or maps it serially with
     ``lax.map`` (``False``). See :func:`forecast` for how this interacts with
     ``batch_size``.
+device
+    Where each chunk of draws is placed as soon as it is drawn and where
+    the stitched result lives. ``"host"`` copies every chunk to host
+    memory with :func:`jax.device_get` and returns a NumPy array; it needs
+    no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
+    (or ``jax_platforms``) leaves only an accelerator backend initialized,
+    which makes it the recommended choice on GPU. A :class:`jax.Device` or
+    platform name like ``"cpu"`` commits the draws to that device instead
+    (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+    the CPU backend is not initialized). With ``batch_size`` set on an
+    accelerator, either bounds accelerator memory by a single chunk
+    instead of the full ``(sample, time, obs)`` array; the draw values are
+    unchanged, only where the result lives. The bound requires
+    ``batch_size`` strictly below the sample count: at or above it, the
+    single-shot path runs and the full array is materialized on the
+    default device before the one transfer. ``None`` keeps everything on
+    the default device.
 
 Returns
 -------
-Num[Array, " sample *batch time obs"]
-    In-sample posterior-predictive draws of the ``obs`` site.
+Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
+    In-sample posterior-predictive draws of the ``obs`` site (a NumPy
+    array when ``device`` resolves to ``"host"``).
 
 
 ## Backtesting & evaluation
@@ -873,7 +939,7 @@ predictions
     ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
     unless ``keep_predictions=True``.
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -943,7 +1009,7 @@ Raises
 ImportError
     If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 
-eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, batch_size: int | None = None) -> 'Array | np.floating'
 
 Empirical CRPS averaged over all data elements.
 
@@ -955,11 +1021,20 @@ pred
     Forecast samples with the sample axis first.
 truth
     Ground-truth values (matching ``pred`` without the sample axis).
+batch_size
+    Optional number of flattened data cells (the product of the batch
+    shape, e.g. time times series) evaluated on the accelerator per pass;
+    the sample axis is never chunked. With host-resident (NumPy) inputs
+    this bounds accelerator memory by ``sample * batch_size`` values plus
+    the CRPS sort workspace instead of the full panel. Chunking only
+    changes the summation order of the final mean (results are equal to
+    float tolerance, not bitwise); at or above the cell count the
+    single-pass path runs. ``None`` (default) evaluates in one pass.
 
 Returns
 -------
-Array
-    The mean empirical CRPS as a scalar array.
+Array | np.floating
+    The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
 
 eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
 
@@ -997,7 +1072,7 @@ Returns
 Array
     The root mean squared error as a scalar array.
 
-eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
+eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, alpha: float = 0.9, batch_size: int | None = None) -> 'Array | np.floating'
 
 Empirical coverage of the central ``alpha`` prediction interval.
 
@@ -1016,19 +1091,25 @@ truth
     Ground-truth values (matching ``pred`` without the sample axis).
 alpha
     Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
+batch_size
+    Optional number of flattened data cells evaluated on the accelerator
+    per pass (see :func:`eval_crps`; the sample axis is never chunked).
+    Coverage is a count of exact 0/1 indicators, so chunking recovers
+    the identical count; only the precision of the final division differs
+    from the single pass. ``None`` (default) evaluates in one pass.
 
 Returns
 -------
-Array
+Array | np.floating
     The fraction of ground truth inside the central ``alpha`` interval, as
-    a scalar array.
+    a scalar (a NumPy scalar when chunked).
 
 Raises
 ------
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``.
 
-crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jaxtyping.Float[Array, '*batch']
+crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch']) -> jaxtyping.Float[Array, '*batch']
 
 Compute the empirical Continuous Ranked Probability Score (CRPS).
 
@@ -1485,13 +1566,28 @@ Raised by :func:`~numpyro_forecast.surgery.shift_loc`,
 ``loc``/``covariance_matrix`` shapes do not match the supported
 time-leading layout.
 
+DeviceMemoryError(message: str | None = None) -> None
+
+The accelerator ran out of memory during posterior or predictive sampling.
+
+Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
+the predictive drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
+:func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
+everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
+when XLA reports ``RESOURCE_EXHAUSTED``. The message embeds the device's
+memory budget and the lever: the per-chunk footprint scales linearly with
+``batch_size`` times the panel width, so lower (or set) ``batch_size``,
+free large device arrays still referenced elsewhere, and keep results off
+the accelerator with ``device="host"``. The original XLA error is chained
+as ``__cause__``.
+
 
 ## ArviZ export
 
 Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, fit: object, model: collections.abc.Callable[..., None], data: jax.Array, covariates: jax.Array, *, num_predictive_samples: int | None = None, predictive_batch_size: int | None = None, predictive_device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
 
@@ -1523,6 +1619,40 @@ num_predictive_samples
     :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
     The same draws drive the in-sample predictive and the forecast. Defaults
     to ``1_000``.
+predictive_batch_size
+    Optional chunk size that bounds how many draws touch the accelerator
+    at once, across both stages of the export. When set, the posterior
+    drawing itself (for variational fits; on a wide panel it is the
+    largest allocation, since every latent and deterministic site is
+    materialized for all draws) and the in-sample/forecast predictive
+    sampling run in chunks of this many draws, each chunk moved to
+    ``predictive_device`` before the next is drawn. The per-chunk
+    accelerator footprint is a handful of ``(batch_size, time, series)``
+    buffers, so it scales linearly with this value times the panel width:
+    on wide panels lower it until a chunk fits. The batch size must be
+    strictly below the draw count for that bound to hold: at or above it,
+    sampling falls back to the single-shot path and the full array is
+    materialized on the default device before the single transfer.
+    Chunking changes the PRNG stream layout of both the posterior and the
+    predictive draws (including the ``posterior`` group), so results are
+    reproducible per ``(rng_key, predictive_batch_size)``. ``None``
+    (default) samples everything in one shot (the results are still moved
+    to ``predictive_device``).
+predictive_device
+    Where the posterior and predictive draws are moved as they are
+    sampled, forwarded to the ``device`` argument of
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior`,
+    :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
+    :func:`~numpyro_forecast.functional.prediction.forecast`. The default
+    ``"host"`` copies every chunk to host memory as a NumPy array (where
+    the tree is built anyway); it is what bounds accelerator memory when
+    ``predictive_batch_size`` is set, and it needs no CPU backend, so it
+    works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
+    leaves only an accelerator backend initialized. A :class:`jax.Device`
+    or platform name like ``"cpu"`` commits the draws to that device
+    instead; pass ``None`` to keep the draws on the default device
+    (chunked compute without per-chunk host transfers, for when the draws
+    fit on the accelerator and transfers would dominate runtime).
 coords
     Optional extra coordinates; these take precedence over the generated
     ``time`` coordinate. They also propagate to the forecast groups, where
@@ -1576,11 +1706,12 @@ Notes
 variational fits), one the in-sample predictive, and, when a horizon is
 present, a third the forecast. The split is a deterministic derivation
 applied for every fit type, so passing the same key twice never correlates
-the sample sets. For step-by-step control over the forecast draws (e.g. a
-custom ``batch_size``), build the in-sample tree with matching-length
-covariates and attach the horizon with :func:`add_forecast_groups`.
+the sample sets. ``predictive_batch_size`` is the built-in route to
+memory-bounded predictive sampling; for fully manual control over the
+forecast draws, build the in-sample tree with matching-length covariates
+and attach the horizon with :func:`add_forecast_groups`.
 
-add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jax.Array, covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: 'Array | np.ndarray', covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 

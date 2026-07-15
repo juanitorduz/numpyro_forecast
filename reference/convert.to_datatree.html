@@ -194,7 +194,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="28" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="29" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -778,7 +778,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/0.2.1/numpyro_forecast/convert.py#L221-L419" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L224-L476" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -789,11 +789,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_predictive_samples</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictive_batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictive_device</span><span class="op">=</span><span class="st">&quot;host&quot;</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>PRNG: <code>rng_key</code> is consumed by the in-sample posterior-predictive draws (for a variational fit, also the posterior draws) and, when a forecast horizon is present, the forecast draws.</p>
@@ -825,6 +827,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dt><code><span class="doc-parameter-name">num_predictive_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
 <p>Number of posterior draws for a variational fit (ignored for <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to <code>1_000</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">predictive_batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Optional chunk size that bounds how many draws touch the accelerator at once, across both stages of the export. When set, the posterior drawing itself (for variational fits; on a wide panel it is the largest allocation, since every latent and deterministic site is materialized for all draws) and the in-sample/forecast predictive sampling run in chunks of this many draws, each chunk moved to <code>predictive_device</code> before the next is drawn. The per-chunk accelerator footprint is a handful of <code>(batch_size, time, series)</code> buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of both the posterior and the predictive draws (including the <code>posterior</code> group), so results are reproducible per <code>(rng_key, predictive_batch_size)</code>. <code>None</code> (default) samples everything in one shot (the results are still moved to <code>predictive_device</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">predictive_device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"host"</span></span></code></dt>
+<dd>
+<p>Where the posterior and predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, and <code>~numpyro_forecast.functional.prediction.forecast()</code>. The default <code>"host"</code> copies every chunk to host memory as a NumPy array (where the tree is built anyway); it is what bounds accelerator memory when <code>predictive_batch_size</code> is set, and it needs no CPU backend, so it works even when <code>numpyro.set_platform("cuda")</code> (or <code>jax_platforms</code>) leaves only an accelerator backend initialized. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device instead; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -873,7 +883,7 @@ If <code>covariate_dims</code> does not name every <code>covariates</code> axis.
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p><code>rng_key</code> is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. For step-by-step control over the forecast draws (e.g.&nbsp;a custom <code>batch_size</code>), build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
+<p><code>rng_key</code> is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. <code>predictive_batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
 
 
 </section>

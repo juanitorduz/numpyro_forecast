@@ -7,12 +7,9 @@ Empirical coverage of the central `alpha` prediction interval.
 Usage
 
 ``` python
-evaluate.eval_coverage(
-    pred,
-    truth,
-    *,
-    alpha=_DEFAULT_COVERAGE_ALPHA,
-)
+evaluate.eval_coverage(pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"], truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"], alpha: float = ..., batch_size: None = None) -> Array
+ 
+evaluate.eval_coverage(pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"], truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"], alpha: float = ..., batch_size: int) -> Array | np.floating
 ```
 
 
@@ -22,21 +19,24 @@ The central `alpha` interval is bounded by the `(1 - alpha) / 2` and `1 - (1 - a
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"]`  
+`pred: Float[Array, ``" sample *batch"] | Float[np.ndarray, `<span class="st">`" sample *batch"``]`</span>  
 Forecast samples with the sample axis first.
 
-`truth: Float[Array, ``" *batch"]`  
+`truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
 Ground-truth values (matching `pred` without the sample axis).
 
 `alpha: float = _DEFAULT_COVERAGE_ALPHA`    
 Nominal interval level in `(0, 1)`; defaults to `0.9`.
 
+`batch_size: int | None = None`  
+Optional number of flattened data cells evaluated on the accelerator per pass (see [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps); the sample axis is never chunked). Coverage is a count of exact 0/1 indicators, so chunking recovers the identical count; only the precision of the final division differs from the single pass. `None` (default) evaluates in one pass.
+
 
 ## Returns
 
 
-`Array`  
-The fraction of ground truth inside the central `alpha` interval, as a scalar array.
+`Array | np.floating`  
+The fraction of ground truth inside the central `alpha` interval, as a scalar (a NumPy scalar when chunked).
 
 
 ## Raises
