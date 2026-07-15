@@ -4,88 +4,123 @@
 :func:`predict_in_sample` samples the in-sample posterior predictive of the
 ``obs`` site. Both drive a jitted ``Predictive`` wrapper through the shared
 chunking driver ``_chunked_draws``, which caps peak memory while compiling the
-predictive exactly once.
+predictive exactly once. With ``device`` set (e.g. ``"host"``), every chunk is
+moved off the accelerator before the next one is drawn, so accelerator memory
+is bounded by a single chunk instead of the full draw array.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import random
 from jaxtyping import Num
 from numpyro.infer import Predictive
 
+from numpyro_forecast.functional._offload import (
+    _oom_advice,
+    _resolve_device,
+    _stitch_chunks,
+    _transfer,
+)
 from numpyro_forecast.functional._validation import _require_covariates_extend_data
 from numpyro_forecast.functional.posterior import _index_tree
 from numpyro_forecast.typing import Array, ForecastModel
 
 
-def _pad_posterior(posterior: dict[str, Array], batch_size: int) -> tuple[dict[str, Array], int]:
-    """Pad a posterior's sample axis up to a whole multiple of ``batch_size``.
-
-    Padding lets the chunk loop slice fixed-size ``batch_size`` blocks so
-    ``_predict`` compiles exactly once regardless of ``num_samples``. The pad
-    rows are wrapped-around copies of existing draws and are discarded by the
-    caller's final ``[:num]`` slice, so they never affect the result.
+def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
+    """Validate and return the shared sample-axis length of a posterior.
 
     Parameters
     ----------
     posterior
-        Posterior samples, sample axis leading (all leaves agree on that axis).
-    batch_size
-        Positive chunk size.
+        Posterior samples, sample axis leading (all leaves must agree on that
+        axis).
 
     Returns
     -------
-    tuple[dict[str, Array], int]
-        The padded posterior and the original (pre-pad) sample count.
+    int
+        The sample-axis length shared by every leaf.
 
     Raises
     ------
     ValueError
-        If ``posterior`` is empty, ``batch_size`` is not positive, or the leaves
-        disagree on the sample-axis length (the message names the offending sites).
+        If ``posterior`` is empty or the leaves disagree on the sample-axis
+        length (the message names the offending sites).
     """
     if not posterior:
-        msg = "_pad_posterior() requires a non-empty posterior"
-        raise ValueError(msg)
-    if batch_size <= 0:
-        msg = f"batch_size must be positive, got {batch_size}"
+        msg = "posterior must be non-empty"
         raise ValueError(msg)
     sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
     distinct = set(sizes.values())
     if len(distinct) != 1:
         msg = f"posterior leaves disagree on the sample axis: {sizes}"
         raise ValueError(msg)
-    num = distinct.pop()
-    remainder = num % batch_size
-    if remainder == 0:
-        return posterior, num
-    pad = batch_size - remainder
-    pad_indices = jnp.arange(pad) % num
-    padded = {
-        name: jnp.concatenate([leaf, leaf[pad_indices]], axis=0)
-        for name, leaf in posterior.items()
-    }
-    return padded, num
+    return distinct.pop()
+
+
+def _chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
+    """Build wrapped sample-axis index blocks of exactly ``batch_size`` rows each.
+
+    Block ``i`` holds ``arange(i * batch_size, (i + 1) * batch_size) % num_samples``:
+    every block shares one shape, so the jitted predictive compiles exactly
+    once regardless of ``num_samples``, and the final block wraps around to
+    re-use leading draws (when ``num_samples`` is not an exact multiple of
+    ``batch_size``), which :func:`_chunked_draws` discards with a final
+    ``[:num_samples]`` slice. The blocks reproduce the draws of the former
+    posterior-padding scheme bit for bit without materializing a padded copy of
+    the posterior.
+
+    Parameters
+    ----------
+    num_samples
+        Total number of posterior draws (callers with
+        ``num_samples <= batch_size`` take the unchunked passthrough instead).
+    batch_size
+        Positive chunk size.
+
+    Returns
+    -------
+    list[Array]
+        One integer index block of length ``batch_size`` per chunk.
+
+    Raises
+    ------
+    ValueError
+        If ``batch_size`` is not positive.
+    """
+    if batch_size <= 0:
+        msg = f"batch_size must be positive, got {batch_size}"
+        raise ValueError(msg)
+    starts = range(0, num_samples, batch_size)
+    return [jnp.arange(start, start + batch_size) % num_samples for start in starts]
 
 
 def _chunked_draws(
     rng_key: Array,
-    predict_fn: Callable[[Array, dict[str, Array]], Array],
-    posterior: dict[str, Array],
+    predict_fn: Callable[[Array, Mapping[str, Array | np.ndarray]], Array],
+    posterior: Mapping[str, Array | np.ndarray],
     batch_size: int | None,
-) -> Array:
+    device: jax.Device | Literal["host"] | None = None,
+) -> Array | np.ndarray:
     """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
 
     Shared chunk driver for :func:`forecast` and :func:`predict_in_sample`.
     With ``batch_size`` ``None`` (or at least the sample count) ``predict_fn``
     is called once on the full posterior with ``rng_key`` itself. Otherwise the
-    posterior is padded to a whole multiple of ``batch_size``
-    (:func:`_pad_posterior`) so every chunk shares one shape and the jitted
-    ``predict_fn`` compiles exactly once; one subkey is split per chunk, and
-    the pad draws are discarded by the final slice.
+    posterior is gathered into wrapped index blocks of exactly ``batch_size``
+    rows (:func:`_chunk_indices`) so every chunk shares one shape and the
+    jitted ``predict_fn`` compiles exactly once; one subkey is split per chunk,
+    and the wrapped draws are discarded by a final slice (skipped when the
+    sample count is an exact multiple of ``batch_size``, since JAX slices copy
+    and nothing wrapped). When ``device`` is
+    given, every chunk is moved there (:func:`_transfer`) before the next one
+    is drawn and the stitched result lives on ``device``, bounding accelerator
+    memory by a single chunk; ``"host"`` stitches the NumPy chunks with
+    :func:`numpy.concatenate` so the result never touches an accelerator.
 
     Parameters
     ----------
@@ -97,30 +132,35 @@ def _chunked_draws(
         Posterior samples of the latent sites, sample axis leading.
     batch_size
         Optional chunk size (caps peak memory).
+    device
+        Optional device (or ``"host"``) each chunk and the stitched result are
+        moved to.
 
     Returns
     -------
-    Array
-        The stitched draws for the original (pre-pad) sample count.
+    Array | np.ndarray
+        The stitched draws for the original sample count (a NumPy array when
+        ``device`` is ``"host"``).
     """
-    num_samples = next(iter(posterior.values())).shape[0]
-    if batch_size is None or batch_size >= num_samples:
-        return predict_fn(rng_key, posterior)
-    padded, num = _pad_posterior(posterior, batch_size)
-    num_padded = next(iter(padded.values())).shape[0]
-    keys = random.split(rng_key, num_padded // batch_size)
-    chunks = [
-        predict_fn(keys[i], _index_tree(padded, slice(start, start + batch_size)))
-        for i, start in enumerate(range(0, num_padded, batch_size))
-    ]
-    return jnp.concatenate(chunks, axis=0)[:num]
+    num = _sample_axis_size(posterior)
+    if batch_size is None or batch_size >= num:
+        with _oom_advice("predictive sampling", batch_size):
+            return _transfer(predict_fn(rng_key, posterior), device)
+    indices = _chunk_indices(num, batch_size)
+    keys = random.split(rng_key, len(indices))
+    with _oom_advice("predictive sampling", batch_size):
+        chunks = [
+            _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
+            for i, idx in enumerate(indices)
+        ]
+        return _stitch_chunks(chunks, num, device)
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
 def _predict(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     data: Array,
     covariates: Array,
     *,
@@ -136,7 +176,7 @@ def _predict(
     ``lax.map`` when ``False``).
     """
     predictive = Predictive(
-        model, posterior_samples=posterior, return_sites=["forecast"], parallel=parallel
+        model, posterior_samples=dict(posterior), return_sites=["forecast"], parallel=parallel
     )
     return predictive(rng_key, covariates, data)["forecast"]
 
@@ -144,13 +184,14 @@ def _predict(
 def forecast(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     data: Array,
     covariates: Array,
     *,
     batch_size: int | None = None,
     parallel: bool = True,
-) -> Num[Array, " sample *batch future obs"]:
+    device: jax.Device | str | None = None,
+) -> Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
     Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
@@ -180,13 +221,31 @@ def forecast(
         ``batch_size`` chunk are vectorized while the chunks are looped over, so
         ``batch_size`` remains the peak-memory governor. The two settings produce
         the same draws up to floating-point reduction order.
+    device
+        Where each chunk of draws is placed as soon as it is drawn and where
+        the stitched result lives. ``"host"`` copies every chunk to host
+        memory with :func:`jax.device_get` and returns a NumPy array; it needs
+        no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
+        (or ``jax_platforms``) leaves only an accelerator backend initialized,
+        which makes it the recommended choice on GPU. A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device instead
+        (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+        the CPU backend is not initialized). With ``batch_size`` set on an
+        accelerator, either bounds accelerator memory by a single chunk
+        instead of the full ``(sample, future, obs)`` array; the draw values
+        are unchanged, only where the result lives. The bound requires
+        ``batch_size`` strictly below the sample count: at or above it, the
+        single-shot path runs and the full array is materialized on the
+        default device before the one transfer. ``None`` keeps everything on
+        the default device.
 
     Returns
     -------
-    Num[Array, " sample *batch future obs"]
+    Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
         Forecast samples over the ``future = duration - t`` horizon (floating
         point for continuous observations, integer for discrete/count models
-        built with :func:`~numpyro_forecast.functional.models.predict_glm`).
+        built with :func:`~numpyro_forecast.functional.models.predict_glm`; a
+        NumPy array when ``device`` resolves to ``"host"``).
 
     Raises
     ------
@@ -196,24 +255,25 @@ def forecast(
     Notes
     -----
     Chunking is a memory knob, not a reproducibility knob: reproducibility is
-    per ``(rng_key, batch_size)``. Each chunk is padded to a whole multiple of
-    ``batch_size`` so the underlying ``_predict`` compiles exactly once for a
-    fixed shape (the pad draws are discarded), but changing ``batch_size``
-    changes the PRNG stream layout and therefore the exact draws.
+    per ``(rng_key, batch_size)``. Every chunk shares the exact ``batch_size``
+    shape (the final chunk wraps around to re-used draws that are discarded),
+    so the underlying ``_predict`` compiles exactly once for a fixed shape, but
+    changing ``batch_size`` changes the PRNG stream layout and therefore the
+    exact draws. ``device`` never changes the draws, only where they live.
     """
     _require_covariates_extend_data(data, covariates)
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+    def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return _predict(key, model, post, data, covariates, parallel=parallel)
 
-    return _chunked_draws(rng_key, predict_fn, posterior, batch_size)
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
 
 
 @partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
 def _predict_obs(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     covariates: Array,
     *,
     parallel: bool = True,
@@ -225,7 +285,7 @@ def _predict_obs(
     the chunked :func:`predict_in_sample` loop cheap.
     """
     predictive = Predictive(
-        model, posterior_samples=posterior, return_sites=["obs"], parallel=parallel
+        model, posterior_samples=dict(posterior), return_sites=["obs"], parallel=parallel
     )
     return predictive(rng_key, covariates)["obs"]
 
@@ -233,12 +293,13 @@ def _predict_obs(
 def predict_in_sample(
     rng_key: Array,
     model: ForecastModel,
-    posterior: dict[str, Array],
+    posterior: Mapping[str, Array | np.ndarray],
     covariates: Array,
     *,
     batch_size: int | None = None,
     parallel: bool = True,
-) -> Num[Array, " sample *batch time obs"]:
+    device: jax.Device | str | None = None,
+) -> Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]:
     """Sample the in-sample posterior predictive of the ``obs`` site.
 
     Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
@@ -266,14 +327,32 @@ def predict_in_sample(
         (``True``, faster, higher peak memory) or maps it serially with
         ``lax.map`` (``False``). See :func:`forecast` for how this interacts with
         ``batch_size``.
+    device
+        Where each chunk of draws is placed as soon as it is drawn and where
+        the stitched result lives. ``"host"`` copies every chunk to host
+        memory with :func:`jax.device_get` and returns a NumPy array; it needs
+        no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
+        (or ``jax_platforms``) leaves only an accelerator backend initialized,
+        which makes it the recommended choice on GPU. A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device instead
+        (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
+        the CPU backend is not initialized). With ``batch_size`` set on an
+        accelerator, either bounds accelerator memory by a single chunk
+        instead of the full ``(sample, time, obs)`` array; the draw values are
+        unchanged, only where the result lives. The bound requires
+        ``batch_size`` strictly below the sample count: at or above it, the
+        single-shot path runs and the full array is materialized on the
+        default device before the one transfer. ``None`` keeps everything on
+        the default device.
 
     Returns
     -------
-    Num[Array, " sample *batch time obs"]
-        In-sample posterior-predictive draws of the ``obs`` site.
+    Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
+        In-sample posterior-predictive draws of the ``obs`` site (a NumPy
+        array when ``device`` resolves to ``"host"``).
     """
 
-    def predict_fn(key: Array, post: dict[str, Array]) -> Array:
+    def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return _predict_obs(key, model, post, covariates, parallel=parallel)
 
-    return _chunked_draws(rng_key, predict_fn, posterior, batch_size)
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))

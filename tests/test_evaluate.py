@@ -4,6 +4,7 @@ from functools import partial
 from typing import Any, cast
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from conftest import RandomWalkModel
 from jax import Array, random
@@ -28,6 +29,7 @@ from numpyro_forecast.evaluate import (
     eval_rmse,
     evaluate_forecast,
 )
+from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.forecaster import HMCForecaster
 from numpyro_forecast.typing import ForecasterFactory
 
@@ -151,6 +153,84 @@ def test_eval_coverage_rejects_out_of_range_alpha(alpha: float) -> None:
 
 def test_default_metrics_keys() -> None:
     assert set(DEFAULT_METRICS) == {"mae", "rmse", "crps", "coverage"}
+
+
+# --- Chunked cell evaluation (memory-bounded scoring on wide panels) --------------
+
+
+def _metric_inputs(n_cells: int = 30) -> tuple[Array, Array]:
+    pred = random.normal(random.PRNGKey(0), (40, 3, n_cells // 3))
+    truth = random.normal(random.PRNGKey(1), (3, n_cells // 3))
+    return pred, truth
+
+
+def test_eval_crps_chunked_matches_single_pass() -> None:
+    # A non-divisor batch size exercises the wrapped final block; chunking only
+    # changes the summation order of the final mean.
+    pred, truth = _metric_inputs()
+    single = float(eval_crps(pred, truth))
+    chunked = float(eval_crps(pred, truth, batch_size=7))
+    assert np.isclose(single, chunked, rtol=1e-6)
+
+
+def test_eval_coverage_chunked_preserves_the_count() -> None:
+    # Coverage counts exact 0/1 indicators, so chunking recovers the identical
+    # count; only the precision of the final division differs (f32 vs f64 mean).
+    pred, truth = _metric_inputs()
+    single = float(eval_coverage(pred, truth, alpha=0.8))
+    chunked = float(eval_coverage(pred, truth, alpha=0.8, batch_size=7))
+    n_cells = truth.size
+    assert round(single * n_cells) == round(chunked * n_cells)
+    assert np.isclose(single, chunked, rtol=1e-6)
+
+
+def test_eval_metrics_batch_ge_cells_is_passthrough() -> None:
+    # At or above the cell count the single-pass kernel runs: bitwise equal.
+    pred, truth = _metric_inputs()
+    assert float(eval_crps(pred, truth, batch_size=64)) == float(eval_crps(pred, truth))
+    assert float(eval_coverage(pred, truth, batch_size=64)) == float(eval_coverage(pred, truth))
+
+
+def test_eval_metrics_accept_numpy_inputs() -> None:
+    pred, truth = _metric_inputs()
+    pred_np, truth_np = np.asarray(pred), np.asarray(truth)
+    assert np.isclose(
+        float(eval_crps(pred_np, truth_np, batch_size=7)),
+        float(eval_crps(pred, truth, batch_size=7)),
+        rtol=1e-6,
+    )
+    assert float(eval_coverage(pred_np, truth_np, batch_size=7)) == float(
+        eval_coverage(pred, truth, batch_size=7)
+    )
+
+
+def test_eval_crps_chunked_single_compile(count_compilations) -> None:
+    """Wrapped fixed-size cell blocks keep the chunked metric at one compiled kernel."""
+    pred, truth = _metric_inputs()
+    eval_crps(pred, truth, batch_size=7)  # warm-up
+
+    with count_compilations() as tally:
+        eval_crps(pred, truth, batch_size=7)
+    assert tally.count == 0
+
+
+def test_eval_crps_rejects_non_positive_batch_size() -> None:
+    pred, truth = _metric_inputs()
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        eval_crps(pred, truth, batch_size=0)
+
+
+def test_chunked_metric_oom_reports_stage(monkeypatch: pytest.MonkeyPatch) -> None:
+    import numpyro_forecast.evaluate as evaluate_mod
+
+    def raise_oom(pred: Array, truth: Array) -> Array:
+        msg = "RESOURCE_EXHAUSTED: Out of memory while trying to allocate 3800000000 bytes."
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(evaluate_mod, "_crps_cells", raise_oom)
+    pred, truth = _metric_inputs()
+    with pytest.raises(DeviceMemoryError, match=r"metric evaluation.*lower batch_size"):
+        eval_crps(pred, truth, batch_size=7)
 
 
 def test_evaluate_forecast_matches_individual_metrics() -> None:

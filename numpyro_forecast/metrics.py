@@ -8,6 +8,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array, Metric
@@ -35,8 +36,8 @@ def _crps_empirical(
 
 
 def crps_empirical(
-    pred: Float[Array, " sample *batch"],
-    truth: Float[Array, " *batch"],
+    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
+    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
 ) -> Float[Array, " *batch"]:
     r"""Compute the empirical Continuous Ranked Probability Score (CRPS).
 

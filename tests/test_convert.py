@@ -2,9 +2,11 @@
 
 import warnings
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import xarray.testing as xarray_testing
 from conftest import RandomWalkModel, empty_covariates
 from jax import Array, random
 
@@ -501,15 +503,19 @@ def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
     real_draw = convert_mod.draw_posterior
     real_pred = convert_mod.predict_in_sample
 
-    def spy_draw(rng_key: Array, fit: object, num: int) -> object:
+    def spy_draw(rng_key: Array, fit: object, num: int, **kwargs: object) -> object:
         captured["post"] = rng_key
-        return real_draw(rng_key, fit, num)
+        return real_draw(rng_key, fit, num, **kwargs)  # ty: ignore[invalid-argument-type]
 
     def spy_pred(
-        rng_key: Array, model: ForecastModel, posterior: dict[str, Array], covariates: Array
+        rng_key: Array,
+        model: ForecastModel,
+        posterior: dict[str, Array],
+        covariates: Array,
+        **kwargs: object,
     ) -> object:
         captured["pred"] = rng_key
-        return real_pred(rng_key, model, posterior, covariates)
+        return real_pred(rng_key, model, posterior, covariates, **kwargs)  # ty: ignore[invalid-argument-type]
 
     monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
     monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
@@ -544,6 +550,260 @@ def test_to_datatree_deterministic_given_key() -> None:
         np.asarray(a["posterior"]["drift"]),
         np.asarray(b["posterior"]["drift"]),
     )
+
+
+# --- predictive_batch_size (issue #64) ----------------------------------------
+
+
+def _svi_fit_with_horizon(horizon: int = 5):  # type: ignore[no-untyped-def]
+    data = _series()
+    n = data.shape[-2]
+    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, empty_covariates(n), num_steps=40)
+    return svi, data, empty_covariates(n + horizon)
+
+
+def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
+    """Chunked predictive sampling produces the same tree layout as the default."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    n = data.shape[-2]
+    tree = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+        predictive_batch_size=4,
+    )
+    assert set(tree.children) == {
+        "posterior",
+        "posterior_predictive",
+        "observed_data",
+        "constant_data",
+        "predictions",
+        "predictions_constant_data",
+    }
+    pp = tree["posterior_predictive"]["obs"]
+    assert pp.sizes == {"chain": 1, "draw": 10, "time": n, "obs_dim": 1}
+    predictions = tree["predictions"]["obs"]
+    assert predictions.sizes == {"chain": 1, "draw": 10, "time": 5, "obs_dim": 1}
+    assert bool(np.all(np.isfinite(np.asarray(pp))))
+    assert bool(np.all(np.isfinite(np.asarray(predictions))))
+
+
+def test_to_datatree_predictive_batch_size_ge_samples_matches_default() -> None:
+    """A batch size at or above the draw count hits the passthrough: identical tree."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    default = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+    )
+    batched = to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+        predictive_batch_size=64,
+    )
+    for group in default.children:
+        xarray_testing.assert_equal(default[group].dataset, batched[group].dataset)
+
+
+def test_to_datatree_predictive_batch_size_deterministic_given_key() -> None:
+    svi, data, covariates = _svi_fit_with_horizon()
+    trees = [
+        to_datatree(
+            random.PRNGKey(7),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+        )
+        for _ in range(2)
+    ]
+    for group in trees[0].children:
+        xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
+
+
+def test_to_datatree_forwards_batch_and_device_to_draw_posterior(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The posterior drawing gets the same memory knobs as the predictive sampling.
+
+    On a wide panel the posterior draw is the largest allocation of the whole
+    export, so ``predictive_batch_size``/``predictive_device`` must chunk and
+    offload it too (the GPU OOM behind the second issue #64 follow-up). This
+    also means the ``posterior`` group's draws change when chunking is enabled
+    (reproducible per ``rng_key`` and batch size), which is why no
+    posterior-group-unaffected invariant exists anymore.
+    """
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, object] = {}
+    real_draw = convert_mod.draw_posterior
+
+    def spy_draw(*args: object, **kwargs: object) -> object:
+        captured["batch_size"] = kwargs["batch_size"]
+        captured["device"] = kwargs["device"]
+        return real_draw(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
+    svi, data, covariates = _svi_fit_with_horizon()
+    to_datatree(
+        random.PRNGKey(2),
+        svi,
+        RandomWalkModel(),
+        data,
+        covariates,
+        num_predictive_samples=10,
+        predictive_batch_size=4,
+    )
+    assert captured["batch_size"] == 4
+    assert captured["device"] == "host"
+
+
+def test_to_datatree_rejects_non_positive_predictive_batch_size() -> None:
+    """The batch-size contract is enforced at the public to_datatree surface."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    with pytest.raises(ValueError, match="batch_size must be positive"):
+        to_datatree(
+            random.PRNGKey(2),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=0,
+        )
+
+
+@pytest.mark.parametrize("other_device", [None, "host"])
+def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> None:
+    """predictive_device is a placement knob, never a draws knob: equal trees."""
+    svi, data, covariates = _svi_fit_with_horizon()
+    trees = [
+        to_datatree(
+            random.PRNGKey(7),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+            predictive_device=device,
+        )
+        for device in ("cpu", other_device)
+    ]
+    for group in trees[0].children:
+        xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
+
+
+@pytest.mark.parametrize("predictive_device", ["host", None])
+def test_to_datatree_forwards_predictive_device(
+    monkeypatch: pytest.MonkeyPatch, predictive_device: str | None
+) -> None:
+    """Both predictive calls receive the predictive_device (default ``"host"``)."""
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, object] = {}
+    real_pred = convert_mod.predict_in_sample
+    real_forecast = convert_mod.forecast
+
+    def spy_pred(*args: object, **kwargs: object) -> object:
+        captured["predict_in_sample"] = kwargs["device"]
+        return real_pred(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    def spy_forecast(*args: object, **kwargs: object) -> object:
+        captured["forecast"] = kwargs["device"]
+        return real_forecast(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
+    monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
+
+    svi, data, covariates = _svi_fit_with_horizon()
+    if predictive_device is None:
+        to_datatree(
+            random.PRNGKey(2),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+            predictive_device=None,
+        )
+    else:
+        # The default must forward "host", so predictive_device is deliberately omitted.
+        to_datatree(
+            random.PRNGKey(2),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+        )
+    assert captured["predict_in_sample"] == predictive_device
+    assert captured["forecast"] == predictive_device
+
+
+def test_to_datatree_default_works_without_cpu_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for the GPU crash: to_datatree must not need the CPU backend.
+
+    ``numpyro.set_platform("cuda")`` restricts ``jax_platforms`` to cuda only,
+    so ``jax.devices("cpu")`` raises. The default ``predictive_device="host"``
+    never resolves a backend, so the export succeeds with no warning.
+    """
+    real_devices = jax.devices
+
+    def fail_cpu_devices(backend: str | None = None) -> list[jax.Device]:
+        if backend == "cpu":
+            msg = "Unknown backend cpu. Available backends are ['cuda']"
+            raise RuntimeError(msg)
+        return real_devices(backend)
+
+    monkeypatch.setattr(jax, "devices", fail_cpu_devices)
+    svi, data, covariates = _svi_fit_with_horizon()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tree = to_datatree(
+            random.PRNGKey(7),
+            svi,
+            RandomWalkModel(),
+            data,
+            covariates,
+            num_predictive_samples=10,
+            predictive_batch_size=4,
+        )
+    assert "posterior_predictive" in tree.children
+    assert "predictions" in tree.children
+
+
+def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:
+    fit, data, _covariates = _mcmc_fit(num_chains=2)
+    n = data.shape[-2]
+    tree = to_datatree(
+        random.PRNGKey(2),
+        fit,
+        RandomWalkModel(),
+        data,
+        empty_covariates(n + 4),
+        predictive_batch_size=16,
+    )
+    pp = tree["posterior_predictive"]["obs"]
+    assert pp.sizes == {"chain": 2, "draw": 50, "time": n, "obs_dim": 1}
+    predictions = tree["predictions"]["obs"]
+    assert predictions.sizes == {"chain": 2, "draw": 50, "time": 4, "obs_dim": 1}
 
 
 def _prediction_draws(

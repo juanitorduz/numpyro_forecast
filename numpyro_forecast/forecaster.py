@@ -15,6 +15,8 @@ import abc
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
+import jax
+import numpy as np
 import numpyro.distributions as dist
 from jax import random
 from jaxtyping import Num
@@ -247,8 +249,22 @@ class _BaseForecaster(abc.ABC):
         self._t_obs = t_obs
 
     @abc.abstractmethod
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        """Return ``num_samples`` posterior draws of the latent sites."""
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        """Return ``num_samples`` posterior draws of the latent sites.
+
+        ``batch_size`` and ``device`` mirror
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`: they
+        chunk the drawing itself and move each chunk off the accelerator, so
+        the posterior draw (the largest allocation on wide panels) is bounded
+        by one chunk.
+        """
         raise NotImplementedError
 
     def __call__(
@@ -260,7 +276,8 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
-    ) -> Num[Array, " sample *batch future obs"]:
+        device: jax.Device | str | None = None,
+    ) -> Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]:
         """Sample forecasts for the steps in ``[t, duration)``.
 
         Parameters
@@ -279,17 +296,25 @@ class _BaseForecaster(abc.ABC):
             Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
             higher peak memory) or map it serially (``False``). See
             :func:`numpyro_forecast.functional.prediction.forecast`.
+        device
+            Where each chunk of draws is placed as soon as it is drawn and
+            where the stitched result lives (``"host"`` returns a NumPy array
+            in host memory and needs no CPU backend, the recommended choice on
+            GPU). See :func:`numpyro_forecast.functional.prediction.forecast`.
 
         Returns
         -------
-        Num[Array, " sample *batch future obs"]
+        Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
             Forecast samples over the ``future = duration - t`` horizon (integer
-            for discrete/count models built with ``predict_glm``).
+            for discrete/count models built with ``predict_glm``; a NumPy array
+            when ``device`` resolves to ``"host"``).
         """
         _require_covariates_extend_data(data, covariates)
         _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
-        posterior = self._draw_posterior(key_post, num_samples)
+        posterior = self._draw_posterior(
+            key_post, num_samples, batch_size=batch_size, device=device
+        )
         return _forecast(
             key_pred,
             self.model,
@@ -298,6 +323,7 @@ class _BaseForecaster(abc.ABC):
             covariates,
             batch_size=batch_size,
             parallel=parallel,
+            device=device,
         )
 
     def predict_in_sample(
@@ -308,7 +334,8 @@ class _BaseForecaster(abc.ABC):
         *,
         batch_size: int | None = None,
         parallel: bool = True,
-    ) -> Num[Array, " sample *batch time obs"]:
+        device: jax.Device | str | None = None,
+    ) -> Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]:
         """Sample the in-sample posterior predictive of the ``obs`` site.
 
         Draws ``num_samples`` posterior latent samples from the fitted forecaster and
@@ -331,11 +358,18 @@ class _BaseForecaster(abc.ABC):
             Whether to vectorize the sample axis with ``vmap`` (``True``, faster,
             higher peak memory) or map it serially (``False``). See
             :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
+        device
+            Where each chunk of draws is placed as soon as it is drawn and
+            where the stitched result lives (``"host"`` returns a NumPy array
+            in host memory and needs no CPU backend, the recommended choice on
+            GPU). See
+            :func:`numpyro_forecast.functional.prediction.predict_in_sample`.
 
         Returns
         -------
-        Num[Array, " sample *batch time obs"]
-            In-sample posterior-predictive draws of the ``obs`` site.
+        Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
+            In-sample posterior-predictive draws of the ``obs`` site (a NumPy
+            array when ``device`` resolves to ``"host"``).
 
         Raises
         ------
@@ -351,9 +385,17 @@ class _BaseForecaster(abc.ABC):
             raise ValueError(msg)
         _require_positive_num_samples(num_samples)
         key_post, key_pred = random.split(rng_key)
-        posterior = self._draw_posterior(key_post, num_samples)
+        posterior = self._draw_posterior(
+            key_post, num_samples, batch_size=batch_size, device=device
+        )
         return _predict_in_sample(
-            key_pred, self.model, posterior, covariates, batch_size=batch_size, parallel=parallel
+            key_pred,
+            self.model,
+            posterior,
+            covariates,
+            batch_size=batch_size,
+            parallel=parallel,
+            device=device,
         )
 
 
@@ -423,8 +465,17 @@ class Forecaster(_BaseForecaster):
         self.params: dict[str, Array] = self._fit.params
         self.losses: Array = self._fit.losses
 
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        return draw_posterior(rng_key, self._fit, num_samples)
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        return draw_posterior(
+            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+        )
 
 
 class HMCForecaster(_BaseForecaster):
@@ -490,8 +541,17 @@ class HMCForecaster(_BaseForecaster):
         )
         self.posterior_samples: dict[str, Array] = self._fit.samples
 
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        return draw_posterior(rng_key, self._fit, num_samples)
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        return draw_posterior(
+            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+        )
 
 
 class PathfinderForecaster(_BaseForecaster):
@@ -552,5 +612,14 @@ class PathfinderForecaster(_BaseForecaster):
         )
         self.elbo: float = self._fit.elbo
 
-    def _draw_posterior(self, rng_key: Array, num_samples: int) -> dict[str, Array]:
-        return draw_posterior(rng_key, self._fit, num_samples)
+    def _draw_posterior(
+        self,
+        rng_key: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+        device: jax.Device | str | None = None,
+    ) -> dict[str, "Array | np.ndarray"]:
+        return draw_posterior(
+            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+        )

@@ -2,7 +2,9 @@
 
 from collections.abc import Callable
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro.distributions as dist
 import pytest
 from conftest import RandomWalkModel, empty_covariates
@@ -97,6 +99,69 @@ def test_forecaster_batch_size_matches_single_shot(rng_key: Array) -> None:
     forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
     fc = forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3)
     assert fc.shape == (10, 6, 1)
+
+
+def test_forecaster_device_bitwise_matches_no_device(rng_key: Array) -> None:
+    """The device knob relocates the chunked forecast draws without changing them."""
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+    plain = forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3)
+    hosted = forecaster(
+        rng_key, data, empty_covariates(46), num_samples=10, batch_size=3, device="cpu"
+    )
+    assert isinstance(hosted, jax.Array)  # "cpu" commits to a device, unlike "host"
+    assert hosted.shape == (10, 6, 1)
+    assert hosted.devices() == {jax.devices("cpu")[0]}
+    assert jnp.array_equal(plain, hosted)
+
+
+def test_forecaster_predict_in_sample_device_bitwise_matches_no_device(rng_key: Array) -> None:
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+    plain = forecaster.predict_in_sample(
+        rng_key, empty_covariates(40), num_samples=10, batch_size=4
+    )
+    hosted = forecaster.predict_in_sample(
+        rng_key, empty_covariates(40), num_samples=10, batch_size=4, device="cpu"
+    )
+    assert isinstance(hosted, jax.Array)  # "cpu" commits to a device, unlike "host"
+    assert hosted.shape == (10, 40, 1)
+    assert hosted.devices() == {jax.devices("cpu")[0]}
+    assert jnp.array_equal(plain, hosted)
+
+
+def test_forecaster_host_device_returns_numpy_bitwise_match(rng_key: Array) -> None:
+    """``device="host"`` yields a NumPy result with the exact same draws."""
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+    plain = forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3)
+    hosted = forecaster(
+        rng_key, data, empty_covariates(46), num_samples=10, batch_size=3, device="host"
+    )
+    assert isinstance(hosted, np.ndarray)
+    assert hosted.shape == (10, 6, 1)
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_forecaster_forwards_batch_and_device_to_posterior_draw(rng_key: Array) -> None:
+    """The posterior draw is chunked/offloaded with the same knobs as the predictive."""
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (40, 1)), axis=-2)
+    forecaster = Forecaster(rng_key, model, data, empty_covariates(40), num_steps=40)
+
+    captured: dict[str, object] = {}
+    real_draw = forecaster._draw_posterior
+
+    def spy_draw(*args: object, **kwargs: object) -> object:
+        captured.update(kwargs)
+        return real_draw(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    forecaster._draw_posterior = spy_draw  # ty: ignore[invalid-assignment]
+    forecaster(rng_key, data, empty_covariates(46), num_samples=10, batch_size=3, device="host")
+    assert captured == {"batch_size": 3, "device": "host"}
 
 
 def test_forecaster_conditions_on_data(rng_key: Array) -> None:

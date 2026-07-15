@@ -17,6 +17,7 @@ from functools import singledispatch
 from typing import Any, cast
 
 import arviz_base
+import jax
 import numpy as np
 import xarray
 from jax import random
@@ -132,7 +133,9 @@ def _reconcile_tree_covariate_dims(
 
 
 @singledispatch
-def _posterior_reshape(fit: object, samples: dict[str, Array]) -> dict[str, "np.ndarray"]:
+def _posterior_reshape(
+    fit: object, samples: "dict[str, Array | np.ndarray]"
+) -> dict[str, "np.ndarray"]:
     """Reshape sample-leading draws to ``(chain, draw, ...)`` per fit type.
 
     The default adds a single pseudo-chain (``leaf[None]``), which is correct for
@@ -156,7 +159,7 @@ def _posterior_reshape(fit: object, samples: dict[str, Array]) -> dict[str, "np.
 
 
 @_posterior_reshape.register
-def _(fit: MCMCFit, samples: dict[str, Array]) -> dict[str, "np.ndarray"]:
+def _(fit: MCMCFit, samples: "dict[str, Array | np.ndarray]") -> dict[str, "np.ndarray"]:
     reshaped: dict[str, np.ndarray] = {}
     for name, value in samples.items():
         array = np.asarray(value)
@@ -164,7 +167,7 @@ def _(fit: MCMCFit, samples: dict[str, Array]) -> dict[str, "np.ndarray"]:
     return reshaped
 
 
-def _reshape_predictive(fit: object, predictive: Array) -> "np.ndarray":
+def _reshape_predictive(fit: object, predictive: "Array | np.ndarray") -> "np.ndarray":
     """Apply the fit's chain reshape to a single predictive array."""
     return _posterior_reshape(fit, {"obs": predictive})["obs"]
 
@@ -226,6 +229,8 @@ def to_datatree(
     covariates: Array,
     *,
     num_predictive_samples: int | None = None,
+    predictive_batch_size: int | None = None,
+    predictive_device: jax.Device | str | None = "host",
     coords: Mapping[str, Sequence[Any]] | None = None,
     time_coord: Sequence[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
@@ -261,6 +266,40 @@ def to_datatree(
         :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
         The same draws drive the in-sample predictive and the forecast. Defaults
         to ``1_000``.
+    predictive_batch_size
+        Optional chunk size that bounds how many draws touch the accelerator
+        at once, across both stages of the export. When set, the posterior
+        drawing itself (for variational fits; on a wide panel it is the
+        largest allocation, since every latent and deterministic site is
+        materialized for all draws) and the in-sample/forecast predictive
+        sampling run in chunks of this many draws, each chunk moved to
+        ``predictive_device`` before the next is drawn. The per-chunk
+        accelerator footprint is a handful of ``(batch_size, time, series)``
+        buffers, so it scales linearly with this value times the panel width:
+        on wide panels lower it until a chunk fits. The batch size must be
+        strictly below the draw count for that bound to hold: at or above it,
+        sampling falls back to the single-shot path and the full array is
+        materialized on the default device before the single transfer.
+        Chunking changes the PRNG stream layout of both the posterior and the
+        predictive draws (including the ``posterior`` group), so results are
+        reproducible per ``(rng_key, predictive_batch_size)``. ``None``
+        (default) samples everything in one shot (the results are still moved
+        to ``predictive_device``).
+    predictive_device
+        Where the posterior and predictive draws are moved as they are
+        sampled, forwarded to the ``device`` argument of
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`,
+        :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
+        :func:`~numpyro_forecast.functional.prediction.forecast`. The default
+        ``"host"`` copies every chunk to host memory as a NumPy array (where
+        the tree is built anyway); it is what bounds accelerator memory when
+        ``predictive_batch_size`` is set, and it needs no CPU backend, so it
+        works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
+        leaves only an accelerator backend initialized. A :class:`jax.Device`
+        or platform name like ``"cpu"`` commits the draws to that device
+        instead; pass ``None`` to keep the draws on the default device
+        (chunked compute without per-chunk host transfers, for when the draws
+        fit on the accelerator and transfers would dominate runtime).
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -314,9 +353,10 @@ def to_datatree(
     variational fits), one the in-sample predictive, and, when a horizon is
     present, a third the forecast. The split is a deterministic derivation
     applied for every fit type, so passing the same key twice never correlates
-    the sample sets. For step-by-step control over the forecast draws (e.g. a
-    custom ``batch_size``), build the in-sample tree with matching-length
-    covariates and attach the horizon with :func:`add_forecast_groups`.
+    the sample sets. ``predictive_batch_size`` is the built-in route to
+    memory-bounded predictive sampling; for fully manual control over the
+    forecast draws, build the in-sample tree with matching-length covariates
+    and attach the horizon with :func:`add_forecast_groups`.
     """
     _require_covariates_cover_data(data, covariates)
     cov_dims = _resolve_covariate_dims(covariates, covariate_dims)
@@ -331,14 +371,16 @@ def to_datatree(
 
     is_mcmc = isinstance(fit, MCMCFit)
     if is_mcmc:
-        samples: dict[str, Array] = dict(fit.samples)  # type: ignore[attr-defined]
+        samples: dict[str, Array | np.ndarray] = dict(fit.samples)  # type: ignore[attr-defined]
     else:
         num = (
             _DEFAULT_NUM_PREDICTIVE_SAMPLES
             if num_predictive_samples is None
             else num_predictive_samples
         )
-        samples = draw_posterior(key_post, fit, num)
+        samples = draw_posterior(
+            key_post, fit, num, batch_size=predictive_batch_size, device=predictive_device
+        )
 
     if time_coord is not None:
         time_values = np.asarray(time_coord)
@@ -369,7 +411,14 @@ def to_datatree(
     )
 
     covariates_insample = covariates[..., :n_time, :]
-    predictive = predict_in_sample(key_pred, model, samples, covariates_insample)
+    predictive = predict_in_sample(
+        key_pred,
+        model,
+        samples,
+        covariates_insample,
+        batch_size=predictive_batch_size,
+        device=predictive_device,
+    )
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_predictive(fit, predictive)},
         sample_dims=_SAMPLE_DIMS,
@@ -397,7 +446,15 @@ def to_datatree(
         "constant_data": constant_ds,
     }
     if key_forecast is not None:
-        forecast_samples = forecast(key_forecast, model, samples, data, covariates)
+        forecast_samples = forecast(
+            key_forecast,
+            model,
+            samples,
+            data,
+            covariates,
+            batch_size=predictive_batch_size,
+            device=predictive_device,
+        )
         predictions_ds, predictions_constant_ds = _forecast_group_datasets(
             _reshape_predictive(fit, forecast_samples),
             covariates[..., n_time:, :],
@@ -421,7 +478,7 @@ def to_datatree(
 
 def add_forecast_groups(
     tree: "xarray.DataTree",
-    forecast_samples: Array,
+    forecast_samples: "Array | np.ndarray",
     covariates_future: Array,
     *,
     time_coord: Sequence[Any] | None = None,
