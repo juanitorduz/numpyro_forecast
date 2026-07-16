@@ -36,7 +36,9 @@ from numpyro_forecast import (
     eval_coverage,
     eval_crps,
     forecasting_model,
+    predictions_to_datatree,
 )
+from numpyro_forecast.acf import acf, pacf
 from numpyro_forecast.functional import Horizon
 from numpyro_forecast.typing import Array
 
@@ -48,6 +50,16 @@ plt.rcParams["figure.facecolor"] = "white"
 numpyro.set_host_device_count(n=4)
 
 rng_key = random.PRNGKey(seed=42)
+
+
+def hdi_label(prob: float, prefix: str = "") -> str:
+    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
+    percent = f"{prob:.0%}".replace("%", r"\%")
+    return f"{prefix}${percent}$ HDI"
+
+
+hdi_probs = (0.5, 0.94)
+hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
 
 %load_ext autoreload
 %autoreload 2
@@ -115,7 +127,7 @@ print(f"series shape: {y_for_loop.shape}")
     series shape: (100,)
 
 
-The scan version threads a carry `(y_prev, error_prev)` through the innovations and produces the same series:
+The scan version threads a carry `(y_prev, error_prev)` through the innovations and produces the same series. Because JAX keys are pure, reusing `rng_subkey` reproduces the innovations bit for bit, so we can also print their realized standard deviation: with only \\T = 100\\ draws it lands visibly below the population value \\\sigma = 0.5\\, a fact we will need when judging the parameter recovery below.
 
 
 ``` python
@@ -156,10 +168,14 @@ def generate_arma_1_1_data_scan(
 
 y = generate_arma_1_1_data_scan(rng_subkey, n_samples, phi_true, theta_true, noise_scale)
 print(f"for-loop and scan agree: {jnp.allclose(y_for_loop, y, atol=1e-6)}")
+
+eps_realized = noise_scale * random.normal(rng_subkey, (n_samples,))
+print(f"realized innovation sd: {eps_realized.std():.2f} (population value: {noise_scale})")
 ```
 
 
     for-loop and scan agree: True
+    realized innovation sd: 0.43 (population value: 0.5)
 
 
 Throughout the package, time lives at axis `-2` and the observation dimension at axis `-1`, so the single series has shape `(100, 1)`. Following the design note above, the same array also serves as the covariates.
@@ -189,69 +205,10 @@ plt.show()
 
 # ACF and PACF
 
-Before modeling, we look at the empirical autocorrelation function (ACF) and partial autocorrelation function (PACF), the classical tools for identifying ARMA orders. The blog post used the statsmodels plotting helpers; here we compute both from scratch, which takes a handful of lines (the PACF follows from the ACF via the Durbin-Levinson recursion).
+Before modeling, we look at the empirical autocorrelation function (ACF) and partial autocorrelation function (PACF), the classical tools for identifying ARMA orders. The blog post used the statsmodels plotting helpers; here we use the package's own [`acf`](https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html) and [`pacf`](https://juanitorduz.github.io/numpyro_forecast/reference/acf.pacf.html) functions from `numpyro_forecast.acf`. Both are jitted, compute the ACF for all lags at once via the FFT, derive the PACF through the Durbin-Levinson recursion, and broadcast over leading batch axes, so the same call works on a panel of series (with time on the last axis).
 
 
 ``` python
-def acf(y: Float[Array, " t"], max_lag: int) -> Float[Array, " lags"]:
-    """Empirical autocorrelation function up to ``max_lag``.
-
-    Parameters
-    ----------
-    y
-        The observed series.
-    max_lag
-        Largest lag to compute.
-
-    Returns
-    -------
-    Float[Array, " lags"]
-        Autocorrelations at lags ``0, ..., max_lag``.
-    """
-    y_centered = y - y.mean()
-    denominator = jnp.sum(y_centered**2)
-    return jnp.stack(
-        [
-            jnp.sum(y_centered[lag:] * y_centered[: y.size - lag]) / denominator
-            for lag in range(max_lag + 1)
-        ]
-    )
-
-
-def pacf(y: Float[Array, " t"], max_lag: int) -> Float[Array, " lags"]:
-    """Empirical partial autocorrelations via the Durbin-Levinson recursion.
-
-    Parameters
-    ----------
-    y
-        The observed series.
-    max_lag
-        Largest lag to compute.
-
-    Returns
-    -------
-    Float[Array, " lags"]
-        Partial autocorrelations at lags ``0, ..., max_lag`` (``1`` at lag zero).
-    """
-    rho = np.asarray(acf(y, max_lag))
-    pacf_values = np.zeros(max_lag + 1)
-    pacf_values[0] = 1.0
-    phi_prev = np.zeros(max_lag + 1)
-    for k in range(1, max_lag + 1):
-        if k == 1:
-            phi_kk = rho[1]
-        else:
-            numerator = rho[k] - np.sum(phi_prev[1:k] * rho[k - 1 : 0 : -1])
-            denominator = 1.0 - np.sum(phi_prev[1:k] * rho[1:k])
-            phi_kk = numerator / denominator
-        phi_new = phi_prev.copy()
-        phi_new[k] = phi_kk
-        phi_new[1:k] = phi_prev[1:k] - phi_kk * phi_prev[k - 1 : 0 : -1]
-        phi_prev = phi_new
-        pacf_values[k] = phi_kk
-    return jnp.asarray(pacf_values)
-
-
 max_lag = 20
 lags = np.arange(max_lag + 1)
 significance_bound = 1.96 / np.sqrt(duration)
@@ -410,7 +367,7 @@ recovery.round({"posterior_mean": 3, "posterior_sd": 3, "r_hat": 3, "ess_bulk": 
 | sigma | 0.5        | 0.436          | 0.032        | 1.001 | 6510.0   | 5500.0   |
 
 
-The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \\\hat{R}\\ values are essentially \\1\\, and the effective sample sizes are healthy. The point estimates for \\\theta\\ and \\\sigma\\ come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of \\0.43\\ (against the population value \\0.5\\), and the posterior mean of \\\sigma\\ matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with \\T = 100\\ observations, because \\\phi\\ and \\\theta\\ can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
+The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \\\hat{R}\\ values are essentially \\1\\, and the effective sample sizes are healthy. The point estimates for \\\theta\\ and \\\sigma\\ come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of \\0.43\\ (against the population value \\0.5\\; we printed the realized value right after generating the data), and the posterior mean of \\\sigma\\ matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with \\T = 100\\ observations, because \\\phi\\ and \\\theta\\ can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
 
 
 ``` python
@@ -441,7 +398,7 @@ plt.show()
 
 # In-sample fit
 
-Next we look at the one-step-ahead posterior predictive over the training window with [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample): at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We plot the \\50\\\\ and \\94\\\\ HDI bands against the observed series with ArviZ `plot_lm` and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
+Next we look at the one-step-ahead posterior predictive over the training window with [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample): at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We plot the posterior mean prediction together with the \\50\\\\ and \\94\\\\ HDI bands (inner band darker, outer band lighter) against the observed series with ArviZ `plot_lm`, packing the draws with the package's [predictions_to_datatree](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree), and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
 
 
 ``` python
@@ -449,32 +406,34 @@ rng_key, rng_subkey = random.split(rng_key)
 train_pp = forecaster.predict_in_sample(rng_subkey, covariates, num_samples=2_000)
 crps_train = eval_crps(train_pp, data)
 
-idata_in_sample = az.from_dict(
-    {
-        "posterior_predictive": {"obs": np.asarray(train_pp[..., 0])[None]},
-        "observed_data": {"obs": np.asarray(y)},
-        "constant_data": {"time": time.astype(float)},
-    },
-    coords={"t": time.astype(float)},
-    dims={"obs": ["t"], "time": ["t"]},
-)
+idata_in_sample = predictions_to_datatree(train_pp, time.astype(float), ["y"], observed=data)
 pc = az.plot_lm(
     idata_in_sample,
     y="obs",
-    x="time",
+    x="t",
+    plot_dim="time",
     ci_kind="hdi",
-    ci_prob=(0.5, 0.94),
+    ci_prob=hdi_probs,
     smooth=False,
-    visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
+    point_estimate="mean",
+    visuals={
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": {"color": "C0", "alpha": 1.0, "width": 1.5},
+    },
+    aes={"alpha": ["prob"]},
+    alpha=hdi_alphas,
     figure_kwargs={"figsize": (10, 6)},
 )
-bands = pc.viz["ci_band"]["time"]
+bands = pc.viz["ci_band"]["t"]
 band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
-band_94.set_label(r"$94\%$ HDI")
-band_50.set_label(r"$50\%$ HDI")
+band_94.set_label(hdi_label(0.94))
+band_50.set_label(hdi_label(0.5))
+pe_line = pc.viz["pe_line"]["t"].item()
+pe_line.set_label("posterior mean")
 ax = pc.viz["figure"].item().axes[0]
 (obs_line,) = ax.plot(time, np.asarray(y), color="black", lw=1, label="observed")
-ax.legend(handles=[band_94, band_50, obs_line], loc="upper right")
+ax.legend(handles=[band_94, band_50, pe_line, obs_line], loc="upper right")
 ax.set(
     title=f"One-step-ahead in-sample fit (train CRPS: {crps_train:.4f})",
     xlabel="time",
@@ -543,7 +502,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
 ## Forecasts per fold
 
-Overlaying every fold's out-of-sample forecast (orange \\50\\\\ and \\94\\\\ HDI bands) on the observed series gives the rolling-origin view: each band picks up where the previous fold's training window ended, and the dashed lines mark the successive train/test splits.
+Overlaying every fold's out-of-sample forecast (orange posterior mean line plus \\50\\\\ and \\94\\\\ HDI bands, again inner darker and outer lighter) on the observed series gives the rolling-origin view: each band picks up where the previous fold's training window ended, and the dashed lines mark the successive train/test splits.
 
 
 ``` python
@@ -553,51 +512,59 @@ for r in results:
     if prediction is None:  # keep_predictions=True guarantees this never triggers
         continue
     fold_time = time[r.t1 : r.t2].astype(float)
-    idata_fold = az.from_dict(
-        {
-            "posterior_predictive": {"obs": np.asarray(prediction[..., 0])[None]},
-            "observed_data": {"obs": np.asarray(data[r.t1 : r.t2, 0])},
-            "constant_data": {"time": fold_time},
-        },
-        coords={"t": fold_time},
-        dims={"obs": ["t"], "time": ["t"]},
-    )
+    idata_fold = predictions_to_datatree(prediction, fold_time, ["y"], observed=data[r.t1 : r.t2])
     if pc is None:
         pc = az.plot_lm(
             idata_fold,
             y="obs",
-            x="time",
+            x="t",
+            plot_dim="time",
             ci_kind="hdi",
-            ci_prob=(0.5, 0.94),
+            ci_prob=hdi_probs,
             smooth=False,
-            visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+            point_estimate="mean",
+            visuals={
+                "ci_band": {"color": "C1"},
+                "observed_scatter": False,
+                "pe_line": {"color": "C1", "alpha": 1.0, "width": 1.5},
+            },
+            aes={"alpha": ["prob"]},
+            alpha=hdi_alphas,
             figure_kwargs={"figsize": (12, 6)},
         )
-        bands = pc.viz["ci_band"]["time"]
+        bands = pc.viz["ci_band"]["t"]
         band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
+        pe_line = pc.viz["pe_line"]["t"].item()
     else:
         az.plot_lm(
             idata_fold,
             y="obs",
-            x="time",
+            x="t",
+            plot_dim="time",
             plot_collection=pc,
             ci_kind="hdi",
-            ci_prob=(0.5, 0.94),
+            ci_prob=hdi_probs,
             smooth=False,
-            visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+            point_estimate="mean",
+            visuals={
+                "ci_band": {"color": "C1"},
+                "observed_scatter": False,
+                "pe_line": {"color": "C1", "alpha": 1.0, "width": 1.5},
+            },
         )
 
 if pc is None:
     msg = "no folds were plotted"
     raise ValueError(msg)
 ax = pc.viz["figure"].item().axes[0]
-band_94.set_label(r"forecast $94\%$ HDI")
-band_50.set_label(r"forecast $50\%$ HDI")
+band_94.set_label(hdi_label(0.94, prefix="forecast "))
+band_50.set_label(hdi_label(0.5, prefix="forecast "))
+pe_line.set_label("forecast posterior mean")
 (obs_line,) = ax.plot(time, np.asarray(y), color="black", lw=1, label="observed")
 split_lines = [
     ax.axvline(r.t1, color="gray", ls="--", lw=0.5, label="train/test split") for r in results
 ]
-ax.legend(handles=[band_94, band_50, obs_line, split_lines[0]], loc="upper left")
+ax.legend(handles=[band_94, band_50, pe_line, obs_line, split_lines[0]], loc="upper left")
 ax.set(title="Expanding-window cross-validation forecasts", xlabel="time", ylabel="y")
 plt.show()
 ```
@@ -669,4 +636,4 @@ plt.show()
 - The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same functional-model-body plus [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) pattern for an error-feedback model.
 - The [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html) in this documentation, which introduces [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
 
-[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#f54f5241)
+[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#d12e4518)

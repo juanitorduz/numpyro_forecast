@@ -64,6 +64,12 @@
 - [metrics.eval_interval_score](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_interval_score.html)
 - [metrics.make_mase](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.make_mase.html)
 
+#### Autocorrelation
+> Batched autocorrelation and partial autocorrelation diagnostics.
+
+- [acf.acf](https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html)
+- [acf.pacf](https://juanitorduz.github.io/numpyro_forecast/reference/acf.pacf.html)
+
 #### Seasonal features
 > Fourier design matrices and seasonal tiling.
 

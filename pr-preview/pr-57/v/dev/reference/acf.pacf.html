@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>functional.models.forecasting_model() – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>acf.pacf() – numpyro_forecast (dev) | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -120,9 +120,38 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.2&quot;,&quot;label&quot;:&quot;0.2.2&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
-  <link rel="alternate" type="text/markdown" href="functional.models.forecasting_model.md">
-  <meta name="description" content="Build a NumPyro model from a functional model body.">
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+  <link rel="alternate" type="text/markdown" href="acf.pacf.md">
+  <meta name="description" content="Compute the empirical partial autocorrelation function up to max_lag.">
   <script type="application/ld+json">
 [
   {
@@ -142,23 +171,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "functional.models.forecasting_model - numpyro_forecast",
+    "name": "acf.pacf - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.forecasting_model.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/acf.pacf.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="functional.models.forecasting_model() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="Build a NumPyro model from a functional model body.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/functional.models.forecasting_model.html">
+  <meta property="og:title" content="acf.pacf() – numpyro_forecast (dev) | numpyro_forecast">
+  <meta property="og:description" content="Compute the empirical partial autocorrelation function up to max_lag.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/acf.pacf.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="functional.models.forecasting_model() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="Build a NumPyro model from a functional model body.">
+  <meta name="twitter:title" content="acf.pacf() – numpyro_forecast (dev) | numpyro_forecast">
+  <meta name="twitter:description" content="Compute the empirical partial autocorrelation function up to max_lag.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -208,7 +237,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">functional.models.forecasting_model()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">acf.pacf()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -266,7 +295,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.forecasting_model.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/functional.models.forecasting_model.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.forecasting_model()</span></span></a>
   </div>
 </li>
@@ -492,7 +521,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">acf.pacf()</span></span></a>
   </div>
 </li>
@@ -772,6 +801,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
     </div>
@@ -780,7 +812,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.forecasting_model()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">acf.pacf()</span></h2>
 </div>
 
 
@@ -798,25 +830,38 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Build a NumPyro model from a functional model body.</p>
+<p>Compute the empirical partial autocorrelation function up to <code>max_lag</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/models.py#L389-L417" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L148-L201" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">models</span><span class="op">.</span><span class="va">forecasting_model</span>(<span class="va">model_fn</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">acf</span><span class="op">.</span><span class="sig-name">pacf</span>(
+    <span class="va">y</span>,
+    <span class="va">max_lag</span>,
+)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The functional analogue of subclassing <code>~numpyro_forecast.forecaster.ForecastingModel</code>. <code>model_fn</code> is a pure function <code>(Horizon, covariates) -&gt; None</code> that calls <a href="functional.models.time_series.html#numpyro_forecast.functional.models.time_series" class="gdls-link gdls-code">time_series()</a> and <a href="functional.models.predict.html#numpyro_forecast.functional.models.predict" class="gdls-link gdls-code">predict()</a>; this wraps it into the standard NumPyro model callable <code>(covariates, data=None)</code>, deriving the <a href="functional.models.Horizon.html#numpyro_forecast.functional.models.Horizon" class="gdls-link gdls-code">Horizon</a> from the shapes.</p>
+<p>The lag-<span class="math inline">\(k\)</span> partial autocorrelation is the correlation between <span class="math inline">\(y_t\)</span> and <span class="math inline">\(y_{t-k}\)</span> after removing the linear effect of the intermediate observations <span class="math inline">\(y_{t-1}, \ldots, y_{t-k+1}\)</span>; it equals the last coefficient <span class="math inline">\(\phi_{kk}\)</span> of the best linear predictor of order <span class="math inline">\(k\)</span>. The coefficients are obtained from the empirical autocorrelations (see <a href="acf.acf.html#numpyro_forecast.acf.acf" class="gdls-link gdls-code">acf()</a>) with the Durbin-Levinson recursion</p>
+<p><span class="math display">\[
+\phi_{kk} =
+\frac{\hat{\rho}_k - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_{k-j}}
+     {1 - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_j}.
+\]</span></p>
+<p>The recursion runs along the last axis and broadcasts over any leading batch axes.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">model_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[Horizon, Array], None]</span></code></dt>
+<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch time"</span>] | Float[np.ndarray, <span class="st">" *batch time"</span>]</span></code></dt>
 <dd>
-The model body. It receives the per-call <a href="functional.models.Horizon.html#numpyro_forecast.functional.models.Horizon" class="gdls-link gdls-code">Horizon</a> (use <code>h.zero_data</code> for the Pyro-style <a href="functional.models.Horizon.html#numpyro_forecast.functional.models.Horizon.zero_data" class="gdls-link gdls-code">zero_data</a>) and the covariates with time at axis <code>-2</code>.
+<p>Time series with time on the last axis, shape <code>(*batch, time)</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">max_lag</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
+<dd>
+Largest lag to evaluate; must satisfy <code>1 &lt;= max_lag &lt; time</code>.
 </dd>
 </dl>
 </div>
@@ -825,12 +870,31 @@ The model body. It receives the per-call <a href="functional.models.Horizon.html
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">ForecastModel</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch lags"</span>]</span></code></dt>
 <dd>
-A callable <code>(covariates, data=None) -&gt; None</code> usable with <code>SVI</code>, <code>MCMC</code>, <code>Predictive</code>, <code>~numpyro_forecast.functional.svi.fit_svi()</code>, <code>~numpyro_forecast.functional.mcmc.fit_mcmc()</code>, and the OOP forecaster classes.
+Partial autocorrelations for lags <code>0, 1, ..., max_lag</code> (<code>max_lag + 1</code> values; lag <code>0</code> is identically <code>1.0</code>).
 </dd>
 </dl>
 </div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>max_lag</code> is not in <code>[1, time)</code>.
+</dd>
+</dl>
+</div>
+</section>
+<section id="notes" class="level2 doc-notes">
+<h2 class="doc-notes">Notes</h2>
+<p>A constant series has zero variance, so the result is meaningless (see <a href="acf.acf.html#numpyro_forecast.acf.acf" class="gdls-link gdls-code">acf()</a>); a near-deterministic series can likewise overflow the recursion (the denominator above approaches zero) and produce infinities or NaNs.</p>
+</section>
+<section id="references" class="level2 doc-references">
+<h2 class="doc-references">References</h2>
+<p>James Durbin (1960). “The Fitting of Time-Series Models”. <em>Revue de l’Institut International de Statistique</em>.</p>
 
 
 </section>
