@@ -24,10 +24,10 @@ where \\X, X'\\ are independent draws from the forecast distribution \\F\\. The 
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"]`  
+`pred: Float[Array, ``" sample *batch"] | Float[np.ndarray, `<span class="st">`" sample *batch"``]`</span>  
 Forecast samples with the sample axis first, shape `(sample, *batch)`.
 
-`truth: Float[Array, ``" *batch"]`  
+`truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
 Ground-truth values with shape `(*batch)` (broadcastable to `pred`).
 
 

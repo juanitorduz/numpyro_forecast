@@ -7,8 +7,8 @@
       "prerelease": true
     },
     {
-      "tag": "0.2.1",
-      "label": "0.2.1",
+      "tag": "0.2.2",
+      "label": "0.2.2",
       "latest": true,
       "path_prefix": ""
     }
@@ -16,347 +16,351 @@
   "pages": {
     ".well-known/agent-skills/numpyro-forecast/SKILL.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     ".well-known/skills/default/SKILL.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "changelog.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "contributing.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/arma.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/electricity_forecast.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/electricity_forecast_calibration.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/exponential_smoothing_state_space.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/forecasting_univariate.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/fresh_retail_stockout.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/hierarchical_forecasting_1.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/hierarchical_forecasting_2.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/index.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "docs/examples/inference_methods_comparison.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "index.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "license.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "package-info.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/arrays.concat_future.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/arrays.zero_data_like.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/contrib.blackjax.BlackjaxCustomKernel.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/contrib.blackjax.BlackjaxMCLMCKernel.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/contrib.blackjax.BlackjaxNUTSKernel.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/contrib.blackjax.PathfinderFit.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/contrib.blackjax.fit_pathfinder.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/convert.add_forecast_groups.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/convert.predictions_to_datatree.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/convert.to_datatree.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/datasets.bart_available.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/datasets.load_bart_hierarchical.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/datasets.load_bart_weekly.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/datasets.load_victoria_electricity.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.BacktestResult.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.VectorizedBacktestResult.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.backtest.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.backtest_vectorized.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.eval_coverage.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.eval_crps.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.eval_mae.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.eval_rmse.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.evaluate_forecast.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/evaluate.results_to_dataframe.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.BacktestWindowError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.CovariateDimsError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
+    ],
+    "reference/exceptions.DeviceMemoryError.html": [
+      "dev",
+      "0.2.2"
     ],
     "reference/exceptions.GuideResolutionError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.GuideSampleArgsError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.KernelConfigError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.KernelResolutionError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.MVNLayoutError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.NumpyroForecastError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.OptimizerResolutionError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.VectorizedGuideError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/exceptions.VectorizedMetricError.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/features.fourier_features.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/features.periodic_repeat.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/forecaster.Forecaster.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/forecaster.ForecastingModel.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/forecaster.HMCForecaster.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/forecaster.PathfinderForecaster.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.mcmc.MCMCFit.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.mcmc.fit_mcmc.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.mcmc.resolve_kernel.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.models.Horizon.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.models.forecasting_model.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.models.markov_time_series.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.models.predict.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.models.predict_glm.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.models.time_series.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.posterior.draw_posterior.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.prediction.forecast.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.prediction.predict_in_sample.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.svi.SVIFit.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.svi.fit_svi.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.svi.resolve_guide.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/functional.svi.resolve_optimizer.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/index.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/metrics.crps_empirical.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/metrics.eval_interval_score.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/metrics.eval_pinball.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/metrics.make_mase.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/optional.require.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/surgery.prefix_condition.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/surgery.register_elementwise.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/surgery.shift_loc.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "reference/surgery.slice_time.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "skill.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ],
     "skills.html": [
       "dev",
-      "0.2.1"
+      "0.2.2"
     ]
   }
 }

@@ -3,6 +3,19 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.2.2
+
+*2026-07-15* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.2)
+
+
+## What's Changed
+
+- \[Fix\] to_datatree OOMs on GPU: in-sample predictive materializes all draws in one allocation by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/65
+- Bump version from 0.2.1 to 0.2.2 by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/66
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1…0.2.2](https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1...0.2.2)
+
+
 # 0.2.1
 
 *2026-07-12* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.1)

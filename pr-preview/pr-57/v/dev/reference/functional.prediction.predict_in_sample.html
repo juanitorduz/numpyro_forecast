@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-f594b883fa7f57eff983ceed828115fe.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-8d5f439641516eb477015a9f2f8dba09.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -117,7 +117,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.1&quot;,&quot;label&quot;:&quot;0.2.1&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.2&quot;,&quot;label&quot;:&quot;0.2.2&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
@@ -169,7 +169,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-12">v0.2.1</span></span>
+    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-15">v0.2.2</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -194,7 +194,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="28" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="29" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -636,6 +636,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</span></span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -776,12 +782,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/prediction.py#L233-L279" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/prediction.py#L293-L358" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">prediction</span><span class="op">.</span><span class="va">predict_in_sample</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>, <span class="va">model</span>, <span class="va">posterior</span>, <span class="va">covariates</span>, <span class="op">*</span>, <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>, <span class="va">parallel</span><span class="op">=</span><span class="cn-bool">True</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">model</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">parallel</span><span class="op">=</span><span class="cn-bool">True</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">device</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Runs <code>Predictive</code> with the in-sample <code>covariates</code> and the supplied posterior latent draws. Unlike <a href="functional.prediction.forecast.html#numpyro_forecast.functional.prediction.forecast" class="gdls-link gdls-code">forecast()</a> there is no forecast horizon: <code>covariates</code> span only the observed window, so the model’s <code>obs</code> site is sampled at every step. The number of predictive samples equals the leading (sample) axis of <code>posterior</code> (see <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>).</p>
@@ -798,7 +811,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>The forecasting model callable (the same one that produced <code>posterior</code>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
+<dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Array | np.ndarray]</span></code></dt>
 <dd>
 <p>Posterior samples of the latent sites, sample axis leading.</p>
 </dd>
@@ -812,7 +825,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">parallel</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">True</span></span></code></dt>
 <dd>
-Whether <code>Predictive</code> vectorizes over the sample axis with <code>vmap</code> (<code>True</code>, faster, higher peak memory) or maps it serially with <code>lax.map</code> (<code>False</code>). See <a href="functional.prediction.forecast.html#numpyro_forecast.functional.prediction.forecast" class="gdls-link gdls-code">forecast()</a> for how this interacts with <code>batch_size</code>.
+<p>Whether <code>Predictive</code> vectorizes over the sample axis with <code>vmap</code> (<code>True</code>, faster, higher peak memory) or maps it serially with <code>lax.map</code> (<code>False</code>). See <a href="functional.prediction.forecast.html#numpyro_forecast.functional.prediction.forecast" class="gdls-link gdls-code">forecast()</a> for how this interacts with <code>batch_size</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. <code>"host"</code> copies every chunk to host memory with <code>jax.device_get()</code> and returns a NumPy array; it needs no CPU backend, so it works even when <code>numpyro.set_platform("cuda")</code> (or <code>jax_platforms</code>) leaves only an accelerator backend initialized, which makes it the recommended choice on GPU. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device instead (<code>"cpu"</code> falls back to <code>"host"</code> with a <code>UserWarning</code> when the CPU backend is not initialized). With <code>batch_size</code> set on an accelerator, either bounds accelerator memory by a single chunk instead of the full <code>(sample, time, obs)</code> array; the draw values are unchanged, only where the result lives. The bound requires <code>batch_size</code> strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. <code>None</code> keeps everything on the default device.
 </dd>
 </dl>
 </div>
@@ -821,9 +838,9 @@ Whether <code>Predictive</code> vectorizes over the sample axis with <code>vmap<
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">Num[Array, <span class="st">" sample *batch time obs"</span>]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Num[Array, <span class="st">" sample *batch time obs"</span>] | Num[np.ndarray, <span class="st">" sample *batch time obs"</span>]<br></span></code></dt>
 <dd>
-In-sample posterior-predictive draws of the <code>obs</code> site.
+In-sample posterior-predictive draws of the <code>obs</code> site (a NumPy array when <code>device</code> resolves to <code>"host"</code>).
 </dd>
 </dl>
 </div>
