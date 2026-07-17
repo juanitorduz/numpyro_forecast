@@ -2521,7 +2521,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-58, ...,  0.0077647 ,-0.02974111, -0.0124298 ],...,[-0.07065581, -0.03357014,  0.04384346, ...,  0.0341642 ,0.03236066,  0.00297283],[ 0.01175634,  0.03759706,  0.03831373, ..., -0.07831579,-0.07014603, -0.00280096],[-0.01998356, -0.0252379 , -0.00567991, ..., -0.00265248,0.01709709,  0.00884613]]]],shape=(1, 1000, 1000, 7), dtype=float32)
+    array([[[[-0.00370806, -0.02375889, -0.00222187, ...,  0.03543464,-0.03082212, -0.02222353],[-0.02620614, -0.03418194,  0.06330831, ...,  0.03830045,0.06659286, -0.11620225],[-0.0037904 ,  0.03649919,  0.01280053, ..., -0.03885782,-0.0082932 ,  0.02884862],...,[ 0.06076236, -0.01289448,  0.03025209, ...,  0.0219386 ,-0.07437515, -0.02828346],[-0.01808404,  0.0347111 ,  0.02351637, ..., -0.04921489,-0.04439977,  0.02546888],[-0.0112855 , -0.01200695, -0.06807072, ...,  0.01965813,0.03531513,  0.01467133]],[[-0.0687041 ,  0.03112254, -0.04120285, ...,  0.0351829 ,0.09774977, -0.12054403],[-0.11155459,  0.01657473,  0.08469622, ..., -0.00881293,0.04711688, -0.06337002],[-0.10007306,  0.01877227, -0.05191411, ..., -0.00965541,0.0834828 ,  0.01475491],...0.03050081,  0.04285786],[-0.07509497, -0.03914259,  0.03333481, ...,  0.01573139,-0.03384735,  0.04663194],[-0.0293646 , -0.00698031,  0.05489082, ..., -0.02085948,0.0479982 , -0.00239991]],[[-0.03150922, -0.02809485, -0.015312  , ..., -0.00339496,0.02986726, -0.00644884],[-0.06565107, -0.02130098,  0.09658525, ..., -0.02455015,0.0395771 , -0.02045913],[-0.0373369 ,  0.04394124,  0.03438158, ...,  0.0077647 ,-0.02974111, -0.0124298 ],...,[-0.07065581, -0.03357014,  0.04384346, ...,  0.0341642 ,0.03236066,  0.00297283],[ 0.01175634,  0.03759706,  0.03831373, ..., -0.07831579,-0.07014603, -0.00280096],[-0.01998356, -0.0252379 , -0.00567991, ..., -0.00265248,0.01709709,  0.00884613]]]],shape=(1, 1000, 1000, 7), dtype=float32)
 
 
 seasonal_scale
@@ -4142,7 +4142,7 @@ ax.set(
 </figure>
 
 
-ibutes it there instead of to availability itself.
+The posterior factor reproduces the saturating shape and the positive floor. The \\50\\\\ and \\94\\\\ HDI bands are so thin they read as a single line, and that is not a plotting artifact but a consequence of what is being plotted: the bands quantify the posterior uncertainty of the *panel-mean* curve, the average of a thousand per-series factor curves. The genuine heterogeneity across series (visible in the gray per-series posterior means, whose floors and curvatures differ substantially) is averaged away by construction, and what remains is the uncertainty about the average itself, which shrinks roughly like \\1/\sqrt{n\_{\text{series}}}\\ on top of per-series parameters that \\76\\ days of data already pin down well. A per-series version of this plot would show much wider bands; the panel mean is deliberately the sharpest view. The curve sits below the rescaled empirical points over most of the range, and that gap is the endogeneity correction at work: high-demand days both sell more and sell out more often, so part of the raw curve's height belongs to the trend, seasonality, and promotions, and the model attributes it there instead of to availability itself.
 
 
 # Inspecting the store hierarchy
