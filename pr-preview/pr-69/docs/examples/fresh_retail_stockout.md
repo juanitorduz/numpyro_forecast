@@ -1243,7 +1243,7 @@ print(f"placeholder discount = 0 share of the panel's day-rows: {placeholder_sha
     placeholder discount = 0 share of the panel's day-rows: 17.7%
 
 
-level prior, and where the feature is informative it can act.
+Two patterns jump out. The holiday flag repeats weekly (weekends plus a solid block around the May Day week), and several series show local sales spikes on those shaded days; promotion activity and priced discounts, by contrast, are entirely absent from the twenty series shown, even though roughly half of the panel's series have active promotion days and about two thirds see at least one real discount: the flagship launch product that dominates both rankings is simply never promoted. The flat discount line is also the placeholder cleanup at work: for these series the raw `discount` column is zero on most days (the placeholder flagged in the EDA at \\0.4\\\\ dataset-wide covers about \\18\\\\ of this panel's days, concentrated in exactly the launch product), so the cleaned magnitude sits at an honest zero instead of reading as a \\100\\\\ discount. This heterogeneity in feature quality is one more argument for pooling the covariate effects by store rather than fitting one global discount effect: where the feature is quiet the coefficient is weakly identified and shrinks toward its store-level prior, and where the feature is informative it can act.
 
 
 # Model specification
@@ -2635,7 +2635,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.01610685,  0.75315964,  1.1681843 , ...,  0.35330093,0.6108243 , -0.10087323],[ 0.62951684,  0.52912664,  1.2252249 , ...,  0.1773334 ,0.7866138 ,  1.326659  ],[ 1.7961483 ,  1.396716  ,  1.2488453 , ...,  0.11139951,0.9176975 ,  3.3708415 ],...,[ 1.4295737 ,  0.7699398 ,  1.2961965 , ...,  1.54285   ,1.6032504 ,  1.1680841 ],[ 1.6351013 ,  1.0312287 ,  1.0310616 , ...,  1.527755  ,1.5172408 ,  1.0817881 ],[ 0.85458386,  1.1848471 ,  0.9561062 , ...,  1.738322  ,0.91634125,  1.4972076 ]],[[ 0.04570786,  1.2042875 ,  0.94080323, ...,  0.18131086,0.5438745 ,  0.5591956 ],[ 0.58503056,  0.59747684,  1.2551382 , ...,  0.18839112,0.2219105 ,  0.31153038],[ 1.3015765 ,  1.6034374 ,  1.2943959 , ...,  0.1648685 ,0.8565458 ,  1.648474  ],...1.39342   ,  1.0266995 ],[ 1.1822275 ,  1.0815052 ,  1.2398258 , ...,  1.3992691 ,1.8514202 ,  0.837533  ],[ 0.5824261 ,  1.086564  ,  0.51870775, ...,  1.5220882 ,1.090594  ,  0.3388074 ]],[[ 0.12407218,  0.78988385,  0.7936152 , ...,  0.45739976,0.6922196 ,  0.04324605],[ 1.045625  ,  0.9787168 ,  0.8046237 , ...,  0.05895355,0.5916289 ,  0.5514068 ],[ 1.2647051 ,  1.5109344 ,  1.1354898 , ...,  0.25254354,0.7246361 ,  1.2972125 ],...,[ 1.2400174 ,  0.88312495,  1.4552361 , ...,  1.3538029 ,1.8313622 ,  2.0108075 ],[ 0.96595144,  1.3083363 ,  1.0148959 , ...,  1.399377  ,1.2877004 ,  1.5515934 ],[ 0.47457677,  1.6257515 ,  1.2236512 , ...,  1.1898532 ,1.2070763 ,  0.43239737]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+1.2647051 ,  1.5109344 ,  1.1354898 , ...,  0.25254354,0.7246361 ,  1.2972125 ],...,[ 1.2400174 ,  0.88312495,  1.4552361 , ...,  1.3538029 ,1.8313622 ,  2.0108075 ],[ 0.96595144,  1.3083363 ,  1.0148959 , ...,  1.399377  ,1.2877004 ,  1.5515934 ],[ 0.47457677,  1.6257515 ,  1.2236512 , ...,  1.1898532 ,1.2070763 ,  0.43239737]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 Attributes: (5)
