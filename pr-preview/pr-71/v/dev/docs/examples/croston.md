@@ -13,7 +13,7 @@ which reads as the expected demand *per period*: how much arrives, divided by ho
 
 Two practical notes on the port, in the same spirit as the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html):
 
-- The blog post models the two *derived* series directly, each with the level model from [its exponential smoothing predecessor](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html). Here we implement the *same* likelihood on the **raw calendar timeline**: one `jax.lax.scan` runs both level recursions, frozen outside demand events by `jnp.where`, and the likelihood terms are **masked** so that only demand events contribute. The two formulations are mathematically identical, but the calendar-time version plugs straight into the package's machinery: [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and, crucially, [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which slices calendar time when it moves the train/test split forward.
+- The blog post models the two *derived* series directly, each with the level model from [its exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/) (the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation treats the richer state space variant of the same idea). Here we implement the *same* likelihood on the **raw calendar timeline**: one `jax.lax.scan` runs both level recursions, frozen outside demand events by `jnp.where`, and the likelihood terms are **masked** so that only demand events contribute. The two formulations are mathematically identical, but the calendar-time version plugs straight into the package's machinery: [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and, crucially, [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which slices calendar time when it moves the train/test split forward.
 - As in the ARMA example, the observed series itself plays the role of the covariates, because the model needs the demand history (values *and* timing) to run its recursions, and the `covariates` argument is the carrier that spans the full horizon at prediction time. The model only ever reads the first [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast.
 
 
@@ -31,7 +31,10 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import preliz as pz
+import xarray as xr
 from jax import random
+from matplotlib.artist import Artist
+from matplotlib.axes import Axes
 from numpyro.handlers import scope
 from numpyro.infer import Predictive
 
@@ -98,6 +101,7 @@ Throughout the package, time lives at axis `-2` and the observation dimension at
 ``` python
 train_data = y_train[:, None]
 test_data = y_test[:, None]
+data_full = y[:, None]  # full series, used by the cross-validation at the end
 covariates_train = train_data  # the demand history is the "covariate" of a Croston model
 covariates_full = jnp.concatenate([y_train, jnp.zeros(n_test)])[:, None]
 print(f"train data shape: {train_data.shape}, full covariates shape: {covariates_full.shape}")
@@ -162,7 +166,7 @@ ax_p.set(
 
 # Prior for the smoothing parameters
 
-Both components get a \\\text{Beta}(2, 20)\\ prior on their smoothing parameter. Its mean is \\2/22 \approx 0.09\\ and most of its mass sits below \\0.3\\, which encodes the standard practice for Croston's method: the classical optimized implementations restrict the smoothing parameter to roughly \\\[0.1, 0.3\]\\, because a level that reacts strongly to each new demand produces volatile, over-reactive forecasts on sparse data.
+Both components get a \\\text{Beta}(2, 20)\\ prior on their smoothing parameter. Its mean is \\2/22 \approx 0.09\\ and most of its mass sits below \\0.3\\, consistent with the standard practice for Croston's method: the classical optimized implementations restrict the smoothing parameter to roughly \\\[0.1, 0.3\]\\, because a level that reacts strongly to each new demand produces volatile, over-reactive forecasts on sparse data. The prior concentrates on the same low-smoothing region while also keeping mass near zero, letting the data decide within it.
 
 
 ``` python
@@ -189,9 +193,15 @@ Croston's method runs **simple exponential smoothing** on each component. Writin
 
 \\ \ell_t = \begin{cases} \alpha \\ x_t + (1 - \alpha) \\ \ell\_{t-1} & \text{if } y_t \> 0, \\ \ell\_{t-1} & \text{otherwise}, \end{cases} \\
 
-and the likelihood at each demand event is the one-step-ahead prediction of the level model, \\x_t \sim \text{Normal}(\ell\_{t-1}, \sigma)\\, exactly the level model of the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html). We run two such recursions side by side: one for the demand sizes (\\x_t = y_t\\ at demand events) and one for the **inverse** intervals (\\x_t = 1/p_t\\). Modeling \\1/p\\ instead of \\p\\ is the blog post's numerical stability trick: the forecast then becomes a *product* of posterior samples, \\\hat{y} = \hat{z} \cdot \widehat{1/p}\\, instead of a quotient by samples that can sit close to zero. Each component gets its own priors,
+and the likelihood at each demand event is the one-step-ahead prediction of the level model, \\x_t \sim \text{Normal}(\ell\_{t-1}, \sigma)\\, exactly the level model of the blog's [exponential smoothing notes](https://juanitorduz.github.io/exponential_smoothing_numpyro/). We run two such recursions side by side: one for the demand sizes (\\x_t = y_t\\ at demand events) and one for the **inverse** intervals (\\x_t = 1/p_t\\). Modeling \\1/p\\ instead of \\p\\ is the blog post's numerical stability trick: the forecast then becomes a *product* of posterior samples, \\\hat{y} = \hat{z} \cdot \widehat{1/p}\\, instead of a quotient by samples that can sit close to zero.
+
+The trick has a statistical cost worth naming. Smoothing \\1/p\\ estimates \\\mathrm{E}\[1/p\]\\, and by Jensen's inequality \\\mathrm{E}\[1/p\] \> 1/\mathrm{E}\[p\]\\ whenever the intervals vary, so the fitted rate is biased *upward* relative to the true demand per period \\\mathrm{E}\[z\]/\mathrm{E}\[p\]\\. This is not specific to our Bayesian variant: the classical ratio \\\hat{z}\_t/\hat{p}\_t\\ suffers a related upward bias, analyzed by Syntetos and Boylan (2005), whose \\(1 - \alpha/2)\\ correction factor (the "SBA" estimator) is the standard remedy. We quantify the effect on our forecast below.
+
+Each component gets its own priors,
 
 \\\begin{align\*} \alpha & \sim \text{Beta}(2, 20), \\ \ell_0 & \sim \text{Normal}(0, 1), \\ \sigma & \sim \text{HalfNormal}(1). \end{align\*}\\
+
+One transparency note on the priors: \\\text{Normal}(0, 1)\\ on the initial levels allows negative values for two quantities that are strictly positive (a demand size and an inverse interval). We keep the blog post's choice for comparability; centering the inits on the data or switching to positive priors is the natural refinement, in the same spirit as the truncated or log-normal component likelihoods mentioned in the forecast section.
 
 Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis. The reusable `level_model` samples the three component priors (sites `smoothing`, `init`, and `noise`), runs the where-gated level recursion with a `jax.lax.scan` that emits the *pre-update* levels (the one-step-ahead means), and, when forecasting, draws the component's flat predictive at a site named [future](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.future) from \\\text{Normal}(\ell_T, \sigma)\\, the level model's forecast distribution given the final level. Calling it under `scope(level_model, "z", divider="_")` and `scope(level_model, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, `p_inv_future`.
 
@@ -230,6 +240,7 @@ def level_model(values: Array, is_event: Array, future: int) -> tuple[Array, Arr
     """
     smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
     init = numpyro.sample("init", dist.Normal(loc=0, scale=1))
+    # jnp.asarray only narrows numpyro's union return type for the type checker.
     noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
 
     def transition_fn(carry, inputs):
@@ -242,6 +253,7 @@ def level_model(values: Array, is_event: Array, future: int) -> tuple[Array, Arr
 
     future_draws = None
     if future > 0:
+        # jnp.asarray only narrows numpyro's union return type for the type checker.
         future_draws = jnp.asarray(
             numpyro.sample(
                 "future", dist.Normal(loc=last_level, scale=noise).expand([future]).to_event(1)
@@ -261,17 +273,17 @@ def croston(h: Horizon, covariates: Array) -> None:
         The observed demand series itself, with time at axis ``-2``; only the
         first ``h.t_obs`` rows are read.
     """
-    y = covariates[..., : h.t_obs, 0]  # observed history only; never reads beyond t_obs
-    is_demand = y > 0
+    y_obs = covariates[..., : h.t_obs, 0]  # observed history only; never reads beyond t_obs
+    is_demand = y_obs > 0
 
     # Interval since the previous demand at every period: cumulative max of the
     # last-seen demand index, shifted one step so it is strictly "before t".
     idx = jnp.arange(h.t_obs)
     last_at_or_before = jax.lax.cummax(jnp.where(is_demand, idx, -1), axis=0)
     last_before = jnp.concatenate([jnp.array([-1]), last_at_or_before[:-1]])
-    p_inv_obs = 1.0 / (idx - last_before).astype(y.dtype)
+    p_inv_obs = 1.0 / (idx - last_before).astype(y_obs.dtype)
 
-    z_mu, z_noise, z_future = scope(level_model, "z", divider="_")(y, is_demand, h.future)
+    z_mu, z_noise, z_future = scope(level_model, "z", divider="_")(y_obs, is_demand, h.future)
     p_inv_mu, p_inv_noise, p_inv_future = scope(level_model, "p_inv", divider="_")(
         p_inv_obs, is_demand, h.future
     )
@@ -288,7 +300,7 @@ def croston(h: Horizon, covariates: Array) -> None:
         obs=p_inv_obs[:, None],
     )
 
-    if h.future > 0 and z_future is not None and p_inv_future is not None:
+    if z_future is not None and p_inv_future is not None:  # exactly when h.future > 0
         numpyro.deterministic("z_forecast", z_future[:, None])
         numpyro.deterministic("p_inv_forecast", p_inv_future[:, None])
         numpyro.deterministic("forecast", (z_future * p_inv_future)[:, None])
@@ -355,7 +367,7 @@ Group: /
 │           z_noise          (chain, draw) float32 16kB 0.431 0.6101 ... 0.5139 0.6101
 │           z_smoothing      (chain, draw) float32 16kB 0.0827 0.04026 ... 0.04315
 │       Attributes:
-│           created_at:                 2026-07-17T12:04:10.940847+00:00
+│           created_at:                 2026-07-17T12:37:45.285863+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -370,7 +382,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 1MB 1.412 0.3509 ... -0.1541
 │       Attributes:
-│           created_at:                 2026-07-17T12:04:11.100071+00:00
+│           created_at:                 2026-07-17T12:37:45.476929+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -383,7 +395,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 272B 0.0 0.0 0.0 0.0 ... 1.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-17T12:04:11.100291+00:00
+│           created_at:                 2026-07-17T12:37:45.477184+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -396,7 +408,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 272B 0.0 0.0 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-17T12:04:11.100446+00:00
+│           created_at:                 2026-07-17T12:37:45.477359+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -411,7 +423,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 192kB 0.6731 ... -0.5101
 │       Attributes:
-│           created_at:                 2026-07-17T12:04:11.667583+00:00
+│           created_at:                 2026-07-17T12:37:46.027046+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -424,7 +436,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 48B 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-07-17T12:04:11.667868+00:00
+            created_at:                 2026-07-17T12:37:46.027284+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -676,7 +688,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:04:10.940847+00:00
+2026-07-17T12:37:45.285863+00:00
 
 creation_library :  
 ArviZ
@@ -812,7 +824,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:04:11.100071+00:00
+2026-07-17T12:37:45.476929+00:00
 
 creation_library :  
 ArviZ
@@ -906,7 +918,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:04:11.100291+00:00
+2026-07-17T12:37:45.477184+00:00
 
 creation_library :  
 ArviZ
@@ -1000,7 +1012,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:04:11.100446+00:00
+2026-07-17T12:37:45.477359+00:00
 
 creation_library :  
 ArviZ
@@ -1136,7 +1148,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:04:11.667583+00:00
+2026-07-17T12:37:46.027046+00:00
 
 creation_library :  
 ArviZ
@@ -1230,7 +1242,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:04:11.667868+00:00
+2026-07-17T12:37:46.027284+00:00
 
 creation_library :  
 ArviZ
@@ -1312,7 +1324,7 @@ pc_trace.viz["figure"].item().suptitle(
 
 # In-sample fit
 
-For the in-sample story we plot the posterior of the deterministic `"rate"` site: the running Croston fitted rate \\\ell^z\_{t-1} \cdot \ell^{1/p}\_{t-1}\\, the expected demand per period given the history so far. This is the quantity Croston's method actually tracks, and the plot shows it doing exactly what it should: it starts uncertain and near the prior, then climbs as demands arrive more and more frequently in the second half of the training window, because exponential smoothing weights the recent inter-demand intervals most heavily.
+For the in-sample story we plot the posterior of the deterministic `"rate"` site: the running Croston fitted rate \\\ell^z\_{t-1} \cdot \ell^{1/p}\_{t-1}\\, the expected demand per period given the history so far. This is the quantity Croston's method actually tracks, and the plot shows it doing exactly what it should: it starts uncertain and near the prior, then climbs as demands arrive more and more frequently in the second half of the training window, because exponential smoothing weights the recent inter-demand intervals most heavily. Per the bias note in the model section, the level of the fitted rate should also be read as somewhat optimistic: smoothing the inverse intervals inflates it relative to the underlying demand frequency, on top of the recency weighting. This cell also defines the small plotting helpers (`stacked_draws` and `plot_band_forecast`) shared by the remaining band plots, so the later plot cells contain only what is specific to each figure.
 
 A caveat worth spelling out: the tree's `posterior_predictive` group (the `"obs"` site) is *not* comparable to the raw series here. Because `"obs"` carries the masked demand-size likelihood, its draws describe the size of a demand *given that one occurs*, at every period, so plotting them against the mostly-zero series would look wildly miscalibrated while being exactly what the model asserts. The same reasoning is why the cross-validation below scores only out-of-sample forecasts (`eval_train=False`).
 
@@ -1327,47 +1339,110 @@ def hdi_label(prob: float, prefix: str = "") -> str:
 hdi_probs = (0.5, 0.94)
 hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
 
-rate_draws = (
-    tree["posterior"]
-    .dataset["rate"]
-    .stack(sample=("chain", "draw"))
-    .transpose("sample", "time", "obs_dim")
-    .to_numpy()
-)
 
-idata_in_sample = predictions_to_datatree(
-    rate_draws, t_train.astype(float), ["y"], observed=train_data
+def stacked_draws(group: xr.DataTree | xr.DataArray, var: str) -> np.ndarray:
+    """Stack a tree variable's ``(chain, draw)`` dims into a leading sample axis.
+
+    Parameters
+    ----------
+    group
+        A tree group holding ``var`` with dims ``(chain, draw, time, obs_dim)``
+        (typed as the union ``tree[...]`` returns; a group always arrives here).
+    var
+        Name of the variable to extract.
+
+    Returns
+    -------
+    np.ndarray
+        The draws with shape ``(sample, time, obs_dim)``.
+    """
+    return (
+        group.dataset[var]
+        .stack(sample=("chain", "draw"))
+        .transpose("sample", "time", "obs_dim")
+        .to_numpy()
+    )
+
+
+def plot_band_forecast(
+    draws: np.ndarray,
+    x: np.ndarray,
+    color: str,
+    label_prefix: str = "",
+    observed: Array | np.ndarray | None = None,
+    figsize: tuple[float, float] = (12.0, 6.0),
+) -> tuple[Axes, list[Artist]]:
+    r"""Plot the posterior mean line and the $50\%$/$94\%$ HDI bands of ``draws``.
+
+    Wraps ``predictions_to_datatree`` and ``az.plot_lm`` with the notebook-wide
+    band styling (inner band darker via ``hdi_alphas``) and labels the artists.
+    Overlays (observed series, split lines, extra point estimates) and the
+    legend are the caller's responsibility.
+
+    Parameters
+    ----------
+    draws
+        Predictive draws with shape ``(sample, time, 1)``.
+    x
+        Numeric x values of length ``time``.
+    color
+        Matplotlib color for the bands and the mean line.
+    label_prefix
+        Prefix for the legend labels, e.g. ``"forecast "``.
+    observed
+        Optional observed data stored alongside the draws.
+    figsize
+        Figure size passed to ``plot_lm``.
+
+    Returns
+    -------
+    tuple[Axes, list[Artist]]
+        The axes and the labeled band and mean-line handles for the legend.
+    """
+    idata = predictions_to_datatree(draws, x, ["y"], observed=observed)
+    pc = az.plot_lm(
+        idata,
+        y="obs",
+        x="t",
+        plot_dim="time",
+        ci_kind="hdi",
+        ci_prob=hdi_probs,
+        smooth=False,
+        point_estimate="mean",
+        visuals={
+            "ci_band": {"color": color},
+            "observed_scatter": False,
+            "pe_line": {"color": color, "alpha": 1.0, "width": 1.5},
+        },
+        aes={"alpha": ["prob"]},
+        alpha=hdi_alphas,
+        figure_kwargs={"figsize": figsize},
+    )
+    bands = pc.viz["ci_band"]["t"]
+    band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
+    band_94.set_label(hdi_label(0.94, prefix=label_prefix))
+    band_50.set_label(hdi_label(0.5, prefix=label_prefix))
+    pe_line = pc.viz["pe_line"]["t"].item()
+    pe_line.set_label(f"{label_prefix}posterior mean")
+    ax = pc.viz["figure"].item().axes[0]
+    return ax, [band_94, band_50, pe_line]
+
+
+rate_draws = stacked_draws(tree["posterior"], "rate")
+
+ax, handles = plot_band_forecast(
+    rate_draws,
+    t_train.astype(float),
+    "C0",
+    label_prefix="rate ",
+    observed=train_data,
+    figsize=(10.0, 6.0),
 )
-pc = az.plot_lm(
-    idata_in_sample,
-    y="obs",
-    x="t",
-    plot_dim="time",
-    ci_kind="hdi",
-    ci_prob=hdi_probs,
-    smooth=False,
-    point_estimate="mean",
-    visuals={
-        "ci_band": {"color": "C0"},
-        "observed_scatter": False,
-        "pe_line": {"color": "C0", "alpha": 1.0, "width": 1.5},
-    },
-    aes={"alpha": ["prob"]},
-    alpha=hdi_alphas,
-    figure_kwargs={"figsize": (10, 6)},
-)
-bands = pc.viz["ci_band"]["t"]
-band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
-band_94.set_label(hdi_label(0.94, prefix="rate "))
-band_50.set_label(hdi_label(0.5, prefix="rate "))
-pe_line = pc.viz["pe_line"]["t"].item()
-pe_line.set_label("rate posterior mean")
-ax = pc.viz["figure"].item().axes[0]
 (obs_line,) = ax.plot(
     t_train, np.asarray(y_train), "o-", color="black", lw=1, ms=4, label="observed"
 )
 ax.legend(
-    handles=[band_94, band_50, pe_line, obs_line],
+    handles=[*handles, obs_line],
     loc="upper center",
     bbox_to_anchor=(0.5, -0.1),
     ncol=4,
@@ -1381,6 +1456,13 @@ ax.set(title="In-sample Croston rate", xlabel="time", ylabel="y");
 </figure>
 
 
+## Why do the HDI bands narrow over time?
+
+Not because the parameter posterior tightens along the axis: the model is fit once on the whole training window, so the posterior is the same at every \\t\\. What is plotted is the posterior of the *deterministic* filtered rate, and the narrowing is a property of the filter. At \\t = 0\\ the rate is the product of the two initial levels, whose posteriors are wide (see the summary table above), so the band starts wide. Every demand event replaces a fraction \\\alpha\\ of a level with an observed value, so after \\k\\ demand events the initial level retains only a weight of \\(1 - \alpha)^k\\: the uncertainty inherited from `z_init` and `p_inv_init` decays away geometrically, which is why the band stays wide through the sparse first third of the series and tightens quickly once demands arrive frequently. At the same time the levels turn into exponentially weighted averages of *observed* values, which are fixed constants and, in this series, very regular (almost all demand sizes are \\1\\), so even the remaining uncertainty about the smoothing parameters barely moves them.
+
+Two secondary features confirm this reading. Because the levels are frozen between demands, the band width is piecewise constant through runs of zeros: all the narrowing happens at demand events. And the band briefly *widens* again right after the unusual size-\\3\\ demand around \\t = 45\\, where the level's jump is \\\alpha \\ (3 - \ell)\\, so uncertainty about the smoothing parameter translates into uncertainty about how far the level moved. Finally, keep in mind that this is the posterior of the mean rate with no observation noise, which is why it can get so tight; the forecast bands over the test window below are much wider because they add the component predictive noise \\\text{Normal}(\ell_T, \sigma)\\ on top of the parameter uncertainty.
+
+
 # Forecast
 
 The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site over the test window: the product of the two components' predictive samples. We plot the posterior mean and median together with the \\50\\\\ and \\94\\\\ HDI bands (inner band darker, outer lighter) against the held-out data, and score the forecast with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
@@ -1389,43 +1471,12 @@ Two features of the plot deserve attention. First, the forecast is **flat**: wit
 
 
 ``` python
-forecast_pp = (
-    tree["predictions"]
-    .dataset["obs"]
-    .stack(sample=("chain", "draw"))
-    .transpose("sample", "time", "obs_dim")
-    .to_numpy()
-)
+forecast_pp = stacked_draws(tree["predictions"], "obs")
 crps_test = eval_crps(forecast_pp, test_data)
 
-idata_forecast = predictions_to_datatree(
-    forecast_pp, t_test.astype(float), ["y"], observed=test_data
+ax, handles = plot_band_forecast(
+    forecast_pp, t_test.astype(float), "C1", label_prefix="forecast ", observed=test_data
 )
-pc = az.plot_lm(
-    idata_forecast,
-    y="obs",
-    x="t",
-    plot_dim="time",
-    ci_kind="hdi",
-    ci_prob=hdi_probs,
-    smooth=False,
-    point_estimate="mean",
-    visuals={
-        "ci_band": {"color": "C1"},
-        "observed_scatter": False,
-        "pe_line": {"color": "C1", "alpha": 1.0, "width": 1.5},
-    },
-    aes={"alpha": ["prob"]},
-    alpha=hdi_alphas,
-    figure_kwargs={"figsize": (12, 6)},
-)
-bands = pc.viz["ci_band"]["t"]
-band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
-band_94.set_label(hdi_label(0.94, prefix="forecast "))
-band_50.set_label(hdi_label(0.5, prefix="forecast "))
-pe_line = pc.viz["pe_line"]["t"].item()
-pe_line.set_label("forecast posterior mean")
-ax = pc.viz["figure"].item().axes[0]
 (median_line,) = ax.plot(
     t_test,
     np.median(forecast_pp[..., 0], axis=0),
@@ -1437,7 +1488,7 @@ ax = pc.viz["figure"].item().axes[0]
 (obs_line,) = ax.plot(t, np.asarray(y), "o-", color="black", lw=1, ms=4, label="observed")
 split_line = ax.axvline(n_train, color="gray", ls="--", label="train/test split")
 ax.legend(
-    handles=[band_94, band_50, pe_line, median_line, obs_line, split_line],
+    handles=[*handles, median_line, obs_line, split_line],
     loc="upper center",
     bbox_to_anchor=(0.5, -0.1),
     ncol=3,
@@ -1453,6 +1504,26 @@ ax.set(
 <figure class="figure">
 <p><img src="croston_files/figure-html/_src-croston-cell-12-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
+
+
+## The Syntetos-Boylan correction
+
+We can quantify the inversion bias directly from the posterior. Syntetos and Boylan derived their correction for the classical point estimator: multiply the Croston rate by \\(1 - \alpha_p/2)\\, where \\\alpha_p\\ is the interval smoothing parameter. Applying the same factor *per posterior draw* of `p_inv_smoothing` gives an approximately de-biased version of our forecast (approximate, because the factor was derived for the classical estimator, not for this Bayesian variant). The cell below compares the posterior mean forecast rate, its SBA-corrected version, and the train-window mean demand per period. With the low posterior smoothing values the correction is small, and the corrected rate remains well above the marginal mean: the remaining gap combines the recency weighting (the end of the training window is genuinely demand-dense) with the residual Jensen bias of smoothing inverse intervals, which the first-order SBA factor does not fully remove.
+
+
+``` python
+alpha_p = tree["posterior"].dataset["p_inv_smoothing"].stack(sample=("chain", "draw")).to_numpy()
+forecast_sba = forecast_pp * (1 - alpha_p[:, None, None] / 2)
+
+print(f"posterior mean forecast rate:        {forecast_pp.mean():.3f}")
+print(f"SBA-corrected mean forecast rate:    {forecast_sba.mean():.3f}")
+print(f"train-window mean demand per period: {float(jnp.mean(y_train)):.3f}")
+```
+
+
+    posterior mean forecast rate:        0.699
+    SBA-corrected mean forecast rate:    0.663
+    train-window mean demand per period: 0.338
 
 
 ## Component forecasts
@@ -1518,7 +1589,7 @@ fig.suptitle("Croston component forecasts", fontsize=16, fontweight="bold", y=1.
 
 
 <figure class="figure">
-<p><img src="croston_files/figure-html/_src-croston-cell-13-output-1.png" class="figure-img" width="1211" height="540" /></p>
+<p><img src="croston_files/figure-html/_src-croston-cell-14-output-1.png" class="figure-img" width="1211" height="540" /></p>
 </figure>
 
 
@@ -1528,9 +1599,6 @@ A fixed-origin forecast tells us how the model does from one training window. Th
 
 
 ``` python
-data_full = y[:, None]
-covariates_series = data_full  # backtest slices the series itself per fold
-
 metrics = {
     "crps": eval_crps,
     "coverage_50": partial(eval_coverage, alpha=0.5),
@@ -1541,7 +1609,7 @@ rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
     data_full,
-    covariates_series,
+    data_full,  # the series doubles as the covariates, sliced per fold by backtest
     lambda: model,
     forecaster_fn=HMCForecaster,
     metrics=metrics,
@@ -1575,36 +1643,13 @@ predictions = [r.prediction for r in results if r.prediction is not None]
 cv_pred = np.concatenate([np.asarray(pred) for pred in predictions], axis=1)
 print(f"assembled one-step-ahead draws: {cv_pred.shape}")
 
-idata_cv = predictions_to_datatree(cv_pred, t_test.astype(float), ["y"], observed=test_data)
-pc = az.plot_lm(
-    idata_cv,
-    y="obs",
-    x="t",
-    plot_dim="time",
-    ci_kind="hdi",
-    ci_prob=hdi_probs,
-    smooth=False,
-    point_estimate="mean",
-    visuals={
-        "ci_band": {"color": "C1"},
-        "observed_scatter": False,
-        "pe_line": {"color": "C1", "alpha": 1.0, "width": 1.5},
-    },
-    aes={"alpha": ["prob"]},
-    alpha=hdi_alphas,
-    figure_kwargs={"figsize": (12, 6)},
+ax, handles = plot_band_forecast(
+    cv_pred, t_test.astype(float), "C1", label_prefix="forecast ", observed=test_data
 )
-bands = pc.viz["ci_band"]["t"]
-band_94, band_50 = bands.sel(prob=0.94).item(), bands.sel(prob=0.5).item()
-band_94.set_label(hdi_label(0.94, prefix="forecast "))
-band_50.set_label(hdi_label(0.5, prefix="forecast "))
-pe_line = pc.viz["pe_line"]["t"].item()
-pe_line.set_label("forecast posterior mean")
-ax = pc.viz["figure"].item().axes[0]
 (obs_line,) = ax.plot(t, np.asarray(y), "o-", color="black", lw=1, ms=4, label="observed")
 split_line = ax.axvline(n_train, color="gray", ls="--", label="train/test split")
 ax.legend(
-    handles=[band_94, band_50, pe_line, obs_line, split_line],
+    handles=[*handles, obs_line, split_line],
     loc="upper center",
     bbox_to_anchor=(0.5, -0.1),
     ncol=3,
@@ -1617,7 +1662,7 @@ ax.set(title="One-step-ahead cross-validation forecasts", xlabel="time", ylabel=
 
 
 <figure class="figure">
-<p><img src="croston_files/figure-html/_src-croston-cell-15-output-2.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="croston_files/figure-html/_src-croston-cell-16-output-2.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -1635,20 +1680,22 @@ plt.setp(stemlines, color="black", linewidth=1)
 ax.legend()
 ax.set(
     xlabel="train/test split point",
-    ylabel="CRPS / demand",
+    ylabel="CRPS",
     title="One-step-ahead CRPS per fold",
 );
 ```
 
 
 <figure class="figure">
-<p><img src="croston_files/figure-html/_src-croston-cell-16-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="croston_files/figure-html/_src-croston-cell-17-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
 ## Calibration
 
 With a single observation per fold, per-fold coverage is a \\0/1\\ indicator, so instead of the ARMA example's per-fold coverage plot we aggregate: the empirical coverage across all folds (equivalently, the mean of the per-fold indicators) against the nominal levels, computed directly from the assembled draws with [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage). We also compare the one-step-ahead CRPS with the fixed-origin CRPS from the forecast section.
+
+One caveat, inherited from the ARMA example but sharper here: [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the *central quantile interval*, while the plotted bands are HDIs. For the ARMA example's near-symmetric predictive the two nearly coincide; for the right-skewed predictive here they genuinely differ, so these numbers check the calibration of central intervals rather than literally of the bands shown above.
 
 
 ``` python
@@ -1676,10 +1723,12 @@ The numbers complete the picture, and they are instructive rather than flatterin
 
 - Orduz, J. [*Croston's Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/croston_numpyro/). The blog post this notebook ports.
 - Orduz, J. [*TSB Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/tsb_numpyro/). The follow-up method that addresses Croston's unresponsiveness to demand recency.
+- Orduz, J. [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/). The predecessor post whose level model this notebook reuses.
 - Croston, J. D. (1972). *Forecasting and stock control for intermittent demands*. Operational Research Quarterly, 23(3), 289-303.
+- Syntetos, A. A., & Boylan, J. E. (2005). *The accuracy of intermittent demand estimates*. International Journal of Forecasting, 21(2), 303-314. The bias analysis behind the \\(1 - \alpha/2)\\ correction quantified above.
 - Morgan, P. [*Croston's Method*](https://www.pmorgan.com.au/tutorials/crostons-method/). A succinct tutorial on the classical method.
 - statsforecast documentation: [`CrostonOptimized`](https://nixtlaverse.nixtla.io/statsforecast/src/core/models.html#crostonoptimized), the classical baseline the blog post compares against.
-- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which introduces the level model this notebook builds on.
+- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same custom model-body pattern for the damped Holt-Winters state space model.
 - The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
 
-[Source: Croston's Method for Intermittent Demand with `numpyro_forecast`](_src/croston-preview.html#ac3e07dd)
+[Source: Croston's Method for Intermittent Demand with `numpyro_forecast`](_src/croston-preview.html#1fd2b9b8)
