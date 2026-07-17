@@ -36,7 +36,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: make setup
       - run: uv run pytest --splits 4 --group ${{ matrix.group }} --splitting-algorithm least_duration
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
