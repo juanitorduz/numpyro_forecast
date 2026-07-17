@@ -6,6 +6,7 @@ from jaxtyping import install_import_hook
 
 with install_import_hook("numpyro_forecast", "beartype.beartype"):
     from numpyro_forecast import (  # noqa: F401
+        acf,
         arrays,
         convert,
         datasets,

@@ -59,6 +59,8 @@ Author notebooks with [jupytext](https://jupytext.readthedocs.io/) as a `py:perc
 
 Each notebook also feeds the card grid on the Examples index page: set a short plain-text `description` in the notebook-level metadata (no markdown, LaTeX, or HTML special characters; great-docs injects it into raw HTML), and tag the code cell whose figure should be the card thumbnail with a `thumbnail` cell tag. Both have fallbacks in `scripts/build_docs.py` (the intro paragraph's first sentence and the notebook's first figure, respectively), but set them explicitly so the card copy reads well and the thumbnail is a representative results plot (for example the forecast with HDI bands) rather than the raw-data plot. Both survive re-execution and jupytext round-trips.
 
+- Do not use `plt.show()` in notebooks.
+
 ## Writing
 
 ### No em-dashes
