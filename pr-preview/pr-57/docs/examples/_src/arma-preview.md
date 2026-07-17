@@ -14,7 +14,7 @@ A practical note on the design, in the same spirit as the [exponential smoothing
 # Prepare notebook
 
 
-    In [1]:
+    In [10]:
 
 
 ``` python
@@ -70,6 +70,12 @@ hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
 ```
 
 
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+    The jaxtyping extension is already loaded. To reload it, use:
+      %reload_ext jaxtyping
+
+
 # Generate data
 
 The ARMA(1,1) process is defined by the recursion
@@ -79,7 +85,7 @@ The ARMA(1,1) process is defined by the recursion
 where \\\phi\\ is the autoregressive coefficient, \\\theta\\ the moving average coefficient, and \\\sigma\\ the innovation scale. We simulate \\T = 100\\ observations with \\\phi = 0.4\\, \\\theta = 0.7\\, and \\\sigma = 0.5\\ (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom we also use inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide `Array` type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
 
 
-    In [2]:
+    In [11]:
 
 
 ``` python
@@ -134,7 +140,7 @@ print(f"series shape: {y_for_loop.shape}")
 The scan version threads a carry `(y_prev, error_prev)` through the innovations and produces the same series. Because JAX keys are pure, reusing `rng_subkey` reproduces the innovations bit for bit, so we can also print their realized standard deviation: with only \\T = 100\\ draws it lands visibly below the population value \\\sigma = 0.5\\, a fact we will need when judging the parameter recovery below.
 
 
-    In [3]:
+    In [12]:
 
 
 ``` python
@@ -188,7 +194,7 @@ print(f"realized innovation sd: {eps_realized.std():.2f} (population value: {noi
 Throughout the package, time lives at axis `-2` and the observation dimension at axis `-1`, so the single series has shape `(100, 1)`. Following the design note above, the same array also serves as the covariates.
 
 
-    In [4]:
+    In [13]:
 
 
 ``` python
@@ -199,9 +205,8 @@ time = np.arange(duration)
 print(f"data shape: {data.shape}")
 
 fig, ax = plt.subplots()
-ax.plot(time, np.asarray(y), color="black", lw=1)
-ax.set(title="Simulated ARMA(1,1) series", xlabel="time", ylabel="y")
-plt.show()
+ax.plot(time, y, color="black", lw=1)
+ax.set(title="Simulated ARMA(1,1) series", xlabel="time", ylabel="y");
 ```
 
 
@@ -218,7 +223,7 @@ plt.show()
 Before modeling, we look at the empirical autocorrelation function (ACF) and partial autocorrelation function (PACF), the classical tools for identifying ARMA orders. The blog post used the statsmodels plotting helpers; here we use the package's own [`acf`](https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html) and [`pacf`](https://juanitorduz.github.io/numpyro_forecast/reference/acf.pacf.html) functions from `numpyro_forecast.acf`. Both are jitted, compute the ACF for all lags at once via the FFT, derive the PACF through the Durbin-Levinson recursion, and broadcast over leading batch axes, so the same call works on a panel of series (with time on the last axis).
 
 
-    In [5]:
+    In [14]:
 
 
 ``` python
@@ -238,8 +243,7 @@ ax_pacf.set(
     title="Partial autocorrelation function (PACF)",
     xlabel="lag",
     ylabel="partial autocorrelation",
-)
-plt.show()
+);
 ```
 
 
@@ -269,7 +273,7 @@ The model body follows the package's two-scan pattern:
 Neither scan body contains a sample site, so plain `jax.lax.scan` is all we need.
 
 
-    In [6]:
+    In [15]:
 
 
 ``` python
@@ -326,7 +330,7 @@ model = forecasting_model(arma_1_1)
 We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with the No-U-Turn Sampler through [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), running \\4\\ chains of \\2{,}000\\ warmup and \\2{,}000\\ sampling steps each, matching the blog post's setup. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \\\mu\\, \\\phi\\, \\\theta\\, and \\\sigma\\.
 
 
-    In [7]:
+    In [16]:
 
 
 ``` python
@@ -336,8 +340,8 @@ forecaster = HMCForecaster(
     model,
     data,
     covariates,
-    num_warmup=2_000,
-    num_samples=2_000,
+    num_warmup=1_000,
+    num_samples=1_000,
     num_chains=4,
 )
 ```
@@ -348,7 +352,7 @@ forecaster = HMCForecaster(
 [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) stores the posterior draws with the chains flattened together (deterministic sites such as `"mu_t"` ride along; we keep just the four parameters). NumPyro flattens the chains in order, so a plain reshape recovers the `(chain, draw)` structure for ArviZ. Since we simulated the data ourselves, we can put the posterior side by side with the true parameter values.
 
 
-    In [8]:
+    In [17]:
 
 
 ``` python
@@ -383,16 +387,16 @@ recovery.round({"posterior_mean": 3, "posterior_sd": 3, "r_hat": 3, "ess_bulk": 
 
 |       | true_value | posterior_mean | posterior_sd | r_hat | ess_bulk | ess_tail |
 |-------|------------|----------------|--------------|-------|----------|----------|
-| mu    | 0.0        | -0.081         | 0.068        | 1.000 | 5254.0   | 5210.0   |
-| phi   | 0.4        | 0.376          | 0.147        | 1.001 | 4192.0   | 4533.0   |
-| theta | 0.7        | 0.526          | 0.151        | 1.001 | 4349.0   | 4084.0   |
-| sigma | 0.5        | 0.436          | 0.032        | 1.001 | 6510.0   | 5500.0   |
+| mu    | 0.0        | -0.081         | 0.070        | 1.001 | 2797.0   | 2133.0   |
+| phi   | 0.4        | 0.369          | 0.144        | 1.002 | 2016.0   | 2109.0   |
+| theta | 0.7        | 0.532          | 0.150        | 1.002 | 1994.0   | 1820.0   |
+| sigma | 0.5        | 0.436          | 0.031        | 1.001 | 3078.0   | 2811.0   |
 
 
 The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \\\hat{R}\\ values are essentially \\1\\, and the effective sample sizes are healthy. The point estimates for \\\theta\\ and \\\sigma\\ come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of \\0.43\\ (against the population value \\0.5\\; we printed the realized value right after generating the data), and the posterior mean of \\\sigma\\ matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with \\T = 100\\ observations, because \\\phi\\ and \\\theta\\ can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
 
 
-    In [9]:
+    In [19]:
 
 
 ``` python
@@ -400,7 +404,7 @@ pc_trace = az.plot_trace_dist(
     idata,
     var_names=scalar_vars,
     compact=True,
-    figure_kwargs={"figsize": (10, 12)},
+    figure_kwargs={"figsize": (12, 7)},
 )
 for var_name in scalar_vars:
     ax_dist = pc_trace.viz["plot"][var_name].sel(column="dist").item()
@@ -412,12 +416,14 @@ pc_trace.viz["figure"].item().suptitle(
     fontweight="bold",
     y=1.03,
 )
-plt.show()
 ```
 
 
+    Text(0.5, 1.03, 'Trace plots and parameter recovery')
+
+
 <figure class="figure">
-<p><img src="arma_files/figure-html/cell-10-output-1.png" class="figure-img" width="1011" height="1251" /></p>
+<p><img src="arma_files/figure-html/cell-10-output-2.png" class="figure-img" width="1211" height="736" /></p>
 </figure>
 
 
@@ -426,7 +432,7 @@ plt.show()
 Next we look at the one-step-ahead posterior predictive over the training window with [predict_in_sample](../../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample): at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We plot the posterior mean prediction together with the \\50\\\\ and \\94\\\\ HDI bands (inner band darker, outer band lighter) against the observed series with ArviZ `plot_lm`, packing the draws with the package's [predictions_to_datatree](../../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree), and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
 
 
-    In [10]:
+    In [23]:
 
 
 ``` python
@@ -461,13 +467,17 @@ pe_line = pc.viz["pe_line"]["t"].item()
 pe_line.set_label("posterior mean")
 ax = pc.viz["figure"].item().axes[0]
 (obs_line,) = ax.plot(time, np.asarray(y), color="black", lw=1, label="observed")
-ax.legend(handles=[band_94, band_50, pe_line, obs_line], loc="upper right")
+ax.legend(
+    handles=[band_94, band_50, pe_line, obs_line],
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.1),
+    ncol=4,
+)
 ax.set(
     title=f"One-step-ahead in-sample fit (train CRPS: {crps_train:.4f})",
     xlabel="time",
     ylabel="y",
-)
-plt.show()
+);
 ```
 
 
@@ -487,7 +497,7 @@ A single split tells us how the model does on one held-out window. A more honest
 We size the folds at roughly \\10\\\\ of the series: each fold forecasts the next `10` steps (`test_window=10`), stepping forward `10` steps at a time (`stride=10`) so the folds do not overlap, and the first `50` observations (half the series) seed the initial training window (`min_train_window=50`). That yields five folds with split points at \\t = 50, 60, 70, 80, 90\\. With `eval_train=True` each fold also scores its in-sample one-step-ahead posterior predictive with the same metrics (this is what the series-as-covariates design buys us), and `keep_predictions=True` retains the out-of-sample forecast samples so we can plot them. Alongside the CRPS we track the empirical **coverage** of the central \\50\\\\ and \\94\\\\ intervals: a well-calibrated forecast covers close to its nominal level.
 
 
-    In [11]:
+    In [14]:
 
 
 ``` python
@@ -511,7 +521,7 @@ results = backtest(
     num_samples=2_000,
     eval_train=True,
     keep_predictions=True,
-    forecaster_options={"num_warmup": 2_000, "num_samples": 2_000, "num_chains": 4},
+    forecaster_options={"num_warmup": 1_000, "num_samples": 1_000, "num_chains": 4},
 )
 
 split_points = [r.t1 for r in results]
@@ -529,9 +539,9 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
 
     folds: 5 (split points: [50, 60, 70, 80, 90])
-    mean in-sample CRPS:     0.2398
-    mean out-of-sample CRPS: 0.2924
-    mean out-of-sample 50% coverage: 0.60  (nominal 0.50)
+    mean in-sample CRPS:     0.2396
+    mean out-of-sample CRPS: 0.2916
+    mean out-of-sample 50% coverage: 0.56  (nominal 0.50)
     mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
 
@@ -540,7 +550,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 Overlaying every fold's out-of-sample forecast (orange posterior mean line plus \\50\\\\ and \\94\\\\ HDI bands, again inner darker and outer lighter) on the observed series gives the rolling-origin view: each band picks up where the previous fold's training window ended, and the dashed lines mark the successive train/test splits.
 
 
-    In [12]:
+    In [28]:
 
 
 ``` python
@@ -602,9 +612,13 @@ pe_line.set_label("forecast posterior mean")
 split_lines = [
     ax.axvline(r.t1, color="gray", ls="--", lw=0.5, label="train/test split") for r in results
 ]
-ax.legend(handles=[band_94, band_50, pe_line, obs_line, split_lines[0]], loc="upper left")
+ax.legend(
+    handles=[band_94, band_50, pe_line, obs_line, split_lines[0]],
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.1),
+    ncol=3,
+)
 ax.set(title="Expanding-window cross-validation forecasts", xlabel="time", ylabel="y")
-plt.show()
 ```
 
 
@@ -612,8 +626,13 @@ plt.show()
       warnings.warn(
 
 
+    [Text(0.5, 1.0, 'Expanding-window cross-validation forecasts'),
+     Text(0.5, 0, 'time'),
+     Text(0, 0.5, 'y')]
+
+
 <figure class="figure">
-<p><img src="arma_files/figure-html/cell-13-output-2.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="arma_files/figure-html/cell-13-output-3.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -625,7 +644,7 @@ The bands show textbook ARMA behavior. Within each fold the forecast mean decays
 The per-fold CRPS quantifies the picture. The in-sample and out-of-sample scores stay close across folds, and neither trends upward as the training window grows, so the model is neither over- nor under-fitting: with only four parameters and a correctly specified model class, even the first fold's \\50\\ observations pin the predictive distribution down well. The out-of-sample score is a bit noisier, as it is computed from just \\10\\ observations per fold.
 
 
-    In [13]:
+    In [29]:
 
 
 ``` python
@@ -633,8 +652,7 @@ fig, ax = plt.subplots()
 ax.plot(split_points, train_crps, "o-", color="C0", label="in-sample CRPS")
 ax.plot(split_points, test_crps, "o-", color="C1", label="out-of-sample CRPS")
 ax.legend()
-ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-validation fold")
-plt.show()
+ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-validation fold");
 ```
 
 
@@ -650,7 +668,7 @@ Finally we check the coverage: the fraction of held-out observations that fall i
 A small caveat: [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are ArviZ HDIs. For the near-symmetric Gaussian predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
 
-    In [14]:
+    In [30]:
 
 
 ``` python
@@ -665,8 +683,7 @@ ax.set(
     ylabel="coverage",
     title="Out-of-sample interval coverage per fold",
     ylim=(0, 1.05),
-)
-plt.show()
+);
 ```
 
 

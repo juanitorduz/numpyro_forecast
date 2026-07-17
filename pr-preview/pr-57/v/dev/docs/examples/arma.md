@@ -69,6 +69,12 @@ hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
 ```
 
 
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+    The jaxtyping extension is already loaded. To reload it, use:
+      %reload_ext jaxtyping
+
+
 # Generate data
 
 The ARMA(1,1) process is defined by the recursion
@@ -189,9 +195,8 @@ time = np.arange(duration)
 print(f"data shape: {data.shape}")
 
 fig, ax = plt.subplots()
-ax.plot(time, np.asarray(y), color="black", lw=1)
-ax.set(title="Simulated ARMA(1,1) series", xlabel="time", ylabel="y")
-plt.show()
+ax.plot(time, y, color="black", lw=1)
+ax.set(title="Simulated ARMA(1,1) series", xlabel="time", ylabel="y");
 ```
 
 
@@ -225,8 +230,7 @@ ax_pacf.set(
     title="Partial autocorrelation function (PACF)",
     xlabel="lag",
     ylabel="partial autocorrelation",
-)
-plt.show()
+);
 ```
 
 
@@ -317,8 +321,8 @@ forecaster = HMCForecaster(
     model,
     data,
     covariates,
-    num_warmup=2_000,
-    num_samples=2_000,
+    num_warmup=1_000,
+    num_samples=1_000,
     num_chains=4,
 )
 ```
@@ -361,10 +365,10 @@ recovery.round({"posterior_mean": 3, "posterior_sd": 3, "r_hat": 3, "ess_bulk": 
 
 |       | true_value | posterior_mean | posterior_sd | r_hat | ess_bulk | ess_tail |
 |-------|------------|----------------|--------------|-------|----------|----------|
-| mu    | 0.0        | -0.081         | 0.068        | 1.000 | 5254.0   | 5210.0   |
-| phi   | 0.4        | 0.376          | 0.147        | 1.001 | 4192.0   | 4533.0   |
-| theta | 0.7        | 0.526          | 0.151        | 1.001 | 4349.0   | 4084.0   |
-| sigma | 0.5        | 0.436          | 0.032        | 1.001 | 6510.0   | 5500.0   |
+| mu    | 0.0        | -0.081         | 0.070        | 1.001 | 2797.0   | 2133.0   |
+| phi   | 0.4        | 0.369          | 0.144        | 1.002 | 2016.0   | 2109.0   |
+| theta | 0.7        | 0.532          | 0.150        | 1.002 | 1994.0   | 1820.0   |
+| sigma | 0.5        | 0.436          | 0.031        | 1.001 | 3078.0   | 2811.0   |
 
 
 The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \\\hat{R}\\ values are essentially \\1\\, and the effective sample sizes are healthy. The point estimates for \\\theta\\ and \\\sigma\\ come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of \\0.43\\ (against the population value \\0.5\\; we printed the realized value right after generating the data), and the posterior mean of \\\sigma\\ matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with \\T = 100\\ observations, because \\\phi\\ and \\\theta\\ can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
@@ -375,7 +379,7 @@ pc_trace = az.plot_trace_dist(
     idata,
     var_names=scalar_vars,
     compact=True,
-    figure_kwargs={"figsize": (10, 12)},
+    figure_kwargs={"figsize": (12, 7)},
 )
 for var_name in scalar_vars:
     ax_dist = pc_trace.viz["plot"][var_name].sel(column="dist").item()
@@ -387,12 +391,14 @@ pc_trace.viz["figure"].item().suptitle(
     fontweight="bold",
     y=1.03,
 )
-plt.show()
 ```
 
 
+    Text(0.5, 1.03, 'Trace plots and parameter recovery')
+
+
 <figure class="figure">
-<p><img src="arma_files/figure-html/_src-arma-cell-10-output-1.png" class="figure-img" width="1011" height="1251" /></p>
+<p><img src="arma_files/figure-html/_src-arma-cell-10-output-2.png" class="figure-img" width="1211" height="736" /></p>
 </figure>
 
 
@@ -433,13 +439,17 @@ pe_line = pc.viz["pe_line"]["t"].item()
 pe_line.set_label("posterior mean")
 ax = pc.viz["figure"].item().axes[0]
 (obs_line,) = ax.plot(time, np.asarray(y), color="black", lw=1, label="observed")
-ax.legend(handles=[band_94, band_50, pe_line, obs_line], loc="upper right")
+ax.legend(
+    handles=[band_94, band_50, pe_line, obs_line],
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.1),
+    ncol=4,
+)
 ax.set(
     title=f"One-step-ahead in-sample fit (train CRPS: {crps_train:.4f})",
     xlabel="time",
     ylabel="y",
-)
-plt.show()
+);
 ```
 
 
@@ -476,7 +486,7 @@ results = backtest(
     num_samples=2_000,
     eval_train=True,
     keep_predictions=True,
-    forecaster_options={"num_warmup": 2_000, "num_samples": 2_000, "num_chains": 4},
+    forecaster_options={"num_warmup": 1_000, "num_samples": 1_000, "num_chains": 4},
 )
 
 split_points = [r.t1 for r in results]
@@ -494,9 +504,9 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
 
     folds: 5 (split points: [50, 60, 70, 80, 90])
-    mean in-sample CRPS:     0.2398
-    mean out-of-sample CRPS: 0.2924
-    mean out-of-sample 50% coverage: 0.60  (nominal 0.50)
+    mean in-sample CRPS:     0.2396
+    mean out-of-sample CRPS: 0.2916
+    mean out-of-sample 50% coverage: 0.56  (nominal 0.50)
     mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
 
@@ -564,14 +574,23 @@ pe_line.set_label("forecast posterior mean")
 split_lines = [
     ax.axvline(r.t1, color="gray", ls="--", lw=0.5, label="train/test split") for r in results
 ]
-ax.legend(handles=[band_94, band_50, pe_line, obs_line, split_lines[0]], loc="upper left")
+ax.legend(
+    handles=[band_94, band_50, pe_line, obs_line, split_lines[0]],
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.1),
+    ncol=3,
+)
 ax.set(title="Expanding-window cross-validation forecasts", xlabel="time", ylabel="y")
-plt.show()
 ```
 
 
+    [Text(0.5, 1.0, 'Expanding-window cross-validation forecasts'),
+     Text(0.5, 0, 'time'),
+     Text(0, 0.5, 'y')]
+
+
 <figure class="figure">
-<p><img src="arma_files/figure-html/_src-arma-cell-13-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="arma_files/figure-html/_src-arma-cell-13-output-2.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -588,8 +607,7 @@ fig, ax = plt.subplots()
 ax.plot(split_points, train_crps, "o-", color="C0", label="in-sample CRPS")
 ax.plot(split_points, test_crps, "o-", color="C1", label="out-of-sample CRPS")
 ax.legend()
-ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-validation fold")
-plt.show()
+ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-validation fold");
 ```
 
 
@@ -617,8 +635,7 @@ ax.set(
     ylabel="coverage",
     title="Out-of-sample interval coverage per fold",
     ylim=(0, 1.05),
-)
-plt.show()
+);
 ```
 
 
