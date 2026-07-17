@@ -82,6 +82,13 @@ Rolling-window backtesting and forecast metrics.
 - `metrics.eval_interval_score`
 - `metrics.make_mase`
 
+### Autocorrelation
+
+Batched autocorrelation and partial autocorrelation diagnostics.
+
+- `acf.acf`
+- `acf.pacf`
+
 ### Seasonal features
 
 Fourier design matrices and seasonal tiling.

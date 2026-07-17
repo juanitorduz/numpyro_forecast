@@ -1,6 +1,15 @@
 # Examples
 
 
+<a href="../../docs/examples/arma.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/arma.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+ARMA(1,1) Model
+
+
+Simulate an ARMA(1,1) process, recover its parameters with NUTS, and evaluate the forecasts with expanding-window cross-validation.
+
+
 <a href="../../docs/examples/electricity_forecast.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/electricity_forecast.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
 
 

@@ -145,6 +145,19 @@ Mean Winkler interval score for the central `alpha` prediction interval.
 Build a Mean Absolute Scaled Error metric scaled by `train_data`.
 
 
+## Autocorrelation
+
+
+Batched autocorrelation and partial autocorrelation diagnostics.
+
+
+[acf.acf()](acf.acf.md#numpyro_forecast.acf.acf)  
+Compute the empirical autocorrelation function up to `max_lag`.
+
+[acf.pacf()](acf.pacf.md#numpyro_forecast.acf.pacf)  
+Compute the empirical partial autocorrelation function up to `max_lag`.
+
+
 ## Seasonal features
 
 

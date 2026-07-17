@@ -30,6 +30,10 @@
       "dev",
       "0.2.2"
     ],
+    "docs/examples/arma.html": [
+      "dev",
+      "0.2.2"
+    ],
     "docs/examples/electricity_forecast.html": [
       "dev",
       "0.2.2"
@@ -75,6 +79,14 @@
       "0.2.2"
     ],
     "package-info.html": [
+      "dev",
+      "0.2.2"
+    ],
+    "reference/acf.acf.html": [
+      "dev",
+      "0.2.2"
+    ],
+    "reference/acf.pacf.html": [
       "dev",
       "0.2.2"
     ],

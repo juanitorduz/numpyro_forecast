@@ -433,6 +433,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/arma-preview.html</loc>
+    <lastmod>2026-07-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/electricity_forecast-preview.html</loc>
     <lastmod>2026-07-17</lastmod>
     <changefreq>monthly</changefreq>
@@ -476,6 +482,12 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/inference_methods_comparison-preview.html</loc>
+    <lastmod>2026-07-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html</loc>
     <lastmod>2026-07-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -571,6 +583,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/_src/arma-preview.html</loc>
+    <lastmod>2026-07-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/_src/electricity_forecast-preview.html</loc>
     <lastmod>2026-07-17</lastmod>
     <changefreq>monthly</changefreq>
@@ -614,6 +632,12 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/_src/inference_methods_comparison-preview.html</loc>
+    <lastmod>2026-07-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/arma.html</loc>
     <lastmod>2026-07-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -680,6 +704,18 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/</loc>
+    <lastmod>2026-07-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/acf.acf.html</loc>
+    <lastmod>2026-07-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/acf.pacf.html</loc>
     <lastmod>2026-07-17</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
