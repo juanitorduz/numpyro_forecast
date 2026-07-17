@@ -22,25 +22,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Float
+from numpyro.diagnostics import _fft_next_fast_len
 
 from numpyro_forecast.typing import Array
-
-
-def _fft_next_fast_len(target: int) -> int:
-    """Return the smallest 5-smooth integer ``>= target`` (ported from numpyro)."""
-    if target <= 2:
-        return target
-    while True:
-        m = target
-        while m % 2 == 0:
-            m //= 2
-        while m % 3 == 0:
-            m //= 3
-        while m % 5 == 0:
-            m //= 5
-        if m == 1:
-            return target
-        target += 1
 
 
 @partial(jax.jit, static_argnames=("max_lag",))
