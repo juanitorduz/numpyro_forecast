@@ -2,334 +2,334 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/skills.html</loc>
-    <lastmod>2026-07-17T08:00:30.290Z</lastmod>
+    <lastmod>2026-07-17T08:04:33.040Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/surgery.shift_loc.html</loc>
-    <lastmod>2026-07-17T08:00:33.210Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.564Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/surgery.prefix_condition.html</loc>
-    <lastmod>2026-07-17T08:00:33.212Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.565Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/metrics.make_mase.html</loc>
-    <lastmod>2026-07-17T08:00:33.202Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.556Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/metrics.eval_interval_score.html</loc>
-    <lastmod>2026-07-17T08:00:33.202Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.555Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/index.html</loc>
-    <lastmod>2026-07-17T08:00:33.154Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.507Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.svi.resolve_guide.html</loc>
-    <lastmod>2026-07-17T08:00:33.171Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.524Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.svi.SVIFit.html</loc>
-    <lastmod>2026-07-17T08:00:33.173Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.525Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.prediction.forecast.html</loc>
-    <lastmod>2026-07-17T08:00:33.180Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.533Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.models.time_series.html</loc>
-    <lastmod>2026-07-17T08:00:33.168Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.521Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.models.predict.html</loc>
-    <lastmod>2026-07-17T08:00:33.169Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.522Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.models.forecasting_model.html</loc>
-    <lastmod>2026-07-17T08:00:33.166Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.518Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.mcmc.resolve_kernel.html</loc>
-    <lastmod>2026-07-17T08:00:33.173Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.526Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.mcmc.MCMCFit.html</loc>
-    <lastmod>2026-07-17T08:00:33.175Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.528Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/forecaster.HMCForecaster.html</loc>
-    <lastmod>2026-07-17T08:00:33.157Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.510Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/forecaster.Forecaster.html</loc>
-    <lastmod>2026-07-17T08:00:33.156Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.509Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/features.fourier_features.html</loc>
-    <lastmod>2026-07-17T08:00:33.203Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.556Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.VectorizedGuideError.html</loc>
-    <lastmod>2026-07-17T08:00:33.214Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.568Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.NumpyroForecastError.html</loc>
-    <lastmod>2026-07-17T08:00:33.213Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.567Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.KernelResolutionError.html</loc>
-    <lastmod>2026-07-17T08:00:33.216Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.570Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.GuideSampleArgsError.html</loc>
-    <lastmod>2026-07-17T08:00:33.216Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.570Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.DeviceMemoryError.html</loc>
-    <lastmod>2026-07-17T08:00:33.218Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.572Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.BacktestWindowError.html</loc>
-    <lastmod>2026-07-17T08:00:33.214Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.568Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.evaluate_forecast.html</loc>
-    <lastmod>2026-07-17T08:00:33.193Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.546Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.eval_mae.html</loc>
-    <lastmod>2026-07-17T08:00:33.195Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.548Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.eval_coverage.html</loc>
-    <lastmod>2026-07-17T08:00:33.199Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.553Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.backtest.html</loc>
-    <lastmod>2026-07-17T08:00:33.188Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.541Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.BacktestResult.html</loc>
-    <lastmod>2026-07-17T08:00:33.191Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.544Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/datasets.load_bart_weekly.html</loc>
-    <lastmod>2026-07-17T08:00:33.225Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.579Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/datasets.bart_available.html</loc>
-    <lastmod>2026-07-17T08:00:33.227Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.581Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/convert.predictions_to_datatree.html</loc>
-    <lastmod>2026-07-17T08:00:33.221Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.576Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/contrib.blackjax.fit_pathfinder.html</loc>
-    <lastmod>2026-07-17T08:00:33.225Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.579Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/contrib.blackjax.BlackjaxNUTSKernel.html</loc>
-    <lastmod>2026-07-17T08:00:33.222Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.576Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/contrib.blackjax.BlackjaxCustomKernel.html</loc>
-    <lastmod>2026-07-17T08:00:33.223Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.578Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/arrays.concat_future.html</loc>
-    <lastmod>2026-07-17T08:00:33.210Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.564Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/license.html</loc>
-    <lastmod>2026-07-17T08:00:27.949Z</lastmod>
+    <lastmod>2026-07-17T08:04:30.446Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/inference_methods_comparison.html</loc>
-    <lastmod>2026-07-17T08:00:32.861Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/hierarchical_forecasting_2.html</loc>
-    <lastmod>2026-07-17T08:00:32.861Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/fresh_retail_stockout.html</loc>
-    <lastmod>2026-07-17T08:00:32.861Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/exponential_smoothing_state_space.html</loc>
-    <lastmod>2026-07-17T08:00:32.860Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/electricity_forecast.html</loc>
-    <lastmod>2026-07-17T08:00:32.860Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.781Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/changelog.html</loc>
-    <lastmod>2026-07-17T08:00:32.833Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.754Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/contributing.html</loc>
-    <lastmod>2026-07-17T08:00:28.546Z</lastmod>
+    <lastmod>2026-07-17T08:04:31.108Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/electricity_forecast_calibration.html</loc>
-    <lastmod>2026-07-17T08:00:32.860Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/forecasting_univariate.html</loc>
-    <lastmod>2026-07-17T08:00:32.860Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/hierarchical_forecasting_1.html</loc>
-    <lastmod>2026-07-17T08:00:32.861Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.782Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/index.html</loc>
-    <lastmod>2026-07-17T08:00:32.861Z</lastmod>
+    <lastmod>2026-07-17T08:04:35.783Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/index.html</loc>
-    <lastmod>2026-07-17T08:00:28.546Z</lastmod>
+    <lastmod>2026-07-17T08:04:31.109Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/package-info.html</loc>
-    <lastmod>2026-07-17T08:00:28.542Z</lastmod>
+    <lastmod>2026-07-17T08:04:31.104Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/arrays.zero_data_like.html</loc>
-    <lastmod>2026-07-17T08:00:33.207Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.560Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/contrib.blackjax.BlackjaxMCLMCKernel.html</loc>
-    <lastmod>2026-07-17T08:00:33.223Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.577Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/contrib.blackjax.PathfinderFit.html</loc>
-    <lastmod>2026-07-17T08:00:33.224Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.578Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/convert.add_forecast_groups.html</loc>
-    <lastmod>2026-07-17T08:00:33.220Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.575Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/convert.to_datatree.html</loc>
-    <lastmod>2026-07-17T08:00:33.220Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.574Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/datasets.load_bart_hierarchical.html</loc>
-    <lastmod>2026-07-17T08:00:33.226Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.580Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/datasets.load_victoria_electricity.html</loc>
-    <lastmod>2026-07-17T08:00:33.226Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.581Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.VectorizedBacktestResult.html</loc>
-    <lastmod>2026-07-17T08:00:33.192Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.545Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.backtest_vectorized.html</loc>
-    <lastmod>2026-07-17T08:00:33.190Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.543Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.eval_crps.html</loc>
-    <lastmod>2026-07-17T08:00:33.194Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.547Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.eval_rmse.html</loc>
-    <lastmod>2026-07-17T08:00:33.196Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.549Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.results_to_dataframe.html</loc>
-    <lastmod>2026-07-17T08:00:33.194Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.547Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.CovariateDimsError.html</loc>
-    <lastmod>2026-07-17T08:00:33.217Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.571Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.GuideResolutionError.html</loc>
-    <lastmod>2026-07-17T08:00:33.215Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.569Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.KernelConfigError.html</loc>
-    <lastmod>2026-07-17T08:00:33.217Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.571Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.MVNLayoutError.html</loc>
-    <lastmod>2026-07-17T08:00:33.218Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.572Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.OptimizerResolutionError.html</loc>
-    <lastmod>2026-07-17T08:00:33.215Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.569Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/exceptions.VectorizedMetricError.html</loc>
-    <lastmod>2026-07-17T08:00:33.214Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.569Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/features.periodic_repeat.html</loc>
-    <lastmod>2026-07-17T08:00:33.206Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.560Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/forecaster.ForecastingModel.html</loc>
-    <lastmod>2026-07-17T08:00:33.165Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.518Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/forecaster.PathfinderForecaster.html</loc>
-    <lastmod>2026-07-17T08:00:33.158Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.510Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.mcmc.fit_mcmc.html</loc>
-    <lastmod>2026-07-17T08:00:33.174Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.527Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.models.Horizon.html</loc>
-    <lastmod>2026-07-17T08:00:33.167Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.520Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.models.markov_time_series.html</loc>
-    <lastmod>2026-07-17T08:00:33.169Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.522Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.models.predict_glm.html</loc>
-    <lastmod>2026-07-17T08:00:33.170Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.523Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.posterior.draw_posterior.html</loc>
-    <lastmod>2026-07-17T08:00:33.176Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.529Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.prediction.predict_in_sample.html</loc>
-    <lastmod>2026-07-17T08:00:33.184Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.537Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.svi.fit_svi.html</loc>
-    <lastmod>2026-07-17T08:00:33.172Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.525Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/functional.svi.resolve_optimizer.html</loc>
-    <lastmod>2026-07-17T08:00:33.171Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.523Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/metrics.crps_empirical.html</loc>
-    <lastmod>2026-07-17T08:00:33.200Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.554Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/metrics.eval_pinball.html</loc>
-    <lastmod>2026-07-17T08:00:33.201Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.555Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/optional.require.html</loc>
-    <lastmod>2026-07-17T08:00:33.213Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.567Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/surgery.register_elementwise.html</loc>
-    <lastmod>2026-07-17T08:00:33.212Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.566Z</lastmod>
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/surgery.slice_time.html</loc>
-    <lastmod>2026-07-17T08:00:33.211Z</lastmod>
+    <lastmod>2026-07-17T08:04:36.565Z</lastmod>
   </url>
 </urlset>
