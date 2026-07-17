@@ -34,6 +34,10 @@
       "dev",
       "0.2.2"
     ],
+    "docs/examples/croston.html": [
+      "dev",
+      "0.2.2"
+    ],
     "docs/examples/electricity_forecast.html": [
       "dev",
       "0.2.2"
