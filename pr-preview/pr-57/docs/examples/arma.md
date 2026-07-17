@@ -3,14 +3,14 @@
 
 ARMA(1,1) Model with `numpyro_forecast`
 
-This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**](https://juanitorduz.github.io/arma_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the \\(1,1)\\ member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous *observation* back into the mean, and a moving average term that feeds the previous *forecast error* back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through the package's [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster).
+This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**](https://juanitorduz.github.io/arma_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the \\(1,1)\\ member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous *observation* back into the mean, and a moving average term that feeds the previous *forecast error* back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through the package's functional [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc).
 
 Two deliberate changes from the blog post are worth calling out:
 
 - Instead of a single train-test split, we evaluate with **expanding-window time-slice cross-validation** via `numpyro_forecast.backtest`, scoring every fold with the continuous ranked probability score (CRPS) and the empirical coverage of the central \\50\\\\ and \\94\\\\ intervals, both in-sample and out-of-sample, exactly as in the [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html).
 - The forecast path is fully **generative**: over the horizon we sample future innovations and feed them back into the ARMA recursion, so the forecast uncertainty compounds correctly step by step. The blog post instead zeroed the future errors inside its prediction loop, which understates the multi-step uncertainty.
 
-A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html): the built-in [time_series](../../reference/functional.models.time_series.md#numpyro_forecast.functional.models.time_series) and [predict](../../reference/functional.models.predict.md#numpyro_forecast.functional.models.predict) primitives assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. We therefore write the model body directly against the functional API's [Horizon](../../reference/functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon) value, registering the framework's `"obs"` and `"forecast"` sites ourselves, while reusing everything downstream: [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample), and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: the `covariates` argument is the natural carrier for the history the filter needs, because it spans the full horizon and is available at prediction time. The model only ever reads the first [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast (we simply never look past the training window).
+A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html): the built-in [time_series](../../reference/functional.models.time_series.md#numpyro_forecast.functional.models.time_series) and [predict](../../reference/functional.models.predict.md#numpyro_forecast.functional.models.predict) primitives assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. We therefore write the model body directly against the functional API's [Horizon](../../reference/functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon) value, registering the framework's `"obs"` and `"forecast"` sites ourselves, while reusing everything downstream: [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: the `covariates` argument is the natural carrier for the history the filter needs, because it spans the full horizon and is available at prediction time. The model only ever reads the first [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast (we simply never look past the training window).
 
 
 # Prepare notebook
@@ -37,9 +37,10 @@ from numpyro_forecast import (
     eval_crps,
     forecasting_model,
     predictions_to_datatree,
+    to_datatree,
 )
 from numpyro_forecast.acf import acf, pacf
-from numpyro_forecast.functional import Horizon
+from numpyro_forecast.functional import Horizon, fit_mcmc
 from numpyro_forecast.typing import Array
 
 az.style.use("arviz-darkgrid")
@@ -52,27 +53,12 @@ numpyro.set_host_device_count(n=4)
 rng_key = random.PRNGKey(seed=42)
 
 
-def hdi_label(prob: float, prefix: str = "") -> str:
-    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
-    percent = f"{prob:.0%}".replace("%", r"\%")
-    return f"{prefix}${percent}$ HDI"
-
-
-hdi_probs = (0.5, 0.94)
-hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
-
 %load_ext autoreload
 %autoreload 2
 %load_ext jaxtyping
 %jaxtyping.typechecker beartype.beartype
 %config InlineBackend.figure_format = "retina"
 ```
-
-
-    The autoreload extension is already loaded. To reload it, use:
-      %reload_ext autoreload
-    The jaxtyping extension is already loaded. To reload it, use:
-      %reload_ext jaxtyping
 
 
 # Generate data
@@ -311,12 +297,14 @@ model = forecasting_model(arma_1_1)
 
 # Inference with NUTS
 
-We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with the No-U-Turn Sampler through [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), running \\4\\ chains of \\2{,}000\\ warmup and \\2{,}000\\ sampling steps each, matching the blog post's setup. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \\\mu\\, \\\phi\\, \\\theta\\, and \\\sigma\\.
+We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running \\4\\ chains of \\1{,}000\\ warmup and \\1{,}000\\ sampling steps each. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \\\mu\\, \\\phi\\, \\\theta\\, and \\\sigma\\.
+
+We then export the whole fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html): a single call restores the `(chain, draw)` structure of the posterior draws, samples the in-sample one-step-ahead posterior predictive, and stores the observed data and covariates alongside, so everything downstream (diagnostics, trace plots, the in-sample fit) reads from one object. Since `covariates` has the same duration as `data`, there is no forecast horizon and hence no forecast groups here; the out-of-sample story comes from the cross-validation below.
 
 
 ``` python
 rng_key, rng_subkey = random.split(rng_key)
-forecaster = HMCForecaster(
+fit = fit_mcmc(
     rng_subkey,
     model,
     data,
@@ -325,50 +313,669 @@ forecaster = HMCForecaster(
     num_samples=1_000,
     num_chains=4,
 )
+
+rng_key, rng_subkey = random.split(rng_key)
+tree = to_datatree(
+    rng_subkey,
+    fit,
+    model,
+    data,
+    covariates,
+    posterior_dims={"mu_t": ["time", "obs_dim"]},
+)
+tree
 ```
+
+
+![](data:image/svg+xml;base64,PHN2ZyBzdHlsZT0icG9zaXRpb246IGFic29sdXRlOyB3aWR0aDogMDsgaGVpZ2h0OiAwOyBvdmVyZmxvdzogaGlkZGVuIj4KPGRlZnM+CjxzeW1ib2wgaWQ9Imljb24tZGF0YWJhc2UiIHZpZXdib3g9IjAgMCAzMiAzMiI+CjxwYXRoIGQ9Ik0xNiAwYy04LjgzNyAwLTE2IDIuMjM5LTE2IDV2NGMwIDIuNzYxIDcuMTYzIDUgMTYgNXMxNi0yLjIzOSAxNi01di00YzAtMi43NjEtNy4xNjMtNS0xNi01eiIgLz4KPHBhdGggZD0iTTE2IDE3Yy04LjgzNyAwLTE2LTIuMjM5LTE2LTV2NmMwIDIuNzYxIDcuMTYzIDUgMTYgNXMxNi0yLjIzOSAxNi01di02YzAgMi43NjEtNy4xNjMgNS0xNiA1eiIgLz4KPHBhdGggZD0iTTE2IDI2Yy04LjgzNyAwLTE2LTIuMjM5LTE2LTV2NmMwIDIuNzYxIDcuMTYzIDUgMTYgNXMxNi0yLjIzOSAxNi01di02YzAgMi43NjEtNy4xNjMgNS0xNiA1eiIgLz4KPC9zeW1ib2w+CjxzeW1ib2wgaWQ9Imljb24tZmlsZS10ZXh0MiIgdmlld2JveD0iMCAwIDMyIDMyIj4KPHBhdGggZD0iTTI4LjY4MSA3LjE1OWMtMC42OTQtMC45NDctMS42NjItMi4wNTMtMi43MjQtMy4xMTZzLTIuMTY5LTIuMDMwLTMuMTE2LTIuNzI0Yy0xLjYxMi0xLjE4Mi0yLjM5My0xLjMxOS0yLjg0MS0xLjMxOWgtMTUuNWMtMS4zNzggMC0yLjUgMS4xMjEtMi41IDIuNXYyN2MwIDEuMzc4IDEuMTIyIDIuNSAyLjUgMi41aDIzYzEuMzc4IDAgMi41LTEuMTIyIDIuNS0yLjV2LTE5LjVjMC0wLjQ0OC0wLjEzNy0xLjIzLTEuMzE5LTIuODQxek0yNC41NDMgNS40NTdjMC45NTkgMC45NTkgMS43MTIgMS44MjUgMi4yNjggMi41NDNoLTQuODExdi00LjgxMWMwLjcxOCAwLjU1NiAxLjU4NCAxLjMwOSAyLjU0MyAyLjI2OHpNMjggMjkuNWMwIDAuMjcxLTAuMjI5IDAuNS0wLjUgMC41aC0yM2MtMC4yNzEgMC0wLjUtMC4yMjktMC41LTAuNXYtMjdjMC0wLjI3MSAwLjIyOS0wLjUgMC41LTAuNSAwIDAgMTUuNDk5LTAgMTUuNSAwdjdjMCAwLjU1MiAwLjQ0OCAxIDEgMWg3djE5LjV6IiAvPgo8cGF0aCBkPSJNMjMgMjZoLTE0Yy0wLjU1MiAwLTEtMC40NDgtMS0xczAuNDQ4LTEgMS0xaDE0YzAuNTUyIDAgMSAwLjQ0OCAxIDFzLTAuNDQ4IDEtMSAxeiIgLz4KPHBhdGggZD0iTTIzIDIyaC0xNGMtMC41NTIgMC0xLTAuNDQ4LTEtMXMwLjQ0OC0xIDEtMWgxNGMwLjU1MiAwIDEgMC40NDggMSAxcy0wLjQ0OCAxLTEgMXoiIC8+CjxwYXRoIGQ9Ik0yMyAxOGgtMTRjLTAuNTUyIDAtMS0wLjQ0OC0xLTFzMC40NDgtMSAxLTFoMTRjMC41NTIgMCAxIDAuNDQ4IDEgMXMtMC40NDggMS0xIDF6IiAvPgo8L3N5bWJvbD4KPC9kZWZzPgo8L3N2Zz4=)
+
+``` xr-text-repr-fallback
+<xarray.DataTree>
+Group: /
+│   Attributes:
+│       inference_library:  numpyro
+│       creation_library:   numpyro_forecast
+│       sample_dims:        ['chain', 'draw']
+├── Group: /posterior
+│       Dimensions:  (chain: 4, draw: 1000, time: 100, obs_dim: 1)
+│       Coordinates:
+│         * chain    (chain) int64 32B 0 1 2 3
+│         * draw     (draw) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
+│         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
+│         * obs_dim  (obs_dim) int64 8B 0
+│       Data variables:
+│           mu       (chain, draw) float32 16kB -0.09647 -0.02102 ... 0.0329 0.04597
+│           mu_t     (chain, draw, time, obs_dim) float32 2MB -0.1546 0.5496 ... -0.4146
+│           phi      (chain, draw) float32 16kB 0.6022 0.408 0.4649 ... 0.3659 0.1668
+│           sigma    (chain, draw) float32 16kB 0.4242 0.4562 0.3988 ... 0.501 0.408
+│           theta    (chain, draw) float32 16kB 0.3627 0.5471 0.3764 ... 0.5953 0.6119
+│       Attributes:
+│           created_at:                 2026-07-17T08:59:11.803187+00:00
+│           creation_library:           ArviZ
+│           creation_library_version:   1.2.0
+│           creation_library_language:  Python
+│           sample_dims:                ['chain', 'draw']
+├── Group: /posterior_predictive
+│       Dimensions:  (chain: 4, draw: 1000, time: 100, obs_dim: 1)
+│       Coordinates:
+│         * chain    (chain) int64 32B 0 1 2 3
+│         * draw     (draw) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
+│         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
+│         * obs_dim  (obs_dim) int64 8B 0
+│       Data variables:
+│           obs      (chain, draw, time, obs_dim) float32 2MB 0.378 0.03782 ... -0.08186
+│       Attributes:
+│           created_at:                 2026-07-17T08:59:11.929615+00:00
+│           creation_library:           ArviZ
+│           creation_library_version:   1.2.0
+│           creation_library_language:  Python
+│           sample_dims:                ['chain', 'draw']
+├── Group: /observed_data
+│       Dimensions:  (time: 100, obs_dim: 1)
+│       Coordinates:
+│         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
+│         * obs_dim  (obs_dim) int64 8B 0
+│       Data variables:
+│           obs      (time, obs_dim) float32 400B 0.6115 0.06982 ... -0.1484 -0.1441
+│       Attributes:
+│           created_at:                 2026-07-17T08:59:11.929833+00:00
+│           creation_library:           ArviZ
+│           creation_library_version:   1.2.0
+│           creation_library_language:  Python
+│           sample_dims:                []
+└── Group: /constant_data
+        Dimensions:        (time: 100, covariate_dim: 1)
+        Coordinates:
+          * time           (time) int64 800B 0 1 2 3 4 5 6 7 ... 92 93 94 95 96 97 98 99
+          * covariate_dim  (covariate_dim) int64 8B 0
+        Data variables:
+            covariates     (time, covariate_dim) float32 400B 0.6115 0.06982 ... -0.1441
+        Attributes:
+            created_at:                 2026-07-17T08:59:11.929990+00:00
+            creation_library:           ArviZ
+            creation_library_version:   1.2.0
+            creation_library_language:  Python
+            sample_dims:                []
+```
+
+
+xarray.DataTree
+
+
+/posterior(14)
+
+Dimensions:
+
+
+- chain: 4
+- draw: 1000
+- time: 100
+- obs_dim: 1
+
+
+Coordinates: (4)
+
+
+chain
+
+
+(chain)
+
+
+int64
+
+
+0 1 2 3
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([0, 1, 2, 3])
+
+
+draw
+
+
+(draw)
+
+
+int64
+
+
+0 1 2 3 4 5 ... 995 996 997 998 999
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([  0,   1,   2, ..., 997, 998, 999], shape=(1000,))
+
+
+time
+
+
+(time)
+
+
+int64
+
+
+0 1 2 3 4 5 6 ... 94 95 96 97 98 99
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,90, 91, 92, 93, 94, 95, 96, 97, 98, 99])
+
+
+obs_dim
+
+
+(obs_dim)
+
+
+int64
+
+
+0
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([0])
+
+
+Data variables: (5)
+
+
+mu
+
+
+(chain, draw)
+
+
+float32
+
+
+-0.09647 -0.02102 ... 0.04597
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[-0.09646773, -0.02101522, -0.07238156, ...,  0.11212269,-0.00052988, -0.00798731],[-0.07251706, -0.07538717, -0.02875393, ..., -0.12315954,-0.07018185, -0.07903112],[ 0.02153392, -0.07431991, -0.04518985, ..., -0.10758153,-0.10836137, -0.07513384],[-0.06687693, -0.03768033, -0.08406789, ..., -0.0970888 ,0.03289504,  0.04597342]], shape=(4, 1000), dtype=float32)
+
+
+mu_t
+
+
+(chain, draw, time, obs_dim)
+
+
+float32
+
+
+-0.1546 0.5496 ... 0.5639 -0.4146
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[[[-0.15455699],[ 0.5496475 ],[-0.22846411],...,[ 0.04035873],[ 0.6136581 ],[-0.4622672 ]],[[-0.02958961],[ 0.5792373 ],[-0.27121457],...,[ 0.07765268],[ 0.65390897],[-0.5205126 ]],[[-0.10603137],[ 0.48198977],[-0.19505152],...,......,[ 0.04807812],[ 0.6310429 ],[-0.64130867]],[[ 0.04493116],[ 0.5939707 ],[-0.2536009 ],...,[ 0.11755434],[ 0.68493474],[-0.51754355]],[[ 0.05364065],[ 0.48932704],[-0.19906978],...,[ 0.10942935],[ 0.5639006 ],[-0.41464213]]]], shape=(4, 1000, 100, 1), dtype=float32)
+
+
+phi
+
+
+(chain, draw)
+
+
+float32
+
+
+0.6022 0.408 ... 0.3659 0.1668
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[0.6021626 , 0.40800858, 0.4648949 , ..., 0.5031756 , 0.5679749 ,0.26459742],[0.576758  , 0.2835461 , 0.3803724 , ..., 0.37069368, 0.24272537,0.5902207 ],[0.4283185 , 0.67807937, 0.50356376, ..., 0.52087355, 0.23761964,0.11487448],[0.1969738 , 0.29357028, 0.2519021 , ..., 0.38436627, 0.3658948 ,0.16677523]], shape=(4, 1000), dtype=float32)
+
+
+sigma
+
+
+(chain, draw)
+
+
+float32
+
+
+0.4242 0.4562 ... 0.501 0.408
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[0.42417994, 0.4562234 , 0.39884937, ..., 0.4779843 , 0.44065925,0.40929258],[0.4311424 , 0.4428815 , 0.47394285, ..., 0.45420346, 0.42864746,0.42506742],[0.43986347, 0.41962373, 0.4243214 , ..., 0.46540776, 0.45097387,0.44440666],[0.42705545, 0.41944715, 0.41231525, ..., 0.4772875 , 0.500982  ,0.40796116]], shape=(4, 1000), dtype=float32)
+
+
+theta
+
+
+(chain, draw)
+
+
+float32
+
+
+0.3627 0.5471 ... 0.5953 0.6119
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[0.36270773, 0.5470649 , 0.37636673, ..., 0.44055176, 0.4442067 ,0.49163032],[0.29103065, 0.61470795, 0.5654199 , ..., 0.46207082, 0.6839458 ,0.2747228 ],[0.3634448 , 0.34727144, 0.35864997, ..., 0.43632984, 0.5381683 ,0.7571629 ],[0.5067898 , 0.5136883 , 0.70493054, ..., 0.6249902 , 0.59532595,0.61187446]], shape=(4, 1000), dtype=float32)
+
+
+Attributes: (5)
+
+
+created_at :  
+2026-07-17T08:59:11.803187+00:00
+
+creation_library :  
+ArviZ
+
+creation_library_version :  
+1.2.0
+
+creation_library_language :  
+Python
+
+sample_dims :  
+\['chain', 'draw'\]
+
+
+/posterior_predictive(10)
+
+Dimensions:
+
+
+- chain: 4
+- draw: 1000
+- time: 100
+- obs_dim: 1
+
+
+Coordinates: (4)
+
+
+chain
+
+
+(chain)
+
+
+int64
+
+
+0 1 2 3
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([0, 1, 2, 3])
+
+
+draw
+
+
+(draw)
+
+
+int64
+
+
+0 1 2 3 4 5 ... 995 996 997 998 999
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([  0,   1,   2, ..., 997, 998, 999], shape=(1000,))
+
+
+time
+
+
+(time)
+
+
+int64
+
+
+0 1 2 3 4 5 6 ... 94 95 96 97 98 99
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,90, 91, 92, 93, 94, 95, 96, 97, 98, 99])
+
+
+obs_dim
+
+
+(obs_dim)
+
+
+int64
+
+
+0
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([0])
+
+
+Data variables: (1)
+
+
+obs
+
+
+(chain, draw, time, obs_dim)
+
+
+float32
+
+
+0.378 0.03782 ... 0.436 -0.08186
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[[[ 0.37801173],[ 0.03781663],[-1.1094376 ],...,[ 0.05967716],[ 1.1015469 ],[-0.47437602]],[[-0.8436128 ],[ 0.34660274],[ 0.15462576],...,[-0.10218637],[ 0.4468028 ],[-0.62966377]],[[-0.49090743],[ 0.3702586 ],[-0.56688434],...,......,[ 0.45504633],[ 1.1635041 ],[-1.492195  ]],[[ 0.31492084],[ 1.1711082 ],[-0.6340382 ],...,[-0.22004732],[ 0.96339697],[-0.2516304 ]],[[ 0.1017881 ],[ 0.75837314],[-0.2306227 ],...,[-0.329196  ],[ 0.4360241 ],[-0.08185795]]]], shape=(4, 1000, 100, 1), dtype=float32)
+
+
+Attributes: (5)
+
+
+created_at :  
+2026-07-17T08:59:11.929615+00:00
+
+creation_library :  
+ArviZ
+
+creation_library_version :  
+1.2.0
+
+creation_library_language :  
+Python
+
+sample_dims :  
+\['chain', 'draw'\]
+
+
+/observed_data(8)
+
+Dimensions:
+
+
+- time: 100
+- obs_dim: 1
+
+
+Coordinates: (2)
+
+
+time
+
+
+(time)
+
+
+int64
+
+
+0 1 2 3 4 5 6 ... 94 95 96 97 98 99
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,90, 91, 92, 93, 94, 95, 96, 97, 98, 99])
+
+
+obs_dim
+
+
+(obs_dim)
+
+
+int64
+
+
+0
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([0])
+
+
+Data variables: (1)
+
+
+obs
+
+
+(time, obs_dim)
+
+
+float32
+
+
+0.6115 0.06982 ... -0.1484 -0.1441
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[ 0.6115394 ],[ 0.06981769],[-0.6078261 ],[-1.0767999 ],[-1.274781  ],[-1.0382899 ],[-1.2064939 ],[-1.008641  ],[-0.48991784],[-0.4190661 ],[-0.5085629 ],[ 0.3146204 ],[ 0.6926972 ],[ 0.55834603],[ 0.22263917],[-0.49487147],[-0.31112087],[-0.18741646],[-0.69310373],[-0.7378681 ],...[-0.35613638],[-0.8201766 ],[-1.2930527 ],[-0.17921585],[-0.2918862 ],[-0.3752794 ],[ 0.17729832],[ 0.31766778],[ 0.60940003],[ 0.10695466],[ 0.3012006 ],[ 0.40986454],[ 0.10548047],[-0.13039589],[ 0.6353712 ],[ 0.7664531 ],[ 0.30337706],[ 0.7511519 ],[-0.14843541],[-0.14405262]], dtype=float32)
+
+
+Attributes: (5)
+
+
+created_at :  
+2026-07-17T08:59:11.929833+00:00
+
+creation_library :  
+ArviZ
+
+creation_library_version :  
+1.2.0
+
+creation_library_language :  
+Python
+
+sample_dims :  
+\[\]
+
+
+/constant_data(8)
+
+Dimensions:
+
+
+- time: 100
+- covariate_dim: 1
+
+
+Coordinates: (2)
+
+
+time
+
+
+(time)
+
+
+int64
+
+
+0 1 2 3 4 5 6 ... 94 95 96 97 98 99
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17,18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71,72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89,90, 91, 92, 93, 94, 95, 96, 97, 98, 99])
+
+
+covariate_dim
+
+
+(covariate_dim)
+
+
+int64
+
+
+0
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([0])
+
+
+Data variables: (1)
+
+
+covariates
+
+
+(time, covariate_dim)
+
+
+float32
+
+
+0.6115 0.06982 ... -0.1484 -0.1441
+
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
+
+<img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
+
+
+    array([[ 0.6115394 ],[ 0.06981769],[-0.6078261 ],[-1.0767999 ],[-1.274781  ],[-1.0382899 ],[-1.2064939 ],[-1.008641  ],[-0.48991784],[-0.4190661 ],[-0.5085629 ],[ 0.3146204 ],[ 0.6926972 ],[ 0.55834603],[ 0.22263917],[-0.49487147],[-0.31112087],[-0.18741646],[-0.69310373],[-0.7378681 ],...[-0.35613638],[-0.8201766 ],[-1.2930527 ],[-0.17921585],[-0.2918862 ],[-0.3752794 ],[ 0.17729832],[ 0.31766778],[ 0.60940003],[ 0.10695466],[ 0.3012006 ],[ 0.40986454],[ 0.10548047],[-0.13039589],[ 0.6353712 ],[ 0.7664531 ],[ 0.30337706],[ 0.7511519 ],[-0.14843541],[-0.14405262]], dtype=float32)
+
+
+Attributes: (5)
+
+
+created_at :  
+2026-07-17T08:59:11.929990+00:00
+
+creation_library :  
+ArviZ
+
+creation_library_version :  
+1.2.0
+
+creation_library_language :  
+Python
+
+sample_dims :  
+\[\]
+
+
+Attributes: (3)
+
+
+inference_library :  
+numpyro
+
+creation_library :  
+numpyro_forecast
+
+sample_dims :  
+\['chain', 'draw'\]
 
 
 # Diagnostics and parameter recovery
 
-[HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) stores the posterior draws with the chains flattened together (deterministic sites such as `"mu_t"` ride along; we keep just the four parameters). NumPyro flattens the chains in order, so a plain reshape recovers the `(chain, draw)` structure for ArviZ. Since we simulated the data ourselves, we can put the posterior side by side with the true parameter values.
+The tree's `posterior` group carries the draws with their `(chain, draw)` structure (deterministic sites such as `"mu_t"` ride along; we summarize just the four parameters), so `az.summary` gives us the whole convergence and recovery picture in one call: posterior means and standard deviations, the \\94\\\\ HDIs, bulk and tail effective sample sizes, \\\hat{R}\\, and the Monte Carlo standard errors. Since we simulated the data ourselves, we prepend the true parameter values as the first column.
 
 
 ``` python
-num_chains = 4
 scalar_vars = ["mu", "phi", "theta", "sigma"]
 true_values = {"mu": 0.0, "phi": phi_true, "theta": theta_true, "sigma": noise_scale}
 
-posterior = {
-    name: np.asarray(value).reshape(num_chains, -1, *value.shape[1:])
-    for name, value in forecaster.posterior_samples.items()
-    if name in scalar_vars
-}
-idata = az.from_dict({"posterior": posterior})
-
-rhat = az.rhat(idata, var_names=scalar_vars)
-ess_bulk = az.ess(idata, var_names=scalar_vars)
-ess_tail = az.ess(idata, var_names=scalar_vars, method="tail")
-recovery = pd.DataFrame(
-    {
-        "true_value": [true_values[name] for name in scalar_vars],
-        "posterior_mean": [float(posterior[name].mean()) for name in scalar_vars],
-        "posterior_sd": [float(posterior[name].std()) for name in scalar_vars],
-        "r_hat": [float(rhat[name].item()) for name in scalar_vars],
-        "ess_bulk": [float(ess_bulk[name].item()) for name in scalar_vars],
-        "ess_tail": [float(ess_tail[name].item()) for name in scalar_vars],
-    },
-    index=scalar_vars,
-)
-recovery.round({"posterior_mean": 3, "posterior_sd": 3, "r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
+recovery = az.summary(tree, var_names=scalar_vars, ci_kind="hdi", ci_prob=0.94)
+recovery.insert(0, "true_value", pd.Series(true_values))
+recovery
 ```
 
 
-|       | true_value | posterior_mean | posterior_sd | r_hat | ess_bulk | ess_tail |
-|-------|------------|----------------|--------------|-------|----------|----------|
-| mu    | 0.0        | -0.081         | 0.070        | 1.001 | 2797.0   | 2133.0   |
-| phi   | 0.4        | 0.369          | 0.144        | 1.002 | 2016.0   | 2109.0   |
-| theta | 0.7        | 0.532          | 0.150        | 1.002 | 1994.0   | 1820.0   |
-| sigma | 0.5        | 0.436          | 0.031        | 1.001 | 3078.0   | 2811.0   |
+|  | true_value | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
+|----|----|----|----|----|----|----|----|----|----|----|
+| mu | 0.0 | -0.081 | 0.07 | -0.22 | 0.046 | 2796 | 2133 | 1.00 | 0.0013 | 0.00095 |
+| phi | 0.4 | 0.369 | 0.144 | 0.083 | 0.62 | 2016 | 2108 | 1.00 | 0.0033 | 0.0023 |
+| theta | 0.7 | 0.532 | 0.15 | 0.25 | 0.8 | 1994 | 1819 | 1.00 | 0.0033 | 0.0021 |
+| sigma | 0.5 | 0.436 | 0.0314 | 0.38 | 0.5 | 3077 | 2811 | 1.00 | 0.00057 | 0.00041 |
 
 
 The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \\\hat{R}\\ values are essentially \\1\\, and the effective sample sizes are healthy. The point estimates for \\\theta\\ and \\\sigma\\ come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of \\0.43\\ (against the population value \\0.5\\; we printed the realized value right after generating the data), and the posterior mean of \\\sigma\\ matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with \\T = 100\\ observations, because \\\phi\\ and \\\theta\\ can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
@@ -376,7 +983,7 @@ The sampler recovers the parameters well: every true value lies within about two
 
 ``` python
 pc_trace = az.plot_trace_dist(
-    idata,
+    tree,
     var_names=scalar_vars,
     compact=True,
     figure_kwargs={"figsize": (12, 7)},
@@ -390,26 +997,37 @@ pc_trace.viz["figure"].item().suptitle(
     fontsize=18,
     fontweight="bold",
     y=1.03,
-)
+);
 ```
 
 
-    Text(0.5, 1.03, 'Trace plots and parameter recovery')
-
-
 <figure class="figure">
-<p><img src="arma_files/figure-html/_src-arma-cell-10-output-2.png" class="figure-img" width="1211" height="736" /></p>
+<p><img src="arma_files/figure-html/_src-arma-cell-10-output-1.png" class="figure-img" width="1211" height="736" /></p>
 </figure>
 
 
 # In-sample fit
 
-Next we look at the one-step-ahead posterior predictive over the training window with [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample): at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We plot the posterior mean prediction together with the \\50\\\\ and \\94\\\\ HDI bands (inner band darker, outer band lighter) against the observed series with ArviZ `plot_lm`, packing the draws with the package's [predictions_to_datatree](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree), and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
+Next we look at the one-step-ahead posterior predictive over the training window, which [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) already sampled into the tree's `posterior_predictive` group: at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We only need to stack the chains back into a single sample dimension to get the draws-first layout the plotting and scoring helpers expect. We plot the posterior mean prediction together with the \\50\\\\ and \\94\\\\ HDI bands (inner band darker, outer band lighter) against the observed series with ArviZ `plot_lm`, packing the draws with the package's [predictions_to_datatree](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree), and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
 
 
 ``` python
-rng_key, rng_subkey = random.split(rng_key)
-train_pp = forecaster.predict_in_sample(rng_subkey, covariates, num_samples=2_000)
+def hdi_label(prob: float, prefix: str = "") -> str:
+    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
+    percent = f"{prob:.0%}".replace("%", r"\%")
+    return f"{prefix}${percent}$ HDI"
+
+
+hdi_probs = (0.5, 0.94)
+hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
+
+train_pp = (
+    tree["posterior_predictive"]
+    .dataset["obs"]
+    .stack(sample=("chain", "draw"))
+    .transpose("sample", "time", "obs_dim")
+    .to_numpy()
+)
 crps_train = eval_crps(train_pp, data)
 
 idata_in_sample = predictions_to_datatree(train_pp, time.astype(float), ["y"], observed=data)
@@ -460,7 +1078,7 @@ ax.set(
 
 # Expanding-window cross-validation
 
-A single split tells us how the model does on one held-out window. A more honest picture comes from *expanding-window* time-slice cross-validation: we repeatedly move the train/test boundary forward, refit from scratch, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop for us, refitting the NUTS sampler on each fold through the same [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster).
+A single split tells us how the model does on one held-out window. A more honest picture comes from *expanding-window* time-slice cross-validation: we repeatedly move the train/test boundary forward, refit from scratch, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop for us, refitting the NUTS sampler on each fold through [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), the OOP counterpart of [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc) that [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) constructs per fold.
 
 We size the folds at roughly \\10\\\\ of the series: each fold forecasts the next `10` steps (`test_window=10`), stepping forward `10` steps at a time (`stride=10`) so the folds do not overlap, and the first `50` observations (half the series) seed the initial training window (`min_train_window=50`). That yields five folds with split points at \\t = 50, 60, 70, 80, 90\\. With `eval_train=True` each fold also scores its in-sample one-step-ahead posterior predictive with the same metrics (this is what the series-as-covariates design buys us), and `keep_predictions=True` retains the out-of-sample forecast samples so we can plot them. Alongside the CRPS we track the empirical **coverage** of the central \\50\\\\ and \\94\\\\ intervals: a well-calibrated forecast covers close to its nominal level.
 
@@ -504,9 +1122,9 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
 
     folds: 5 (split points: [50, 60, 70, 80, 90])
-    mean in-sample CRPS:     0.2396
-    mean out-of-sample CRPS: 0.2916
-    mean out-of-sample 50% coverage: 0.56  (nominal 0.50)
+    mean in-sample CRPS:     0.2398
+    mean out-of-sample CRPS: 0.2921
+    mean out-of-sample 50% coverage: 0.58  (nominal 0.50)
     mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
 
@@ -580,17 +1198,12 @@ ax.legend(
     bbox_to_anchor=(0.5, -0.1),
     ncol=3,
 )
-ax.set(title="Expanding-window cross-validation forecasts", xlabel="time", ylabel="y")
+ax.set(title="Expanding-window cross-validation forecasts", xlabel="time", ylabel="y");
 ```
 
 
-    [Text(0.5, 1.0, 'Expanding-window cross-validation forecasts'),
-     Text(0.5, 0, 'time'),
-     Text(0, 0.5, 'y')]
-
-
 <figure class="figure">
-<p><img src="arma_files/figure-html/_src-arma-cell-13-output-2.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="arma_files/figure-html/_src-arma-cell-13-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -650,7 +1263,7 @@ ax.set(
 - Hyndman, R. J., & Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/), 3rd edition. Chapter 9: ARIMA models.
 - NumPyro documentation: [Example: AR(2) process](https://num.pyro.ai/en/stable/examples/ar2.html).
 - Pyro forum: [Lax.scan to implement ARMA(1,1)](https://forum.pyro.ai/t/lax-scan-to-implement-arma-1-1/2518).
-- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same functional-model-body plus [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) pattern for an error-feedback model.
+- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same functional-model-body pattern for an error-feedback model.
 - The [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html) in this documentation, which introduces [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
 
-[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#d12e4518)
+[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#657fe9b4)
