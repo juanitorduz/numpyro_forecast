@@ -331,7 +331,7 @@ Both smoothing parameters get a \\\text{Beta}(2, 8)\\ prior. It keeps the classi
 ``` python
 prior_mean = 2 / 10
 
-fig, ax = plt.subplots(figsize=(9, 5))
+fig, ax = plt.subplots(figsize=(10, 6))
 pz.Beta(2, 8).plot_pdf(ax=ax, color="C0")
 pz.Beta(10, 40).plot_pdf(ax=ax, alpha=0.7)
 ax.axvline(prior_mean, color="C1", ls="--", label="prior mean")
@@ -345,7 +345,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="availability_tsb_files/figure-html/cell-7-output-1.png" class="figure-img" width="793" height="481" /></p>
+<p><img src="availability_tsb_files/figure-html/cell-7-output-1.png" class="figure-img" width="821" height="558" /></p>
 </figure>
 
 
@@ -662,6 +662,8 @@ With \\1{,}000\\ series the posterior has about \\4{,}000\\ latent dimensions (f
 
 
 ``` python
+%%time
+
 num_steps = 10_000
 
 rng_key, rng_subkey = random.split(rng_key)
@@ -682,6 +684,8 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
     mean ELBO loss over the last 100 steps: 57,127
+    CPU times: user 10.5 s, sys: 3.21 s, total: 13.8 s
+    Wall time: 6.2 s
 
 
 <figure class="figure">
@@ -689,7 +693,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 </figure>
 
 
-Is the plain constant-rate `Adam` leaving anything on the table? The [fresh-retail example](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) gets a real benefit from a fancier `optax` recipe (a one-cycle learning-rate schedule chained with a reduce-on-plateau backoff), so we run the same recipe here and compare where the ELBO lands. On this model the two optimizers end in the same place, so the schedule buys nothing that the simple configuration does not already deliver, and we keep `Adam` for the rest of the notebook. The comparison is worth keeping around, though: it is a one-argument change ([fit_svi](../../../reference/functional.svi.fit_svi.md#numpyro_forecast.functional.svi.fit_svi) accepts any `optax` optimizer via `optim=`), and on harder posterior geometries, like the retail example's hierarchical model on real data, it is the difference between converging and stalling.
+> **Remark:** Is the plain constant-rate `Adam` leaving anything on the table? The [fresh-retail example](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) gets a real benefit from a fancier `optax` recipe (a one-cycle learning-rate schedule chained with a reduce-on-plateau backoff), so we run the same recipe here and compare where the ELBO lands. On this model the two optimizers end in the same place, so the schedule buys nothing that the simple configuration does not already deliver, and we keep `Adam` for the rest of the notebook. The comparison is worth keeping around, though: it is a one-argument change ([fit_svi](../../../reference/functional.svi.fit_svi.md#numpyro_forecast.functional.svi.fit_svi) accepts any `optax` optimizer via `optim=`), and on harder posterior geometries, like the retail example's hierarchical model on real data, it is the difference between converging and stalling.
 
 
     In [10]:
@@ -794,7 +798,7 @@ Group: /
 │           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.273 ... 1.783
 │           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.07928 ....
 │       Attributes:
-│           created_at:                 2026-07-21T13:34:21.325380+00:00
+│           created_at:                 2026-07-21T20:04:37.321662+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -810,7 +814,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 200MB -2.585 0.9524 ... 4.154
 │       Attributes:
-│           created_at:                 2026-07-21T13:34:21.754916+00:00
+│           created_at:                 2026-07-21T20:04:37.863551+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -823,7 +827,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-21T13:34:21.755161+00:00
+│           created_at:                 2026-07-21T20:04:37.864016+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -837,7 +841,7 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-21T13:34:21.755812+00:00
+│           created_at:                 2026-07-21T20:04:37.864534+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -852,7 +856,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.134 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-21T13:34:22.008860+00:00
+│           created_at:                 2026-07-21T20:04:38.129758+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -866,7 +870,7 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-07-21T13:34:22.009184+00:00
+            created_at:                 2026-07-21T20:04:38.130088+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1222,7 +1226,7 @@ Attributes: (6)
 
 
 created_at :  
-2026-07-21T13:34:21.325380+00:00
+2026-07-21T20:04:37.321662+00:00
 
 creation_library :  
 ArviZ
@@ -1361,7 +1365,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T13:34:21.754916+00:00
+2026-07-21T20:04:37.863551+00:00
 
 creation_library :  
 ArviZ
@@ -1455,7 +1459,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T13:34:21.755161+00:00
+2026-07-21T20:04:37.864016+00:00
 
 creation_library :  
 ArviZ
@@ -1570,7 +1574,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T13:34:21.755812+00:00
+2026-07-21T20:04:37.864534+00:00
 
 creation_library :  
 ArviZ
@@ -1699,14 +1703,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.00000000e+00,  1.13425064e+00,  0.00000000e+00, ...,-2.76441574e-01,  7.85750389e-01,  3.51096129e+00],[-0.00000000e+00,  0.00000000e+00,  1.53906143e+00, ...,0.00000000e+00,  9.11785603e-01,  3.66306877e+00],[ 0.00000000e+00, -0.00000000e+00,  1.42802417e+00, ...,6.83469677e+00, -1.37476969e+00,  0.00000000e+00],...,[ 0.00000000e+00,  1.14195740e+00,  9.80820775e-01, ...,3.55617189e+00, -0.00000000e+00,  0.00000000e+00],[ 1.18154919e+00,  0.00000000e+00,  1.85884058e+00, ...,0.00000000e+00, -2.95453388e-02,  2.32469559e+00],[ 3.53652716e+00,  0.00000000e+00,  1.08322167e+00, ...,1.32379735e+00,  0.00000000e+00,  0.00000000e+00]],[[ 0.00000000e+00,  9.57378149e-01,  0.00000000e+00, ...,8.62511253e+00,  3.13758075e-01,  1.20065804e+01],[ 0.00000000e+00,  0.00000000e+00,  1.38504457e+00, ...,0.00000000e+00, -1.30518861e-02,  1.94735932e+00],[ 0.00000000e+00,  0.00000000e+00,  1.18639715e-01, ...,2.21687675e+00, -2.95517355e-01,  0.00000000e+00],...1.21884310e+00, -0.00000000e+00,  0.00000000e+00],[ 2.90715480e+00,  0.00000000e+00,  7.05792010e-01, ...,0.00000000e+00,  5.17736256e-01,  3.35584593e+00],[ 1.97415721e+00,  0.00000000e+00,  1.07672542e-01, ...,5.27291596e-01,  0.00000000e+00,  0.00000000e+00]],[[ 0.00000000e+00, -1.14590682e-01,  0.00000000e+00, ...,1.77340770e+00, -2.22006872e-01,  8.96911621e-01],[ 0.00000000e+00,  0.00000000e+00, -1.14924334e-01, ...,0.00000000e+00, -1.56876259e-02,  3.59755921e+00],[ 0.00000000e+00,  0.00000000e+00, -6.41032815e-01, ...,4.07854509e+00, -1.05620794e-01,  0.00000000e+00],...,[ 0.00000000e+00,  1.38957596e+00,  8.15236986e-01, ...,3.02757716e+00,  0.00000000e+00,  0.00000000e+00],[ 5.00996590e+00,  0.00000000e+00, -5.27322367e-02, ...,0.00000000e+00, -8.76562655e-01,  3.15467000e+00],[ 6.07991505e+00,  0.00000000e+00,  2.36341929e+00, ...,4.03817368e+00, -0.00000000e+00,  0.00000000e+00]]]],shape=(1, 1000, 10, 1000), dtype=float32)
+,  0.00000000e+00, -6.41032815e-01, ...,4.07854509e+00, -1.05620794e-01,  0.00000000e+00],...,[ 0.00000000e+00,  1.38957596e+00,  8.15236986e-01, ...,3.02757716e+00,  0.00000000e+00,  0.00000000e+00],[ 5.00996590e+00,  0.00000000e+00, -5.27322367e-02, ...,0.00000000e+00, -8.76562655e-01,  3.15467000e+00],[ 6.07991505e+00,  0.00000000e+00,  2.36341929e+00, ...,4.03817368e+00, -0.00000000e+00,  0.00000000e+00]]]],shape=(1, 1000, 10, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-21T13:34:22.008860+00:00
+2026-07-21T20:04:38.129758+00:00
 
 creation_library :  
 ArviZ
@@ -1821,7 +1825,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T13:34:22.009184+00:00
+2026-07-21T20:04:38.130088+00:00
 
 creation_library :  
 ArviZ
@@ -1877,7 +1881,7 @@ smoothing_means = xr.DataTree.from_dict(
     {"posterior": xr.Dataset({"z_smoothing": ("series", z_sm), "p_smoothing": ("series", p_sm)})}
 )
 pc = az.plot_dist(
-    smoothing_means, sample_dims=["series"], kind="hist", figure_kwargs={"figsize": (12, 4)}
+    smoothing_means, sample_dims=["series"], kind="kde", figure_kwargs={"figsize": (12, 4)}
 )
 for name in ["z_smoothing", "p_smoothing"]:
     ax = pc.viz["plot"][name].item()
@@ -1886,13 +1890,13 @@ for name in ["z_smoothing", "p_smoothing"]:
     ax.set(xlabel="posterior mean")
 fig = pc.viz["plot"]["z_smoothing"].item().figure
 fig.suptitle(
-    "Per-series posterior-mean smoothing parameters", fontsize=18, fontweight="bold", y=1.05
+    "Per-series posterior-mean smoothing parameters", fontsize=18, fontweight="bold", y=1.1
 );
 ```
 
 
 <figure class="figure">
-<p><img src="availability_tsb_files/figure-html/cell-14-output-1.png" class="figure-img" width="1211" height="435" /></p>
+<p><img src="availability_tsb_files/figure-html/cell-14-output-1.png" class="figure-img" width="1211" height="455" /></p>
 </figure>
 
 
@@ -2189,10 +2193,10 @@ ax.annotate(
     f"last {run_k} training periods:\nzeros from stock-outs",
     xy=(t_max_train - run_k / 2, 0.04),
     xycoords=ax.get_xaxis_transform(),
-    xytext=(0.55, 0.85),
+    xytext=(0.55, 0.8),
     textcoords="axes fraction",
     ha="center",
-    fontsize=11,
+    fontsize=20,
     arrowprops={"arrowstyle": "->", "color": "C3"},
     color="C3",
 )
@@ -2210,11 +2214,11 @@ ax.set(
 ```
 
 
+    series 41: last 5 training periods are stock-outs, lambda = 5.12, latent demand lost in the run = 33 units
+
+
     /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
-
-
-    series 41: last 5 training periods are stock-outs, lambda = 5.12, latent demand lost in the run = 33 units
 
 
 <figure class="figure">
