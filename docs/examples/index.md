@@ -10,6 +10,15 @@ ARMA(1,1) Model
 Simulate an ARMA(1,1) process, recover its parameters with NUTS, and evaluate the forecasts with expanding-window cross-validation.
 
 
+<a href="../../docs/examples/availability_tsb.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/availability_tsb.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+TSB with Availability Constraints for Intermittent Demand
+
+
+Availability-aware TSB method for intermittent demand. Gating the demand-probability update with a stock availability mask separates true demand from stock-outs, with SVI on a 1,000-series panel and full-availability scenario forecasts.
+
+
 <a href="../../docs/examples/croston.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/croston.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
 
 
