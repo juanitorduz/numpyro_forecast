@@ -3,6 +3,26 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.2.3
+
+*2026-07-21* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.3)
+
+
+## What's Changed
+
+- Bump codecov/codecov-action from 5 to 7 by [<span class="citation" cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/67
+- Bump ty from 0.0.58 to 0.0.60 by [<span class="citation" cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/70
+- Bump ruff from 0.15.21 to 0.15.22 by [<span class="citation" cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/69
+- Bump anthropics/claude-code-action from 1.0.171 to 1.0.176 by [<span class="citation" cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/68
+- Add ARMA(1,1) parameter-recovery and cross-validation example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/57
+- Croston method example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/71
+- TSB method example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/72
+- Availability-aware TSB example by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/73
+- Bump version to 0.2.3 and update numpyro dependency by [<span class="citation" cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/74
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.2.2…0.2.3](https://github.com/juanitorduz/numpyro_forecast/compare/0.2.2...0.2.3)
+
+
 # 0.2.2
 
 *2026-07-15* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.2)
