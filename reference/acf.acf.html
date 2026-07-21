@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>convert.add_forecast_groups() – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>acf.acf() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -118,11 +118,40 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
-<script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
-  <link rel="alternate" type="text/markdown" href="convert.add_forecast_groups.md">
-  <meta name="description" content="Attach out-of-sample forecast groups to a copy of tree.">
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+  <link rel="alternate" type="text/markdown" href="acf.acf.md">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html">
+  <meta name="description" content="Compute the empirical autocorrelation function up to max_lag.">
   <script type="application/ld+json">
 [
   {
@@ -142,23 +171,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "convert.add_forecast_groups - numpyro_forecast",
+    "name": "acf.acf - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="convert.add_forecast_groups() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="Attach out-of-sample forecast groups to a copy of tree.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html">
+  <meta property="og:title" content="acf.acf() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Compute the empirical autocorrelation function up to max_lag.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="convert.add_forecast_groups() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="Attach out-of-sample forecast groups to a copy of tree.">
+  <meta name="twitter:title" content="acf.acf() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Compute the empirical autocorrelation function up to max_lag.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -169,7 +198,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast (dev) <span class="version-badge" title="Released 2026-07-21">v0.2.3</span></span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-07-21">v0.2.3</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -208,7 +237,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">convert.add_forecast_groups()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">acf.acf()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -486,7 +515,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">acf.acf()</span></span></a>
   </div>
 </li>
@@ -678,7 +707,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
   </div>
 </li>
@@ -773,6 +802,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
   <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
     </div>
@@ -781,7 +812,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">acf.acf()</span></h2>
 </div>
 
 
@@ -799,48 +830,38 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+<p>Compute the empirical autocorrelation function up to <code>max_lag</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/0.2.3/numpyro_forecast/convert.py#L479-L571" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/0.2.3/numpyro_forecast/acf.py#L79-L129" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast_groups</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tree</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecast_samples</span>,</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates_future</span>,</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">acf</span><span class="op">.</span><span class="sig-name">acf</span>(
+    <span class="va">y</span>,
+    <span class="va">max_lag</span>,
+)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>. This is the step-by-step route for draws you produced yourself; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> attaches the same groups automatically when its <code>covariates</code> extend beyond <code>data</code>.</p>
+<p>The lag-<span class="math inline">\(k\)</span> autocorrelation of a series <span class="math inline">\(y_1, \ldots, y_T\)</span> with sample mean <span class="math inline">\(\bar{y}\)</span> is estimated with the biased normalization</p>
+<p><span class="math display">\[
+\hat{\rho}_k =
+\frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
+     {\sum_{t=1}^{T} (y_t - \bar{y})^2},
+\]</span></p>
+<p>computed for all lags at once via the FFT of the centered series (the Wiener-Khinchin identity), so the cost is <span class="math inline">\(O(T \log T)\)</span> instead of <span class="math inline">\(O(T \, k_{\max})\)</span>. The computation runs along the last axis and broadcasts over any leading batch axes.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">tree</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
+<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch time"</span>] | Float[np.ndarray, <span class="st">" *batch time"</span>]</span></code></dt>
 <dd>
-<p>A tree from <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> (its <code>observed_data</code> time coordinate is continued).</p>
+<p>Time series with time on the last axis, shape <code>(*batch, time)</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">forecast_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | np.ndarray</span></code></dt>
+<dt><code><span class="doc-parameter-name">max_lag</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
-<p>Forecast draws shaped <code>(num_samples, future, obs)</code> from <code>~numpyro_forecast.functional.prediction.forecast()</code>.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">covariates_future</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
-<dd>
-<p>Future covariates shaped <code>(future, covariate_dim)</code>, or any layout with time at axis <code>-2</code> when <code>covariate_dims</code> names the axes.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-<p>Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g.&nbsp;datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-Optional dimension names for <code>covariates_future</code>, one per axis. When omitted, the names are inherited from the tree’s <code>constant_data["covariates"]</code> variable (falling back to <code>("time", "covariate_dim")</code> if the tree carries no stored covariates), so the forecast covariates always share the in-sample axis names. When given explicitly, the names must match the stored ones. See <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>.
+Largest lag to evaluate; must satisfy <code>1 &lt;= max_lag &lt; time</code>.
 </dd>
 </dl>
 </div>
@@ -849,9 +870,9 @@ Optional dimension names for <code>covariates_future</code>, one per axis. When 
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch lags"</span>]</span></code></dt>
 <dd>
-A new tree with the <code>predictions</code> and <code>predictions_constant_data</code> groups added.
+Autocorrelations for lags <code>0, 1, ..., max_lag</code> (<code>max_lag + 1</code> values; lag <code>0</code> is identically <code>1.0</code>).
 </dd>
 </dl>
 </div>
@@ -862,14 +883,18 @@ A new tree with the <code>predictions</code> and <code>predictions_constant_data
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.</p>
-</dd>
-<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
-<dd>
-If the resolved <code>covariate_dims</code> (explicit or inherited) do not name every <code>covariates_future</code> axis, or if explicit names disagree with the dimension names already stored on the tree’s <code>constant_data["covariates"]</code>.
+If <code>max_lag</code> is not in <code>[1, time)</code>.
 </dd>
 </dl>
 </div>
+</section>
+<section id="notes" class="level2 doc-notes">
+<h2 class="doc-notes">Notes</h2>
+<p>A constant series has zero variance, so the result is meaningless: all NaN in eager execution (a <code>0 / 0</code>), while under <code>jax.jit()</code> the rounding of the mean can instead yield arbitrary finite values.</p>
+</section>
+<section id="references" class="level2 doc-references">
+<h2 class="doc-references">References</h2>
+<p>Adapted from <code>numpyro.diagnostics.autocorrelation()</code>, itself adapted from the Stan implementation.</p>
 
 
 </section>
@@ -888,7 +913,7 @@ If the resolved <code>covariate_dims</code> (explicit or inherited) do not name 
     anchorJS.add('.anchored');
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/juanitorduz\.github\.io\/numpyro_forecast\/v\/dev\/");
+        var filterRegex = new RegExp("https:\/\/juanitorduz\.github\.io\/numpyro_forecast\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }

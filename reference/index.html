@@ -82,7 +82,7 @@ ul.task-list li input[type="checkbox"] {
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.2&quot;,&quot;label&quot;:&quot;0.2.2&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 
 
   <link rel="alternate" type="text/markdown" href="index.md">
@@ -434,9 +434,29 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Seasonal features</span></a>
+ <span class="menu-text">Autocorrelation</span></a>
 </div>
       <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">acf.acf()</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">acf.pacf()</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Seasonal features</span></a>
+</div>
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
@@ -456,7 +476,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Array helpers</span></a>
 </div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
@@ -476,7 +496,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Distribution surgery</span></a>
 </div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
@@ -508,7 +528,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Optional dependencies</span></a>
 </div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
@@ -522,7 +542,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Exceptions</span></a>
 </div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -602,7 +622,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -628,7 +648,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -666,7 +686,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -709,6 +729,7 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#functional-core-fitting" id="toc-functional-core-fitting" class="nav-link" data-scroll-target="#functional-core-fitting">Functional core: fitting</a></li>
   <li><a href="#functional-core-posterior-and-prediction" id="toc-functional-core-posterior-and-prediction" class="nav-link" data-scroll-target="#functional-core-posterior-and-prediction">Functional core: posterior and prediction</a></li>
   <li><a href="#backtesting-evaluation" id="toc-backtesting-evaluation" class="nav-link" data-scroll-target="#backtesting-evaluation">Backtesting &amp; evaluation</a></li>
+  <li><a href="#autocorrelation" id="toc-autocorrelation" class="nav-link" data-scroll-target="#autocorrelation">Autocorrelation</a></li>
   <li><a href="#seasonal-features" id="toc-seasonal-features" class="nav-link" data-scroll-target="#seasonal-features">Seasonal features</a></li>
   <li><a href="#array-helpers" id="toc-array-helpers" class="nav-link" data-scroll-target="#array-helpers">Array helpers</a></li>
   <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
@@ -923,6 +944,22 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/metrics.make_mase.html#numpyro_forecast.metrics.make_mase" class="doc-function doc-label doc-label-function">metrics.make_mase()</a></dt>
 <dd>
 <p>Build a Mean Absolute Scaled Error metric scaled by <code>train_data</code>.</p>
+</dd>
+</dl>
+</section>
+<section id="autocorrelation" class="level2 doc-group">
+<h2 class="doc-group">Autocorrelation</h2>
+<div class="doc-description">
+<p>Batched autocorrelation and partial autocorrelation diagnostics.</p>
+</div>
+<dl>
+<dt><a href="../reference/acf.acf.html#numpyro_forecast.acf.acf" class="doc-function doc-label doc-label-function">acf.acf()</a></dt>
+<dd>
+<p>Compute the empirical autocorrelation function up to <code>max_lag</code>.</p>
+</dd>
+<dt><a href="../reference/acf.pacf.html#numpyro_forecast.acf.pacf" class="doc-function doc-label doc-label-function">acf.pacf()</a></dt>
+<dd>
+<p>Compute the empirical partial autocorrelation function up to <code>max_lag</code>.</p>
 </dd>
 </dl>
 </section>
