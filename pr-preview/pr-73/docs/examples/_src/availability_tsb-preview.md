@@ -29,7 +29,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import optax
 import preliz as pz
 import xarray as xr
 from jax import random
@@ -260,7 +259,7 @@ def shade_stockouts(ax: Axes, t_axis: np.ndarray, available: np.ndarray) -> Arti
 
 
 order = np.argsort(lam)[::-1]
-example_series = [int(order[10]), int(order[500]), int(order[900])]
+example_series = int(order[10])
 display_series = [int(order[rank]) for rank in np.linspace(5, n_series - 10, 10, dtype=int)]
 print(
     f"display series {display_series} with rates "
@@ -322,22 +321,22 @@ simple exponential smoothing of the demand indicator, updated **only when the pr
 
 # Prior for the smoothing parameters
 
-Both smoothing parameters get a \\\text{Beta}(2, 8)\\ prior. It keeps the classical center (mean \\2/10 = 0.2\\, matching the standard practice of smoothing parameters roughly in \\\[0.1, 0.3\]\\) but is deliberately *wider* than the blog post's \\\text{Beta}(10, 40)\\: same mean, far fatter tails, so a series whose data genuinely call for a very reactive or very stiff level can reach it. With \\1{,}000\\ series each contributing its own posterior, there is no reason to constrain them tightly a priori.
+Both smoothing parameters get a \\\text{Beta}(1.5, 3)\\ prior. This is a genuinely weakly informative choice: most of its mass still sits at the small values classical practice expects for smoothing parameters (roughly \\\[0.1, 0.3\]\\), but the density stays meaningfully positive across the whole unit interval, so a series whose data call for a very stiff level (near \\0\\) or a very reactive one (near \\1\\) can reach it without fighting the prior. Contrast this with the blog post's \\\text{Beta}(10, 40)\\, which pins the parameter to a narrow band around \\0.2\\; with \\1{,}000\\ series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
 
 
     In [6]:
 
 
 ``` python
-prior_mean = 2 / 10
+prior_mean = 1.5 / 4.5
 
 fig, ax = plt.subplots(figsize=(10, 6))
-pz.Beta(2, 8).plot_pdf(ax=ax, color="C0")
+pz.Beta(1.5, 3).plot_pdf(ax=ax, color="C0")
 pz.Beta(10, 40).plot_pdf(ax=ax, alpha=0.7)
 ax.axvline(prior_mean, color="C1", ls="--", label="prior mean")
 ax.legend()
 ax.set(
-    title=r"Smoothing parameter prior: $\text{Beta}(2, 8)$ vs the blog post's $\text{Beta}(10, 40)$",
+    title=r"Smoothing parameter prior: $\text{Beta}(1.5, 3)$ vs the blog post's $\text{Beta}(10, 40)$",
     xlabel="smoothing parameter",
     ylabel="density",
 );
@@ -345,7 +344,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="availability_tsb_files/figure-html/cell-7-output-1.png" class="figure-img" width="821" height="558" /></p>
+<p><img src="availability_tsb_files/figure-html/cell-7-output-1.png" class="figure-img" width="831" height="558" /></p>
 </figure>
 
 
@@ -356,7 +355,7 @@ The model is the TSB notebook's two-component construction promoted to a panel, 
 The remaining choices, and where their numbers come from:
 
 - **Level inits.** Following the blog post, the levels start deterministically rather than sampled as in the sibling notebooks: the demand-size level starts at the first observation, \\\ell^z_0 = y_0\\, and the demand probability starts at \\\hat{p}\_0 = 0.5\\, the agnostic "no idea whether this period sees demand" value that the data then pull toward each series' true probability.
-- **Noise priors.** The demand-size noise is hierarchical: a global scale \\\sigma\_{\text{scale}} \sim \text{LogNormal}(\log 5, 0.5)\\ (centered on the blog post's value of \\5\\, slightly wider than its \\0.3\\ log-scale) with per-series \\\sigma_i \sim \text{HalfNormal}(\sigma\_{\text{scale}})\\, which shares strength across \\1{,}000\\ series that individually see only a handful of demand events. The probability component instead gets a fixed weakly informative \\\sigma_i \sim \text{HalfNormal}(1)\\: its observations live in \\\[0, 1\]\\, so a scale of order one is already essentially flat and there is nothing for a hierarchy to learn.
+- **Noise priors.** The demand-size noise is hierarchical: a global scale \\\sigma\_{\text{scale}} \sim \text{LogNormal}(\log 5, 1)\\ (centered on the blog post's value of \\5\\ but with a log-scale of \\1\\ instead of its \\0.3\\, spanning an order of magnitude in either direction) with per-series \\\sigma_i \sim \text{HalfNormal}(\sigma\_{\text{scale}})\\, which shares strength across \\1{,}000\\ series that individually see only a handful of demand events. The probability component instead gets a fixed weakly informative \\\sigma_i \sim \text{HalfNormal}(1)\\: its observations live in \\\[0, 1\]\\, so a scale of order one is already essentially flat and there is nothing for a hierarchy to learn.
 - **Noise floors.** One pragmatic addition over the blog post: each component's observation scale gets a small constant floor (\\0.1\\ on the sizes, \\0.05\\ on the indicator, well below any scale the data support). With this many series, some have every training demand equal (all \\1\\s is common for slow movers) or no on-shelf demand at all, and without the floor SVI drives those series' scales toward zero until the ELBO turns NaN late in the optimization.
 
 The `availability_tsb` body then does what is specific to this method:
@@ -419,7 +418,7 @@ def panel_level_model(
     with numpyro.plate("series", n_series):
         # cast() only narrows numpyro's union return type for the type checker.
         smoothing = cast(
-            Array, numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=8))
+            Array, numpyro.sample("smoothing", dist.Beta(concentration1=1.5, concentration0=3))
         )
         noise = noise_floor + cast(
             Array, numpyro.sample("noise", dist.HalfNormal(scale=noise_scale))
@@ -471,7 +470,7 @@ def availability_tsb(h: Horizon, covariates: Array) -> None:
 
     # cast() only narrows numpyro's union return type for the type checker.
     noise_scale = cast(
-        Array, numpyro.sample("noise_scale", dist.LogNormal(loc=jnp.log(5), scale=0.5))
+        Array, numpyro.sample("noise_scale", dist.LogNormal(loc=jnp.log(5), scale=1))
     )
 
     # Demand-size component: identical to Croston/TSB (updates only at demand events).
@@ -511,7 +510,7 @@ model = forecasting_model(availability_tsb)
 
 ## Prior predictive check
 
-Before fitting we draw from the prior predictive with NumPyro's `Predictive` and look at the implied `"rate"` paths for one example series. The recursions are driven by the observed history through the covariates, so even under the prior the rate follows the data's rough shape; what the prior controls is how strongly each observation moves the levels and how wide the bands are. This cell also defines the small band-plot helpers (`hdi_label`, `stacked_draws`, and `plot_band_forecast`, shared with the sibling notebooks) used by every band plot below.
+Before fitting we draw from the prior predictive with NumPyro's `Predictive` and look at the implied `"rate"` paths for one example series. The recursions are driven by the observed history through the covariates, so even under the prior the rate follows the data's rough shape; what the prior controls is how strongly each observation moves the levels and hence how wide the band of plausible paths is. Under the wide \\\text{Beta}(1.5, 3)\\ prior that band is genuinely broad: it spans everything from a stiff level that barely reacts to a reactive one that chases the observations up to their spikes, which is exactly the agnosticism we want before seeing the likelihood. This cell also defines the small band-plot helpers (`hdi_label`, `stacked_draws`, and `plot_band_forecast`, shared with the sibling notebooks) used by every band plot below.
 
 
     In [8]:
@@ -621,7 +620,7 @@ prior_predictive = Predictive(model, num_samples=500)
 prior_samples = prior_predictive(rng_subkey, covariates_train)
 prior_rate = np.asarray(prior_samples["rate"])
 
-i = example_series[0]
+i = example_series
 ax, handles = plot_band_forecast(
     prior_rate[:, :, [i]],
     t_train.astype(float),
@@ -683,9 +682,9 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    mean ELBO loss over the last 100 steps: 57,127
-    CPU times: user 10.5 s, sys: 3.21 s, total: 13.8 s
-    Wall time: 6.2 s
+    mean ELBO loss over the last 100 steps: 56,657
+    CPU times: user 10.4 s, sys: 3.23 s, total: 13.6 s
+    Wall time: 6.02 s
 
 
 <figure class="figure">
@@ -693,55 +692,12 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 </figure>
 
 
-> **Remark:** Is the plain constant-rate `Adam` leaving anything on the table? The [fresh-retail example](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) gets a real benefit from a fancier `optax` recipe (a one-cycle learning-rate schedule chained with a reduce-on-plateau backoff), so we run the same recipe here and compare where the ELBO lands. On this model the two optimizers end in the same place, so the schedule buys nothing that the simple configuration does not already deliver, and we keep `Adam` for the rest of the notebook. The comparison is worth keeping around, though: it is a one-argument change ([fit_svi](../../../reference/functional.svi.fit_svi.md#numpyro_forecast.functional.svi.fit_svi) accepts any `optax` optimizer via `optim=`), and on harder posterior geometries, like the retail example's hierarchical model on real data, it is the difference between converging and stalling.
-
-
-    In [10]:
-
-
-``` python
-scheduler = optax.linear_onecycle_schedule(
-    transition_steps=num_steps,
-    peak_value=0.01,
-    pct_start=0.3,
-    pct_final=0.85,
-    div_factor=2,
-    final_div_factor=3,
-)
-custom_optimizer = optax.chain(
-    optax.adam(learning_rate=scheduler),
-    optax.contrib.reduce_on_plateau(factor=0.8, patience=20, accumulation_size=100),
-)
-
-rng_key, rng_subkey = random.split(rng_key)
-fit_onecycle = fit_svi(
-    rng_subkey,
-    model,
-    train_data,
-    covariates_train,
-    optim=custom_optimizer,
-    num_steps=num_steps,
-)
-
-loss_adam = float(jnp.mean(fit.losses[-100:]))
-loss_onecycle = float(jnp.mean(fit_onecycle.losses[-100:]))
-print(f"last-100 mean ELBO loss, constant-rate Adam:        {loss_adam:,.1f}")
-print(f"last-100 mean ELBO loss, one-cycle + plateau chain: {loss_onecycle:,.1f}")
-print(f"relative difference: {abs(loss_onecycle - loss_adam) / loss_adam:.2%}")
-```
-
-
-    last-100 mean ELBO loss, constant-rate Adam:        57,127.2
-    last-100 mean ELBO loss, one-cycle + plateau chain: 57,130.9
-    relative difference: 0.01%
-
-
 # Diagnostics
 
 We export the fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html). Because we pass the *extended* covariates (whose availability input carries the realized test availability), the tree automatically gains `predictions` groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide `time` coordinate, name the covariate axes explicitly (the covariates are `3`-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with `predictive_batch_size`, since every stored site on this panel is a `(draws, time, series)` block.
 
 
-    In [11]:
+    In [10]:
 
 
 ``` python
@@ -789,16 +745,16 @@ Group: /
 │         * z_noise_dim_0      (z_noise_dim_0) int64 8kB 0 1 2 3 4 ... 996 997 998 999
 │         * z_smoothing_dim_0  (z_smoothing_dim_0) int64 8kB 0 1 2 3 ... 996 997 998 999
 │       Data variables:
-│           demand_rate        (chain, draw, time, obs_dim) float32 200MB 0.5 ... 3.188
-│           noise_scale        (chain, draw) float32 4kB 1.642 1.596 ... 1.604 1.663
-│           p_noise            (chain, draw, p_noise_dim_0) float32 4MB 0.2356 ... 0....
-│           p_smoothing        (chain, draw, p_smoothing_dim_0) float32 4MB 0.3565 .....
-│           prob               (chain, draw, time, obs_dim) float32 200MB 0.5 ... 0.9987
+│           demand_rate        (chain, draw, time, obs_dim) float32 200MB 0.5 ... 3.074
+│           noise_scale        (chain, draw) float32 4kB 1.615 1.647 1.64 ... 1.65 1.6
+│           p_noise            (chain, draw, p_noise_dim_0) float32 4MB 0.2493 ... 0....
+│           p_smoothing        (chain, draw, p_smoothing_dim_0) float32 4MB 0.4641 .....
+│           prob               (chain, draw, time, obs_dim) float32 200MB 0.5 ... 0.9885
 │           rate               (chain, draw, time, obs_dim) float32 200MB 0.5 ... 0.0
-│           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.273 ... 1.783
-│           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.07928 ....
+│           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.553 ... 1.536
+│           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.1851 .....
 │       Attributes:
-│           created_at:                 2026-07-21T20:04:37.321662+00:00
+│           created_at:                 2026-07-21T20:42:03.486023+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -812,9 +768,9 @@ Group: /
 │         * time     (time) int64 400B 0 1 2 3 4 5 6 7 8 ... 41 42 43 44 45 46 47 48 49
 │         * obs_dim  (obs_dim) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 200MB -2.585 0.9524 ... 4.154
+│           obs      (chain, draw, time, obs_dim) float32 200MB 4.629 0.009904 ... 5.943
 │       Attributes:
-│           created_at:                 2026-07-21T20:04:37.863551+00:00
+│           created_at:                 2026-07-21T20:42:03.842623+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -827,7 +783,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-21T20:04:37.864016+00:00
+│           created_at:                 2026-07-21T20:42:03.842856+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -841,7 +797,7 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-21T20:04:37.864534+00:00
+│           created_at:                 2026-07-21T20:42:03.843171+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -854,9 +810,9 @@ Group: /
 │         * time     (time) int64 80B 50 51 52 53 54 55 56 57 58 59
 │         * obs_dim  (obs_dim) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.134 ... -0.0 0.0
+│           obs      (chain, draw, time, obs_dim) float32 40MB 0.0 1.829 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-21T20:04:38.129758+00:00
+│           created_at:                 2026-07-21T20:42:04.095486+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -870,7 +826,7 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-07-21T20:04:38.130088+00:00
+            created_at:                 2026-07-21T20:42:04.095836+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1071,7 +1027,7 @@ demand_rate
 float32
 
 
-0.5 0.5 1.0 ... 2.512 0.04121 3.188
+0.5 0.5 1.0 ... 3.022 0.08353 3.074
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1079,7 +1035,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.6782645 , 0.5416363 , 1.259012  , ..., 0.        ,0.        , 1.821347  ],[1.1701968 , 0.49653283, 0.93291295, ..., 0.48845178,0.        , 2.196816  ],...,[2.7286556 , 1.4210991 , 1.7483305 , ..., 1.895539  ,0.10322234, 3.5041564 ],[2.7286556 , 1.4210991 , 1.7483305 , ..., 2.1258059 ,0.07261866, 3.5945382 ],[2.7286556 , 1.4210991 , 1.8080542 , ..., 2.543216  ,0.07261866, 3.1444442 ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.67434454, 0.55141246, 1.2266889 , ..., 0.        ,0.        , 1.831261  ],[1.4757882 , 0.4947135 , 0.9486122 , ..., 0.68103886,0.        , 2.1647592 ],...0.03651327, 3.2493646 ],[2.9599526 , 1.4673674 , 1.5857991 , ..., 2.1478982 ,0.02816564, 3.3343325 ],[2.9599526 , 1.4673674 , 1.6226114 , ..., 2.5577505 ,0.02816564, 3.1081858 ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.5861883 , 0.5657135 , 1.1837469 , ..., 0.        ,0.        , 2.1095319 ],[1.3870059 , 0.49136347, 0.96623707, ..., 0.46575168,0.        , 2.5309641 ],...,[2.9010303 , 1.4277786 , 1.7093551 , ..., 1.8990767 ,0.0670123 , 3.3007855 ],[2.9010303 , 1.4277786 , 1.7093551 , ..., 2.1139655 ,0.04121009, 3.3553944 ],[2.9010303 , 1.4277786 , 1.7621943 , ..., 2.512274  ,0.04121009, 3.187746  ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
+    array([[[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.7320571 , 0.5694075 , 1.2441037 , ..., 0.        ,0.        , 2.085867  ],[1.8074473 , 0.49036524, 0.94041353, ..., 0.9723475 ,0.        , 2.6230536 ],...,[2.951497  , 1.441483  , 1.704891  , ..., 1.7295665 ,0.13106833, 3.6971278 ],[2.951497  , 1.441483  , 1.704891  , ..., 2.0738666 ,0.10390674, 3.7668278 ],[2.951497  , 1.441483  , 1.7656178 , ..., 2.7064626 ,0.10390674, 3.157551  ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.63742614, 0.5283374 , 1.2656491 , ..., 0.        ,0.        , 1.9837328 ],[1.6002175 , 0.49839395, 0.92943054, ..., 0.9411317 ,0.        , 2.3386676 ],...0.09988163, 3.505543  ],[2.9566238 , 1.2485332 , 1.5758353 , ..., 2.205152  ,0.07032981, 3.5962224 ],[2.9566238 , 1.2485332 , 1.609144  , ..., 2.907524  ,0.07032981, 3.0360372 ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.72035825, 0.5438479 , 1.3433828 , ..., 0.        ,0.        , 1.8755093 ],[1.51209   , 0.49615473, 0.88208836, ..., 1.0555435 ,0.        , 2.1774433 ],...,[2.9055464 , 1.4837337 , 1.7942309 , ..., 1.8336604 ,0.09121706, 3.082446  ],[2.9055464 , 1.4837337 , 1.7942309 , ..., 2.274942  ,0.08353098, 3.1224144 ],[2.9055464 , 1.4837337 , 1.8481925 , ..., 3.022356  ,0.08353098, 3.0735953 ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
 
 
 noise_scale
@@ -1091,7 +1047,7 @@ noise_scale
 float32
 
 
-1.642 1.596 1.633 ... 1.604 1.663
+1.615 1.647 1.64 ... 1.638 1.65 1.6
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1099,7 +1055,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[1.6416291, 1.5958658, 1.6325939, 1.6945783, 1.6003406, 1.6255283,1.6421682, 1.6443455, 1.5555668, 1.614861 , 1.6523478, 1.646847 ,1.6432052, 1.6258223, 1.6975629, 1.6614513, 1.664088 , 1.6003448,1.6012199, 1.5659268, 1.6225545, 1.6466433, 1.60414  , 1.6503952,1.6611876, 1.5827991, 1.7345903, 1.6313452, 1.6109694, 1.672122 ,1.6361485, 1.6599686, 1.6631761, 1.5659422, 1.6108747, 1.6323732,1.6656111, 1.712672 , 1.659887 , 1.688221 , 1.6199827, 1.6414831,1.5965594, 1.6727933, 1.6683942, 1.602181 , 1.6751714, 1.67705  ,1.6301814, 1.6369519, 1.6429139, 1.6195647, 1.641255 , 1.5977068,1.6112276, 1.6104451, 1.6465298, 1.659197 , 1.6195042, 1.6359935,1.715927 , 1.6339296, 1.6720576, 1.607311 , 1.5854268, 1.6463037,1.6791978, 1.6211045, 1.6283805, 1.6229887, 1.6421996, 1.6847124,1.6719561, 1.6599553, 1.6641331, 1.6528298, 1.6591628, 1.6796407,1.6346507, 1.5726473, 1.6558863, 1.6582421, 1.6563594, 1.6812468,1.677731 , 1.6375397, 1.6150467, 1.643502 , 1.6205966, 1.6443094,1.5775449, 1.6493683, 1.6408716, 1.6682272, 1.6853138, 1.585379 ,1.6400694, 1.6736987, 1.6644564, 1.6701779, 1.6790502, 1.5774459,1.6959455, 1.6780759, 1.6057984, 1.6543074, 1.6432146, 1.6565053,1.6687175, 1.571016 , 1.6412761, 1.5717098, 1.6543851, 1.6208785,1.618209 , 1.7078304, 1.6749426, 1.6338297, 1.6305742, 1.6717522,...1.6156881, 1.6516421, 1.5987262, 1.6158215, 1.6227918, 1.6319647,1.7263533, 1.6160934, 1.6532023, 1.6532918, 1.652952 , 1.7065803,1.6541291, 1.6081972, 1.6582243, 1.69543  , 1.6990416, 1.6532215,1.6684816, 1.5904355, 1.6092715, 1.64985  , 1.6278578, 1.6102451,1.64433  , 1.6162637, 1.6274749, 1.6124511, 1.5611887, 1.6266475,1.6727331, 1.656884 , 1.6655791, 1.6261462, 1.6851727, 1.7133818,1.636466 , 1.5766335, 1.691194 , 1.6445113, 1.6533564, 1.6542022,1.6348943, 1.6810308, 1.6593655, 1.7476557, 1.6539026, 1.6339725,1.713681 , 1.6616988, 1.6369412, 1.6439741, 1.6024175, 1.6339896,1.6413014, 1.6423017, 1.6298608, 1.6303184, 1.6531131, 1.5821995,1.6607072, 1.6472602, 1.6942983, 1.6366313, 1.6229575, 1.6195221,1.6737407, 1.7155664, 1.6439842, 1.679561 , 1.5966047, 1.5795963,1.5994356, 1.6327971, 1.6480588, 1.5943656, 1.6719537, 1.6916468,1.6427773, 1.6357688, 1.671581 , 1.6469822, 1.6624147, 1.6527021,1.6147665, 1.6641214, 1.6202685, 1.6304166, 1.6411166, 1.623867 ,1.5806018, 1.5871994, 1.6749038, 1.6542323, 1.6025615, 1.729628 ,1.6453216, 1.6759707, 1.620002 , 1.6143054, 1.6428082, 1.5931753,1.6199028, 1.6883078, 1.6644399, 1.6931082, 1.6182313, 1.5921946,1.6162312, 1.7244012, 1.5856706, 1.6379843, 1.6421332, 1.7258818,1.6155782, 1.6036739, 1.6041226, 1.6627   ]], dtype=float32)
+    array([[1.6145902, 1.6469204, 1.6398652, 1.7017729, 1.6375501, 1.5389268,1.720043 , 1.6193825, 1.6574185, 1.6867076, 1.6657157, 1.6356448,1.612778 , 1.6740178, 1.6053519, 1.6390157, 1.6240585, 1.6516685,1.683398 , 1.61717  , 1.6664426, 1.6432558, 1.6305466, 1.6591103,1.6070484, 1.5742412, 1.6081716, 1.6260235, 1.6884226, 1.637721 ,1.6388631, 1.6499252, 1.6426784, 1.5947479, 1.6344618, 1.6709068,1.6133674, 1.5933386, 1.6567177, 1.6298666, 1.6168498, 1.5406659,1.656766 , 1.6665763, 1.6978755, 1.6769216, 1.6042225, 1.6990898,1.695636 , 1.6334486, 1.6445452, 1.6067343, 1.6338731, 1.6157094,1.6236672, 1.6819682, 1.6518248, 1.5910022, 1.6226097, 1.6612377,1.6304061, 1.5937009, 1.6816139, 1.6433898, 1.5816549, 1.6616898,1.6601644, 1.624017 , 1.6146793, 1.592674 , 1.6478162, 1.6274884,1.6393409, 1.6751405, 1.64576  , 1.6763501, 1.6417896, 1.6402297,1.6514916, 1.5972848, 1.5948651, 1.5963844, 1.6867903, 1.5873893,1.6366041, 1.6499281, 1.6533614, 1.6419989, 1.5601794, 1.6619139,1.6083983, 1.643034 , 1.6417322, 1.7022381, 1.6456676, 1.5851429,1.6358137, 1.6197815, 1.7158647, 1.6458882, 1.6271319, 1.6689755,1.6148283, 1.5945523, 1.6653335, 1.6281075, 1.6142019, 1.6464982,1.6603469, 1.7065146, 1.6296763, 1.5862203, 1.6430578, 1.6584401,1.6557138, 1.6363838, 1.6628011, 1.6615556, 1.654893 , 1.6515263,...1.6743404, 1.61441  , 1.628207 , 1.6857444, 1.6880468, 1.612716 ,1.649971 , 1.6255175, 1.6113255, 1.6612427, 1.6252117, 1.6643958,1.674687 , 1.5986881, 1.614551 , 1.6842304, 1.57814  , 1.645499 ,1.6451603, 1.5870237, 1.659803 , 1.5955728, 1.6096414, 1.6355736,1.6097932, 1.6987286, 1.6634324, 1.6335919, 1.6535206, 1.599096 ,1.6049505, 1.5850134, 1.6553959, 1.6518092, 1.6422869, 1.6318713,1.692177 , 1.7014471, 1.6218375, 1.6980574, 1.6610041, 1.7264938,1.649717 , 1.5997105, 1.6450061, 1.5839632, 1.6528866, 1.6270101,1.6300722, 1.6510396, 1.5781668, 1.7200345, 1.619066 , 1.5845501,1.6274278, 1.6779016, 1.6189808, 1.6513345, 1.5916343, 1.6400065,1.6464672, 1.7067223, 1.5788374, 1.6033487, 1.5909253, 1.5923367,1.6146715, 1.6966349, 1.6445422, 1.7511878, 1.6175109, 1.5879123,1.7041862, 1.6619353, 1.6509405, 1.5632219, 1.5987496, 1.6636409,1.6662546, 1.6451418, 1.5813894, 1.6682767, 1.5698072, 1.6017479,1.6749477, 1.6272931, 1.6152456, 1.6620653, 1.6222019, 1.683219 ,1.6474893, 1.6067909, 1.7111015, 1.6353762, 1.7081157, 1.598943 ,1.6836401, 1.6711296, 1.653128 , 1.7211313, 1.7070644, 1.6283703,1.683164 , 1.6619976, 1.5825214, 1.6267465, 1.5985281, 1.567323 ,1.6163516, 1.728416 , 1.6837697, 1.7095963, 1.6151903, 1.609623 ,1.636188 , 1.638241 , 1.6499665, 1.6001523]], dtype=float32)
 
 
 p_noise
@@ -1111,7 +1067,7 @@ p_noise
 float32
 
 
-0.2356 0.3296 ... 0.3635 0.2637
+0.2493 0.4484 ... 0.3551 0.2397
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1119,7 +1075,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.23557004, 0.3295964 , 0.28722733, ..., 0.33739036,0.3955534 , 0.27733847],[0.23538832, 0.41975355, 0.3417156 , ..., 0.38350692,0.41343474, 0.4003674 ],[0.36853442, 0.39166048, 0.29544455, ..., 0.4357567 ,0.24930838, 0.30580193],...,[0.2871821 , 0.35036743, 0.22920299, ..., 0.39317298,0.34532732, 0.36878356],[0.19114229, 0.48188245, 0.38271156, ..., 0.42993554,0.42688757, 0.3214646 ],[0.27185494, 0.38835335, 0.37892863, ..., 0.4895899 ,0.3634896 , 0.26367855]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.24931394, 0.4484018 , 0.35473594, ..., 0.54184985,0.28705645, 0.41682237],[0.29547748, 0.2573474 , 0.27726278, ..., 0.42920303,0.3053679 , 0.25669795],[0.3668341 , 0.48080125, 0.2980232 , ..., 0.44681126,0.3803906 , 0.30758858],...,[0.27236262, 0.5015855 , 0.3551371 , ..., 0.3211371 ,0.5452048 , 0.22221369],[0.2740268 , 0.5276048 , 0.3458017 , ..., 0.46591944,0.3346829 , 0.2395594 ],[0.23791055, 0.5345935 , 0.3304667 , ..., 0.37274468,0.3550704 , 0.23967566]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 p_smoothing
@@ -1131,7 +1087,7 @@ p_smoothing
 float32
 
 
-0.3565 0.08327 ... 0.385 0.4064
+0.4641 0.1388 ... 0.08426 0.2503
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1139,7 +1095,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.35652906, 0.08327255, 0.2590119 , ..., 0.19484755,0.2964831 , 0.21423137],[0.34868917, 0.10282499, 0.2266888 , ..., 0.36005324,0.29112014, 0.2208406 ],[0.20488365, 0.07814995, 0.1328513 , ..., 0.06689196,0.11641613, 0.23009804],...,[0.16498864, 0.19421962, 0.42516562, ..., 0.19061652,0.1618794 , 0.13161285],[0.27692997, 0.06892153, 0.11122721, ..., 0.24989341,0.228619  , 0.16223253],[0.17237663, 0.13142703, 0.18374693, ..., 0.1762564 ,0.38503695, 0.40635452]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.46411425, 0.138815  , 0.24410358, ..., 0.057114  ,0.20723243, 0.39057794],[0.2748523 , 0.05667488, 0.2656491 , ..., 0.2992202 ,0.33852437, 0.32248855],[0.403594  , 0.09217647, 0.33188844, ..., 0.18502949,0.1162178 , 0.23625495],...,[0.28549844, 0.08436769, 0.29365185, ..., 0.21677299,0.27324826, 0.30100095],[0.2798879 , 0.2766967 , 0.08560641, ..., 0.14038883,0.29586837, 0.14647965],[0.44071648, 0.08769584, 0.34338275, ..., 0.28075513,0.08426151, 0.25033945]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 prob
@@ -1151,7 +1107,7 @@ prob
 float32
 
 
-0.5 0.5 0.5 ... 0.05805 0.9987
+0.5 0.5 0.5 ... 0.1547 0.9885
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1159,7 +1115,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.5       , 0.5       , 0.5       , ..., 0.5       ,0.5       , 0.5       ],[0.6782645 , 0.5416363 , 0.629506  , ..., 0.5       ,0.5       , 0.6071157 ],[0.79297256, 0.49653283, 0.46645647, ..., 0.5974238 ,0.5       , 0.6912838 ],...,[0.99956113, 0.7600253 , 0.8896235 , ..., 0.77201736,0.11591072, 0.97138715],[0.99956113, 0.7600253 , 0.8896235 , ..., 0.81643915,0.08154514, 0.9775169 ],[0.99956113, 0.7600253 , 0.9182124 , ..., 0.8522055 ,0.08154514, 0.9823335 ]],[[0.5       , 0.5       , 0.5       , ..., 0.5       ,0.5       , 0.5       ],[0.67434454, 0.55141246, 0.61334443, ..., 0.5       ,0.5       , 0.61042035],[0.78789705, 0.4947135 , 0.4743061 , ..., 0.68002665,0.5       , 0.69645536],...0.12834577, 0.9528761 ],[0.9975666 , 0.75083727, 0.8383683 , ..., 0.8290444 ,0.09900349, 0.9605211 ],[0.9975666 , 0.75083727, 0.85634613, ..., 0.8717651 ,0.09900349, 0.96692586]],[[0.5       , 0.5       , 0.5       , ..., 0.5       ,0.5       , 0.5       ],[0.5861883 , 0.5657135 , 0.59187347, ..., 0.5       ,0.5       , 0.7031772 ],[0.6575198 , 0.49136347, 0.48311853, ..., 0.5881282 ,0.5       , 0.82379246],...,[0.9829037 , 0.76581156, 0.8582117 , ..., 0.7730285 ,0.0943976 , 0.99625576],[0.9829037 , 0.76581156, 0.8582117 , ..., 0.8130337 ,0.05805104, 0.9977772 ],[0.9829037 , 0.76581156, 0.8842649 , ..., 0.84598774,0.05805104, 0.9986805 ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
+    array([[[[0.5       , 0.5       , 0.5       , ..., 0.5       ,0.5       , 0.5       ],[0.7320571 , 0.5694075 , 0.62205184, ..., 0.5       ,0.5       , 0.695289  ],[0.85641325, 0.49036524, 0.47020677, ..., 0.528557  ,0.5       , 0.81430244],...,[0.99997234, 0.76520795, 0.8828678 , ..., 0.7416936 ,0.1313159 , 0.9954338 ],[0.99997234, 0.76520795, 0.8828678 , ..., 0.75644654,0.10410299, 0.9972173 ],[0.99997234, 0.76520795, 0.9114603 , ..., 0.77035683,0.10410299, 0.99830425]],[[0.5       , 0.5       , 0.5       , ..., 0.5       ,0.5       , 0.5       ],[0.63742614, 0.5283374 , 0.63282454, ..., 0.5       ,0.5       , 0.6612443 ],[0.73708045, 0.49839395, 0.46471527, ..., 0.6496101 ,0.5       , 0.7704891 ],...0.11604278, 0.94447356],[0.997707  , 0.7491674 , 0.8288847 , ..., 0.80665636,0.08170938, 0.95260704],[0.997707  , 0.7491674 , 0.8435333 , ..., 0.83379966,0.08170938, 0.9595491 ]],[[0.5       , 0.5       , 0.5       , ..., 0.5       ,0.5       , 0.5       ],[0.72035825, 0.5438479 , 0.6716914 , ..., 0.5       ,0.5       , 0.62516975],[0.843601  , 0.49615473, 0.44104418, ..., 0.6403775 ,0.5       , 0.7190045 ],...,[0.99994683, 0.76181954, 0.9272069 , ..., 0.77481943,0.16896415, 0.97956836],[0.99994683, 0.76181954, 0.9272069 , ..., 0.83804   ,0.15472697, 0.9846832 ],[0.99994683, 0.76181954, 0.9522028 , ..., 0.88351107,0.15472697, 0.9885176 ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
 
 
 rate
@@ -1171,7 +1127,7 @@ rate
 float32
 
 
-0.5 0.5 1.0 1.5 ... 0.0 0.04121 0.0
+0.5 0.5 1.0 1.5 ... 0.0 0.08353 0.0
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1179,7 +1135,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.6782645 , 0.5416363 , 1.259012  , ..., 0.        ,0.        , 1.821347  ],[0.        , 0.        , 0.93291295, ..., 0.        ,0.        , 0.        ],...,[0.        , 0.        , 0.        , ..., 1.895539  ,0.10322234, 3.5041564 ],[0.        , 0.        , 1.7483305 , ..., 2.1258059 ,0.        , 3.5945382 ],[0.        , 1.4210991 , 1.8080542 , ..., 0.        ,0.07261866, 0.        ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.67434454, 0.55141246, 1.2266889 , ..., 0.        ,0.        , 1.831261  ],[0.        , 0.        , 0.9486122 , ..., 0.        ,0.        , 0.        ],...0.03651327, 3.2493646 ],[0.        , 0.        , 1.5857991 , ..., 2.1478982 ,0.        , 3.3343325 ],[0.        , 1.4673674 , 1.6226114 , ..., 0.        ,0.02816564, 0.        ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.5861883 , 0.5657135 , 1.1837469 , ..., 0.        ,0.        , 2.1095319 ],[0.        , 0.        , 0.96623707, ..., 0.        ,0.        , 0.        ],...,[0.        , 0.        , 0.        , ..., 1.8990767 ,0.0670123 , 3.3007855 ],[0.        , 0.        , 1.7093551 , ..., 2.1139655 ,0.        , 3.3553944 ],[0.        , 1.4277786 , 1.7621943 , ..., 0.        ,0.04121009, 0.        ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
+    array([[[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.7320571 , 0.5694075 , 1.2441037 , ..., 0.        ,0.        , 2.085867  ],[0.        , 0.        , 0.94041353, ..., 0.        ,0.        , 0.        ],...,[0.        , 0.        , 0.        , ..., 1.7295665 ,0.13106833, 3.6971278 ],[0.        , 0.        , 1.704891  , ..., 2.0738666 ,0.        , 3.7668278 ],[0.        , 1.441483  , 1.7656178 , ..., 0.        ,0.10390674, 0.        ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.63742614, 0.5283374 , 1.2656491 , ..., 0.        ,0.        , 1.9837328 ],[0.        , 0.        , 0.92943054, ..., 0.        ,0.        , 0.        ],...0.09988163, 3.505543  ],[0.        , 0.        , 1.5758353 , ..., 2.205152  ,0.        , 3.5962224 ],[0.        , 1.2485332 , 1.609144  , ..., 0.        ,0.07032981, 0.        ]],[[0.5       , 0.5       , 1.        , ..., 0.        ,0.        , 1.5       ],[0.72035825, 0.5438479 , 1.3433828 , ..., 0.        ,0.        , 1.8755093 ],[0.        , 0.        , 0.88208836, ..., 0.        ,0.        , 0.        ],...,[0.        , 0.        , 0.        , ..., 1.8336604 ,0.09121706, 3.082446  ],[0.        , 0.        , 1.7942309 , ..., 2.274942  ,0.        , 3.1224144 ],[0.        , 1.4837337 , 1.8481925 , ..., 0.        ,0.08353098, 0.        ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
 
 
 z_noise
@@ -1191,7 +1147,7 @@ z_noise
 float32
 
 
-2.273 0.9714 ... 0.9517 1.783
+2.553 0.8696 0.6872 ... 1.214 1.536
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1199,7 +1155,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[2.2729077 , 0.97144175, 0.7048762 , ..., 1.2990873 ,0.77874327, 1.6654072 ],[2.1058667 , 0.9474447 , 0.844502  , ..., 1.2889745 ,1.089972  , 1.3748813 ],[2.4379141 , 0.84468067, 0.7863216 , ..., 1.2037662 ,0.38981688, 1.5715235 ],...,[2.1181762 , 0.83416605, 0.6763507 , ..., 1.1266961 ,0.69756234, 1.3436103 ],[1.9629935 , 1.0041883 , 0.9009639 , ..., 1.1429585 ,1.123892  , 1.6957167 ],[1.9611555 , 0.9789245 , 0.961785  , ..., 1.1008172 ,0.9516987 , 1.7827178 ]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[2.5525696 , 0.8695829 , 0.68723035, ..., 1.8708465 ,0.65175974, 2.0846379 ],[2.415524  , 1.1842448 , 0.76283383, ..., 1.1064708 ,0.42015886, 1.7134247 ],[1.9749248 , 1.1837242 , 0.8991847 , ..., 0.8714416 ,0.6749737 , 1.1884742 ],...,[2.1801035 , 0.87009645, 0.6825254 , ..., 1.4964955 ,1.3100291 , 1.2452865 ],[2.437276  , 0.9817199 , 0.72893965, ..., 1.2253641 ,1.1411226 , 1.1922944 ],[2.2222462 , 0.8830132 , 0.7485413 , ..., 1.4236465 ,1.2143513 , 1.5357432 ]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 z_smoothing
@@ -1211,7 +1167,7 @@ z_smoothing
 float32
 
 
-0.07928 0.2907 ... 0.2661 0.07233
+0.1851 0.2813 ... 0.1764 0.02841
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1219,14 +1175,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.07928485, 0.2907415 , 0.11092173, ..., 0.27253225,0.4247977 , 0.17787854],[0.14551206, 0.09308542, 0.07054768, ..., 0.3338295 ,0.22210976, 0.1082524 ],[0.07821747, 0.08379131, 0.11445527, ..., 0.46371633,0.1380882 , 0.22935659],...,[0.31724772, 0.12656786, 0.12887691, ..., 0.19936539,0.12140953, 0.06226573],[0.21951218, 0.2192169 , 0.03021587, ..., 0.24352941,0.08028406, 0.10394039],[0.18490852, 0.29427147, 0.1300808 , ..., 0.263974  ,0.26609617, 0.07233211]]], shape=(1, 1000, 1000), dtype=float32)
+    array([[[0.18508086, 0.28131872, 0.08775461, ..., 0.61320883,0.7916275 , 0.22122772],[0.19517024, 0.3730101 , 0.16520633, ..., 0.48292133,0.23373763, 0.03530276],[0.20517959, 0.2376031 , 0.14359942, ..., 0.44886643,0.15692043, 0.06638111],...,[0.38577348, 0.07894781, 0.3069872 , ..., 0.24992412,0.298103  , 0.07705662],[0.2105509 , 0.40463483, 0.0654758 , ..., 0.59494567,0.3891093 , 0.2202098 ],[0.13207054, 0.22740489, 0.09047869, ..., 0.5494382 ,0.17638852, 0.02841386]]], shape=(1, 1000, 1000), dtype=float32)
 
 
 Attributes: (6)
 
 
 created_at :  
-2026-07-21T20:04:37.321662+00:00
+2026-07-21T20:42:03.486023+00:00
 
 creation_library :  
 ArviZ
@@ -1350,7 +1306,7 @@ obs
 float32
 
 
--2.585 0.9524 ... -0.4725 4.154
+4.629 0.009904 ... 0.6084 5.943
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1358,14 +1314,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-2.584829  ,  0.9524088 ,  1.6452434 , ..., -2.101253  ,-0.23768803,  2.6046705 ],[-1.4616485 ,  0.04638965,  2.773092  , ..., -3.4859781 ,0.8573891 ,  2.568034  ],[ 1.7744092 ,  2.863715  ,  1.0430939 , ..., -1.2135471 ,-0.14930597,  4.333962  ],...,[-1.2050627 ,  1.7277703 ,  2.5311892 , ..., -1.2706459 ,0.60986936,  2.1594825 ],[ 2.5552487 ,  1.2631192 ,  1.6882025 , ...,  0.6074698 ,0.13905123,  5.567868  ],[ 1.6200869 , -0.21489447,  2.183492  , ...,  4.6327214 ,-0.39420646,  3.6504116 ]],[[-1.7072934 ,  1.8867687 ,  2.4083626 , ..., -3.1491606 ,0.6865282 ,  2.8707554 ],[ 2.3502629 ,  1.4805038 ,  2.066377  , ..., -2.7371752 ,0.25684795,  4.187906  ],[ 2.8947086 ,  2.136424  ,  3.636254  , ..., -1.0803797 ,1.2342826 ,  1.9288054 ],...0.52896786,  6.298092  ],[-0.22268045,  3.0086749 ,  3.1160135 , ...,  3.1890354 ,0.7740424 ,  4.2279406 ],[ 0.04493713,  3.6145422 ,  3.2841437 , ...,  4.3561387 ,-2.4431305 ,  6.317762  ]],[[-1.5166011 ,  2.1837714 ,  2.946469  , ..., -2.7062275 ,1.5667833 ,  4.287099  ],[ 2.9663105 ,  1.8921396 ,  2.12064   , ...,  0.03020589,-0.36844075,  3.8513367 ],[ 1.7266587 , -0.21004365,  1.8016311 , ...,  2.3834224 ,-1.0077399 ,  1.3293755 ],...,[-1.5501094 , -0.6320512 ,  0.54482424, ...,  3.278456  ,-0.93964976,  4.5965323 ],[ 3.9174888 ,  0.30723456,  1.521188  , ...,  2.2805521 ,1.5582681 ,  0.02582051],[ 5.7725286 ,  1.301194  ,  1.6545142 , ...,  4.4337497 ,-0.47245854,  4.1535535 ]]]],shape=(1, 1000, 50, 1000), dtype=float32)
+    array([[[[ 4.6288614e+00,  9.9035688e-03,  2.2452724e+00, ...,7.1292949e-01, -1.8445134e-01,  1.5833722e+00],[ 2.4943845e+00, -1.3270287e-01,  2.5188859e+00, ...,-1.6241315e-01,  3.3716271e-03,  3.3407738e+00],[ 2.8896575e+00,  3.1390530e-01,  2.1112885e+00, ...,3.8432491e+00, -3.3742588e-02,  2.1670454e+00],...,[ 2.9631734e+00,  8.6447781e-01,  3.1051941e+00, ...,1.2029287e+00,  1.1179149e+00,  4.2229257e+00],[ 3.4341056e+00,  2.0094724e+00,  2.4834509e-01, ...,2.8520133e+00, -8.3464980e-02,  5.2893615e+00],[ 3.7786551e+00,  2.7677116e+00,  4.9917378e+00, ...,3.0763011e+00,  1.8064265e+00,  4.8895669e+00]],[[-2.0999050e+00,  1.2287408e+00,  2.3271840e+00, ...,-1.0165006e+00,  6.9828831e-02,  3.2856126e+00],[-1.5225981e+00,  8.9123614e-02, -1.1875581e-01, ...,1.3968474e+00, -6.7327458e-01,  4.1905179e+00],[ 1.9705055e+00,  1.0744293e+00,  1.3674026e+00, ...,3.2522577e-01, -5.1401023e-02,  1.8248801e+00],...2.4590268e+00, -9.2551842e-02,  3.5946195e+00],[ 2.8526075e+00,  3.5486388e+00,  1.1623614e+00, ...,3.8856380e+00,  4.3167439e-01,  2.8868263e+00],[ 6.0207238e+00,  9.1288692e-01,  1.7655480e+00, ...,-7.2938174e-01, -6.1652064e-01,  4.2095251e+00]],[[-1.4855620e+00,  2.2960941e-01,  5.1401836e-01, ...,-2.4284966e+00, -7.5238943e-01,  2.3153830e+00],[ 5.0807757e+00,  6.2605780e-01,  4.7428074e-01, ...,-2.2864845e+00, -7.3223841e-01,  4.1120391e+00],[ 3.4163591e-01,  2.9233828e-01,  2.9613054e+00, ...,2.0087181e-02,  7.9234517e-01,  3.3718393e+00],...,[ 5.6476231e+00, -1.3768443e+00,  2.0373843e+00, ...,4.4303617e-01,  8.7327284e-01,  5.6992106e+00],[ 3.6667502e+00,  2.4397228e+00,  2.5795124e+00, ...,5.6795173e+00,  1.9828838e+00,  1.6729053e+00],[ 1.5951473e+00,  8.2368779e-01,  2.0853293e+00, ...,5.0243702e+00,  6.0843801e-01,  5.9434958e+00]]]],shape=(1, 1000, 50, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-21T20:04:37.863551+00:00
+2026-07-21T20:42:03.842623+00:00
 
 creation_library :  
 ArviZ
@@ -1459,7 +1415,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T20:04:37.864016+00:00
+2026-07-21T20:42:03.842856+00:00
 
 creation_library :  
 ArviZ
@@ -1574,7 +1530,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T20:04:37.864534+00:00
+2026-07-21T20:42:03.843171+00:00
 
 creation_library :  
 ArviZ
@@ -1695,7 +1651,7 @@ obs
 float32
 
 
--0.0 1.134 0.0 ... 4.038 -0.0 0.0
+0.0 1.829 0.0 ... 1.797 -0.0 0.0
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1703,14 +1659,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-,  0.00000000e+00, -6.41032815e-01, ...,4.07854509e+00, -1.05620794e-01,  0.00000000e+00],...,[ 0.00000000e+00,  1.38957596e+00,  8.15236986e-01, ...,3.02757716e+00,  0.00000000e+00,  0.00000000e+00],[ 5.00996590e+00,  0.00000000e+00, -5.27322367e-02, ...,0.00000000e+00, -8.76562655e-01,  3.15467000e+00],[ 6.07991505e+00,  0.00000000e+00,  2.36341929e+00, ...,4.03817368e+00, -0.00000000e+00,  0.00000000e+00]]]],shape=(1, 1000, 10, 1000), dtype=float32)
+    array([[[[ 0.00000000e+00,  1.82943869e+00,  0.00000000e+00, ...,5.71951866e+00, -1.21958435e-01,  1.15496564e+00],[ 0.00000000e+00,  0.00000000e+00,  3.21712911e-01, ...,0.00000000e+00,  2.32566029e-01,  5.92708588e-01],[ 0.00000000e+00,  0.00000000e+00,  3.41475129e+00, ...,5.88810015e+00, -1.93567014e+00,  0.00000000e+00],...,[ 0.00000000e+00,  1.80092394e+00,  1.45659089e+00, ...,7.47253716e-01,  0.00000000e+00,  0.00000000e+00],[ 6.18266964e+00,  0.00000000e+00,  1.69755089e+00, ...,0.00000000e+00, -2.83365771e-02,  7.46494007e+00],[ 6.84719133e+00, -0.00000000e+00,  8.92225981e-01, ...,7.58012676e+00,  0.00000000e+00,  0.00000000e+00]],[[ 0.00000000e+00,  5.84721625e-01,  0.00000000e+00, ...,4.09254742e+00, -2.11934596e-01,  2.30609393e+00],[-0.00000000e+00,  0.00000000e+00,  1.13811016e+00, ...,0.00000000e+00,  1.17718272e-01,  4.51170921e+00],[ 0.00000000e+00,  0.00000000e+00,  7.45026827e-01, ...,4.69889212e+00, -1.37649834e-01,  0.00000000e+00],...4.03757286e+00, -0.00000000e+00,  0.00000000e+00],[ 2.00271249e-01,  0.00000000e+00,  2.54454899e+00, ...,0.00000000e+00,  1.02271378e+00,  1.84675837e+00],[ 7.35066891e+00,  0.00000000e+00,  4.12520245e-02, ...,4.45882750e+00,  0.00000000e+00,  0.00000000e+00]],[[ 0.00000000e+00,  1.37098062e+00,  0.00000000e+00, ...,2.92818141e+00, -4.89951313e-01,  3.05019355e+00],[ 0.00000000e+00,  0.00000000e+00,  2.64586616e+00, ...,0.00000000e+00, -2.16716737e-03,  2.49079514e+00],[-0.00000000e+00,  0.00000000e+00,  5.07599771e-01, ...,3.16639066e+00, -5.59967419e-04,  0.00000000e+00],...,[ 0.00000000e+00,  1.84604621e+00,  1.44751072e+00, ...,6.24032164e+00,  0.00000000e+00,  0.00000000e+00],[ 3.80655146e+00,  0.00000000e+00,  2.77513003e+00, ...,0.00000000e+00, -9.95480195e-02,  4.38582325e+00],[ 1.87409055e+00,  0.00000000e+00,  2.53862834e+00, ...,1.79725480e+00, -0.00000000e+00,  0.00000000e+00]]]],shape=(1, 1000, 10, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-21T20:04:38.129758+00:00
+2026-07-21T20:42:04.095486+00:00
 
 creation_library :  
 ArviZ
@@ -1825,7 +1781,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-21T20:04:38.130088+00:00
+2026-07-21T20:42:04.095836+00:00
 
 creation_library :  
 ArviZ
@@ -1856,7 +1812,7 @@ sample_dims :
 A variational fit has no chains to converge, so the MCMC diagnostics of the sibling notebooks (\\\hat{R}\\, effective sample sizes) do not apply; the ELBO curve above plays their role. What we can inspect is the fitted posterior itself. `az.summary` on the global noise scale checks the one shared parameter, and for the \\1{,}000\\-dimensional per-series sites we look at the *distribution* of posterior-mean smoothing parameters across series against the prior mean.
 
 
-    In [12]:
+    In [11]:
 
 
 ``` python
@@ -1864,12 +1820,12 @@ az.summary(tree, var_names=["noise_scale"], ci_kind="hdi", ci_prob=0.94, kind="s
 ```
 
 
-|             | mean | sd   | hdi94_lb | hdi94_ub |
-|-------------|------|------|----------|----------|
-| noise_scale | 1.6  | 0.04 | 1.6      | 1.7      |
+|             | mean | sd    | hdi94_lb | hdi94_ub |
+|-------------|------|-------|----------|----------|
+| noise_scale | 1.6  | 0.038 | 1.6      | 1.7      |
 
 
-    In [13]:
+    In [12]:
 
 
 ``` python
@@ -1896,7 +1852,32 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="availability_tsb_files/figure-html/cell-14-output-1.png" class="figure-img" width="1211" height="455" /></p>
+<p><img src="availability_tsb_files/figure-html/cell-13-output-1.png" class="figure-img" width="1211" height="455" /></p>
+</figure>
+
+
+How to read these two shapes. A small smoothing parameter means a *stiff* level (each new observation nudges the estimate only slightly), a large one a *reactive* level that chases the latest observations. The size component (`z_smoothing`) comes out unimodal, concentrated around its annotated mean of \\0.3\\: demand sizes are i.i.d. within each series, so there is no genuine trend to chase, and the likelihood settles on moderate values that average over the Poisson noise rather than track it. The probability component (`p_smoothing`) is the interesting one: its distribution is *multimodal*, with a distinct cluster of series at clearly larger values. That upper cluster is not noise; it is the fastest movers. Their true demand probability sits near \\1\\, so their demand indicator is an almost constant string of ones, and the quickest way for the recursion to explain it is to escape the agnostic \\\hat{p}\_0 = 0.5\\ initialization in a few steps, which requires a large smoothing parameter. The scatter below makes the link explicit, and the printed split quantifies it.
+
+
+    In [13]:
+
+
+``` python
+fig, ax = plt.subplots(figsize=(9, 6))
+p_true_all = 1 - np.exp(-lam)
+ax.scatter(p_true_all, p_sm, s=12, alpha=0.4, color="C0")
+ax.axhline(prior_mean, color="C1", ls="--", label="prior mean")
+ax.legend(loc="upper left")
+ax.set(
+    title="Reactive probability smoothing belongs to the fast movers",
+    xlabel=r"true demand probability $1 - e^{-\lambda_i}$",
+    ylabel="posterior-mean p_smoothing",
+);
+```
+
+
+<figure class="figure">
+<p><img src="availability_tsb_files/figure-html/cell-14-output-1.png" class="figure-img" width="911" height="611" /></p>
 </figure>
 
 
@@ -1904,20 +1885,16 @@ fig.suptitle(
 
 
 ``` python
-high_sm = p_sm > 0.3
-p_true_all = 1 - np.exp(-lam)
-print(f"series with posterior-mean p_smoothing above 0.3: {int(high_sm.sum())}")
+high_sm = p_sm > 0.55
+print(f"series with posterior-mean p_smoothing above 0.55: {int(high_sm.sum())}")
 print(f"  their mean true demand probability:      {float(p_true_all[high_sm].mean()):.2f}")
 print(f"  remaining series' mean true probability: {float(p_true_all[~high_sm].mean()):.2f}")
 ```
 
 
-    series with posterior-mean p_smoothing above 0.3: 307
-      their mean true demand probability:      0.97
-      remaining series' mean true probability: 0.76
-
-
-The size component's posterior means stay in the sensible \\\[0.1, 0.5\]\\ range, centered a little above the prior mean (the annotated mean is \\0.24\\): demand is i.i.d. within each series, so there is no genuine trend in the sizes for a reactive smoothing parameter to chase, and fifty periods per series let the data shift the prior only mildly. The probability component is more interesting: its distribution is clearly bimodal, and the printed split shows that the series in the upper mode are the fastest movers, whose true demand probability is essentially \\1\\. For them the demand indicator is a near-constant string of ones, and the quickest way to explain it is to escape the \\\hat{p}\_0 = 0.5\\ initialization fast, so their likelihood rewards a much larger smoothing parameter.
+    series with posterior-mean p_smoothing above 0.55: 204
+      their mean true demand probability:      0.98
+      remaining series' mean true probability: 0.78
 
 
 # In-sample fit
@@ -1992,9 +1969,17 @@ fig.suptitle(
 </figure>
 
 
+At first glance this fit can look poor: the blue line runs well below the observed spikes and above the many zeros, and its narrow bands cover almost none of the black dots. That is exactly how it should look. The plotted `"rate"` is the model's *expected* sales per period, a smoothed conditional mean, while each observation is a single draw from a very skewed intermittent distribution: mostly zeros, occasionally a spike several times the mean. A mean that ran through the spikes would not be a better fit; it would be chasing Poisson noise the model is deliberately averaging over (this is the same reason a constant \\\lambda\\ is the best possible point forecast for an i.i.d. Poisson series, however jagged its draws look). The bands are narrow for the same reason: they carry only parameter uncertainty about the smoothed level, not the observation noise around it. The honest question, "does the model's *predictive distribution* cover the data?", is answered on the test window below, where the posterior predictive (which does include the observation noise and the zero-inflation from demand gaps and stock-outs) is scored with CRPS and its empirical coverage.
+
+
 ## The demand probability
 
-The probability path is where the innovation lives, so we look at it for the series with the *longest* stock-out run in the training window. Through the shaded run the availability-gated estimate stays **frozen**: plain TSB would decay it by a factor \\(1 - \beta)\\ per period across the same stretch, reading the enforced silence as vanishing demand. Between stock-outs the path does exactly what TSB should do, decaying through on-shelf zeros and jumping at demands: it moves around the series' true demand probability \\1 - e^{-\lambda}\\ (dashed line, never seen by the model), overshooting during the long mid-sample streak of demand events and falling back through the on-shelf zeros that follow.
+The probability path is where the innovation lives, so we look at it for the series with the *longest* stock-out run in the training window. The figure has a few moving parts, so here is how to read it:
+
+- The path starts at the agnostic initialization \\\hat{p}\_0 = 0.5\\ and is plotted as a posterior *band*, not a single line: the smoothing parameter \\\beta\\ is uncertain, and every recursion step inherits that uncertainty, so the band is the posterior over the whole trajectory.
+- The short vertical rug marks at the bottom are the observed demand events. Each one pulls the estimate up by \\\beta (1 - \hat{p}\_t)\\; each *on-shelf* zero decays it by a factor \\(1 - \beta)\\. This is plain TSB behavior, and between stock-outs the path does exactly that, wiggling around the series' true demand probability \\1 - e^{-\lambda}\\ (dashed line, a ground-truth quantity the model never sees).
+- Through the shaded stock-out runs the availability-gated estimate stays exactly **frozen**: a zero the customer never had a chance to break carries no demand information, so the recursion skips it.
+- The dashed blue line is the counterfactual that makes the freeze visible: the same recursion with the same fitted smoothing parameter, but with plain TSB's every-period updates, which read the enforced silence of a stock-out as vanishing demand. Every shaded run drags it down (the long mid-window run pulls it almost to zero), and because each of those artificial decays has to be earned back through subsequent demand events, the counterfactual spends essentially the whole window below the gated path. That persistent gap is exactly the downward bias the availability gate removes.
 
 
     In [16]:
@@ -2024,6 +2009,20 @@ ax, handles = plot_band_forecast(
 )
 p_true_j = 1 - np.exp(-lam[j])
 true_line = ax.axhline(p_true_j, color="black", ls="--", lw=1, label="true demand probability")
+
+# Counterfactual: the same recursion with the fitted (posterior-mean) smoothing
+# parameter but plain TSB's every-period updates, so stock-outs decay it too.
+beta_j = float(p_sm[j])
+demand_indicator_j = np.asarray(train_data[:, j] > 0, dtype=float)
+plain_path = np.empty(t_max_train)
+p_hat = 0.5
+for step in range(t_max_train):
+    plain_path[step] = p_hat
+    p_hat = p_hat + beta_j * (demand_indicator_j[step] - p_hat)
+(plain_line,) = ax.plot(
+    t_train, plain_path, color="C0", ls="--", lw=1.5, label="plain TSB counterfactual"
+)
+
 event_times = t_train[np.asarray(train_data[:, j] > 0)]
 (rug,) = ax.plot(
     event_times,
@@ -2035,7 +2034,7 @@ event_times = t_train[np.asarray(train_data[:, j] > 0)]
 )
 shade = shade_stockouts(ax, t_train, avail_train_np[:, j])
 ax.legend(
-    handles=[*handles, true_line, rug, shade],
+    handles=[*handles, true_line, plain_line, rug, shade],
     loc="upper center",
     bbox_to_anchor=(0.5, -0.1),
     ncol=3,
@@ -2079,7 +2078,7 @@ print(f"empirical 94% coverage: {cov_94:.2f}  (nominal 0.94)")
 ```
 
 
-    panel test CRPS (realized availability): 0.5385
+    panel test CRPS (realized availability): 0.5471
     empirical 50% coverage: 0.70  (nominal 0.50)
     empirical 94% coverage: 0.98  (nominal 0.94)
 
@@ -2114,7 +2113,7 @@ def add_availability_axis(ax: Axes, t_axis: np.ndarray, available: np.ndarray) -
     return avail_line
 
 
-i = example_series[0]
+i = example_series
 ax, handles = plot_band_forecast(
     forecast_pp[:, :, [i]],
     t_test.astype(float),
@@ -2214,11 +2213,11 @@ ax.set(
 ```
 
 
-    series 41: last 5 training periods are stock-outs, lambda = 5.12, latent demand lost in the run = 33 units
-
-
     /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
+
+
+    series 41: last 5 training periods are stock-outs, lambda = 5.12, latent demand lost in the run = 33 units
 
 
 <figure class="figure">
@@ -2249,7 +2248,7 @@ predictive = Predictive(
 )
 component_draws = predictive(rng_subkey, covariates_full, train_data)
 
-i = example_series[0]
+i = example_series
 components = np.concatenate(
     [
         np.asarray(component_draws["z_forecast"])[:, :, [i]],
@@ -2370,7 +2369,8 @@ pc = az.plot_lm(
     },
     aes={"alpha": ["prob"]},
     alpha=hdi_alphas,
-    figure_kwargs={"figsize": (12, 5), "sharex": True, "sharey": True},
+    col_wrap=1,
+    figure_kwargs={"figsize": (12, 9), "sharex": True, "sharey": True},
 )
 axes = pc.viz["plot"]["t"]
 ax_realized = axes.sel(series="realized availability").item()
@@ -2396,21 +2396,21 @@ ax_full = axes.sel(series="full availability").item()
 truth_line = ax_full.axhline(
     expected_total, color="black", ls="--", lw=1, label="true expected demand"
 )
-ax_realized.set(title="Realized availability", xlabel="time", ylabel="panel total")
-ax_full.set(title="Full availability", xlabel="time", ylabel="")
+ax_realized.set(title="Realized availability", xlabel="", ylabel="panel total")
+ax_full.set(title="Full availability", xlabel="time", ylabel="panel total")
 bands = pc.viz["ci_band"]["t"]
 band_94 = bands.sel(series="full availability", prob=0.94).item()
 band_50 = bands.sel(series="full availability", prob=0.5).item()
 band_94.set_label(hdi_label(0.94))
 band_50.set_label(hdi_label(0.5))
-ax_realized.legend(handles=[sales_line], loc="lower left")
+ax_realized.legend(handles=[sales_line], loc="upper left")
 ax_full.legend(handles=[band_94, band_50, demand_line, truth_line], loc="lower left")
 fig = pc.viz["figure"].item()
 fig.suptitle(
     "Panel-total forecasts under two availability scenarios",
     fontsize=16,
     fontweight="bold",
-    y=1.05,
+    y=1.03,
 );
 ```
 
@@ -2420,7 +2420,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="availability_tsb_files/figure-html/cell-23-output-2.png" class="figure-img" width="1211" height="540" /></p>
+<p><img src="availability_tsb_files/figure-html/cell-23-output-2.png" class="figure-img" width="1211" height="942" /></p>
 </figure>
 
 
@@ -2447,15 +2447,15 @@ print(
 
     true expected demand per period (sum of lambdas):  2,471.8
     expected sales per period at 60% availability:     1,483.1
-    forecast total per period, realized availability:  1,485.9 (60% of expected demand)
-    forecast total per period, full availability:      2,476.1 (100% of expected demand)
+    forecast total per period, realized availability:  1,490.4 (60% of expected demand)
+    forecast total per period, full availability:      2,481.3 (100% of expected demand)
 
 
 How to read this figure:
 
-- **Left panel (realized availability).** The forecast answers "how much will we *sell* under the stock-out pattern the test window actually had". The panel total wiggles period by period because a different random \\40\\\\ of the assortment is off the shelf each period, and the band tracks the observed total sales (black), which is the quantity this scenario should predict. Note that the model gets the *level* right without ever being told the availability rate: it learned each series' on-shelf demand and the covariates supply who is on the shelf when.
-- **Right panel (full availability).** Same posterior, one covariate change: every product on the shelf over the whole horizon. The forecast jumps to the level of the *latent demand* (blue), the sales that would materialize with nothing censored, and its mean sits essentially on the true expected demand \\\sum_i \lambda_i\\ (dashed), a ground-truth quantity the model has never observed. This is the number a replenishment plan actually needs, and no amount of post-processing of the left panel produces it: scaling censored forecasts up by a global availability rate would miss which series were censored and by how much.
-- **The gap between the panels** is the roughly \\40\\\\ of demand that stock-outs make invisible in any single period's sales. The printed totals below the figure quantify it: the realized-availability total sits near the expected *sales* level, while the full-availability total recovers the expected *demand* within a few percent.
+- **Top panel (realized availability).** The forecast answers "how much will we *sell* under the stock-out pattern the test window actually had". The panel total wiggles period by period because a different random \\40\\\\ of the assortment is off the shelf each period, and the band tracks the observed total sales (black), which is the quantity this scenario should predict. Note that the model gets the *level* right without ever being told the availability rate: it learned each series' on-shelf demand and the covariates supply who is on the shelf when.
+- **Bottom panel (full availability).** Same posterior, one covariate change: every product on the shelf over the whole horizon. The forecast jumps to the level of the *latent demand* (blue), the sales that would materialize with nothing censored, and its mean sits essentially on the true expected demand \\\sum_i \lambda_i\\ (dashed), a ground-truth quantity the model has never observed. This is the number a replenishment plan actually needs, and no amount of post-processing of the top panel produces it: scaling censored forecasts up by a global availability rate would miss which series were censored and by how much.
+- **The vertical gap between the panels** is easy to read off because they share the y axis: it is the roughly \\40\\\\ of demand that stock-outs make invisible in any single period's sales. The printed totals below the figure quantify it: the realized-availability total sits near the expected *sales* level, while the full-availability total recovers the expected *demand* within a few percent.
 - **Band widths.** The bands are much narrower, relative to the mean, than in the single-series forecasts above: summing \\1{,}000\\ series averages away the independent per-series noise, so what remains is mostly the (small, well-pooled) parameter uncertainty plus the availability pattern itself.
 
 
@@ -2488,7 +2488,7 @@ post_plain = draw_posterior(
 ```
 
 
-    mean ELBO loss over the last 100 steps: 87,131
+    mean ELBO loss over the last 100 steps: 87,683
 
 
     In [25]:
@@ -2566,8 +2566,8 @@ print(
 
 
     true expected demand per period (sum of lambdas):     2,471.8
-    full-availability forecast, availability-aware TSB:   2,476.1 (100% of truth)
-    full-availability forecast, plain TSB:                1,480.6 (60% of truth)
+    full-availability forecast, availability-aware TSB:   2,481.3 (100% of truth)
+    full-availability forecast, plain TSB:                1,479.8 (60% of truth)
 
 
 Finally, we return to the hero series from the forecast section, the fast mover whose training window ends in a stock-out run, and ask both fits the same scenario question: how much demand would there be with the product always on the shelf? For plain TSB the trailing run is a double blow. Its demand-probability estimate is biased low on *every* series (the \\0.6 \times\\ line above), and on this series it decayed further through each zero of the trailing run right before the forecast origin. The availability-aware fit froze through the same run.
