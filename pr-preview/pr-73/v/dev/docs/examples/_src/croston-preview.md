@@ -1650,7 +1650,7 @@ fig.suptitle("Croston component forecasts", fontsize=16, fontweight="bold", y=1.
 
 # One-step-ahead cross-validation
 
-A fixed-origin forecast tells us how the model does from one training window. The blog post's more interesting experiment is a **rolling-origin, one-step-ahead** evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) runs this loop for us with `test_window=1` and `stride=1`, refitting the NUTS sampler on each fold through [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), the OOP counterpart of [fit_mcmc](../../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc) that [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) constructs per fold. With `min_train_window=n_train` the folds tile the test span exactly, one fold per held-out period, and `keep_predictions=True` retains each fold's forecast samples so we can assemble and plot them. Alongside the CRPS we track the empirical coverage of the central \\50\\\\ and \\94\\\\ intervals as per-fold indicators (with a single test point per fold, each is \\0\\ or \\1\\; we aggregate them across folds below).
+de the CRPS we track the empirical coverage of the central \\50\\\\ and \\94\\\\ intervals as per-fold indicators (with a single test point per fold, each is \\0\\ or \\1\\; we aggregate them across folds below).
 
 
     In [14]:
