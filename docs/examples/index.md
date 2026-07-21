@@ -89,3 +89,12 @@ Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC
 
 
 Fit the same weekly BART ridership model with NUTS, SVI, Pathfinder, and MCLMC without touching the model code, and compare their forecasts with CRPS.
+
+
+<a href="../../docs/examples/tsb.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/tsb.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+TSB Method for Intermittent Demand
+
+
+Bayesian TSB method for intermittent demand: masked exponential smoothing of demand sizes and a per-period demand probability, so the forecast decays during zero-runs where Croston's stays frozen. NUTS inference and one-step-ahead cross-validation.
