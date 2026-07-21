@@ -11,10 +11,10 @@ TSB fixes exactly this. It keeps the demand-size channel unchanged, but replaces
 
 the expected demand size times the probability that a demand occurs. Because the probability is updated on every zero as well as every demand, it **decays geometrically through a run of zeros** and jumps back up at the next demand, so the forecast responds to the *recency* of demand. That single structural change, one smoothing recursion that runs every period instead of only at events, is the whole story, and it is what this notebook makes concrete. As a side benefit, TSB smooths a probability directly instead of an inverse interval, so it sidesteps the inversion (Jensen) bias and the Syntetos-Boylan correction that the Croston notebook has to reckon with.
 
-Two practical notes on the port, unchanged from the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) and the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html):
+Two practical notes on the port, unchanged from the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html):
 
 - We reuse the *same* reusable `level_model` (the simple exponential smoothing level model from the blog's [exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/)) on the **raw calendar timeline**: one `jax.lax.scan` runs each level recursion, and demand events are marked with a boolean indicator. The only difference from Croston lives in *how that indicator is used*: Croston freezes the level (and masks the likelihood) outside demand events, while TSB's probability channel updates on every period. Everything plugs straight into [fit_mcmc](../../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest).
-- As in the ARMA example, the observed series itself plays the role of the covariates, because the model needs the demand history to run its recursions, and `covariates` is the carrier that spans the full horizon at prediction time. The model only ever reads the first [t_obs](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast.
+- The observed series itself plays the role of the covariates, because the model needs the demand history to run its recursions, and `covariates` is the carrier that spans the full horizon at prediction time. The model only ever reads the first [t_obs](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast.
 
 
 # Prepare notebook
@@ -168,7 +168,7 @@ markerline, stemlines, baseline = ax_d.stem(t_train, is_demand_train.astype(floa
 plt.setp(markerline, color="C3", markersize=4)
 plt.setp(stemlines, color="C3", linewidth=1)
 ax_d.axhline(demand_rate, color="black", ls="--", lw=1, label="empirical demand rate")
-ax_d.legend(loc="upper right")
+ax_d.legend(loc="upper left")
 ax_d.set(
     title="Demand indicator $d_t$ ($1$ if demand, every period, calendar axis)",
     xlabel="time",
@@ -236,7 +236,7 @@ Because both components run the *same* level model, we write it once and compose
 The `tsb` body then does what is specific to TSB:
 
 1.  **Bookkeeping.** From the observed prefix of the covariates it builds the demand indicator `is_demand` and the float `demand_indicator`. Where Croston passes `is_demand` as the event gate to *both* channels, TSB passes an all-`True` gate (`every_period`) to the probability channel, so that channel updates on every period. That one substitution is the method.
-2.  **In sample.** The size likelihood `"obs"` is **masked** to demand events (only demand sizes inform \\\ell^z\\), exactly as in Croston. The probability likelihood `"obs_prob"` is **not masked**: every period's \\0/1\\ indicator informs \\\ell^p\\. The deterministic sites `"rate"` (\\\ell^z\_{t-1} \cdot \ell^p\_{t-1}\\) and `"prob"` (\\\ell^p\_{t-1}\\) expose the fitted rate and availability for the plots below.
+2.  **In sample.** The size likelihood `"obs"` is **masked** to demand events (only demand sizes inform \\\ell^z\\), exactly as in Croston. The probability likelihood `"obs_prob"` is **not masked**: every period's \\0/1\\ indicator informs \\\ell^p\\. The deterministic sites `"rate"` (\\\ell^z\_{t-1} \cdot \ell^p\_{t-1}\\) and `"prob"` (\\\ell^p\_{t-1}\\) expose the fitted rate and availability for the plots below. Each level is \\1\\-D over time, so we index it with `[:, None]` to add the trailing observation dimension (time lives at axis \\-2\\ and the observation at axis \\-1\\ throughout the package), lining the deterministics and likelihoods up with `h.data`.
 3.  **Out of sample.** When `h.future > 0` the two scoped level models draw their predictives at `"z_future"` and `"p_future"`, and the body exposes their product as the `"forecast"` site the forecaster reads. As with Croston, the *multi-step* forecast is flat, but its level is the already-decayed probability at the end of training, so a forecast made right after a long drought starts lower than one made right after a demand.
 
 
@@ -322,6 +322,8 @@ def tsb(h: Horizon, covariates: Array) -> None:
         demand_indicator, every_period, h.future
     )
 
+    # z_mu and p_mu are 1-D over time; [:, None] adds the trailing observation dim
+    # (axis -1) so every site matches the package's (time, obs) layout and h.data.
     numpyro.deterministic("rate", (z_mu * p_mu)[:, None])
     numpyro.deterministic("prob", p_mu[:, None])
     numpyro.sample(
@@ -406,7 +408,7 @@ Group: /
 │           z_noise      (chain, draw) float32 16kB 0.4392 0.572 ... 0.5041 0.6103
 │           z_smoothing  (chain, draw) float32 16kB 0.1112 0.03419 ... 0.05288 0.04834
 │       Attributes:
-│           created_at:                 2026-07-17T18:59:45.115521+00:00
+│           created_at:                 2026-07-21T09:55:30.474899+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -421,7 +423,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 1MB 1.319 0.2379 ... -0.1558
 │       Attributes:
-│           created_at:                 2026-07-17T18:59:45.257072+00:00
+│           created_at:                 2026-07-21T09:55:30.616382+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -434,7 +436,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 272B 0.0 0.0 0.0 0.0 ... 1.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-17T18:59:45.257301+00:00
+│           created_at:                 2026-07-21T09:55:30.616627+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -447,7 +449,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 272B 0.0 0.0 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-17T18:59:45.257461+00:00
+│           created_at:                 2026-07-21T09:55:30.616799+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -462,7 +464,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 192kB 0.6634 ... -0.9309
 │       Attributes:
-│           created_at:                 2026-07-17T18:59:45.775236+00:00
+│           created_at:                 2026-07-21T09:55:31.129733+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -475,7 +477,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 48B 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-07-17T18:59:45.775448+00:00
+            created_at:                 2026-07-21T09:55:31.129935+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -747,7 +749,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T18:59:45.115521+00:00
+2026-07-21T09:55:30.474899+00:00
 
 creation_library :  
 ArviZ
@@ -883,7 +885,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T18:59:45.257072+00:00
+2026-07-21T09:55:30.616382+00:00
 
 creation_library :  
 ArviZ
@@ -977,7 +979,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T18:59:45.257301+00:00
+2026-07-21T09:55:30.616627+00:00
 
 creation_library :  
 ArviZ
@@ -1071,7 +1073,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T18:59:45.257461+00:00
+2026-07-21T09:55:30.616799+00:00
 
 creation_library :  
 ArviZ
@@ -1207,7 +1209,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T18:59:45.775236+00:00
+2026-07-21T09:55:31.129733+00:00
 
 creation_library :  
 ArviZ
@@ -1301,7 +1303,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T18:59:45.775448+00:00
+2026-07-21T09:55:31.129935+00:00
 
 creation_library :  
 ArviZ
@@ -1371,7 +1373,7 @@ pc_trace = az.plot_trace_dist(
     tree,
     var_names=scalar_vars,
     compact=True,
-    figure_kwargs={"figsize": (12, 9)},
+    figure_kwargs={"figsize": (12, 12)},
 )
 pc_trace.viz["figure"].item().suptitle(
     "Trace plots",
@@ -1383,7 +1385,7 @@ pc_trace.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="tsb_files/figure-html/cell-10-output-1.png" class="figure-img" width="1211" height="942" /></p>
+<p><img src="tsb_files/figure-html/cell-10-output-1.png" class="figure-img" width="1211" height="1251" /></p>
 </figure>
 
 
@@ -1562,7 +1564,7 @@ ax.legend(
     handles=[*handles, rug, base_line],
     loc="upper center",
     bbox_to_anchor=(0.5, -0.1),
-    ncol=5,
+    ncol=3,
 )
 ax.set(title="In-sample availability probability", xlabel="time", ylabel="demand probability");
 ```
@@ -1570,14 +1572,10 @@ ax.set(title="In-sample availability probability", xlabel="time", ylabel="demand
 
     /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
-    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/IPython/core/events.py:100: UserWarning: constrained_layout not applied because axes sizes collapsed to zero.  Try making figure larger or Axes decorations smaller.
-      func(*args, **kwargs)
-    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/IPython/core/pylabtools.py:170: UserWarning: constrained_layout not applied because axes sizes collapsed to zero.  Try making figure larger or Axes decorations smaller.
-      fig.canvas.print_figure(bytes_io, **kw)
 
 
 <figure class="figure">
-<p><img src="tsb_files/figure-html/cell-12-output-2.png" class="figure-img" width="1482" height="611" /></p>
+<p><img src="tsb_files/figure-html/cell-12-output-2.png" class="figure-img" width="1007" height="611" /></p>
 </figure>
 
 
@@ -1845,6 +1843,11 @@ print(f"empirical 94% coverage: {cov_94:.2f}  (nominal 0.94)")
 
 
 On this series TSB actually comes out **ahead** of Croston, and for an instructive reason. Its one-step-ahead and fixed-origin CRPS (both around \\0.23\\ to \\0.24\\) are lower than the Croston notebook's (both around \\0.35\\ to \\0.37\\), and its central \\50\\\\ interval covers close to nominal (\\0.58\\ against \\0.50\\) where Croston's covered almost nothing (\\0.08\\). Two things drive this. First, TSB smooths a probability directly, so it avoids the upward inversion bias that inflates the Croston rate; its fitted rate sits lower, much closer to the zero-heavy realizations. Second, the forecast's spread reaches down across zero (partly, it must be said, because the Gaussian probability channel spills below zero, which a \\\text{Bernoulli}\\ channel would achieve more honestly), so the interval actually contains the zeros that dominate the series. The one structural weakness both methods share, a predictive of a *rate* rather than a *count*, is what still keeps the coverage from being exact. And the headline advantage, a forecast that decays when demand truly stops, does not show up in the aggregate score on i.i.d. data at all: it stays latent here, waiting for a series that genuinely goes obsolete to turn it into a decisive difference.
+
+
+# A final note: TSB versus ARMA
+
+It is worth being explicit about why a classical ARMA model is not the tool here. ARMA (and ARIMA) describe a continuous, autocorrelated series fluctuating around a stable mean with additive noise, and they forecast by extrapolating that autocorrelation. Intermittent demand breaks every one of those assumptions: the series is mostly exact zeros with a spike-at-zero marginal, the per-period mean is a tiny rate rather than a level to revert to, and an ARMA fit would smear a smooth continuous prediction across the zeros while never separating *how much* is demanded from *whether* a demand occurs. TSB (like Croston) instead decomposes the series into a demand size and a demand probability, which is the structurally correct representation for this kind of data. What the notebook does share with the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) is only the mechanical scaffolding, the series-as-covariates carrier and the expanding-window [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) loop, not the modeling assumptions.
 
 
 # References
