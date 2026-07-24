@@ -34,7 +34,7 @@ dependencies = [
     "arviz>=1.2.0",
     "beartype>=0.22",
     "jaxtyping>=0.3.11",
-    "matplotlib>=3.8,<3.11",
+    "matplotlib>=3.8,<3.12",
     "numpyro>=0.19.0",
 ]
 
