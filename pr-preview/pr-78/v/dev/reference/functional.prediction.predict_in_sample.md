@@ -51,6 +51,6 @@ Where each chunk of draws is placed as soon as it is drawn and where the stitche
 ## Returns
 
 
-`Num[Array, ``" sample *batch time obs"] | Num[np.ndarray, `<span class="st">`" sample *batch time obs"``]`  
+`Num[Array, ``" sample *batch time obs"] | Num[np.ndarray, `<span class="st">`" sample *batch time obs"``]`\
 </span>  
 In-sample posterior-predictive draws of the `obs` site (a NumPy array when `device` resolves to `"host"`).
