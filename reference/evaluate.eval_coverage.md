@@ -25,7 +25,7 @@ Forecast samples with the sample axis first.
 `truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
 Ground-truth values (matching `pred` without the sample axis).
 
-`alpha: float = _DEFAULT_COVERAGE_ALPHA`    
+`alpha: float = _DEFAULT_COVERAGE_ALPHA`\  
 Nominal interval level in `(0, 1)`; defaults to `0.9`.
 
 `batch_size: int | None = None`  

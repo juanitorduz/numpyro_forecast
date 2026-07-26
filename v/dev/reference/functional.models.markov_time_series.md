@@ -41,7 +41,7 @@ Per-step `(carry, x_t) -> (dist_t, carry_fn)` callable; the wrapper owns the `nu
 `xs: Array | None = None`  
 Optional exogenous inputs over the full horizon with time at axis `-2`, moved into scan layout internally; `None` for autonomous dynamics.
 
-`plates: Sequence[tuple[str, int]] = ()`    
+`plates: Sequence[tuple[str, int]] = ()`\  
 `(name, size)` pairs opened **inside** the scan body around the sample statement (the only placement NumPyro supports for scan + plate).
 
 `reparam_config: Mapping[str, Reparam] | None = None`  

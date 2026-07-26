@@ -25,7 +25,7 @@ Seasonal pattern; the repeated axis has length equal to the period. Accepts any 
 `duration: int`  
 Target length along `axis`.
 
-`axis: int = `<span class="dv">`-1`  
+`axis: int = `<span class="dv">`-1`\
 </span>  
 Axis to repeat along (defaults to `-1`).
 

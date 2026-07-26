@@ -25,7 +25,7 @@ In-sample array.
 `suffix: Array`  
 Forecast-horizon array (same shape as `prefix` except along `axis`).
 
-`axis: int = `<span class="dv">`-2`  
+`axis: int = `<span class="dv">`-2`\
 </span>  
 Time axis to concatenate along (defaults to `-2`).
 
