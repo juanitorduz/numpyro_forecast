@@ -60,7 +60,7 @@ dev = [
     "pytest-split>=0.10",
     "pytest-xdist",
     "pytest>=8.0",
-    "ruff==0.15.22",
+    "ruff==0.16.0",
     "ty==0.0.63",
     "optax>=0.2",
     "blackjax>=1.6,<2",
