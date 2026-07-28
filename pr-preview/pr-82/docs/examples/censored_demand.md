@@ -68,7 +68,7 @@ rng_key = random.PRNGKey(seed=42)
 
 We reproduce the blog post's data generating process. Latent demand follows an AR(2) recursion with a weekly sinusoid, clipped at zero:
 
-d_t = \max\left(0, \\ \phi_1 \\ d\_{t-1} + \phi_2 \\ d\_{t-2} + \gamma \sin\left(\frac{2\pi t}{7}\right) + c + \varepsilon^d_t\right), \qquad \varepsilon^d_t \sim \text{Normal}(0, \sigma_d).
+d_t = \max\left(0, \\ \phi_1 \\ d\_{t-1} + \phi_2 \\ d\_{t-2} + \gamma \sin\left(\frac{2\pi t}{7}\right) + \alpha + \varepsilon^d_t\right), \qquad \varepsilon^d_t \sim \text{Normal}(0, \sigma_d).
 
 Sales are demand minus a friction term and noise, never exceeding demand and never negative:
 
@@ -85,7 +85,7 @@ It pays to keep the four quantities straight, because the whole example is about
 - **Observed sales** y_t are the only column a transaction database records: sales zeroed out on stockout days and truncated at the capacity cap.
 - **Availability** a_t says whether the product was on the shelf at all. Retail systems typically know this (or can reconstruct it from inventory snapshots), which is what makes the model below feasible in practice.
 
-From the observed series we also derive the **censoring indicator** c_t = \mathbb{1}\\y_t = y\_{\max}\\: on those days the register hit the cap, so the recorded value is a lower bound on sales rather than a measurement of them.
+From the observed series we also derive the **censoring indicator** c_t = \mathbb{1}\\y_t = y\_{\max}\\: on those days the register hit the cap, so the recorded value is a lower bound on sales rather than a measurement of them. Production data would flag y_t \geq y\_{\max} instead; the exact equality is safe here only because the simulation's `minimum` returns the cap bit-exactly.
 
 
 ``` python
@@ -241,7 +241,7 @@ ax_bot.scatter(
     zorder=5,
     label="censored at capacity",
 )
-cap_line = ax_bot.axhline(params.max_capacity, color="C3", ls="--", lw=1.5, label="capacity cap")
+ax_bot.axhline(params.max_capacity, color="C3", ls="--", lw=1.5, label="capacity cap")
 ax_twin = ax_bot.twinx()
 ax_twin.plot(
     time,
@@ -278,7 +278,7 @@ We hold out the last 30 days as the test window. Throughout the package, time li
 The covariates carry everything the model needs over the **full** duration, in a `(180, 7)` tensor. The package infers the forecast horizon from the shapes: covariates longer than the data by 30 rows means a 30-step forecast.
 
 - Column `0` is the observed sales history the AR recursion filters. Only the first [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows are ever read, so the future rows are zeroed out and no information leaks.
-- Column `1` is the availability mask and column `2` the censoring indicator. Their trailing 30 rows encode the **forecast scenario**: availability pinned to one and censoring to zero, meaning the forecast describes *uncensored demand*, the number a planner should order against. This is the same covariates-as-scenario device the availability TSB and fresh retail examples use.
+- Column `1` is the availability mask and column `2` the censoring indicator, read only over the training rows. One honest caveat versus the availability TSB and fresh retail examples, whose recursions consume these inputs over the horizon too: here the forecast scan applies no gate or cap at all, so the forecast is *structurally* uncensored demand-scale sales, the number a planner should order against, regardless of what the trailing rows contain. We still pin the trailing 30 rows to availability one and censoring zero so the scenario travels with the forecast into the tree's `predictions_constant_data`, as documentation rather than as a model input.
 - Columns `3:7` are weekly Fourier features (two harmonics, sines then cosines) from the package's [`fourier_features`](https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html) helper, the only columns the model reads over the horizon.
 
 
@@ -314,9 +314,9 @@ print(f"train data shape: {train_data.shape}, full covariates shape: {covariates
 
 # Model specification
 
-The mean recursion is an AR(2) with Fourier seasonality, run on *filtered* lags \tilde{y}\_t defined below:
+The mean recursion is an AR(2) on *filtered* lags \tilde{y}\_t (defined below) plus a Fourier seasonal term:
 
-\hat{y}\_t = \mu + \phi_1 \\ \tilde{y}\_{t-1} + \phi_2 \\ \tilde{y}\_{t-2} + s_t, \qquad s_t = \mathbf{f}\_t^\top \boldsymbol{\beta},
+\hat{y}\_t = \mu + \phi_1 \\ \tilde{y}\_{t-1} + \phi_2 \\ \tilde{y}\_{t-2} + \mathbf{f}\_t^\top \boldsymbol{\beta},
 
 with priors
 
@@ -356,8 +356,8 @@ def ar2_seasonal(h: Horizon, covariates: Array) -> None:
         (the only columns read over the forecast horizon).
     """
     y = covariates[..., : h.t_obs, 0]  # observed history only; never reads beyond t_obs
-    available = covariates[..., : h.t_obs, 1:2]
-    censored = covariates[..., : h.t_obs, 2:3]
+    available_mask = covariates[..., : h.t_obs, 1:2]
+    censored_mask = covariates[..., : h.t_obs, 2:3]
     fourier = covariates[..., 3:]
 
     # cast() only narrows numpyro's union return type for the type checker.
@@ -383,16 +383,16 @@ def ar2_seasonal(h: Horizon, covariates: Array) -> None:
     (lag_1_last, lag_2_last), preds = jax.lax.scan(
         transition_fn,
         init_carry,
-        (y, seasonal[: h.t_obs], available[..., 0], censored[..., 0]),
+        (y, seasonal[: h.t_obs], available_mask[..., 0], censored_mask[..., 0]),
     )
     pred_mean = preds[:, None]
     numpyro.deterministic("pred_mean", pred_mean)
 
-    valid = (jnp.arange(h.t_obs)[:, None] >= 2) & (available == 1)
+    valid = (jnp.arange(h.t_obs)[:, None] >= 2) & (available_mask == 1)
     numpyro.sample(
         "obs",
         dist.RightCensoredDistribution(
-            dist.Normal(loc=pred_mean, scale=sigma), censored=censored
+            dist.Normal(loc=pred_mean, scale=sigma), censored=censored_mask
         ).mask(valid),
         obs=h.data,
     )
@@ -425,7 +425,7 @@ model = forecasting_model(ar2_seasonal)
 
 We fit the model on the training window with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each with `target_accept_prob=0.9` (the survival term gives the likelihood a slightly harder geometry near the cap). A modest budget is plenty because the posterior is tiny: the in-sample filter is deterministic, so the only latents are the eight parameters (\mu, \phi_1, \phi_2, \sigma, and four Fourier coefficients).
 
-We then export the fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html). Because we pass the *extended* covariates, the tree automatically carries `predictions` groups with the out-of-sample draws of the `"forecast"` site, and the trailing scenario rows of the covariates land verbatim in `predictions_constant_data`, so the tree records that this forecast is a full-availability, uncensored scenario.
+We then export the fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html). Because we pass the *extended* covariates, the tree automatically carries `predictions` groups with the out-of-sample draws of the `"forecast"` site, and the trailing scenario rows of the covariates land verbatim in `predictions_constant_data`, so the tree documents that this forecast describes a full-availability, uncensored scenario.
 
 
 ``` python
@@ -1007,7 +1007,7 @@ Group: /
 │           pred_mean            (chain, draw, time, obs_dim) float32 2MB 0.05285 ......
 │           sigma                (chain, draw) float32 16kB 0.5679 0.5054 ... 0.6245
 │       Attributes:
-│           created_at:                 2026-07-28T10:50:31.059255+00:00
+│           created_at:                 2026-07-28T12:08:26.309109+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1022,7 +1022,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB 0.7659 -0.08214 ... 3.37
 │       Attributes:
-│           created_at:                 2026-07-28T10:50:31.198091+00:00
+│           created_at:                 2026-07-28T12:08:26.473664+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1035,7 +1035,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 600B 0.0 2.2 0.0 2.2 ... 0.0 0.0 0.0 2.2
 │       Attributes:
-│           created_at:                 2026-07-28T10:50:31.198318+00:00
+│           created_at:                 2026-07-28T12:08:26.473929+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1048,7 +1048,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 4kB 0.0 0.0 ... -0.2225 -0.901
 │       Attributes:
-│           created_at:                 2026-07-28T10:50:31.198475+00:00
+│           created_at:                 2026-07-28T12:08:26.474128+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1063,7 +1063,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 480kB 2.087 1.853 ... 4.176
 │       Attributes:
-│           created_at:                 2026-07-28T10:50:31.371570+00:00
+│           created_at:                 2026-07-28T12:08:26.674394+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1076,7 +1076,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 840B 0.0 1.0 ... -0.901 0.6235
         Attributes:
-            created_at:                 2026-07-28T10:50:31.371778+00:00
+            created_at:                 2026-07-28T12:08:26.674620+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1329,7 +1329,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-28T10:50:31.059255+00:00
+2026-07-28T12:08:26.309109+00:00
 
 creation_library :  
 ArviZ
@@ -1465,7 +1465,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-28T10:50:31.198091+00:00
+2026-07-28T12:08:26.473664+00:00
 
 creation_library :  
 ArviZ
@@ -1559,7 +1559,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-28T10:50:31.198318+00:00
+2026-07-28T12:08:26.473929+00:00
 
 creation_library :  
 ArviZ
@@ -1653,7 +1653,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-28T10:50:31.198475+00:00
+2026-07-28T12:08:26.474128+00:00
 
 creation_library :  
 ArviZ
@@ -1789,7 +1789,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-28T10:50:31.371570+00:00
+2026-07-28T12:08:26.674394+00:00
 
 creation_library :  
 ArviZ
@@ -1883,7 +1883,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-28T10:50:31.371778+00:00
+2026-07-28T12:08:26.674620+00:00
 
 creation_library :  
 ArviZ
@@ -1959,7 +1959,7 @@ pc_trace.viz["figure"].item().suptitle(
 
 # In-sample fit
 
-The tree's `posterior_predictive` group holds the one-step-ahead predictive of the `"obs"` site over the training window (the first two steps run on placeholder lags and are dropped from the plot). Because `RightCensoredDistribution` samples from its *base* distribution, these draws describe latent demand-scale sales, so the two places where they deliberately disagree with the observed series are the whole point: on capacity days the bands ride **above** the dashed cap that pins the orange line down, and through the gray stockout gaps the predictive mean carries the filter's demand estimate instead of chasing the recorded zeros. The latent demand curve (black), which the model never saw, runs along the upper half of the bands (the predictive describes *sales*, which sit below demand by the friction term) and escapes them only at the strongest peaks. This cell also defines the small plotting helpers (`stacked_draws` and `plot_band_forecast`) shared with the remaining band plots.
+The tree's `posterior_predictive` group holds the one-step-ahead predictive of the `"obs"` site over the training window (the first two steps run on placeholder lags and are dropped from the plot). Because `RightCensoredDistribution` samples from its *base* distribution, these draws describe latent demand-scale sales, so the two places where they deliberately disagree with the observed series are the whole point: on capacity days the bands ride **above** the dashed cap that pins the orange line down, and through the gray stockout gaps the predictive mean carries the filter's demand estimate instead of chasing the recorded zeros. The latent demand curve (black), which the model never saw, runs along the upper half of the bands (the predictive describes *sales*, which sit below demand by the friction term) and escapes them only at the strongest peaks. The lower band also dips below zero in the troughs: a \text{Normal} likelihood pays for its simplicity with predictive mass on negative sales, a compromise the next steps revisit (the forecast recursion, by contrast, clips its sampled trajectories at zero). This cell also defines the small plotting helpers (`stacked_draws` and `plot_band_forecast`) shared with the remaining band plots.
 
 
 ``` python
@@ -2103,7 +2103,7 @@ ax.set(title="One-step-ahead in-sample fit", xlabel="time", ylabel="units");
 
 # Forecasting demand
 
-The `predictions` group already holds the out-of-sample draws of the `"forecast"` site under the full-availability, uncensored scenario encoded in the trailing covariate rows. We plot them against the **latent demand**, the series the model never saw, and score the forecast with the CRPS against that ground truth.
+The `predictions` group already holds the out-of-sample draws of the `"forecast"` site, structurally uncensored as discussed in the covariates section. We plot them against the **latent demand**, the series the model never saw, and score the forecast with the CRPS against that ground truth.
 
 This is the money plot of the example: on its seasonal peaks the demand runs above the capacity cap, into territory where not a single observation exists, and the forecast mean follows it across the line. A model of *sales* cannot do this, because sales above the cap were never once recorded; the survival terms in the likelihood are what taught the model that capped days were floors, not values.
 
@@ -2281,7 +2281,7 @@ results_df
 
 Two readings, one per truth:
 
-- **Against latent demand**, the aggregate point metrics are nearly a wash: the censored model edges ahead on MAE, the naive model on RMSE and CRPS. This is expected. On the two thirds of test days where demand sits below the cap the two likelihoods largely agree, and there the naive model's tighter, lower predictive scores well, offsetting its losses at the peaks. Calibration is where they separate: the censored model's central intervals cover at or above their nominal levels at both widths, while the naive model's 50\\ interval falls short, because treating capped days as exact observations drags its mean down *and* shrinks its fitted noise scale (compare the \sigma posteriors in the two summary tables).
+- **Against latent demand**, the aggregate point metrics are nearly a wash: the censored model edges ahead on MAE, the naive model on RMSE and CRPS. This is expected. Both models target the *sales* scale, which sits below demand by the friction \delta = 0.25 in expectation, so a modest downward offset against this truth is structural and shared. On the two thirds of test days where demand sits below the cap the two likelihoods largely agree, and there the naive model's tighter, lower predictive scores well, offsetting its losses at the peaks. Calibration is where they separate: the censored model's central intervals cover at or above their nominal levels at both widths, while the naive model's 50\\ interval falls short, because treating capped days as exact observations drags its mean down *and* shrinks its fitted noise scale (compare the \sigma posteriors in the two summary tables).
 - **Against observed sales**, the naive model scores better across the board, and that is not a defect but the fresh retail example's lesson restated: the test window's observed sales are themselves gated and capped, so a *correct* demand forecast is penalized for sitting above the caps and the stockout zeros. Scoring against recorded sales systematically favors models that repeat the corruption. In production, where latent demand is unavailable, this is an argument for evaluating on periods or stores with clean availability.
 
 Neither aggregate row answers the operational question, "how much should we stock for the strong days?", so we re-score on exactly the days that drive that decision: the test days whose latent demand exceeds the cap, the days a planner would under-stock by trusting the naive model.
@@ -2336,9 +2336,17 @@ The choice between them is driven by what the data records and how the censoring
 
 - **Gating the recursion** (TSB) is the right tool when availability is binary and the model is a recursive smoother: off-shelf periods simply carry no information, so the estimate should freeze rather than decay.
 - **A multiplicative factor** shines when availability is *fractional* and *noisy* (a reconstructed share of the day on the shelf): it models the average effect of partial availability on the mean, and its learned floor absorbs label noise such as recorded sales on supposedly out-of-stock days.
-- **A censored likelihood** is the sharpest instrument when the censoring point is *known* per observation (a shelf capacity, an inventory level, a purchase limit): it models the mechanism itself rather than its average effect, at the price of trusting the recorded censoring indicator. All three share the same practical payoff: because availability and censoring are model *inputs*, the forecast becomes a scenario tool, and forecasting demand is just choosing the right trailing covariate rows.
+- **A censored likelihood** is the sharpest instrument when the censoring point is *known* per observation (a shelf capacity, an inventory level, a purchase limit): it models the mechanism itself rather than its average effect, at the price of trusting the recorded censoring indicator. All three share the same practical payoff: the corruption mechanism enters the model explicitly rather than as noise, so forecasting demand amounts to running the model with the mechanism switched off, whether through scenario covariate rows (TSB, fresh retail) or through a forecast recursion that never applies the cap (this notebook).
 
 In practice the mechanisms compose: a retailer with hourly stockout labels *and* known shelf capacities could use the fresh retail example's availability feature for partial days and this notebook's survival terms for capped ones.
+
+
+# Next steps
+
+- Replace the capped-day plug-in \max(y_t, \hat{y}\_t) in the lag filter with the censored conditional mean \hat{y}\_t + \sigma \\ \varphi(z_t) / \left(1 - \Phi(z_t)\right) with z_t = (y_t - \hat{y}\_t) / \sigma, the exact expectation of the latent value given that it exceeds the cap.
+- Let the capacity cap vary by day, read from inventory snapshots, instead of a single constant. `RightCensoredDistribution` censors at each *recorded* value, so only the data preparation changes, not the model.
+- Swap the \text{Normal} base for a strictly nonnegative observation model (for example a truncated \text{Normal}), removing the predictive mass on negative sales visible in the in-sample bands.
+- Replace the fixed train-test split with rolling-origin evaluation via the package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper, as in the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html).
 
 
 # References
@@ -2349,4 +2357,4 @@ In practice the mechanisms compose: a retailer with hourly stockout labels *and*
 - The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) in this documentation, which introduces the two-scan pattern for AR-on-observations models.
 - The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/examples/availability_tsb.html) and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) in this documentation: the sibling availability mechanisms compared above.
 
-[Source: Demand Forecasting with Censored Likelihood with `numpyro_forecast`](_src/censored_demand-preview.html#4426aec5)
+[Source: Demand Forecasting with Censored Likelihood with `numpyro_forecast`](_src/censored_demand-preview.html#ef5694ca)
