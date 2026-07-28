@@ -46,7 +46,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="../../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../../site_libs/bootstrap/bootstrap-b41571d959391a190bdbf9a72c2fe358.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../../site_libs/bootstrap/bootstrap-bf476c94c8758bc321fd5fd3b984c438.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -135,7 +135,7 @@ ul.task-list li input[type="checkbox"] {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="32" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="33" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -177,6 +177,12 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../../docs/examples/availability_tsb.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">TSB with Availability Constraints for Intermittent Demand</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../../docs/examples/censored_demand.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Demand Forecasting with Censored Likelihood</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -283,6 +289,13 @@ TSB with Availability Constraints for Intermittent Demand
 </div>
 <div class="section-card-desc" style="font-size: 0.9rem; color: #6c757d; line-height: 1.45;">
 Availability-aware TSB method for intermittent demand. Gating the demand-probability update with a stock availability mask separates true demand from stock-outs, with SVI on a 1,000-series panel and full-availability scenario forecasts.
+</div>
+</a> <a href="../../docs/examples/censored_demand.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"> <img src="thumbnails/censored_demand.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;">
+<div class="section-card-title" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;">
+Demand Forecasting with Censored Likelihood
+</div>
+<div class="section-card-desc" style="font-size: 0.9rem; color: #6c757d; line-height: 1.45;">
+Demand forecasting when observed sales are censored by stockouts and a capacity cap. An AR(2) model with weekly seasonality whose likelihood mixes the Normal density below the cap with the survival mass at it, fit with NUTS and compared against a naive Normal model on recovering true demand.
 </div>
 </a> <a href="../../docs/examples/croston.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"> <img src="thumbnails/croston.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;">
 <div class="section-card-title" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem; color: #0d6efd;">

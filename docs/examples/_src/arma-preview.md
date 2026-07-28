@@ -1,11 +1,11 @@
 # ARMA(1,1) Model with `numpyro_forecast`
 
 
-This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**](https://juanitorduz.github.io/arma_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the \\(1,1)\\ member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous *observation* back into the mean, and a moving average term that feeds the previous *forecast error* back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through the package's functional [fit_mcmc](../../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc).
+This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**](https://juanitorduz.github.io/arma_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the (1,1) member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous *observation* back into the mean, and a moving average term that feeds the previous *forecast error* back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through the package's functional [fit_mcmc](../../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc).
 
 Two deliberate changes from the blog post are worth calling out:
 
-- Instead of a single train-test split, we evaluate with **expanding-window time-slice cross-validation** via `numpyro_forecast.backtest`, scoring every fold with the continuous ranked probability score (CRPS) and the empirical coverage of the central \\50\\\\ and \\94\\\\ intervals, both in-sample and out-of-sample, exactly as in the [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html).
+- Instead of a single train-test split, we evaluate with **expanding-window time-slice cross-validation** via `numpyro_forecast.backtest`, scoring every fold with the continuous ranked probability score (CRPS) and the empirical coverage of the central 50\\ and 94\\ intervals, both in-sample and out-of-sample, exactly as in the [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html).
 - The forecast path is fully **generative**: over the horizon we sample future innovations and feed them back into the ARMA recursion, so the forecast uncertainty compounds correctly step by step. The blog post instead zeroed the future errors inside its prediction loop, which understates the multi-step uncertainty.
 
 A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html): the built-in [time_series](../../../reference/functional.models.time_series.md#numpyro_forecast.functional.models.time_series) and [predict](../../../reference/functional.models.predict.md#numpyro_forecast.functional.models.predict) primitives assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. We therefore write the model body directly against the functional API's [Horizon](../../../reference/functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon) value, registering the framework's `"obs"` and `"forecast"` sites ourselves, while reusing everything downstream: [fit_mcmc](../../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: the `covariates` argument is the natural carrier for the history the filter needs, because it spans the full horizon and is available at prediction time. The model only ever reads the first [t_obs](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast (we simply never look past the training window).
@@ -66,9 +66,9 @@ rng_key = random.PRNGKey(seed=42)
 
 The ARMA(1,1) process is defined by the recursion
 
-\\y_t = \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma),\\
+y_t = \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma),
 
-where \\\phi\\ is the autoregressive coefficient, \\\theta\\ the moving average coefficient, and \\\sigma\\ the innovation scale. We simulate \\T = 100\\ observations with \\\phi = 0.4\\, \\\theta = 0.7\\, and \\\sigma = 0.5\\ (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom we also use inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide `Array` type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
+where \phi is the autoregressive coefficient, \theta the moving average coefficient, and \sigma the innovation scale. We simulate T = 100 observations with \phi = 0.4, \theta = 0.7, and \sigma = 0.5 (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom we also use inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide `Array` type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
 
 
     In [2]:
@@ -123,7 +123,7 @@ print(f"series shape: {y_for_loop.shape}")
     series shape: (100,)
 
 
-The scan version threads a carry `(y_prev, error_prev)` through the innovations and produces the same series. Because JAX keys are pure, reusing `rng_subkey` reproduces the innovations bit for bit, so we can also print their realized standard deviation: with only \\T = 100\\ draws it lands visibly below the population value \\\sigma = 0.5\\, a fact we will need when judging the parameter recovery below.
+The scan version threads a carry `(y_prev, error_prev)` through the innovations and produces the same series. Because JAX keys are pure, reusing `rng_subkey` reproduces the innovations bit for bit, so we can also print their realized standard deviation: with only T = 100 draws it lands visibly below the population value \sigma = 0.5, a fact we will need when judging the parameter recovery below.
 
 
     In [3]:
@@ -238,22 +238,22 @@ ax_pacf.set(
 </figure>
 
 
-The shaded band is the approximate \\95\\\\ significance region \\\pm 1.96 / \sqrt{T}\\ for white noise. The ACF starts high and decays geometrically over the first few lags, while the PACF is large and positive at lag \\1\\ and then flips to a significant negative value at lag \\2\\ before dying out: a sign-alternating decay rather than a clean cutoff. Neither function cuts sharply, which is the classical signature of a mixed ARMA process: a pure AR(\\p\\) model would cut the PACF after lag \\p\\, and a pure MA(\\q\\) model would cut the ACF after lag \\q\\.
+The shaded band is the approximate 95\\ significance region \pm 1.96 / \sqrt{T} for white noise. The ACF starts high and decays geometrically over the first few lags, while the PACF is large and positive at lag 1 and then flips to a significant negative value at lag 2 before dying out: a sign-alternating decay rather than a clean cutoff. Neither function cuts sharply, which is the classical signature of a mixed ARMA process: a pure AR(p) model would cut the PACF after lag p, and a pure MA(q) model would cut the ACF after lag q.
 
 
 # Model specification
 
-The generative model adds a global mean \\\mu\\ to the recursion and uses the same priors as the blog post:
+The generative model adds a global mean \mu to the recursion and uses the same priors as the blog post:
 
-\\y_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma),\\
+y_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma),
 
-\\\begin{align\*} \mu & \sim \text{Normal}(0, 1), \\ \phi & \sim \text{Uniform}(-1, 1), \\ \theta & \sim \text{Uniform}(-1, 1), \\ \sigma & \sim \text{HalfNormal}(1). \end{align\*}\\
+\begin{align\*} \mu & \sim \text{Normal}(0, 1), \\ \phi & \sim \text{Uniform}(-1, 1), \\ \theta & \sim \text{Uniform}(-1, 1), \\ \sigma & \sim \text{HalfNormal}(1). \end{align\*}
 
-The key insight (from the blog post, and the same one behind the innovations state space form of exponential smoothing) is that *in sample the errors are deterministic* given the parameters and the observed data: running the recursion forward, the one-step-ahead prediction at time \\t\\ is \\\hat{y}\_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1}\\ and the error is simply \\\varepsilon_t = y_t - \hat{y}\_t\\, initialized with \\y\_{-1} = \mu\\ and \\\varepsilon\_{-1} = 0\\. The whole in-sample likelihood is then a single Gaussian observation site: conditioning \\y_t \sim \text{Normal}(\hat{y}\_t, \sigma)\\ is exactly the blog post's "condition on the errors" trick, \\\varepsilon_t \sim \text{Normal}(0, \sigma)\\, since the two differ only by a location shift.
+The key insight (from the blog post, and the same one behind the innovations state space form of exponential smoothing) is that *in sample the errors are deterministic* given the parameters and the observed data: running the recursion forward, the one-step-ahead prediction at time t is \hat{y}\_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} and the error is simply \varepsilon_t = y_t - \hat{y}\_t, initialized with y\_{-1} = \mu and \varepsilon\_{-1} = 0. The whole in-sample likelihood is then a single Gaussian observation site: conditioning y_t \sim \text{Normal}(\hat{y}\_t, \sigma) is exactly the blog post's "condition on the errors" trick, \varepsilon_t \sim \text{Normal}(0, \sigma), since the two differ only by a location shift.
 
 The model body follows the package's two-scan pattern:
 
-1.  **In sample.** A deterministic `jax.lax.scan` filters the observed series into one-step-ahead means \\\hat{y}\_t\\ (exposed as the deterministic site `"mu_t"`), and the `"obs"` site conditions the data on them.
+1.  **In sample.** A deterministic `jax.lax.scan` filters the observed series into one-step-ahead means \hat{y}\_t (exposed as the deterministic site `"mu_t"`), and the `"obs"` site conditions the data on them.
 2.  **Out of sample.** When `h.future > 0` we draw the horizon innovations from the prior at a separate `"eps_future"` site, then roll the recursion forward feeding the *sampled* observation and innovation back into the carry, and expose the trajectory as the deterministic `"forecast"` site the forecaster reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, so the forecast uncertainty compounds over the horizon exactly as the generative process says it should.
 
 Neither scan body contains a sample site, so plain `jax.lax.scan` is all we need.
@@ -313,7 +313,7 @@ model = forecasting_model(arma_1_1)
 
 # Inference with NUTS
 
-We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running \\4\\ chains of \\1{,}000\\ warmup and \\1{,}000\\ sampling steps each. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \\\mu\\, \\\phi\\, \\\theta\\, and \\\sigma\\.
+We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \mu, \phi, \theta, and \sigma.
 
 We then export the whole fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html): a single call restores the `(chain, draw)` structure of the posterior draws, samples the in-sample one-step-ahead posterior predictive, and stores the observed data and covariates alongside, so everything downstream (diagnostics, trace plots, the in-sample fit) reads from one object. Since `covariates` has the same duration as `data`, there is no forecast horizon and hence no forecast groups here; the out-of-sample story comes from the cross-validation below.
 
@@ -1503,7 +1503,7 @@ sample_dims :
 
 # Diagnostics and parameter recovery
 
-The tree's `posterior` group carries the draws with their `(chain, draw)` structure (deterministic sites such as `"mu_t"` ride along; we summarize just the four parameters), so `az.summary` gives us the whole convergence and recovery picture in one call: posterior means and standard deviations, the \\94\\\\ HDIs, bulk and tail effective sample sizes, \\\hat{R}\\, and the Monte Carlo standard errors. Since we simulated the data ourselves, we prepend the true parameter values as the first column.
+The tree's `posterior` group carries the draws with their `(chain, draw)` structure (deterministic sites such as `"mu_t"` ride along; we summarize just the four parameters), so `az.summary` gives us the whole convergence and recovery picture in one call: posterior means and standard deviations, the 94\\ HDIs, bulk and tail effective sample sizes, \hat{R}, and the Monte Carlo standard errors. Since we simulated the data ourselves, we prepend the true parameter values as the first column.
 
 
     In [8]:
@@ -1527,7 +1527,7 @@ recovery
 | sigma | 0.5 | 0.436 | 0.0314 | 0.38 | 0.5 | 3077 | 2811 | 1.00 | 0.00057 | 0.00041 |
 
 
-The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \\\hat{R}\\ values are essentially \\1\\, and the effective sample sizes are healthy. The point estimates for \\\theta\\ and \\\sigma\\ come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of \\0.43\\ (against the population value \\0.5\\; we printed the realized value right after generating the data), and the posterior mean of \\\sigma\\ matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with \\T = 100\\ observations, because \\\phi\\ and \\\theta\\ can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
+The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \hat{R} values are essentially 1, and the effective sample sizes are healthy. The point estimates for \theta and \sigma come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of 0.43 (against the population value 0.5; we printed the realized value right after generating the data), and the posterior mean of \sigma matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with T = 100 observations, because \phi and \theta can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
 
 
     In [9]:
@@ -1560,7 +1560,7 @@ pc_trace.viz["figure"].item().suptitle(
 
 # In-sample fit
 
-Next we look at the one-step-ahead posterior predictive over the training window, which [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) already sampled into the tree's `posterior_predictive` group: at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We only need to stack the chains back into a single sample dimension to get the draws-first layout the plotting and scoring helpers expect. We plot the posterior mean prediction together with the \\50\\\\ and \\94\\\\ HDI bands (inner band darker, outer band lighter) against the observed series with ArviZ `plot_lm`, packing the draws with the package's [predictions_to_datatree](../../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree), and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
+Next we look at the one-step-ahead posterior predictive over the training window, which [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) already sampled into the tree's `posterior_predictive` group: at each time step the predicted mean uses the observed history up to the previous step, and the `"obs"` site adds the observation noise. We only need to stack the chains back into a single sample dimension to get the draws-first layout the plotting and scoring helpers expect. We plot the posterior mean prediction together with the 50\\ and 94\\ HDI bands (inner band darker, outer band lighter) against the observed series with ArviZ `plot_lm`, packing the draws with the package's [predictions_to_datatree](../../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree), and score the fit with the CRPS, a proper scoring rule that compares each observation to the whole predictive distribution (lower is better).
 
 
     In [10]:
@@ -1639,7 +1639,7 @@ ax.set(
 
 A single split tells us how the model does on one held-out window. A more honest picture comes from *expanding-window* time-slice cross-validation: we repeatedly move the train/test boundary forward, refit from scratch, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop for us, refitting the NUTS sampler on each fold through [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), the OOP counterpart of [fit_mcmc](../../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc) that [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) constructs per fold.
 
-We size the folds at roughly \\10\\\\ of the series: each fold forecasts the next `10` steps (`test_window=10`), stepping forward `10` steps at a time (`stride=10`) so the folds do not overlap, and the first `50` observations (half the series) seed the initial training window (`min_train_window=50`). That yields five folds with split points at \\t = 50, 60, 70, 80, 90\\. With `eval_train=True` each fold also scores its in-sample one-step-ahead posterior predictive with the same metrics (this is what the series-as-covariates design buys us), and `keep_predictions=True` retains the out-of-sample forecast samples so we can plot them. Alongside the CRPS we track the empirical **coverage** of the central \\50\\\\ and \\94\\\\ intervals: a well-calibrated forecast covers close to its nominal level.
+We size the folds at roughly 10\\ of the series: each fold forecasts the next `10` steps (`test_window=10`), stepping forward `10` steps at a time (`stride=10`) so the folds do not overlap, and the first `50` observations (half the series) seed the initial training window (`min_train_window=50`). That yields five folds with split points at t = 50, 60, 70, 80, 90. With `eval_train=True` each fold also scores its in-sample one-step-ahead posterior predictive with the same metrics (this is what the series-as-covariates design buys us), and `keep_predictions=True` retains the out-of-sample forecast samples so we can plot them. Alongside the CRPS we track the empirical **coverage** of the central 50\\ and 94\\ intervals: a well-calibrated forecast covers close to its nominal level.
 
 
     In [11]:
@@ -1692,7 +1692,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
 ## Forecasts per fold
 
-Overlaying every fold's out-of-sample forecast (orange posterior mean line plus \\50\\\\ and \\94\\\\ HDI bands, again inner darker and outer lighter) on the observed series gives the rolling-origin view: each band picks up where the previous fold's training window ended, and the dashed lines mark the successive train/test splits.
+Overlaying every fold's out-of-sample forecast (orange posterior mean line plus 50\\ and 94\\ HDI bands, again inner darker and outer lighter) on the observed series gives the rolling-origin view: each band picks up where the previous fold's training window ended, and the dashed lines mark the successive train/test splits.
 
 
     In [12]:
@@ -1776,12 +1776,12 @@ ax.set(title="Expanding-window cross-validation forecasts", xlabel="time", ylabe
 </figure>
 
 
-The bands show textbook ARMA behavior. Within each fold the forecast mean decays toward the unconditional level at the geometric rate \\\phi^h\\, so with \\\phi = 0.4\\ the memory of the last observation is essentially gone after two or three steps and the band settles at the *marginal* width of the process. This is not a defect: for a short-memory process, reverting quickly to the stationary distribution is exactly the right forecast, and what cross-validation checks here is that the bands are the right width, in other words that the forecast is calibrated.
+The bands show textbook ARMA behavior. Within each fold the forecast mean decays toward the unconditional level at the geometric rate \phi^h, so with \phi = 0.4 the memory of the last observation is essentially gone after two or three steps and the band settles at the *marginal* width of the process. This is not a defect: for a short-memory process, reverting quickly to the stationary distribution is exactly the right forecast, and what cross-validation checks here is that the bands are the right width, in other words that the forecast is calibrated.
 
 
 ## CRPS per fold
 
-The per-fold CRPS quantifies the picture. The in-sample and out-of-sample scores stay close across folds, and neither trends upward as the training window grows, so the model is neither over- nor under-fitting: with only four parameters and a correctly specified model class, even the first fold's \\50\\ observations pin the predictive distribution down well. The out-of-sample score is a bit noisier, as it is computed from just \\10\\ observations per fold.
+The per-fold CRPS quantifies the picture. The in-sample and out-of-sample scores stay close across folds, and neither trends upward as the training window grows, so the model is neither over- nor under-fitting: with only four parameters and a correctly specified model class, even the first fold's 50 observations pin the predictive distribution down well. The out-of-sample score is a bit noisier, as it is computed from just 10 observations per fold.
 
 
     In [13]:
@@ -1803,7 +1803,7 @@ ax.set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per cross-val
 
 ## Forecast calibration
 
-Finally we check the coverage: the fraction of held-out observations that fall inside the central \\50\\\\ and \\94\\\\ prediction intervals of their fold's forecast. Well-calibrated forecasts should track the dashed nominal levels; points above mean the bands are too wide (under-confident), points below that they are too narrow (over-confident). With only \\10\\ observations per fold the empirical coverage is grainy (each observation moves it by \\0.1\\), so some wobble around the nominal levels is expected.
+Finally we check the coverage: the fraction of held-out observations that fall inside the central 50\\ and 94\\ prediction intervals of their fold's forecast. Well-calibrated forecasts should track the dashed nominal levels; points above mean the bands are too wide (under-confident), points below that they are too narrow (over-confident). With only 10 observations per fold the empirical coverage is grainy (each observation moves it by 0.1), so some wobble around the nominal levels is expected.
 
 A small caveat: [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are ArviZ HDIs. For the near-symmetric Gaussian predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 

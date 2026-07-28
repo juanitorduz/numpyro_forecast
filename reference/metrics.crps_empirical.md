@@ -16,9 +16,11 @@ metrics.crps_empirical(
 
 The CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as
 
-\\ \mathrm{CRPS}(F, y) = \mathbb{E}\|X - y\| - \tfrac{1}{2}\\\mathbb{E}\|X - X'\|, \\
+.. math::
 
-where \\X, X'\\ are independent draws from the forecast distribution \\F\\. The expectations are estimated from the forecast `sample` axis using the sorted-sample \\O(n \log n)\\ identity.
+    \mathrm{CRPS}(F, y) = \mathbb{E}|X - y| - \tfrac{1}{2}\,\mathbb{E}|X - X'|,
+
+where :math:`X, X'` are independent draws from the forecast distribution :math:`F`. The expectations are estimated from the forecast `sample` axis using the sorted-sample :math:`O(n \log n)` identity.
 
 
 ## Parameters

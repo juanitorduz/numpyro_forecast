@@ -112,9 +112,9 @@ print("christmas index:", christmas_index)
 
 # Model specification
 
-This is the univariate model lifted to a panel. Each series \\s\\ gets its own random-walk level \\\ell\_{t,s}\\ and its own weekly seasonal profile (one value per hour-of-week, `168` in total), and all series share the same global drift scale and observation scale \\\sigma\\:
+This is the univariate model lifted to a panel. Each series s gets its own random-walk level \ell\_{t,s} and its own weekly seasonal profile (one value per hour-of-week, `168` in total), and all series share the same global drift scale and observation scale \sigma:
 
-\\\begin{align\*} \mu\_{t,s} & = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s} \\ \ell\_{t,s} & = \ell\_{t-1,s} + \delta\_{t,s} \\ \delta\_{t,s} & \sim \text{Normal}(0, \sigma\_\text{drift}) \\ y\_{t,s} & \sim \text{Normal}(\mu\_{t,s}, \sigma). \end{align\*}\\
+\begin{align\*} \mu\_{t,s} & = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s} \\ \ell\_{t,s} & = \ell\_{t-1,s} + \delta\_{t,s} \\ \delta\_{t,s} & \sim \text{Normal}(0, \sigma\_\text{drift}) \\ y\_{t,s} & \sim \text{Normal}(\mu\_{t,s}, \sigma). \end{align\*}
 
 The hierarchy is expressed with `numpyro.plate`. We wrap `self.time_series(...)` in an `n_series` plate so the drift (and its forecast `_future` companion) is sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together.
 
@@ -173,7 +173,7 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the \\50\\\\ and \\94\\\\ HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
+As usual (highly recommended!), we run prior predictive checks before fitting. We draw from the prior over the training window and overlay the 50\\ and 94\\ HDI bands on the last three weeks of training data for eight origins. The ranges look reasonable: wide enough to admit the data without being absurd.
 
 
 ``` python

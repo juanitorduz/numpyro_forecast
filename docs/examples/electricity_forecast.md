@@ -357,7 +357,7 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-Before we fit the model, let's visualize the prior predictive distribution. A [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) instance is a plain NumPyro model callable, so we can hand it to `Predictive` directly. We draw the bands with ArviZ's `plot_lm`, which computes the \\50\\\\ and \\94\\\\ HDI internally; since the time axis is a `datetime64` array we pass it as matplotlib date numbers (`mdates.date2num`) and restore the date formatter on the returned axis.
+Before we fit the model, let's visualize the prior predictive distribution. A [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) instance is a plain NumPyro model callable, so we can hand it to `Predictive` directly. We draw the bands with ArviZ's `plot_lm`, which computes the 50\\ and 94\\ HDI internally; since the time axis is a `datetime64` array we pass it as matplotlib date numbers (`mdates.date2num`) and restore the date formatter on the returned axis.
 
 
 ``` python
@@ -661,7 +661,7 @@ This effect plot coincides with the exploratory comment by Hyndman and Athanasop
 
 > *"It is clear that high demand occurs when temperatures are high due to the effect of air-conditioning. But there is also a heating effect, where demand increases for very low temperatures."*
 
-Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range \\15\\°C - 25\\°C\\.
+Indeed, at the extremes of the common temperature range the temperature effect on demand increases. Heating and cooling usually happen outside the range 15\\°C - 25\\°C.
 
 
 # References

@@ -3,11 +3,11 @@
 
 This notebook ports the blog post [**TSB Method for Intermittent Time Series Forecasting in NumPyro**](https://juanitorduz.github.io/tsb_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It is the direct follow-up to the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html), and rather than re-deriving intermittent demand from scratch, we focus on the one thing the **Teunter-Syntetos-Babai (TSB)** method changes and why that change matters.
 
-The setup is the same. **Intermittent demand** series are dominated by zeros, with the occasional non-zero demand arriving at irregular times (spare parts, slow-moving SKUs). [Croston's method](https://juanitorduz.github.io/croston_numpyro/) splits the series \\y_t\\ into **demand sizes** \\z_t\\ (the non-zero values) and **demand intervals** \\p_t\\ (the gaps between demands), smooths each with simple exponential smoothing, and forecasts the ratio \\\hat{z}\_t / \hat{p}\_t\\: the expected demand per period. Its well-known weakness is that both components update **only at demand events**. Once demand stops, a Croston forecast never moves again: it stays frozen at the last level no matter how long the drought runs, so it cannot express that a slow item is going obsolete.
+The setup is the same. **Intermittent demand** series are dominated by zeros, with the occasional non-zero demand arriving at irregular times (spare parts, slow-moving SKUs). [Croston's method](https://juanitorduz.github.io/croston_numpyro/) splits the series y_t into **demand sizes** z_t (the non-zero values) and **demand intervals** p_t (the gaps between demands), smooths each with simple exponential smoothing, and forecasts the ratio \hat{z}\_t / \hat{p}\_t: the expected demand per period. Its well-known weakness is that both components update **only at demand events**. Once demand stops, a Croston forecast never moves again: it stays frozen at the last level no matter how long the drought runs, so it cannot express that a slow item is going obsolete.
 
-TSB fixes exactly this. It keeps the demand-size channel unchanged, but replaces the interval channel with a **demand probability** \\p_t \in \[0, 1\]\\ that is smoothed at **every period**, not just at demand events:
+TSB fixes exactly this. It keeps the demand-size channel unchanged, but replaces the interval channel with a **demand probability** p_t \in \[0, 1\] that is smoothed at **every period**, not just at demand events:
 
-\\\hat{y}\_{t+h} = \hat{z}\_t \cdot \hat{p}\_t,\\
+\hat{y}\_{t+h} = \hat{z}\_t \cdot \hat{p}\_t,
 
 the expected demand size times the probability that a demand occurs. Because the probability is updated on every zero as well as every demand, it **decays geometrically through a run of zeros** and jumps back up at the next demand, so the forecast responds to the *recency* of demand. That single structural change, one smoothing recursion that runs every period instead of only at events, is the whole story, and it is what this notebook makes concrete. As a side benefit, TSB smooths a probability directly instead of an inverse interval, so it sidesteps the inversion (Jensen) bias and the Syntetos-Boylan correction that the Croston notebook has to reckon with.
 
@@ -79,7 +79,7 @@ rng_key = random.PRNGKey(seed=42)
 
 # Generate data
 
-We use exactly the same data as the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) so the two notebooks are directly comparable: \\T = 80\\ periods of intermittent demand drawn from a Poisson distribution with a small rate, \\y_t \sim \text{Poisson}(0.3)\\, so roughly three quarters of the periods are zero and the non-zero demands are small counts. We hold out the last \\15\\\\ of the series as a test window for the fixed-origin forecast (the rolling-origin evaluation at the end refits over this window step by step).
+We use exactly the same data as the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) so the two notebooks are directly comparable: T = 80 periods of intermittent demand drawn from a Poisson distribution with a small rate, y_t \sim \text{Poisson}(0.3), so roughly three quarters of the periods are zero and the non-zero demands are small counts. We hold out the last 15\\ of the series as a test window for the fixed-origin forecast (the rolling-origin evaluation at the end refits over this window step by step).
 
 
     In [2]:
@@ -140,7 +140,7 @@ ax.set(title="Simulated intermittent demand series", xlabel="time", ylabel="y");
 
 # Demand sizes and demand probability
 
-The two component series TSB works with make the contrast with Croston explicit. The **demand sizes** \\z\\ are the non-zero values in order of appearance, exactly as in Croston. But where Croston derives the **inter-demand intervals** (one number per demand event, on the *event* axis), TSB works with the **demand indicator** \\d_t = \mathbf{1}\[y_t \> 0\]\\, a \\0/1\\ value at *every period* on the calendar axis. Smoothing \\d_t\\ estimates the running probability that a period sees demand; because it is defined on every period, it can decay while zeros pile up, which is the behavior Croston's event-axis intervals cannot represent.
+The two component series TSB works with make the contrast with Croston explicit. The **demand sizes** z are the non-zero values in order of appearance, exactly as in Croston. But where Croston derives the **inter-demand intervals** (one number per demand event, on the *event* axis), TSB works with the **demand indicator** d_t = \mathbf{1}\[y_t \> 0\], a 0/1 value at *every period* on the calendar axis. Smoothing d_t estimates the running probability that a period sees demand; because it is defined on every period, it can decay while zeros pile up, which is the behavior Croston's event-axis intervals cannot represent.
 
 As in the Croston notebook this cell is exposition only: the model recomputes the indicator on the calendar axis inside its own body.
 
@@ -189,7 +189,7 @@ ax_d.set(
 
 # Prior for the smoothing parameters
 
-Both components get a \\\text{Beta}(2, 20)\\ prior on their smoothing parameter, the *same* prior the Croston notebook uses. Its mean is \\2/22 \approx 0.09\\ and most of its mass sits below \\0.3\\, consistent with the standard practice of restricting the smoothing parameter to roughly \\\[0.1, 0.3\]\\: a level that reacts strongly to each observation produces volatile forecasts on sparse data. The blog post uses a slightly more reactive \\\text{Beta}(10, 40)\\ (mean \\0.2\\); we keep \\\text{Beta}(2, 20)\\ so that the *only* difference from the Croston notebook is the structural one (which recursion updates every period), not the prior.
+Both components get a \text{Beta}(2, 20) prior on their smoothing parameter, the *same* prior the Croston notebook uses. Its mean is 2/22 \approx 0.09 and most of its mass sits below 0.3, consistent with the standard practice of restricting the smoothing parameter to roughly \[0.1, 0.3\]: a level that reacts strongly to each observation produces volatile forecasts on sparse data. The blog post uses a slightly more reactive \text{Beta}(10, 40) (mean 0.2); we keep \text{Beta}(2, 20) so that the *only* difference from the Croston notebook is the structural one (which recursion updates every period), not the prior.
 
 
     In [5]:
@@ -215,28 +215,28 @@ ax.set(
 
 # Model specification
 
-TSB runs **simple exponential smoothing** on each component, just like Croston. Writing \\\ell_t\\ for a component's level and \\x_t\\ for its input at time \\t\\, the demand-size channel updates **only at demand events**, exactly as in Croston:
+TSB runs **simple exponential smoothing** on each component, just like Croston. Writing \ell_t for a component's level and x_t for its input at time t, the demand-size channel updates **only at demand events**, exactly as in Croston:
 
-\\ \ell^z_t = \begin{cases} \alpha_z \\ y_t + (1 - \alpha_z) \\ \ell^z\_{t-1} & \text{if } y_t \> 0, \\ \ell^z\_{t-1} & \text{otherwise}. \end{cases} \\
+ \ell^z_t = \begin{cases} \alpha_z \\ y_t + (1 - \alpha_z) \\ \ell^z\_{t-1} & \text{if } y_t \> 0, \\ \ell^z\_{t-1} & \text{otherwise}. \end{cases} 
 
-The availability channel is where TSB departs. Instead of smoothing inter-demand intervals at events, it smooths the demand indicator \\d_t = \mathbf{1}\[y_t \> 0\]\\ at **every period**:
+The availability channel is where TSB departs. Instead of smoothing inter-demand intervals at events, it smooths the demand indicator d_t = \mathbf{1}\[y_t \> 0\] at **every period**:
 
-\\ \ell^p_t = \begin{cases} \alpha_p + (1 - \alpha_p) \\ \ell^p\_{t-1} & \text{if } y_t \> 0 \quad (\text{jump up}), \\ (1 - \alpha_p) \\ \ell^p\_{t-1} & \text{otherwise} \quad (\text{decay toward } 0). \end{cases} \\
+ \ell^p_t = \begin{cases} \alpha_p + (1 - \alpha_p) \\ \ell^p\_{t-1} & \text{if } y_t \> 0 \quad (\text{jump up}), \\ (1 - \alpha_p) \\ \ell^p\_{t-1} & \text{otherwise} \quad (\text{decay toward } 0). \end{cases} 
 
-Both branches are the single recursion \\\ell^p_t = \alpha_p \\ d_t + (1 - \alpha_p) \\ \ell^p\_{t-1}\\: plain exponential smoothing of a \\0/1\\ series, evaluated on every period. During a run of zeros \\d_t = 0\\, so the probability decays by a factor \\(1 - \alpha_p)\\ each step; at a demand \\d_t = 1\\, so it jumps back up. The likelihood at each period is the one-step-ahead prediction \\x_t \sim \text{Normal}(\ell\_{t-1}, \sigma)\\, with the size channel evaluated only at demand events (masked, as in Croston) and the probability channel evaluated at every period. The forecast is the **product** of the two levels, \\\hat{y} = \hat{z} \cdot \hat{p}\\: because \\\hat{p} \in \[0, 1\]\\ is used directly, there is no inversion and hence none of Croston's Jensen bias or Syntetos-Boylan correction to worry about.
+Both branches are the single recursion \ell^p_t = \alpha_p \\ d_t + (1 - \alpha_p) \\ \ell^p\_{t-1}: plain exponential smoothing of a 0/1 series, evaluated on every period. During a run of zeros d_t = 0, so the probability decays by a factor (1 - \alpha_p) each step; at a demand d_t = 1, so it jumps back up. The likelihood at each period is the one-step-ahead prediction x_t \sim \text{Normal}(\ell\_{t-1}, \sigma), with the size channel evaluated only at demand events (masked, as in Croston) and the probability channel evaluated at every period. The forecast is the **product** of the two levels, \hat{y} = \hat{z} \cdot \hat{p}: because \hat{p} \in \[0, 1\] is used directly, there is no inversion and hence none of Croston's Jensen bias or Syntetos-Boylan correction to worry about.
 
 Each component gets its own priors,
 
-\\\begin{align\*} \alpha & \sim \text{Beta}(2, 20), \\ \ell_0 & \sim \text{Normal}(0, 1), \\ \sigma & \sim \text{HalfNormal}(1). \end{align\*}\\
+\begin{align\*} \alpha & \sim \text{Beta}(2, 20), \\ \ell_0 & \sim \text{Normal}(0, 1), \\ \sigma & \sim \text{HalfNormal}(1). \end{align\*}
 
-One transparency note on the priors, sharper than in the Croston notebook: \\\text{Normal}(0, 1)\\ on the initial levels allows negative values, which is looser still for the probability channel, whose level is meant to live in \\\[0, 1\]\\. We keep the loose prior for comparability with the blog post and the Croston notebook; centering the probability init near the base demand rate, using a \\\text{Beta}\\ init, or replacing the Gaussian `obs_prob` likelihood with a \\\text{Bernoulli}\\ one (the indicator is, after all, a Bernoulli outcome) are the natural refinements.
+One transparency note on the priors, sharper than in the Croston notebook: \text{Normal}(0, 1) on the initial levels allows negative values, which is looser still for the probability channel, whose level is meant to live in \[0, 1\]. We keep the loose prior for comparability with the blog post and the Croston notebook; centering the probability init near the base demand rate, using a \text{Beta} init, or replacing the Gaussian `obs_prob` likelihood with a \text{Bernoulli} one (the indicator is, after all, a Bernoulli outcome) are the natural refinements.
 
 Because both components run the *same* level model, we write it once and compose with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, exactly as the Croston notebook does. The reusable `level_model` samples the three component priors (sites `smoothing`, `init`, `noise`), runs the where-gated level recursion with a `jax.lax.scan` that emits the *pre-update* levels (the one-step-ahead means), and, when forecasting, draws the component's flat predictive at a site named [future](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.future). Calling it under `scope(level_model, "z", divider="_")` and `scope(level_model, "p", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, `p_future`. **This is the identical helper used in the Croston notebook**; the entire difference between the two methods is in the `tsb` body below, in a single argument.
 
 The `tsb` body then does what is specific to TSB:
 
 1.  **Bookkeeping.** From the observed prefix of the covariates it builds the demand indicator `is_demand` and the float `demand_indicator`. Where Croston passes `is_demand` as the event gate to *both* channels, TSB passes an all-`True` gate (`every_period`) to the probability channel, so that channel updates on every period. That one substitution is the method.
-2.  **In sample.** The size likelihood `"obs"` is **masked** to demand events (only demand sizes inform \\\ell^z\\), exactly as in Croston. The probability likelihood `"obs_prob"` is **not masked**: every period's \\0/1\\ indicator informs \\\ell^p\\. The deterministic sites `"rate"` (\\\ell^z\_{t-1} \cdot \ell^p\_{t-1}\\) and `"prob"` (\\\ell^p\_{t-1}\\) expose the fitted rate and availability for the plots below. Each level is \\1\\-D over time, so we index it with `[:, None]` to add the trailing observation dimension (time lives at axis \\-2\\ and the observation at axis \\-1\\ throughout the package), lining the deterministics and likelihoods up with `h.data`.
+2.  **In sample.** The size likelihood `"obs"` is **masked** to demand events (only demand sizes inform \ell^z), exactly as in Croston. The probability likelihood `"obs_prob"` is **not masked**: every period's 0/1 indicator informs \ell^p. The deterministic sites `"rate"` (\ell^z\_{t-1} \cdot \ell^p\_{t-1}) and `"prob"` (\ell^p\_{t-1}) expose the fitted rate and availability for the plots below. Each level is 1-D over time, so we index it with `[:, None]` to add the trailing observation dimension (time lives at axis -2 and the observation at axis -1 throughout the package), lining the deterministics and likelihoods up with `h.data`.
 3.  **Out of sample.** When `h.future > 0` the two scoped level models draw their predictives at `"z_future"` and `"p_future"`, and the body exposes their product as the `"forecast"` site the forecaster reads. As with Croston, the *multi-step* forecast is flat, but its level is the already-decayed probability at the end of training, so a forecast made right after a long drought starts lower than one made right after a demand.
 
 
@@ -349,7 +349,7 @@ model = forecasting_model(tsb)
 
 # Inference with NUTS
 
-We fit the model on the training window with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running \\4\\ chains of \\1{,}000\\ warmup and \\1{,}000\\ sampling steps each. As in Croston the posterior has six scalar parameters, three per component.
+We fit the model on the training window with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each. As in Croston the posterior has six scalar parameters, three per component.
 
 We then export the fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html). Because we pass the *extended* covariates, the tree automatically carries `predictions` groups with the out-of-sample forecast draws. We register both per-timestep deterministics, `"rate"` and `"prob"`, so they share the tree-wide `time` coordinate.
 
@@ -1860,7 +1860,7 @@ sample_dims :
 
 # Diagnostics
 
-`az.summary` on the six scalar parameters gives the convergence picture in one call: posterior means and standard deviations, the \\94\\\\ HDIs, effective sample sizes, and \\\hat{R}\\.
+`az.summary` on the six scalar parameters gives the convergence picture in one call: posterior means and standard deviations, the 94\\ HDIs, effective sample sizes, and \hat{R}.
 
 
     In [8]:
@@ -1889,7 +1889,7 @@ az.summary(tree, var_names=scalar_vars, ci_kind="hdi", ci_prob=0.94)
 | p_noise | 0.459 | 0.0416 | 0.39 | 0.54 | 5695 | 2923 | 1.00 | 0.00056 | 0.00042 |
 
 
-The chains mix well: the \\\hat{R}\\ values are essentially \\1\\ and the effective sample sizes are healthy. The demand-size parameters (`z_smoothing`, `z_init`, `z_noise`) reproduce the Croston picture, because that channel is unchanged: the smoothing posterior barely moves from the \\\text{Beta}(2, 20)\\ prior, while the initial level concentrates near the typical demand size of about \\1\\. The probability channel tells the more interesting story. Its smoothing posterior also stays low, which is the correct answer for this *stationary* series: an i.i.d. demand process has no genuine trend in its occurrence rate, so smoothing slowly and tracking the base rate is exactly right. Its initial level and noise scale come out slightly tighter than their demand-size counterparts (`p_init` and `p_noise` have smaller standard deviations than `z_init` and `z_noise`), because the indicator gives the probability channel one observation on every one of the \\68\\ periods, against the \\20\\ demand events the size channel sees. The trace plots confirm the picture.
+The chains mix well: the \hat{R} values are essentially 1 and the effective sample sizes are healthy. The demand-size parameters (`z_smoothing`, `z_init`, `z_noise`) reproduce the Croston picture, because that channel is unchanged: the smoothing posterior barely moves from the \text{Beta}(2, 20) prior, while the initial level concentrates near the typical demand size of about 1. The probability channel tells the more interesting story. Its smoothing posterior also stays low, which is the correct answer for this *stationary* series: an i.i.d. demand process has no genuine trend in its occurrence rate, so smoothing slowly and tracking the base rate is exactly right. Its initial level and noise scale come out slightly tighter than their demand-size counterparts (`p_init` and `p_noise` have smaller standard deviations than `z_init` and `z_noise`), because the indicator gives the probability channel one observation on every one of the 68 periods, against the 20 demand events the size channel sees. The trace plots confirm the picture.
 
 
     In [9]:
@@ -1918,7 +1918,7 @@ pc_trace.viz["figure"].item().suptitle(
 
 # In-sample fit
 
-For the in-sample story we plot the posterior of the deterministic `"rate"` site: the running TSB fitted rate \\\ell^z\_{t-1} \cdot \ell^p\_{t-1}\\, the expected demand per period given the history so far. Compared with the Croston rate, which is piecewise constant and can only step at demand events, the TSB rate is visibly **alive between demands**: because the availability probability decays on every zero, the rate slopes downward through each run of zeros and jumps back up at the next demand. That sawtooth is the signature of the every-period update, and it is the single clearest picture of how TSB differs from Croston. This cell also defines the small plotting helpers (`stacked_draws` and `plot_band_forecast`) shared by the remaining band plots.
+For the in-sample story we plot the posterior of the deterministic `"rate"` site: the running TSB fitted rate \ell^z\_{t-1} \cdot \ell^p\_{t-1}, the expected demand per period given the history so far. Compared with the Croston rate, which is piecewise constant and can only step at demand events, the TSB rate is visibly **alive between demands**: because the availability probability decays on every zero, the rate slopes downward through each run of zeros and jumps back up at the next demand. That sawtooth is the signature of the every-period update, and it is the single clearest picture of how TSB differs from Croston. This cell also defines the small plotting helpers (`stacked_draws` and `plot_band_forecast`) shared by the remaining band plots.
 
 The same caveat as in the Croston notebook applies: the tree's `posterior_predictive` group (the `"obs"` site) carries the *masked demand-size* likelihood, so its draws describe the size of a demand given that one occurs and are not comparable to the raw, mostly-zero series. This is why the cross-validation below scores only out-of-sample forecasts (`eval_train=False`).
 
@@ -2059,9 +2059,9 @@ ax.set(title="In-sample TSB rate", xlabel="time", ylabel="y");
 
 ## The availability probability
 
-The rate above is a product of two levels; the availability probability \\\ell^p\\ is the component that carries all of the TSB behavior, so it is worth looking at on its own. The plot below is the posterior of the `"prob"` site against the demand-event times (the rug at the bottom) and the empirical demand rate (dashed line).
+The rate above is a product of two levels; the availability probability \ell^p is the component that carries all of the TSB behavior, so it is worth looking at on its own. The plot below is the posterior of the `"prob"` site against the demand-event times (the rug at the bottom) and the empirical demand rate (dashed line).
 
-Two things stand out. First, the probability path **decays through every run of zeros and jumps at each demand**, oscillating around the base rate: this is precisely the per-period responsiveness Croston lacks, where the interval channel would hold a flat line across the same zeros. Second, the amount of decay per zero is governed by \\\alpha_p\\, and with the low posterior smoothing the per-step change is small: within a single short gap the probability barely moves, but across the sparse first third of the series the drops accumulate and pull it down toward zero, and it climbs back to oscillate around the base rate once demands arrive frequently. On this *stationary* series that gentle, base-rate-tracking behavior is the honest answer, because there is no real trend in the occurrence rate to chase. The mechanism that produces the sawtooth is exactly the mechanism that would let the forecast fall toward zero if demand genuinely dried up, which is what makes TSB the right tool when obsolescence is a real possibility.
+Two things stand out. First, the probability path **decays through every run of zeros and jumps at each demand**, oscillating around the base rate: this is precisely the per-period responsiveness Croston lacks, where the interval channel would hold a flat line across the same zeros. Second, the amount of decay per zero is governed by \alpha_p, and with the low posterior smoothing the per-step change is small: within a single short gap the probability barely moves, but across the sparse first third of the series the drops accumulate and pull it down toward zero, and it climbs back to oscillate around the base rate once demands arrive frequently. On this *stationary* series that gentle, base-rate-tracking behavior is the honest answer, because there is no real trend in the occurrence rate to chase. The mechanism that produces the sawtooth is exactly the mechanism that would let the forecast fall toward zero if demand genuinely dried up, which is what makes TSB the right tool when obsolescence is a real possibility.
 
 
     In [11]:
@@ -2108,9 +2108,9 @@ ax.set(title="In-sample availability probability", xlabel="time", ylabel="demand
 
 # Forecast
 
-The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site over the test window: the product of the two components' predictive samples. We plot the posterior mean and median together with the \\50\\\\ and \\94\\\\ HDI bands against the held-out data, and score the forecast with the CRPS (lower is better).
+The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site over the test window: the product of the two components' predictive samples. We plot the posterior mean and median together with the 50\\ and 94\\ HDI bands against the held-out data, and score the forecast with the CRPS (lower is better).
 
-Like Croston, the *multi-step* forecast is **flat**: with no future observations the levels stay put, so TSB predicts the same demand rate for every horizon step. The difference is where that flat level comes from. It starts from the availability probability *as of the end of the training window*, which here is relatively high because training ends in a demand-dense stretch; had it ended in a long drought, the forecast would start proportionally lower. That sensitivity to how recently demand was seen is exactly what the one-step-ahead cross-validation below makes visible. The predictive is right-skewed (the solid mean sits above the dashed median), and because the probability channel is a Gaussian centered on a small value, a sizable share of its draws fall below zero: the inner \\50\\\\ band already dips under the axis. This is the same pragmatic Normal-likelihood choice as the blog post, and modeling the indicator with a \\\text{Bernoulli}\\ likelihood (or the size with a truncated or log-normal one) is the natural fix.
+Like Croston, the *multi-step* forecast is **flat**: with no future observations the levels stay put, so TSB predicts the same demand rate for every horizon step. The difference is where that flat level comes from. It starts from the availability probability *as of the end of the training window*, which here is relatively high because training ends in a demand-dense stretch; had it ended in a long drought, the forecast would start proportionally lower. That sensitivity to how recently demand was seen is exactly what the one-step-ahead cross-validation below makes visible. The predictive is right-skewed (the solid mean sits above the dashed median), and because the probability channel is a Gaussian centered on a small value, a sizable share of its draws fall below zero: the inner 50\\ band already dips under the axis. This is the same pragmatic Normal-likelihood choice as the blog post, and modeling the indicator with a \text{Bernoulli} likelihood (or the size with a truncated or log-normal one) is the natural fix.
 
 
     In [12]:
@@ -2158,7 +2158,7 @@ ax.set(
 
 ## Component forecasts
 
-To see where the combined forecast comes from, we sample the two component predictives directly with `Predictive`, requesting the `"z_forecast"` and `"p_forecast"` deterministic sites, and plot them side by side with a single faceted `plot_lm` call. The demand-size component predicts the size of the next demand; the demand-probability component predicts the chance a period sees any demand at all. Their product is the forecast above. The probability component targets a quantity in \\\[0, 1\]\\, unlike Croston's unbounded inverse interval, though our Gaussian likelihood still lets some predictive draws stray outside that range, one more reason a \\\text{Bernoulli}\\ or \\\text{Beta}\\ probability channel is the natural next step.
+To see where the combined forecast comes from, we sample the two component predictives directly with `Predictive`, requesting the `"z_forecast"` and `"p_forecast"` deterministic sites, and plot them side by side with a single faceted `plot_lm` call. The demand-size component predicts the size of the next demand; the demand-probability component predicts the chance a period sees any demand at all. Their product is the forecast above. The probability component targets a quantity in \[0, 1\], unlike Croston's unbounded inverse interval, though our Gaussian likelihood still lets some predictive draws stray outside that range, one more reason a \text{Bernoulli} or \text{Beta} probability channel is the natural next step.
 
 
     In [13]:
@@ -2232,7 +2232,7 @@ fig.suptitle("TSB component forecasts", fontsize=16, fontweight="bold", y=1.05);
 
 # One-step-ahead cross-validation
 
-The fixed-origin forecast uses one training window. The sharper experiment, and the one where TSB and Croston visibly part ways, is a **rolling-origin, one-step-ahead** evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) runs this loop with `test_window=1` and `stride=1`, refitting NUTS on each fold through [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster). With `min_train_window=n_train` the folds tile the test span exactly, one fold per held-out period, and `keep_predictions=True` retains each fold's forecast samples. Alongside the CRPS we track the empirical coverage of the central \\50\\\\ and \\94\\\\ intervals.
+The fixed-origin forecast uses one training window. The sharper experiment, and the one where TSB and Croston visibly part ways, is a **rolling-origin, one-step-ahead** evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) runs this loop with `test_window=1` and `stride=1`, refitting NUTS on each fold through [HMCForecaster](../../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster). With `min_train_window=n_train` the folds tile the test span exactly, one fold per held-out period, and `keep_predictions=True` retains each fold's forecast samples. Alongside the CRPS we track the empirical coverage of the central 50\\ and 94\\ intervals.
 
 
     In [14]:
@@ -2315,7 +2315,7 @@ ax.set(title="One-step-ahead cross-validation forecasts", xlabel="time", ylabel=
 
 ## CRPS per fold
 
-The per-fold CRPS makes the same point numerically. Where Croston's per-fold score sits at essentially two flat levels (its forecast never moves), TSB's score **glides**: through the run of held-out zeros the forecast decays steadily toward zero, fitting each accumulating zero a little better, so the CRPS falls smoothly across the drought. It jumps back up only at the two held-out demands (the first fold and the last), where the now-low forecast misses a realized \\1\\. This is the opposite of Croston's pattern, where the inflated, frozen rate scores the demands *better* than the zeros; TSB's decaying rate instead pays its price on the demands and earns it back across the far more numerous zeros.
+The per-fold CRPS makes the same point numerically. Where Croston's per-fold score sits at essentially two flat levels (its forecast never moves), TSB's score **glides**: through the run of held-out zeros the forecast decays steadily toward zero, fitting each accumulating zero a little better, so the CRPS falls smoothly across the drought. It jumps back up only at the two held-out demands (the first fold and the last), where the now-low forecast misses a realized 1. This is the opposite of Croston's pattern, where the inflated, frozen rate scores the demands *better* than the zeros; TSB's decaying rate instead pays its price on the demands and earns it back across the far more numerous zeros.
 
 
     In [16]:
@@ -2343,7 +2343,7 @@ ax.set(
 
 ## Calibration
 
-With a single observation per fold, per-fold coverage is a \\0/1\\ indicator, so we aggregate: the empirical coverage across all folds against the nominal levels, computed from the assembled draws with [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage). We also compare the one-step-ahead CRPS with the fixed-origin CRPS from the forecast section.
+With a single observation per fold, per-fold coverage is a 0/1 indicator, so we aggregate: the empirical coverage across all folds against the nominal levels, computed from the assembled draws with [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage). We also compare the one-step-ahead CRPS with the fixed-origin CRPS from the forecast section.
 
 The same caveat as in the Croston notebook applies: [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the *central quantile interval*, while the plotted bands are HDIs, and for this right-skewed predictive the two genuinely differ, so these numbers check the calibration of central intervals rather than literally of the bands shown above.
 
@@ -2369,7 +2369,7 @@ print(f"empirical 94% coverage: {cov_94:.2f}  (nominal 0.94)")
     empirical 94% coverage: 1.00  (nominal 0.94)
 
 
-On this series TSB actually comes out **ahead** of Croston, and for an instructive reason. Its one-step-ahead and fixed-origin CRPS (both around \\0.23\\ to \\0.24\\) are lower than the Croston notebook's (both around \\0.35\\ to \\0.37\\), and its central \\50\\\\ interval covers close to nominal (\\0.58\\ against \\0.50\\) where Croston's covered almost nothing (\\0.08\\). Two things drive this. First, TSB smooths a probability directly, so it avoids the upward inversion bias that inflates the Croston rate; its fitted rate sits lower, much closer to the zero-heavy realizations. Second, the forecast's spread reaches down across zero (partly, it must be said, because the Gaussian probability channel spills below zero, which a \\\text{Bernoulli}\\ channel would achieve more honestly), so the interval actually contains the zeros that dominate the series. The one structural weakness both methods share, a predictive of a *rate* rather than a *count*, is what still keeps the coverage from being exact. And the headline advantage, a forecast that decays when demand truly stops, does not show up in the aggregate score on i.i.d. data at all: it stays latent here, waiting for a series that genuinely goes obsolete to turn it into a decisive difference.
+On this series TSB actually comes out **ahead** of Croston, and for an instructive reason. Its one-step-ahead and fixed-origin CRPS (both around 0.23 to 0.24) are lower than the Croston notebook's (both around 0.35 to 0.37), and its central 50\\ interval covers close to nominal (0.58 against 0.50) where Croston's covered almost nothing (0.08). Two things drive this. First, TSB smooths a probability directly, so it avoids the upward inversion bias that inflates the Croston rate; its fitted rate sits lower, much closer to the zero-heavy realizations. Second, the forecast's spread reaches down across zero (partly, it must be said, because the Gaussian probability channel spills below zero, which a \text{Bernoulli} channel would achieve more honestly), so the interval actually contains the zeros that dominate the series. The one structural weakness both methods share, a predictive of a *rate* rather than a *count*, is what still keeps the coverage from being exact. And the headline advantage, a forecast that decays when demand truly stops, does not show up in the aggregate score on i.i.d. data at all: it stays latent here, waiting for a series that genuinely goes obsolete to turn it into a decisive difference.
 
 
 # A final note: TSB versus ARMA

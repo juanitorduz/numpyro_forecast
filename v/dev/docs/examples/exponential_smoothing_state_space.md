@@ -56,11 +56,11 @@ rng_key = random.PRNGKey(seed=42)
 
 # Generate synthetic data
 
-We use the same synthetic series as the source posts: a seasonal cosine wave with period \\m = 15\\, a slow logarithmic trend, and additive Gaussian noise,
+We use the same synthetic series as the source posts: a seasonal cosine wave with period m = 15, a slow logarithmic trend, and additive Gaussian noise,
 
-\\y_t = \cos(2 \pi t) + \log(t + 1) + 0.2 \\ \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, 1).\\
+y_t = \cos(2 \pi t) + \log(t + 1) + 0.2 \\ \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, 1).
 
-This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last \\20\\\\ of the series as a test set.
+This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last 20\\ of the series as a test set.
 
 
 ``` python
@@ -133,7 +133,7 @@ It threads a *carry* (the running state) through a step function `f`, and stacks
 
 ## A simple example
 
-As a warm-up, we use `scan` to compute the geometric damping sum \\\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\\ that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of \\\varphi\\.
+As a warm-up, we use `scan` to compute the geometric damping sum \varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h that appears in the damped-trend forecast formula below. The carry holds the running sum and the current power of \varphi.
 
 
 ``` python
@@ -164,17 +164,17 @@ print(f"partial sums: {np.asarray(partial_sums).round(5)}")
 
 # From component form to state space form
 
-The classical **damped Holt-Winters** method with additive seasonality of period \\m\\ is a set of recursive updates for the level \\\ell_t\\, the trend \\b_t\\, and the seasonal component \\s_t\\, together with an \\h\\-step forecast,
+The classical **damped Holt-Winters** method with additive seasonality of period m is a set of recursive updates for the level \ell_t, the trend b_t, and the seasonal component s_t, together with an h-step forecast,
 
-\\ \begin{align\*} \hat{y}\_{t+h \mid t} &= \ell_t + \varphi_h \\ b_t + s\_{t + h - m(k+1)}, \\ \ell_t &= \alpha (y_t - s\_{t-m}) + (1 - \alpha)(\ell\_{t-1} + \varphi \\ b\_{t-1}), \\ b_t &= \beta^{\*} (\ell_t - \ell\_{t-1}) + (1 - \beta^{\*}) \varphi \\ b\_{t-1}, \\ s_t &= \gamma (y_t - \ell\_{t-1} - \varphi \\ b\_{t-1}) + (1 - \gamma) s\_{t-m}, \end{align\*} \\
+ \begin{align\*} \hat{y}\_{t+h \mid t} &= \ell_t + \varphi_h \\ b_t + s\_{t + h - m(k+1)}, \\ \ell_t &= \alpha (y_t - s\_{t-m}) + (1 - \alpha)(\ell\_{t-1} + \varphi \\ b\_{t-1}), \\ b_t &= \beta^{\*} (\ell_t - \ell\_{t-1}) + (1 - \beta^{\*}) \varphi \\ b\_{t-1}, \\ s_t &= \gamma (y_t - \ell\_{t-1} - \varphi \\ b\_{t-1}) + (1 - \gamma) s\_{t-m}, \end{align\*} 
 
-where \\\alpha, \beta^{\*}, \gamma \in (0, 1)\\ are smoothing parameters, \\\varphi \in (0, 1)\\ is the damping factor, \\\varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h\\, and \\k = \lfloor (h-1)/m \rfloor\\.
+where \alpha, \beta^{\*}, \gamma \in (0, 1) are smoothing parameters, \varphi \in (0, 1) is the damping factor, \varphi_h = \varphi + \varphi^2 + \cdots + \varphi^h, and k = \lfloor (h-1)/m \rfloor.
 
-The **innovations state space form** (SSOE) rewrites this as a generative model driven by a *single* error term \\\varepsilon_t\\ shared across all equations,
+The **innovations state space form** (SSOE) rewrites this as a generative model driven by a *single* error term \varepsilon_t shared across all equations,
 
-\\ \begin{align\*} y_t &= \underbrace{\ell\_{t-1} + \varphi \\ b\_{t-1} + s\_{t-m}}\_{\mu_t} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma), \\ \ell_t &= \ell\_{t-1} + \varphi \\ b\_{t-1} + \alpha \\ \varepsilon_t, \\ b_t &= \varphi \\ b\_{t-1} + \beta \\ \varepsilon_t, \\ s_t &= s\_{t-m} + \gamma \\ \varepsilon_t, \end{align\*} \\
+ \begin{align\*} y_t &= \underbrace{\ell\_{t-1} + \varphi \\ b\_{t-1} + s\_{t-m}}\_{\mu_t} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma), \\ \ell_t &= \ell\_{t-1} + \varphi \\ b\_{t-1} + \alpha \\ \varepsilon_t, \\ b_t &= \varphi \\ b\_{t-1} + \beta \\ \varepsilon_t, \\ s_t &= s\_{t-m} + \gamma \\ \varepsilon_t, \end{align\*} 
 
-with the coefficient map \\\beta = \beta^{\*} \alpha\\ and \\\gamma = \gamma^{\*} (1 - \alpha)\\. The two forms are mathematically equivalent, but the SSOE form is the one we want for probabilistic forecasting. In sample, the innovation is exactly the one-step-ahead forecast error \\\varepsilon_t = y_t - \mu_t\\, so the whole state trajectory is a deterministic function of the observed data and the parameters. Out of sample there is no data, so \\\varepsilon_t\\ is *sampled* and fed back into the level, trend, and seasonal updates. Because a single innovation drives every component, the forecast uncertainty compounds and the prediction interval widens with the horizon, which is the behavior we expect from a genuine stochastic process.
+with the coefficient map \beta = \beta^{\*} \alpha and \gamma = \gamma^{\*} (1 - \alpha). The two forms are mathematically equivalent, but the SSOE form is the one we want for probabilistic forecasting. In sample, the innovation is exactly the one-step-ahead forecast error \varepsilon_t = y_t - \mu_t, so the whole state trajectory is a deterministic function of the observed data and the parameters. Out of sample there is no data, so \varepsilon_t is *sampled* and fed back into the level, trend, and seasonal updates. Because a single innovation drives every component, the forecast uncertainty compounds and the prediction interval widens with the horizon, which is the behavior we expect from a genuine stochastic process.
 
 
 # The model
@@ -183,10 +183,10 @@ We implement the SSOE model as a functional `numpyro_forecast` model body. A mod
 
 The body does two things with `scan`, neither of which contains a NumPyro sample site (so plain `jax.lax.scan` is all we need, and reverse-mode automatic differentiation works out of the box):
 
-1.  **In sample.** A deterministic filter consumes the observed series to produce the one-step-ahead means \\\mu_t\\; the whole in-sample likelihood is then a single `Normal` observation site `"obs"`. We also expose \\\mu_t\\ as a deterministic site `"mu"` for the in-sample fit plot.
+1.  **In sample.** A deterministic filter consumes the observed series to produce the one-step-ahead means \mu_t; the whole in-sample likelihood is then a single `Normal` observation site `"obs"`. We also expose \mu_t as a deterministic site `"mu"` for the in-sample fit plot.
 2.  **Out of sample.** When `h.future > 0` we draw the horizon innovations from the prior at a separate `"eps_future"` site, roll the state forward feeding those innovations back, and expose the result as the deterministic `"forecast"` site that the forecaster reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, exactly like the built-in `_future` sites.
 
-The priors follow the source post: \\\text{Beta}(5, 5)\\ on the level, trend, and seasonal smoothing parameters (flat enough near the boundaries to avoid a funnel-shaped posterior), \\\text{Beta}(2, 5)\\ on the damping factor (favoring some damping), a tight \\\text{HalfNormal}(0.5)\\ on the noise, and weakly informative priors on the initial states.
+The priors follow the source post: \text{Beta}(5, 5) on the level, trend, and seasonal smoothing parameters (flat enough near the boundaries to avoid a funnel-shaped posterior), \text{Beta}(2, 5) on the damping factor (favoring some damping), a tight \text{HalfNormal}(0.5) on the noise, and weakly informative priors on the initial states.
 
 
 ``` python
@@ -254,7 +254,7 @@ model = forecasting_model(exponential_smoothing_ssm)
 
 # Priors
 
-Before fitting, it is worth looking at the priors on the bounded parameters. The \\\text{Beta}(5, 5)\\ prior on the smoothing parameters is symmetric and concentrated away from \\0\\ and \\1\\, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The \\\text{Beta}(2, 5)\\ prior on the damping factor \\\varphi\\ puts more mass below \\0.5\\, encoding a mild preference for damped (non-explosive) trends.
+Before fitting, it is worth looking at the priors on the bounded parameters. The \text{Beta}(5, 5) prior on the smoothing parameters is symmetric and concentrated away from 0 and 1, which keeps the sampler away from the boundary regions where the posterior geometry degenerates. The \text{Beta}(2, 5) prior on the damping factor \varphi puts more mass below 0.5, encoding a mild preference for damped (non-explosive) trends.
 
 
 ``` python
@@ -290,7 +290,7 @@ ax_noise.set(
 
 # Inference
 
-We fit the model with the NUTS sampler through [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), running \\4\\ chains of \\2{,}000\\ warmup and \\2{,}000\\ sampling steps each. [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) takes the model, the in-sample data, and the covariates over the training window, and runs the No-U-Turn Sampler under the hood.
+We fit the model with the NUTS sampler through [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), running 4 chains of 2{,}000 warmup and 2{,}000 sampling steps each. [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster) takes the model, the in-sample data, and the covariates over the training window, and runs the No-U-Turn Sampler under the hood.
 
 
 ``` python
@@ -355,7 +355,7 @@ diagnostics.round({"r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
 | trend_init            | 1.001 | 3796.0   | 4569.0   |
 
 
-The \\\hat{R}\\ values are close to \\1\\ and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
+The \hat{R} values are close to 1 and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
 
 
 ``` python
@@ -411,7 +411,7 @@ print(f"forecast samples: {forecast_samples.shape}")
     forecast samples: (2000, 48, 1)
 
 
-We visualize both the in-sample fit and the forecast with `az.plot_lm`, showing the \\50\\\\ and \\94\\\\ HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.
+We visualize both the in-sample fit and the forecast with `az.plot_lm`, showing the 50\\ and 94\\ HDI bands. The forecast band (in orange) clearly fans out as the horizon grows: this is the calibrated uncertainty that the innovations state space form provides.
 
 
 ``` python
@@ -494,7 +494,7 @@ plt.show()
 
 # Evaluation
 
-Finally, we score the forecast against the held-out test set with the package's evaluation metrics: mean absolute error and root mean squared error (point-forecast accuracy), the continuous ranked probability score (a proper score for the whole predictive distribution), and the empirical coverage of the central \\90\\\\ interval (calibration).
+Finally, we score the forecast against the held-out test set with the package's evaluation metrics: mean absolute error and root mean squared error (point-forecast accuracy), the continuous ranked probability score (a proper score for the whole predictive distribution), and the empirical coverage of the central 90\\ interval (calibration).
 
 
 ``` python
@@ -515,7 +515,7 @@ for name, value in metrics.items():
       coverage (90%): 0.9583
 
 
-The coverage of the central \\90\\\\ interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for `numpyro_forecast.backtest`, which refits the model on a moving window; we omit it here because it retrains the full sampler for every window.
+The coverage of the central 90\\ interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for `numpyro_forecast.backtest`, which refits the model on a moving window; we omit it here because it retrains the full sampler for every window.
 
 
 # References

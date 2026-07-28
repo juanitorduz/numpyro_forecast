@@ -120,7 +120,7 @@ print("christmas index:", christmas_index)
 
 The structure mirrors part I but spreads the effects across two hierarchies, origin and destination, plus the hour-of-week. The random-walk `level` is indexed by destination: it captures how busy an arrival station is over time. The seasonal effect and the observation scale are each a **sum** of an origin part and a destination part, so a ride inherits the weekly rhythm and the noisiness of both its endpoints. On top of that, a static **pairwise** term models the affinity of each origin-destination pair, which absorbs structure the additive parts miss (for instance, people rarely travel from a station back to itself).
 
-\\\begin{align\*} \mu & = \text{level} + (\text{origin\\seasonal} + \text{destin\\seasonal}) + \text{pairwise} \\ y & \sim \text{Normal}(\mu,\\ \text{origin\\scale} + \text{destin\\scale}) \end{align\*}\\
+\begin{align\*} \mu & = \text{level} + (\text{origin\\seasonal} + \text{destin\\seasonal}) + \text{pairwise} \\ y & \sim \text{Normal}(\mu,\\ \text{origin\\scale} + \text{destin\\scale}) \end{align\*}
 
 We declare three plates, `origin` (dim `-3`), `hour_of_week` (dim `-2`) and `destin` (dim `-1`), and open each effect under the plates it depends on. The per-destination level is sampled with `self.time_series(...)` under the `destin` plate, and the seasonal effect is tiled across the full horizon with [periodic_repeat](../../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Broadcasting over the three plate dimensions assembles the `(origin, time, destin)` mean.
 

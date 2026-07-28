@@ -3,9 +3,9 @@
 
 This notebook ports the blog post [**Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints**](https://juanitorduz.github.io/availability_tsb/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It closes the intermittent-demand trilogy started by the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) and the [TSB example](https://juanitorduz.github.io/numpyro_forecast/examples/tsb.html), and like those notebooks it focuses on the *one* structural change the method makes and why that change matters.
 
-The motivation is a fact of retail life that the classical intermittent-demand methods ignore: a sales series contains **two kinds of zeros**. Some periods are zero because nobody wanted the product (no demand), and some are zero because nobody *could* buy it (a stock-out, a delisting, a closed store). What we observe is censored demand, \\y_t = a_t \cdot d^{\ast}\_t\\, where \\d^{\ast}\_t\\ is the demand that would have materialized and \\a_t \in \\0, 1\\\\ says whether the product was on the shelf.
+The motivation is a fact of retail life that the classical intermittent-demand methods ignore: a sales series contains **two kinds of zeros**. Some periods are zero because nobody wanted the product (no demand), and some are zero because nobody *could* buy it (a stock-out, a delisting, a closed store). What we observe is censored demand, y_t = a_t \cdot d^{\ast}\_t, where d^{\ast}\_t is the demand that would have materialized and a_t \in \\0, 1\\ says whether the product was on the shelf.
 
-Plain TSB cannot tell these zeros apart. Its demand probability decays at *every* zero, so a stretch of stock-outs is read as demand fading away, and the estimate converges to \\P(\text{available}) \cdot P(\text{demand} \mid \text{available})\\: biased low by the availability rate, and biased differently for every series depending on its stock-out history. The fix from the blog post is a **one-line change**: gate the probability update with the availability mask, so that off-shelf periods, which carry no demand information whatsoever, leave the estimate frozen instead of decaying it. The estimate then targets the uncensored \\P(\text{demand} \mid \text{available})\\, and because availability becomes a model *input*, the forecast turns into a **scenario tool**: feed a full-availability future to forecast unconstrained demand (the number replenishment planning needs), or feed any planned availability path.
+Plain TSB cannot tell these zeros apart. Its demand probability decays at *every* zero, so a stretch of stock-outs is read as demand fading away, and the estimate converges to P(\text{available}) \cdot P(\text{demand} \mid \text{available}): biased low by the availability rate, and biased differently for every series depending on its stock-out history. The fix from the blog post is a **one-line change**: gate the probability update with the availability mask, so that off-shelf periods, which carry no demand information whatsoever, leave the estimate frozen instead of decaying it. The estimate then targets the uncensored P(\text{demand} \mid \text{available}), and because availability becomes a model *input*, the forecast turns into a **scenario tool**: feed a full-availability future to forecast unconstrained demand (the number replenishment planning needs), or feed any planned availability path.
 
 Two practical notes on the port:
 
@@ -74,9 +74,9 @@ rng_key = random.PRNGKey(seed=42)
 
 # Generate data
 
-We use the blog post's synthetic panel: \\1{,}000\\ series over \\60\\ periods. Each series draws a rate \\\lambda_i \sim \text{Gamma}(2.5)\\, its latent demand is \\d^{\ast}\_{t, i} \sim \text{Poisson}(\lambda_i)\\, availability is an independent coin flip \\a\_{t, i} \sim \text{Bernoulli}(0.6)\\, and the observed sales are the censored product \\y\_{t, i} = a\_{t, i} \cdot d^{\ast}\_{t, i}\\. The last \\10\\ periods are held out as a test window.
+We use the blog post's synthetic panel: 1{,}000 series over 60 periods. Each series draws a rate \lambda_i \sim \text{Gamma}(2.5), its latent demand is d^{\ast}\_{t, i} \sim \text{Poisson}(\lambda_i), availability is an independent coin flip a\_{t, i} \sim \text{Bernoulli}(0.6), and the observed sales are the censored product y\_{t, i} = a\_{t, i} \cdot d^{\ast}\_{t, i}. The last 10 periods are held out as a test window.
 
-The one deliberate extension over the blog post is that the generator also *returns* the uncensored demand and the true rates. The data-generating process knows the ground truth, so later sections can score the recovered demand probabilities against \\P(d^{\ast} \> 0) = 1 - e^{-\lambda}\\ instead of eyeballing them.
+The one deliberate extension over the blog post is that the generator also *returns* the uncensored demand and the true rates. The data-generating process knows the ground truth, so later sections can score the recovered demand probabilities against P(d^{\ast} \> 0) = 1 - e^{-\lambda} instead of eyeballing them.
 
 
     In [2]:
@@ -194,7 +194,7 @@ print(f"train data shape: {train_data.shape}, full covariates shape: {covariates
 
 ## Two kinds of zeros
 
-Before modeling anything, it is worth quantifying how badly the zeros conflate the two stories. In the training window, roughly \\40\\\\ of all periods are stock-outs by construction, and they turn a substantial share of periods with genuine demand into observed zeros (lost sales). A method that reads every zero as "no demand" is fitting to all of them.
+Before modeling anything, it is worth quantifying how badly the zeros conflate the two stories. In the training window, roughly 40\\ of all periods are stock-outs by construction, and they turn a substantial share of periods with genuine demand into observed zeros (lost sales). A method that reads every zero as "no demand" is fitting to all of them.
 
 
     In [4]:
@@ -296,32 +296,32 @@ fig.suptitle("Observed sales and stock-outs (ten example series)", fontsize=18, 
 
 # From Croston to TSB to availability constraints
 
-All three methods in this trilogy decompose the sparse series into a **demand size** and an **occurrence** component and run simple exponential smoothing on each; they differ only in what the occurrence component is and *when* it updates. Writing \\\ell_t\\ for a component level, every recursion below is the same masked update \\\ell_t = \ell\_{t-1} + g_t \\ \alpha \\ (x_t - \ell\_{t-1})\\ with a different gate \\g_t\\:
+All three methods in this trilogy decompose the sparse series into a **demand size** and an **occurrence** component and run simple exponential smoothing on each; they differ only in what the occurrence component is and *when* it updates. Writing \ell_t for a component level, every recursion below is the same masked update \ell_t = \ell\_{t-1} + g_t \\ \alpha \\ (x_t - \ell\_{t-1}) with a different gate g_t:
 
-| method | occurrence component | update gate \\g_t\\ | what \\\hat{p}\\ estimates under stock-outs |
+| method | occurrence component | update gate g_t | what \hat{p} estimates under stock-outs |
 |----|----|----|----|
 | Croston | inverse inter-demand interval | demand events only | interval-based, availability inflates intervals |
-| TSB | demand indicator \\d_t\\ | every period | \\P(\text{available}) \cdot P(\text{demand} \mid \text{available})\\ |
-| availability TSB | demand indicator \\d_t\\ | available periods \\a_t = 1\\ | \\P(\text{demand} \mid \text{available})\\ |
+| TSB | demand indicator d_t | every period | P(\text{available}) \cdot P(\text{demand} \mid \text{available}) |
+| availability TSB | demand indicator d_t | available periods a_t = 1 | P(\text{demand} \mid \text{available}) |
 
-[Croston's method](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) updates both components only at demand events, so a stock-out run simply freezes it, but it also *stretches the measured inter-demand intervals*: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. [TSB](https://juanitorduz.github.io/numpyro_forecast/examples/tsb.html) replaces the intervals with the demand indicator \\d_t = \mathbf{1}\[y_t \> 0\]\\ smoothed at every period:
+[Croston's method](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) updates both components only at demand events, so a stock-out run simply freezes it, but it also *stretches the measured inter-demand intervals*: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. [TSB](https://juanitorduz.github.io/numpyro_forecast/examples/tsb.html) replaces the intervals with the demand indicator d_t = \mathbf{1}\[y_t \> 0\] smoothed at every period:
 
-\\ \hat{p}\_t = \begin{cases} \beta + (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t \> 0, \\ (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t = 0. \end{cases} \\
+ \hat{p}\_t = \begin{cases} \beta + (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t \> 0, \\ (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t = 0. \end{cases} 
 
 This is the method's strength on genuinely fading demand and its weakness under censoring: the second branch fires on stock-out zeros too. The blog post's hack rewrites the zero branch as
 
-\\ \hat{p}\_t = (1 - a_t \\ \beta) \\ \hat{p}\_{t-1}, \\
+ \hat{p}\_t = (1 - a_t \\ \beta) \\ \hat{p}\_{t-1}, 
 
-so an on-shelf zero (\\a_t = 1\\) decays the probability exactly as in TSB, while an off-shelf period (\\a_t = 0\\) leaves it untouched. Since a sale requires the product on the shelf (\\y_t \> 0 \Rightarrow a_t = 1\\), all branches collapse into the single gated recursion
+so an on-shelf zero (a_t = 1) decays the probability exactly as in TSB, while an off-shelf period (a_t = 0) leaves it untouched. Since a sale requires the product on the shelf (y_t \> 0 \Rightarrow a_t = 1), all branches collapse into the single gated recursion
 
-\\ \hat{p}\_t = \hat{p}\_{t-1} + a_t \\ \beta \\ (d_t - \hat{p}\_{t-1}): \\
+ \hat{p}\_t = \hat{p}\_{t-1} + a_t \\ \beta \\ (d_t - \hat{p}\_{t-1}): 
 
-simple exponential smoothing of the demand indicator, updated **only when the product is available**. The point forecast becomes \\\hat{y}\_{t+h} = a\_{t+h} \\ \hat{z}\_t \\ \hat{p}\_t\\ with the *future* availability \\a\_{t+h}\\ chosen by the forecaster, which is what turns the model into a scenario tool. And because plain TSB is recovered exactly by setting \\a_t \equiv 1\\, the comparison at the end of this notebook needs no second model: it just feeds the same model an all-ones availability input.
+simple exponential smoothing of the demand indicator, updated **only when the product is available**. The point forecast becomes \hat{y}\_{t+h} = a\_{t+h} \\ \hat{z}\_t \\ \hat{p}\_t with the *future* availability a\_{t+h} chosen by the forecaster, which is what turns the model into a scenario tool. And because plain TSB is recovered exactly by setting a_t \equiv 1, the comparison at the end of this notebook needs no second model: it just feeds the same model an all-ones availability input.
 
 
 # Prior for the smoothing parameters
 
-Both smoothing parameters get a \\\text{Beta}(1.5, 3)\\ prior. This is a genuinely weakly informative choice: most of its mass still sits at the small values classical practice expects for smoothing parameters (roughly \\\[0.1, 0.3\]\\), but the density stays meaningfully positive across the whole unit interval, so a series whose data call for a very stiff level (near \\0\\) or a very reactive one (near \\1\\) can reach it without fighting the prior. Contrast this with the blog post's \\\text{Beta}(10, 40)\\, which pins the parameter to a narrow band around \\0.2\\; with \\1{,}000\\ series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
+Both smoothing parameters get a \text{Beta}(1.5, 3) prior. This is a genuinely weakly informative choice: most of its mass still sits at the small values classical practice expects for smoothing parameters (roughly \[0.1, 0.3\]), but the density stays meaningfully positive across the whole unit interval, so a series whose data call for a very stiff level (near 0) or a very reactive one (near 1) can reach it without fighting the prior. Contrast this with the blog post's \text{Beta}(10, 40), which pins the parameter to a narrow band around 0.2; with 1{,}000 series each contributing its own posterior, there is no reason to constrain them that tightly a priori, and we let the data decide instead.
 
 
     In [6]:
@@ -354,16 +354,16 @@ The model is the TSB notebook's two-component construction promoted to a panel, 
 
 The remaining choices, and where their numbers come from:
 
-- **Level inits.** Following the blog post, the levels start deterministically rather than sampled as in the sibling notebooks: the demand-size level starts at the first observation, \\\ell^z_0 = y_0\\, and the demand probability starts at \\\hat{p}\_0 = 0.5\\, the agnostic "no idea whether this period sees demand" value that the data then pull toward each series' true probability.
-- **Noise priors.** The demand-size noise is hierarchical: a global scale \\\sigma\_{\text{scale}} \sim \text{LogNormal}(\log 5, 1)\\ (centered on the blog post's value of \\5\\ but with a log-scale of \\1\\ instead of its \\0.3\\, spanning an order of magnitude in either direction) with per-series \\\sigma_i \sim \text{HalfNormal}(\sigma\_{\text{scale}})\\, which shares strength across \\1{,}000\\ series that individually see only a handful of demand events. The probability component instead gets a fixed weakly informative \\\sigma_i \sim \text{HalfNormal}(1)\\: its observations live in \\\[0, 1\]\\, so a scale of order one is already essentially flat and there is nothing for a hierarchy to learn.
-- **Noise floors.** One pragmatic addition over the blog post: each component's observation scale gets a small constant floor (\\0.1\\ on the sizes, \\0.05\\ on the indicator, well below any scale the data support). With this many series, some have every training demand equal (all \\1\\s is common for slow movers) or no on-shelf demand at all, and without the floor SVI drives those series' scales toward zero until the ELBO turns NaN late in the optimization.
+- **Level inits.** Following the blog post, the levels start deterministically rather than sampled as in the sibling notebooks: the demand-size level starts at the first observation, \ell^z_0 = y_0, and the demand probability starts at \hat{p}\_0 = 0.5, the agnostic "no idea whether this period sees demand" value that the data then pull toward each series' true probability.
+- **Noise priors.** The demand-size noise is hierarchical: a global scale \sigma\_{\text{scale}} \sim \text{LogNormal}(\log 5, 1) (centered on the blog post's value of 5 but with a log-scale of 1 instead of its 0.3, spanning an order of magnitude in either direction) with per-series \sigma_i \sim \text{HalfNormal}(\sigma\_{\text{scale}}), which shares strength across 1{,}000 series that individually see only a handful of demand events. The probability component instead gets a fixed weakly informative \sigma_i \sim \text{HalfNormal}(1): its observations live in \[0, 1\], so a scale of order one is already essentially flat and there is nothing for a hierarchy to learn.
+- **Noise floors.** One pragmatic addition over the blog post: each component's observation scale gets a small constant floor (0.1 on the sizes, 0.05 on the indicator, well below any scale the data support). With this many series, some have every training demand equal (all 1s is common for slow movers) or no on-shelf demand at all, and without the floor SVI drives those series' scales toward zero until the ELBO turns NaN late in the optimization.
 
 The `availability_tsb` body then does what is specific to this method:
 
 1.  **Bookkeeping.** From the covariates it reads the observed sales prefix (input `0`), the availability mask (input `1`), and the *future* availability rows, and builds the demand indicator.
 2.  **The one-line innovation.** The demand-size component is gated by `is_demand`, exactly as in Croston and TSB. The demand-probability component smooths the indicator gated by `available`: where the TSB notebook passes an all-true `every_period` gate, this model passes the availability mask. That single argument is the whole method.
-3.  **In sample.** The size likelihood `"obs"` is masked to demand events, as in the siblings. The probability likelihood `"obs_prob"` is masked to *available* periods: an off-shelf indicator observation carries no demand information, so it contributes no likelihood either. The deterministic sites expose the uncensored `"demand_rate"` (\\\hat{z}\_{t-1} \hat{p}\_{t-1}\\), the censored `"rate"` (\\a_t \hat{z}\_{t-1} \hat{p}\_{t-1}\\, the expected *sales*), and the probability path `"prob"`.
-4.  **Out of sample.** The `"forecast"` site is the component predictives' product times the future availability read from the covariates, \\a \cdot \hat{z} \cdot \hat{p}\\, so the same fitted model forecasts any availability scenario.
+3.  **In sample.** The size likelihood `"obs"` is masked to demand events, as in the siblings. The probability likelihood `"obs_prob"` is masked to *available* periods: an off-shelf indicator observation carries no demand information, so it contributes no likelihood either. The deterministic sites expose the uncensored `"demand_rate"` (\hat{z}\_{t-1} \hat{p}\_{t-1}), the censored `"rate"` (a_t \hat{z}\_{t-1} \hat{p}\_{t-1}, the expected *sales*), and the probability path `"prob"`.
+4.  **Out of sample.** The `"forecast"` site is the component predictives' product times the future availability read from the covariates, a \cdot \hat{z} \cdot \hat{p}, so the same fitted model forecasts any availability scenario.
 
 
     In [7]:
@@ -510,7 +510,7 @@ model = forecasting_model(availability_tsb)
 
 ## Prior predictive check
 
-Before fitting we draw from the prior predictive with NumPyro's `Predictive` and look at the implied `"rate"` paths for one example series. The recursions are driven by the observed history through the covariates, so even under the prior the rate follows the data's rough shape; what the prior controls is how strongly each observation moves the levels and hence how wide the band of plausible paths is. Under the wide \\\text{Beta}(1.5, 3)\\ prior that band is genuinely broad: it spans everything from a stiff level that barely reacts to a reactive one that chases the observations up to their spikes, which is exactly the agnosticism we want before seeing the likelihood. This cell also defines the small band-plot helpers (`hdi_label`, `stacked_draws`, and `plot_band_forecast`, shared with the sibling notebooks) used by every band plot below.
+Before fitting we draw from the prior predictive with NumPyro's `Predictive` and look at the implied `"rate"` paths for one example series. The recursions are driven by the observed history through the covariates, so even under the prior the rate follows the data's rough shape; what the prior controls is how strongly each observation moves the levels and hence how wide the band of plausible paths is. Under the wide \text{Beta}(1.5, 3) prior that band is genuinely broad: it spans everything from a stiff level that barely reacts to a reactive one that chases the observations up to their spikes, which is exactly the agnosticism we want before seeing the likelihood. This cell also defines the small band-plot helpers (`hdi_label`, `stacked_draws`, and `plot_band_forecast`, shared with the sibling notebooks) used by every band plot below.
 
 
     In [8]:
@@ -654,7 +654,7 @@ ax.set(title=f"Prior predictive rate (series {i})", xlabel="time", ylabel="sales
 
 # Inference with SVI
 
-With \\1{,}000\\ series the posterior has about \\4{,}000\\ latent dimensions (four per-series parameters, the two components' smoothing and noise, plus the global noise scale), which is exactly the regime where the sibling notebooks' NUTS setup stops being the right tool and stochastic variational inference shines. We fit with the functional [`fit_svi`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.fit_svi.html), following the blog post's configuration: an `AutoNormal` guide (the default) and `Adam` with learning rate \\0.001\\ for \\10{,}000\\ steps. The ELBO loss settles well before the end of the run.
+With 1{,}000 series the posterior has about 4{,}000 latent dimensions (four per-series parameters, the two components' smoothing and noise, plus the global noise scale), which is exactly the regime where the sibling notebooks' NUTS setup stops being the right tool and stochastic variational inference shines. We fit with the functional [`fit_svi`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.svi.fit_svi.html), following the blog post's configuration: an `AutoNormal` guide (the default) and `Adam` with learning rate 0.001 for 10{,}000 steps. The ELBO loss settles well before the end of the run.
 
 
     In [9]:
@@ -2336,7 +2336,7 @@ sample_dims :
 \['chain', 'draw'\]
 
 
-A variational fit has no chains to converge, so the MCMC diagnostics of the sibling notebooks (\\\hat{R}\\, effective sample sizes) do not apply; the ELBO curve above plays their role. What we can inspect is the fitted posterior itself. `az.summary` on the global noise scale checks the one shared parameter, and for the \\1{,}000\\-dimensional per-series sites we look at the *distribution* of posterior-mean smoothing parameters across series against the prior mean.
+A variational fit has no chains to converge, so the MCMC diagnostics of the sibling notebooks (\hat{R}, effective sample sizes) do not apply; the ELBO curve above plays their role. What we can inspect is the fitted posterior itself. `az.summary` on the global noise scale checks the one shared parameter, and for the 1{,}000-dimensional per-series sites we look at the *distribution* of posterior-mean smoothing parameters across series against the prior mean.
 
 
     In [11]:
@@ -2383,7 +2383,7 @@ fig.suptitle(
 </figure>
 
 
-How to read these two shapes. A small smoothing parameter means a *stiff* level (each new observation nudges the estimate only slightly), a large one a *reactive* level that chases the latest observations. The size component (`z_smoothing`) comes out unimodal, concentrated around its annotated mean of \\0.3\\: demand sizes are i.i.d. within each series, so there is no genuine trend to chase, and the likelihood settles on moderate values that average over the Poisson noise rather than track it. The probability component (`p_smoothing`) is the interesting one: its distribution is *multimodal*, with a distinct cluster of series at clearly larger values. That upper cluster is not noise; it is the fastest movers. Their true demand probability sits near \\1\\, so their demand indicator is an almost constant string of ones, and the quickest way for the recursion to explain it is to escape the agnostic \\\hat{p}\_0 = 0.5\\ initialization in a few steps, which requires a large smoothing parameter. The scatter below makes the link explicit, and the printed split quantifies it.
+How to read these two shapes. A small smoothing parameter means a *stiff* level (each new observation nudges the estimate only slightly), a large one a *reactive* level that chases the latest observations. The size component (`z_smoothing`) comes out unimodal, concentrated around its annotated mean of 0.3: demand sizes are i.i.d. within each series, so there is no genuine trend to chase, and the likelihood settles on moderate values that average over the Poisson noise rather than track it. The probability component (`p_smoothing`) is the interesting one: its distribution is *multimodal*, with a distinct cluster of series at clearly larger values. That upper cluster is not noise; it is the fastest movers. Their true demand probability sits near 1, so their demand indicator is an almost constant string of ones, and the quickest way for the recursion to explain it is to escape the agnostic \hat{p}\_0 = 0.5 initialization in a few steps, which requires a large smoothing parameter. The scatter below makes the link explicit, and the printed split quantifies it.
 
 
     In [13]:
@@ -2426,7 +2426,7 @@ print(f"  remaining series' mean true probability: {float(p_true_all[~high_sm].m
 
 # In-sample fit
 
-For the in-sample story we plot the posterior of the `"rate"` site, the expected *sales* per period \\a_t \hat{z}\_{t-1} \hat{p}\_{t-1}\\, for five example series spanning the panel from fast to slow movers. The availability mask is visible twice in every panel: the rate drops to exactly zero in every shaded stock-out (no sales can happen off the shelf), and between stock-outs it moves gently as the smoothed components track the data.
+For the in-sample story we plot the posterior of the `"rate"` site, the expected *sales* per period a_t \hat{z}\_{t-1} \hat{p}\_{t-1}, for five example series spanning the panel from fast to slow movers. The availability mask is visible twice in every panel: the rate drops to exactly zero in every shaded stock-out (no sales can happen off the shelf), and between stock-outs it moves gently as the smoothed components track the data.
 
 
     In [15]:
@@ -2496,15 +2496,15 @@ fig.suptitle(
 </figure>
 
 
-At first glance this fit can look poor: the blue line runs well below the observed spikes and above the many zeros, and its narrow bands cover almost none of the black dots. That is exactly how it should look. The plotted `"rate"` is the model's *expected* sales per period, a smoothed conditional mean, while each observation is a single draw from a very skewed intermittent distribution: mostly zeros, occasionally a spike several times the mean. A mean that ran through the spikes would not be a better fit; it would be chasing Poisson noise the model is deliberately averaging over (this is the same reason a constant \\\lambda\\ is the best possible point forecast for an i.i.d. Poisson series, however jagged its draws look). The bands are narrow for the same reason: they carry only parameter uncertainty about the smoothed level, not the observation noise around it. The honest question, "does the model's *predictive distribution* cover the data?", is answered on the test window below, where the posterior predictive (which does include the observation noise and the zero-inflation from demand gaps and stock-outs) is scored with CRPS and its empirical coverage.
+At first glance this fit can look poor: the blue line runs well below the observed spikes and above the many zeros, and its narrow bands cover almost none of the black dots. That is exactly how it should look. The plotted `"rate"` is the model's *expected* sales per period, a smoothed conditional mean, while each observation is a single draw from a very skewed intermittent distribution: mostly zeros, occasionally a spike several times the mean. A mean that ran through the spikes would not be a better fit; it would be chasing Poisson noise the model is deliberately averaging over (this is the same reason a constant \lambda is the best possible point forecast for an i.i.d. Poisson series, however jagged its draws look). The bands are narrow for the same reason: they carry only parameter uncertainty about the smoothed level, not the observation noise around it. The honest question, "does the model's *predictive distribution* cover the data?", is answered on the test window below, where the posterior predictive (which does include the observation noise and the zero-inflation from demand gaps and stock-outs) is scored with CRPS and its empirical coverage.
 
 
 ## The demand probability
 
 The probability path is where the innovation lives, so we look at it for the series with the *longest* stock-out run in the training window. The figure has a few moving parts, so here is how to read it:
 
-- The path starts at the agnostic initialization \\\hat{p}\_0 = 0.5\\ and is plotted as a posterior *band*, not a single line: the smoothing parameter \\\beta\\ is uncertain, and every recursion step inherits that uncertainty, so the band is the posterior over the whole trajectory.
-- The short vertical rug marks at the bottom are the observed demand events. Each one pulls the estimate up by \\\beta (1 - \hat{p}\_t)\\; each *on-shelf* zero decays it by a factor \\(1 - \beta)\\. This is plain TSB behavior, and between stock-outs the path does exactly that, wiggling around the series' true demand probability \\1 - e^{-\lambda}\\ (dashed line, a ground-truth quantity the model never sees).
+- The path starts at the agnostic initialization \hat{p}\_0 = 0.5 and is plotted as a posterior *band*, not a single line: the smoothing parameter \beta is uncertain, and every recursion step inherits that uncertainty, so the band is the posterior over the whole trajectory.
+- The short vertical rug marks at the bottom are the observed demand events. Each one pulls the estimate up by \beta (1 - \hat{p}\_t); each *on-shelf* zero decays it by a factor (1 - \beta). This is plain TSB behavior, and between stock-outs the path does exactly that, wiggling around the series' true demand probability 1 - e^{-\lambda} (dashed line, a ground-truth quantity the model never sees).
 - Through the shaded stock-out runs the availability-gated estimate stays exactly **frozen**: a zero the customer never had a chance to break carries no demand information, so the recursion skips it.
 - The dashed blue line is the counterfactual that makes the freeze visible: the same recursion with the same fitted smoothing parameter, but with plain TSB's every-period updates, which read the enforced silence of a stock-out as vanishing demand. Every shaded run drags it down (the long mid-window run pulls it almost to zero), and because each of those artificial decays has to be earned back through subsequent demand events, the counterfactual spends essentially the whole window below the gated path. That persistent gap is exactly the downward bias the availability gate removes.
 
@@ -2588,7 +2588,7 @@ ax.set(
 
 # Forecast
 
-The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site under the **realized-availability scenario**: the test window's actual stock-out pattern rode in on the covariates, so the forecast predicts zero sales in the periods the product is genuinely off the shelf and \\\hat{z} \hat{p}\\ plus noise elsewhere. That is the right object to score against the observed test sales, which we do panel-wide with the CRPS and the central-interval coverages.
+The `predictions` group of the tree already holds the out-of-sample draws of the `"forecast"` site under the **realized-availability scenario**: the test window's actual stock-out pattern rode in on the covariates, so the forecast predicts zero sales in the periods the product is genuinely off the shelf and \hat{z} \hat{p} plus noise elsewhere. That is the right object to score against the observed test sales, which we do panel-wide with the CRPS and the central-interval coverages.
 
 
     In [17]:
@@ -2682,7 +2682,7 @@ The forecast band pinches to zero inside the shaded test stock-outs and re-opens
 
 ## Zeros at the forecast origin do not drag the forecast down
 
-Here is the single most important picture in this notebook. Consider a series whose training window *ends* in a stock-out run: the last thing the model sees before forecasting is a string of zeros. Every classical intermittent-demand method reads that string as evidence that demand is dying, plain TSB decays its demand probability by \\(1 - \beta)\\ per period through the entire run, and its forecast opens *low* accordingly. But these zeros carry no demand information at all, because the product was off the shelf. We select the series with the longest such trailing run among the fast movers whose test window is mostly on the shelf, so the difference is visible in the observed data.
+Here is the single most important picture in this notebook. Consider a series whose training window *ends* in a stock-out run: the last thing the model sees before forecasting is a string of zeros. Every classical intermittent-demand method reads that string as evidence that demand is dying, plain TSB decays its demand probability by (1 - \beta) per period through the entire run, and its forecast opens *low* accordingly. But these zeros carry no demand information at all, because the product was off the shelf. We select the series with the longest such trailing run among the fast movers whose test window is mostly on the shelf, so the difference is visible in the observed data.
 
 
     In [19]:
@@ -2752,7 +2752,7 @@ ax.set(
 </figure>
 
 
-The last observations before the forecast origin are all zeros, and yet the forecast does **not** open at zero: it opens right at the series' demand level, and the observed test sales (black) immediately confirm it. The model can do this because the availability gate froze the demand-probability estimate through the shaded run, so at the origin \\\hat{p}\\ still remembers what demand looked like the last time the product was actually on the shelf. The green availability line makes the mechanism visible: the forecast bands pinch toward zero exactly where availability drops, and nowhere else. We return to this series at the end of the notebook to show what plain TSB would have done in its place.
+The last observations before the forecast origin are all zeros, and yet the forecast does **not** open at zero: it opens right at the series' demand level, and the observed test sales (black) immediately confirm it. The model can do this because the availability gate froze the demand-probability estimate through the shaded run, so at the origin \hat{p} still remembers what demand looked like the last time the product was actually on the shelf. The green availability line makes the mechanism visible: the forecast bands pinch toward zero exactly where availability drops, and nowhere else. We return to this series at the end of the notebook to show what plain TSB would have done in its place.
 
 
 ## Component forecasts
@@ -2866,7 +2866,7 @@ print(f"full-availability forecast draws: {forecast_full.shape}")
     full-availability forecast draws: (1000, 10, 1000)
 
 
-We compare the two scenarios where they differ most visibly: the total demand across the whole panel, period by period. Under realized availability the forecast tracks the observed total *sales*; under full availability it recovers the total latent *demand*, whose ground truth (the sum of the \\\lambda_i\\, dashed line) the model has never seen. Roughly \\40\\\\ of demand is invisible in any single period's sales, and the availability-aware model reconstructs it.
+We compare the two scenarios where they differ most visibly: the total demand across the whole panel, period by period. Under realized availability the forecast tracks the observed total *sales*; under full availability it recovers the total latent *demand*, whose ground truth (the sum of the \lambda_i, dashed line) the model has never seen. Roughly 40\\ of demand is invisible in any single period's sales, and the availability-aware model reconstructs it.
 
 
     In [22]:
@@ -2980,15 +2980,15 @@ print(
 
 How to read this figure:
 
-- **Top panel (realized availability).** The forecast answers "how much will we *sell* under the stock-out pattern the test window actually had". The panel total wiggles period by period because a different random \\40\\\\ of the assortment is off the shelf each period, and the band tracks the observed total sales (black), which is the quantity this scenario should predict. Note that the model gets the *level* right without ever being told the availability rate: it learned each series' on-shelf demand and the covariates supply who is on the shelf when.
-- **Bottom panel (full availability).** Same posterior, one covariate change: every product on the shelf over the whole horizon. The forecast jumps to the level of the *latent demand* (blue), the sales that would materialize with nothing censored, and its mean sits essentially on the true expected demand \\\sum_i \lambda_i\\ (dashed), a ground-truth quantity the model has never observed. This is the number a replenishment plan actually needs, and no amount of post-processing of the top panel produces it: scaling censored forecasts up by a global availability rate would miss which series were censored and by how much.
-- **The vertical gap between the panels** is easy to read off because they share the y axis: it is the roughly \\40\\\\ of demand that stock-outs make invisible in any single period's sales. The printed totals below the figure quantify it: the realized-availability total sits near the expected *sales* level, while the full-availability total recovers the expected *demand* within a few percent.
-- **Band widths.** The bands are much narrower, relative to the mean, than in the single-series forecasts above: summing \\1{,}000\\ series averages away the independent per-series noise, so what remains is mostly the (small, well-pooled) parameter uncertainty plus the availability pattern itself.
+- **Top panel (realized availability).** The forecast answers "how much will we *sell* under the stock-out pattern the test window actually had". The panel total wiggles period by period because a different random 40\\ of the assortment is off the shelf each period, and the band tracks the observed total sales (black), which is the quantity this scenario should predict. Note that the model gets the *level* right without ever being told the availability rate: it learned each series' on-shelf demand and the covariates supply who is on the shelf when.
+- **Bottom panel (full availability).** Same posterior, one covariate change: every product on the shelf over the whole horizon. The forecast jumps to the level of the *latent demand* (blue), the sales that would materialize with nothing censored, and its mean sits essentially on the true expected demand \sum_i \lambda_i (dashed), a ground-truth quantity the model has never observed. This is the number a replenishment plan actually needs, and no amount of post-processing of the top panel produces it: scaling censored forecasts up by a global availability rate would miss which series were censored and by how much.
+- **The vertical gap between the panels** is easy to read off because they share the y axis: it is the roughly 40\\ of demand that stock-outs make invisible in any single period's sales. The printed totals below the figure quantify it: the realized-availability total sits near the expected *sales* level, while the full-availability total recovers the expected *demand* within a few percent.
+- **Band widths.** The bands are much narrower, relative to the mean, than in the single-series forecasts above: summing 1{,}000 series averages away the independent per-series noise, so what remains is mostly the (small, well-pooled) parameter uncertainty plus the availability pattern itself.
 
 
 # Comparison with plain TSB
 
-Since plain TSB is the special case \\a_t \equiv 1\\, comparing against it requires no second model: we refit the *same* model with an all-ones availability input, so its demand-probability component decays on every zero, stock-out or not. The synthetic setup then lets us do something a real dataset never allows: score both fits against the **known truth**. Each series' true on-shelf demand probability is \\1 - e^{-\lambda_i}\\, and we compare it with each fit's posterior-mean probability path, time-averaged over the second half of the training window to wash out the \\\hat{p}\_0 = 0.5\\ transient.
+Since plain TSB is the special case a_t \equiv 1, comparing against it requires no second model: we refit the *same* model with an all-ones availability input, so its demand-probability component decays on every zero, stock-out or not. The synthetic setup then lets us do something a real dataset never allows: score both fits against the **known truth**. Each series' true on-shelf demand probability is 1 - e^{-\lambda_i}, and we compare it with each fit's posterior-mean probability path, time-averaged over the second half of the training window to wash out the \hat{p}\_0 = 0.5 transient.
 
 
     In [24]:
@@ -3062,7 +3062,7 @@ ax.set(
 </figure>
 
 
-The scatter is the whole argument in one picture: the availability-aware estimates line up with the identity, while the plain TSB estimates line up with the \\0.6 \times\\ line, exactly the \\P(\text{available}) \cdot P(\text{demand} \mid \text{available})\\ bias predicted in the comparison section. On observed *sales* under the historical availability regime that bias partly cancels (a censored probability times an uncensored future is roughly right on average), but the moment we ask the scenario question, plain TSB has no way to answer: its forecast of unconstrained demand inherits the bias in full.
+The scatter is the whole argument in one picture: the availability-aware estimates line up with the identity, while the plain TSB estimates line up with the 0.6 \times line, exactly the P(\text{available}) \cdot P(\text{demand} \mid \text{available}) bias predicted in the comparison section. On observed *sales* under the historical availability regime that bias partly cancels (a censored probability times an uncensored future is roughly right on average), but the moment we ask the scenario question, plain TSB has no way to answer: its forecast of unconstrained demand inherits the bias in full.
 
 One subtlety in setting the comparison up honestly: [forecast](../../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast) reruns the model's recursions from the covariates it is given, so plain TSB's covariates must carry the all-ones availability input over the *whole* horizon, training window included. Feeding it the gated history would smuggle the availability information back into a method that, by definition, never sees it.
 
@@ -3097,7 +3097,7 @@ print(
     full-availability forecast, plain TSB:                1,479.8 (60% of truth)
 
 
-Finally, we return to the hero series from the forecast section, the fast mover whose training window ends in a stock-out run, and ask both fits the same scenario question: how much demand would there be with the product always on the shelf? For plain TSB the trailing run is a double blow. Its demand-probability estimate is biased low on *every* series (the \\0.6 \times\\ line above), and on this series it decayed further through each zero of the trailing run right before the forecast origin. The availability-aware fit froze through the same run.
+Finally, we return to the hero series from the forecast section, the fast mover whose training window ends in a stock-out run, and ask both fits the same scenario question: how much demand would there be with the product always on the shelf? For plain TSB the trailing run is a double blow. Its demand-probability estimate is biased low on *every* series (the 0.6 \times line above), and on this series it decayed further through each zero of the trailing run right before the forecast origin. The availability-aware fit froze through the same run.
 
 
     In [27]:
@@ -3184,12 +3184,12 @@ As for Croston, the comparison stays conceptual: its occurrence bookkeeping live
 
 It is worth collecting what the one-line change delivered, because each piece showed up in a different section:
 
-- **Unbiased demand estimates.** The demand-probability component recovers \\P(\text{demand} \mid \text{available})\\ instead of the censored product, as the recovery scatter shows against ground truth.
+- **Unbiased demand estimates.** The demand-probability component recovers P(\text{demand} \mid \text{available}) instead of the censored product, as the recovery scatter shows against ground truth.
 - **Scenario forecasts.** Availability enters as an input (the trailing rows of the availability covariate), so the same posterior answers "what will we sell under the planned availability" and "what would demand be with everything on the shelf", the number replenishment actually needs. Plain TSB can only extrapolate the censored history.
 - **No stock-out death spiral.** A forecast that decays with every stock-out under-forecasts, which under-stocks, which causes more stock-out zeros: a feedback loop the frozen update never enters.
-- **Nearly free.** One extra input series and one gated update; plain TSB is recovered exactly at \\a_t \equiv 1\\, so nothing is lost where availability data does not exist.
+- **Nearly free.** One extra input series and one gated update; plain TSB is recovered exactly at a_t \equiv 1, so nothing is lost where availability data does not exist.
 
-The same caveats as in the sibling notebooks apply to the likelihood choices: Gaussian likelihoods for a count size and a \\0/1\\ indicator are the blog post's pragmatic simplification, and \\\text{Bernoulli}\\ occurrence or truncated size likelihoods are the natural refinements. The hack also treats availability as *exogenous*; when stock-outs correlate with demand (best-sellers sell out), the censoring is informative and the frozen update, while far better than the decaying one, is no longer the full story.
+The same caveats as in the sibling notebooks apply to the likelihood choices: Gaussian likelihoods for a count size and a 0/1 indicator are the blog post's pragmatic simplification, and \text{Bernoulli} occurrence or truncated size likelihoods are the natural refinements. The hack also treats availability as *exogenous*; when stock-outs correlate with demand (best-sellers sell out), the censoring is informative and the frozen update, while far better than the decaying one, is no longer the full story.
 
 
 # References
