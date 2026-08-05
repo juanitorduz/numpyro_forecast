@@ -1,5 +1,5 @@
 ---
-name: numpyro-forecast
+name: numpyro_forecast
 description: >
   A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.
 license: Apache-2.0
@@ -13,7 +13,7 @@ A JAX/NumPyro port of Pyro's forecasting module.
 ## Installation
 
 ```bash
-pip install numpyro-forecast
+pip install numpyro_forecast
 ```
 
 ## API overview

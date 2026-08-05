@@ -16,7 +16,7 @@ metrics.eval_interval_score(
 ```
 
 
-For the central `alpha` interval \\\[l, u\]\\ (the \\(1-\alpha)/2\\ and \\1-(1-\alpha)/2\\ quantiles), the interval score is \\(u - l) + \tfrac{2}{1-\alpha}\big\[(l - y)\mathbf 1\_{y\<l} + (y - u)\mathbf 1\_{y\>u}\big\]\\, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see `~numpyro_forecast.typing.Metric`).
+For the central `alpha` interval :math:`[l, u]` (the :math:`(1-\alpha)/2` and :math:`1-(1-\alpha)/2` quantiles), the interval score is :math:`(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y<l} + (y - u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see `~numpyro_forecast.typing.Metric`).
 
 
 ## Parameters

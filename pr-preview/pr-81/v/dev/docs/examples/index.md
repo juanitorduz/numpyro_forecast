@@ -19,6 +19,15 @@ TSB with Availability Constraints for Intermittent Demand
 Availability-aware TSB method for intermittent demand. Gating the demand-probability update with a stock availability mask separates true demand from stock-outs, with SVI on a 1,000-series panel and full-availability scenario forecasts.
 
 
+<a href="../../docs/examples/censored_demand.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/censored_demand.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+Demand Forecasting with Censored Likelihood
+
+
+Demand forecasting when observed sales are censored by stockouts and a capacity cap. An AR(2) model with weekly seasonality whose likelihood mixes the Normal density below the cap with the survival mass at it, fit with NUTS and compared against a naive Normal model on recovering true demand.
+
+
 <a href="../../docs/examples/croston.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/croston.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
 
 

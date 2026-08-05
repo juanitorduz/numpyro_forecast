@@ -150,9 +150,9 @@ ax.set(title="First Fourier modes", xlabel="week");
 
 # Model specification
 
-The idea is a *local level model with seasonality*. The mean has three parts: a global `bias`, a random-walk level \\\ell_t\\ that lets the baseline drift slowly over time, and a Fourier regression for the annual cycle. The level moves by small Gaussian increments (the `drift`), so it can follow long-term changes without being told their shape in advance. For the likelihood we use a Student-T instead of a Normal: its heavy tails make the model robust to the occasional outlier week.
+The idea is a *local level model with seasonality*. The mean has three parts: a global `bias`, a random-walk level \ell_t that lets the baseline drift slowly over time, and a Fourier regression for the annual cycle. The level moves by small Gaussian increments (the `drift`), so it can follow long-term changes without being told their shape in advance. For the likelihood we use a Student-T instead of a Normal: its heavy tails make the model robust to the occasional outlier week.
 
-\\\begin{align\*} \mu_t & = \text{bias} + \ell_t + w^\top x_t, \\ \ell_t & = \ell\_{t-1} + \delta_t, \\ \delta_t & \sim \text{Normal}(0, \sigma\_\text{drift}), \\ y_t & \sim \text{StudentT}(\nu, \mu_t, \sigma). \end{align\*}\\
+\begin{align\*} \mu_t & = \text{bias} + \ell_t + w^\top x_t, \\ \ell_t & = \ell\_{t-1} + \delta_t, \\ \delta_t & \sim \text{Normal}(0, \sigma\_\text{drift}), \\ y_t & \sim \text{StudentT}(\nu, \mu_t, \sigma). \end{align\*}
 
 We subclass [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) and write the generative story in [model](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model). The level is the cumulative sum of `drift`, which we sample with `self.time_series(...)` (the package's equivalent of the blog's `scan` over time). The single call to `self.predict(...)` registers the zero-centered Student-T noise around the predicted mean, and it is also what wires up the train-vs-forecast machinery: in-sample steps are observed, while the forecast horizon is drawn from separate `_future` latent sites so the variational guide never changes shape. Finally, a `LocScaleReparam` on the drift switches between centered and non-centered parameterizations, which helps the SVI geometry quite a lot.
 
@@ -204,7 +204,7 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (`data=None`, so the horizon is zero and the `obs` site spans the train period) and plot the \\50\\\\ and \\94\\\\ HDI bands against the training series with ArviZ `plot_lm`. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.
+As usual (highly recommended!), we look at the prior predictive before fitting anything. We draw from the prior over the training window (`data=None`, so the horizon is zero and the `obs` site spans the train period) and plot the 50\\ and 94\\ HDI bands against the training series with ArviZ `plot_lm`. The priors are not very informative, but the implied ranges sit comfortably around the data, which is what we want.
 
 
 ``` python
@@ -313,7 +313,7 @@ print(f"Test 94% coverage: {eval_coverage(forecast, y_test, alpha=0.94):.2f}  (n
 
 # Forecast visualization
 
-The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with \\50\\\\ and \\94\\\\ HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.
+The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with 50\\ and 94\\ HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.
 
 
 ``` python
@@ -449,7 +449,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.9
 
 ## Rolling forecasts
 
-Overlaying every fold's out-of-sample forecast (orange \\50\\\\ and \\94\\\\ HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
+Overlaying every fold's out-of-sample forecast (orange 50\\ and 94\\ HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
 
 
 ``` python
@@ -543,7 +543,7 @@ ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest f
 
 ## Forecast calibration
 
-CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so "the forecasts look calibrated" deserves its own number. We score the empirical **coverage** of each fold's out-of-sample bands: the fraction of held-out weeks that actually fall inside the central \\50\\\\ and \\94\\\\ prediction intervals. A well-calibrated forecast covers close to its nominal level, so the points should track the dashed reference lines. Points above mean the bands are too wide (under-confident); points below mean they are too narrow (over-confident). This is the quantitative version of the "stays inside the bands" eyeball check from the rolling-forecast plot.
+CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so "the forecasts look calibrated" deserves its own number. We score the empirical **coverage** of each fold's out-of-sample bands: the fraction of held-out weeks that actually fall inside the central 50\\ and 94\\ prediction intervals. A well-calibrated forecast covers close to its nominal level, so the points should track the dashed reference lines. Points above mean the bands are too wide (under-confident); points below mean they are too narrow (over-confident). This is the quantitative version of the "stays inside the bands" eyeball check from the rolling-forecast plot.
 
 A small caveat: [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
@@ -641,7 +641,7 @@ Here the expanding window is the clear winner: it scores a lower out-of-sample C
 
 The rolling loop above refits one fold at a time, so each fold pays its own SVI compilation and Python-loop overhead. Because every fold shares the same model, guide, and window sizes, [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) can instead fit **all folds in a single vmapped SVI run**: model, guide, and optimizer compile once, and the per-fold losses, forecasts, and metrics come out stacked along a leading window axis.
 
-The `metrics` mapping needs no change at all. Metrics are pure JAX scalar kernels, so the partial-bound \\50\\\\ and \\94\\\\ coverage levels defined earlier are scored inside the same single fused computation, right alongside the default CRPS. The two backtests are estimator-equivalent but differ in PRNG stream layout, so the per-fold numbers agree statistically rather than bitwise.
+The `metrics` mapping needs no change at all. Metrics are pure JAX scalar kernels, so the partial-bound 50\\ and 94\\ coverage levels defined earlier are scored inside the same single fused computation, right alongside the default CRPS. The two backtests are estimator-equivalent but differ in PRNG stream layout, so the per-fold numbers agree statistically rather than bitwise.
 
 
 ``` python

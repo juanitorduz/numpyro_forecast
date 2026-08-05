@@ -14,7 +14,7 @@
     }
   ],
   "pages": {
-    ".well-known/agent-skills/numpyro-forecast/SKILL.html": [
+    ".well-known/agent-skills/numpyro_forecast/SKILL.html": [
       "dev",
       "0.2.3"
     ],
@@ -35,6 +35,10 @@
       "0.2.3"
     ],
     "docs/examples/availability_tsb.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "docs/examples/censored_demand.html": [
       "dev",
       "0.2.3"
     ],

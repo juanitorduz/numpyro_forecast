@@ -14,11 +14,15 @@ acf.acf(
 ```
 
 
-The lag-\\k\\ autocorrelation of a series \\y_1, \ldots, y_T\\ with sample mean \\\bar{y}\\ is estimated with the biased normalization
+The lag-:math:`k` autocorrelation of a series :math:`y_1, \ldots, y_T` with sample mean :math:`\bar{y}` is estimated with the biased normalization
 
-\\ \hat{\rho}\_k = \frac{\sum\_{t=k+1}^{T} (y_t - \bar{y})(y\_{t-k} - \bar{y})} {\sum\_{t=1}^{T} (y_t - \bar{y})^2}, \\
+.. math::
 
-computed for all lags at once via the FFT of the centered series (the Wiener-Khinchin identity), so the cost is \\O(T \log T)\\ instead of \\O(T \\ k\_{\max})\\. The computation runs along the last axis and broadcasts over any leading batch axes.
+    \hat{\rho}_k =
+    \frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
+         {\sum_{t=1}^{T} (y_t - \bar{y})^2},
+
+computed for all lags at once via the FFT of the centered series (the Wiener-Khinchin identity), so the cost is :math:`O(T \log T)` instead of :math:`O(T \, k_{\max})`. The computation runs along the last axis and broadcasts over any leading batch axes.
 
 
 ## Parameters

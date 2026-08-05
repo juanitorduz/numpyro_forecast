@@ -45,11 +45,9 @@ Covariates with time at axis `-2` and the same duration as `data`.
 Guide specification resolved by [resolve_guide()](functional.svi.resolve_guide.md#numpyro_forecast.functional.svi.resolve_guide): `None` (`AutoNormal`), an `AutoGuide` instance, an `AutoGuide` subclass or `functools.partial` factory of one, or a hand-written guide function.
 
 `optim: OptimizerLike = None`  
-Optimizer specification resolved by [resolve_optimizer()](functional.svi.resolve_optimizer.md#numpyro_forecast.functional.svi.resolve_optimizer): `None` (`Adam(0.01)`), a positive scalar learning rate, an `optax.GradientTransformation`, or a `_NumPyroOptim`. For example, a cosine-decayed, gradient-clipped Adam:
+Optimizer specification resolved by [resolve_optimizer()](functional.svi.resolve_optimizer.md#numpyro_forecast.functional.svi.resolve_optimizer): `None` (`Adam(0.01)`), a positive scalar learning rate, an `optax.GradientTransformation`, or a `_NumPyroOptim`. For example, a cosine-decayed, gradient-clipped Adam::
 
-``` python
-import optax
-```
+    import optax
 
     schedule = optax.cosine_decay_schedule(1e-2, decay_steps=1_000)
     optim = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))

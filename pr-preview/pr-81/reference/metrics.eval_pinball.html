@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-b41571d959391a190bdbf9a72c2fe358.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-bf476c94c8758bc321fd5fd3b984c438.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -122,35 +122,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 
-  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
-  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
-
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
 
   <link rel="alternate" type="text/markdown" href="metrics.eval_pinball.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_pinball.html">
@@ -226,7 +197,7 @@ window.Quarto = {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="32" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="33" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -267,19 +238,19 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/forecaster.Forecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.Forecaster</span></span></a>
+ <span class="menu-text">forecaster.Forecaster</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/forecaster.HMCForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.HMCForecaster</span></span></a>
+ <span class="menu-text">forecaster.HMCForecaster</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">forecaster.PathfinderForecaster</span></span></a>
+ <span class="menu-text">forecaster.PathfinderForecaster</span></a>
   </div>
 </li>
       </ul>
@@ -293,13 +264,13 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/forecaster.ForecastingModel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-abc">forecaster.ForecastingModel</span></span></a>
+ <span class="menu-text">forecaster.ForecastingModel</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.models.forecasting_model.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.forecasting_model()</span></span></a>
+ <span class="menu-text">functional.models.forecasting_model</span></a>
   </div>
 </li>
       </ul>
@@ -313,31 +284,31 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.models.Horizon.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">functional.models.Horizon</span></span></a>
+ <span class="menu-text">functional.models.Horizon</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.models.time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.time_series()</span></span></a>
+ <span class="menu-text">functional.models.time_series</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.models.markov_time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.markov_time_series()</span></span></a>
+ <span class="menu-text">functional.models.markov_time_series</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.models.predict.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.predict()</span></span></a>
+ <span class="menu-text">functional.models.predict</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.models.predict_glm.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.models.predict_glm()</span></span></a>
+ <span class="menu-text">functional.models.predict_glm</span></a>
   </div>
 </li>
       </ul>
@@ -351,43 +322,43 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.svi.resolve_optimizer.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.svi.resolve_optimizer()</span></span></a>
+ <span class="menu-text">functional.svi.resolve_optimizer</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.svi.resolve_guide.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.svi.resolve_guide()</span></span></a>
+ <span class="menu-text">functional.svi.resolve_guide</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.svi.fit_svi.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.svi.fit_svi()</span></span></a>
+ <span class="menu-text">functional.svi.fit_svi</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.svi.SVIFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">functional.svi.SVIFit</span></span></a>
+ <span class="menu-text">functional.svi.SVIFit</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.mcmc.resolve_kernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.mcmc.resolve_kernel()</span></span></a>
+ <span class="menu-text">functional.mcmc.resolve_kernel</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.mcmc.fit_mcmc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.mcmc.fit_mcmc()</span></span></a>
+ <span class="menu-text">functional.mcmc.fit_mcmc</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.mcmc.MCMCFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">functional.mcmc.MCMCFit</span></span></a>
+ <span class="menu-text">functional.mcmc.MCMCFit</span></a>
   </div>
 </li>
       </ul>
@@ -401,19 +372,19 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.posterior.draw_posterior.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.posterior.draw_posterior()</span></span></a>
+ <span class="menu-text">functional.posterior.draw_posterior</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.prediction.forecast.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.prediction.forecast()</span></span></a>
+ <span class="menu-text">functional.prediction.forecast</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/functional.prediction.predict_in_sample.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">functional.prediction.predict_in_sample()</span></span></a>
+ <span class="menu-text">functional.prediction.predict_in_sample</span></a>
   </div>
 </li>
       </ul>
@@ -427,85 +398,85 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest()</span></span></a>
+ <span class="menu-text">evaluate.backtest</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest_vectorized.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.backtest_vectorized()</span></span></a>
+ <span class="menu-text">evaluate.backtest_vectorized</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.BacktestResult.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.BacktestResult</span></span></a>
+ <span class="menu-text">evaluate.BacktestResult</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</span></span></a>
+ <span class="menu-text">evaluate.VectorizedBacktestResult</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.evaluate_forecast.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.evaluate_forecast()</span></span></a>
+ <span class="menu-text">evaluate.evaluate_forecast</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.results_to_dataframe.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.results_to_dataframe()</span></span></a>
+ <span class="menu-text">evaluate.results_to_dataframe</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.eval_crps.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_crps()</span></span></a>
+ <span class="menu-text">evaluate.eval_crps</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.eval_mae.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_mae()</span></span></a>
+ <span class="menu-text">evaluate.eval_mae</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.eval_rmse.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_rmse()</span></span></a>
+ <span class="menu-text">evaluate.eval_rmse</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.eval_coverage.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">evaluate.eval_coverage()</span></span></a>
+ <span class="menu-text">evaluate.eval_coverage</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/metrics.crps_empirical.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">metrics.crps_empirical()</span></span></a>
+ <span class="menu-text">metrics.crps_empirical</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/metrics.eval_pinball.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">metrics.eval_pinball()</span></span></a>
+ <span class="menu-text">metrics.eval_pinball</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/metrics.eval_interval_score.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">metrics.eval_interval_score()</span></span></a>
+ <span class="menu-text">metrics.eval_interval_score</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/metrics.make_mase.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">metrics.make_mase()</span></span></a>
+ <span class="menu-text">metrics.make_mase</span></a>
   </div>
 </li>
       </ul>
@@ -519,13 +490,13 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">acf.acf()</span></span></a>
+ <span class="menu-text">acf.acf</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">acf.pacf()</span></span></a>
+ <span class="menu-text">acf.pacf</span></a>
   </div>
 </li>
       </ul>
@@ -539,13 +510,13 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">features.fourier_features()</span></span></a>
+ <span class="menu-text">features.fourier_features</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">features.periodic_repeat()</span></span></a>
+ <span class="menu-text">features.periodic_repeat</span></a>
   </div>
 </li>
       </ul>
@@ -559,13 +530,13 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.zero_data_like()</span></span></a>
+ <span class="menu-text">arrays.zero_data_like</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.concat_future()</span></span></a>
+ <span class="menu-text">arrays.concat_future</span></a>
   </div>
 </li>
       </ul>
@@ -579,25 +550,25 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.shift_loc()</span></span></a>
+ <span class="menu-text">surgery.shift_loc</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.slice_time()</span></span></a>
+ <span class="menu-text">surgery.slice_time</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.prefix_condition()</span></span></a>
+ <span class="menu-text">surgery.prefix_condition</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.register_elementwise()</span></span></a>
+ <span class="menu-text">surgery.register_elementwise</span></a>
   </div>
 </li>
       </ul>
@@ -611,7 +582,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">optional.require()</span></span></a>
+ <span class="menu-text">optional.require</span></a>
   </div>
 </li>
       </ul>
@@ -625,73 +596,73 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.NumpyroForecastError</span></span></a>
+ <span class="menu-text">exceptions.NumpyroForecastError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.BacktestWindowError</span></span></a>
+ <span class="menu-text">exceptions.BacktestWindowError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.VectorizedGuideError</span></span></a>
+ <span class="menu-text">exceptions.VectorizedGuideError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</span></span></a>
+ <span class="menu-text">exceptions.VectorizedMetricError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.OptimizerResolutionError</span></span></a>
+ <span class="menu-text">exceptions.OptimizerResolutionError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.GuideResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.GuideResolutionError</span></span></a>
+ <span class="menu-text">exceptions.GuideResolutionError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.GuideSampleArgsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.GuideSampleArgsError</span></span></a>
+ <span class="menu-text">exceptions.GuideSampleArgsError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.KernelResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.KernelResolutionError</span></span></a>
+ <span class="menu-text">exceptions.KernelResolutionError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.KernelConfigError</span></span></a>
+ <span class="menu-text">exceptions.KernelConfigError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</span></span></a>
+ <span class="menu-text">exceptions.CovariateDimsError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</span></span></a>
+ <span class="menu-text">exceptions.MVNLayoutError</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</span></span></a>
+ <span class="menu-text">exceptions.DeviceMemoryError</span></a>
   </div>
 </li>
       </ul>
@@ -705,19 +676,19 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.to_datatree()</span></span></a>
+ <span class="menu-text">convert.to_datatree</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></span></a>
+ <span class="menu-text">convert.add_forecast_groups</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">convert.predictions_to_datatree()</span></span></a>
+ <span class="menu-text">convert.predictions_to_datatree</span></a>
   </div>
 </li>
       </ul>
@@ -731,31 +702,31 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxNUTSKernel</span></span></a>
+ <span class="menu-text">contrib.blackjax.BlackjaxNUTSKernel</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxMCLMCKernel</span></span></a>
+ <span class="menu-text">contrib.blackjax.BlackjaxMCLMCKernel</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</span></span></a>
+ <span class="menu-text">contrib.blackjax.BlackjaxCustomKernel</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.PathfinderFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</span></span></a>
+ <span class="menu-text">contrib.blackjax.PathfinderFit</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.fit_pathfinder.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</span></span></a>
+ <span class="menu-text">contrib.blackjax.fit_pathfinder</span></a>
   </div>
 </li>
       </ul>
@@ -769,25 +740,25 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">datasets.load_bart_weekly()</span></span></a>
+ <span class="menu-text">datasets.load_bart_weekly</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_hierarchical.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">datasets.load_bart_hierarchical()</span></span></a>
+ <span class="menu-text">datasets.load_bart_hierarchical</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_victoria_electricity.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">datasets.load_victoria_electricity()</span></span></a>
+ <span class="menu-text">datasets.load_victoria_electricity</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.bart_available.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="doc-object-name doc-function doc-label doc-label-function">datasets.bart_available()</span></span></a>
+ <span class="menu-text">datasets.bart_available</span></a>
   </div>
 </li>
       </ul>
@@ -846,7 +817,7 @@ window.Quarto = {
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The pinball loss for the forecast <span class="math inline">\(\hat q\)</span> of quantile <span class="math inline">\(\tau\)</span> is <span class="math inline">\(\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))\)</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>); <code>quantile</code> is static so each level specializes its own branch.</p>
+<p>The pinball loss for the forecast :math:<code>\hat q</code> of quantile :math:<code>\tau</code> is :math:<code>\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))</code>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>); <code>quantile</code> is static so each level specializes its own branch.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
