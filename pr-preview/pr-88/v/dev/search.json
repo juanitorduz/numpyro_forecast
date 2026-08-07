@@ -1382,7 +1382,7 @@
     "href": "package-info.html#dev",
     "title": "Package Info",
     "section": "dev",
-    "text": "dev\n\n\n\nPackage\nVersion Constraint\nLast Published\nPyPI\n\n\n\n\ngraphviz\n&gt;=0.20\n2025-06-15\n\n\n\nipykernel\n&gt;=6.29\n2026-06-10\n\n\n\njupytext\n&gt;=1.16\n2026-07-21\n\n\n\nnbmake\n&gt;=1.5\n2024-12-23\n\n\n\nprek\n&gt;=0.4.5\n2026-08-03\n\n\n\npreliz\n&gt;=0.16\n2026-07-07\n\n\n\npytest-cov\n&gt;=5.0\n2026-03-21\n\n\n\npytest-split\n&gt;=0.10\n2026-02-03\n\n\n\npytest-xdist\n—\n2025-07-01\n\n\n\npytest\n&gt;=8.0\n2026-06-19\n\n\n\nruff\n==0.16.0\n2026-07-30\n\n\n\nty\n==0.0.64\n2026-08-06\n\n\n\noptax\n&gt;=0.2\n2026-03-20\n\n\n\nblackjax\n&lt;2,&gt;=1.6\n2026-07-16\n\n\n\nhuggingface-hub\n&gt;=1.22.0\n2026-08-06\n\n\n\nscikit-learn\n&gt;=1.6\n2026-06-02"
+    "text": "dev\n\n\n\nPackage\nVersion Constraint\nLast Published\nPyPI\n\n\n\n\ngraphviz\n&gt;=0.20\n2025-06-15\n\n\n\nipykernel\n&gt;=6.29\n2026-06-10\n\n\n\njupytext\n&gt;=1.16\n2026-07-21\n\n\n\nnbmake\n&gt;=1.5\n2024-12-23\n\n\n\nprek\n&gt;=0.4.5\n2026-08-03\n\n\n\npreliz\n&gt;=0.16\n2026-07-07\n\n\n\npytest-cov\n&gt;=5.0\n2026-03-21\n\n\n\npytest-split\n&gt;=0.10\n2026-02-03\n\n\n\npytest-xdist\n—\n2025-07-01\n\n\n\npytest\n&gt;=8.0\n2026-06-19\n\n\n\nruff\n==0.16.1\n2026-07-30\n\n\n\nty\n==0.0.66\n2026-08-06\n\n\n\noptax\n&gt;=0.2\n2026-03-20\n\n\n\nblackjax\n&lt;2,&gt;=1.6\n2026-07-16\n\n\n\nhuggingface-hub\n&gt;=1.22.0\n2026-08-06\n\n\n\nscikit-learn\n&gt;=1.6\n2026-06-02"
   },
   {
     "objectID": "package-info.html#docs",
