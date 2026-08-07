@@ -1,0 +1,84 @@
+\section{Case study 2: known caps, censored likelihoods}\label{sec:cs2}
+
+The second data situation is richer than a binary flag: for each period we know not only whether the item was constrained but \emph{at what level}. Shelf capacity, delivered quantity, or a purchase limit gives a per-observation censoring point $c_t$, and days at the cap record a \emph{lower bound} on demand rather than a corrupted zero. That extra information admits a sharper tool than gating: a censored likelihood that keeps capped observations in the fit while scoring them correctly as bounds.
+
+\subsection{The Tobit observation model}\label{sec:tobit}
+
+Right-censored regression goes back to \citet{tobin1958estimation}; \citet{amemiya1984tobit} reviews the model family. Let $\hat{y}_t$ be the model's conditional mean and $c_t$ the known cap, with censoring indicator $c^{\text{ind}}_t = \mathbf{1}[y_t \geq c_t]$. The observation density is
+\begin{equation}\label{eq:tobit}
+p(y_t \mid \hat{y}_t, \sigma) \;=\; \text{Normal}(y_t \mid \hat{y}_t, \sigma)^{\,1 - c^{\text{ind}}_t} \; \left[ 1 - \Phi\!\left( \frac{y_t - \hat{y}_t}{\sigma} \right) \right]^{\,c^{\text{ind}}_t},
+\end{equation}
+so uncensored days contribute the usual density and capped days contribute the survival probability of exceeding the cap. In NumPyro this is a single vectorized observation site using \texttt{RightCensoredDistribution}, whose sampler draws from the \emph{uncensored} base distribution, so posterior predictive draws live on the demand scale automatically. Days with the item fully off shelf carry no demand information at all and are removed from the likelihood with a mask, exactly as in \S\ref{sec:cs1}.
+
+\subsection{Filtered lags}\label{sec:lag-filter}
+
+The mean model is an autoregression with weekly seasonality,
+\begin{equation}\label{eq:cs2-mean}
+\hat{y}_t = \mu + \phi_1 \tilde{y}_{t-1} + \phi_2 \tilde{y}_{t-2} + \mathbf{f}_t^{\top} \boldsymbol{\beta},
+\end{equation}
+with $\mathbf{f}_t$ a weekly Fourier basis. An autoregression on stockout-affected data has a second entry point for corruption beyond the likelihood: the lags themselves. Feeding raw zeros from stockout days as lagged sales attenuates $\phi_1, \phi_2$ toward zero and inflates $\sigma$, because the first on-shelf day after a gap looks like an impossible rebound. The filtered lag
+\begin{equation}\label{eq:lag-filter}
+\tilde{y}_t \;=\; a_t \left[ (1 - c^{\text{ind}}_t) \, y_t + c^{\text{ind}}_t \, \max(y_t, \hat{y}_t) \right] + (1 - a_t) \, \hat{y}_t
+\end{equation}
+passes clean on-shelf observations through, floors capped observations at the model's own prediction, and substitutes the prediction on off-shelf days, the plug-in analogue of how a state-space filter handles missing observations. The $\max(y_t, \hat{y}_t)$ term is a plug-in approximation to the exact censored conditional mean $\hat{y}_t + \sigma \phi(z_t) / (1 - \Phi(z_t))$; the approximation is deliberate, cheap, and one of the acknowledged simplifications below. Over the forecast horizon the recursion feeds sampled trajectories back into the carry and never applies a cap, which is how this case study obtains its demand forecast (Table~\ref{tab:taxonomy}).
+
+\subsection{Setup}\label{sec:cs2-setup}
+
+The generator produces $180$ periods of latent demand from an AR(2) with weekly seasonality ($\phi_1 = 0.6$, $\phi_2 = 0.3$), subtracts a small sales friction $\delta = 0.25$, caps at a constant capacity $c = 2.2$, and gates through $\text{Bernoulli}(0.8)$ availability: $49$ stockout days ($27\%$) and $36$ capacity-censored days ($20\%$), with the last $30$ days held out. The friction term is absent from the fitted model, so the model is again misspecified relative to the generator (\S\ref{sec:scoring}). Inference is the No-U-Turn Sampler with $4$ chains of $1{,}000$ warmup and $1{,}000$ draws each; all $\hat{R}$ values are $1.00$. Figure~\ref{fig:cs2-dgp} shows the anatomy of the corruption.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{fig05_censored_dgp_anatomy}
+\caption{The simulated censoring anatomy. Top: latent demand versus sales after friction. Bottom: sales versus observed sales, with stockout gaps, the capacity cap (dashed), and capacity-censored days marked. Planning needs the black curve; the data records the orange one.}
+\label{fig:cs2-dgp}
+\end{figure}
+
+The comparison arm refits the same model with the censoring indicator zeroed out, under which \eqref{eq:tobit} reduces to a plain Normal likelihood that treats capped days as exact observations of $2.2$. Two properties of this ablation must be stated to keep the comparison honest. First, zeroing the indicator changes \emph{two} coupled things: the likelihood loses its survival term, and the lag filter \eqref{eq:lag-filter} loses its cap-flooring, so the ablation measures the joint effect of both. Second, both arms keep the availability masking and off-shelf lag substitution, so the baseline is a \emph{plain Normal likelihood} model that already handles stockouts, not a naive fit to raw sales; the comparison isolates the treatment of capacity censoring specifically.
+
+\subsection{Results: three questions}\label{sec:cs2-results}
+
+\emph{(a) Aggregate accuracy against latent demand.} On the full $30$-day holdout scored against the latent demand path, the censored model does not win: the plain-Normal model has lower RMSE ($0.572$ versus $0.635$) and lower CRPS ($0.333$ versus $0.370$), while MAE goes the other way ($0.495$ versus $0.488$ for the censored model). The two models genuinely agree on most days: roughly two thirds of the test days have demand below the cap, where the likelihoods coincide, and the plain model's tighter predictive scores well there. Aggregate point accuracy on a mostly-uncensored window is the wrong place to look for the mechanism.
+
+\emph{(b) Stress days and calibration.} The models differ exactly where the ordering decision lives. On the $10$ of $30$ test days where latent demand exceeds the cap, the censored model's MAE is $0.318$ against $0.687$ for the plain model, less than half the error, with a stated mechanism: the plain model's conditional mean tops out near the cap it mistook for data, while the survival term lets the censored model place mass above it. Figure~\ref{fig:cs2-insample} shows the same behavior in-sample, with the censored model's HDI bands riding above the cap on capacity days. Interval calibration moves in the same direction, $0.600$ versus $0.467$ empirical coverage at nominal $50\%$ and $1.000$ versus $0.967$ at $94\%$, but on $30$ days these gaps are at most directional (\S\ref{sec:scoring}): the $50\%$ gap is within about $1.5$ binomial standard errors and the $94\%$ gap is a single day. The peak-day contrast, not the coverage table, is this case study's headline.
+
+\emph{(c) The trap, demonstrated.} Scored against \emph{observed sales} instead of latent demand, the ranking inverts: the plain model wins every metric, for example CRPS $0.774$ versus $0.991$. This is the outcome predicted in \S\ref{sec:scoring}: the plain model is rewarded precisely for reproducing the caps and the post-stockout dynamics that the censored model refuses to reproduce. A model selection exercise run on recorded sales would have chosen the model that systematically under-forecasts demand on the days that cause stockouts. Aggregate scores against sales evaluate the censoring process, not the demand model.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llccccc}
+\toprule
+\multicolumn{7}{l}{\emph{Single simulated series, $30$-day holdout, NUTS; not comparable to the tables of \S\ref{sec:cs1} or \S\ref{sec:cs3}.}} \\
+\midrule
+Scored against & Model & MAE & RMSE & CRPS & Cov.\ $50\%$ & Cov.\ $94\%$ \\
+\midrule
+Latent demand & censored & $0.488$ & $0.635$ & $0.370$ & $0.600$ & $1.000$ \\
+Latent demand & plain Normal & $0.495$ & $0.572$ & $0.333$ & $0.467$ & $0.967$ \\
+\addlinespace
+Latent demand, peak days ($n{=}10$) & censored & $0.318$ & $0.341$ & $0.274$ & $0.8$ & $1.0$ \\
+Latent demand, peak days ($n{=}10$) & plain Normal & $0.687$ & $0.744$ & $0.458$ & $0.3$ & $0.9$ \\
+\addlinespace
+Observed sales & censored & $1.334$ & $1.616$ & $0.991$ & $0.300$ & $0.600$ \\
+Observed sales & plain Normal & $0.996$ & $1.204$ & $0.774$ & $0.267$ & $0.467$ \\
+\bottomrule
+\end{tabular}
+\caption{Censored versus plain-Normal likelihood on the capacity case study. The ablation flips one input but changes two coupled things (survival term and lag cap-flooring); both arms retain stockout masking. Coverage gaps on $30$ days (binomial standard error $\approx 0.09$ at nominal $50\%$) are directional evidence only. Peak days are the $10$ of $30$ test days with latent demand above the cap.}
+\label{tab:cs2-results}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{fig07_in_sample_fit_above_cap}
+\caption{In-sample one-step-ahead fit of the censored model: the $50\%$ and $94\%$ HDI bands ride above the cap on capacity-censored days and carry the demand estimate through shaded stockout gaps, tracking the latent demand overlay.}
+\label{fig:cs2-insample}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{fig06_censored_vs_plain_forecasts}
+\caption{Thirty-day demand forecasts of the censored model (left) and the plain-Normal ablation (right) against latent demand, with the capacity cap dashed. The models agree below the cap; the plain model's central tendency saturates near the cap on the days demand exceeds it.}
+\label{fig:cs2-forecasts}
+\end{figure}
+
+\paragraph{Limitations.}
+Exact parameter recovery is not achieved and is not achievable here: the recursion runs on filtered sales rather than demand, and the generator's friction and zero-clipping are unmodeled ($\phi_1$ posterior mean $0.453$ against a true $0.6$). The method requires trusting the recorded censoring indicator and observing availability; in this simulation censoring is detected by exact equality with the cap, which is an artifact of the generator, and production data would need a threshold rule. The Normal likelihood places predictive mass on negative sales in-sample. The lag filter is a plug-in approximation, the cap is constant where real shelf capacity varies, and all results come from a single fixed split with no rolling-origin backtest.

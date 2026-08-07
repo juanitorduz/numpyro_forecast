@@ -1,0 +1,73 @@
+\section{Sales as censored demand}\label{sec:censored}
+
+\subsection{Notation and the demand forecast}\label{sec:notation}
+
+Throughout the paper, $d_t \geq 0$ denotes the latent demand for one item at time $t$: the quantity customers would have bought had the item been fully available. The recorded sales $y_t$ are a corrupted measurement of $d_t$. The corruption is driven by an availability signal $a_t$ and, where one exists, a censoring point $c_t$ (a shelf capacity or an inventory level). In a panel, a subscript $s$ indexes the series (a store and product pair). Table~\ref{tab:notation} collects the symbols; all three case studies use them with the same meaning.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Symbol & Meaning & Domain \\
+\midrule
+$d_t$ & latent demand & $[0, \infty)$ \\
+$y_t$ & observed sales & $[0, \infty)$ \\
+$a_t$ & availability & $\{0, 1\}$ (\S\ref{sec:cs1}, \S\ref{sec:cs2}) or $[0, 1]$ (\S\ref{sec:cs3}) \\
+$c_t$ & censoring point (capacity, inventory level) & $(0, \infty)$, observed per period in \S\ref{sec:cs2} \\
+$\ell_t$ & a smoothed or state-space level & model specific \\
+$g_t$ & update gate of a smoothing recursion & $\{0, 1\}$ \\
+$f(a_t)$ & multiplicative availability factor & $(0, 1]$ \\
+$h$ & forecast horizon & positive integers \\
+\bottomrule
+\end{tabular}
+\caption{Notation shared by the three case studies.}
+\label{tab:notation}
+\end{table}
+
+The object every method in this paper targets is the \emph{demand forecast}: the predictive distribution of what will be demanded over the horizon, not of what will be rung up at the till. All three case studies obtain it by the same meta-move: the corruption enters the joint model as an explicit, switchable component, and the demand forecast is the model's predictive distribution with that component switched off. How the switch is thrown differs by mechanism. In the two availability-driven case studies it is a covariate edit: a full-availability scenario input in \S\ref{sec:cs1} and availability pinned to one over the horizon in \S\ref{sec:cs3}. In the capacity case study of \S\ref{sec:cs2} it is a structural omission: the forecast recursion simply never applies the cap, so the censoring mechanism shapes the demand forecast only indirectly, through the parameter posterior and a lag filter. The distinction matters when reading Table~\ref{tab:taxonomy}, whose final column is deliberately not uniform.
+
+\subsection{A taxonomy of stockout information}\label{sec:taxonomy}
+
+The organizing question of this paper is not which model is best. It is: \emph{what do you actually observe about the stockout?} The answer determines which corruption mechanisms can enter the likelihood at all. A binary on-shelf flag admits gating a smoothing recursion. A censoring point recorded per observation admits a censored likelihood. A fractional, noisily labeled availability admits a multiplicative attenuation factor whose floor absorbs the label noise. Figure~\ref{fig:corruption} shows the three corruption patterns on a common toy demand path, and Table~\ref{tab:taxonomy} maps each pattern to its mechanism and to the case study that works it out. The table is adapted from the taxonomy developed in the \pkg{numpyro\_forecast} example collection.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{fig01_corruption_patterns}
+\caption{Three ways stockouts corrupt the same latent demand path (black). Left: a binary availability flag gates sales (blue) to zero during off-shelf runs (shaded). Center: a known capacity cap records $\min(d_t, c)$, so peak observations are lower bounds. Right: fractional within-day availability attenuates sales toward a small floor. Each column corresponds to one case study in Table~\ref{tab:taxonomy}.}
+\label{fig:corruption}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{p{0.20\textwidth}p{0.20\textwidth}p{0.24\textwidth}p{0.20\textwidth}c}
+\toprule
+Stockout information observed & Censoring pattern & Mechanism & Demand forecast & \S \\
+\midrule
+Binary on-shelf flag $a_t \in \{0,1\}$ & hard zeros while off shelf & gate the recursion updates on $a_t$; mask the likelihood & full-availability scenario input over the horizon & \S\ref{sec:cs1} \\
+\addlinespace
+Per-observation censoring point $c_t$ & observations record $\min(\cdot\,, c_t)$ & censored likelihood: density below the cap, survival mass at it & generative recursion that never applies the cap & \S\ref{sec:cs2} \\
+\addlinespace
+Fractional, noisy availability $a_t \in [0,1]$ & multiplicative attenuation, mislabeled hours & saturating factor $f(a_t)$ with a learned floor & availability pinned to one over the horizon & \S\ref{sec:cs3} \\
+\bottomrule
+\end{tabular}
+\caption{Selection map from observed stockout information to censoring mechanism. The mechanisms compose; the rows mark which signal makes each mechanism \emph{available}, not which is optimal for a given dataset (see the scope note below).}
+\label{tab:taxonomy}
+\end{table}
+
+Two scope notes keep this table honest. First, the rows are a statement about \emph{availability of mechanisms}, not about optimality: no mechanism is cross-applied to another row's data situation in this paper, and two of the six cross-applications are structurally infeasible because a censored likelihood requires a recorded censoring point, which neither the binary panel of \S\ref{sec:cs1} nor the fresh-retail data of \S\ref{sec:cs3} contains. Second, where a within-case ablation exists (\S\ref{sec:cs1} and \S\ref{sec:cs2}), the mechanism is compared against the \emph{same} model with the mechanism switched off, and the improvement shows up on specific criteria stated in each case study, not uniformly across all metrics.
+
+\subsection{What to score a demand forecast against}\label{sec:scoring}
+
+Evaluating a demand model on stockout-affected data has a trap built into it. On censored days the recorded sales are precisely the quantity the model is designed \emph{not} to reproduce. A model that correctly infers that demand exceeded the cap will, on those days, sit above the observations and be penalized for it; a model that happily reproduces the corruption will score well. Aggregate accuracy against recorded sales is therefore partly an evaluation of the censoring process, not of the demand model. This is not a hypothetical concern: \S\ref{sec:cs2-results} shows a case where the mechanism-free model wins every point metric against observed sales while systematically under-ordering exactly on the days that drive stockouts.
+
+What should be used instead depends on what is observable. On simulated data the latent demand is known, and scoring against it is the point of the simulation. On real data the latent demand is never observed, and we fall back on three weaker but workable criteria: \emph{calibration} of the predictive intervals, \emph{behavior on stress days} (days where demand plausibly exceeded supply), and \emph{counterfactual plausibility} (whether the implied full-availability forecast is consistent with independent evidence such as the empirical demand-availability curve). Each criterion comes with caveats that the case studies state explicitly. In particular, interval coverage on short holdouts is noisy: on a $30$-day test window the standard error of an empirical coverage estimate at nominal $50\%$ is roughly $\sqrt{0.5 \cdot 0.5 / 30} \approx 0.09$, so coverage differences below about $0.2$ should be read as directional at best. Throughout, reported coverage refers to central (equal-tailed) intervals, while the figures display highest-density intervals; for skewed predictive distributions the two genuinely differ.
+
+The synthetic case studies (\S\ref{sec:cs1} and \S\ref{sec:cs2}) should be read as \emph{mechanism validation}: can the model recover a known latent quantity from corrupted observations? In neither case is the fitted model the data-generating process. Case study 1 fits Gaussian smoothing recursions with noise floors to Gamma-Poisson count data and a binary indicator; case study 2 omits the generator's friction term. Both models are misspecified in ways that work against the mechanism rather than for it, so recovery is not guaranteed by construction. The framework these studies test is falsifiable: it would be undermined if the mechanism-free variant recovered the latent demand quantities equally well, or if the mechanism-aware variant lost on stress days and calibration simultaneously.
+
+Finally, a comparability warning that applies to every table in this paper. The three case studies use different data, different scales, different likelihoods, different inference algorithms (mean-field variational inference in \S\ref{sec:cs1} and \S\ref{sec:cs3}, Hamiltonian Monte Carlo in \S\ref{sec:cs2}), and different evaluation targets (observed panel sales, latent simulated demand, rescaled clipped sales). CRPS and coverage values are therefore not comparable across case studies, and each results table repeats this warning where it applies.
+
+\subsection{Related approaches not covered here}\label{sec:related}
+
+The mechanisms in this paper sit inside a large literature on demand estimation under censoring, and several important strands are deliberately out of scope. The revenue-management community calls the problem \emph{unconstraining}: recovering true demand from booking data truncated by capacity controls \citep{talluri2004theory, weatherford2002better, queenan2007comparison}. The inventory literature studies parametric demand estimation from sales in lost-sales systems, from early work on Poisson demand through censored newsvendor formulations \citep{conrad1976sales, nahmias1994demand, agrawal1996estimating, ding2002censored}; \citet{braden1991informational} established how censored observations change Bayesian updating, a result that matters here because all three of our case studies treat availability as exogenous, an assumption that fails when stockouts correlate with demand. A separate strand estimates \emph{primary} demand under stockout-based substitution with discrete-choice models, which answers a question our single-item models cannot: where did the lost demand go \citep{anupindi1998estimation, kok2007demand, musalem2010structural, vulcano2012estimating}. Data-driven newsvendor methods handle censoring inside the decision problem rather than the forecast \citep{sachs2014data, huber2019data}. Finally, the FreshRetailNet-50K release that supplies the data for \S\ref{sec:cs3} ships its own neural baselines for latent demand recovery \citep{wang2025freshretailnet}; we do not compare against them because our target there, the full-availability demand forecast, is not scoreable against their observed test sales, as \S\ref{sec:cs3} discusses. Readers whose stockout problem involves substitution, endogenous availability, or decision-integrated estimation will find better starting points in these literatures.

@@ -1,0 +1,70 @@
+\section{Case study 3: fractional availability at $50{,}000$ series}\label{sec:cs3}
+
+The first two case studies used simulated data so that recovery of known latent quantities could be checked. The third works on real data at production scale, where the stockout signal is neither a clean flag nor a known cap but a \emph{fractional, noisily labeled} availability, and where the modeling choices are dominated by what survives contact with label noise and a large panel.
+
+\subsection{Data and label noise}\label{sec:cs3-data}
+
+FreshRetailNet-50K \citep{wang2025freshretailnet} contains $90$ days of daily sales for $50{,}000$ store-product series ($4{,}500{,}000$ rows, $898$ stores, $865$ products, $18$ cities, 2024-03-28 to 2024-06-25), with hourly stockout flags per day. We aggregate the hourly flags into a sales-weighted availability $a_{t,s} = \sum_h w_h (1 - \text{stockout}_{t,s,h})$, where $w_h$ is the share of total sales occurring in hour $h$, so that an item off shelf only overnight loses little availability. The last $14$ days are held out; the first $76$ train.
+
+The stockout labels are visibly noisy, and the noise shapes the model. On days flagged out of stock for all $24$ hours, $14.8\%$ nonetheless record positive sales; $2.5\%$ of all sales volume occurs in hours flagged out of stock; and the empirical sales ratio at zero availability is $0.037$ rather than zero. A mechanism that forces sales to zero at zero availability would be contradicted by the data it is fit to. This motivates the learned floor below.
+
+\subsection{Model}\label{sec:cs3-model}
+
+Each series carries a local-level state-space model with a damped trend, weekly seasonality, and store-hierarchical covariate effects, all multiplied by an availability factor:
+\begin{align}
+y_{t,s} &\sim \text{Normal}\!\left( f_{t,s} \, \mu_{t,s}, \; f_{t,s} \left( \sigma_s + \lambda_s \, \text{softplus}(\ell_{t,s}) \right) + \sigma_0 \right), \label{eq:cs3-obs} \\
+\mu_{t,s} &= \ell_{t,s} + \gamma_{d(t),s} + \textstyle\sum_{c=1}^{4} \beta_{c,s} \, x_{c,t,s}, \\
+\ell_{t,s} &= \ell_{0,s} + \textstyle\sum_{u \leq t} (\varepsilon_{u,s} + \delta_{u,s}), \qquad \varepsilon_{u,s} \sim \text{Normal}(0, \tau_s), \\
+\delta_{u,s} &= \phi^{\text{trend}}_s \, \delta_{u-1,s} + \eta_{u,s}, \qquad \eta_{u,s} \sim \text{Normal}(0, \tau^{\text{trend}}_s),
+\end{align}
+where $\gamma_{d(t),s}$ is a zero-sum weekly seasonal effect, the covariates $x_{c,t,s}$ are discount magnitude, promotional activity, holiday, and a launch indicator, and the coefficients $\beta_{c,s}$ shrink toward store-level means. The availability factor is
+\begin{equation}\label{eq:factor}
+f_{t,s} \;=\; \phi_s + (1 - \phi_s) \, \frac{1 - e^{-b_s a_{t,s}}}{1 - e^{-b_s}},
+\end{equation}
+with $\phi_s \sim \text{Beta}(2, 18)$ and $b_s \sim \text{LogNormal}(1, 0.5)$. Three properties make \eqref{eq:factor} more than a fudge factor. The floor $\phi_s$ gives zero-availability days a small positive expected sale, absorbing the label noise quantified above instead of letting contradiction days dominate the likelihood; its prior is concentrated near the empirical floor of $0.037$, so posterior agreement with that value is partly prior-driven and should be read as consistency, not as independent validation. The saturating shape has a random-encounter interpretation: if customers make purchase attempts at Poisson rate $b_s$ and succeed only when the item is in stock a share $a$ of the day, the probability of at least one successful encounter is $1 - e^{-b_s a}$. The normalization by $1 - e^{-b_s}$ anchors $f_{t,s} = 1$ at full availability, which removes the scale degeneracy between the level and the factor; at $a = 1$ the observation mean is the full, uncorrupted regression mean $\mu_{t,s}$ (level plus seasonality plus covariate effects). The factor also multiplies the observation noise scale in \eqref{eq:cs3-obs}, so low-availability days are both smaller in mean and less informative, while a small constant $\sigma_0 = 0.02$ outside the factor keeps the likelihood proper at $a = 0$. Sales are scaled per series by the training-window mean before fitting.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\textwidth]{fig08_posterior_availability_factor}
+\caption{Posterior panel-mean availability factor against availability, with $50\%$ and $94\%$ HDI bands, overlaid on the rescaled empirical sales ratios by availability decile. The posterior curve sits below the raw empirical points over most of the range, consistent with the model attributing part of the high sales on low-availability days to those days being high-demand days (stockouts are not random). The bands quantify uncertainty of the panel \emph{average} and are accordingly thin; per-series factors vary far more.}
+\label{fig:factor}
+\end{figure}
+
+\subsection{Computation}\label{sec:cs3-compute}
+
+The model is fit with stochastic variational inference under an \texttt{AutoNormal} guide for $60{,}000$ steps, using a one-cycle learning-rate schedule combined with reduce-on-plateau. The notebook's stored timing for this fit on the full $50{,}000$-series panel is $5$ minutes $28$ seconds of wall-clock time with the CUDA backend. The committed companion notebook in the \pkg{numpyro\_forecast} repository, which runs the identical model on a $1{,}000$-series subset on CPU, reports that a hosted version of the full-panel workflow (provisioned via Modal\footnote{\url{https://modal.com}}) executes end to end, from data loading through counterfactual forecasting, in approximately $10$ minutes on GPU; we quote that as the notebook's statement rather than an independent measurement. The bounded claim these numbers support is that the same hierarchical specification used on the $1{,}000$-series subset runs at the $50{,}000$-series scale in minutes on one machine; posterior-predictive export at this scale requires draw batching and host offload, which the package provides.
+
+\subsection{Results}\label{sec:cs3-results}
+
+On the $14$-day holdout, scored on the original sales scale, the model's CRPS is $0.268$ against $0.380$ for a seasonal-naive ensemble (weekday-aligned training windows stacked into an empirical predictive); central-interval coverage is $0.938$ at nominal $94\%$ and $0.556$ at nominal $50\%$. Two attribution caveats belong in the same breath as these numbers. The seasonal-naive comparison scores the model \emph{as a whole}, trend, seasonality, promotions, hierarchy, and availability factor together; because no with-and-without-factor ablation was run at this scale (or any scale), none of the CRPS margin can be attributed to the availability factor specifically. And coverage degrades on zero-sales days ($0.36$ at nominal $50\%$, against $0.56$ on positive days; zeros are $3.7\%$ of the test panel), direct evidence of the Normal likelihood's misspecification on clipped, non-negative sales.
+
+The demand forecast pins availability to one over the horizon and re-forecasts with the same posterior draws and the same random numbers, so the difference between the two forecasts is the model's implied stockout cost, free of Monte Carlo noise. Across the panel the fitted model implies $8.7\%$ more expected demand than expected sales over the test window, with $82.2\%$ of series gaining more than $1\%$; this is a model output, not a validated quantity, since demand at full availability is never observed, and the availability labels it conditions on are themselves noisy. Figure~\ref{fig:sales-vs-demand} shows one illustrative series: on its worst test day (availability $0.42$), expected sales are $13.9$ units against an expected demand of $25.0$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{fig09_sales_vs_demand_series}
+\caption{Sales forecast under observed availability (top) versus demand forecast under availability pinned to one (bottom) for one illustrative series, with $50\%$ and $94\%$ HDI bands and the availability input in red. On 2024-06-22 (availability $0.42$) the expected sale is $13.9$ units and the expected demand $25.0$. The series was chosen to display the mechanism clearly, not as a typical case.}
+\label{fig:sales-vs-demand}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\multicolumn{4}{l}{\emph{FreshRetailNet-50K, $14$-day holdout, original sales scale; not comparable to the tables of \S\ref{sec:cs1} or \S\ref{sec:cs2}.}} \\
+\midrule
+ & CRPS & Coverage $94\%$ & Coverage $50\%$ \\
+\midrule
+Hierarchical model with availability factor & $0.268$ & $0.938$ & $0.556$ \\
+Seasonal-naive ensemble & $0.380$ & -- & -- \\
+\midrule
+\multicolumn{4}{l}{Fit wall-clock: $5$\,min $28$\,s ($60{,}000$ SVI steps, $50{,}000$ series, CUDA backend).} \\
+\bottomrule
+\end{tabular}
+\caption{Panel evaluation for the fresh-retail case study. The seasonal-naive baseline is an empirical ensemble without calibrated intervals, so its coverages are not defined. No availability-factor ablation is available: the CRPS margin reflects the whole model, not the factor.}
+\label{tab:cs3-results}
+\end{table}
+
+\paragraph{Limitations.}
+All results use a single train-test split. Availability over the horizon is taken from the recorded data, so the evaluation is retrospective; a production system would need availability forecasts or scenarios. The full-availability demand forecast is unfalsifiable against observations by construction. The Normal likelihood on non-negative, zero-clipped sales is misspecified, with the zero-sales-day coverage gap above as its measurable symptom, and predictive intervals become directionally miscalibrated (systematically missing high) in the second forecast week. The sales-weighted hour weights $w_h$ were computed over the full window including test days, a mild hygiene compromise inherited from the source notebook. The hosted end-to-end runtime is reported secondhand, as described in \S\ref{sec:cs3-compute}.

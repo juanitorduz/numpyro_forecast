@@ -1,0 +1,96 @@
+\section{Case study 1: binary availability, gating the recursion}\label{sec:cs1}
+
+Intermittent demand series, where many periods record zero, are the natural home of the first mechanism, because a stockout manufactures exactly the symptom that intermittent-demand methods are built around. The classical estimators of this family are all exponential smoothing recursions of one common form,
+\begin{equation}\label{eq:gated-update}
+\ell_t = \ell_{t-1} + g_t \, \alpha \, (x_t - \ell_{t-1}),
+\end{equation}
+where $x_t$ is the smoothed signal, $\alpha \in (0,1)$ is a smoothing weight, and $g_t \in \{0,1\}$ is an update gate. The methods differ only in what they smooth and when the gate opens. This section presents Croston's method, the Teunter-Syntetos-Babai (TSB) variant, and an availability-gated variant of TSB in that single frame, so that the modification handling stockouts is visible as a one-line change of gate. The availability-gated variant is a natural modification of TSB rather than a new estimator; versions of it appear whenever practitioners restrict occurrence updates to on-shelf periods, and the contribution here is the unified presentation and a controlled comparison on a common panel.
+
+\subsection{Croston and TSB}\label{sec:croston-tsb}
+
+Croston's method \citep{croston1972forecasting} decomposes an intermittent series into demand sizes and inter-demand intervals. Two recursions of the form \eqref{eq:gated-update} run side by side, both gated on demand events ($g_t = \mathbf{1}[y_t > 0]$): one smooths the positive demand sizes $z$, the other the (inverse) interval between demand events, and the forecast rate is $\hat{y}_{t+h} = \hat{z}_t \, \widehat{1/p}_t$, the size estimate times the inverse-interval estimate. Because $\mathbb{E}[1/p] > 1/\mathbb{E}[p]$, this construction is biased upward; the correction of \citet{syntetos2005accuracy} multiplies the rate by $(1 - \alpha/2)$, and \citet{syntetos2001bias} analyzes the bias itself. In our Bayesian implementation both smoothing weights carry $\text{Beta}(2, 20)$ priors, the initial levels $\text{Normal}(0, 1)$ priors, and the one-step-ahead likelihoods are $\text{Normal}(\ell_{t-1}, \sigma)$ with $\sigma \sim \text{HalfNormal}(1)$, fit with the No-U-Turn Sampler \citep{hoffman2014nuts}. On a simulated $\text{Poisson}(0.3)$ series of $80$ periods ($73\%$ zeros, $12$-fold one-step-ahead cross-validation), the posterior mean forecast rate is $0.699$, corrected to $0.663$ by the Syntetos-Boylan factor, against a training-window mean demand of $0.338$; these are rates, not accuracy scores. Full derivations and diagnostics are in \citet{boylan2021intermittent} and the accompanying notebooks.
+
+Croston's known blind spot is obsolescence: between demand events nothing updates, so a series that dies keeps its last forecast forever. TSB \citep{teunter2011intermittent} fixes this by replacing the interval channel with a demand \emph{probability} channel that smooths the occurrence indicator $d_t = \mathbf{1}[y_t > 0]$ on \emph{every} period ($g_t \equiv 1$):
+\begin{equation}\label{eq:tsb-prob}
+\ell^{p}_t = \ell^{p}_{t-1} + \alpha_p \, (d_t - \ell^{p}_{t-1}),
+\end{equation}
+with forecast $\hat{y}_{t+h} = \hat{z}_t \, \hat{p}_t$. In the implementation the two methods share the same level-recursion code; TSB is obtained by passing an always-open gate to the probability channel. Table~\ref{tab:cs1-single} reports both methods on the same single series under the same protocol. TSB scores better there, but two caveats from the source notebooks temper the comparison: on this stationary series TSB's headline advantage (probability decay under obsolescence) never activates, and part of its better empirical coverage comes from the Gaussian probability channel placing predictive mass below zero, which a Bernoulli channel would handle more honestly. Croston's near-zero $50\%$ coverage is structural rather than an inference failure: its predictive interval is an interval for a \emph{rate}, strictly above zero, evaluated on a test span dominated by zero counts.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\multicolumn{5}{l}{\emph{Single simulated series, $n = 80$, one-step-ahead CV ($12$ folds); not comparable to Table~\ref{tab:cs1-panel} or later tables.}} \\
+\midrule
+Method & CRPS (one-step) & CRPS (fixed origin) & Coverage $50\%$ & Coverage $94\%$ \\
+\midrule
+Croston & $0.348$ & $0.373$ & $0.08$ & $1.00$ \\
+TSB & $0.228$ & $0.244$ & $0.58$ & $1.00$ \\
+\bottomrule
+\end{tabular}
+\caption{Croston versus TSB on one simulated intermittent series (no stockouts involved yet). Croston's $0.08$ coverage at nominal $50\%$ is structural: its central interval is a rate interval lying strictly above zero on a mostly-zero test span. TSB's higher coverage is partly produced by Gaussian predictive mass below zero.}
+\label{tab:cs1-single}
+\end{table}
+
+\subsection{The availability gate}\label{sec:availability-gate}
+
+Now let stockouts enter. When an item is off shelf, $y_t = 0$ regardless of demand. TSB's probability channel \eqref{eq:tsb-prob} treats every such zero as evidence that demand is fading and decays $\hat{p}_t$ toward zero; a long stockout run drives the demand probability, and with it the forecast, into the ground. This is the mechanism by which yesterday's stockouts become tomorrow's under-orders. If a binary availability flag $a_t$ is recorded, the fix stays within the frame of \eqref{eq:gated-update}: gate the probability channel on availability, $g_t = a_t$, so that off-shelf periods neither confirm nor deny demand, and mask the corresponding likelihood contributions so off-shelf indicators carry zero log-density. The demand-size channel keeps its Croston gate ($y_t > 0$ implies $a_t = 1$, so sizes are only ever observed on shelf). The observation model is $y_t = a_t \, d^{*}_t$: availability censors demand multiplicatively. For the forecast, availability becomes a scenario input: expected sales over the horizon are $\hat{y}_{t+h} = a_{t+h} \, \hat{z}_t \, \hat{p}_t$ under an assumed availability path, and the demand forecast is the same expression with the full-availability path $a_{t+h} \equiv 1$. Under this gating, $\hat{p}$ estimates $P(\text{demand} \mid \text{available})$, whereas plain TSB estimates the product $P(\text{available}) \cdot P(\text{demand} \mid \text{available})$: a quantity contaminated by the availability process.
+
+\subsection{Setup}\label{sec:cs1-setup}
+
+The test bed is a simulated panel of $1{,}000$ series over $60$ periods (train $50$, test $10$). Per-series demand rates are drawn $\lambda_i \sim \text{Gamma}(2.5)$, latent demand $d^{*}_{t,i} \sim \text{Poisson}(\lambda_i)$, availability $a_{t,i} \sim \text{Bernoulli}(0.6)$ independently of demand, and observed sales are $y_{t,i} = a_{t,i} \, d^{*}_{t,i}$. Half of all periods record zero sales; a $0.40$ share of periods are stockouts and $0.11$ are genuine no-demand periods on shelf. The model is fit with stochastic variational inference \citep{hoffman2013stochastic} using an \texttt{AutoNormal} mean-field guide \citep{kucukelbir2017automatic}, Adam with learning rate $0.001$, and $10{,}000$ steps over roughly $4{,}000$ latent dimensions; smoothing weights carry $\text{Beta}(1.5, 3)$ priors and the size channel a hierarchical noise scale. Two implementation details are honesty-relevant. First, small constant noise floors ($0.1$ on sizes, $0.05$ on the indicator) are added to stabilize SVI, which otherwise produces numerical failures; they are a pragmatic device, not part of the statistical story. Second, the model is deliberately misspecified relative to the generator: Gaussian likelihoods smooth integer counts and a binary indicator, so parameter recovery is not guaranteed by construction (\S\ref{sec:scoring}).
+
+The comparison model requires no second implementation: because availability enters only through the gate and the likelihood mask, refitting the same model with an all-ones availability input recovers plain TSB exactly. This makes the comparison a clean within-model ablation, and it is best read as a consistency check on the mechanism rather than a horse race between different methods.
+
+\subsection{Results}\label{sec:cs1-results}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{fig02_gated_vs_counterfactual_probability}
+\caption{In-sample demand probability for one series with a $9$-period stockout run (shaded bands). The availability-gated posterior (solid, with $50\%$ and $94\%$ HDI bands) freezes through stockouts and tracks the true demand probability (dashed horizontal line). The blue dashed path is a deterministic \emph{plain-TSB counterfactual recursion}: the TSB update replayed with the fitted posterior-mean smoothing weight, not the refit plain-TSB model of Table~\ref{tab:cs1-panel}. It decays toward zero through every stockout run and must climb back afterwards.}
+\label{fig:gated-probability}
+\end{figure}
+
+Figure~\ref{fig:gated-probability} shows the mechanism at work on a single series with a $9$-period stockout run: the gated posterior rides through the gap unchanged while the ungated recursion decays toward zero and has to recover afterwards. Figure~\ref{fig:recovery-scatter} shows the same effect panel-wide at the parameter level. The availability-gated model's estimated demand probabilities line up on the identity against the true per-series probabilities, with a panel mean of $0.99$ of truth; the plain-TSB refit lines up on the $0.6$ line, with a panel mean of $0.60$ of truth. The value $0.60$ is not incidental: it is the generator's availability rate, reproduced arithmetically because plain TSB estimates $\mathbb{E}[a_t d_t] = 0.6 \, \mathbb{E}[d_t]$. The figure therefore confirms that the bias of ignoring availability has exactly the predicted sign and magnitude; it is a consistency check with a known answer, not a measured performance gap on an open question.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{fig03_probability_recovery_scatter}
+\caption{Estimated versus true demand probability across the $1{,}000$-series panel. The availability-gated model (identity line) recovers the conditional demand probability; the plain-TSB refit recovers $0.6$ of it, the generator's availability rate, because it estimates the product of availability and demand probabilities.}
+\label{fig:recovery-scatter}
+\end{figure}
+
+The practical consequence appears when the model is asked the planning question: what would be sold under full availability? Summed over the panel, the availability-gated demand forecast totals $2{,}481.3$ expected units per period against a true total expected demand of $2{,}471.8$, while the plain-TSB refit totals $1{,}479.8$, which is $60\%$ of the truth (Table~\ref{tab:cs1-panel}). Two framing points keep this result in proportion. First, under the \emph{historical} availability regime the two models' sales forecasts are much closer, because plain TSB's bias partly cancels when the future looks like the corrupted past; the bias bites specifically on the counterfactual scenario question that assortment and purchasing decisions ask. Second, on realized-availability test sales the gated model's panel CRPS is $0.547$ with central-interval coverage $0.70$ at nominal $50\%$ and $0.98$ at nominal $94\%$; the mean-field guide and Gaussian likelihoods leave the intervals imperfectly calibrated, and we report these numbers as context rather than as a claim of superiority.
+
+Figure~\ref{fig:forecast-opens} shows the single most decision-relevant behavior: for a series whose last five training periods are all stockouts (with an estimated $33$ units of demand lost during the run), the full-availability forecast opens at the inferred demand level rather than at the recent zeros. A model without the gate starts such series near zero, and the error compounds through the reorder cycle.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{fig04_forecast_opens_at_demand_level}
+\caption{A series whose training window ends in a five-period stockout run. The full-availability demand forecast (bands: $50\%$ and $94\%$ HDI) opens at the inferred demand level instead of at the trailing zeros; the realized-availability forecast (left of the split) pinches to zero inside stockouts.}
+\label{fig:forecast-opens}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\multicolumn{3}{l}{\emph{Simulated panel, $1{,}000 \times 60$; SVI; different data and protocol}} \\
+\multicolumn{3}{l}{\emph{from Table~\ref{tab:cs1-single}; not comparable to it or to later tables.}} \\
+\midrule
+ & Availability-gated TSB & Plain TSB (all-ones refit) \\
+\midrule
+Mean estimated / true demand probability & $0.99$ & $0.60$ \\
+Full-availability panel total (true $2{,}471.8$) & $2{,}481.3$ & $1{,}479.8$ \\
+Panel test CRPS (realized availability) & $0.547$ & \\
+Coverage $50\%$ / $94\%$ (realized availability) & $0.70$ / $0.98$ & \\
+\bottomrule
+\end{tabular}
+\caption{Availability-gated TSB versus the plain-TSB ablation on the simulated panel. The $0.60$ recovery ratio equals the generator's availability rate by construction (see text); the comparison is a consistency check on the gating mechanism. CRPS and coverage for the plain refit are omitted because under realized availability the two sales forecasts are close and the difference is not the point of the comparison.}
+\label{tab:cs1-panel}
+\end{table}
+
+\paragraph{Limitations.}
+The Gaussian likelihoods are a pragmatic simplification: predictive draws go negative for counts and outside $[0,1]$ for the probability channel, and the noise floors exist to stabilize SVI rather than to model anything. Availability is treated as exogenous; when stockouts correlate with demand, as they do for best-sellers, the censoring is informative and the frozen update, while far better than the decaying one, is no longer the full story \citep{braden1991informational}. Ground-truth scoring of demand probabilities is possible only because the data are simulated. All panel results use a single fixed train-test split, and the mean-field variational posterior is known to understate uncertainty.

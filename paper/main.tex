@@ -1,0 +1,41 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[round]{natbib}
+\usepackage{microtype}
+\usepackage[colorlinks=true, linkcolor=blue!60!black, citecolor=blue!60!black, urlcolor=blue!60!black]{hyperref}
+
+\graphicspath{{figures/}}
+
+\newcommand{\pkg}[1]{\textsf{#1}}
+
+\title{Forecasting Demand, Not Sales:\\ A Practitioner's Guide to Probabilistic Models for Stockout-Censored Data}
+\author{Juan Orduz\\ \href{mailto:juanitorduz@gmail.com}{\texttt{juanitorduz@gmail.com}}}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\input{sections/00_abstract}
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_sales_as_censored_demand}
+\input{sections/03_availability_tsb}
+\input{sections/04_censored_likelihood}
+\input{sections/05_fresh_retail}
+\input{sections/06_discussion}
+\input{sections/07_reproducibility}
+\input{sections/08_conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
