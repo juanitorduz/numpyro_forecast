@@ -133,7 +133,7 @@ Callable `(carry, x_t) -> (dist_t, carry_fn)`: `dist_t` is the per-step observat
 `xs: Array | None = None`  
 Optional exogenous inputs spanning the full horizon with time at axis `-2`; split and moved into scan layout internally. `None` for autonomous dynamics.
 
-`plates: Sequence[tuple[str, int]] = ()`\  
+`plates: Sequence[tuple[str, int]] = ()`  
 `(name, size)` pairs opened inside the scan body around the sample statement (the only placement NumPyro accepts around a scan).
 
 `reparam_config: Mapping[str, Reparam] | None = None`  

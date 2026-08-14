@@ -48,7 +48,7 @@ Covariates with time at axis `-2` (same duration as `data`).
 `model_fn: ModelFactory`  
 Factory returning a fresh [ForecastingModel](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) per window.
 
-`forecaster_fn: ForecasterFactory = Forecaster`\  
+`forecaster_fn: ForecasterFactory = Forecaster`  
 Factory returning a fitted forecaster (defaults to [Forecaster](forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster)).
 
 `metrics: Mapping[str, Metric] | None = None`  
