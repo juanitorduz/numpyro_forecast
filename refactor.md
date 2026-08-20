@@ -26,7 +26,8 @@ Calling them "primitives" mislabels them for exactly the audience most likely to
 
 | Removed | What you write instead |
 |---|---|
-| `forecaster.py` in full: `ForecastingModel`, `_BaseForecaster`, `Forecaster`, `HMCForecaster`, `PathfinderForecaster` | a plain model function wrapped in `forecasting_model` |
+| `forecaster.py` in full: `ForecastingModel`, `_BaseForecaster`, `Forecaster`, `HMCForecaster`, `PathfinderForecaster` | a plain `(covariates, data=None)` model function that derives its `Horizon` via `nf.horizon` |
+| `forecasting_model` (the functional wrapper) | `h = nf.horizon(covariates, data)` as the first line of the model (spelled `Horizon.from_data` until the PR-C renames land) |
 | `fit_svi`, `SVIFit`, `resolve_optimizer`, `resolve_guide` | `SVI(model, guide, optim, Trace_ELBO()).run(key, num_steps, covariates, data)` |
 | `fit_mcmc`, `MCMCFit`, `resolve_kernel`, `_validate_kernel_run_config` | `MCMC(NUTS(model), ...).run(key, covariates, data)` |
 | the `_draw_posterior_impl` singledispatch and its three registrations | `mcmc.get_samples()` for MCMC; the guide-based `draw_posterior` for variational fits |
@@ -45,7 +46,11 @@ The bar every survivor has to clear: **it does something plain NumPyro cannot do
 
 ### Model building blocks
 
-`Horizon`, `horizon()`, `forecasting_model`, `innovations` (renamed from `time_series`), `markov_series` (renamed from `markov_time_series`), `ssoe` (new, see below), `predict` (GLM form), and `Transition`. These are the package. They carry the train/forecast split, the `_future`-site convention that keeps `AutoNormal` from resizing, and the horizon derived from covariate shapes.
+`Horizon`, `horizon()`, `innovations` (renamed from `time_series`), `markov_series` (renamed from `markov_time_series`), `ssoe` (new, see below), `predict` (GLM form), and `Transition`. These are the package. They carry the train/forecast split, the `_future`-site convention that keeps `AutoNormal` from resizing, and the horizon derived from covariate shapes.
+
+`Horizon` is kept deliberately, since it is the value every building block is parameterized by: it derives the train/forecast split from shapes once per model call, instead of letting each block take `(covariates, data)` and re-derive it independently, which would reopen exactly the mismatch that the rejected `obs=`-on-`predict` idea would (see the docs section). `forecasting_model` is **not** kept: it was a two-line wrapper that saved exactly one line, `h = nf.horizon(covariates, data)` at the top of the model, and it fails the same bar that removed `fit_svi`, while hiding the standard NumPyro `(covariates, data=None)` signature behind a bespoke `(h, covariates)` body signature. Without it the model on the page is a function any NumPyro user already knows how to read.
+
+With the wrapper gone, the `(covariates, data=None)` calling convention the drivers rely on is carried by documentation and by the `ForecastModel` type. PR-A upgrades `ForecastModel` in `typing.py` from the loose `Callable[..., None]` alias to a `@runtime_checkable` Protocol whose `__call__` is `(self, covariates: Array, data: Array | None = None, /) -> None`, positional-only because the drivers invoke positionally, so user models keep free parameter names. What this buys: ty checks the signature structurally at every call site where a user passes a model into `forecast`, `predict_in_sample`, or `to_datatree`, catching a forgotten `data=None` default statically. What it does not buy: at runtime the beartype hook's isinstance check on a runtime-checkable Protocol reduces to member existence, i.e. `callable(model)`, no stronger than the current alias, because Python runtime protocols never check signatures (a model missing the default still fails loudly, with a `TypeError` at the first `data=None` driver call). The alias's docstring has to be rewritten in any case: it currently justifies the looseness by the OOP/functional duality, and this refactor deletes both halves of that sentence.
 
 ### Producing draws
 
@@ -199,7 +204,7 @@ numpyro_forecast/
   __init__.py       # flat top-level exports; convert stays eager (see dependency slimming)
   models/           # zero inference imports
     __init__.py     #   flat re-exports
-    _horizon.py     #   Horizon, horizon(), forecasting_model
+    _horizon.py     #   Horizon, horizon()
     _innovations.py #   innovations
     _markov.py      #   markov_series, Transition
     _ssoe.py        #   ssoe, SSOEResult
@@ -215,7 +220,7 @@ numpyro_forecast/
 
 `models` is a package rather than a single file because the post-refactor single-file estimate is around 590 lines with no headroom, and the scan-heavy `markov_series` and `ssoe` pairs deserve their own homes. Submodules are private; the public dotted path stays `numpyro_forecast.models.ssoe` via flat re-exports. One subtlety this creates: `tests/test_docs_reference.py`'s walk collects only symbols whose `__module__` matches the module they are found in and skips `_`-prefixed modules, so re-exported names would silently escape the "every public symbol is documented" enforcement. The walk is extended in the same PR to also collect names re-exported via `__all__` from public package `__init__` modules.
 
-Top-level exports: `horizon`, `Horizon`, `innovations`, `markov_series`, `ssoe`, `predict`, `forecasting_model`, `Transition`, `SSOEResult`, `draw_posterior`, `forecast`, `predict_in_sample`, plus the existing evaluation, metrics, convert, and surgery names. Canonical docs spelling: `import numpyro_forecast as nf`. The `install_import_hook` submodule list in `__init__.py` and the CI base-import leak list move in lockstep.
+Top-level exports: `horizon`, `Horizon`, `innovations`, `markov_series`, `ssoe`, `predict`, `Transition`, `SSOEResult`, `draw_posterior`, `forecast`, `predict_in_sample`, plus the existing evaluation, metrics, convert, and surgery names. Canonical docs spelling: `import numpyro_forecast as nf`. The `install_import_hook` submodule list in `__init__.py` and the CI base-import leak list move in lockstep.
 
 LOC honesty: the package gets smaller, but not dramatically, since the fit wrappers were thin. The win is a smaller API surface to learn, one obvious way to run inference, and roughly 40 to 60 lines of scan plumbing removed from each SSOE notebook.
 
@@ -251,7 +256,7 @@ The remaining ten notebooks are handled in a follow-up PR. In the interim the **
 ## PR sequencing
 
 1. **PR-A, the minimal draft** (opened as a draft PR, per the review's suggestion). Every removal above, the reshaped `draw_posterior`, `to_datatree`, `backtest`, and contrib contracts, the test sweep, and the three notebook rewrites. No renames, no `ssoe`, no layout move: the diff should be about what disappears. If the notebooks make it unwieldy, the stockout rewrite splits into its own PR immediately behind, but PR-B does not start before it lands, because it is the acceptance test for the device machinery.
-2. **PR-B, readback.** Having read the three rewritten notebooks, decide which conveniences come back. Candidates to re-litigate: `forecast` and `predict_in_sample`, `draw_posterior`'s name and signature, `backtest`'s closure shape, `to_datatree`'s ergonomics.
+2. **PR-B, readback.** Having read the three rewritten notebooks, decide which conveniences come back. Candidates to re-litigate: `forecast` and `predict_in_sample`, `draw_posterior`'s name and signature, `backtest`'s closure shape, `to_datatree`'s ergonomics, and whether the `forecasting_model` decorator earns its way back.
 3. **PR-C, layout move, renames, and the terminology sweep.** `models/` package plus `predictive.py`, `innovations`/`markov_series`/`horizon()`, top-level exports, docs-reference and api-snapshot sweep.
 4. **PR-D, the `ssoe` block**, its tests, and an example model.
 5. **PR-E, the remaining ten notebooks.** Must not lag PR-C.
