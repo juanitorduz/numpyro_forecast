@@ -7,9 +7,9 @@ Empirical coverage of the central `alpha` prediction interval.
 Usage
 
 ``` python
-evaluate.eval_coverage(pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"], truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"], alpha: float = ..., batch_size: None = None) -> Array
+evaluate.eval_coverage(pred: Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch'], truth: Float[Array, ' *batch'] | Float[np.ndarray, ' *batch'], alpha: float = ..., batch_size: None = None) -> Array
  
-evaluate.eval_coverage(pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"], truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"], alpha: float = ..., batch_size: int) -> Array | np.floating
+evaluate.eval_coverage(pred: Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch'], truth: Float[Array, ' *batch'] | Float[np.ndarray, ' *batch'], alpha: float = ..., batch_size: int) -> Array | np.floating
 ```
 
 
