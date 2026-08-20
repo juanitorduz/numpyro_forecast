@@ -7,9 +7,9 @@ Empirical CRPS averaged over all data elements.
 Usage
 
 ``` python
-evaluate.eval_crps(pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"], truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"], batch_size: None = None) -> Array
+evaluate.eval_crps(pred: Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch'], truth: Float[Array, ' *batch'] | Float[np.ndarray, ' *batch'], batch_size: None = None) -> Array
  
-evaluate.eval_crps(pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"], truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"], batch_size: int) -> Array | np.floating
+evaluate.eval_crps(pred: Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch'], truth: Float[Array, ' *batch'] | Float[np.ndarray, ' *batch'], batch_size: int) -> Array | np.floating
 ```
 
 
