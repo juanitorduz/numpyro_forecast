@@ -55,8 +55,7 @@ Where each chunk of draws is placed as soon as it is drawn and where the stitche
 ## Returns
 
 
-`Num[Array, ``" sample *batch future obs"] | Num[np.ndarray, `<span class="st">`" sample *batch future obs"``]`\
-</span>  
+`Num[Array, ``" sample *batch future obs"] | Num[np.ndarray, `<span class="st">`" sample *batch future obs"``]`</span>  
 Forecast samples over the `future = duration - t` horizon (floating point for continuous observations, integer for discrete/count models built with `~numpyro_forecast.functional.models.predict_glm()`; a NumPy array when `device` resolves to `"host"`).
 
 
