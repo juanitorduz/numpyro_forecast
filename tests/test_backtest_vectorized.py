@@ -3,8 +3,8 @@
 Covers estimator equivalence with the loop :func:`backtest` (window indices +
 statistical metric closeness), every validator, the window-count formula, the
 compile-discipline gate (I3: the vmapped SVI fit does not recompile per window),
-and the I6 acceptance check that a subsequent eager ``fit_svi`` with a fresh
-guide runs without an ``UnexpectedTracerError``.
+and the I6 acceptance check that a subsequent eager plain-NumPyro SVI fit with a
+fresh guide runs without an ``UnexpectedTracerError``.
 """
 
 import types
@@ -16,8 +16,9 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import as_autoguide, svi_forecast_fn
+from conftest import rw_model, svi_forecast_fn
 from jax import Array, random
+from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.evaluate import (
@@ -33,21 +34,9 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.forecaster import ForecastingModel
-from numpyro_forecast.functional import fit_svi, forecast
+from numpyro_forecast.functional import draw_posterior, forecast
 
 TRAIN, TEST = 30, 5
-
-
-class _RandomWalk(ForecastingModel):
-    """Local-level random walk with Normal observation noise."""
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
-        level = jnp.cumsum(drift, axis=-2)
-        self.predict(dist.Normal(0.0, sigma), level)
 
 
 def _series(duration: int) -> tuple[Array, Array]:
@@ -66,14 +55,14 @@ def test_window_indices_match_loop_backtest() -> None:
         random.PRNGKey(0),
         data,
         cov,
-        _RandomWalk,
+        lambda: rw_model,
         forecast_fn=svi_forecast_fn(num_steps=50),
         train_window=TRAIN,
         test_window=TEST,
         stride=stride,
         num_samples=20,
     )
-    model = _RandomWalk()
+    model = rw_model
     vec = backtest_vectorized(
         random.PRNGKey(0),
         data,
@@ -99,14 +88,14 @@ def test_metrics_statistically_close_to_loop() -> None:
         random.PRNGKey(3),
         data,
         cov,
-        _RandomWalk,
+        lambda: rw_model,
         forecast_fn=svi_forecast_fn(num_steps=800),
         train_window=TRAIN,
         test_window=TEST,
         stride=5,
         num_samples=200,
     )
-    model = _RandomWalk()
+    model = rw_model
     vec = backtest_vectorized(
         random.PRNGKey(3),
         data,
@@ -140,7 +129,7 @@ def test_window_size_validators(
 ) -> None:
     """Each window-size/stride constraint raises its own ``BacktestWindowError``."""
     data, cov = _series(50)
-    model = _RandomWalk()
+    model = rw_model
     with pytest.raises(BacktestWindowError, match=message):
         backtest_vectorized(
             random.PRNGKey(0),
@@ -168,7 +157,7 @@ def test_handwritten_guide_rejected() -> None:
             random.PRNGKey(0),
             data,
             cov,
-            _RandomWalk,
+            lambda: rw_model,
             train_window=TRAIN,
             test_window=TEST,
             guide=handwritten_guide,
@@ -179,7 +168,7 @@ def test_handwritten_guide_rejected() -> None:
 def test_duration_too_short_rejected() -> None:
     """A series with no room for a single window raises ``BacktestWindowError``."""
     data, cov = _series(TRAIN + TEST - 1)
-    model = _RandomWalk()
+    model = rw_model
     with pytest.raises(BacktestWindowError, match="no window fits"):
         backtest_vectorized(
             random.PRNGKey(0),
@@ -197,7 +186,7 @@ def test_covariate_length_mismatch_rejected() -> None:
     """Mismatched data/covariate durations raise ``ValueError``."""
     data, _ = _series(50)
     cov = jnp.zeros((49, 0))
-    model = _RandomWalk()
+    model = rw_model
     with pytest.raises(ValueError, match="share the time axis"):
         backtest_vectorized(
             random.PRNGKey(0),
@@ -223,7 +212,7 @@ def test_covariate_length_mismatch_rejected() -> None:
 def test_window_count_matches_formula(duration: int, train: int, test: int, stride: int) -> None:
     """The number of windows follows ``floor((D - train - test) / stride) + 1``."""
     data, cov = _series(duration)
-    model = _RandomWalk()
+    model = rw_model
     result = backtest_vectorized(
         random.PRNGKey(0),
         data,
@@ -256,7 +245,7 @@ def test_single_svi_compilation(
     data, cov = _series(duration)
 
     def run() -> int:
-        model = _RandomWalk()
+        model = rw_model
         with count_compilations() as tally:
             result = backtest_vectorized(
                 random.PRNGKey(0),
@@ -277,7 +266,7 @@ def test_single_svi_compilation(
     # First call may compile several vmapped stages (fit, posterior, forecast, metrics).
     assert first < 50
 
-    model = _RandomWalk()
+    model = rw_model
     with count_compilations() as tally:
         result = backtest_vectorized(
             random.PRNGKey(0),
@@ -297,7 +286,7 @@ def test_single_svi_compilation(
 
 
 def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
-    """I6 acceptance: a fresh eager ``fit_svi`` after a vectorized run is clean.
+    """I6 acceptance: a fresh eager plain-NumPyro SVI fit after a vectorized run is clean.
 
     The mandatory eager warm-up keeps the vectorized run's AutoGuide instance
     uncontaminated, and a subsequent eager fit uses a fresh guide, so no
@@ -305,7 +294,7 @@ def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
     """
     duration = TRAIN + TEST + 7
     data, cov = _series(duration)
-    model = _RandomWalk()
+    model = rw_model
     backtest_vectorized(
         random.PRNGKey(1),
         data,
@@ -320,11 +309,12 @@ def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
     train_data = data[:TRAIN]
     train_cov = cov[:TRAIN]
     full_cov = cov[: TRAIN + TEST]
-    fit = fit_svi(random.PRNGKey(2), _RandomWalk(), train_data, train_cov, num_steps=30)
-    from numpyro_forecast.functional import draw_posterior
-
-    posterior = draw_posterior(random.PRNGKey(3), as_autoguide(fit.guide), fit.params, 10)
-    preds = forecast(random.PRNGKey(4), _RandomWalk(), posterior, train_data, full_cov)
+    key_fit, key_draw = random.split(random.PRNGKey(2))
+    fresh_guide = AutoNormal(rw_model)
+    svi = SVI(rw_model, fresh_guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    state = svi.run(key_fit, 30, train_cov, train_data, progress_bar=False)
+    posterior = draw_posterior(key_draw, fresh_guide, state.params, 10)
+    preds = forecast(random.PRNGKey(4), rw_model, posterior, train_data, full_cov)
     assert preds.shape[0] == 10
     assert jnp.all(jnp.isfinite(preds))
 
@@ -333,7 +323,7 @@ def test_keep_predictions_shape() -> None:
     """``keep_predictions=True`` retains ``(windows, samples, test, obs)`` forecasts."""
     duration = TRAIN + TEST + 6
     data, cov = _series(duration)
-    model = _RandomWalk()
+    model = rw_model
     result = backtest_vectorized(
         random.PRNGKey(0),
         data,
@@ -380,7 +370,7 @@ def test_result_schema_and_dataframe_row_shape() -> None:
 
     duration = TRAIN + TEST + 8
     data, cov = _series(duration)
-    model = _RandomWalk()
+    model = rw_model
     result = backtest_vectorized(
         random.PRNGKey(0),
         data,
@@ -422,7 +412,7 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
     duration = 50
     data, cov = _series(duration)
     metrics_50 = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}
-    model_default = _RandomWalk()
+    model_default = rw_model
     vec_default = backtest_vectorized(
         random.PRNGKey(5),
         data,
@@ -436,7 +426,7 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
         num_samples=100,
         keep_predictions=True,
     )
-    model_50 = _RandomWalk()
+    model_50 = rw_model
     vec_50 = backtest_vectorized(
         random.PRNGKey(5),
         data,
@@ -472,7 +462,7 @@ def test_host_metric_raises_actionable_error() -> None:
     def host_mae(pred: Array, truth: Array) -> Array:
         return jnp.asarray(float(jnp.abs(pred - truth).mean()))
 
-    model = _RandomWalk()
+    model = rw_model
     with pytest.raises(VectorizedMetricError):
         backtest_vectorized(
             random.PRNGKey(0),

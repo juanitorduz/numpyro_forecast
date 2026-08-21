@@ -3,13 +3,15 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
 import pytest
-from conftest import RandomWalkModel, as_autoguide, empty_covariates, svi_guide_params
+from conftest import empty_covariates, rw_model, svi_guide_params
 from jax import random
+from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta
 
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.functional import draw_posterior, fit_svi
+from numpyro_forecast.functional import draw_posterior
 from numpyro_forecast.functional.posterior import _jitted_sample_posterior
 from numpyro_forecast.typing import Array
 
@@ -32,10 +34,10 @@ def test_draw_posterior_autodelta_tiled_sample_axis() -> None:
     # guide type, never shape inspection).
     data = jnp.zeros((20, 1))
     covariates = empty_covariates(20)
-    fit = fit_svi(
-        random.PRNGKey(0), RandomWalkModel(), data, covariates, guide=AutoDelta, num_steps=10
-    )
-    post = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 7)
+    guide = AutoDelta(rw_model)
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    result = svi.run(random.PRNGKey(0), 10, covariates, data, progress_bar=False)
+    post = draw_posterior(random.PRNGKey(1), guide, result.params, 7)
     assert post["sigma"].shape[0] == 7
     assert jnp.allclose(post["sigma"][0], post["sigma"][1])
 

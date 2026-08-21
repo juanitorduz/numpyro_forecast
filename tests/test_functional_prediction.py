@@ -6,15 +6,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import empty_covariates, rw_body, svi_guide_params
+from conftest import empty_covariates, rw_model, svi_guide_params
 from jax import random
+from numpyro.infer import MCMC, NUTS
 from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.functional import (
     draw_posterior,
     forecast,
-    forecasting_model,
     predict_in_sample,
 )
 from numpyro_forecast.functional._offload import _resolve_device
@@ -30,10 +30,27 @@ from numpyro_forecast.typing import Array, ForecastModel
 def _fit_data(
     t: int = 30, num_steps: int = 40
 ) -> tuple[ForecastModel, Array, AutoNormal, dict[str, Array]]:
-    model = forecasting_model(rw_body)
+    model = rw_model
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     guide, params = svi_guide_params(t, num_steps=num_steps)
     return model, data, guide, params
+
+
+def test_forecast_accepts_raw_mcmc_get_samples() -> None:
+    """Raw ``MCMC(kernel(model)).get_samples()`` forecasts, with no fit_mcmc wrapper.
+
+    Moved from ``test_kernels.py`` (roadmap §3): proves that plain NumPyro MCMC
+    output flows straight into :func:`forecast`, the compatibility invariant that
+    matters once the ``fit_mcmc``/``MCMCFit`` wrapper is gone.
+    """
+    data = jnp.zeros((15, 1))
+    covariates = empty_covariates(15)
+    mcmc = MCMC(NUTS(rw_model), num_warmup=10, num_samples=10, progress_bar=False)
+    mcmc.run(random.PRNGKey(0), covariates, data)
+    samples = mcmc.get_samples()
+    fc = forecast(random.PRNGKey(2), rw_model, samples, data, empty_covariates(18))
+    assert fc.shape == (10, 3, 1)
+    assert jnp.all(jnp.isfinite(fc))
 
 
 def test_forecast_shape_and_finite() -> None:

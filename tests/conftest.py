@@ -14,20 +14,14 @@ from jax import Array, random
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide, AutoNormal
 
-from numpyro_forecast.forecaster import (
-    Forecaster,
-    ForecastingModel,
-    HMCForecaster,
-    _BaseForecaster,
-)
 from numpyro_forecast.functional import (
     Horizon,
     MCMCFit,
     SVIFit,
+    draw_posterior,
     fit_mcmc,
     fit_svi,
     forecast,
-    forecasting_model,
     predict,
     predict_in_sample,
     time_series,
@@ -119,17 +113,6 @@ def sample_hierarchical() -> Array:
     return series[..., None]
 
 
-class RandomWalkModel(ForecastingModel):
-    """Local-level random walk with Normal observation noise (shared by tests)."""
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
-        level = jnp.cumsum(drift, axis=-2)
-        self.predict(dist.Normal(0.0, sigma), level)
-
-
 def empty_covariates(duration: int) -> Array:
     """Return a ``(duration, 0)`` covariate array (no exogenous features)."""
     return jnp.zeros((duration, 0))
@@ -143,20 +126,56 @@ def rw_body(h: Horizon, covariates: Array) -> None:
     predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
 
 
+def rw_model(covariates: Array, data: Array | None = None) -> None:
+    """Plain-function random-walk model on :func:`rw_body` (shared by tests).
+
+    The functional-only replacement for the former ``RandomWalkModel``
+    (:class:`~numpyro_forecast.forecaster.ForecastingModel` subclass): derives
+    the :class:`Horizon` from the shapes itself instead of relying on
+    :func:`~numpyro_forecast.functional.forecasting_model`, so every non-legacy
+    test drives it as a plain ``(covariates, data=None)`` callable.
+    """
+    rw_body(Horizon.from_data(covariates, data), covariates)
+
+
+def rw_model_factory() -> ForecastModel:
+    """A :data:`~numpyro_forecast.typing.ModelFactory` returning a fresh ``rw_model`` wrapper.
+
+    ``rw_model`` itself is a plain module-level function: every ``ModelFactory``
+    call would return the exact same object, unlike the former ``RandomWalkModel``
+    class (a fresh instance per call). Tests that rely on ``model_fn()`` producing
+    a distinct object each call (e.g. the ``reuse_model=False`` compile-cache
+    invariant in ``evaluate.backtest``) use this instead of ``lambda: rw_model``.
+    """
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        rw_model(covariates, data)
+
+    return model
+
+
 def svi_fit(t: int, num_steps: int = 40) -> SVIFit:
-    """Fit the shared random-walk body with SVI on a synthetic series (test helper)."""
-    model = forecasting_model(rw_body)
+    """Fit the shared random-walk body with SVI on a synthetic series (test helper).
+
+    Kept only for ``tests/test_functional_svi.py`` (deleted alongside ``fit_svi``
+    in a later task); every other caller fits with plain NumPyro instead (see
+    :func:`svi_guide_params`, :func:`posterior_factory`).
+    """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    return fit_svi(random.PRNGKey(1), model, data, empty_covariates(t), num_steps=num_steps)
+    return fit_svi(random.PRNGKey(1), rw_model, data, empty_covariates(t), num_steps=num_steps)
 
 
 def mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
-    """Fit the shared random-walk body with MCMC on a synthetic series (test helper)."""
-    model = forecasting_model(rw_body)
+    """Fit the shared random-walk body with MCMC on a synthetic series (test helper).
+
+    Kept only for ``tests/test_functional_mcmc.py`` (deleted alongside ``fit_mcmc``
+    in a later task); every other caller fits with plain NumPyro instead (see
+    :func:`nuts_samples`, :func:`posterior_factory`).
+    """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     return fit_mcmc(
         random.PRNGKey(1),
-        model,
+        rw_model,
         data,
         empty_covariates(t),
         num_warmup=num_warmup,
@@ -184,10 +203,9 @@ def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str,
     :func:`~numpyro_forecast.functional.posterior.draw_posterior` exercise the
     guide-based contract directly instead of the fit-wrapper machinery.
     """
-    model = forecasting_model(rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    guide = AutoNormal(model)
-    svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    guide = AutoNormal(rw_model)
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
     result = svi.run(random.PRNGKey(1), num_steps, empty_covariates(t), data, progress_bar=False)
     return guide, result.params
 
@@ -205,10 +223,9 @@ def nuts_samples(
     in between. ``chain_method="sequential"`` mirrors :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`'s
     default, so ``num_chains > 1`` runs on a single CPU device.
     """
-    model = forecasting_model(rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     mcmc = MCMC(
-        NUTS(model),
+        NUTS(rw_model),
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
@@ -306,36 +323,47 @@ def fast_mcmc() -> dict[str, int]:
 
 
 @pytest.fixture(params=["svi", "nuts"])
-def forecaster_factory(
+def posterior_factory(
     request: pytest.FixtureRequest,
     fast_svi: dict[str, int],
     fast_mcmc: dict[str, int],
-) -> Callable[..., _BaseForecaster]:
-    """Build a fitted forecaster with either SVI or NUTS, using fast settings.
+) -> Callable[[Array, ForecastModel, Array, Array], dict[str, "Array | np.ndarray"]]:
+    """Build a posterior-sample dict with either SVI or NUTS, using fast settings.
 
     Parametrized over both inference backends so a single test exercises a model
-    under ``Forecaster`` (SVI) and ``HMCForecaster`` (NUTS).
+    under a variational posterior (``AutoNormal`` + ``SVI.run`` + ``draw_posterior``)
+    and an MCMC posterior (raw ``MCMC(NUTS(model))`` + ``get_samples()``), with the
+    same ``(rng_key, model, data, covariates) -> posterior`` call signature. The
+    functional-only replacement for the former ``forecaster_factory`` (which built
+    an OOP ``Forecaster``/``HMCForecaster`` instead of a bare posterior dict).
     """
+    num_samples = fast_mcmc["num_samples"]
+
     if request.param == "svi":
 
-        def make_svi(
+        def draw_svi(
             rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-        ) -> _BaseForecaster:
-            return Forecaster(rng_key, model, data, covariates, num_steps=fast_svi["num_steps"])
+        ) -> dict[str, "Array | np.ndarray"]:
+            key_fit, key_draw = random.split(rng_key)
+            guide = AutoNormal(model)
+            svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+            state = svi.run(key_fit, fast_svi["num_steps"], covariates, data, progress_bar=False)
+            return draw_posterior(key_draw, guide, state.params, num_samples)
 
-        return make_svi
+        return draw_svi
 
-    def make_nuts(
+    def draw_nuts(
         rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-    ) -> _BaseForecaster:
-        return HMCForecaster(
-            rng_key,
-            model,
-            data,
-            covariates,
+    ) -> dict[str, "Array | np.ndarray"]:
+        mcmc = MCMC(
+            NUTS(model),
             num_warmup=fast_mcmc["num_warmup"],
-            num_samples=fast_mcmc["num_samples"],
+            num_samples=num_samples,
             num_chains=fast_mcmc["num_chains"],
+            chain_method="sequential",
+            progress_bar=False,
         )
+        mcmc.run(rng_key, covariates, data)
+        return mcmc.get_samples()
 
-    return make_nuts
+    return draw_nuts

@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray.testing as xarray_testing
-from conftest import empty_covariates, forecasting_model, nuts_samples, rw_body, svi_guide_params
+from conftest import empty_covariates, nuts_samples, rw_model, svi_guide_params
 from jax import Array, random
 
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
@@ -20,7 +20,7 @@ arviz_stats = pytest.importorskip("arviz_stats")
 
 def _model() -> ForecastModel:
     """The functional random-walk model matching conftest's posterior-drawing helpers."""
-    return forecasting_model(rw_body)
+    return rw_model
 
 
 def _series(n: int = 18) -> Array:

@@ -8,21 +8,18 @@ import numpyro.distributions as dist
 import pytest
 from jax import Array, random
 from numpyro.handlers import seed, trace
-from numpyro.infer import Predictive
+from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.functional import (
     Horizon,
     draw_posterior,
-    fit_mcmc,
-    fit_svi,
     forecast,
-    forecasting_model,
     markov_time_series,
     predict,
 )
-from tests.conftest import as_autoguide, empty_covariates
+from tests.conftest import empty_covariates
 
 PHI = 0.85
 DRIFT = 0.08
@@ -40,14 +37,9 @@ def _ar1_body(h: Horizon, covariates: Array) -> None:
     predict(h, dist.Normal(0.0, 0.05), z)
 
 
-def _ar1_model() -> ForecastingModel:
-    class AR1(ForecastingModel):
-        def model(self, zero_data: Array | None, covariates: Array) -> None:
-            init = jnp.zeros((1,))
-            z = self.markov_time_series("z", init, _ar1_transition)
-            self.predict(dist.Normal(0.0, 0.05), z)
-
-    return AR1()
+def _ar1_model(covariates: Array, data: Array | None = None) -> None:
+    """Plain-function AR(1) model on :func:`_ar1_body`."""
+    _ar1_body(Horizon.from_data(covariates, data), covariates)
 
 
 @pytest.mark.parametrize("fitter", ["svi", "mcmc"])
@@ -57,25 +49,26 @@ def test_ar1_forecast_matches_closed_form(fitter: str, rng_key: Array) -> None:
     duration = t_obs + future
     cov = empty_covariates(duration)
     data = jnp.zeros((t_obs, 1))
-    model = _ar1_model()
     if fitter == "svi":
-        fit = fit_svi(rng_key, model, data, cov[:t_obs], num_steps=400)
-        post = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 200)
+        key_fit, key_draw = random.split(rng_key)
+        guide = AutoNormal(_ar1_model)
+        svi = SVI(_ar1_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        state = svi.run(key_fit, 400, cov[:t_obs], data, progress_bar=False)
+        post = draw_posterior(key_draw, guide, state.params, 200)
     else:
         # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(),
         # with no draw_posterior step (that's guide-based only); fit for exactly
         # the wanted draw count instead of thinning/resampling after the fact.
-        fit = fit_mcmc(
-            rng_key,
-            model,
-            data,
-            cov[:t_obs],
+        mcmc = MCMC(
+            NUTS(_ar1_model),
             num_warmup=100,
             num_samples=200,
+            progress_bar=False,
         )
-        post = fit.samples
+        mcmc.run(rng_key, cov[:t_obs], data)
+        post = mcmc.get_samples()
     z_last = float(post["z"][:, -1, 0].mean())
-    preds = forecast(random.PRNGKey(2), model, post, data, cov, batch_size=50)
+    preds = forecast(random.PRNGKey(2), _ar1_model, post, data, cov, batch_size=50)
     mean_fc = preds.mean(axis=0)[:, 0]
     closed = jnp.array([PHI ** (k + 1) * z_last for k in range(future)])
     assert jnp.allclose(mean_fc, closed, rtol=0.15, atol=0.15)
@@ -89,8 +82,7 @@ def test_carry_threading_extreme_state() -> None:
     data = jnp.zeros((t_obs, 1))
     z_last = 5.0
     posterior = {"z": jnp.full((3, t_obs, 1), z_last)}
-    model = _ar1_model()
-    pred = Predictive(model, posterior_samples=posterior, return_sites=["z_future"])
+    pred = Predictive(_ar1_model, posterior_samples=posterior, return_sites=["z_future"])
     zf = pred(random.PRNGKey(0), cov, data)["z_future"]
     mean_step0 = float(zf[:, 0, 0].mean())
     assert mean_step0 > 3.0
@@ -180,12 +172,14 @@ def test_xs_threading() -> None:
     assert tr["z"]["value"].shape[0] == 8
 
 
-def test_functional_ar1_via_forecasting_model() -> None:
-    """The functional wrapper composes with :func:`forecasting_model`."""
-    model = forecasting_model(_ar1_body)
+def test_ar1_model_end_to_end_shape() -> None:
+    """The plain-function AR(1) model fits and forecasts with the expected shape."""
     data = jnp.zeros((10, 1))
     cov = empty_covariates(14)
-    fit = fit_svi(random.PRNGKey(0), model, data, cov[:10], num_steps=50)
-    post = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 20)
-    preds = forecast(random.PRNGKey(2), model, post, data, cov)
+    key_fit, key_draw = random.split(random.PRNGKey(0))
+    guide = AutoNormal(_ar1_model)
+    svi = SVI(_ar1_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    state = svi.run(key_fit, 50, cov[:10], data, progress_bar=False)
+    post = draw_posterior(key_draw, guide, state.params, 20)
+    preds = forecast(random.PRNGKey(2), _ar1_model, post, data, cov)
     assert preds.shape == (20, 4, 1)

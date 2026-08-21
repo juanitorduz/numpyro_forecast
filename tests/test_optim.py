@@ -1,18 +1,37 @@
-"""Tests for optimizer resolution (roadmap §1)."""
+"""Tests for optimizer resolution (roadmap §1).
+
+This file is deleted alongside ``fit_svi`` in a later task, so ``RandomWalkModel``
+(formerly shared via ``conftest.py``, which is now functional-only) is kept here
+as a local, file-scoped copy rather than threaded through the shared fixture file.
+"""
 
 import subprocess
 import sys
 
 import jax.numpy as jnp
 import numpy as np
+import numpyro
+import numpyro.distributions as dist
 import optax
 import pytest
-from conftest import RandomWalkModel, empty_covariates
-from jax import random
+from conftest import empty_covariates
+from jax import Array, random
 from numpyro.optim import Adam, _NumPyroOptim
 
 from numpyro_forecast.exceptions import OptimizerResolutionError
+from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.functional import fit_svi, resolve_optimizer
+
+
+class RandomWalkModel(ForecastingModel):
+    """Local-level random walk with Normal observation noise (local test copy)."""
+
+    def model(self, zero_data: Array | None, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
+        level = jnp.cumsum(drift, axis=-2)
+        self.predict(dist.Normal(0.0, sigma), level)
 
 
 def test_resolve_none_returns_adam() -> None:

@@ -1,4 +1,9 @@
-"""Tests for guide resolution and guide-flavored posterior draws (roadmap §2)."""
+"""Tests for guide resolution and guide-flavored posterior draws (roadmap §2).
+
+This file is deleted alongside ``fit_svi`` in a later task, so ``RandomWalkModel``
+(formerly shared via ``conftest.py``, which is now functional-only) is kept here
+as a local, file-scoped copy rather than threaded through the shared fixture file.
+"""
 
 import functools
 
@@ -6,8 +11,8 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import RandomWalkModel, as_autoguide, empty_covariates
-from jax import random
+from conftest import as_autoguide, empty_covariates
+from jax import Array, random
 from numpyro.handlers import seed, trace
 from numpyro.infer import Predictive
 from numpyro.infer.autoguide import (
@@ -18,12 +23,24 @@ from numpyro.infer.autoguide import (
 )
 
 from numpyro_forecast.exceptions import GuideResolutionError
+from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.functional import (
     draw_posterior,
     fit_svi,
     forecast,
     resolve_guide,
 )
+
+
+class RandomWalkModel(ForecastingModel):
+    """Local-level random walk with Normal observation noise (local test copy)."""
+
+    def model(self, zero_data: Array | None, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
+        level = jnp.cumsum(drift, axis=-2)
+        self.predict(dist.Normal(0.0, sigma), level)
 
 
 def _handwritten_guide(covariates, data=None) -> None:

@@ -1,19 +1,20 @@
 """Tests for the functional model-building primitives (``functional.models``)."""
 
+from collections.abc import Callable
+
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import RandomWalkModel, empty_covariates, rw_body
+from conftest import empty_covariates, rw_body, rw_model
 from jax import random
 from numpyro.handlers import seed, trace
+from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.functional import (
     Horizon,
-    fit_mcmc,
     forecast,
-    forecasting_model,
     predict,
     predict_glm,
     time_series,
@@ -131,35 +132,30 @@ def test_predict_forecast_requires_data() -> None:
         ).get_trace()
 
 
-def _assert_traces_equal(
-    model_a: ForecastModel, model_b: ForecastModel, covariates: Array, data: Array
-) -> None:
-    key = random.PRNGKey(0)
-    tr_a = trace(seed(model_a, key)).get_trace(covariates, data)
-    tr_b = trace(seed(model_b, key)).get_trace(covariates, data)
-    assert set(tr_a) == set(tr_b)
-    for name in tr_a:
-        if tr_a[name].get("value") is not None:
-            assert jnp.array_equal(tr_a[name]["value"], tr_b[name]["value"]), name
-
-
-def test_forecasting_model_matches_oop_training_trace() -> None:
-    func_model = forecasting_model(rw_body)
+def test_rw_model_training_trace() -> None:
+    """The plain-function ``rw_model`` produces the expected training-time trace."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (20, 1)), axis=-2)
-    _assert_traces_equal(func_model, RandomWalkModel(), empty_covariates(20), data)
+    tr = trace(seed(rw_model, random.PRNGKey(0))).get_trace(empty_covariates(20), data)
+    assert tr["drift"]["value"].shape == (20, 1)
+    assert "obs" in tr
+    assert "drift_future" not in tr
+    assert "forecast" not in tr
 
 
-def test_forecasting_model_matches_oop_forecast_trace() -> None:
-    func_model = forecasting_model(rw_body)
+def test_rw_model_forecast_trace() -> None:
+    """The plain-function ``rw_model`` produces the expected forecast-horizon trace."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (20, 1)), axis=-2)
-    _assert_traces_equal(func_model, RandomWalkModel(), empty_covariates(25), data)
+    tr = trace(seed(rw_model, random.PRNGKey(0))).get_trace(empty_covariates(25), data)
+    # In-sample site keeps its training shape; the horizon uses a separate site.
+    assert tr["drift"]["value"].shape == (20, 1)
+    assert tr["drift_future"]["value"].shape == (5, 1)
+    assert tr["forecast"]["value"].shape == (5, 1)
 
 
-def test_forecasting_model_prior_sampling() -> None:
+def test_rw_model_prior_sampling() -> None:
     # data=None: pure prior sampling. The whole horizon is in-sample, so "obs" is
     # sampled (not observed) and there are no forecast-horizon sites.
-    func_model = forecasting_model(rw_body)
-    tr = trace(seed(func_model, random.PRNGKey(0))).get_trace(empty_covariates(15))
+    tr = trace(seed(rw_model, random.PRNGKey(0))).get_trace(empty_covariates(15))
     assert tr["drift"]["value"].shape == (15, 1)
     assert tr["obs"]["is_observed"] is False
     assert "drift_future" not in tr
@@ -167,6 +163,15 @@ def test_forecasting_model_prior_sampling() -> None:
 
 
 # --- P13: predict_glm + predict refactor (I9) --------------------------------
+
+
+def _as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
+    """Wrap a ``(Horizon, covariates)`` body as a plain ``(covariates, data=None)`` model."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        body(Horizon.from_data(covariates, data), covariates)
+
+    return model
 
 
 def _predict_glm_body(h: Horizon, covariates: Array) -> None:
@@ -198,9 +203,8 @@ def test_predict_predict_glm_trace_equivalence(future: int) -> None:
     """Invariant I9: predict == predict_glm o shift_loc (identical traces)."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (24, 1)), axis=-2)
     covariates = empty_covariates(24 + future)
-    model_predict = forecasting_model(rw_body)
-    model_glm = forecasting_model(_predict_glm_body)
-    _traces_equal(model_predict, model_glm, covariates, data)
+    model_glm = _as_model(_predict_glm_body)
+    _traces_equal(rw_model, model_glm, covariates, data)
 
 
 def test_predict_glm_rejects_float_data_for_discrete_obs() -> None:
@@ -208,7 +212,7 @@ def test_predict_glm_rejects_float_data_for_discrete_obs() -> None:
         rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
         predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
-    model = forecasting_model(poisson_body)
+    model = _as_model(poisson_body)
     float_data = jnp.abs(random.normal(random.PRNGKey(0), (12, 1)))
     with pytest.raises(ValueError, match="discrete support"):
         trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
@@ -219,7 +223,7 @@ def test_predict_glm_accepts_integer_data_for_discrete_obs() -> None:
         rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
         predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
-    model = forecasting_model(poisson_body)
+    model = _as_model(poisson_body)
     int_data = jnp.asarray(random.poisson(random.PRNGKey(0), 3.0, (12, 1)), dtype=jnp.int32)
     tr = trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), int_data)
     assert "obs" in tr
@@ -233,20 +237,19 @@ def test_poisson_local_level_end_to_end() -> None:
         log_rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
         predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
 
-    model = forecasting_model(poisson_body)
+    model = _as_model(poisson_body)
     true_rate = 5.0
     data = jnp.asarray(random.poisson(random.PRNGKey(0), true_rate, (40, 1)), dtype=jnp.int32)
-    fit = fit_mcmc(
-        random.PRNGKey(1),
-        model,
-        data,
-        empty_covariates(40),
+    mcmc = MCMC(
+        NUTS(model),
         num_warmup=200,
         num_samples=200,
+        progress_bar=False,
     )
+    mcmc.run(random.PRNGKey(1), empty_covariates(40), data)
     # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
     # no draw_posterior step (that's guide-based only).
-    post = fit.samples
+    post = mcmc.get_samples()
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(46))
     assert fc.shape == (200, 6, 1)
     assert bool(jnp.all(fc >= 0.0))

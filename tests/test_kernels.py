@@ -1,20 +1,38 @@
-"""Tests for kernel resolution, run-config validation, and fit_mcmc (roadmap §3)."""
+"""Tests for kernel resolution, run-config validation, and fit_mcmc (roadmap §3).
+
+This file is deleted alongside ``fit_mcmc`` in a later task, so ``RandomWalkModel``
+(formerly shared via ``conftest.py``, which is now functional-only) is kept here
+as a local, file-scoped copy rather than threaded through the shared fixture file.
+"""
 
 import re
 
 import jax.numpy as jnp
+import numpyro
+import numpyro.distributions as dist
 import pytest
-from conftest import RandomWalkModel, empty_covariates
-from jax import random
+from conftest import empty_covariates
+from jax import Array, random
 from numpyro.infer import AIES, ESS, HMC, HMCECS, NUTS, SA, BarkerMH, HMCGibbs
 
 from numpyro_forecast.exceptions import KernelConfigError, KernelResolutionError
+from numpyro_forecast.forecaster import ForecastingModel
 from numpyro_forecast.functional import (
     MCMCFit,
     fit_mcmc,
-    forecast,
     resolve_kernel,
 )
+
+
+class RandomWalkModel(ForecastingModel):
+    """Local-level random walk with Normal observation noise (local test copy)."""
+
+    def model(self, zero_data: Array | None, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
+        level = jnp.cumsum(drift, axis=-2)
+        self.predict(dist.Normal(0.0, sigma), level)
 
 
 def test_resolve_none_returns_nuts() -> None:
@@ -81,7 +99,7 @@ def test_ensemble_kernel_requires_multichain_vectorized(
 
 
 @pytest.mark.parametrize("kernel", [NUTS, HMC, BarkerMH, SA])
-def test_numpyro_kernels_fit_and_forecast(kernel) -> None:
+def test_numpyro_kernels_fit(kernel) -> None:
     data = jnp.zeros((15, 1))
     covariates = empty_covariates(15)
     fit = fit_mcmc(
@@ -95,10 +113,7 @@ def test_numpyro_kernels_fit_and_forecast(kernel) -> None:
     )
     assert isinstance(fit, MCMCFit)
     assert fit.num_chains == 1
-    samples = fit.samples
-    fc = forecast(random.PRNGKey(2), RandomWalkModel(), samples, data, empty_covariates(18))
-    assert fc.shape == (10, 3, 1)
-    assert jnp.all(jnp.isfinite(fc))
+    assert "drift_scale" in fit.samples
 
 
 @pytest.mark.parametrize("kernel_cls", [AIES, ESS])

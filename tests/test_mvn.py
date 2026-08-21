@@ -4,15 +4,14 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import as_autoguide
 from jax import Array, random
+from numpyro.infer import SVI, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.exceptions import MVNLayoutError
 from numpyro_forecast.functional import (
     Horizon,
     draw_posterior,
-    fit_svi,
-    forecasting_model,
     predict,
 )
 from numpyro_forecast.surgery import (
@@ -123,9 +122,10 @@ def test_mvn_slice_time_marginal_block() -> None:
 
 
 def test_gp_noise_end_to_end() -> None:
-    """GP-style correlated noise fits through ``fit_svi``."""
+    """GP-style correlated noise fits through plain NumPyro SVI."""
 
-    def gp_body(h: Horizon, covariates: Array) -> None:
+    def gp_model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
         time = h.duration
         sigma = numpyro.sample("sigma", dist.HalfNormal(1.0))
         rho = numpyro.sample("rho", dist.Beta(2.0, 2.0))
@@ -134,11 +134,13 @@ def test_gp_noise_end_to_end() -> None:
         level = numpyro.sample("level", dist.Normal(0.0, 1.0))
         predict(h, noise, jnp.asarray(level) + jnp.zeros((time, 1)))
 
-    model = forecasting_model(gp_body)
     data = random.normal(random.PRNGKey(0), (12, 1))
     cov = empty_covariates(16)
-    fit = fit_svi(random.PRNGKey(1), model, data, cov[:12], num_steps=150)
-    post = draw_posterior(random.PRNGKey(2), as_autoguide(fit.guide), fit.params, 30)
+    key_fit, key_draw = random.split(random.PRNGKey(1))
+    guide = AutoNormal(gp_model)
+    svi = SVI(gp_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    state = svi.run(key_fit, 150, cov[:12], data, progress_bar=False)
+    post = draw_posterior(key_draw, guide, state.params, 30)
     assert set(post) >= {"sigma", "rho", "level"}
     assert jnp.all(jnp.isfinite(post["sigma"]))
 

@@ -1,4 +1,11 @@
-"""Tests for the forecasting base class and SVI/MCMC forecasters."""
+"""Tests for the forecasting base class and SVI/MCMC forecasters.
+
+This whole file is deleted alongside ``ForecastingModel``/``Forecaster``/
+``HMCForecaster`` in a later task, so ``RandomWalkModel`` and
+``forecaster_factory`` (both formerly shared via ``conftest.py``, which is now
+functional-only) are kept here as local, file-scoped copies rather than
+threaded through the shared fixture file.
+"""
 
 from collections.abc import Callable
 
@@ -8,7 +15,7 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import RandomWalkModel, empty_covariates
+from conftest import empty_covariates
 from jax import Array, random
 from numpyro.handlers import seed, trace
 
@@ -18,6 +25,55 @@ from numpyro_forecast.forecaster import (
     HMCForecaster,
     _BaseForecaster,
 )
+from numpyro_forecast.typing import ForecastModel
+
+
+class RandomWalkModel(ForecastingModel):
+    """Local-level random walk with Normal observation noise (local test copy)."""
+
+    def model(self, zero_data: Array | None, covariates: Array) -> None:
+        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
+        level = jnp.cumsum(drift, axis=-2)
+        self.predict(dist.Normal(0.0, sigma), level)
+
+
+@pytest.fixture(params=["svi", "nuts"])
+def forecaster_factory(
+    request: pytest.FixtureRequest,
+    fast_svi: dict[str, int],
+    fast_mcmc: dict[str, int],
+) -> Callable[..., _BaseForecaster]:
+    """Build a fitted forecaster with either SVI or NUTS, using fast settings.
+
+    Parametrized over both inference backends so a single test exercises a model
+    under ``Forecaster`` (SVI) and ``HMCForecaster`` (NUTS). Local copy of the
+    fixture formerly shared via ``conftest.py``.
+    """
+    if request.param == "svi":
+
+        def make_svi(
+            rng_key: Array, model: ForecastModel, data: Array, covariates: Array
+        ) -> _BaseForecaster:
+            return Forecaster(rng_key, model, data, covariates, num_steps=fast_svi["num_steps"])
+
+        return make_svi
+
+    def make_nuts(
+        rng_key: Array, model: ForecastModel, data: Array, covariates: Array
+    ) -> _BaseForecaster:
+        return HMCForecaster(
+            rng_key,
+            model,
+            data,
+            covariates,
+            num_warmup=fast_mcmc["num_warmup"],
+            num_samples=fast_mcmc["num_samples"],
+            num_chains=fast_mcmc["num_chains"],
+        )
+
+    return make_nuts
 
 
 def test_predict_sites_training(rng_key: Array) -> None:
