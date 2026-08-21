@@ -192,18 +192,29 @@ def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str,
     return guide, result.params
 
 
-def nuts_samples(t: int, num_warmup: int = 20, num_samples: int = 20) -> dict[str, Array]:
+def nuts_samples(
+    t: int, num_warmup: int = 20, num_samples: int = 20, num_chains: int = 1
+) -> dict[str, Array]:
     """Fit the shared random-walk body with raw NumPyro NUTS (test helper).
 
     Deliberately built on plain NumPyro rather than :func:`fit_mcmc`/``MCMCFit``
-    (scheduled for removal), returning ``mcmc.get_samples()`` directly: this is
-    the posterior dict MCMC users pass straight to
-    :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``,
-    with no ``draw_posterior`` step in between.
+    (scheduled for removal), returning ``mcmc.get_samples()`` directly (flattened,
+    ``group_by_chain=False``): this is the posterior dict MCMC users pass straight
+    to :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``/
+    :func:`~numpyro_forecast.convert.to_datatree`, with no ``draw_posterior`` step
+    in between. ``chain_method="sequential"`` mirrors :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`'s
+    default, so ``num_chains > 1`` runs on a single CPU device.
     """
     model = forecasting_model(rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    mcmc = MCMC(NUTS(model), num_warmup=num_warmup, num_samples=num_samples, progress_bar=False)
+    mcmc = MCMC(
+        NUTS(model),
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=num_chains,
+        chain_method="sequential",
+        progress_bar=False,
+    )
     mcmc.run(random.PRNGKey(1), empty_covariates(t), data)
     return mcmc.get_samples()
 
