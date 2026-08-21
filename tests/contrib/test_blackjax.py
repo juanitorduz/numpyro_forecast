@@ -531,18 +531,26 @@ _MULTIPATH_MAXITER = 50
 
 @pytest.fixture(scope="module")
 def multipathfinder_fit() -> MultiPathfinderFit:
-    """A cheap multipath fit shared by tests that only inspect its outputs."""
+    """A cheap multipath fit shared by tests that only inspect its outputs.
+
+    Only 2 paths and 50 ELBO samples reliably push ``pareto_k`` above the 0.7
+    warning threshold on this toy posterior; that ``UserWarning`` is expected
+    here (a byproduct of the cheap settings, not something this fixture tests)
+    and is captured so it does not leak into the test-output summary.
+    """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
     covariates = _empty_covariates(_MULTIPATH_T)
-    return fit_multipathfinder(
-        random.PRNGKey(1),
-        rw_model,
-        data,
-        covariates,
-        num_paths=_MULTIPATH_NUM_PATHS,
-        num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
-        maxiter=_MULTIPATH_MAXITER,
-    )
+    with pytest.warns(UserWarning, match="pareto"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
+    return fit
 
 
 def test_multipathfinder_api_canary() -> None:
@@ -664,6 +672,12 @@ def test_multipathfinder_fit_pickle_round_trip(multipathfinder_fit: MultiPathfin
 
 
 def test_fit_multipathfinder_knob_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
+    """maxcor/maxls/gtol/ftol/maxiter reach ``multi_approximate`` (pareto_k warning expected).
+
+    The real ``multi_approximate``/``psis_weights`` still run behind the spy, so
+    the same cheap-settings ``pareto_k > 0.7`` warning as the module fixture
+    fires here too; it is captured rather than left to leak into test output.
+    """
     import blackjax.vi.multipathfinder as multipathfinder_module
 
     captured: dict[str, object] = {}
@@ -680,19 +694,20 @@ def test_fit_multipathfinder_knob_passthrough(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(multipathfinder_module, "multi_approximate", spy_multi_approximate)
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
-    fit_multipathfinder(
-        random.PRNGKey(1),
-        rw_model,
-        data,
-        _empty_covariates(_MULTIPATH_T),
-        num_paths=_MULTIPATH_NUM_PATHS,
-        num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
-        maxiter=41,
-        maxcor=6,
-        maxls=222,
-        gtol=1e-6,
-        ftol=1e-4,
-    )
+    with pytest.warns(UserWarning, match="pareto"):
+        fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=41,
+            maxcor=6,
+            maxls=222,
+            gtol=1e-6,
+            ftol=1e-4,
+        )
     assert captured == {
         "maxcor": 6,
         "maxls": 222,
@@ -758,18 +773,21 @@ def test_fit_multipathfinder_num_paths_one() -> None:
 
     No equality with the single-path :func:`fit_pathfinder` API is asserted: the
     PRNG streams differ by construction (per-path init keys vs. a single init
-    key), so their draws are not expected to match.
+    key), so their draws are not expected to match. A single path with only 50
+    ELBO samples reliably trips the ``pareto_k > 0.7`` warning, so it is
+    captured here rather than left to leak into test output.
     """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
-    fit = fit_multipathfinder(
-        random.PRNGKey(1),
-        rw_model,
-        data,
-        _empty_covariates(_MULTIPATH_T),
-        num_paths=1,
-        num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
-        maxiter=_MULTIPATH_MAXITER,
-    )
+    with pytest.warns(UserWarning, match="pareto"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=1,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
     assert fit.log_weights.shape == (_MULTIPATH_NUM_ELBO_SAMPLES,)
     post = multipathfinder_samples(random.PRNGKey(2), fit, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
@@ -793,18 +811,21 @@ def test_fit_multipathfinder_high_dim_finite_elbos() -> None:
 
     Multipath analogue of ``test_fit_pathfinder_high_dim_finite_elbo``: end-to-end
     proof the stable-bfgs patch holds on the multipath route too (upstream floors
-    every ELBO at ``-inf`` beyond a few hundred parameters).
+    every ELBO at ``-inf`` beyond a few hundred parameters). The high-dimensional
+    posterior reliably pushes ``pareto_k`` above the 0.7 warning threshold at
+    these cheap settings, so that incidental warning is captured here.
     """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (300, 1)), axis=-2)
-    fit = fit_multipathfinder(
-        random.PRNGKey(1),
-        reparam_model,
-        data,
-        _empty_covariates(300),
-        num_paths=_MULTIPATH_NUM_PATHS,
-        num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
-        maxiter=_MULTIPATH_MAXITER,
-    )
+    with pytest.warns(UserWarning, match="pareto"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            reparam_model,
+            data,
+            _empty_covariates(300),
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
     assert bool(jnp.all(jnp.isfinite(jnp.asarray(fit.elbos))))
 
 
