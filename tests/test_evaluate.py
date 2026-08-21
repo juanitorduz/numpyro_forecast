@@ -12,7 +12,6 @@ from jax import Array, random
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
-    _block_object,
     _expanding_windows,
     _iter_windows,
     _resolve_window_type,
@@ -97,47 +96,6 @@ def _spy_closure(calls: list[dict[str, Any]]) -> ForecastFn:
 def _never_called(*_args: object, **_kwargs: object) -> Array:
     """A closure that fails the test if ``backtest`` ever invokes it."""
     pytest.fail("this closure should never have been called")
-
-
-class _SlotShim:
-    """A __slots__ object (no __dict__) to exercise the _block_object no-op."""
-
-    __slots__ = ("value",)
-
-    def __init__(self, value: Array) -> None:
-        self.value = value
-
-
-def test_block_object_handles_frozen_dataclass_and_shim() -> None:
-    # Regular object with __dict__: returned unchanged, arrays materialized.
-    class _Holder:
-        def __init__(self) -> None:
-            self.arr = jnp.ones(4)
-            self.name = "holder"
-
-    holder = _Holder()
-    assert _block_object(holder) is holder
-    assert bool(jnp.all(holder.arr == 1.0))
-
-    # __slots__ object without __dict__: no-op, returned unchanged.
-    shim = _SlotShim(jnp.zeros(2))
-    assert _block_object(shim) is shim
-
-
-def test_block_object_reaches_nested_arrays() -> None:
-    """Arrays nested inside containers under an attribute are blocked, not just top-level."""
-
-    class _Nested:
-        def __init__(self) -> None:
-            self.inner = {"samples": [jnp.arange(3.0), jnp.ones(2)]}
-            self.pair = (jnp.zeros(1), {"deep": jnp.full(2, 5.0)})
-
-    obj = _Nested()
-    # block_until_ready recurses the __dict__ pytree; the call succeeds and leaf
-    # values survive the walk unchanged.
-    assert _block_object(obj) is obj
-    assert bool(jnp.all(obj.inner["samples"][0] == jnp.arange(3.0)))
-    assert bool(jnp.all(obj.pair[1]["deep"] == 5.0))
 
 
 def test_timed_returns_result_and_nonnegative_time() -> None:

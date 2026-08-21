@@ -5,7 +5,7 @@ were moved here when that module was removed in favour of defining models direct
 in the example notebooks (``docs/examples/``). They are retained as a regression target
 for :mod:`tests.test_examples`, now written as plain functional models (a pure
 ``(covariates, data=None)`` callable opening with ``Horizon.from_data``) rather than
-:class:`~numpyro_forecast.forecaster.ForecastingModel` subclasses.
+subclasses of the former OOP ``ForecastingModel`` base class.
 """
 
 from typing import cast

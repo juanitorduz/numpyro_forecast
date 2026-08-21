@@ -377,42 +377,12 @@ class BacktestResult:
         return asdict(self)
 
 
-def _block_object[T](obj: T) -> T:
-    """Block until every JAX array transitively reachable from ``obj`` is ready.
-
-    JAX arrays materialize asynchronously, so timing a call that returns a
-    container (e.g. a fitted forecaster) without blocking would report only the
-    dispatch time. This passes ``vars(obj)`` (the instance ``__dict__``) to
-    :func:`jax.block_until_ready`, which recurses through the dict as a pytree:
-    array leaves nested inside lists/tuples/dicts/registered dataclasses are all
-    awaited, not just top-level attributes. Objects without a ``__dict__``
-    (``__slots__``-only or ``vars``-less) are a safe no-op.
-
-    Parameters
-    ----------
-    obj
-        Any object; its array-valued attributes are awaited.
-
-    Returns
-    -------
-    T
-        ``obj`` unchanged (returned so it can wrap a call inline).
-    """
-    try:
-        attrs = vars(obj)
-    except TypeError:
-        return obj
-    jax.block_until_ready(attrs)
-    return obj
-
-
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
     """Run ``fn``, block until its result is ready, and return ``(result, seconds)``.
 
     The ``jax.block_until_ready`` call folds asynchronous compute time into the
     measurement so reported walltimes reflect real work rather than dispatch
-    time; array results are awaited directly, containers should be pre-wrapped
-    with :func:`_block_object`.
+    time; array results are awaited directly.
     """
     start = perf_counter()
     result = fn()
@@ -600,12 +570,12 @@ def _iter_windows(
 def _slice_window(
     data: Array, covariates: Array, t0: int, t1: int, t2: int
 ) -> tuple[Array, Array, Array, Array]:
-    """Slice ``(train_data, train_covariates, test_covariates, truth)`` for one window."""
+    """Slice ``(train_data, train_covariates, full_covariates, truth)`` for one window."""
     train_data = data[..., t0:t1, :]
     train_covariates = covariates[..., t0:t1, :]
-    test_covariates = covariates[..., t0:t2, :]
+    full_covariates = covariates[..., t0:t2, :]
     truth = data[..., t1:t2, :]
-    return train_data, train_covariates, test_covariates, truth
+    return train_data, train_covariates, full_covariates, truth
 
 
 def _eval_train_window(
@@ -658,7 +628,7 @@ def _run_window(
     keep_predictions: bool,
 ) -> BacktestResult:
     """Fit, forecast, and score a single backtest window into a :class:`BacktestResult`."""
-    train_data, train_covariates, test_covariates, truth = _slice_window(
+    train_data, train_covariates, full_covariates, truth = _slice_window(
         data, covariates, t0, t1, t2
     )
     if per_window_metrics is not None:
@@ -673,7 +643,7 @@ def _run_window(
                 model,
                 train_data,
                 train_covariates,
-                test_covariates,
+                full_covariates,
                 num_samples,
                 batch_size=batch_size,
             ),
@@ -750,11 +720,11 @@ def backtest(
     :data:`~numpyro_forecast.typing.ForecastFn`)::
 
         forecast_fn(
-            rng_key, model, train_data, train_covariates, test_covariates,
+            rng_key, model, train_data, train_covariates, full_covariates,
             num_samples, *, batch_size=None,
         ) -> draws  # shape (num_samples, *batch, t2 - t1, obs)
 
-    where ``test_covariates`` spans the *full* window, ``covariates[..., t0:t2, :]``
+    where ``full_covariates`` spans the *full* window, ``covariates[..., t0:t2, :]``
     (train followed by test), matching what the model needs to run the forecast
     horizon. The optional ``in_sample_fn`` has the call signature (see
     :data:`~numpyro_forecast.typing.InSampleFn`)::
@@ -773,6 +743,7 @@ def backtest(
     + ``Predictive``)::
 
         import numpyro
+        from jax import random
         from numpyro.infer import SVI, Predictive, Trace_ELBO
         from numpyro.infer.autoguide import AutoNormal
 
@@ -782,7 +753,7 @@ def backtest(
             model,
             train_data,
             train_covariates,
-            test_covariates,
+            full_covariates,
             num_samples,
             *,
             batch_size=None,
@@ -793,7 +764,7 @@ def backtest(
             state = svi.run(key_fit, 1_000, train_covariates, train_data, progress_bar=False)
             posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
             predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
-            return predictive(key_pred, test_covariates, train_data)["forecast"]
+            return predictive(key_pred, full_covariates, train_data)["forecast"]
 
     Parameters
     ----------

@@ -12,7 +12,7 @@ import numpyro.distributions as dist
 import pytest
 from jax import Array, random
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoGuide, AutoNormal
+from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.functional import (
     Horizon,
@@ -126,7 +126,7 @@ def rw_model(covariates: Array, data: Array | None = None) -> None:
     """Plain-function random-walk model on :func:`rw_body` (shared by tests).
 
     The functional-only replacement for the former ``RandomWalkModel``
-    (:class:`~numpyro_forecast.forecaster.ForecastingModel` subclass): derives
+    (a subclass of the former OOP ``ForecastingModel`` base class): derives
     the :class:`Horizon` from the shapes itself via ``Horizon.from_data``, so
     every non-legacy test drives it as a plain ``(covariates, data=None)``
     callable.
@@ -148,19 +148,6 @@ def rw_model_factory() -> ForecastModel:
         rw_model(covariates, data)
 
     return model
-
-
-def as_autoguide(guide: "AutoGuide | Callable[..., None]") -> AutoGuide:
-    """Narrow a resolved guide to ``AutoGuide`` for ty (test helper).
-
-    :func:`~numpyro_forecast.evaluate.backtest_vectorized`'s ``guide`` parameter is
-    typed ``AutoGuide | Callable[..., None]`` (hand-written guides are supported at
-    runtime); tests that know the guide is a resolved ``AutoGuide`` use this to
-    narrow it before passing it to the guide-only
-    :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
-    """
-    assert isinstance(guide, AutoGuide)
-    return guide
 
 
 def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str, Array]]:

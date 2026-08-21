@@ -74,11 +74,14 @@ reference:
     desc: Public type contracts.
     contents:
       - typing.ForecastModel
+      - typing.ForecastFn
+      - typing.InSampleFn
 
   - title: "Functional core: model primitives"
     desc: Pure functional primitives for the train/forecast split.
     contents:
       - functional.models.Horizon
+      - functional.models.Transition
       - functional.models.time_series
       - functional.models.markov_time_series
       - functional.models.predict

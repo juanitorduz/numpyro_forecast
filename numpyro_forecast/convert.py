@@ -159,10 +159,13 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     -----
     NumPyro's flattened ``mcmc.get_samples()`` (the default,
     ``group_by_chain=False``) concatenates chains in a fixed order, so this
-    plain reshape recovers the exact per-chain layout. When that ordering
-    guarantee is a concern, draw with ``mcmc.get_samples(group_by_chain=True)``
-    instead: its leaves already carry explicit ``(chain, draw, ...)`` axes, so
-    no reshape is needed for them.
+    plain reshape recovers the exact per-chain layout. ``to_datatree`` (and
+    hence this helper) only accepts that flattened, chain-major layout;
+    ``mcmc.get_samples(group_by_chain=True)`` output, whose leaves already
+    carry explicit ``(chain, draw, ...)`` axes, is not a valid input here. If
+    the flattened ordering guarantee is a concern, draw with
+    ``group_by_chain=True`` upstream only to disambiguate chain order for
+    yourself, then flatten back before passing samples to ``to_datatree``.
     """
     reshaped = np.asarray(array)
     n = reshaped.shape[0]
@@ -359,12 +362,14 @@ def to_datatree(
     attrs previously stamped on the ``posterior`` group are gone too, since a
     fit type is no longer knowable from a plain posterior dict; use
     ``num_chains`` (``1`` vs. ``> 1``) to tell the two apart if needed.
-    ``rng_key`` is split internally into a predictive subkey and, when a
-    horizon is present, a forecast subkey, so passing the same key twice never
-    correlates the two sample sets. ``predictive_batch_size`` is the built-in
-    route to memory-bounded predictive sampling; for fully manual control over
-    the forecast draws, build the in-sample tree with matching-length
-    covariates and attach the horizon with :func:`add_forecast_groups`.
+    When a forecast horizon is present, ``rng_key`` is split internally into a
+    predictive subkey and a forecast subkey, so passing the same key twice
+    never correlates the two sample sets. When there is no horizon, ``rng_key``
+    is used unsplit for the in-sample predictive draw. ``predictive_batch_size``
+    is the built-in route to memory-bounded predictive sampling; for fully
+    manual control over the forecast draws, build the in-sample tree with
+    matching-length covariates and attach the horizon with
+    :func:`add_forecast_groups`.
     """
     _require_covariates_cover_data(data, covariates)
     cov_dims = _resolve_covariate_dims(covariates, covariate_dims)

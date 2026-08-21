@@ -71,8 +71,8 @@ ForecastFn = Callable[..., "Array | np.ndarray"]
 """A closure that fits a model on a training window and forecasts its test horizon.
 
 Called by :func:`~numpyro_forecast.evaluate.backtest` positionally as
-``forecast_fn(rng_key, model, train_data, train_covariates, test_covariates,
-num_samples, *, batch_size=None)``, where ``test_covariates`` spans the *full*
+``forecast_fn(rng_key, model, train_data, train_covariates, full_covariates,
+num_samples, *, batch_size=None)``, where ``full_covariates`` spans the *full*
 window (train followed by test, i.e. ``covariates[..., t0:t2, :]``). Must return
 forecast samples with the sample axis first, shape
 ``(num_samples, *batch, t2 - t1, obs)``. ``batch_size`` is forwarded unchanged
