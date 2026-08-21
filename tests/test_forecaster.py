@@ -5,6 +5,7 @@ from collections.abc import Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
 import numpyro.distributions as dist
 import pytest
 from conftest import RandomWalkModel, empty_covariates
@@ -256,3 +257,33 @@ def test_hmc_forecaster_rejects_unequal_duration(rng_key: Array) -> None:
     data = jnp.zeros((30, 1))
     with pytest.raises(ValueError, match="equal duration"):
         HMCForecaster(rng_key, model, data, empty_covariates(25), num_warmup=5, num_samples=5)
+
+
+def _handwritten_guide(covariates: Array, data: Array | None = None) -> None:
+    """A mean-field hand-written guide for RandomWalkModel (in-sample only)."""
+    t = covariates.shape[-2]
+    drift_scale_loc = numpyro.param("drift_scale_loc", -1.0)
+    sigma_loc = numpyro.param("sigma_loc", -1.0)
+    numpyro.sample("drift_scale", dist.LogNormal(drift_scale_loc, 0.1))
+    numpyro.sample("sigma", dist.LogNormal(sigma_loc, 0.1))
+    drift_loc = numpyro.param("drift_loc", jnp.zeros((t, 1)))
+    with numpyro.plate("time", t, dim=-2):
+        numpyro.sample("drift", dist.Normal(drift_loc, 0.1))
+
+
+def test_forecaster_hand_written_guide_end_to_end(rng_key: Array) -> None:
+    """Regression: a Forecaster built with a hand-written guide still forecasts.
+
+    draw_posterior became AutoGuide-only; Forecaster._draw_posterior must detect
+    a hand-written guide (not an AutoGuide instance) and draw via a direct
+    Predictive call instead of handing it to draw_posterior (which would raise a
+    beartype TypeCheckError at forecast time).
+    """
+    model = RandomWalkModel()
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (20, 1)), axis=-2)
+    forecaster = Forecaster(
+        rng_key, model, data, empty_covariates(20), guide=_handwritten_guide, num_steps=5
+    )
+    fc = forecaster(rng_key, data, empty_covariates(24), num_samples=4)
+    assert fc.shape == (4, 4, 1)
+    assert bool(jnp.all(jnp.isfinite(fc)))

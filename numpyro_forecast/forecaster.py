@@ -21,6 +21,7 @@ import numpy as np
 import numpyro.distributions as dist
 from jax import random
 from jaxtyping import Num
+from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.infer.reparam import Reparam
 
@@ -37,7 +38,7 @@ from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_glm as _predict_glm
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
-from numpyro_forecast.functional._offload import _resolve_device, _transfer
+from numpyro_forecast.functional._offload import _draw_chunked, _resolve_device, _transfer
 from numpyro_forecast.functional._validation import (
     _require_covariates_extend_data,
     _require_positive_num_samples,
@@ -476,8 +477,27 @@ class Forecaster(_BaseForecaster):
         batch_size: int | None = None,
         device: jax.Device | str | None = None,
     ) -> dict[str, "Array | np.ndarray"]:
-        return draw_posterior(
-            rng_key, self.guide, self.params, num_samples, batch_size=batch_size, device=device
+        # draw_posterior is AutoGuide-only now; a hand-written guide (supported at
+        # runtime, see resolve_guide) reproduces the old SVIFit dispatch's
+        # Predictive-based draw instead, through the same chunk-and-transfer
+        # driver so batch_size/device keep their usual contract.
+        if isinstance(self._fit.guide, AutoGuide):
+            return draw_posterior(
+                rng_key, self.guide, self.params, num_samples, batch_size=batch_size, device=device
+            )
+        fit = self._fit
+
+        def draw_fn(key: Array, n: int) -> dict[str, Array]:
+            predictive = Predictive(fit.guide, params=fit.params, num_samples=n)
+            return predictive(key, fit.covariates, fit.data)
+
+        return _draw_chunked(
+            rng_key,
+            draw_fn,
+            num_samples,
+            batch_size=batch_size,
+            device=device,
+            stage="posterior drawing",
         )
 
 
