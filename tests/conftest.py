@@ -153,9 +153,10 @@ def rw_model_factory() -> ForecastModel:
 def as_autoguide(guide: "AutoGuide | Callable[..., None]") -> AutoGuide:
     """Narrow a resolved guide to ``AutoGuide`` for ty (test helper).
 
-    ``SVIFit.guide`` is typed as ``AutoGuide | Callable[..., None]`` (hand-written
-    guides are supported at runtime); tests that know the guide is a resolved
-    ``AutoGuide`` use this to narrow it before passing it to the guide-only
+    :func:`~numpyro_forecast.evaluate.backtest_vectorized`'s ``guide`` parameter is
+    typed ``AutoGuide | Callable[..., None]`` (hand-written guides are supported at
+    runtime); tests that know the guide is a resolved ``AutoGuide`` use this to
+    narrow it before passing it to the guide-only
     :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
     """
     assert isinstance(guide, AutoGuide)
@@ -165,10 +166,10 @@ def as_autoguide(guide: "AutoGuide | Callable[..., None]") -> AutoGuide:
 def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str, Array]]:
     """Fit the shared random-walk body with raw NumPyro SVI (test helper).
 
-    Deliberately built on plain NumPyro rather than :func:`fit_svi`/``SVIFit``
-    (scheduled for removal), so tests that only need a guide/params pair for
+    Deliberately built on plain NumPyro rather than a fit-wrapper, so tests that
+    only need a guide/params pair for
     :func:`~numpyro_forecast.functional.posterior.draw_posterior` exercise the
-    guide-based contract directly instead of the fit-wrapper machinery.
+    guide-based contract directly.
     """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     guide = AutoNormal(rw_model)
@@ -182,13 +183,13 @@ def nuts_samples(
 ) -> dict[str, Array]:
     """Fit the shared random-walk body with raw NumPyro NUTS (test helper).
 
-    Deliberately built on plain NumPyro rather than :func:`fit_mcmc`/``MCMCFit``
-    (scheduled for removal), returning ``mcmc.get_samples()`` directly (flattened,
-    ``group_by_chain=False``): this is the posterior dict MCMC users pass straight
-    to :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``/
+    Deliberately built on plain NumPyro rather than a fit-wrapper, returning
+    ``mcmc.get_samples()`` directly (flattened, ``group_by_chain=False``): this is
+    the posterior dict MCMC users pass straight to
+    :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``/
     :func:`~numpyro_forecast.convert.to_datatree`, with no ``draw_posterior`` step
-    in between. ``chain_method="sequential"`` mirrors :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`'s
-    default, so ``num_chains > 1`` runs on a single CPU device.
+    in between. ``chain_method="sequential"`` keeps ``num_chains > 1`` on a single
+    CPU device.
     """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
     mcmc = MCMC(
@@ -208,9 +209,8 @@ def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
 
     Fits ``model`` with ``AutoNormal`` + ``SVI.run`` and forecasts with the
     package's :func:`~numpyro_forecast.functional.forecast`. Deliberately built on
-    plain NumPyro rather than the OOP ``Forecaster``/``fit_svi``/``draw_posterior``
-    (scheduled for removal), so backtest tests exercise the closure contract
-    directly instead of the machinery being replaced.
+    plain NumPyro rather than a fit-wrapper, so backtest tests exercise the
+    closure contract directly.
     """
 
     def forecast_fn(

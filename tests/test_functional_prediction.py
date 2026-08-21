@@ -37,11 +37,11 @@ def _fit_data(
 
 
 def test_forecast_accepts_raw_mcmc_get_samples() -> None:
-    """Raw ``MCMC(kernel(model)).get_samples()`` forecasts, with no fit_mcmc wrapper.
+    """Raw ``MCMC(kernel(model)).get_samples()`` forecasts, with no fit-wrapper.
 
     Moved from ``test_kernels.py`` (roadmap §3): proves that plain NumPyro MCMC
     output flows straight into :func:`forecast`, the compatibility invariant that
-    matters once the ``fit_mcmc``/``MCMCFit`` wrapper is gone.
+    matters now that there is no fit-wrapper between them.
     """
     data = jnp.zeros((15, 1))
     covariates = empty_covariates(15)

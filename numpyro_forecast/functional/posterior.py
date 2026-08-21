@@ -111,7 +111,8 @@ def draw_posterior(
         The fitted variational guide, e.g. the ``AutoGuide`` instance passed to
         ``SVI``.
     params
-        The learned variational parameters, e.g. ``fit.params``.
+        The learned variational parameters, e.g. the trained parameters from
+        ``svi.run``'s result.
     num_samples
         Number of posterior draws.
     batch_size
