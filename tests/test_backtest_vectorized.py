@@ -18,6 +18,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import svi_forecast_fn
 from jax import Array, random
+from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
@@ -72,13 +73,15 @@ def test_window_indices_match_loop_backtest() -> None:
         stride=stride,
         num_samples=20,
     )
+    model = _RandomWalk()
     vec = backtest_vectorized(
         random.PRNGKey(0),
         data,
         cov,
-        _RandomWalk,
+        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model),
         stride=stride,
         num_steps=50,
         num_samples=20,
@@ -103,13 +106,15 @@ def test_metrics_statistically_close_to_loop() -> None:
         stride=5,
         num_samples=200,
     )
+    model = _RandomWalk()
     vec = backtest_vectorized(
         random.PRNGKey(3),
         data,
         cov,
-        _RandomWalk,
+        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model),
         stride=5,
         num_steps=800,
         num_samples=200,
@@ -135,14 +140,16 @@ def test_window_size_validators(
 ) -> None:
     """Each window-size/stride constraint raises its own ``BacktestWindowError``."""
     data, cov = _series(50)
+    model = _RandomWalk()
     with pytest.raises(BacktestWindowError, match=message):
         backtest_vectorized(
             random.PRNGKey(0),
             data,
             cov,
-            _RandomWalk,
+            lambda: model,
             train_window=train_window,
             test_window=test_window,
+            guide=AutoNormal(model),
             stride=stride,
             num_steps=10,
         )
@@ -172,14 +179,16 @@ def test_handwritten_guide_rejected() -> None:
 def test_duration_too_short_rejected() -> None:
     """A series with no room for a single window raises ``BacktestWindowError``."""
     data, cov = _series(TRAIN + TEST - 1)
+    model = _RandomWalk()
     with pytest.raises(BacktestWindowError, match="no window fits"):
         backtest_vectorized(
             random.PRNGKey(0),
             data,
             cov,
-            _RandomWalk,
+            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
+            guide=AutoNormal(model),
             num_steps=10,
         )
 
@@ -188,14 +197,16 @@ def test_covariate_length_mismatch_rejected() -> None:
     """Mismatched data/covariate durations raise ``ValueError``."""
     data, _ = _series(50)
     cov = jnp.zeros((49, 0))
+    model = _RandomWalk()
     with pytest.raises(ValueError, match="share the time axis"):
         backtest_vectorized(
             random.PRNGKey(0),
             data,
             cov,
-            _RandomWalk,
+            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
+            guide=AutoNormal(model),
             num_steps=10,
         )
 
@@ -212,13 +223,15 @@ def test_covariate_length_mismatch_rejected() -> None:
 def test_window_count_matches_formula(duration: int, train: int, test: int, stride: int) -> None:
     """The number of windows follows ``floor((D - train - test) / stride) + 1``."""
     data, cov = _series(duration)
+    model = _RandomWalk()
     result = backtest_vectorized(
         random.PRNGKey(0),
         data,
         cov,
-        _RandomWalk,
+        lambda: model,
         train_window=train,
         test_window=test,
+        guide=AutoNormal(model),
         stride=stride,
         num_steps=10,
         num_samples=5,
@@ -243,14 +256,16 @@ def test_single_svi_compilation(
     data, cov = _series(duration)
 
     def run() -> int:
+        model = _RandomWalk()
         with count_compilations() as tally:
             result = backtest_vectorized(
                 random.PRNGKey(0),
                 data,
                 cov,
-                _RandomWalk,
+                lambda: model,
                 train_window=TRAIN,
                 test_window=TEST,
+                guide=AutoNormal(model),
                 stride=1,
                 num_steps=30,
                 num_samples=10,
@@ -262,14 +277,16 @@ def test_single_svi_compilation(
     # First call may compile several vmapped stages (fit, posterior, forecast, metrics).
     assert first < 50
 
+    model = _RandomWalk()
     with count_compilations() as tally:
         result = backtest_vectorized(
             random.PRNGKey(0),
             data,
             cov,
-            _RandomWalk,
+            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
+            guide=AutoNormal(model),
             stride=1,
             num_steps=30,
             num_samples=10,
@@ -288,13 +305,15 @@ def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
     """
     duration = TRAIN + TEST + 7
     data, cov = _series(duration)
+    model = _RandomWalk()
     backtest_vectorized(
         random.PRNGKey(1),
         data,
         cov,
-        _RandomWalk,
+        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model),
         num_steps=30,
         num_samples=10,
     )
@@ -314,13 +333,15 @@ def test_keep_predictions_shape() -> None:
     """``keep_predictions=True`` retains ``(windows, samples, test, obs)`` forecasts."""
     duration = TRAIN + TEST + 6
     data, cov = _series(duration)
+    model = _RandomWalk()
     result = backtest_vectorized(
         random.PRNGKey(0),
         data,
         cov,
-        _RandomWalk,
+        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model),
         num_steps=20,
         num_samples=15,
         keep_predictions=True,
@@ -359,13 +380,15 @@ def test_result_schema_and_dataframe_row_shape() -> None:
 
     duration = TRAIN + TEST + 8
     data, cov = _series(duration)
+    model = _RandomWalk()
     result = backtest_vectorized(
         random.PRNGKey(0),
         data,
         cov,
-        _RandomWalk,
+        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model),
         stride=1,
         num_steps=20,
         num_samples=15,
@@ -399,25 +422,29 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
     duration = 50
     data, cov = _series(duration)
     metrics_50 = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}
+    model_default = _RandomWalk()
     vec_default = backtest_vectorized(
         random.PRNGKey(5),
         data,
         cov,
-        _RandomWalk,
+        lambda: model_default,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model_default),
         stride=5,
         num_steps=50,
         num_samples=100,
         keep_predictions=True,
     )
+    model_50 = _RandomWalk()
     vec_50 = backtest_vectorized(
         random.PRNGKey(5),
         data,
         cov,
-        _RandomWalk,
+        lambda: model_50,
         train_window=TRAIN,
         test_window=TEST,
+        guide=AutoNormal(model_50),
         stride=5,
         num_steps=50,
         num_samples=100,
@@ -445,14 +472,16 @@ def test_host_metric_raises_actionable_error() -> None:
     def host_mae(pred: Array, truth: Array) -> Array:
         return jnp.asarray(float(jnp.abs(pred - truth).mean()))
 
+    model = _RandomWalk()
     with pytest.raises(VectorizedMetricError):
         backtest_vectorized(
             random.PRNGKey(0),
             data,
             cov,
-            _RandomWalk,
+            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
+            guide=AutoNormal(model),
             num_steps=1,
             num_samples=10,
             metrics={"host_mae": host_mae},

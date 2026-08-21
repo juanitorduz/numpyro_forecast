@@ -32,15 +32,15 @@ class BacktestWindowError(NumpyroForecastError, ValueError):
 
 
 class VectorizedGuideError(NumpyroForecastError, ValueError):
-    """The vectorized backtest requires an ``AutoGuide``.
+    """The vectorized backtest requires an ``AutoGuide`` instance.
 
-    Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when the
-    resolved guide is hand-written: those are not vmappable, use
+    Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
+    ``guide`` is hand-written: those are not vmappable, use
     :func:`~numpyro_forecast.evaluate.backtest` instead.
     """
 
     default_message = (
-        "backtest_vectorized requires an AutoGuide (guide resolves to one); "
+        "backtest_vectorized requires an AutoGuide instance; "
         "hand-written guides are not vmappable here, use backtest() instead."
     )
 

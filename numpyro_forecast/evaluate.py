@@ -21,13 +21,13 @@ from jax import lax, random
 from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
+from numpyro.optim import Adam
 
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional import resolve_guide, resolve_optimizer
 from numpyro_forecast.functional._offload import _oom_advice, _stitch_chunks, _transfer
 from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
@@ -43,8 +43,7 @@ from numpyro_forecast.typing import (
 
 if TYPE_CHECKING:
     import pandas as pd
-
-    from numpyro_forecast.typing import GuideLike, OptimizerLike
+    from numpyro.optim import _NumPyroOptim
 
 
 _DEFAULT_COVERAGE_ALPHA = 0.9
@@ -1023,10 +1022,10 @@ def backtest_vectorized(
     *,
     train_window: int,
     test_window: int,
+    guide: "AutoGuide | Callable[..., None]",
+    optim: "_NumPyroOptim | None" = None,
     stride: int = 1,
     num_steps: int = 1_001,
-    optim: "OptimizerLike" = None,
-    guide: "GuideLike" = None,
     num_samples: int = 100,
     metrics: Mapping[str, Metric] | None = None,
     keep_predictions: bool = False,
@@ -1054,21 +1053,27 @@ def backtest_vectorized(
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
         Factory returning a fresh model; called exactly once (per-window model
-        variation is unsupported here, use :func:`backtest`).
+        variation is unsupported here, use :func:`backtest`). Must return the
+        same model object ``guide`` was built on (see ``guide`` below).
     train_window
         Fixed training-window length (``>= 1``).
     test_window
         Fixed test-window length (``>= 1``).
+    guide
+        An ``AutoGuide`` instance built on the same model object ``model_fn``
+        returns (hand-written guides are not vmappable, use :func:`backtest`
+        instead)::
+
+            model = make_model()
+            backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+
+    optim
+        NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
+        optax optimizer, wrap it with ``numpyro.optim.optax_to_numpyro`` first.
     stride
         Step between successive windows (``>= 1``).
     num_steps
         Number of SVI steps per window.
-    optim
-        Optimizer specification resolved by
-        :func:`~numpyro_forecast.functional.svi.resolve_optimizer`.
-    guide
-        Guide specification; must resolve to an ``AutoGuide`` (hand-written
-        guides are not vmappable, use :func:`backtest`).
     num_samples
         Number of forecast samples drawn per window.
     metrics
@@ -1095,7 +1100,7 @@ def backtest_vectorized(
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
     VectorizedGuideError
-        If the resolved guide is not an ``AutoGuide``.
+        If ``guide`` is not an ``AutoGuide`` instance.
     VectorizedMetricError
         If a metric forces a host conversion under ``vmap`` (it is not a pure
         JAX function).
@@ -1127,10 +1132,10 @@ def backtest_vectorized(
     train_d, train_c, hor_c, truth = jax.vmap(slice_one)(starts)
 
     model = model_fn()
-    resolved_guide = resolve_guide(guide, model)
-    if not isinstance(resolved_guide, AutoGuide):
+    if not isinstance(guide, AutoGuide):
         raise VectorizedGuideError()
-    svi = SVI(model, resolved_guide, resolve_optimizer(optim), Trace_ELBO())
+    resolved_optim = Adam(0.01) if optim is None else optim
+    svi = SVI(model, guide, resolved_optim, Trace_ELBO())
 
     # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
     # caches its prototype trace on the instance at first init, so if that
@@ -1153,7 +1158,7 @@ def backtest_vectorized(
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, int(starts.shape[0]))
     params, losses = jax.jit(jax.vmap(fit_one))(init_keys, train_d, train_c)
     posterior = jax.jit(
-        jax.vmap(lambda k, p: resolved_guide.sample_posterior(k, p, sample_shape=(num_samples,)))
+        jax.vmap(lambda k, p: guide.sample_posterior(k, p, sample_shape=(num_samples,)))
     )(post_keys, params)
 
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
