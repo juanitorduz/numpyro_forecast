@@ -5,7 +5,7 @@ Keeping these in a dependency-free module avoids import cycles between
 """
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import jax
 
@@ -71,19 +71,34 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 :func:`~numpyro_forecast.metrics.make_mase`.
 """
 
-ForecastModel = Callable[..., None]
-"""A NumPyro forecasting model callable ``(covariates, data=None) -> None``.
 
-Both an OOP :class:`~numpyro_forecast.forecaster.ForecastingModel` instance and a
-plain function built by :func:`numpyro_forecast.functional.models.forecasting_model`
-satisfy this. Typed loosely (a bare ``Callable``) on purpose: the package's
-beartype import hook performs an ``isinstance``-style check on annotated
-parameters, so a nominal ``ForecastingModel`` hint would reject functional
-models at runtime, whereas ``Callable`` accepts either.
-"""
+@runtime_checkable
+class ForecastModel(Protocol):
+    """A NumPyro forecasting model: a callable ``(covariates, data=None) -> None``.
+
+    Both an OOP :class:`~numpyro_forecast.forecaster.ForecastingModel` instance
+    and a plain function built by
+    :func:`numpyro_forecast.functional.models.forecasting_model` satisfy this
+    Protocol structurally, so neither needs to subclass it. The parameters are
+    positional-only so a user model's own parameter names (``cov``, ``y``, ...)
+    stay free instead of being forced to match ``covariates``/``data``.
+
+    ``ty`` checks call sites against this signature structurally (duck typing),
+    which is the main payoff of the Protocol over a bare ``Callable`` alias.
+    At runtime, the beartype import hook's ``isinstance`` check on a
+    ``runtime_checkable`` Protocol only verifies that the named methods exist
+    (Python runtime protocols never inspect signatures), so it reduces to
+    ``callable(model)``: a model missing the ``data=None`` default still
+    passes this check and only fails loudly at the first driver call that
+    invokes it with ``data=None``.
+    """
+
+    def __call__(self, covariates: Array, data: Array | None = None, /) -> None:
+        """Run the forecasting model against ``covariates`` and optional ``data``."""
+
 
 ModelFactory = Callable[[], ForecastModel]
-"""A zero-argument callable returning a fresh forecasting model (OOP or functional)."""
+"""A zero-argument callable returning a fresh :class:`ForecastModel` instance."""
 
 ForecasterFactory = Callable[..., "_BaseForecaster"]
 """Callable ``(rng_key, model, data, covariates, **options)`` returning a forecaster.

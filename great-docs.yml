@@ -83,6 +83,11 @@ reference:
       - forecaster.ForecastingModel
       - functional.models.forecasting_model
 
+  - title: Typing
+    desc: Public type contracts.
+    contents:
+      - typing.ForecastModel
+
   - title: "Functional core: model primitives"
     desc: Pure functional primitives for the train/forecast split.
     contents:
