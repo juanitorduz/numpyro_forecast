@@ -43,8 +43,9 @@ class ForecastModel(Protocol):
     """A NumPyro forecasting model: a callable ``(covariates, data=None) -> None``.
 
     Any plain function with this signature satisfies this Protocol structurally
-    (including one built by
-    :func:`numpyro_forecast.functional.models.forecasting_model`), so nothing
+    (for example, one that derives its
+    :class:`~numpyro_forecast.functional.models.Horizon` from the shapes via
+    ``Horizon.from_data`` and calls the functional primitives), so nothing
     needs to subclass it. The parameters are positional-only so a user model's
     own parameter names (``cov``, ``y``, ...) stay free instead of being forced
     to match ``covariates``/``data``.

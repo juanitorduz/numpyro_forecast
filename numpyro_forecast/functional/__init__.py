@@ -19,7 +19,6 @@ fitted variational guide), and :mod:`~numpyro_forecast.functional.prediction`
 from numpyro_forecast.functional.models import (
     Horizon,
     Transition,
-    forecasting_model,
     markov_time_series,
     predict,
     predict_glm,
@@ -33,7 +32,6 @@ __all__ = [
     "Transition",
     "draw_posterior",
     "forecast",
-    "forecasting_model",
     "markov_time_series",
     "predict",
     "predict_glm",

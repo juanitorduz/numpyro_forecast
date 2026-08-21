@@ -42,7 +42,17 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional import forecasting_model
+from numpyro_forecast.functional import (
+    Horizon,
+    Transition,
+    draw_posterior,
+    forecast,
+    markov_time_series,
+    predict,
+    predict_glm,
+    predict_in_sample,
+    time_series,
+)
 from numpyro_forecast.surgery import register_elementwise
 
 try:
@@ -55,9 +65,11 @@ __all__ = [
     "BacktestResult",
     "BacktestWindowError",
     "CovariateDimsError",
+    "Horizon",
     "KernelConfigError",
     "MVNLayoutError",
     "NumpyroForecastError",
+    "Transition",
     "VectorizedBacktestResult",
     "VectorizedGuideError",
     "VectorizedMetricError",
@@ -65,14 +77,20 @@ __all__ = [
     "add_forecast_groups",
     "backtest",
     "backtest_vectorized",
+    "draw_posterior",
     "eval_coverage",
     "eval_crps",
     "eval_mae",
     "eval_rmse",
     "evaluate_forecast",
-    "forecasting_model",
+    "forecast",
+    "markov_time_series",
+    "predict",
+    "predict_glm",
+    "predict_in_sample",
     "predictions_to_datatree",
     "register_elementwise",
     "results_to_dataframe",
+    "time_series",
     "to_datatree",
 ]

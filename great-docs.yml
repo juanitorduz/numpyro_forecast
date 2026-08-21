@@ -70,11 +70,6 @@ authors:
 # - Add 'desc:' to sections for descriptions
 
 reference:
-  - title: Models
-    desc: Building forecasting models.
-    contents:
-      - functional.models.forecasting_model
-
   - title: Typing
     desc: Public type contracts.
     contents:

@@ -127,9 +127,9 @@ def rw_model(covariates: Array, data: Array | None = None) -> None:
 
     The functional-only replacement for the former ``RandomWalkModel``
     (:class:`~numpyro_forecast.forecaster.ForecastingModel` subclass): derives
-    the :class:`Horizon` from the shapes itself instead of relying on
-    :func:`~numpyro_forecast.functional.forecasting_model`, so every non-legacy
-    test drives it as a plain ``(covariates, data=None)`` callable.
+    the :class:`Horizon` from the shapes itself via ``Horizon.from_data``, so
+    every non-legacy test drives it as a plain ``(covariates, data=None)``
+    callable.
     """
     rw_body(Horizon.from_data(covariates, data), covariates)
 
