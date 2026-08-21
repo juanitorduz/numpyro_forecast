@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, refactor3]
   pull_request:
-    branches: [main]
+    branches: [main, refactor3]
 
 jobs:
   prek:
