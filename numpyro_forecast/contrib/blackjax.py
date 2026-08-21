@@ -14,9 +14,22 @@ kernels run one blackjax step per NumPyro sampling step; adaptation happens once
 section on :class:`BlackjaxNUTSKernel`, :class:`BlackjaxMCLMCKernel`, and
 :class:`BlackjaxCustomKernel` for why, and :exc:`~numpyro_forecast.exceptions.KernelConfigError`
 for the one constraint (a kernel with no bound model) these kernels reject outright.
+
+This module also exposes a two-tier Pathfinder variational-inference API. The
+single-path tier, :func:`fit_pathfinder` and :func:`pathfinder_samples`, runs one
+L-BFGS optimization path and returns a single local normal approximation: cheap,
+but a single path can settle in one mode and miss the rest of a multimodal or
+otherwise hard posterior. The multi-path tier, :func:`fit_multipathfinder` and
+:func:`multipathfinder_samples`, runs several L-BFGS paths in parallel from
+diverse starting points, pools their draws, and reweights the pool with
+Pareto-smoothed importance sampling (PSIS) so the returned approximation is not
+tied to a single mode; it is the recommended entry point over the single-path
+functions.
 """
 
 import importlib
+import math
+import warnings
 from collections import namedtuple
 from dataclasses import dataclass
 from typing import Any, cast
@@ -529,6 +542,10 @@ def fit_pathfinder(
     num_elbo_samples: int = 200,
     ftol: float = 1e-5,
     maxiter: int = 30,
+    maxcor: int = 10,
+    maxls: int = 1_000,
+    gtol: float = 1e-8,
+    init_params: dict[str, Array] | None = None,
 ) -> PathfinderFit:
     """Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -555,11 +572,30 @@ def fit_pathfinder(
         Models with per-step time latents typically need far more: the default
         suits tens of parameters, while a few hundred parameters (e.g. a
         400-step random walk) converge around ``1_000``.
+    maxcor
+        L-BFGS history size; caps the rank of the low-rank-plus-diagonal
+        covariance correction at roughly ``2 * maxcor``. High-dimensional
+        posteriors need it raised well above the default of ``10``.
+    maxls
+        Maximum number of line-search steps per L-BFGS iteration.
+    gtol
+        L-BFGS gradient-norm convergence tolerance.
+    init_params
+        Optional initial unconstrained position, overriding NumPyro's own
+        initialization draw (``param_info.z``); ``initialize_model`` still runs
+        regardless, since it also builds the potential/postprocess functions.
 
     Returns
     -------
     PathfinderFit
         The fitted variational approximation.
+
+    See Also
+    --------
+    fit_multipathfinder
+        The recommended entry point: runs several L-BFGS paths in parallel and
+        reweights their pooled draws with Pareto-smoothed importance sampling,
+        instead of relying on this single path's local normal approximation.
 
     Notes
     -----
@@ -582,13 +618,17 @@ def fit_pathfinder(
     def logdensity_fn(position: dict[str, Array]) -> Array:
         return -potential_fn(position)
 
+    position = param_info.z if init_params is None else init_params
     state, _info = blackjax.vi.pathfinder.approximate(
         approx_key,
         logdensity_fn,
-        param_info.z,
+        position,
         num_samples=num_elbo_samples,
-        ftol=ftol,
         maxiter=maxiter,
+        maxcor=maxcor,
+        maxls=maxls,
+        gtol=gtol,
+        ftol=ftol,
     )
     return PathfinderFit(
         state=state,
@@ -665,6 +705,329 @@ def pathfinder_samples(
         # draws and map the constraining transform over the leading sample axis
         # (no batch_ndims reliance).
         unconstrained, _log_weights = blackjax.vi.pathfinder.sample(key_sample, fit.state, n)
+        transform = postprocess_fn(fit.covariates, fit.data)
+        return jax.vmap(transform)(unconstrained)
+
+    return _draw_chunked(
+        rng_key,
+        draw_fn,
+        num_samples,
+        batch_size=batch_size,
+        device=device,
+        stage="posterior drawing",
+    )
+
+
+@dataclass(frozen=True)
+class MultiPathfinderFit:
+    """The result of fitting a forecasting model with multi-path BlackJAX Pathfinder.
+
+    A plain-data (picklable) container, mirroring :class:`PathfinderFit`: it holds
+    the raw blackjax ``MultipathfinderState`` (the pooled per-path approximations),
+    the model and its data/covariates, the per-path ELBOs, and the Pareto-smoothed
+    importance sampling (PSIS) weights/diagnostic over the pooled draws. Draws are
+    produced lazily by :func:`multipathfinder_samples`.
+
+    Attributes
+    ----------
+    state
+        The blackjax ``MultipathfinderState`` (per-path ``PathfinderState`` objects,
+        the pooled samples, and their log target/approximation densities).
+    model
+        The forecasting model that was fit.
+    covariates
+        In-sample covariates used at fit time (time at axis ``-2``).
+    data
+        In-sample data used at fit time (time at axis ``-2``).
+    elbos
+        The evidence lower bound of each path's fitted approximation, in path
+        order; converted eagerly with ``float()`` so pickling this fit never
+        carries JAX tracers.
+    log_weights
+        Normalized PSIS log importance weights over the flattened pool of
+        ``num_paths * num_elbo_samples`` draws (path-major, matching
+        ``state.samples``); valid only for that exact stored pool, not for any
+        other resampling of it.
+    pareto_k
+        The Pareto shape-parameter diagnostic for the PSIS resampling: below
+        ``0.5`` is reliable, ``0.5`` to ``0.7`` is borderline, and above ``0.7``
+        indicates the importance weights are unreliable.
+    """
+
+    state: Any
+    model: ForecastModel
+    covariates: Array
+    data: Array
+    elbos: tuple[float, ...]
+    log_weights: Array
+    pareto_k: float
+
+
+def fit_multipathfinder(
+    rng_key: Array,
+    model: ForecastModel,
+    data: Array,
+    covariates: Array,
+    *,
+    num_paths: int = 4,
+    num_elbo_samples: int = 200,
+    maxiter: int = 30,
+    maxcor: int = 10,
+    maxls: int = 1_000,
+    gtol: float = 1e-8,
+    ftol: float = 1e-5,
+    initial_positions: dict[str, Array] | None = None,
+) -> MultiPathfinderFit:
+    """Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
+
+    Runs ``num_paths`` independent single-path Pathfinder approximations in
+    parallel (vmapped L-BFGS runs, by default each from its own fresh
+    ``init_to_uniform`` starting point), pools their per-path posterior draws,
+    and reweights the pool with Pareto-smoothed importance sampling (PSIS) so
+    the returned approximation is not tied to a single mode. This is the
+    recommended entry point over :func:`fit_pathfinder`: a single L-BFGS path
+    can settle in one mode and its local normal approximation may not reflect
+    the rest of a multimodal or otherwise hard posterior.
+
+    PRNG: ``rng_key`` is split into a model-initialization stream and a
+    multipath-approximation stream; the initialization stream is further split
+    into one subkey per path so that (when ``initial_positions`` is not
+    supplied) every path starts from its own independent ``init_to_uniform``
+    draw, exactly the diverse starting points multipath Pathfinder wants.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for initialization and the multipath Pathfinder run.
+    model
+        The forecasting model callable (OOP instance or functional model).
+    data
+        In-sample data with time at axis ``-2``.
+    covariates
+        Covariates with time at axis ``-2`` and the same duration as ``data``.
+    num_paths
+        Number of independent L-BFGS paths to run in parallel (vmapped).
+    num_elbo_samples
+        Number of Monte Carlo samples drawn per path to estimate its ELBO and
+        to build the pooled sample used for PSIS resampling.
+    maxiter
+        Maximum number of L-BFGS iterations per path.
+    maxcor
+        L-BFGS history size; caps the rank of the low-rank-plus-diagonal
+        covariance correction at roughly ``2 * maxcor``. High-dimensional
+        posteriors need it raised well above the default of ``10``.
+    maxls
+        Maximum number of line-search steps per L-BFGS iteration.
+    gtol
+        L-BFGS gradient-norm convergence tolerance.
+    ftol
+        L-BFGS relative function-value convergence tolerance.
+    initial_positions
+        Optional starting positions, one per path, overriding the default
+        per-path ``init_to_uniform`` draws. Every leaf must already carry a
+        leading axis of size ``num_paths`` (validated; a mismatch raises
+        ``ValueError``).
+
+    Returns
+    -------
+    MultiPathfinderFit
+        The fitted multipath approximation together with its per-path ELBOs
+        and the PSIS log weights/``pareto_k`` diagnostic over the pooled draws.
+
+    Raises
+    ------
+    ValueError
+        If ``num_paths`` is not positive, or ``initial_positions`` is supplied
+        without a leading axis of size ``num_paths`` on every leaf.
+
+    Warns
+    -----
+    UserWarning
+        If one or more per-path ELBOs are non-finite (raise ``maxiter``/``maxcor``
+        or inspect ``fit.elbos``), or if the PSIS ``pareto_k`` diagnostic exceeds
+        ``0.7`` (increase ``num_paths``/``maxiter``/``maxcor``, or fall back to
+        MCMC). Neither condition raises: the fit is always returned, carrying
+        everything needed to inspect and diagnose it.
+
+    Notes
+    -----
+    Runs with :func:`_stable_bfgs_sample` patched into blackjax (via
+    :func:`_ensure_stable_bfgs_sample`, called before
+    ``blackjax.vi.multipathfinder.multi_approximate``): ``multi_approximate``
+    calls ``approximate``/``sample`` imported from ``blackjax.vi.pathfinder``,
+    whose module globals hold ``bfgs_sample``, so patching that module (as
+    :func:`fit_pathfinder` already does) covers the multipath route too.
+    """
+    if num_paths < 1:
+        msg = "num_paths must be positive"
+        raise ValueError(msg)
+    if initial_positions is not None:
+        leaves = jax.tree.leaves(initial_positions)
+        if not leaves or any(leaf.shape[0] != num_paths for leaf in leaves):
+            msg = (
+                "initial_positions must carry a leading axis of size "
+                f"num_paths={num_paths} on every leaf"
+            )
+            raise ValueError(msg)
+
+    require("blackjax", extra="blackjax")
+    _ensure_stable_bfgs_sample()
+    init_key, approx_key = random.split(rng_key)
+    init_keys = random.split(init_key, num_paths)
+
+    if initial_positions is None:
+        positions = []
+        for key in init_keys:
+            param_info, potential_fn_gen, _postprocess_fn, _ = initialize_model(
+                key,
+                model,
+                dynamic_args=True,
+                model_args=(covariates, data),
+            )
+            positions.append(param_info.z)
+        stacked_positions = jax.tree.map(lambda *xs: jnp.stack(xs), *positions)
+    else:
+        # potential_fn_gen depends only on the model/data, not the init key or
+        # strategy, so a single initialize_model call supplies it here exactly
+        # like the per-path loop above does when init_positions is None.
+        _param_info, potential_fn_gen, _postprocess_fn, _ = initialize_model(
+            init_keys[0],
+            model,
+            dynamic_args=True,
+            model_args=(covariates, data),
+        )
+        stacked_positions = initial_positions
+
+    potential_fn = potential_fn_gen(covariates, data)
+
+    def logdensity_fn(position: dict[str, Array]) -> Array:
+        return -potential_fn(position)
+
+    multipathfinder_module = importlib.import_module("blackjax.vi.multipathfinder")
+    state, _info = multipathfinder_module.multi_approximate(
+        approx_key,
+        logdensity_fn,
+        stacked_positions,
+        num_elbo_samples,
+        maxiter=maxiter,
+        maxcor=maxcor,
+        maxls=maxls,
+        gtol=gtol,
+        ftol=ftol,
+    )
+    log_weights, pareto_k = multipathfinder_module.psis_weights(state)
+    pareto_k_value = float(pareto_k)
+
+    elbos = tuple(float(elbo) for elbo in state.path_states.elbo)
+    n_failed = sum(1 for elbo in elbos if not math.isfinite(elbo))
+    if n_failed:
+        msg = (
+            f"{n_failed} of {num_paths} path(s) failed (non-finite ELBO); raise "
+            "maxiter/maxcor or inspect elbos."
+        )
+        warnings.warn(msg, UserWarning, stacklevel=2)
+    if pareto_k_value > 0.7:
+        msg = (
+            f"pareto_k={pareto_k_value:.2f} > 0.7: PSIS resampling unreliable; "
+            "increase num_paths/maxiter/maxcor or fall back to MCMC."
+        )
+        warnings.warn(msg, UserWarning, stacklevel=2)
+
+    return MultiPathfinderFit(
+        state=state,
+        model=model,
+        covariates=covariates,
+        data=data,
+        elbos=elbos,
+        log_weights=log_weights,
+        pareto_k=pareto_k_value,
+    )
+
+
+def multipathfinder_samples(
+    rng_key: Array,
+    fit: MultiPathfinderFit,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+    device: jax.Device | str | None = None,
+) -> dict[str, Array | np.ndarray]:
+    """Draw ``num_samples`` posterior samples from a fitted multipath Pathfinder fit.
+
+    Resamples with replacement from the pooled per-path draws stored in
+    ``fit.state.samples`` (flattened to the ``num_paths * num_elbo_samples`` pool
+    from fit time), using the normalized PSIS ``fit.log_weights`` as resampling
+    probabilities. This is with-replacement PSIS resampling, matching blackjax's
+    own multipath ``sample_fn`` semantics, so the output contract is identical to
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
+    :func:`pathfinder_samples`: :func:`~numpyro_forecast.functional.prediction.forecast`
+    and NumPyro's ``Predictive`` consume it unchanged. The raw pool and weights
+    stay public on ``fit`` for anyone who wants a different resampling scheme.
+    Chunking and device offload are delegated to the shared
+    :func:`~numpyro_forecast.functional._offload._draw_chunked` driver, so the same
+    memory-bounding contract applies.
+
+    PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
+    split into a model-initialization stream (used only to rebuild the
+    constraining transform) and a resampling-index stream.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key.
+    fit
+        A fit from :func:`fit_multipathfinder`.
+    num_samples
+        Number of posterior draws. Requesting far more than the pool size
+        (``num_paths * num_elbo_samples`` at fit time) duplicates draws; raise
+        ``num_elbo_samples`` in :func:`fit_multipathfinder` instead of
+        oversampling here.
+    batch_size
+        Optional chunk size for the drawing itself; see
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior` (the same
+        memory/reproducibility contract applies).
+    device
+        Where each chunk of draws is moved as soon as it is drawn; see
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+
+    Returns
+    -------
+    dict[str, Array | np.ndarray]
+        Posterior samples of the latent sites, sample axis leading (NumPy leaves
+        when ``device`` resolves to ``"host"``).
+
+    Raises
+    ------
+    ValueError
+        If ``num_samples`` or ``batch_size`` is not positive.
+
+    Notes
+    -----
+    ``pareto_k`` is computed and warned about once, at :func:`fit_multipathfinder`
+    time; this function does not recompute or re-warn about it.
+    """
+    _require_positive_num_samples(num_samples)
+
+    def draw_fn(key: Array, n: int) -> dict[str, Array]:
+        # Split so the discarded init draws and the resampling indices use
+        # distinct streams (the init param draws are unused, but keep the
+        # streams isolated).
+        key_init, key_choice = random.split(key)
+        _param_info, _potential_fn_gen, postprocess_fn, _ = initialize_model(
+            key_init,
+            fit.model,
+            dynamic_args=True,
+            model_args=(fit.covariates, fit.data),
+        )
+        flat_pool = jax.tree.map(lambda x: x.reshape(-1, *x.shape[2:]), fit.state.samples)
+        indices = jax.random.choice(
+            key_choice,
+            fit.log_weights.shape[0],
+            shape=(n,),
+            replace=True,
+            p=jnp.exp(fit.log_weights),
+        )
+        unconstrained = jax.tree.map(lambda x: x[indices], flat_pool)
         transform = postprocess_fn(fit.covariates, fit.data)
         return jax.vmap(transform)(unconstrained)
 

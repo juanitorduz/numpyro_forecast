@@ -171,6 +171,9 @@ reference:
       - contrib.blackjax.PathfinderFit
       - contrib.blackjax.fit_pathfinder
       - contrib.blackjax.pathfinder_samples
+      - contrib.blackjax.MultiPathfinderFit
+      - contrib.blackjax.fit_multipathfinder
+      - contrib.blackjax.multipathfinder_samples
 
   - title: Datasets
     desc: Example datasets used in the tutorials.
