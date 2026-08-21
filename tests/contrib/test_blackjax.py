@@ -13,12 +13,14 @@ import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import Array, random
+from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.forecaster import ForecastingModel, PathfinderForecaster
-from numpyro_forecast.functional import fit_mcmc, forecast
+from numpyro_forecast.exceptions import KernelConfigError
+from numpyro_forecast.functional import Horizon, forecast, predict, time_series
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import _api_canary
+from tests.conftest import rw_model
 
 pytest.importorskip("blackjax")
 
@@ -32,31 +34,29 @@ from numpyro_forecast.contrib.blackjax import (
 )
 
 
-class MeanModel(ForecastingModel):
+def mean_model(covariates: Array, data: Array | None = None) -> None:
     """Constant-level model with a conjugate Normal prior on the level.
 
     Observations are ``Normal(mu, 1)`` with ``mu ~ Normal(0, 10)``, so the
     posterior mean of ``mu`` is close to the sample mean of the data: a cheap
     closed-form recovery target.
     """
+    h = Horizon.from_data(covariates, data)
+    mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
+    level = jnp.broadcast_to(mu, (h.duration, 1))
+    predict(h, dist.Normal(0.0, 1.0), level)
 
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
-        level = jnp.broadcast_to(mu, (covariates.shape[-2], 1))
-        self.predict(dist.Normal(0.0, 1.0), level)
 
-
-class ReparamModel(ForecastingModel):
+def reparam_model(covariates: Array, data: Array | None = None) -> None:
     """Random-walk model with a ``LocScaleReparam`` drift (adds a ``_decentered`` site)."""
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-        drift = self.time_series(
-            "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam()
-        )
-        level = jnp.cumsum(drift, axis=-2)
-        self.predict(dist.Normal(0.0, sigma), level)
+    h = Horizon.from_data(covariates, data)
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+    drift = time_series(
+        h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam()
+    )
+    level = jnp.cumsum(drift, axis=-2)
+    predict(h, dist.Normal(0.0, sigma), level)
 
 
 def _empty_covariates(duration: int) -> Array:
@@ -67,17 +67,15 @@ def test_blackjax_nuts_recovers_normal_normal_posterior() -> None:
     truth = 3.0
     data = truth + random.normal(random.PRNGKey(0), (200, 1))
     covariates = _empty_covariates(200)
-    fit = fit_mcmc(
-        random.PRNGKey(1),
-        MeanModel(),
-        data,
-        covariates,
-        kernel=BlackjaxNUTSKernel,
-        kernel_kwargs={"num_adaptation_steps": 300},
+    mcmc = MCMC(
+        BlackjaxNUTSKernel(mean_model, num_adaptation_steps=300),
         num_warmup=0,
         num_samples=500,
+        chain_method="sequential",
+        progress_bar=False,
     )
-    posterior_mean = float(fit.samples["mu"].mean())
+    mcmc.run(random.PRNGKey(1), covariates, data)
+    posterior_mean = float(mcmc.get_samples()["mu"].mean())
     # Posterior mean ~ sample mean with the near-flat prior; loose MC tolerance.
     assert abs(posterior_mean - float(data.mean())) < 0.1
 
@@ -87,48 +85,47 @@ def test_blackjax_keyset_equals_nuts() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (30, 1)), axis=-2)
     covariates = _empty_covariates(30)
 
-    nuts_fit = fit_mcmc(
-        random.PRNGKey(1), ReparamModel(), data, covariates, num_warmup=100, num_samples=100
-    )
-    bj_fit = fit_mcmc(
-        random.PRNGKey(1),
-        ReparamModel(),
-        data,
-        covariates,
-        kernel=BlackjaxNUTSKernel,
-        kernel_kwargs={"num_adaptation_steps": 100},
+    nuts_mcmc = MCMC(NUTS(reparam_model), num_warmup=100, num_samples=100, progress_bar=False)
+    nuts_mcmc.run(random.PRNGKey(1), covariates, data)
+    nuts_samples = nuts_mcmc.get_samples()
+
+    bj_mcmc = MCMC(
+        BlackjaxNUTSKernel(reparam_model, num_adaptation_steps=100),
         num_warmup=0,
         num_samples=100,
+        chain_method="sequential",
+        progress_bar=False,
     )
-    assert "drift_decentered" in nuts_fit.samples
-    assert set(nuts_fit.samples) == set(bj_fit.samples)
+    bj_mcmc.run(random.PRNGKey(1), covariates, data)
+    bj_samples = bj_mcmc.get_samples()
+
+    assert "drift_decentered" in nuts_samples
+    assert set(nuts_samples) == set(bj_samples)
 
 
 def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (30, 1)), axis=-2)
     train_covariates = _empty_covariates(30)
     forecast_covariates = _empty_covariates(36)
-    model = ReparamModel()
+    model = reparam_model
 
-    nuts_fit = fit_mcmc(
-        random.PRNGKey(1), model, data, train_covariates, num_warmup=200, num_samples=200
-    )
-    mclmc_fit = fit_mcmc(
-        random.PRNGKey(1),
-        model,
-        data,
-        train_covariates,
-        kernel=BlackjaxMCLMCKernel,
-        kernel_kwargs={"num_tuning_steps": 200},
+    nuts_mcmc = MCMC(NUTS(model), num_warmup=200, num_samples=200, progress_bar=False)
+    nuts_mcmc.run(random.PRNGKey(1), train_covariates, data)
+    nuts_post = nuts_mcmc.get_samples()
+
+    mclmc_mcmc = MCMC(
+        BlackjaxMCLMCKernel(model, num_tuning_steps=200),
         num_warmup=0,
         num_samples=200,
+        chain_method="sequential",
+        progress_bar=False,
     )
+    mclmc_mcmc.run(random.PRNGKey(1), train_covariates, data)
+    mclmc_post = mclmc_mcmc.get_samples()
 
     # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
     # no draw_posterior step (that's guide-based only); both fits already hold
-    # exactly the 200 draws requested below.
-    nuts_post = nuts_fit.samples
-    mclmc_post = mclmc_fit.samples
+    # exactly the 200 draws requested above.
     nuts_fc = forecast(random.PRNGKey(3), model, nuts_post, data, forecast_covariates)
     mclmc_fc = forecast(random.PRNGKey(3), model, mclmc_post, data, forecast_covariates)
 
@@ -152,29 +149,17 @@ def _nuts_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignor
 def test_blackjax_custom_kernel_happy_path() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     covariates = _empty_covariates(25)
-    fit = fit_mcmc(
-        random.PRNGKey(1),
-        RandomWalkForCustom(),
-        data,
-        covariates,
-        kernel=BlackjaxCustomKernel,
-        kernel_kwargs={"build_fn": _nuts_build_fn},
+    mcmc = MCMC(
+        BlackjaxCustomKernel(rw_model, build_fn=_nuts_build_fn),
         num_warmup=0,
         num_samples=100,
+        chain_method="sequential",
+        progress_bar=False,
     )
-    assert fit.samples["sigma"].shape == (100,)
-    assert bool(jnp.all(jnp.isfinite(fit.samples["sigma"])))
-
-
-class RandomWalkForCustom(ForecastingModel):
-    """Plain random-walk model used by the custom-kernel happy path."""
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
-        level = jnp.cumsum(drift, axis=-2)
-        self.predict(dist.Normal(0.0, sigma), level)
+    mcmc.run(random.PRNGKey(1), covariates, data)
+    samples = mcmc.get_samples()
+    assert samples["sigma"].shape == (100,)
+    assert bool(jnp.all(jnp.isfinite(samples["sigma"])))
 
 
 _BadState = namedtuple("_BadState", ["position"])
@@ -188,55 +173,84 @@ def _malformed_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: 
 def test_blackjax_custom_kernel_malformed_state_raises() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     covariates = _empty_covariates(25)
+    mcmc = MCMC(
+        BlackjaxCustomKernel(rw_model, build_fn=_malformed_build_fn),
+        num_warmup=0,
+        num_samples=10,
+        chain_method="sequential",
+        progress_bar=False,
+    )
     with pytest.raises(TypeError, match="differ from the model"):
-        fit_mcmc(
-            random.PRNGKey(1),
-            RandomWalkForCustom(),
-            data,
-            covariates,
-            kernel=BlackjaxCustomKernel,
-            kernel_kwargs={"build_fn": _malformed_build_fn},
-            num_warmup=0,
-            num_samples=10,
-        )
+        mcmc.run(random.PRNGKey(1), covariates, data)
 
 
-def test_blackjax_kernel_rejects_non_sequential_chain_method() -> None:
-    """A Blackjax* kernel with chain_method='vectorized' raises before running."""
-    from numpyro_forecast.exceptions import KernelConfigError
+# --- Spec-required failure-mode pins (replacing the old fit_mcmc-level checks) ----
 
+
+def test_blackjax_kernel_vectorized_chain_method_raises_under_batched_rng() -> None:
+    """A BlackJAX kernel run with chain_method='vectorized' fails on a batched rng_key.
+
+    Determined empirically: with more than one chain, NumPyro's "vectorized" chain
+    method hands ``_BlackjaxKernel.init`` a stacked ``rng_key`` of shape
+    ``(num_chains, 2)`` instead of tracing a single per-chain call through
+    ``jax.vmap``. The base kernel calls ``jax.random.split(rng_key, 3)``
+    unconditionally, and JAX's own ``_check_prng_key`` rejects a key array whose
+    leading axis is not scalar-shaped, so the failure surfaces as a plain
+    ``ValueError`` from ``jax.random.split``, not from this package's own
+    validation (there is none left: run-config validation lived in the deleted
+    ``fit_mcmc``, not in the kernel itself). With a single chain there is nothing
+    to batch, so this needs ``num_chains=2`` to actually manifest.
+    """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (12, 1)), axis=-2)
     cov = _empty_covariates(12)
-    with pytest.raises(KernelConfigError, match="sequential"):
-        fit_mcmc(
-            random.PRNGKey(1),
-            MeanModel(),
-            data,
-            cov,
-            kernel=BlackjaxNUTSKernel,
-            chain_method="vectorized",
-            num_warmup=0,
-            num_samples=5,
-        )
+    mcmc = MCMC(
+        BlackjaxNUTSKernel(mean_model, num_adaptation_steps=20),
+        num_warmup=0,
+        num_samples=5,
+        num_chains=2,
+        chain_method="vectorized",
+        progress_bar=False,
+    )
+    with pytest.raises(ValueError, match="split accepts a single key"):
+        mcmc.run(random.PRNGKey(1), cov, data)
 
 
-def test_blackjax_kernel_warns_on_num_warmup() -> None:
-    """num_warmup>0 warns, attributed to the caller of fit_mcmc (stacklevel=3)."""
+def test_blackjax_kernel_num_warmup_positive_runs_and_wastes_steps() -> None:
+    """num_warmup>0 is documented waste, not an error: it still yields num_samples draws.
+
+    Adaptation for BlackJAX kernels happens once inside ``_BlackjaxKernel.init``
+    (see the "Run configuration" docstring sections on the kernel classes), so
+    NumPyro's own warmup phase runs the model that many extra times for nothing;
+    it is neither rejected nor does it change the returned sample count.
+    """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (12, 1)), axis=-2)
     cov = _empty_covariates(12)
-    with pytest.warns(UserWarning, match="warmup") as record:
-        fit_mcmc(
-            random.PRNGKey(1),
-            MeanModel(),
-            data,
-            cov,
-            kernel=BlackjaxNUTSKernel,
-            kernel_kwargs={"num_adaptation_steps": 20},
-            num_warmup=2,
-            num_samples=5,
-        )
-    # stacklevel=3 points the warning at this test file, not fit_mcmc's frame.
-    assert any(w.filename.endswith("test_blackjax.py") for w in record)
+    mcmc = MCMC(
+        BlackjaxNUTSKernel(mean_model, num_adaptation_steps=20),
+        num_warmup=3,
+        num_samples=5,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    mcmc.run(random.PRNGKey(1), cov, data)
+    samples = mcmc.get_samples()
+    assert samples["mu"].shape == (5,)
+    assert bool(jnp.all(jnp.isfinite(samples["mu"])))
+
+
+def test_blackjax_kernel_unbound_raises_kernel_config_error() -> None:
+    """A kernel constructed without a model raises KernelConfigError from init."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (12, 1)), axis=-2)
+    cov = _empty_covariates(12)
+    mcmc = MCMC(
+        BlackjaxNUTSKernel(),
+        num_warmup=0,
+        num_samples=5,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    with pytest.raises(KernelConfigError, match="no bound model"):
+        mcmc.run(random.PRNGKey(1), cov, data)
 
 
 def test_blackjax_api_canaries() -> None:
@@ -298,7 +312,7 @@ def test_pathfinder_constrained_support() -> None:
     covariates = _empty_covariates(24)
     fit = fit_pathfinder(
         random.PRNGKey(1),
-        RandomWalkForCustom(),
+        rw_model,
         data,
         covariates,
         num_elbo_samples=100,
@@ -314,9 +328,7 @@ def test_pathfinder_samples_chunked_matches_unchunked_shape() -> None:
     """Chunked and unchunked pathfinder draws agree on shape (values differ: distinct subkeys)."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
-    fit = fit_pathfinder(
-        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
-    )
+    fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
     unchunked = pathfinder_samples(random.PRNGKey(2), fit, 10)
     chunked = pathfinder_samples(random.PRNGKey(2), fit, 10, batch_size=4)
     assert set(chunked) == set(unchunked)
@@ -328,9 +340,7 @@ def test_pathfinder_samples_chunked_matches_unchunked_shape() -> None:
 def test_pathfinder_samples_device_host_returns_numpy() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
-    fit = fit_pathfinder(
-        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
-    )
+    fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
     hosted = pathfinder_samples(random.PRNGKey(2), fit, 20, device="host")
     assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
     assert hosted["sigma"].shape == (20,)
@@ -344,9 +354,7 @@ def test_pathfinder_samples_splits_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
-    fit = fit_pathfinder(
-        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
-    )
+    fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
 
     captured: dict[str, Array] = {}
     real_init = bj.initialize_model
@@ -373,26 +381,28 @@ def test_pathfinder_samples_splits_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_pathfinder_forecast_composes() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
-    forecaster = PathfinderForecaster(
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(
         random.PRNGKey(1),
-        RandomWalkForCustom(),
+        rw_model,
         data,
-        _empty_covariates(24),
+        covariates,
         num_elbo_samples=100,
         ftol=1e-4,
     )
-    forecast_samples = forecaster(random.PRNGKey(2), data, _empty_covariates(30), 100)
+    posterior = pathfinder_samples(random.PRNGKey(2), fit, 100)
+    forecast_samples = forecast(
+        random.PRNGKey(3), rw_model, posterior, data, _empty_covariates(30)
+    )
     assert forecast_samples.shape == (100, 6, 1)
     assert bool(jnp.all(jnp.isfinite(forecast_samples)))
-    assert isinstance(forecaster.elbo, float)
+    assert isinstance(fit.elbo, float)
 
 
 def test_pathfinder_fit_pickle_round_trip() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
-    fit = fit_pathfinder(
-        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
-    )
+    fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
     restored = pickle.loads(pickle.dumps(fit))  # noqa: S301 - round-trip of our own data
     assert isinstance(restored, PathfinderFit)
     assert restored.elbo == fit.elbo
@@ -472,7 +482,7 @@ def test_fit_pathfinder_high_dim_finite_elbo() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (300, 1)), axis=-2)
     fit = fit_pathfinder(
         random.PRNGKey(1),
-        ReparamModel(),
+        reparam_model,
         data,
         _empty_covariates(300),
         num_elbo_samples=100,
@@ -496,7 +506,7 @@ def test_fit_pathfinder_maxiter_passthrough(monkeypatch: pytest.MonkeyPatch) -> 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     fit_pathfinder(
         random.PRNGKey(1),
-        RandomWalkForCustom(),
+        rw_model,
         data,
         _empty_covariates(24),
         num_elbo_samples=50,
@@ -513,6 +523,7 @@ def test_backtest_accepts_a_forecast_fn_closure() -> None:
     closure contract from this (BlackJAX-optional) test module.
     """
     from numpyro_forecast.evaluate import backtest
+    from tests.conftest import rw_model_factory
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
@@ -536,7 +547,7 @@ def test_backtest_accepts_a_forecast_fn_closure() -> None:
         random.PRNGKey(1),
         data,
         covariates,
-        RandomWalkForCustom,
+        rw_model_factory,
         forecast_fn=forecast_fn,
         test_window=4,
         min_train_window=12,

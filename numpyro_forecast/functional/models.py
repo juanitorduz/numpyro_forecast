@@ -389,11 +389,10 @@ def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> Non
 def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastModel:
     """Build a NumPyro model from a functional model body.
 
-    The functional analogue of subclassing
-    :class:`~numpyro_forecast.forecaster.ForecastingModel`. ``model_fn`` is a
-    pure function ``(Horizon, covariates) -> None`` that calls :func:`time_series`
-    and :func:`predict`; this wraps it into the standard NumPyro model callable
-    ``(covariates, data=None)``, deriving the :class:`Horizon` from the shapes.
+    ``model_fn`` is a pure function ``(Horizon, covariates) -> None`` that calls
+    :func:`time_series` and :func:`predict`; this wraps it into the standard
+    NumPyro model callable ``(covariates, data=None)``, deriving the
+    :class:`Horizon` from the shapes.
 
     Parameters
     ----------
@@ -405,10 +404,8 @@ def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastMod
     Returns
     -------
     ForecastModel
-        A callable ``(covariates, data=None) -> None`` usable with ``SVI``,
-        ``MCMC``, ``Predictive``, :func:`~numpyro_forecast.functional.svi.fit_svi`,
-        :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`, and the OOP forecaster
-        classes.
+        A callable ``(covariates, data=None) -> None`` usable directly with
+        NumPyro's ``SVI``, ``MCMC``, and ``Predictive``.
     """
 
     def numpyro_model(covariates: Array, data: Array | None = None) -> None:

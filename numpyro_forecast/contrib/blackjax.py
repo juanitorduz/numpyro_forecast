@@ -2,17 +2,18 @@
 
 This module adapts `BlackJAX <https://blackjax-devs.github.io/blackjax/>`_ sampling
 algorithms to the NumPyro ``MCMCKernel`` interface so they can be passed straight to
-:func:`numpyro_forecast.functional.mcmc.fit_mcmc` (and thus
-:class:`~numpyro_forecast.forecaster.HMCForecaster`).
+:class:`~numpyro.infer.MCMC` like any built-in kernel.
 
 BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``,
 requiring ``blackjax>=1.6`` whose MCLMC tuning API this module targets) and is
 never imported at package import time: it is pulled in lazily, via
 :func:`numpyro_forecast.optional.require`, the first time a kernel is initialized. All three
 kernels run one blackjax step per NumPyro sampling step; adaptation happens once inside
-:meth:`_BlackjaxKernel.init`, so these kernels require ``chain_method="sequential"`` and
-``num_warmup=0`` (enforced/warned by
-:func:`numpyro_forecast.functional.mcmc._validate_kernel_run_config`).
+:meth:`_BlackjaxKernel.init`, so every run against one of these kernels must use
+``chain_method="sequential"`` and ``num_warmup=0``: see the "Run configuration"
+section on :class:`BlackjaxNUTSKernel`, :class:`BlackjaxMCLMCKernel`, and
+:class:`BlackjaxCustomKernel` for why, and :exc:`~numpyro_forecast.exceptions.KernelConfigError`
+for the one constraint (a kernel with no bound model) these kernels reject outright.
 """
 
 import importlib
@@ -28,6 +29,7 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
+from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.functional._offload import _draw_chunked
 from numpyro_forecast.functional._validation import _require_positive_num_samples
 from numpyro_forecast.optional import require
@@ -56,9 +58,11 @@ class _BlackjaxKernel(MCMCKernel):
     Parameters
     ----------
     model
-        The NumPyro forecasting model the kernel samples from. Bound by
-        :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when a kernel class
-        is passed to :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
+        The NumPyro forecasting model the kernel samples from. Pass it directly
+        to the kernel constructor (``BlackjaxNUTSKernel(model, ...)``) before
+        handing the instance to :class:`~numpyro.infer.MCMC`; a kernel
+        constructed without a model is unbound and raises
+        :exc:`~numpyro_forecast.exceptions.KernelConfigError` from :meth:`init`.
     """
 
     sample_field = "position"
@@ -137,7 +141,7 @@ class _BlackjaxKernel(MCMCKernel):
 
         Raises
         ------
-        ValueError
+        KernelConfigError
             If the kernel has no bound model.
         TypeError
             If :meth:`_build` returns a state whose ``position`` key set differs
@@ -145,8 +149,12 @@ class _BlackjaxKernel(MCMCKernel):
         """
         require("blackjax", extra="blackjax")
         if self._model is None:
-            msg = f"{type(self).__name__} has no bound model; pass the kernel class to fit_mcmc."
-            raise ValueError(msg)
+            msg = (
+                f"{type(self).__name__} has no bound model; construct it with the "
+                "model as the first argument (e.g. BlackjaxNUTSKernel(model)) before "
+                "passing it to MCMC."
+            )
+            raise KernelConfigError(msg)
         model_kwargs = {} if model_kwargs is None else model_kwargs
         rng_key, init_key, build_key = random.split(rng_key, 3)
         param_info, potential_fn_gen, postprocess_fn, _ = initialize_model(
@@ -234,6 +242,17 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
     :meth:`~_BlackjaxKernel.init` via ``blackjax.window_adaptation``; each MCMC step
     is then a single tuned NUTS step.
 
+    Run configuration
+    -----------------
+    Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
+    only**: the instance holds its step/postprocess functions as plain attributes
+    (``self._step_fn``, ``self._postprocess_fn``), and ``vmap``/``pmap`` chain
+    parallelism (``"vectorized"``/``"parallel"``) traces this instance, capturing
+    those attributes as tracers instead of running the closed-over blackjax step.
+    Also pass **``num_warmup=0``**: adaptation runs once inside :meth:`~_BlackjaxKernel.init`
+    (via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
+    of that are simply discarded work, not additional tuning.
+
     Parameters
     ----------
     model
@@ -280,6 +299,17 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
     mass matrix) are tuned once in :meth:`~_BlackjaxKernel.init` via
     ``blackjax.mclmc_find_L_and_step_size``; each MCMC step is then a single
     tuned MCLMC step.
+
+    Run configuration
+    -----------------
+    Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
+    only**: the instance holds its step/postprocess functions as plain attributes
+    (``self._step_fn``, ``self._postprocess_fn``), and ``vmap``/``pmap`` chain
+    parallelism (``"vectorized"``/``"parallel"``) traces this instance, capturing
+    those attributes as tracers instead of running the closed-over blackjax step.
+    Also pass **``num_warmup=0``**: tuning runs once inside :meth:`~_BlackjaxKernel.init`
+    (via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
+    on top of that are simply discarded work, not additional tuning.
 
     Parameters
     ----------
@@ -342,6 +372,17 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     same sites as the model and ``step_fn`` has signature
     ``(rng_key, inner_state) -> (inner_state, info)``. The base class validates the
     returned state's key set and raises :class:`TypeError` if it is malformed.
+
+    Run configuration
+    -----------------
+    Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
+    only**: the instance holds its step/postprocess functions as plain attributes
+    (``self._step_fn``, ``self._postprocess_fn``), and ``vmap``/``pmap`` chain
+    parallelism (``"vectorized"``/``"parallel"``) traces this instance, capturing
+    those attributes as tracers instead of running the closed-over blackjax step.
+    Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
+    once inside :meth:`~_BlackjaxKernel.init`, so any NumPyro-driven warmup steps
+    on top of that are simply discarded work, not additional tuning.
 
     Parameters
     ----------

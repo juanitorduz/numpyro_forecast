@@ -1,7 +1,7 @@
 """Shared type aliases used across the package.
 
 Keeping these in a dependency-free module avoids import cycles between
-``forecaster`` and ``evaluate``.
+``evaluate`` and the rest of the package.
 """
 
 from collections.abc import Callable
@@ -11,42 +11,9 @@ import jax
 
 if TYPE_CHECKING:
     import numpy as np
-    import optax
-    from numpyro.infer.autoguide import AutoGuide
-    from numpyro.infer.mcmc import MCMCKernel
-    from numpyro.optim import _NumPyroOptim
 
 Array = jax.Array
 """A JAX array (alias of :class:`jax.Array`)."""
-
-if TYPE_CHECKING:
-    # Precise unions for static checkers. At runtime (the ``else`` branch) each is
-    # ``object`` so the beartype import hook accepts any resolvable form without
-    # forcing an ``optax``/``numpyro`` import at package import time.
-    OptimizerLike = float | int | _NumPyroOptim | optax.GradientTransformation | None
-    """An optimizer specification accepted by :func:`~numpyro_forecast.functional.svi.fit_svi`.
-
-    Resolved by :func:`~numpyro_forecast.functional.svi.resolve_optimizer`: ``None``
-    (default ``Adam``), a positive scalar learning rate, an
-    ``optax.GradientTransformation``, or a NumPyro ``_NumPyroOptim``.
-    """
-
-    GuideLike = AutoGuide | type[AutoGuide] | Callable[..., object] | None
-    """A guide specification accepted by :func:`~numpyro_forecast.functional.svi.fit_svi`.
-
-    Resolved by :func:`~numpyro_forecast.functional.svi.resolve_guide`: ``None``
-    (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or a
-    ``functools.partial`` factory of one, or a hand-written guide function.
-    """
-
-    KernelLike = MCMCKernel | type[MCMCKernel] | None
-    """A kernel specification accepted by :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
-
-    Resolved by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel`: ``None``
-    (``NUTS``), an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
-    """
-else:
-    OptimizerLike = GuideLike = KernelLike = object
 
 BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
@@ -75,12 +42,12 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 class ForecastModel(Protocol):
     """A NumPyro forecasting model: a callable ``(covariates, data=None) -> None``.
 
-    Both an OOP :class:`~numpyro_forecast.forecaster.ForecastingModel` instance
-    and a plain function built by
-    :func:`numpyro_forecast.functional.models.forecasting_model` satisfy this
-    Protocol structurally, so neither needs to subclass it. The parameters are
-    positional-only so a user model's own parameter names (``cov``, ``y``, ...)
-    stay free instead of being forced to match ``covariates``/``data``.
+    Any plain function with this signature satisfies this Protocol structurally
+    (including one built by
+    :func:`numpyro_forecast.functional.models.forecasting_model`), so nothing
+    needs to subclass it. The parameters are positional-only so a user model's
+    own parameter names (``cov``, ``y``, ...) stay free instead of being forced
+    to match ``covariates``/``data``.
 
     ``ty`` checks call sites against this signature structurally (duck typing),
     which is the main payoff of the Protocol over a bare ``Callable`` alias.

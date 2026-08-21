@@ -16,11 +16,7 @@ from numpyro.infer.autoguide import AutoGuide, AutoNormal
 
 from numpyro_forecast.functional import (
     Horizon,
-    MCMCFit,
-    SVIFit,
     draw_posterior,
-    fit_mcmc,
-    fit_svi,
     forecast,
     predict,
     predict_in_sample,
@@ -152,35 +148,6 @@ def rw_model_factory() -> ForecastModel:
         rw_model(covariates, data)
 
     return model
-
-
-def svi_fit(t: int, num_steps: int = 40) -> SVIFit:
-    """Fit the shared random-walk body with SVI on a synthetic series (test helper).
-
-    Kept only for ``tests/test_functional_svi.py`` (deleted alongside ``fit_svi``
-    in a later task); every other caller fits with plain NumPyro instead (see
-    :func:`svi_guide_params`, :func:`posterior_factory`).
-    """
-    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    return fit_svi(random.PRNGKey(1), rw_model, data, empty_covariates(t), num_steps=num_steps)
-
-
-def mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
-    """Fit the shared random-walk body with MCMC on a synthetic series (test helper).
-
-    Kept only for ``tests/test_functional_mcmc.py`` (deleted alongside ``fit_mcmc``
-    in a later task); every other caller fits with plain NumPyro instead (see
-    :func:`nuts_samples`, :func:`posterior_factory`).
-    """
-    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    return fit_mcmc(
-        random.PRNGKey(1),
-        rw_model,
-        data,
-        empty_covariates(t),
-        num_warmup=num_warmup,
-        num_samples=num_samples,
-    )
 
 
 def as_autoguide(guide: "AutoGuide | Callable[..., None]") -> AutoGuide:

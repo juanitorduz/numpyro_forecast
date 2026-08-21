@@ -70,17 +70,9 @@ authors:
 # - Add 'desc:' to sections for descriptions
 
 reference:
-  - title: Forecasters
-    desc: High-level interfaces for fitting and forecasting.
-    contents:
-      - forecaster.Forecaster
-      - forecaster.HMCForecaster
-      - forecaster.PathfinderForecaster
-
   - title: Models
-    desc: Building forecasting models (object-oriented and functional).
+    desc: Building forecasting models.
     contents:
-      - forecaster.ForecastingModel
       - functional.models.forecasting_model
 
   - title: Typing
@@ -96,17 +88,6 @@ reference:
       - functional.models.markov_time_series
       - functional.models.predict
       - functional.models.predict_glm
-
-  - title: "Functional core: fitting"
-    desc: Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
-    contents:
-      - functional.svi.resolve_optimizer
-      - functional.svi.resolve_guide
-      - functional.svi.fit_svi
-      - functional.svi.SVIFit
-      - functional.mcmc.resolve_kernel
-      - functional.mcmc.fit_mcmc
-      - functional.mcmc.MCMCFit
 
   - title: "Functional core: posterior and prediction"
     desc: Drawing posterior samples and generating forecasts and in-sample predictions.
@@ -171,9 +152,6 @@ reference:
       - exceptions.BacktestWindowError
       - exceptions.VectorizedGuideError
       - exceptions.VectorizedMetricError
-      - exceptions.OptimizerResolutionError
-      - exceptions.GuideResolutionError
-      - exceptions.KernelResolutionError
       - exceptions.KernelConfigError
       - exceptions.CovariateDimsError
       - exceptions.MVNLayoutError

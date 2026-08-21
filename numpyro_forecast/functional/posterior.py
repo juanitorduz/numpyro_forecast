@@ -2,13 +2,12 @@
 
 :func:`draw_posterior` draws posterior samples of the latent sites from a fitted
 variational guide (an :class:`~numpyro.infer.autoguide.AutoGuide`) and its learned
-parameters, as returned by :func:`~numpyro_forecast.functional.svi.fit_svi` (via
-``fit.guide``/``fit.params``). It is guide-only on purpose: MCMC users already hold
-their posterior samples via ``mcmc.get_samples()`` (see
-:func:`~numpyro_forecast.functional.mcmc.fit_mcmc`), and hand-written-guide users
-draw with a single ``numpyro.infer.Predictive(guide, params=params,
-num_samples=n)(rng_key, covariates, data)`` call; neither needs this function.
-The blackjax Pathfinder backend has its own analogous entry point,
+parameters, as returned by ``AutoGuide``/``SVI.run`` (``guide``/``state.params``).
+It is guide-only on purpose: MCMC users already hold their posterior samples via
+``mcmc.get_samples()``, and hand-written-guide users draw with a single
+``numpyro.infer.Predictive(guide, params=params, num_samples=n)(rng_key,
+covariates, data)`` call; neither needs this function. The blackjax Pathfinder
+backend has its own analogous entry point,
 :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`, built on the same
 shared chunk-and-transfer loop, :func:`~numpyro_forecast.functional._offload._draw_chunked`.
 """
@@ -109,8 +108,8 @@ def draw_posterior(
     rng_key
         PRNG key.
     guide
-        The fitted variational guide, e.g. ``fit.guide`` from
-        :func:`~numpyro_forecast.functional.svi.fit_svi`.
+        The fitted variational guide, e.g. the ``AutoGuide`` instance passed to
+        ``SVI``.
     params
         The learned variational parameters, e.g. ``fit.params``.
     num_samples
@@ -149,8 +148,7 @@ def draw_posterior(
 
     Notes
     -----
-    For an MCMC fit, use its samples directly (``mcmc.get_samples()``, or
-    ``fit.samples`` from :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`); this
+    For an MCMC fit, use its samples directly (``mcmc.get_samples()``); this
     function draws afresh from a variational guide, and chunks drawn from
     independent subkeys remain valid i.i.d. posterior samples.
     """
