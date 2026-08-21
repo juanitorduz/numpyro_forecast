@@ -8,6 +8,7 @@ import pickle
 from collections import namedtuple
 
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
@@ -15,7 +16,7 @@ from jax import Array, random
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.forecaster import ForecastingModel, PathfinderForecaster
-from numpyro_forecast.functional import draw_posterior, fit_mcmc, forecast
+from numpyro_forecast.functional import fit_mcmc, forecast
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import _api_canary
 
@@ -27,6 +28,7 @@ from numpyro_forecast.contrib.blackjax import (
     BlackjaxNUTSKernel,
     PathfinderFit,
     fit_pathfinder,
+    pathfinder_samples,
 )
 
 
@@ -122,8 +124,11 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
         num_samples=200,
     )
 
-    nuts_post = draw_posterior(random.PRNGKey(2), nuts_fit, 200)
-    mclmc_post = draw_posterior(random.PRNGKey(2), mclmc_fit, 200)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only); both fits already hold
+    # exactly the 200 draws requested below.
+    nuts_post = nuts_fit.samples
+    mclmc_post = mclmc_fit.samples
     nuts_fc = forecast(random.PRNGKey(3), model, nuts_post, data, forecast_covariates)
     mclmc_fc = forecast(random.PRNGKey(3), model, mclmc_post, data, forecast_covariates)
 
@@ -300,12 +305,38 @@ def test_pathfinder_constrained_support() -> None:
         ftol=1e-4,
     )
     assert isinstance(fit, PathfinderFit)
-    post = draw_posterior(random.PRNGKey(2), fit, 200)
+    post = pathfinder_samples(random.PRNGKey(2), fit, 200)
     assert bool(jnp.all(post["sigma"] > 0.0))
     assert bool(jnp.all(post["drift_scale"] > 0.0))
 
 
-def test_pathfinder_draw_posterior_splits_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pathfinder_samples_chunked_matches_unchunked_shape() -> None:
+    """Chunked and unchunked pathfinder draws agree on shape (values differ: distinct subkeys)."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(
+        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
+    )
+    unchunked = pathfinder_samples(random.PRNGKey(2), fit, 10)
+    chunked = pathfinder_samples(random.PRNGKey(2), fit, 10, batch_size=4)
+    assert set(chunked) == set(unchunked)
+    for name in unchunked:
+        assert chunked[name].shape == unchunked[name].shape
+        assert bool(jnp.all(jnp.isfinite(chunked[name])))
+
+
+def test_pathfinder_samples_device_host_returns_numpy() -> None:
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(
+        random.PRNGKey(1), RandomWalkForCustom(), data, covariates, num_elbo_samples=100
+    )
+    hosted = pathfinder_samples(random.PRNGKey(2), fit, 20, device="host")
+    assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
+    assert hosted["sigma"].shape == (20,)
+
+
+def test_pathfinder_samples_splits_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """The pathfinder draw splits rng_key: model init and sampling get distinct subkeys."""
     import blackjax
 
@@ -333,7 +364,7 @@ def test_pathfinder_draw_posterior_splits_key(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(blackjax.vi.pathfinder, "sample", spy_sample)
 
     parent = random.PRNGKey(2)
-    draw_posterior(parent, fit, 50)
+    pathfinder_samples(parent, fit, 50)
 
     assert not jnp.array_equal(captured["init"], captured["sample"])
     assert not jnp.array_equal(captured["init"], parent)
@@ -366,7 +397,7 @@ def test_pathfinder_fit_pickle_round_trip() -> None:
     assert isinstance(restored, PathfinderFit)
     assert restored.elbo == fit.elbo
     # The restored fit still draws a valid constrained posterior.
-    post = draw_posterior(random.PRNGKey(2), restored, 50)
+    post = pathfinder_samples(random.PRNGKey(2), restored, 50)
     assert bool(jnp.all(post["sigma"] > 0.0))
 
 

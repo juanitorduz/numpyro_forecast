@@ -11,7 +11,6 @@ from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.functional import (
     Horizon,
-    draw_posterior,
     fit_mcmc,
     forecast,
     forecasting_model,
@@ -245,7 +244,9 @@ def test_poisson_local_level_end_to_end() -> None:
         num_warmup=200,
         num_samples=200,
     )
-    post = draw_posterior(random.PRNGKey(2), fit, 200)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(46))
     assert fc.shape == (200, 6, 1)
     assert bool(jnp.all(fc >= 0.0))

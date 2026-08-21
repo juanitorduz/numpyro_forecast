@@ -173,7 +173,6 @@ reference:
       - exceptions.VectorizedMetricError
       - exceptions.OptimizerResolutionError
       - exceptions.GuideResolutionError
-      - exceptions.GuideSampleArgsError
       - exceptions.KernelResolutionError
       - exceptions.KernelConfigError
       - exceptions.CovariateDimsError
@@ -195,6 +194,7 @@ reference:
       - contrib.blackjax.BlackjaxCustomKernel
       - contrib.blackjax.PathfinderFit
       - contrib.blackjax.fit_pathfinder
+      - contrib.blackjax.pathfinder_samples
 
   - title: Datasets
     desc: Example datasets used in the tutorials.

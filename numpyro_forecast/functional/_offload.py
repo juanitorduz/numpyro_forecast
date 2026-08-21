@@ -1,24 +1,31 @@
 """Device-offload helpers shared by the chunked posterior and predictive drivers.
 
-Both :mod:`~numpyro_forecast.functional.posterior` and
-:mod:`~numpyro_forecast.functional.prediction` draw large sample arrays in
-fixed-size chunks and move each chunk off the accelerator before the next one
+Both the posterior drivers (:func:`~numpyro_forecast.functional.posterior.draw_posterior`,
+:func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`) and the predictive
+drivers in :mod:`~numpyro_forecast.functional.prediction` draw large sample arrays
+in fixed-size chunks and move each chunk off the accelerator before the next one
 is produced. The helpers here own the device semantics of that loop:
 :func:`_resolve_device` turns the public ``device`` argument into a concrete
 target (a :class:`jax.Device`, the backend-free ``"host"`` sentinel, or
 ``None``), :func:`_transfer` moves one chunk there and blocks, and
 :func:`_stitch_chunks` concatenates the transferred chunks without pulling
-them back onto the accelerator.
+them back onto the accelerator. :func:`_draw_chunked` is the shared chunk-and-transfer
+loop itself: it owns batch-size validation, the single-shot passthrough, key
+splitting, and the per-chunk draw/transfer/stitch sequence, so
+:func:`~numpyro_forecast.functional.posterior.draw_posterior` and
+:func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples` differ only in the
+``draw_fn`` they supply.
 """
 
 import warnings
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Literal
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax import random
 
 from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.typing import Array
@@ -218,3 +225,85 @@ def _stitch_chunks(
     else:
         stitched = jnp.concatenate(chunks, axis=0)
     return stitched if stitched.shape[0] == num_samples else stitched[:num_samples]
+
+
+def _draw_chunked(
+    rng_key: Array,
+    draw_fn: Callable[[Array, int], dict[str, Array]],
+    num_samples: int,
+    *,
+    batch_size: int | None,
+    device: jax.Device | str | None,
+    stage: str,
+) -> dict[str, Array | np.ndarray]:
+    """Draw ``num_samples`` samples from ``draw_fn`` in fixed-size, offloaded chunks.
+
+    Shared chunk-and-transfer loop for :func:`~numpyro_forecast.functional.posterior.draw_posterior`
+    and :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`. With
+    ``batch_size`` ``None`` (or at least ``num_samples``) ``draw_fn`` is called once
+    for the full count with ``rng_key`` itself (the single-shot passthrough).
+    Otherwise ``rng_key`` is split into one subkey per chunk, ``draw_fn`` is called
+    with each subkey and exactly ``batch_size`` as the sample count (so every chunk
+    shares one shape and whatever ``draw_fn`` compiles internally compiles exactly
+    once), every leaf of every chunk is moved to ``device`` as soon as it is drawn
+    (:func:`_transfer`), and the final chunk's overdraw is discarded by
+    :func:`_stitch_chunks`. Chunking is a memory knob, not a reproducibility knob:
+    draws are reproducible per ``(rng_key, batch_size)``, but changing ``batch_size``
+    changes the PRNG stream layout and therefore the exact draws.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key; consumed directly when unchunked, split per chunk otherwise.
+    draw_fn
+        ``(rng_key, n) -> samples`` drawing exactly ``n`` samples of every latent
+        site, sample axis leading.
+    num_samples
+        Total number of samples to draw.
+    batch_size
+        Optional chunk size (caps peak memory); ``None`` or at least
+        ``num_samples`` takes the single-shot passthrough.
+    device
+        Where each chunk (and the single-shot result) is moved as soon as it is
+        drawn; forwarded to :func:`_resolve_device`.
+    stage
+        Human-readable stage name forwarded to :func:`_oom_advice` for the OOM
+        error message (e.g. ``"posterior drawing"``).
+
+    Returns
+    -------
+    dict[str, Array | np.ndarray]
+        The drawn samples with exactly ``num_samples`` leading rows (NumPy leaves
+        when ``device`` resolves to ``"host"``).
+
+    Raises
+    ------
+    ValueError
+        If ``batch_size`` is not positive.
+    DeviceMemoryError
+        If ``draw_fn`` fails with a device OOM (see :func:`_oom_advice`).
+    """
+    resolved = _resolve_device(device)
+    if batch_size is not None and batch_size <= 0:
+        msg = f"batch_size must be positive, got {batch_size}"
+        raise ValueError(msg)
+    if batch_size is None or batch_size >= num_samples:
+        with _oom_advice(stage, batch_size):
+            samples = draw_fn(rng_key, num_samples)
+            return {name: _transfer(leaf, resolved) for name, leaf in samples.items()}
+    num_chunks = -(-num_samples // batch_size)  # ceil; the last chunk overdraws
+    keys = random.split(rng_key, num_chunks)
+    chunks: list[dict[str, Array | np.ndarray]] = []
+    with _oom_advice(stage, batch_size):
+        for key in keys:
+            # An explicit loop with pop-per-leaf keeps the accelerator peak at
+            # one chunk: every device buffer of chunk k is released (each leaf
+            # as soon as its copy lands on ``device``) before chunk k+1 is
+            # dispatched.
+            draws = dict(draw_fn(key, batch_size))
+            chunks.append({name: _transfer(draws.pop(name), resolved) for name in list(draws)})
+            del draws
+        return {
+            name: _stitch_chunks([chunk[name] for chunk in chunks], num_samples, resolved)
+            for name in chunks[0]
+        }

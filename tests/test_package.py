@@ -57,7 +57,6 @@ def test_all_matches_exported_names() -> None:
         "Forecaster",
         "ForecastingModel",
         "GuideResolutionError",
-        "GuideSampleArgsError",
         "HMCForecaster",
         "KernelConfigError",
         "KernelResolutionError",

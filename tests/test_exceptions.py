@@ -5,7 +5,6 @@ import pytest
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     GuideResolutionError,
-    GuideSampleArgsError,
     KernelConfigError,
     KernelResolutionError,
     MVNLayoutError,
@@ -24,7 +23,6 @@ from numpyro_forecast.exceptions import (
         (VectorizedMetricError, TypeError),
         (OptimizerResolutionError, TypeError),
         (GuideResolutionError, TypeError),
-        (GuideSampleArgsError, ValueError),
         (KernelResolutionError, TypeError),
         (KernelConfigError, ValueError),
         (MVNLayoutError, NotImplementedError),
@@ -45,7 +43,6 @@ def test_exception_subclasses_base_and_builtin(
         VectorizedMetricError,
         OptimizerResolutionError,
         GuideResolutionError,
-        GuideSampleArgsError,
         MVNLayoutError,
     ],
 )

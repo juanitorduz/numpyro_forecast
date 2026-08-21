@@ -22,7 +22,7 @@ from numpyro_forecast.functional import (
     markov_time_series,
     predict,
 )
-from tests.conftest import empty_covariates
+from tests.conftest import as_autoguide, empty_covariates
 
 PHI = 0.85
 DRIFT = 0.08
@@ -60,16 +60,20 @@ def test_ar1_forecast_matches_closed_form(fitter: str, rng_key: Array) -> None:
     model = _ar1_model()
     if fitter == "svi":
         fit = fit_svi(rng_key, model, data, cov[:t_obs], num_steps=400)
+        post = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 200)
     else:
+        # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(),
+        # with no draw_posterior step (that's guide-based only); fit for exactly
+        # the wanted draw count instead of thinning/resampling after the fact.
         fit = fit_mcmc(
             rng_key,
             model,
             data,
             cov[:t_obs],
             num_warmup=100,
-            num_samples=100,
+            num_samples=200,
         )
-    post = draw_posterior(random.PRNGKey(1), fit, 200)
+        post = fit.samples
     z_last = float(post["z"][:, -1, 0].mean())
     preds = forecast(random.PRNGKey(2), model, post, data, cov, batch_size=50)
     mean_fc = preds.mean(axis=0)[:, 0]
@@ -182,6 +186,6 @@ def test_functional_ar1_via_forecasting_model() -> None:
     data = jnp.zeros((10, 1))
     cov = empty_covariates(14)
     fit = fit_svi(random.PRNGKey(0), model, data, cov[:10], num_steps=50)
-    post = draw_posterior(random.PRNGKey(1), fit, 20)
+    post = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 20)
     preds = forecast(random.PRNGKey(2), model, post, data, cov)
     assert preds.shape == (20, 4, 1)

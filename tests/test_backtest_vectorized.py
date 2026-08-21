@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import svi_forecast_fn
+from conftest import as_autoguide, svi_forecast_fn
 from jax import Array, random
 from numpyro.infer.autoguide import AutoNormal
 
@@ -323,7 +323,7 @@ def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
     fit = fit_svi(random.PRNGKey(2), _RandomWalk(), train_data, train_cov, num_steps=30)
     from numpyro_forecast.functional import draw_posterior
 
-    posterior = draw_posterior(random.PRNGKey(3), fit, 10)
+    posterior = draw_posterior(random.PRNGKey(3), as_autoguide(fit.guide), fit.params, 10)
     preds = forecast(random.PRNGKey(4), _RandomWalk(), posterior, train_data, full_cov)
     assert preds.shape[0] == 10
     assert jnp.all(jnp.isfinite(preds))

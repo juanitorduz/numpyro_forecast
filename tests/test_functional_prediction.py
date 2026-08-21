@@ -6,14 +6,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import empty_covariates, rw_body
+from conftest import empty_covariates, rw_body, svi_guide_params
 from jax import random
+from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.functional import (
-    SVIFit,
     draw_posterior,
-    fit_svi,
     forecast,
     forecasting_model,
     predict_in_sample,
@@ -28,32 +27,34 @@ from numpyro_forecast.functional.prediction import (
 from numpyro_forecast.typing import Array, ForecastModel
 
 
-def _fit_data(t: int = 30, num_steps: int = 40) -> tuple[ForecastModel, Array, SVIFit]:
+def _fit_data(
+    t: int = 30, num_steps: int = 40
+) -> tuple[ForecastModel, Array, AutoNormal, dict[str, Array]]:
     model = forecasting_model(rw_body)
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    fit = fit_svi(random.PRNGKey(1), model, data, empty_covariates(t), num_steps=num_steps)
-    return model, data, fit
+    guide, params = svi_guide_params(t, num_steps=num_steps)
+    return model, data, guide, params
 
 
 def test_forecast_shape_and_finite() -> None:
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     assert fc.shape == (10, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
 
 def test_forecast_batched_shape_and_finite() -> None:
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
     assert fc.shape == (10, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
 
 
 def test_forecast_parallel_matches_serial() -> None:
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     serial = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=False)
     vmapped = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=True)
     assert vmapped.shape == serial.shape == (10, 6, 1)
@@ -63,8 +64,8 @@ def test_forecast_parallel_matches_serial() -> None:
 def test_forecast_parallel_matches_serial_batched() -> None:
     # With batch_size fixed, only the within-chunk mapping changes (vmap vs
     # lax.map), so the chunked-vmap path must match the chunked-serial path.
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     kwargs = {"batch_size": 3}
     serial = forecast(
         random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=False, **kwargs
@@ -76,23 +77,23 @@ def test_forecast_parallel_matches_serial_batched() -> None:
 
 
 def test_forecast_rejects_covariates_not_longer() -> None:
-    model, data, fit = _fit_data(num_steps=20)
-    post = draw_posterior(random.PRNGKey(2), fit, 5)
+    model, data, guide, params = _fit_data(num_steps=20)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 5)
     with pytest.raises(ValueError, match="covariates must extend beyond data"):
         forecast(random.PRNGKey(3), model, post, data, empty_covariates(30))
 
 
 def test_predict_in_sample_shape_and_finite() -> None:
-    model, _data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     obs = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30))
     assert obs.shape == (10, 30, 1)
     assert bool(jnp.all(jnp.isfinite(obs)))
 
 
 def test_predict_in_sample_batched_matches_unbatched_shape() -> None:
-    model, _data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     full = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30))
     batched = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30), batch_size=3)
     assert batched.shape == full.shape == (10, 30, 1)
@@ -100,8 +101,8 @@ def test_predict_in_sample_batched_matches_unbatched_shape() -> None:
 
 
 def test_predict_in_sample_parallel_matches_serial() -> None:
-    model, _data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     serial = predict_in_sample(
         random.PRNGKey(3), model, post, empty_covariates(30), parallel=False
     )
@@ -192,8 +193,8 @@ def test_chunked_draws_unchunked_passthrough(batch_size: int | None) -> None:
 @pytest.mark.parametrize("num_samples", [1, 3, 4, 5, 12])
 def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
     # Sweep num_samples around batch_size b=4: {1, b-1, b, b+1, 3b}.
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, num_samples)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, num_samples)
     fc = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=4)
     assert fc.shape == (num_samples, 6, 1)
     assert bool(jnp.all(jnp.isfinite(fc)))
@@ -202,9 +203,9 @@ def test_forecast_chunked_shapes_and_finite(num_samples: int) -> None:
 def test_forecast_chunked_close_to_unchunked() -> None:
     # Chunking changes the PRNG layout, so draws differ; the sample means still
     # agree within Monte Carlo error (same distribution).
-    model, data, fit = _fit_data()
+    model, data, guide, params = _fit_data()
     n = 400
-    post = draw_posterior(random.PRNGKey(2), fit, n)
+    post = draw_posterior(random.PRNGKey(2), guide, params, n)
     chunked = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=8)
     unchunked = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     assert chunked.shape == unchunked.shape == (n, 6, 1)
@@ -224,10 +225,10 @@ def test_single_compile_while_chunking(count_compilations) -> None:
     every shape has been seen, and the ``_predict`` cache introspection pins the
     forecast kernel specifically to one variant.
     """
-    model, data, fit = _fit_data()
+    model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
     # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
-    posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
+    posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
     def _sweep() -> None:
@@ -302,8 +303,8 @@ def test_chunked_draws_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_forecast_device_bitwise_matches_no_device() -> None:
     # device is a placement knob, never a draws knob.
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
     hosted = forecast(
         random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
@@ -314,8 +315,8 @@ def test_forecast_device_bitwise_matches_no_device() -> None:
 
 
 def test_predict_in_sample_device_bitwise_matches_no_device() -> None:
-    model, _data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4)
     hosted = predict_in_sample(
         random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="cpu"
@@ -326,8 +327,8 @@ def test_predict_in_sample_device_bitwise_matches_no_device() -> None:
 
 
 def test_forecast_device_string_alias() -> None:
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     by_string = forecast(
         random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
     )
@@ -342,8 +343,8 @@ def test_forecast_device_string_alias() -> None:
 
 def test_forecast_unchunked_device_commits_result() -> None:
     # The unchunked passthrough honors device too (single transfer of the result).
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="cpu")
     assert isinstance(hosted, jax.Array)
@@ -354,9 +355,9 @@ def test_forecast_unchunked_device_commits_result() -> None:
 @pytest.mark.parametrize("device", ["cpu", "host"])
 def test_single_compile_while_chunking_with_device(count_compilations, device: str) -> None:
     """Off-accelerator transfers must not break the fixed-shape single-compile invariant."""
-    model, data, fit = _fit_data()
+    model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
-    posteriors = [draw_posterior(random.PRNGKey(2), fit, n) for n in (5, 8, 12)]
+    posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
     def _sweep() -> None:
@@ -451,8 +452,8 @@ def test_chunked_draws_host_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch
 
 def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
     # "host" is a placement/representation knob, never a draws knob.
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
     cpu = forecast(
         random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="cpu"
@@ -466,8 +467,8 @@ def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
 
 
 def test_predict_in_sample_host_bitwise_matches_default() -> None:
-    model, _data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4)
     hosted = predict_in_sample(
         random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="host"
@@ -503,8 +504,8 @@ def test_predictive_non_oom_errors_propagate_unchanged() -> None:
 
 def test_forecast_numpy_posterior_bitwise_matches_jax() -> None:
     """A host-offloaded (NumPy) posterior streams back through the same draws."""
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     post_np = {name: np.asarray(leaf) for name, leaf in post.items()}
     from_jax = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
     from_np = forecast(random.PRNGKey(3), model, post_np, data, empty_covariates(36), batch_size=3)
@@ -512,8 +513,8 @@ def test_forecast_numpy_posterior_bitwise_matches_jax() -> None:
 
 
 def test_predict_in_sample_numpy_posterior_bitwise_matches_jax() -> None:
-    model, _data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     post_np = {name: np.asarray(leaf) for name, leaf in post.items()}
     from_jax = predict_in_sample(
         random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4
@@ -526,8 +527,8 @@ def test_predict_in_sample_numpy_posterior_bitwise_matches_jax() -> None:
 
 def test_forecast_unchunked_host_returns_numpy() -> None:
     # The unchunked passthrough honors "host" too (single device_get of the result).
-    model, data, fit = _fit_data()
-    post = draw_posterior(random.PRNGKey(2), fit, 10)
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="host")
     assert isinstance(hosted, np.ndarray)

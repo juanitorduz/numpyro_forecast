@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any, cast
 
 import jax
+import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 from jax import random
@@ -36,10 +37,12 @@ from numpyro_forecast.functional import predict as _predict
 from numpyro_forecast.functional import predict_glm as _predict_glm
 from numpyro_forecast.functional import predict_in_sample as _predict_in_sample
 from numpyro_forecast.functional import time_series as _time_series
+from numpyro_forecast.functional._offload import _resolve_device, _transfer
 from numpyro_forecast.functional._validation import (
     _require_covariates_extend_data,
     _require_positive_num_samples,
 )
+from numpyro_forecast.functional.posterior import _index_tree
 from numpyro_forecast.typing import (
     Array,
     ForecastModel,
@@ -474,7 +477,7 @@ class Forecaster(_BaseForecaster):
         device: jax.Device | str | None = None,
     ) -> dict[str, "Array | np.ndarray"]:
         return draw_posterior(
-            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
+            rng_key, self.guide, self.params, num_samples, batch_size=batch_size, device=device
         )
 
 
@@ -549,9 +552,21 @@ class HMCForecaster(_BaseForecaster):
         batch_size: int | None = None,
         device: jax.Device | str | None = None,
     ) -> dict[str, "Array | np.ndarray"]:
-        return draw_posterior(
-            rng_key, self._fit, num_samples, batch_size=batch_size, device=device
-        )
+        # MCMC draws are already materialized (mcmc.get_samples()), so there is no
+        # drawing peak to bound: batch_size is ignored (as draw_posterior used to
+        # do for an MCMCFit) and only the requested count is selected from the
+        # chain. Fewer draws than available: thin on an evenly spaced grid
+        # (deterministic, order-preserving, duplicate-free). More draws than
+        # available: resample with replacement (the only way to grow the count).
+        _require_positive_num_samples(num_samples)
+        available = next(iter(self.posterior_samples.values())).shape[0]
+        if num_samples <= available:
+            indices = jnp.linspace(0, available - 1, num_samples).round().astype(int)
+        else:
+            indices = random.choice(rng_key, available, shape=(num_samples,), replace=True)
+        selected = _index_tree(self.posterior_samples, indices)
+        resolved = _resolve_device(device)
+        return {name: _transfer(leaf, resolved) for name, leaf in selected.items()}
 
 
 class PathfinderForecaster(_BaseForecaster):
@@ -620,6 +635,9 @@ class PathfinderForecaster(_BaseForecaster):
         batch_size: int | None = None,
         device: jax.Device | str | None = None,
     ) -> dict[str, "Array | np.ndarray"]:
-        return draw_posterior(
+        # Lazy import: mirrors the constructor's deferred blackjax dependency (I8).
+        from numpyro_forecast.contrib.blackjax import pathfinder_samples
+
+        return pathfinder_samples(
             rng_key, self._fit, num_samples, batch_size=batch_size, device=device
         )

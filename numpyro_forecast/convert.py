@@ -22,9 +22,17 @@ import numpy as np
 import xarray
 from jax import random
 from jaxtyping import Float, Num
+from numpyro.infer import Predictive
+from numpyro.infer.autoguide import AutoGuide
 
 from numpyro_forecast.exceptions import CovariateDimsError
-from numpyro_forecast.functional import MCMCFit, draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.functional import (
+    MCMCFit,
+    SVIFit,
+    draw_posterior,
+    forecast,
+    predict_in_sample,
+)
 from numpyro_forecast.functional._validation import _require_covariates_cover_data
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -221,6 +229,76 @@ def _forecast_group_datasets(
     return predictions_ds, predictions_constant_ds
 
 
+def _draw_fit_posterior(
+    rng_key: Array,
+    fit: object,
+    num_samples: int,
+    *,
+    batch_size: int | None,
+    device: jax.Device | str | None,
+) -> dict[str, "Array | np.ndarray"]:
+    """Draw posterior samples from a non-MCMC fit for :func:`to_datatree`.
+
+    Interim shim (Task 5 pivot; ``to_datatree`` itself is reshaped in a later
+    task): an :class:`~numpyro_forecast.functional.svi.SVIFit` with an ``AutoGuide``
+    delegates to the guide-based
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior`. An ``SVIFit``
+    holding a hand-written guide instead draws with one direct ``Predictive`` call
+    (mirroring what ``draw_posterior`` used to do internally for that case; it no
+    longer supports hand-written guides). A blackjax
+    :class:`~numpyro_forecast.contrib.blackjax.PathfinderFit` is routed to
+    :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples` (imported lazily
+    so blackjax stays an optional dependency, invariant I8).
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for the draw.
+    fit
+        A non-MCMC fit (``SVIFit`` or a ``PathfinderFit``).
+    num_samples
+        Number of posterior draws.
+    batch_size
+        Optional chunk size forwarded to the underlying draw.
+    device
+        Device/placement forwarded to the underlying draw.
+
+    Returns
+    -------
+    dict[str, Array | np.ndarray]
+        Posterior samples of the latent sites, sample axis leading.
+
+    Raises
+    ------
+    ValueError
+        If ``fit`` is a hand-written-guide ``SVIFit`` built without its in-sample
+        covariates/data.
+    NotImplementedError
+        If ``fit`` is of a type this shim does not (yet) support.
+    """
+    if isinstance(fit, SVIFit):
+        if isinstance(fit.guide, AutoGuide):
+            return draw_posterior(
+                rng_key, fit.guide, fit.params, num_samples, batch_size=batch_size, device=device
+            )
+        if fit.covariates is None:
+            msg = (
+                "to_datatree() cannot draw from a hand-written guide's SVIFit built "
+                "without its in-sample covariates/data"
+            )
+            raise ValueError(msg)
+        predictive = Predictive(fit.guide, params=fit.params, num_samples=num_samples)
+        return cast("dict[str, Array | np.ndarray]", predictive(rng_key, fit.covariates, fit.data))
+    if type(fit).__name__ == "PathfinderFit":
+        from numpyro_forecast.contrib.blackjax import pathfinder_samples
+
+        return pathfinder_samples(
+            rng_key, cast("Any", fit), num_samples, batch_size=batch_size, device=device
+        )
+    msg = f"to_datatree() does not support {type(fit).__name__}"
+    raise NotImplementedError(msg)
+
+
 def to_datatree(
     rng_key: Array,
     fit: object,
@@ -378,7 +456,7 @@ def to_datatree(
             if num_predictive_samples is None
             else num_predictive_samples
         )
-        samples = draw_posterior(
+        samples = _draw_fit_posterior(
             key_post, fit, num, batch_size=predictive_batch_size, device=predictive_device
         )
 

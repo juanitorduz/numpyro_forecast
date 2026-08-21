@@ -11,7 +11,6 @@ from numpyro.infer import AIES, ESS, HMC, HMCECS, NUTS, SA, BarkerMH, HMCGibbs
 from numpyro_forecast.exceptions import KernelConfigError, KernelResolutionError
 from numpyro_forecast.functional import (
     MCMCFit,
-    draw_posterior,
     fit_mcmc,
     forecast,
     resolve_kernel,
@@ -96,7 +95,7 @@ def test_numpyro_kernels_fit_and_forecast(kernel) -> None:
     )
     assert isinstance(fit, MCMCFit)
     assert fit.num_chains == 1
-    samples = draw_posterior(random.PRNGKey(1), fit, 10)
+    samples = fit.samples
     fc = forecast(random.PRNGKey(2), RandomWalkModel(), samples, data, empty_covariates(18))
     assert fc.shape == (10, 3, 1)
     assert jnp.all(jnp.isfinite(fc))

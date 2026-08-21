@@ -11,7 +11,7 @@ from conftest import RandomWalkModel, empty_covariates
 from jax import Array, random
 
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
-from numpyro_forecast.functional import draw_posterior, fit_mcmc, fit_svi, forecast
+from numpyro_forecast.functional import fit_mcmc, fit_svi, forecast
 from numpyro_forecast.typing import ForecastModel
 
 arviz_base = pytest.importorskip("arviz_base")
@@ -119,7 +119,9 @@ def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
     out = add_forecast_groups(tree, fc, future_covariates[n:])
@@ -135,7 +137,9 @@ def test_add_forecast_groups_explicit_time_coord() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 3)
-    post = draw_posterior(random.PRNGKey(3), fit, 60)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
     out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=[900, 901, 902])
@@ -151,7 +155,9 @@ def test_add_forecast_groups_rejects_wrong_length_time_coord() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 3)
-    post = draw_posterior(random.PRNGKey(3), fit, 60)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
     with pytest.raises(ValueError, match="time_coord has length 2"):
@@ -168,7 +174,9 @@ def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
     n = data.shape[-2]
     days = np.datetime64("2024-01-01") + np.arange(n)
     future_covariates = empty_covariates(n + 3)
-    post = draw_posterior(random.PRNGKey(3), fit, 60)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2), fit, RandomWalkModel(), data, covariates, time_coord=list(days)
@@ -338,7 +346,9 @@ def test_add_forecast_groups_covariate_dims() -> None:
     fit, data, _ = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = jnp.zeros((2, n + 5, 1))
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
@@ -370,7 +380,9 @@ def test_add_forecast_groups_inherits_covariate_dims() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
@@ -392,7 +404,9 @@ def test_add_forecast_groups_rejects_mismatched_covariate_dims() -> None:
     fit, data, covariates = _mcmc_fit()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
@@ -416,7 +430,9 @@ def test_add_forecast_groups_inherited_dims_reject_wrong_ndim() -> None:
     n = data.shape[-2]
     insample_covariates = jnp.zeros((2, n, 1))
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
+    # MCMC posterior samples (mcmc.get_samples()) go straight to forecast(), with
+    # no draw_posterior step (that's guide-based only).
+    post = fit.samples
     fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
@@ -503,9 +519,9 @@ def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
     real_draw = convert_mod.draw_posterior
     real_pred = convert_mod.predict_in_sample
 
-    def spy_draw(rng_key: Array, fit: object, num: int, **kwargs: object) -> object:
+    def spy_draw(rng_key: Array, *args: object, **kwargs: object) -> object:
         captured["post"] = rng_key
-        return real_draw(rng_key, fit, num, **kwargs)  # ty: ignore[invalid-argument-type]
+        return real_draw(rng_key, *args, **kwargs)  # ty: ignore[invalid-argument-type]
 
     def spy_pred(
         rng_key: Array,

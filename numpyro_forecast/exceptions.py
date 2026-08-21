@@ -93,21 +93,6 @@ class GuideResolutionError(NumpyroForecastError, TypeError):
     )
 
 
-class GuideSampleArgsError(NumpyroForecastError, ValueError):
-    """Drawing from a hand-written guide needs the in-sample arguments.
-
-    Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` when an
-    :class:`~numpyro_forecast.functional.svi.SVIFit` holding a hand-written guide
-    was constructed without its in-sample covariates/data.
-    """
-
-    default_message = (
-        "drawing from a hand-written guide requires the in-sample covariates/data, "
-        "which this SVIFit was constructed without. Fit via fit_svi (which records "
-        "them) or provide them explicitly."
-    )
-
-
 class CovariateDimsError(NumpyroForecastError, ValueError):
     """Covariate dimension names are inconsistent or malformed.
 

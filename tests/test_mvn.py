@@ -4,6 +4,7 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
+from conftest import as_autoguide
 from jax import Array, random
 
 from numpyro_forecast.exceptions import MVNLayoutError
@@ -137,7 +138,7 @@ def test_gp_noise_end_to_end() -> None:
     data = random.normal(random.PRNGKey(0), (12, 1))
     cov = empty_covariates(16)
     fit = fit_svi(random.PRNGKey(1), model, data, cov[:12], num_steps=150)
-    post = draw_posterior(random.PRNGKey(2), fit, 30)
+    post = draw_posterior(random.PRNGKey(2), as_autoguide(fit.guide), fit.params, 30)
     assert set(post) >= {"sigma", "rho", "level"}
     assert jnp.all(jnp.isfinite(post["sigma"]))
 

@@ -6,9 +6,10 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import RandomWalkModel, empty_covariates
+from conftest import RandomWalkModel, as_autoguide, empty_covariates
 from jax import random
 from numpyro.handlers import seed, trace
+from numpyro.infer import Predictive
 from numpyro.infer.autoguide import (
     AutoDelta,
     AutoGuide,
@@ -16,9 +17,8 @@ from numpyro.infer.autoguide import (
     AutoNormal,
 )
 
-from numpyro_forecast.exceptions import GuideResolutionError, GuideSampleArgsError
+from numpyro_forecast.exceptions import GuideResolutionError
 from numpyro_forecast.functional import (
-    SVIFit,
     draw_posterior,
     fit_svi,
     forecast,
@@ -76,19 +76,13 @@ def test_resolve_unknown_type_rejected() -> None:
         resolve_guide(42, RandomWalkModel())  # ty: ignore[invalid-argument-type]
 
 
-def test_manual_svifit_handwritten_without_args_raises() -> None:
-    fit = SVIFit(guide=_handwritten_guide, params={}, losses=jnp.zeros(1))
-    with pytest.raises(GuideSampleArgsError, match="hand-written guide"):
-        draw_posterior(random.PRNGKey(0), fit, 5)
-
-
 def test_autodelta_draw_has_tiled_sample_axis() -> None:
     data = jnp.zeros((20, 1))
     covariates = empty_covariates(20)
     fit = fit_svi(
         random.PRNGKey(0), RandomWalkModel(), data, covariates, guide=AutoDelta, num_steps=10
     )
-    samples = draw_posterior(random.PRNGKey(1), fit, 7)
+    samples = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 7)
     # AutoDelta is a point estimate tiled to a leading sample axis: the latent
     # values are identical across the axis (dispatch by type, not by shape).
     assert samples["sigma"].shape[0] == 7
@@ -96,6 +90,9 @@ def test_autodelta_draw_has_tiled_sample_axis() -> None:
 
 
 def test_handwritten_guide_end_to_end() -> None:
+    # draw_posterior is guide-based only (AutoGuide); a hand-written guide draws
+    # with one direct Predictive call instead (the guide is not vmappable/jittable
+    # through the shared jitted-sample-posterior path).
     data = jnp.zeros((20, 1))
     covariates = empty_covariates(20)
     fit = fit_svi(
@@ -106,7 +103,8 @@ def test_handwritten_guide_end_to_end() -> None:
         guide=_handwritten_guide,
         num_steps=10,
     )
-    samples = draw_posterior(random.PRNGKey(1), fit, 8)
+    predictive = Predictive(fit.guide, params=fit.params, num_samples=8)
+    samples = predictive(random.PRNGKey(1), covariates, data)
     assert samples["drift"].shape == (8, 20, 1)
     forecast_covariates = empty_covariates(25)
     fc = forecast(random.PRNGKey(2), RandomWalkModel(), samples, data, forecast_covariates)
@@ -143,7 +141,7 @@ def test_autonormal_forecast_shape_contract() -> None:
     data = jnp.zeros((20, 1))
     covariates = empty_covariates(20)
     fit = fit_svi(random.PRNGKey(0), RandomWalkModel(), data, covariates, num_steps=10)
-    samples = draw_posterior(random.PRNGKey(1), fit, 16)
+    samples = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 16)
     fc = forecast(random.PRNGKey(2), RandomWalkModel(), samples, data, empty_covariates(25))
     assert fc.shape == (16, 5, 1)
 
@@ -160,7 +158,7 @@ def test_bare_automvn_class_fits_and_forecasts() -> None:
         guide=AutoMultivariateNormal,
         num_steps=10,
     )
-    samples = draw_posterior(random.PRNGKey(1), fit, 12)
+    samples = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 12)
     fc = forecast(random.PRNGKey(2), RandomWalkModel(), samples, data, empty_covariates(24))
     assert fc.shape == (12, 4, 1)
     assert jnp.all(jnp.isfinite(fc))
@@ -173,7 +171,7 @@ def test_autodelta_forecast_varies_over_tiled_latents() -> None:
     fit = fit_svi(
         random.PRNGKey(0), RandomWalkModel(), data, covariates, guide=AutoDelta, num_steps=10
     )
-    samples = draw_posterior(random.PRNGKey(1), fit, 32)
+    samples = draw_posterior(random.PRNGKey(1), as_autoguide(fit.guide), fit.params, 32)
     fc = forecast(random.PRNGKey(2), RandomWalkModel(), samples, data, empty_covariates(25))
     assert fc.shape == (32, 5, 1)
     # Observation noise makes forecasts vary across the sample axis even though

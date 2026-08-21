@@ -11,8 +11,8 @@ import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import Array, random
-from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
+from numpyro.infer.autoguide import AutoGuide, AutoNormal
 
 from numpyro_forecast.forecaster import (
     Forecaster,
@@ -162,6 +162,50 @@ def mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
         num_warmup=num_warmup,
         num_samples=num_samples,
     )
+
+
+def as_autoguide(guide: "AutoGuide | Callable[..., None]") -> AutoGuide:
+    """Narrow a resolved guide to ``AutoGuide`` for ty (test helper).
+
+    ``SVIFit.guide`` is typed as ``AutoGuide | Callable[..., None]`` (hand-written
+    guides are supported at runtime); tests that know the guide is a resolved
+    ``AutoGuide`` use this to narrow it before passing it to the guide-only
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+    """
+    assert isinstance(guide, AutoGuide)
+    return guide
+
+
+def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str, Array]]:
+    """Fit the shared random-walk body with raw NumPyro SVI (test helper).
+
+    Deliberately built on plain NumPyro rather than :func:`fit_svi`/``SVIFit``
+    (scheduled for removal), so tests that only need a guide/params pair for
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior` exercise the
+    guide-based contract directly instead of the fit-wrapper machinery.
+    """
+    model = forecasting_model(rw_body)
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
+    guide = AutoNormal(model)
+    svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    result = svi.run(random.PRNGKey(1), num_steps, empty_covariates(t), data, progress_bar=False)
+    return guide, result.params
+
+
+def nuts_samples(t: int, num_warmup: int = 20, num_samples: int = 20) -> dict[str, Array]:
+    """Fit the shared random-walk body with raw NumPyro NUTS (test helper).
+
+    Deliberately built on plain NumPyro rather than :func:`fit_mcmc`/``MCMCFit``
+    (scheduled for removal), returning ``mcmc.get_samples()`` directly: this is
+    the posterior dict MCMC users pass straight to
+    :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``,
+    with no ``draw_posterior`` step in between.
+    """
+    model = forecasting_model(rw_body)
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
+    mcmc = MCMC(NUTS(model), num_warmup=num_warmup, num_samples=num_samples, progress_bar=False)
+    mcmc.run(random.PRNGKey(1), empty_covariates(t), data)
+    return mcmc.get_samples()
 
 
 def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:

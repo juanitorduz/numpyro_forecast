@@ -22,13 +22,14 @@ from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import random
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
+from numpyro_forecast.functional._offload import _draw_chunked
 from numpyro_forecast.functional._validation import _require_positive_num_samples
-from numpyro_forecast.functional.posterior import _draw_posterior_impl
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
 
@@ -455,7 +456,7 @@ class PathfinderFit:
     A plain-data (picklable) container: it holds the raw blackjax
     ``PathfinderState``, the model and its data/covariates (needed to rebuild the
     unconstrained-to-constrained transform when drawing), and the fitted ELBO.
-    Draws are produced lazily by :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+    Draws are produced lazily by :func:`pathfinder_samples`.
 
     Attributes
     ----------
@@ -557,23 +558,80 @@ def fit_pathfinder(
     )
 
 
-@_draw_posterior_impl.register
-def _(fit: PathfinderFit, num_samples: int, rng_key: Array) -> dict[str, Array]:
+def pathfinder_samples(
+    rng_key: Array,
+    fit: PathfinderFit,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+    device: jax.Device | str | None = None,
+) -> dict[str, Array | np.ndarray]:
+    """Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
+
+    The returned dict has the sample axis leading and is ready to pass to
+    :func:`~numpyro_forecast.functional.prediction.forecast` or NumPyro's
+    ``Predictive``, exactly like :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+    Chunking and device offload are delegated to the shared
+    :func:`~numpyro_forecast.functional._offload._draw_chunked` driver, so the same
+    memory-bounding contract applies.
+
+    PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
+    split into a model-initialization stream and a Pathfinder-sampling stream (the
+    init param draws are unused, but the streams are kept isolated).
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key.
+    fit
+        A fit from :func:`fit_pathfinder`.
+    num_samples
+        Number of posterior draws.
+    batch_size
+        Optional chunk size for the drawing itself; see
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior` (the same
+        memory/reproducibility contract applies).
+    device
+        Where each chunk of draws is moved as soon as it is drawn; see
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+
+    Returns
+    -------
+    dict[str, Array | np.ndarray]
+        Posterior samples of the latent sites, sample axis leading (NumPy leaves
+        when ``device`` resolves to ``"host"``).
+
+    Raises
+    ------
+    ValueError
+        If ``num_samples`` or ``batch_size`` is not positive.
+    """
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
     _ensure_stable_bfgs_sample()
-    # Split so the discarded init draws and the pathfinder draws use distinct
-    # streams (the init param draws are unused, but keep the streams isolated).
-    key_init, key_sample = random.split(rng_key)
-    _param_info, _potential_fn_gen, postprocess_fn, _ = initialize_model(
-        key_init,
-        fit.model,
-        dynamic_args=True,
-        model_args=(fit.covariates, fit.data),
+
+    def draw_fn(key: Array, n: int) -> dict[str, Array]:
+        # Split so the discarded init draws and the pathfinder draws use distinct
+        # streams (the init param draws are unused, but keep the streams isolated).
+        key_init, key_sample = random.split(key)
+        _param_info, _potential_fn_gen, postprocess_fn, _ = initialize_model(
+            key_init,
+            fit.model,
+            dynamic_args=True,
+            model_args=(fit.covariates, fit.data),
+        )
+        # sample() returns (samples_dict, log_weights); take the unconstrained
+        # draws and map the constraining transform over the leading sample axis
+        # (no batch_ndims reliance).
+        unconstrained, _log_weights = blackjax.vi.pathfinder.sample(key_sample, fit.state, n)
+        transform = postprocess_fn(fit.covariates, fit.data)
+        return jax.vmap(transform)(unconstrained)
+
+    return _draw_chunked(
+        rng_key,
+        draw_fn,
+        num_samples,
+        batch_size=batch_size,
+        device=device,
+        stage="posterior drawing",
     )
-    # sample() returns (samples_dict, log_weights); take the unconstrained draws
-    # and map the constraining transform over the leading sample axis (no
-    # batch_ndims reliance).
-    unconstrained, _log_weights = blackjax.vi.pathfinder.sample(key_sample, fit.state, num_samples)
-    transform = postprocess_fn(fit.covariates, fit.data)
-    return jax.vmap(transform)(unconstrained)
