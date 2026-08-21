@@ -1,8 +1,9 @@
 """Backtesting and evaluation metrics.
 
 This is the JAX/NumPyro port of ``pyro.contrib.forecast.evaluate``. Unlike Pyro
-there is no global parameter store, so each backtest window is a pure call that
-fits its own forecaster. :func:`backtest` supports two windowing strategies, an
+there is no global parameter store, so each backtest window is a pure call into
+a user-supplied fit/forecast closure (see :data:`~numpyro_forecast.typing.ForecastFn`).
+:func:`backtest` supports two windowing strategies, an
 ``"expanding"`` window (always trains from ``t0 = 0``) and a fixed-size
 ``"rolling"`` window (see :data:`WindowType`), selected via ``window_type``.
 """
@@ -26,13 +27,19 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.forecaster import Forecaster
 from numpyro_forecast.functional import resolve_guide, resolve_optimizer
 from numpyro_forecast.functional._offload import _oom_advice, _stitch_chunks, _transfer
 from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
-from numpyro_forecast.typing import Array, ForecasterFactory, ForecastModel, Metric, ModelFactory
+from numpyro_forecast.typing import (
+    Array,
+    ForecastFn,
+    ForecastModel,
+    InSampleFn,
+    Metric,
+    ModelFactory,
+)
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -339,12 +346,10 @@ class BacktestResult:
         Train-begin, train/test split, and test-end time indices.
     num_samples
         Number of forecast samples drawn.
-    train_walltime, test_walltime
-        Wall-clock seconds for fitting and forecasting.
+    walltime
+        Wall-clock seconds for the window's timed ``forecast_fn`` call.
     metrics
         Mapping of metric name to value for the window.
-    params
-        Mapping of scalar parameter name to value (when available).
     train_metrics
         Mapping of metric name to in-sample value for the window. Empty unless
         ``backtest`` was called with ``eval_train=True``.
@@ -357,10 +362,8 @@ class BacktestResult:
     t1: int
     t2: int
     num_samples: int
-    train_walltime: float
-    test_walltime: float
+    walltime: float
     metrics: dict[str, float]
-    params: dict[str, float] = field(default_factory=dict)
     train_metrics: dict[str, float] = field(default_factory=dict)
     prediction: Array | None = None
 
@@ -373,14 +376,6 @@ class BacktestResult:
             All fields as a plain dictionary.
         """
         return asdict(self)
-
-
-def _scalar_params(forecaster: object) -> dict[str, float]:
-    """Extract scalar variational parameters from a fitted forecaster, if any."""
-    params = getattr(forecaster, "params", None)
-    if not isinstance(params, Mapping):
-        return {}
-    return {name: float(value) for name, value in params.items() if jnp.size(value) == 1}
 
 
 def _block_object[T](obj: T) -> T:
@@ -603,20 +598,6 @@ def _iter_windows(
     )
 
 
-def _resolve_options(
-    forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None,
-    t0: int,
-    t1: int,
-    t2: int,
-) -> Mapping[str, Any]:
-    """Resolve per-window forecaster options from a mapping or a ``(t0, t1, t2)`` callable."""
-    if forecaster_options is None:
-        return {}
-    if callable(forecaster_options) and not isinstance(forecaster_options, Mapping):
-        return forecaster_options(t0=t0, t1=t1, t2=t2)
-    return cast("Mapping[str, Any]", forecaster_options)
-
-
 def _slice_window(
     data: Array, covariates: Array, t0: int, t1: int, t2: int
 ) -> tuple[Array, Array, Array, Array]:
@@ -630,7 +611,8 @@ def _slice_window(
 
 def _eval_train_window(
     rng_key: Array,
-    forecaster: object,
+    in_sample_fn: InSampleFn,
+    model: ForecastModel,
     train_data: Array,
     train_covariates: Array,
     *,
@@ -641,25 +623,14 @@ def _eval_train_window(
 ) -> dict[str, float]:
     """Score the in-sample posterior predictive over one training window.
 
-    ``forecaster`` is typed loosely (``object``) so ``ty`` does not reject
-    duck-typed forecasters at the ``forecaster`` boundary; the explicit guard
-    below raises a clear :class:`TypeError` when ``predict_in_sample`` is missing.
-
-    Raises
-    ------
-    TypeError
-        If ``forecaster`` does not expose ``predict_in_sample``.
+    A thin call into the user-supplied :data:`~numpyro_forecast.typing.InSampleFn`
+    closure, which owns fitting the model and drawing its in-sample predictive.
     """
-    predict_in_sample = getattr(forecaster, "predict_in_sample", None)
-    if not callable(predict_in_sample):
-        msg = (
-            "eval_train=True requires a forecaster exposing "
-            "predict_in_sample(rng_key, covariates, num_samples, *, batch_size=None); "
-            f"{type(forecaster).__name__} does not."
-        )
-        raise TypeError(msg)
     train_pred = cast(
-        "Array", predict_in_sample(rng_key, train_covariates, num_samples, batch_size=batch_size)
+        "Array",
+        in_sample_fn(
+            rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
+        ),
     )
     train_truth = train_data
     if transform is not None:
@@ -677,8 +648,8 @@ def _run_window(
     covariates: Array,
     model_fn: ModelFactory,
     shared_model: ForecastModel | None,
-    forecaster_fn: ForecasterFactory,
-    options: Mapping[str, Any],
+    forecast_fn: ForecastFn,
+    in_sample_fn: InSampleFn | None,
     num_samples: int,
     batch_size: int | None,
     metrics: Mapping[str, Metric],
@@ -693,21 +664,19 @@ def _run_window(
     )
     if per_window_metrics is not None:
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
-    key_fit, key_forecast = random.split(rng_key)
 
     model = shared_model if shared_model is not None else model_fn()
-    forecaster, train_walltime = _timed(
-        lambda: _block_object(
-            forecaster_fn(key_fit, model, train_data, train_covariates, **options)
-        )
-    )
-    pred, test_walltime = _timed(
-        # Without a device argument the forecaster always returns a jax.Array
-        # (the NumPy variant only arises for device="host").
+    pred, walltime = _timed(
         lambda: cast(
             "Array",
-            forecaster(
-                key_forecast, train_data, test_covariates, num_samples, batch_size=batch_size
+            forecast_fn(
+                rng_key,
+                model,
+                train_data,
+                train_covariates,
+                test_covariates,
+                num_samples,
+                batch_size=batch_size,
             ),
         )
     )
@@ -717,12 +686,15 @@ def _run_window(
 
     train_metrics: dict[str, float] = {}
     if eval_train:
+        # in_sample_fn is guaranteed non-None here: backtest's entry check raises
+        # before any window runs when eval_train=True and in_sample_fn is None.
         # In-sample scoring is an optional diagnostic: derive its key as an
-        # independent substream via fold_in so enabling it never shifts the
-        # fit/forecast keys above.
+        # independent substream via fold_in so enabling it never shifts the key
+        # passed to forecast_fn above.
         train_metrics = _eval_train_window(
             random.fold_in(rng_key, 2),
-            forecaster,
+            cast("InSampleFn", in_sample_fn),
+            model,
             train_data,
             train_covariates,
             num_samples=num_samples,
@@ -736,10 +708,8 @@ def _run_window(
         t1=t1,
         t2=t2,
         num_samples=num_samples,
-        train_walltime=train_walltime,
-        test_walltime=test_walltime,
+        walltime=walltime,
         metrics=evaluate_forecast(pred, truth, metrics=metrics),
-        params=_scalar_params(forecaster),
         train_metrics=train_metrics,
         prediction=pred if keep_predictions else None,
     )
@@ -751,7 +721,8 @@ def backtest(
     covariates: Array,
     model_fn: ModelFactory,
     *,
-    forecaster_fn: ForecasterFactory = Forecaster,
+    forecast_fn: ForecastFn,
+    in_sample_fn: InSampleFn | None = None,
     metrics: Mapping[str, Metric] | None = None,
     per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None,
     transform: Callable[[Array, Array], tuple[Array, Array]] | None = None,
@@ -763,12 +734,67 @@ def backtest(
     stride: int = 1,
     num_samples: int = 100,
     batch_size: int | None = None,
-    forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None = None,
     eval_train: bool = False,
     keep_predictions: bool = False,
     reuse_model: bool = True,
 ) -> list[BacktestResult]:
     """Backtest a forecasting model on a moving window of ``(train, test)`` data.
+
+    Fitting and forecasting are delegated entirely to user-supplied closures
+    rather than an OOP forecaster: ``forecast_fn`` fits ``model`` on the
+    training window and forecasts the test horizon, and the optional
+    ``in_sample_fn`` fits and scores the in-sample fit. Both closures own their
+    own inference backend (SVI, MCMC, or anything else), so ``backtest`` itself
+    has no dependency on how a model is fit.
+
+    ``forecast_fn`` has the call signature (see
+    :data:`~numpyro_forecast.typing.ForecastFn`)::
+
+        forecast_fn(
+            rng_key, model, train_data, train_covariates, test_covariates,
+            num_samples, *, batch_size=None,
+        ) -> draws  # shape (num_samples, *batch, t2 - t1, obs)
+
+    where ``test_covariates`` spans the *full* window, ``covariates[..., t0:t2, :]``
+    (train followed by test), matching what the model needs to run the forecast
+    horizon. The optional ``in_sample_fn`` has the call signature (see
+    :data:`~numpyro_forecast.typing.InSampleFn`)::
+
+        in_sample_fn(
+            rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
+        ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
+
+    ``batch_size`` is forwarded unchanged into both closures so a chunked
+    implementation can bound its own device memory. A closure that offloads
+    work internally (e.g. moves draws to host memory to cap peak accelerator
+    usage) must return the draws back on-device before returning: the metrics
+    computed by :func:`evaluate_forecast` are jitted and expect array inputs.
+
+    A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
+    + ``Predictive``)::
+
+        import numpyro
+        from numpyro.infer import SVI, Predictive, Trace_ELBO
+        from numpyro.infer.autoguide import AutoNormal
+
+
+        def forecast_fn(
+            rng_key,
+            model,
+            train_data,
+            train_covariates,
+            test_covariates,
+            num_samples,
+            *,
+            batch_size=None,
+        ):
+            guide = AutoNormal(model)
+            svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+            key_fit, key_post, key_pred = random.split(rng_key, 3)
+            state = svi.run(key_fit, 1_000, train_covariates, train_data, progress_bar=False)
+            posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+            predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
+            return predictive(key_pred, test_covariates, train_data)["forecast"]
 
     Parameters
     ----------
@@ -780,8 +806,14 @@ def backtest(
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
         Factory returning a fresh :class:`ForecastingModel` per window.
-    forecaster_fn
-        Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
+    forecast_fn
+        Closure that fits ``model`` on the training window and forecasts the
+        test horizon (see :data:`~numpyro_forecast.typing.ForecastFn` and the
+        contract above).
+    in_sample_fn
+        Optional closure that fits ``model`` on the training window and scores
+        its in-sample fit (see :data:`~numpyro_forecast.typing.InSampleFn` and
+        the contract above). Required when ``eval_train=True``.
     metrics
         Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
         Each function takes ``(pred, truth)`` and returns a scalar array (see
@@ -818,16 +850,12 @@ def backtest(
     num_samples
         Number of forecast samples per window.
     batch_size
-        Optional forecast-sampling chunk size.
-    forecaster_options
-        Options dict passed to ``forecaster_fn``, or a callable
-        ``(t0, t1, t2) -> dict`` returning per-window options.
+        Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
+        (see the contract above).
     eval_train
         If ``True``, also score the in-sample posterior predictive over each training
         window with the same ``metrics`` and store them in
-        ``BacktestResult.train_metrics``. Requires a forecaster exposing
-        ``predict_in_sample`` (the built-in :class:`Forecaster` and
-        :class:`HMCForecaster` do).
+        ``BacktestResult.train_metrics``. Requires ``in_sample_fn``.
     keep_predictions
         If ``True``, store each window's out-of-sample forecast samples (after
         ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
@@ -844,7 +872,16 @@ def backtest(
     -------
     list[BacktestResult]
         One result per backtest window.
+
+    Raises
+    ------
+    ValueError
+        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
+        but ``in_sample_fn`` is ``None``.
     """
+    if eval_train and in_sample_fn is None:
+        msg = "eval_train=True requires in_sample_fn to be set"
+        raise ValueError(msg)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
@@ -876,8 +913,8 @@ def backtest(
                 covariates=covariates,
                 model_fn=model_fn,
                 shared_model=shared_model,
-                forecaster_fn=forecaster_fn,
-                options=_resolve_options(forecaster_options, t0, t1, t2),
+                forecast_fn=forecast_fn,
+                in_sample_fn=in_sample_fn,
                 num_samples=num_samples,
                 batch_size=batch_size,
                 metrics=metrics,
@@ -1144,19 +1181,17 @@ def results_to_dataframe(
 ) -> "pd.DataFrame":
     """Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
 
-    Columns are prefix-namespaced so metric, in-sample-metric, and parameter
-    names never collide: window metrics become ``metric_<name>``, in-sample
-    metrics ``train_metric_<name>``, and scalar parameters ``param_<name>``,
-    alongside the window indices ``t0``/``t1``/``t2``, ``num_samples``, and
-    ``train_walltime``/``test_walltime``. Forecast samples are excluded.
-    Windows may carry different metric sets (e.g. via
-    ``backtest(per_window_metrics=...)``); the union of columns is used and
-    missing entries are left as ``NaN``.
+    Columns are prefix-namespaced so metric and in-sample-metric names never
+    collide: window metrics become ``metric_<name>`` and in-sample metrics
+    ``train_metric_<name>``, alongside the window indices ``t0``/``t1``/``t2``,
+    ``num_samples``, and ``walltime``. Forecast samples are excluded. Windows
+    may carry different metric sets (e.g. via ``backtest(per_window_metrics=...)``);
+    the union of columns is used and missing entries are left as ``NaN``.
 
     A :class:`VectorizedBacktestResult` from :func:`backtest_vectorized` is also
     accepted; it produces the same ``metric_<name>`` columns for the same metric
-    set, but has no ``train_metric_*``, ``param_*``, or walltime columns (a
-    vectorized run has no per-window walltimes), which are simply absent.
+    set, but has no ``train_metric_*`` or ``walltime`` columns (a vectorized run
+    has no per-window walltimes), which are simply absent.
 
     Parameters
     ----------
@@ -1184,15 +1219,12 @@ def results_to_dataframe(
             "t1": result.t1,
             "t2": result.t2,
             "num_samples": result.num_samples,
-            "train_walltime": result.train_walltime,
-            "test_walltime": result.test_walltime,
+            "walltime": result.walltime,
         }
         for name, value in result.metrics.items():
             row[f"metric_{name}"] = value
         for name, value in result.train_metrics.items():
             row[f"train_metric_{name}"] = value
-        for name, value in result.params.items():
-            row[f"param_{name}"] = value
         rows.append(row)
     return pandas.DataFrame(rows)
 

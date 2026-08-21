@@ -1,7 +1,7 @@
 """Interchangeability tests between the functional and OOP APIs."""
 
 import jax.numpy as jnp
-from conftest import RandomWalkModel, empty_covariates, rw_body
+from conftest import RandomWalkModel, empty_covariates, rw_body, svi_forecast_fn
 from jax import random
 
 from numpyro_forecast.evaluate import backtest
@@ -68,6 +68,8 @@ def test_oop_model_through_functional_fit_and_forecast() -> None:
 
 
 def test_functional_model_in_backtest() -> None:
+    # Demonstrates the functional model type works as-is inside backtest's
+    # closure contract (a plain NumPyro forecast_fn, not the OOP Forecaster).
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     results = backtest(
@@ -75,11 +77,11 @@ def test_functional_model_in_backtest() -> None:
         data,
         covariates,
         lambda: forecasting_model(rw_body),
+        forecast_fn=svi_forecast_fn(num_steps=20),
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=10,
-        forecaster_options={"num_steps": 20},
     )
     assert len(results) == 3
     for r in results:

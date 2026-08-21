@@ -474,15 +474,31 @@ def test_fit_pathfinder_maxiter_passthrough(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured["maxiter"] == 17
 
 
-def test_pathfinder_as_backtest_forecaster_fn() -> None:
+def test_backtest_accepts_a_forecast_fn_closure() -> None:
+    """``backtest`` runs against a plain closure (canned draws; no real fit needed here).
+
+    Pathfinder-as-a-backtest-fitter is retested properly once ``backtest`` grows a
+    real closure-based Pathfinder helper (Task 5); this only exercises the generic
+    closure contract from this (BlackJAX-optional) test module.
+    """
     from numpyro_forecast.evaluate import backtest
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
 
-    def make(rng_key, model, train_data, train_covariates, **options):  # type: ignore[no-untyped-def]
-        return PathfinderForecaster(
-            rng_key, model, train_data, train_covariates, num_elbo_samples=80, ftol=1e-4
+    def forecast_fn(  # type: ignore[no-untyped-def]
+        rng_key,
+        model,
+        train_data,
+        train_covariates,
+        test_covariates,
+        num_samples,
+        *,
+        batch_size=None,
+    ):
+        horizon = test_covariates.shape[-2] - train_data.shape[-2]
+        return train_data.mean() + random.normal(
+            rng_key, (num_samples, horizon, train_data.shape[-1])
         )
 
     results = backtest(
@@ -490,7 +506,7 @@ def test_pathfinder_as_backtest_forecaster_fn() -> None:
         data,
         covariates,
         RandomWalkForCustom,
-        forecaster_fn=make,
+        forecast_fn=forecast_fn,
         test_window=4,
         min_train_window=12,
         stride=4,

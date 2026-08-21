@@ -6,10 +6,13 @@ from contextlib import AbstractContextManager, contextmanager
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import Array, random
+from numpyro.infer import SVI, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.forecaster import (
     Forecaster,
@@ -23,11 +26,13 @@ from numpyro_forecast.functional import (
     SVIFit,
     fit_mcmc,
     fit_svi,
+    forecast,
     forecasting_model,
     predict,
+    predict_in_sample,
     time_series,
 )
-from numpyro_forecast.typing import ForecastModel
+from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
 # ---------------------------------------------------------------------------
 # Compile-count harness (roadmap §4.5). A single process-wide JAX monitoring
@@ -157,6 +162,66 @@ def mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
         num_warmup=num_warmup,
         num_samples=num_samples,
     )
+
+
+def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
+    """Build a ``backtest``-compatible :data:`ForecastFn` closure from plain NumPyro.
+
+    Fits ``model`` with ``AutoNormal`` + ``SVI.run`` and forecasts with the
+    package's :func:`~numpyro_forecast.functional.forecast`. Deliberately built on
+    plain NumPyro rather than the OOP ``Forecaster``/``fit_svi``/``draw_posterior``
+    (scheduled for removal), so backtest tests exercise the closure contract
+    directly instead of the machinery being replaced.
+    """
+
+    def forecast_fn(
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Array,
+        train_covariates: Array,
+        test_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> "Array | np.ndarray":
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        key_fit, key_post, key_pred = random.split(rng_key, 3)
+        state = svi.run(key_fit, num_steps, train_covariates, train_data, progress_bar=False)
+        posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+        return forecast(
+            key_pred, model, posterior, train_data, test_covariates, batch_size=batch_size
+        )
+
+    return forecast_fn
+
+
+def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
+    """Build a ``backtest``-compatible :data:`InSampleFn` closure from plain NumPyro.
+
+    Mirrors :func:`svi_forecast_fn` but scores the in-sample fit with the
+    package's :func:`~numpyro_forecast.functional.predict_in_sample`.
+    """
+
+    def in_sample_fn(
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Array,
+        train_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> "Array | np.ndarray":
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        key_fit, key_post, key_pred = random.split(rng_key, 3)
+        state = svi.run(key_fit, num_steps, train_covariates, train_data, progress_bar=False)
+        posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+        return predict_in_sample(
+            key_pred, model, posterior, train_covariates, batch_size=batch_size
+        )
+
+    return in_sample_fn
 
 
 @pytest.fixture

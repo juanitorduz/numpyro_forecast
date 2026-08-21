@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
+from conftest import svi_forecast_fn
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
@@ -65,11 +66,11 @@ def test_window_indices_match_loop_backtest() -> None:
         data,
         cov,
         _RandomWalk,
+        forecast_fn=svi_forecast_fn(num_steps=50),
         train_window=TRAIN,
         test_window=TEST,
         stride=stride,
         num_samples=20,
-        forecaster_options={"num_steps": 50},
     )
     vec = backtest_vectorized(
         random.PRNGKey(0),
@@ -96,11 +97,11 @@ def test_metrics_statistically_close_to_loop() -> None:
         data,
         cov,
         _RandomWalk,
+        forecast_fn=svi_forecast_fn(num_steps=800),
         train_window=TRAIN,
         test_window=TEST,
         stride=5,
         num_samples=200,
-        forecaster_options={"num_steps": 800},
     )
     vec = backtest_vectorized(
         random.PRNGKey(3),
@@ -382,9 +383,9 @@ def test_result_schema_and_dataframe_row_shape() -> None:
     metric_cols = [c for c in df.columns if c.startswith("metric_")]
     assert metric_cols  # at least one metric column
     assert {"t0", "t1", "t2", "num_samples"}.issubset(df.columns)
-    # A vectorized run has no per-window walltimes or params.
+    # A vectorized run has no per-window walltimes or train_metrics.
     assert not any(c.startswith("train_metric_") or c.startswith("param_") for c in df.columns)
-    assert "train_walltime" not in df.columns
+    assert "walltime" not in df.columns
 
 
 def test_custom_coverage_alpha_stays_vectorized() -> None:
