@@ -11,6 +11,7 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from numpyro_forecast.functional._offload import _device_view
 from numpyro_forecast.typing import Array, Metric
 
 
@@ -56,6 +57,9 @@ def crps_empirical(
     ----------
     pred
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+        May be host-committed (e.g. draws sampled with ``device="host"``),
+        regardless of whether ``truth`` is: either operand is moved to device
+        memory first (:func:`~numpyro_forecast.functional._offload._device_view`).
     truth
         Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
 
@@ -70,12 +74,12 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    pred_arr = jnp.asarray(pred)
+    pred_arr = _device_view(pred)
     num_samples = pred_arr.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-    return _crps_empirical(pred_arr, jnp.asarray(truth))
+    return _crps_empirical(pred_arr, _device_view(truth))
 
 
 @partial(jax.jit, static_argnames=("quantile",))

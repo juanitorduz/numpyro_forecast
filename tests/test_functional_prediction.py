@@ -18,6 +18,7 @@ from numpyro_forecast.functional import (
     predict_in_sample,
 )
 from numpyro_forecast.functional._offload import (
+    _device_view,
     _draw_chunked,
     _host_sharding,
     _leaf_view,
@@ -478,6 +479,45 @@ def test_leaf_view_passes_tracers_through() -> None:
 
     out = jax.vmap(probe)(jnp.ones((3, 4)))
     assert seen == [True]  # the tracer itself, not a NumPy copy
+    assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
+
+
+def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
+    """``_device_view`` is the metric-kernel-safe counterpart to ``_leaf_view``.
+
+    A host-committed leaf must come back as a device-resident ``jax.Array``
+    with the same values (so a fused metric kernel never mixes memory kinds),
+    a device-resident leaf must come back unchanged in value, and a NumPy
+    input must come back as a jax ``Array``.
+    """
+    x = jnp.arange(6.0).reshape(3, 2)
+    hosted = jax.device_put(x, _host_sharding(x))
+
+    viewed = _device_view(hosted)
+    assert isinstance(viewed, jax.Array)
+    assert viewed.sharding.memory_kind == "device"
+    assert jnp.array_equal(viewed, x)
+
+    same = _device_view(x)
+    assert isinstance(same, jax.Array)
+    assert jnp.array_equal(same, x)
+
+    from_numpy = _device_view(np.asarray(x))
+    assert isinstance(from_numpy, jax.Array)
+    assert jnp.array_equal(from_numpy, x)
+
+
+def test_device_view_passes_tracers_through() -> None:
+    """A tracer has no ``sharding``; ``_device_view`` must not reach for one."""
+    seen: list[bool] = []
+
+    def probe(row: Array) -> Array:
+        viewed = _device_view(row)
+        seen.append(viewed is row)
+        return jnp.sum(jnp.asarray(viewed))
+
+    out = jax.vmap(probe)(jnp.ones((3, 4)))
+    assert seen == [True]  # the tracer itself, not a converted copy
     assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
 
 

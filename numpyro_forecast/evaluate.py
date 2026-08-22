@@ -29,7 +29,7 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional._offload import _leaf_view, _oom_advice
+from numpyro_forecast.functional._offload import _device_view, _leaf_view, _oom_advice
 from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -52,10 +52,20 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 
 
 @jax.jit
-def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+    """Jitted MAE core; the host-committed-input handling lives in :func:`eval_mae`."""
+    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+
+
+def eval_mae(
+    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -69,14 +79,24 @@ def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"
     Array
         The mean absolute error as a scalar array.
     """
-    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+    return _eval_mae(_device_view(pred), _device_view(truth))
 
 
 @jax.jit
-def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+    """Jitted RMSE core; the host-committed-input handling lives in :func:`eval_rmse`."""
+    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+
+
+def eval_rmse(
+    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -90,7 +110,7 @@ def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch
     Array
         The root mean squared error as a scalar array.
     """
-    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+    return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
 _crps_cells = jax.jit(crps_empirical)
@@ -179,9 +199,11 @@ def eval_crps(
         NumPy views before chunking, whatever their own memory kind. Chunking
         only changes the summation order of the final mean (results are equal
         to float tolerance, not bitwise); at or above the cell count the
-        single-pass path runs, which instead applies one jitted operation
-        directly to ``pred`` and ``truth`` and so raises in JAX if only one of
-        them is host-committed. ``None`` (default) evaluates in one pass.
+        single-pass path runs instead, which moves any host-committed operand
+        back to device memory first
+        (:func:`~numpyro_forecast.functional._offload._device_view`) so either
+        ``pred`` or ``truth`` (or both) may be host-committed regardless of
+        ``batch_size``. ``None`` (default) evaluates in one pass.
 
     Returns
     -------
@@ -189,7 +211,7 @@ def eval_crps(
         The mean empirical CRPS as a scalar array.
     """
     if batch_size is None or batch_size >= np.size(truth):
-        return _eval_crps_single_pass(cast("Array", pred), cast("Array", truth))
+        return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
     return _chunked_cell_metric(
         _crps_cells,
         cast("Array | np.ndarray", pred),
@@ -236,7 +258,10 @@ def eval_coverage(
         per pass (see :func:`eval_crps`; the sample axis is never chunked).
         Coverage is a count of exact 0/1 indicators, so chunking recovers
         the identical count; only the precision of the final division differs
-        from the single pass. ``None`` (default) evaluates in one pass.
+        from the single pass. Either path accepts a host-committed ``pred``
+        or ``truth`` (or both); the single pass moves them to device memory
+        first (:func:`~numpyro_forecast.functional._offload._device_view`).
+        ``None`` (default) evaluates in one pass.
 
     Returns
     -------
@@ -253,7 +278,7 @@ def eval_coverage(
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= np.size(truth):
-        return _coverage_indicator(cast("Array", pred), cast("Array", truth), alpha=alpha).mean()
+        return _coverage_indicator(_device_view(pred), _device_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
     return _chunked_cell_metric(
         kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
@@ -312,14 +337,12 @@ def evaluate_forecast(
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
-    # NumPy (or any other ArrayLike) inputs are normalized once up front. A
+    # NumPy (or any other ArrayLike) input is normalized once up front, and any
     # host-committed jax.Array input (e.g. draws sampled with device="host")
-    # passes through unchanged here: mixing it with a device-resident ``pred``
-    # or ``truth`` in the jitted metric kernels below raises in JAX rather
-    # than being silently staged onto the accelerator, so pass a batch_size
-    # -chunked metric (which normalizes both operands internally) or matching
-    # memory kinds when either input may be host-committed.
-    pred_arr, truth_arr = jnp.asarray(pred), jnp.asarray(truth)
+    # is moved to device memory so the jitted metric kernels below never see a
+    # host/device memory-kind mismatch, whichever of pred/truth (or both) was
+    # host-committed.
+    pred_arr, truth_arr = _device_view(pred), _device_view(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
     stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
@@ -721,14 +744,11 @@ def backtest(
     ``batch_size`` is forwarded unchanged into both closures so a chunked
     implementation can bound its own device memory. A closure may return draws
     committed to host memory (e.g. via ``device="host"``, to cap peak
-    accelerator usage): pair that with a ``batch_size``-chunked metric
-    (``eval_crps``/``eval_coverage`` with ``batch_size`` set), which stages
-    both operands through the same host view internally and so accepts the
-    mismatch; the unchunked metrics run a single jitted operation directly on
-    ``pred`` and ``truth``, which raises in JAX if only one of the two is
-    host-committed. Returning draws already on-device sidesteps the question
-    entirely and also avoids the extra host-to-device hop for metrics scored
-    every window.
+    accelerator usage): every metric in :data:`DEFAULT_METRICS` accepts a
+    host-committed ``pred`` or ``truth`` (or both), in any mix and regardless
+    of ``batch_size``, moving a host-committed operand to device memory first
+    where needed. Returning draws already on-device still avoids the extra
+    host-to-device hop for metrics scored every window.
 
     A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
     + ``Predictive``)::

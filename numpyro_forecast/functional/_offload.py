@@ -34,11 +34,15 @@ is not a drop-in replacement for a device array in your own ``jnp`` code. The
 documented contract is: feed a host-committed result straight into this
 package's own drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
 :func:`~numpyro_forecast.functional.prediction.predict_in_sample`,
-:func:`~numpyro_forecast.convert.to_datatree`, and the ``batch_size``-chunked
-evaluation metrics in :mod:`~numpyro_forecast.evaluate`), which already accept
-host-committed leaves, or convert it explicitly first: ``np.asarray(x)`` stays
-on host (no device traffic), and ``jax.device_put(x, device)`` moves it onto an
-accelerator.
+:func:`~numpyro_forecast.convert.to_datatree`, and every evaluation metric in
+:mod:`~numpyro_forecast.evaluate` and :mod:`~numpyro_forecast.metrics`), which
+all accept host-committed leaves in any mix with device-resident ones, or
+convert it explicitly first: ``np.asarray(x)`` stays on host (no device
+traffic), and ``jax.device_put(x, device)`` moves it onto an accelerator.
+:func:`_device_view` is the counterpart to :func:`_leaf_view` used by the
+unchunked metric entry points: rather than staging to NumPy, it moves a
+host-committed operand back onto its own device so the fused kernel sees two
+device-resident arrays.
 """
 
 import warnings
@@ -53,6 +57,7 @@ import numpy as np
 from jax import random
 from jax.core import Tracer
 from jax.sharding import SingleDeviceSharding
+from jax.typing import ArrayLike
 
 from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.typing import Array
@@ -234,6 +239,51 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
             return np.asarray(leaf)
         return leaf
     return np.asarray(leaf)
+
+
+def _device_view(leaf: ArrayLike) -> Array:
+    """Move a host-committed leaf back onto its device before it feeds a metric kernel.
+
+    The counterpart to :func:`_leaf_view` for the *unchunked* metric entry
+    points in :mod:`~numpyro_forecast.evaluate` and
+    :func:`~numpyro_forecast.metrics.crps_empirical`: those run one fused
+    ``jnp``/jitted kernel directly on ``pred`` and ``truth``, and JAX raises
+    (``memory_space of all inputs ... must be the same``) the moment such a
+    kernel combines a host-committed array (a memory kind in
+    :data:`_HOST_MEMORY_KINDS`, as produced by ``device="host"``) with a
+    device-resident one. Calling this on both operands first means a metric
+    accepts any mix of host-committed and device-resident inputs: whichever
+    operand is host-committed is copied back onto the device it was offloaded
+    from (its own ``.devices()``, not :func:`jax.devices`, so this also works
+    when the CPU backend was never initialized), and the two now share the
+    default ``"device"`` memory kind.
+
+    A tracer is passed through untouched, for the same reason as
+    :func:`_leaf_view`: it is host-resident by neither fact nor definition
+    under ``vmap``/``jit``, and it has no ``.sharding`` to inspect.
+
+    Parameters
+    ----------
+    leaf
+        One metric operand (``pred`` or ``truth``), in whatever form the
+        caller supplied it.
+
+    Returns
+    -------
+    Array
+        ``leaf`` itself when it is a tracer; a device-resident
+        :class:`jax.Array` otherwise (moved there first if it was
+        host-committed).
+    """
+    if isinstance(leaf, Tracer):
+        return leaf
+    if isinstance(leaf, jax.Array) and leaf.sharding.memory_kind in _HOST_MEMORY_KINDS:
+        device = next(iter(leaf.devices()))
+        try:
+            return jax.device_put(leaf, SingleDeviceSharding(device, memory_kind="device"))
+        except (ValueError, NotImplementedError):
+            return jnp.asarray(np.asarray(leaf))
+    return jnp.asarray(leaf)
 
 
 def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["host"] | None:

@@ -9,6 +9,7 @@ import pytest
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
+from numpyro_forecast.functional._offload import _host_sharding
 from numpyro_forecast.metrics import (
     crps_empirical,
     eval_interval_score,
@@ -81,6 +82,33 @@ def test_crps_shape_mismatch_raises() -> None:
 def test_crps_needs_two_samples() -> None:
     with pytest.raises(ValueError, match="at least 2 samples"):
         crps_empirical(jnp.zeros((1, 3)), jnp.zeros((3,)))
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_crps_accepts_host_committed_inputs(
+    rng_key: Array, commit_pred: bool, commit_truth: bool
+) -> None:
+    """``crps_empirical`` must accept any mix of host-committed/device-resident inputs.
+
+    Mixing a host-committed ``jax.Array`` (e.g. draws sampled with
+    ``device="host"``) with a device-resident one inside the fused jitted CRPS
+    kernel used to raise (``memory_space of all inputs ... must be the
+    same``); ``crps_empirical`` now moves a host-committed operand to device
+    memory first, so any mix matches the fully device-resident result.
+    """
+    pred = random.normal(rng_key, (100, 5))
+    truth = random.normal(random.PRNGKey(1), (5,))
+    expected = crps_empirical(pred, truth)
+
+    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
+    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    got = crps_empirical(pred_in, truth_in)
+
+    np.testing.assert_allclose(got, expected)
 
 
 # --- P7: pinball, interval score, MASE ---------------------------------------
