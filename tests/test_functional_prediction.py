@@ -1,6 +1,7 @@
 """Tests for functional predictive sampling (``functional.prediction``)."""
 
 from collections.abc import Mapping
+from unittest import mock
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +21,7 @@ from numpyro_forecast.functional import (
 from numpyro_forecast.functional._offload import (
     _device_view,
     _draw_chunked,
+    _host_memory_kind,
     _host_sharding,
     _leaf_view,
     _resolve_device,
@@ -445,6 +447,35 @@ def test_resolve_device_missing_platform_raises_actionable_error(
         _resolve_device("tpu")
 
 
+def test_host_memory_kind_prefers_pinned_host() -> None:
+    """The CPU backend exposes ``"pinned_host"``, which must win over ``"unpinned_host"``."""
+    assert _host_memory_kind(jax.devices()[0]) == "pinned_host"
+
+
+class _DeviceOnlyMemory:
+    """A memory stand-in reporting the ``"device"`` kind."""
+
+    kind = "device"
+
+
+def test_host_memory_kind_raises_without_a_host_kind() -> None:
+    """A device that addresses no host memory kind must raise, not silently degrade.
+
+    ``jax.Device`` is a C-extension (nanobind) type with no Python-accessible
+    constructor, so the stub is a ``MagicMock(spec=...)`` rather than a
+    subclass: ``spec`` makes ``isinstance(stub, jax.Device)`` true, which is
+    what the beartype-checked ``device: jax.Device`` parameter requires. Each
+    call builds a fresh mock (a distinct, freshly hashed object) so
+    ``_host_memory_kind``'s ``lru_cache`` cannot serve a stale answer cached
+    under another test's device.
+    """
+    stub_device = mock.MagicMock(spec=jax.devices()[0])
+    stub_device.addressable_memories.return_value = [_DeviceOnlyMemory()]
+
+    with pytest.raises(RuntimeError, match="exposes no host memory kind"):
+        _host_memory_kind(stub_device)
+
+
 def test_leaf_view_stages_host_committed_leaves_as_numpy() -> None:
     """``_leaf_view`` is the host-gather switch: only host-committed leaves become NumPy.
 
@@ -524,12 +555,13 @@ def test_device_view_passes_tracers_through() -> None:
 def test_chunked_draws_gathers_host_posterior_chunks_on_the_host() -> None:
     """A host-committed posterior must be indexed as NumPy, not as a jax Array.
 
-    This is the memory-bounding contract of the host path on an accelerator:
-    indexing a host-committed ``jax.Array`` copies the *whole* leaf into device
-    memory before the gather, so ``_chunked_draws`` stages every leaf through
-    ``_leaf_view`` first. Spying on the chunks actually handed to ``predict_fn``
-    is what pins that: drop the ``_leaf_view`` call and these leaves come back
-    as ``jax.Array``.
+    This is the correctness contract of the host path on an accelerator:
+    indexing a host-committed ``jax.Array`` with a device-resident index array
+    raises (``memory_space of all inputs ... must be the same``), so
+    ``_chunked_draws`` stages every leaf through ``_leaf_view`` first, which
+    keeps the gather on the host. Spying on the chunks actually handed to
+    ``predict_fn`` is what pins that: drop the ``_leaf_view`` call and these
+    leaves come back as ``jax.Array``.
     """
     chunk_types: list[type] = []
 

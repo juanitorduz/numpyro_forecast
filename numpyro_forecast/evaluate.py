@@ -141,7 +141,8 @@ def _chunked_cell_metric(
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
     is never chunked. Inputs are normalized with
     :func:`~numpyro_forecast.functional._offload._leaf_view` so a host-committed
-    panel is sliced on the host rather than dragged back onto the accelerator.
+    panel is sliced on the host instead of raising when a device-resident
+    index array gathers against it.
 
     Parameters
     ----------
@@ -807,7 +808,12 @@ def backtest(
         window-dependent metrics such as a MASE scaled by that window's training
         data (:func:`numpyro_forecast.metrics.make_mase`).
     transform
-        Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+        Optional ``(pred, truth) -> (pred, truth)`` applied before metrics. It
+        runs before the metrics and receives the forecast/in-sample closure's
+        draws as-is, so a transform that does its own array math against a
+        device-resident operand must convert a host-committed ``pred`` or
+        ``truth`` first, e.g. with :func:`numpy.asarray` (or move it back
+        onto a device explicitly).
     window_type
         Windowing strategy. If ``None`` (default) it is inferred from
         ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and

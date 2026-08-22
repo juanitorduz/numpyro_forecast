@@ -222,6 +222,40 @@ def test_unchunked_metrics_accept_host_committed_inputs(
         np.testing.assert_allclose(got[name], expected[name])
 
 
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_chunked_metrics_accept_host_committed_inputs(
+    commit_pred: bool, commit_truth: bool
+) -> None:
+    """The chunked (``batch_size``-bounded) path must accept the same input mixes.
+
+    :func:`~numpyro_forecast.evaluate._chunked_cell_metric` slices ``pred``
+    and ``truth`` into cell blocks through
+    :func:`~numpyro_forecast.functional._offload._leaf_view` rather than the
+    fused kernel used by the unchunked path, so it needs its own coverage: any
+    mix of host-committed/device-resident inputs must reproduce the
+    all-device, unchunked result.
+    """
+    pred, truth = _metric_inputs()
+    pred_in = _host(pred) if commit_pred else pred
+    truth_in = _host(truth) if commit_truth else truth
+
+    # rtol matches test_eval_crps_chunked_matches_single_pass: chunking only
+    # changes the summation order of the final mean (f32 rounding), regardless
+    # of which operand is host-committed.
+    np.testing.assert_allclose(
+        eval_crps(pred_in, truth_in, batch_size=7), eval_crps(pred, truth), rtol=1e-6
+    )
+    np.testing.assert_allclose(
+        eval_coverage(pred_in, truth_in, batch_size=7),
+        eval_coverage(pred, truth),
+        rtol=1e-6,
+    )
+
+
 # --- Chunked cell evaluation (memory-bounded scoring on wide panels) --------------
 
 

@@ -23,9 +23,10 @@ The ``"host"`` target keeps results in host memory while keeping them
 nothing of the stitched result occupies accelerator memory and the whole
 pipeline stays jax-native. :func:`_leaf_view` is the counterpart used by the
 chunk drivers when they *consume* such arrays: it exposes a host-committed leaf
-as a NumPy view so per-chunk gathers run on the host instead of dragging the
-full leaf back onto the accelerator. Anyone who needs plain pageable host memory
-can still call ``np.asarray(draws)`` on the result.
+as a NumPy view so per-chunk gathers run on the host instead of raising (a
+device-resident index array gathering directly against a host-committed leaf
+is a memory-space mismatch JAX rejects). Anyone who needs plain pageable host
+memory can still call ``np.asarray(draws)`` on the result.
 
 Arithmetic that mixes a host-committed array with a device-resident one raises
 in JAX (``memory_space of all inputs ... must be the same``) rather than
@@ -207,11 +208,12 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     A device-resident :class:`jax.Array` is returned unchanged. A
     host-committed one (a memory kind in :data:`_HOST_MEMORY_KINDS`, as produced
     by ``device="host"``) is wrapped as a NumPy array, which is the piece that
-    keeps chunked prediction memory-bounded on an accelerator: indexing a
-    host-committed ``jax.Array`` would copy the whole leaf back into device
-    memory before the gather, whereas indexing the NumPy view gathers on the
-    host and hands only the chunk to the jitted predictive. Anything else
-    (NumPy arrays, lists, scalars) is normalized with :func:`numpy.asarray`.
+    makes chunked prediction work at all on an accelerator: indexing a
+    host-committed ``jax.Array`` with a device-resident index array raises
+    (``memory_space of all inputs ... must be the same``) rather than copying
+    the leaf back, whereas indexing the NumPy view gathers on the host and
+    hands only the chunk to the jitted predictive. Anything else (NumPy
+    arrays, lists, scalars) is normalized with :func:`numpy.asarray`.
 
     A tracer is passed through untouched. Tracers are ``jax.Array`` instances
     but have no ``sharding``, and more importantly nothing about a traced value
@@ -387,11 +389,22 @@ def _stitch_chunks(
     sharding. Otherwise :func:`jax.numpy.concatenate` runs on the chunks'
     (committed) device.
 
+    The host path would otherwise hold three copies of the full result at
+    once: the per-chunk pinned buffers, the pageable ``np.concatenate`` output,
+    and the pinned :func:`jax.device_put` target. ``chunks`` is cleared right
+    after the concatenation, before the final ``device_put``, so the per-chunk
+    buffers can be collected as soon as their one caller reference (this
+    function's own ``chunks`` parameter, the caller is expected to hand over
+    the sole reference) is dropped, leaving only the staged NumPy array and the
+    device_put target alive together.
+
     Parameters
     ----------
     chunks
         Same-shaped chunks with the sample axis leading, already transferred
-        per ``device``.
+        per ``device``. The caller should not keep its own reference to this
+        list (or to the chunks it contains) after the call, since the list is
+        cleared in place to release them as early as possible.
     num_samples
         The requested sample count the stitched result is cut back to.
     device
@@ -405,10 +418,12 @@ def _stitch_chunks(
         wherever the chunks lived.
     """
     if device == "host":
+        sharding = chunks[0].sharding
         staged = np.concatenate([np.asarray(chunk) for chunk in chunks], axis=0)
+        chunks.clear()  # drop the per-chunk buffers before the final device_put
         if staged.shape[0] != num_samples:
             staged = staged[:num_samples]
-        return jax.device_put(staged, chunks[0].sharding)
+        return jax.device_put(staged, sharding).block_until_ready()
     stitched = jnp.concatenate(chunks, axis=0)
     return stitched if stitched.shape[0] == num_samples else stitched[:num_samples]
 
@@ -489,7 +504,13 @@ def _draw_chunked(
             draws = dict(draw_fn(key, batch_size))
             chunks.append({name: _transfer(draws.pop(name), resolved) for name in list(draws)})
             del draws
+        # Pop (not index) each leaf out of every per-chunk dict so the list
+        # built for _stitch_chunks is the *only* reference to those buffers;
+        # _stitch_chunks then frees it as soon as it has staged the result,
+        # instead of the per-chunk dicts here keeping a second reference alive
+        # for the rest of the loop.
+        names = list(chunks[0])
         return {
-            name: _stitch_chunks([chunk[name] for chunk in chunks], num_samples, resolved)
-            for name in chunks[0]
+            name: _stitch_chunks([chunk.pop(name) for chunk in chunks], num_samples, resolved)
+            for name in names
         }
