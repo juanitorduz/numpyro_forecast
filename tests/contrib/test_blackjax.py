@@ -4,6 +4,7 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 (which must not import optional dependencies, invariant I8) never runs them.
 """
 
+import dataclasses
 import pickle
 from collections import namedtuple
 from typing import cast
@@ -647,6 +648,81 @@ def test_multipathfinder_samples_reproducible_per_key(
 
     different = multipathfinder_samples(random.PRNGKey(8), multipathfinder_fit, 50)
     assert any(not bool(jnp.array_equal(first[name], different[name])) for name in first)
+
+
+def test_multipathfinder_samples_elbo_exceeds_pool_size(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """``resample="elbo"`` draws fresh per-path samples, so the fit-time pool is no cap.
+
+    The fixture's stored pool holds only ``num_paths * num_elbo_samples = 100``
+    draws; asking for 500 used to duplicate them, and now draws 500 fresh ones
+    per path instead.
+    """
+    pool_size = _MULTIPATH_NUM_PATHS * _MULTIPATH_NUM_ELBO_SAMPLES
+    num_samples = 5 * pool_size
+    post = multipathfinder_samples(
+        random.PRNGKey(2), multipathfinder_fit, num_samples, resample="elbo"
+    )
+    assert post["sigma"].shape == (num_samples,)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+    assert bool(jnp.all(post["drift_scale"] > 0.0))
+    for leaf in post.values():
+        assert bool(jnp.all(jnp.isfinite(leaf)))
+    # Fresh draws: every one of the 500 is distinct, unlike pool resampling.
+    assert len(np.unique(np.asarray(post["drift"]), axis=0)) == num_samples
+
+
+def test_multipathfinder_samples_psis_reproducible_per_key(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """Explicit PSIS resampling works and is deterministic in the key.
+
+    The cheap fixture's importance weights are degenerate, so the sampling-time
+    ``pareto_k`` warning is expected here and captured rather than left to leak.
+    """
+    key = random.PRNGKey(7)
+    with pytest.warns(UserWarning, match="pareto"):
+        first = multipathfinder_samples(key, multipathfinder_fit, 50, resample="psis")
+    with pytest.warns(UserWarning, match="pareto"):
+        second = multipathfinder_samples(key, multipathfinder_fit, 50, resample="psis")
+    assert first["sigma"].shape == (50,)
+    assert bool(jnp.all(first["sigma"] > 0.0))
+    for name in first:
+        assert bool(jnp.array_equal(first[name], second[name]))
+
+
+def test_multipathfinder_samples_auto_follows_pareto_k(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """``resample="auto"`` resolves to ``"elbo"`` above the 0.7 gate and ``"psis"`` below it."""
+    assert multipathfinder_fit.pareto_k > 0.7
+    key = random.PRNGKey(11)
+
+    auto_high = multipathfinder_samples(key, multipathfinder_fit, 40)
+    elbo = multipathfinder_samples(key, multipathfinder_fit, 40, resample="elbo")
+    for name in elbo:
+        assert bool(jnp.array_equal(auto_high[name], elbo[name]))
+
+    trusted = dataclasses.replace(multipathfinder_fit, pareto_k=0.3)
+    with pytest.warns(UserWarning, match="pareto"):
+        auto_low = multipathfinder_samples(key, trusted, 40)
+    with pytest.warns(UserWarning, match="pareto"):
+        psis = multipathfinder_samples(key, trusted, 40, resample="psis")
+    for name in psis:
+        assert bool(jnp.array_equal(auto_low[name], psis[name]))
+
+
+def test_multipathfinder_samples_invalid_resample_raises(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    with pytest.raises(ValueError, match="resample must be one of"):
+        multipathfinder_samples(
+            random.PRNGKey(2),
+            multipathfinder_fit,
+            10,
+            resample="nope",  # ty: ignore[invalid-argument-type]
+        )
 
 
 def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderFit) -> None:

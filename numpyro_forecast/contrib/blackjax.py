@@ -21,10 +21,13 @@ L-BFGS optimization path and returns a single local normal approximation: cheap,
 but a single path can settle in one mode and miss the rest of a multimodal or
 otherwise hard posterior. The multi-path tier, :func:`fit_multipathfinder` and
 :func:`multipathfinder_samples`, runs several L-BFGS paths in parallel from
-diverse starting points, pools their draws, and reweights the pool with
-Pareto-smoothed importance sampling (PSIS) so the returned approximation is not
+diverse starting points and combines them into one approximation that is not
 tied to a single mode; it is the recommended entry point over the single-path
-functions.
+functions. How the paths are combined at drawing time is chosen by the
+``resample`` argument of :func:`multipathfinder_samples`: Pareto-smoothed
+importance sampling (PSIS) over the pooled draws when its ``pareto_k``
+diagnostic says the weights are trustworthy, and ELBO-weighted sampling of whole
+paths when it does not (PSIS weights degenerate in high dimensions).
 """
 
 import importlib
@@ -32,7 +35,7 @@ import math
 import warnings
 from collections import namedtuple
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -54,6 +57,14 @@ _BJState = namedtuple("_BJState", ["position", "inner", "rng_key"])
 ``position`` is the unconstrained sample dict (the NumPyro ``sample_field``),
 ``inner`` is the opaque blackjax algorithm state, and ``rng_key`` is the PRNG key
 carried between steps.
+"""
+
+_PARETO_K_THRESHOLD = 0.7
+"""Pareto shape-parameter value above which PSIS importance weights are unreliable.
+
+The conventional threshold of Vehtari et al. (2017): below ``0.5`` importance
+sampling is reliable, ``0.5`` to ``0.7`` is borderline, and above ``0.7`` the
+weights are dominated by a handful of draws.
 """
 
 
@@ -594,8 +605,8 @@ def fit_pathfinder(
     --------
     fit_multipathfinder
         The recommended entry point: runs several L-BFGS paths in parallel and
-        reweights their pooled draws with Pareto-smoothed importance sampling,
-        instead of relying on this single path's local normal approximation.
+        combines them (see :func:`multipathfinder_samples`), instead of relying
+        on this single path's local normal approximation.
 
     Notes
     -----
@@ -746,12 +757,15 @@ class MultiPathfinderFit:
     log_weights
         Normalized PSIS log importance weights over the flattened pool of
         ``num_paths * num_elbo_samples`` draws (path-major, matching
-        ``state.samples``); valid only for that exact stored pool, not for any
-        other resampling of it.
+        ``state.samples``); a fit-time diagnostic, valid only for that exact
+        stored pool. :func:`multipathfinder_samples` draws fresh samples and
+        recomputes its own weights, so it never consumes these.
     pareto_k
-        The Pareto shape-parameter diagnostic for the PSIS resampling: below
-        ``0.5`` is reliable, ``0.5`` to ``0.7`` is borderline, and above ``0.7``
-        indicates the importance weights are unreliable.
+        The Pareto shape-parameter diagnostic for the fit-time PSIS weights:
+        below ``0.5`` is reliable, ``0.5`` to ``0.7`` is borderline, and above
+        ``0.7`` indicates the importance weights are unreliable.
+        :func:`multipathfinder_samples` reads it to decide whether
+        ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
     """
 
     state: Any
@@ -782,12 +796,15 @@ def fit_multipathfinder(
 
     Runs ``num_paths`` independent single-path Pathfinder approximations in
     parallel (vmapped L-BFGS runs, by default each from its own fresh
-    ``init_to_uniform`` starting point), pools their per-path posterior draws,
-    and reweights the pool with Pareto-smoothed importance sampling (PSIS) so
-    the returned approximation is not tied to a single mode. This is the
-    recommended entry point over :func:`fit_pathfinder`: a single L-BFGS path
-    can settle in one mode and its local normal approximation may not reflect
-    the rest of a multimodal or otherwise hard posterior.
+    ``init_to_uniform`` starting point) and scores the pooled per-path draws
+    with Pareto-smoothed importance sampling (PSIS), so the returned fit is not
+    tied to a single mode. This is the recommended entry point over
+    :func:`fit_pathfinder`: a single L-BFGS path can settle in one mode and its
+    local normal approximation may not reflect the rest of a multimodal or
+    otherwise hard posterior. The PSIS weights computed here are a fit-time
+    diagnostic; the draws themselves come from :func:`multipathfinder_samples`,
+    which resamples fresh per-path draws and reads ``pareto_k`` to pick between
+    PSIS and ELBO-weighted path sampling.
 
     PRNG: ``rng_key`` is split into a model-initialization stream and a
     multipath-approximation stream; the initialization stream is further split
@@ -832,7 +849,8 @@ def fit_multipathfinder(
     -------
     MultiPathfinderFit
         The fitted multipath approximation together with its per-path ELBOs
-        and the PSIS log weights/``pareto_k`` diagnostic over the pooled draws.
+        and the fit-time PSIS log weights/``pareto_k`` diagnostic over the
+        pooled draws.
 
     Raises
     ------
@@ -845,9 +863,11 @@ def fit_multipathfinder(
     UserWarning
         If one or more per-path ELBOs are non-finite (raise ``maxiter``/``maxcor``
         or inspect ``fit.elbos``), or if the PSIS ``pareto_k`` diagnostic exceeds
-        ``0.7`` (increase ``num_paths``/``maxiter``/``maxcor``, or fall back to
-        MCMC). Neither condition raises: the fit is always returned, carrying
-        everything needed to inspect and diagnose it.
+        ``0.7``, in which case ``multipathfinder_samples(..., resample="auto")``
+        falls back to ELBO-weighted path sampling (increase
+        ``num_paths``/``maxiter``/``maxcor``, or fall back to MCMC). Neither
+        condition raises: the fit is always returned, carrying everything needed
+        to inspect and diagnose it.
 
     Notes
     -----
@@ -926,10 +946,13 @@ def fit_multipathfinder(
             "maxiter/maxcor or inspect elbos."
         )
         warnings.warn(msg, UserWarning, stacklevel=2)
-    if pareto_k_value > 0.7:
+    if pareto_k_value > _PARETO_K_THRESHOLD:
         msg = (
-            f"pareto_k={pareto_k_value:.2f} > 0.7: PSIS resampling unreliable; "
-            "increase num_paths/maxiter/maxcor or fall back to MCMC."
+            f"pareto_k={pareto_k_value:.2f} > {_PARETO_K_THRESHOLD}: PSIS importance "
+            "weights over the pooled draws are unreliable, so "
+            'multipathfinder_samples(..., resample="auto") falls back to '
+            "ELBO-weighted path sampling instead of PSIS resampling; increase "
+            "num_paths/maxiter/maxcor or fall back to MCMC."
         )
         warnings.warn(msg, UserWarning, stacklevel=2)
 
@@ -949,27 +972,55 @@ def multipathfinder_samples(
     fit: MultiPathfinderFit,
     num_samples: int,
     *,
+    resample: Literal["auto", "psis", "elbo"] = "auto",
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
 ) -> dict[str, Array | np.ndarray]:
     """Draw ``num_samples`` posterior samples from a fitted multipath Pathfinder fit.
 
-    Resamples with replacement from the pooled per-path draws stored in
-    ``fit.state.samples`` (flattened to the ``num_paths * num_elbo_samples`` pool
-    from fit time), using the normalized PSIS ``fit.log_weights`` as resampling
-    probabilities. This is with-replacement PSIS resampling, matching blackjax's
-    own multipath ``sample_fn`` semantics, so the output contract is identical to
+    Every call draws fresh unconstrained samples from each path's fitted normal
+    approximation (``num_samples`` per path, via ``blackjax.vi.pathfinder.sample``
+    vmapped over the paths) and then combines the paths into a single set of
+    ``num_samples`` draws. Nothing is recycled from the small pool stored at fit
+    time, so asking for more draws than that pool held costs nothing in
+    duplication. The output contract is identical to
     :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
     :func:`pathfinder_samples`: :func:`~numpyro_forecast.functional.prediction.forecast`
-    and NumPyro's ``Predictive`` consume it unchanged. The raw pool and weights
-    stay public on ``fit`` for anyone who wants a different resampling scheme.
-    Chunking and device offload are delegated to the shared
+    and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
+    are delegated to the shared
     :func:`~numpyro_forecast.functional._offload._draw_chunked` driver, so the same
     memory-bounding contract applies.
 
+    Resampling strategies
+    ---------------------
+    ``resample="psis"``
+        Pool the ``num_paths * num_samples`` fresh draws, score them under the
+        model (``logp``) and under their own path's approximation (``logq``),
+        Pareto-smooth the importance ratios, and resample ``num_samples`` of them
+        with replacement. This is the textbook multipath Pathfinder estimator and
+        the most faithful one *when the importance weights behave*.
+    ``resample="elbo"``
+        Pick a whole path per draw, with probability ``softmax(fit.elbos)`` over
+        the paths whose ELBO is finite (non-finite paths get zero weight, and an
+        all-non-finite fit degrades to a uniform choice), then take one fresh draw
+        from that path. With ELBO gaps of hundreds of nats this collapses onto the
+        single best path, which is the right answer when the paths disagree
+        strongly: no single draw is ever duplicated.
+    ``resample="auto"`` (default)
+        ``"psis"`` when ``fit.pareto_k <= 0.7``, ``"elbo"`` otherwise.
+
+    The gate matters because importance sampling degenerates in high dimensions:
+    on a posterior with hundreds of parameters the ratio ``logp - logq`` is
+    dominated by a handful of draws, ``pareto_k`` climbs far above ``0.7``, and
+    PSIS resampling collapses the answer onto those few draws. ELBO-weighted path
+    sampling never concentrates like that, because it reweights *paths* (a handful
+    of well-separated numbers) rather than individual draws.
+
     PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
     split into a model-initialization stream (used only to rebuild the
-    constraining transform) and a resampling-index stream.
+    constraining transform), a per-path sampling stream, and a resampling-index
+    stream. The split is the same in every mode, so ``resample="auto"`` produces
+    bitwise the same draws as the explicit mode it resolves to.
 
     Parameters
     ----------
@@ -978,14 +1029,15 @@ def multipathfinder_samples(
     fit
         A fit from :func:`fit_multipathfinder`.
     num_samples
-        Number of posterior draws. Requesting far more than the pool size
-        (``num_paths * num_elbo_samples`` at fit time) duplicates draws; raise
-        ``num_elbo_samples`` in :func:`fit_multipathfinder` instead of
-        oversampling here.
+        Number of posterior draws.
+    resample
+        How to combine the per-path draws: ``"auto"`` (default), ``"psis"``, or
+        ``"elbo"``; see "Resampling strategies" above.
     batch_size
         Optional chunk size for the drawing itself; see
         :func:`~numpyro_forecast.functional.posterior.draw_posterior` (the same
-        memory/reproducibility contract applies).
+        memory/reproducibility contract applies). Note that each chunk draws
+        ``num_paths * batch_size`` samples internally.
     device
         Where each chunk of draws is moved as soon as it is drawn; see
         :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
@@ -999,35 +1051,87 @@ def multipathfinder_samples(
     Raises
     ------
     ValueError
-        If ``num_samples`` or ``batch_size`` is not positive.
+        If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
+        not one of ``"auto"``, ``"psis"``, ``"elbo"``.
 
-    Notes
+    Warns
     -----
-    ``pareto_k`` is computed and warned about once, at :func:`fit_multipathfinder`
-    time; this function does not recompute or re-warn about it.
+    UserWarning
+        In PSIS mode, if the ``pareto_k`` recomputed on this call's fresh draws
+        exceeds ``0.7``. This is a separate diagnostic from ``fit.pareto_k``,
+        which is computed once over the pool stored at fit time.
     """
     _require_positive_num_samples(num_samples)
+    if resample not in ("auto", "psis", "elbo"):
+        msg = f"resample must be one of 'auto', 'psis', 'elbo', got {resample!r}"
+        raise ValueError(msg)
+    blackjax = require("blackjax", extra="blackjax")
+    _ensure_stable_bfgs_sample()
+
+    if resample == "auto":
+        mode = "psis" if fit.pareto_k <= _PARETO_K_THRESHOLD else "elbo"
+    else:
+        mode = resample
+
+    num_paths = len(fit.elbos)
+    elbos = jnp.asarray(fit.elbos)
+    finite = jnp.isfinite(elbos)
+    # softmax over the finite-ELBO paths; a fit whose every path failed has no
+    # signal to weight by, so it degrades to a uniform choice over the paths.
+    path_weights = (
+        jax.nn.softmax(jnp.where(finite, elbos, -jnp.inf))
+        if bool(jnp.any(finite))
+        else jnp.full((num_paths,), 1.0 / num_paths)
+    )
 
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
-        # Split so the discarded init draws and the resampling indices use
-        # distinct streams (the init param draws are unused, but keep the
-        # streams isolated).
-        key_init, key_choice = random.split(key)
-        _param_info, _potential_fn_gen, postprocess_fn, _ = initialize_model(
+        # Three isolated streams: the (unused) init param draws, the per-path
+        # Pathfinder draws, and the path/index choice.
+        key_init, key_paths, key_choice = random.split(key, 3)
+        _param_info, potential_fn_gen, postprocess_fn, _ = initialize_model(
             key_init,
             fit.model,
             dynamic_args=True,
             model_args=(fit.covariates, fit.data),
         )
-        flat_pool = jax.tree.map(lambda x: x.reshape(-1, *x.shape[2:]), fit.state.samples)
-        indices = jax.random.choice(
-            key_choice,
-            fit.log_weights.shape[0],
-            shape=(n,),
-            replace=True,
-            p=jnp.exp(fit.log_weights),
-        )
-        unconstrained = jax.tree.map(lambda x: x[indices], flat_pool)
+        # sample() returns (samples_dict, logq) with the draws already unravelled
+        # into the model's site dict; vmapping it over the stacked per-path states
+        # gives leaves of shape (num_paths, n, ...) and logq of shape (num_paths, n).
+        path_keys = random.split(key_paths, num_paths)
+        draws, logq = jax.vmap(
+            lambda path_key, path_state: blackjax.vi.pathfinder.sample(path_key, path_state, n)
+        )(path_keys, fit.state.path_states)
+
+        if mode == "elbo":
+            path_index = jax.random.choice(
+                key_choice, num_paths, shape=(n,), replace=True, p=path_weights
+            )
+            unconstrained = jax.tree.map(
+                lambda x: x[path_index, jnp.arange(n)],
+                draws,
+            )
+        else:
+            flat_draws = jax.tree.map(lambda x: x.reshape(-1, *x.shape[2:]), draws)
+            potential_fn = potential_fn_gen(fit.covariates, fit.data)
+            logp = jax.vmap(lambda position: -potential_fn(position))(flat_draws)
+            log_w, pareto_k = blackjax.diagnostics.psis_weights(logp - logq.reshape(-1))
+            pareto_k_value = float(pareto_k)
+            if pareto_k_value > _PARETO_K_THRESHOLD:
+                msg = (
+                    f"pareto_k={pareto_k_value:.2f} > {_PARETO_K_THRESHOLD} on this "
+                    'call\'s fresh draws: PSIS resampling is unreliable; pass resample="elbo" '
+                    '(or resample="auto") to weight whole paths by their ELBO instead.'
+                )
+                warnings.warn(msg, UserWarning, stacklevel=2)
+            indices = jax.random.choice(
+                key_choice,
+                log_w.shape[0],
+                shape=(n,),
+                replace=True,
+                p=jnp.exp(log_w),
+            )
+            unconstrained = jax.tree.map(lambda x: x[indices], flat_draws)
+
         transform = postprocess_fn(fit.covariates, fit.data)
         return jax.vmap(transform)(unconstrained)
 
