@@ -38,6 +38,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import random
+from jax.core import Tracer
 from jax.sharding import SingleDeviceSharding
 
 from numpyro_forecast.exceptions import DeviceMemoryError
@@ -194,6 +195,14 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     host and hands only the chunk to the jitted predictive. Anything else
     (NumPy arrays, lists, scalars) is normalized with :func:`numpy.asarray`.
 
+    A tracer is passed through untouched. Tracers are ``jax.Array`` instances
+    but have no ``sharding``, and more importantly nothing about a traced value
+    is host-resident, so the host staging is meaningless under ``vmap``/``jit``.
+    Passing it through lets the traced computation fail where it always did
+    (e.g. at the first host conversion), which is what
+    :func:`~numpyro_forecast.evaluate._vmapped_metrics` translates into
+    :class:`~numpyro_forecast.exceptions.VectorizedMetricError`.
+
     Parameters
     ----------
     leaf
@@ -202,8 +211,11 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     Returns
     -------
     Array | np.ndarray
-        ``leaf`` itself when it is device-resident, a NumPy view otherwise.
+        ``leaf`` itself when it is a tracer or device-resident, a NumPy view
+        otherwise.
     """
+    if isinstance(leaf, Tracer):
+        return leaf
     if isinstance(leaf, jax.Array):
         if leaf.sharding.memory_kind in _HOST_MEMORY_KINDS:
             return np.asarray(leaf)

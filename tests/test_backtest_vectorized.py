@@ -28,6 +28,7 @@ from numpyro_forecast.evaluate import (
     backtest,
     backtest_vectorized,
     eval_coverage,
+    eval_crps,
 )
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
@@ -460,6 +461,35 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
         t1, t2 = int(vec_50.t1[i]), int(vec_50.t2[i])
         expected = eval_coverage(vec_50.predictions[i], data[t1:t2], alpha=0.5)
         assert float(vec_50.metrics["coverage"][i]) == pytest.approx(float(expected))
+
+
+def test_chunked_metric_raises_actionable_error() -> None:
+    """A chunked metric stages values on the host, so it too must be rejected clearly.
+
+    ``eval_crps(..., batch_size=n)`` runs the host-staging chunk loop
+    (``_chunked_cell_metric``), which cannot work on a traced window axis. The
+    failure must surface as ``VectorizedMetricError`` and not as a raw
+    ``AttributeError`` from ``_leaf_view`` reaching for ``sharding`` on a
+    tracer: that regression is exactly what the tracer passthrough in
+    ``_leaf_view`` guards.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+
+    model = rw_model
+    with pytest.raises(VectorizedMetricError):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            data,
+            cov,
+            lambda: model,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(model),
+            num_steps=1,
+            num_samples=10,
+            metrics={"crps": partial(eval_crps, batch_size=2)},
+        )
 
 
 def test_host_metric_raises_actionable_error() -> None:

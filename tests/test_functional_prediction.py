@@ -17,7 +17,12 @@ from numpyro_forecast.functional import (
     forecast,
     predict_in_sample,
 )
-from numpyro_forecast.functional._offload import _draw_chunked, _resolve_device
+from numpyro_forecast.functional._offload import (
+    _draw_chunked,
+    _host_sharding,
+    _leaf_view,
+    _resolve_device,
+)
 from numpyro_forecast.functional.prediction import (
     _chunk_indices,
     _chunked_draws,
@@ -437,6 +442,72 @@ def test_resolve_device_missing_platform_raises_actionable_error(
     monkeypatch.setattr(jax, "devices", _fail_devices_for("tpu"))
     with pytest.raises(ValueError, match="platform 'tpu' is not initialized"):
         _resolve_device("tpu")
+
+
+def test_leaf_view_stages_host_committed_leaves_as_numpy() -> None:
+    """``_leaf_view`` is the host-gather switch: only host-committed leaves become NumPy.
+
+    A device-resident array must come back as the *same object* (no copy, no
+    round-trip), a host-committed one as ``np.ndarray`` so downstream indexing
+    gathers on the host instead of pulling the whole leaf into device memory,
+    and a NumPy input must pass straight through.
+    """
+    x = jnp.arange(6.0).reshape(3, 2)
+    hosted = jax.device_put(x, _host_sharding(x))
+
+    assert _leaf_view(x) is x  # device-resident: untouched, not even copied
+    viewed = _leaf_view(hosted)
+    assert isinstance(viewed, np.ndarray)
+    assert np.array_equal(viewed, np.asarray(x))
+    assert isinstance(_leaf_view(np.asarray(x)), np.ndarray)
+
+
+def test_leaf_view_passes_tracers_through() -> None:
+    """A tracer has no ``sharding``; ``_leaf_view`` must not reach for one.
+
+    Without the passthrough this raises ``AttributeError`` under ``vmap``,
+    which would mask the actionable ``VectorizedMetricError`` that
+    ``backtest_vectorized`` raises for host-staging metrics.
+    """
+    seen: list[bool] = []
+
+    def probe(row: Array) -> Array:
+        viewed = _leaf_view(row)
+        seen.append(viewed is row)
+        return jnp.sum(jnp.asarray(viewed))
+
+    out = jax.vmap(probe)(jnp.ones((3, 4)))
+    assert seen == [True]  # the tracer itself, not a NumPy copy
+    assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
+
+
+def test_chunked_draws_gathers_host_posterior_chunks_on_the_host() -> None:
+    """A host-committed posterior must be indexed as NumPy, not as a jax Array.
+
+    This is the memory-bounding contract of the host path on an accelerator:
+    indexing a host-committed ``jax.Array`` copies the *whole* leaf into device
+    memory before the gather, so ``_chunked_draws`` stages every leaf through
+    ``_leaf_view`` first. Spying on the chunks actually handed to ``predict_fn``
+    is what pins that: drop the ``_leaf_view`` call and these leaves come back
+    as ``jax.Array``.
+    """
+    chunk_types: list[type] = []
+
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        chunk_types.append(type(post["x"]))
+        return jnp.asarray(post["x"]) * 2.0
+
+    x = jnp.arange(10.0)[:, None]
+    posterior = {"x": jax.device_put(x, _host_sharding(x))}
+
+    _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    assert len(chunk_types) == 3
+    assert all(issubclass(t, np.ndarray) for t in chunk_types), chunk_types
+
+    # The single-shot passthrough stages the posterior the same way.
+    chunk_types.clear()
+    _chunked_draws(random.PRNGKey(0), predict_fn, posterior, None)
+    assert [issubclass(t, np.ndarray) for t in chunk_types] == [True]
 
 
 def test_chunked_draws_host_is_host_resident_and_matches_values() -> None:
