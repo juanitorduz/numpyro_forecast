@@ -6,7 +6,6 @@ from contextlib import AbstractContextManager, contextmanager
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
@@ -230,7 +229,7 @@ def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
         num_samples: int,
         *,
         batch_size: int | None = None,
-    ) -> "Array | np.ndarray":
+    ) -> Array:
         guide = AutoNormal(model)
         svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
         key_fit, key_post, key_pred = random.split(rng_key, 3)
@@ -258,7 +257,7 @@ def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
         num_samples: int,
         *,
         batch_size: int | None = None,
-    ) -> "Array | np.ndarray":
+    ) -> Array:
         guide = AutoNormal(model)
         svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
         key_fit, key_post, key_pred = random.split(rng_key, 3)

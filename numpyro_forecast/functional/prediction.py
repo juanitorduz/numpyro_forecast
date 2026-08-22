@@ -11,12 +11,13 @@ is bounded by a single chunk instead of the full draw array.
 
 from collections.abc import Callable, Mapping
 from functools import partial
-from typing import Literal
+from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import random
+from jax.typing import ArrayLike
 from jaxtyping import Num
 from numpyro.infer import Predictive
 
@@ -103,7 +104,7 @@ def _chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
 def _chunked_draws(
     rng_key: Array,
     predict_fn: Callable[[Array, Mapping[str, Array | np.ndarray]], Array],
-    posterior: Mapping[str, Array | np.ndarray],
+    posterior: Mapping[str, ArrayLike],
     batch_size: int | None,
     device: jax.Device | Literal["host"] | None = None,
 ) -> Array:
@@ -146,7 +147,9 @@ def _chunked_draws(
         The stitched draws for the original sample count (committed to host
         memory when ``device`` is ``"host"``).
     """
-    staged = {name: _leaf_view(leaf) for name, leaf in posterior.items()}
+    staged = {
+        name: _leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
+    }
     num = _sample_axis_size(staged)
     if batch_size is None or batch_size >= num:
         with _oom_advice("predictive sampling", batch_size):
@@ -189,7 +192,7 @@ def _predict(
 def forecast(
     rng_key: Array,
     model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
+    posterior: Mapping[str, ArrayLike],
     data: Array,
     covariates: Array,
     *,
@@ -212,7 +215,8 @@ def forecast(
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
-        Posterior samples of the latent sites, sample axis leading.
+        Posterior samples of the latent sites, sample axis leading. NumPy
+        leaves are accepted directly (e.g. host-offloaded draws).
     data
         Observed data with time at axis ``-2`` and length ``t``.
     covariates
@@ -301,7 +305,7 @@ def _predict_obs(
 def predict_in_sample(
     rng_key: Array,
     model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
+    posterior: Mapping[str, ArrayLike],
     covariates: Array,
     *,
     batch_size: int | None = None,
@@ -323,7 +327,8 @@ def predict_in_sample(
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
-        Posterior samples of the latent sites, sample axis leading.
+        Posterior samples of the latent sites, sample axis leading. NumPy
+        leaves are accepted directly (e.g. host-offloaded draws).
     covariates
         Covariates with time at axis ``-2`` spanning the observed window. Its time
         length must match the data the ``posterior`` was fit on, since the in-sample

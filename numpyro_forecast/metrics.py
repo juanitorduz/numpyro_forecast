@@ -8,7 +8,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from numpyro_forecast.typing import Array, Metric
@@ -36,8 +36,8 @@ def _crps_empirical(
 
 
 def crps_empirical(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
 ) -> Float[Array, " *batch"]:
     r"""Compute the empirical Continuous Ranked Probability Score (CRPS).
 
@@ -70,11 +70,12 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    num_samples = pred.shape[0]
+    pred_arr = jnp.asarray(pred)
+    num_samples = pred_arr.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-    return _crps_empirical(pred, truth)
+    return _crps_empirical(pred_arr, jnp.asarray(truth))
 
 
 @partial(jax.jit, static_argnames=("quantile",))

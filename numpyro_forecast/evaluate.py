@@ -18,6 +18,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import lax, random
+from jax.typing import ArrayLike
 from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
@@ -153,8 +154,8 @@ def _chunked_cell_metric(
 
 
 def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     batch_size: int | None = None,
 ) -> Array:
@@ -183,9 +184,14 @@ def eval_crps(
     Array
         The mean empirical CRPS as a scalar array.
     """
-    if batch_size is None or batch_size >= truth.size:
-        return _eval_crps_single_pass(pred, truth)
-    return _chunked_cell_metric(_crps_cells, pred, truth, batch_size)
+    if batch_size is None or batch_size >= np.size(truth):
+        return _eval_crps_single_pass(cast("Array", pred), cast("Array", truth))
+    return _chunked_cell_metric(
+        _crps_cells,
+        cast("Array | np.ndarray", pred),
+        cast("Array | np.ndarray", truth),
+        batch_size,
+    )
 
 
 @partial(jax.jit, static_argnames=("alpha",))
@@ -198,8 +204,8 @@ def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
 
 
 def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
     batch_size: int | None = None,
@@ -242,10 +248,12 @@ def eval_coverage(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    if batch_size is None or batch_size >= truth.size:
-        return _coverage_indicator(pred, truth, alpha=alpha).mean()
+    if batch_size is None or batch_size >= np.size(truth):
+        return _coverage_indicator(cast("Array", pred), cast("Array", truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
-    return _chunked_cell_metric(kernel, pred, truth, batch_size)
+    return _chunked_cell_metric(
+        kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
+    )
 
 
 DEFAULT_METRICS: dict[str, Metric] = {
@@ -258,8 +266,8 @@ DEFAULT_METRICS: dict[str, Metric] = {
 
 
 def evaluate_forecast(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
@@ -569,11 +577,8 @@ def _eval_train_window(
     A thin call into the user-supplied :data:`~numpyro_forecast.typing.InSampleFn`
     closure, which owns fitting the model and drawing its in-sample predictive.
     """
-    train_pred = cast(
-        "Array",
-        in_sample_fn(
-            rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
-        ),
+    train_pred = in_sample_fn(
+        rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
     )
     train_truth = train_data
     if transform is not None:
@@ -610,17 +615,14 @@ def _run_window(
 
     model = shared_model if shared_model is not None else model_fn()
     pred, walltime = _timed(
-        lambda: cast(
-            "Array",
-            forecast_fn(
-                rng_key,
-                model,
-                train_data,
-                train_covariates,
-                full_covariates,
-                num_samples,
-                batch_size=batch_size,
-            ),
+        lambda: forecast_fn(
+            rng_key,
+            model,
+            train_data,
+            train_covariates,
+            full_covariates,
+            num_samples,
+            batch_size=batch_size,
         )
     )
 
@@ -708,10 +710,11 @@ def backtest(
         ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
 
     ``batch_size`` is forwarded unchanged into both closures so a chunked
-    implementation can bound its own device memory. A closure that offloads
-    work internally (e.g. moves draws to host memory to cap peak accelerator
-    usage) must return the draws back on-device before returning: the metrics
-    computed by :func:`evaluate_forecast` are jitted and expect array inputs.
+    implementation can bound its own device memory. A closure may return draws
+    offloaded to host memory (e.g. to cap peak accelerator usage): the metrics
+    computed by :func:`evaluate_forecast` accept NumPy directly and convert
+    once internally, though returning them already on-device avoids that
+    extra host-to-device hop for metrics scored every window.
 
     A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
     + ``Predictive``)::

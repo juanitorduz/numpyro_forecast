@@ -20,7 +20,7 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+from jax.typing import ArrayLike
 from jaxtyping import Float
 from numpyro.diagnostics import _fft_next_fast_len
 
@@ -77,7 +77,7 @@ def _validate_max_lag(name: str, time: int, max_lag: int) -> None:
 
 
 def acf(
-    y: Float[Array, " *batch time"] | Float[np.ndarray, " *batch time"],
+    y: Float[ArrayLike, " *batch time"],
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical autocorrelation function up to ``max_lag``.
@@ -125,12 +125,13 @@ def acf(
     Adapted from :func:`numpyro.diagnostics.autocorrelation`, itself adapted
     from the Stan implementation.
     """
+    y = jnp.asarray(y)
     _validate_max_lag("acf", y.shape[-1], max_lag)
     return _acf(y, max_lag=max_lag)
 
 
 def pacf(
-    y: Float[Array, " *batch time"] | Float[np.ndarray, " *batch time"],
+    y: Float[ArrayLike, " *batch time"],
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical partial autocorrelation function up to ``max_lag``.
@@ -181,5 +182,6 @@ def pacf(
     James Durbin (1960). "The Fitting of Time-Series Models". *Revue de
     l'Institut International de Statistique*.
     """
+    y = jnp.asarray(y)
     _validate_max_lag("pacf", y.shape[-1], max_lag)
     return _pacf(y, max_lag=max_lag)

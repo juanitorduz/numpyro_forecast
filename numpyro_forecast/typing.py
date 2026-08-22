@@ -5,12 +5,9 @@ Keeping these in a dependency-free module avoids import cycles between
 """
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import jax
-
-if TYPE_CHECKING:
-    import numpy as np
 
 Array = jax.Array
 """A JAX array (alias of :class:`jax.Array`)."""
@@ -67,7 +64,7 @@ class ForecastModel(Protocol):
 ModelFactory = Callable[[], ForecastModel]
 """A zero-argument callable returning a fresh :class:`ForecastModel` instance."""
 
-ForecastFn = Callable[..., "Array | np.ndarray"]
+ForecastFn = Callable[..., Array]
 """A closure that fits a model on a training window and forecasts its test horizon.
 
 Called by :func:`~numpyro_forecast.evaluate.backtest` positionally as
@@ -77,19 +74,21 @@ window (train followed by test, i.e. ``covariates[..., t0:t2, :]``). Must return
 forecast samples with the sample axis first, shape
 ``(num_samples, *batch, t2 - t1, obs)``. ``batch_size`` is forwarded unchanged
 from ``backtest`` so a chunked closure can bound its own device memory; a
-closure that offloads work internally must return the draws back on-device
-(the metrics scoring them are jitted). Typed loosely (a bare ``Callable``, like
-:data:`Metric`) because per-backend fit options differ; the exact shapes are
-pinned above rather than in the type itself.
+closure may offload work internally (e.g. host memory) and return host-resident
+draws (:func:`~numpyro_forecast.evaluate.evaluate_forecast` accepts NumPy
+directly), though returning them already on-device avoids an extra
+host-to-device hop for the metrics scored every window. Typed loosely (a bare
+``Callable``, like :data:`Metric`) because per-backend fit options differ; the
+exact shapes are pinned above rather than in the type itself.
 """
 
-InSampleFn = Callable[..., "Array | np.ndarray"]
+InSampleFn = Callable[..., Array]
 """A closure that fits a model on a training window and scores its in-sample fit.
 
 Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
 ``eval_train=True``) positionally as ``in_sample_fn(rng_key, model, train_data,
 train_covariates, num_samples, *, batch_size=None)``. Must return in-sample
 posterior-predictive samples with the sample axis first, shape
-``(num_samples, *batch, t1 - t0, obs)``. The same ``batch_size``/on-device
-requirements as :data:`ForecastFn` apply.
+``(num_samples, *batch, t1 - t0, obs)``. The same ``batch_size``/host-offload
+notes as :data:`ForecastFn` apply.
 """
