@@ -199,7 +199,7 @@ ValueError
 Drawing posterior samples and generating forecasts and in-sample predictions.
 
 
-draw_posterior(rng_key: jax.Array, guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jax.Array], num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
+draw_posterior(rng_key: jax.Array, guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jax.Array], num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array]
 
 Draw ``num_samples`` posterior samples of the latent sites from a fitted guide.
 
@@ -234,25 +234,39 @@ batch_size
     are reproducible per ``(rng_key, batch_size)``.
 device
     Where each chunk of draws is moved as soon as it is drawn. ``"host"``
-    copies to host memory with :func:`jax.device_get` and returns NumPy
-    leaves; it needs no CPU backend, so it works even when
+    commits every leaf to host memory and returns :class:`jax.Array` leaves
+    whose sharding carries a host memory kind (``"pinned_host"`` where the
+    backend offers it), so nothing of the result occupies accelerator
+    memory; it needs no CPU backend, so it works even when
     ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves only an
     accelerator backend initialized. A :class:`jax.Device` or platform
     name like ``"cpu"`` commits the draws to that device instead
     (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
     the CPU backend is not initialized). ``None`` keeps everything on the
-    default device. ``device`` never changes the draw values.
+    default device. ``device`` never changes the draw values. Arithmetic
+    that mixes a host-committed leaf with a device-resident array raises
+    in JAX rather than running on the accelerator, so feed a host-committed
+    posterior straight into
+    :func:`~numpyro_forecast.functional.prediction.forecast`,
+    :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, or
+    :func:`~numpyro_forecast.convert.to_datatree` (all of which already
+    accept it), or convert explicitly first with ``np.asarray(x)`` (stays
+    on host) or ``jax.device_put(x, device)`` (moves it to an accelerator).
 
 Returns
 -------
-dict[str, Array | np.ndarray]
-    Posterior samples of the latent sites, sample axis leading (NumPy
-    leaves when ``device`` resolves to ``"host"``).
+dict[str, Array]
+    Posterior samples of the latent sites, sample axis leading (leaves
+    committed to host memory when ``device`` resolves to ``"host"``).
 
 Raises
 ------
 ValueError
     If ``num_samples`` or ``batch_size`` is not positive.
+RuntimeError
+    If ``device`` resolves to ``"host"`` and the array's device exposes no
+    host memory kind (see
+    :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
 Notes
 -----
@@ -260,7 +274,7 @@ For an MCMC fit, use its samples directly (``mcmc.get_samples()``); this
 function draws afresh from a variational guide, and chunks drawn from
 independent subkeys remain valid i.i.d. posterior samples.
 
-forecast(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs']
+forecast(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch future obs']
 
 Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
@@ -277,7 +291,8 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading.
+    Posterior samples of the latent sites, sample axis leading. NumPy
+    leaves are accepted directly (e.g. host-offloaded draws).
 data
     Observed data with time at axis ``-2`` and length ``t``.
 covariates
@@ -293,11 +308,14 @@ parallel
     the same draws up to floating-point reduction order.
 device
     Where each chunk of draws is placed as soon as it is drawn and where
-    the stitched result lives. ``"host"`` copies every chunk to host
-    memory with :func:`jax.device_get` and returns a NumPy array; it needs
-    no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
-    (or ``jax_platforms``) leaves only an accelerator backend initialized,
-    which makes it the recommended choice on GPU. A :class:`jax.Device` or
+    the stitched result lives. ``"host"`` commits every chunk to host
+    memory and returns a :class:`jax.Array` whose sharding carries a host
+    memory kind (``"pinned_host"`` where the backend offers it), so nothing
+    of the result occupies accelerator memory; call :func:`numpy.asarray`
+    on it for a plain NumPy copy. It needs no CPU backend, so it works even
+    when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves
+    only an accelerator backend initialized, which makes it the recommended
+    choice on GPU. A :class:`jax.Device` or
     platform name like ``"cpu"`` commits the draws to that device instead
     (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
     the CPU backend is not initialized). With ``batch_size`` set on an
@@ -307,20 +325,31 @@ device
     ``batch_size`` strictly below the sample count: at or above it, the
     single-shot path runs and the full array is materialized on the
     default device before the one transfer. ``None`` keeps everything on
-    the default device.
+    the default device. Arithmetic that mixes a host-committed result
+    with a device-resident array raises in JAX rather than running on
+    the accelerator, so feed it straight into
+    :func:`~numpyro_forecast.convert.to_datatree` or the
+    ``batch_size``-chunked evaluation metrics in
+    :mod:`~numpyro_forecast.evaluate` (both already accept it), or
+    convert explicitly first with ``np.asarray(x)`` (stays on host) or
+    ``jax.device_put(x, device)`` (moves it to an accelerator).
 
 Returns
 -------
-Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
+Num[Array, " sample *batch future obs"]
     Forecast samples over the ``future = duration - t`` horizon (floating
     point for continuous observations, integer for discrete/count models
-    built with :func:`~numpyro_forecast.functional.models.predict_glm`; a
-    NumPy array when ``device`` resolves to ``"host"``).
+    built with :func:`~numpyro_forecast.functional.models.predict_glm`;
+    committed to host memory when ``device`` resolves to ``"host"``).
 
 Raises
 ------
 ValueError
     If ``covariates`` does not extend beyond ``data`` along the time axis.
+RuntimeError
+    If ``device`` resolves to ``"host"`` and the array's device exposes no
+    host memory kind (see
+    :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
 Notes
 -----
@@ -331,7 +360,7 @@ so the underlying ``_predict`` compiles exactly once for a fixed shape, but
 changing ``batch_size`` changes the PRNG stream layout and therefore the
 exact draws. ``device`` never changes the draws, only where they live.
 
-predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs'] | jaxtyping.Num[ndarray, 'sample *batch time obs']
+predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs']
 
 Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -348,7 +377,8 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading.
+    Posterior samples of the latent sites, sample axis leading. NumPy
+    leaves are accepted directly (e.g. host-offloaded draws).
 covariates
     Covariates with time at axis ``-2`` spanning the observed window. Its time
     length must match the data the ``posterior`` was fit on, since the in-sample
@@ -362,11 +392,14 @@ parallel
     ``batch_size``.
 device
     Where each chunk of draws is placed as soon as it is drawn and where
-    the stitched result lives. ``"host"`` copies every chunk to host
-    memory with :func:`jax.device_get` and returns a NumPy array; it needs
-    no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
-    (or ``jax_platforms``) leaves only an accelerator backend initialized,
-    which makes it the recommended choice on GPU. A :class:`jax.Device` or
+    the stitched result lives. ``"host"`` commits every chunk to host
+    memory and returns a :class:`jax.Array` whose sharding carries a host
+    memory kind (``"pinned_host"`` where the backend offers it), so nothing
+    of the result occupies accelerator memory; call :func:`numpy.asarray`
+    on it for a plain NumPy copy. It needs no CPU backend, so it works even
+    when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves
+    only an accelerator backend initialized, which makes it the recommended
+    choice on GPU. A :class:`jax.Device` or
     platform name like ``"cpu"`` commits the draws to that device instead
     (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
     the CPU backend is not initialized). With ``batch_size`` set on an
@@ -376,13 +409,27 @@ device
     ``batch_size`` strictly below the sample count: at or above it, the
     single-shot path runs and the full array is materialized on the
     default device before the one transfer. ``None`` keeps everything on
-    the default device.
+    the default device. Arithmetic that mixes a host-committed result
+    with a device-resident array raises in JAX rather than running on
+    the accelerator, so feed it straight into
+    :func:`~numpyro_forecast.convert.to_datatree` or the
+    ``batch_size``-chunked evaluation metrics in
+    :mod:`~numpyro_forecast.evaluate` (both already accept it), or
+    convert explicitly first with ``np.asarray(x)`` (stays on host) or
+    ``jax.device_put(x, device)`` (moves it to an accelerator).
 
 Returns
 -------
-Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
-    In-sample posterior-predictive draws of the ``obs`` site (a NumPy
-    array when ``device`` resolves to ``"host"``).
+Num[Array, " sample *batch time obs"]
+    In-sample posterior-predictive draws of the ``obs`` site (committed to
+    host memory when ``device`` resolves to ``"host"``).
+
+Raises
+------
+RuntimeError
+    If ``device`` resolves to ``"host"`` and the array's device exposes no
+    host memory kind (see
+    :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
 
 ## Backtesting & evaluation
@@ -390,7 +437,7 @@ Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, forecast_fn: collections.abc.Callable[..., 'Array | np.ndarray'], in_sample_fn: collections.abc.Callable[..., 'Array | np.ndarray'] | None = None, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, forecast_fn: collections.abc.Callable[..., jax.Array], in_sample_fn: collections.abc.Callable[..., jax.Array] | None = None, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -419,10 +466,13 @@ horizon. The optional ``in_sample_fn`` has the call signature (see
     ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
 
 ``batch_size`` is forwarded unchanged into both closures so a chunked
-implementation can bound its own device memory. A closure that offloads
-work internally (e.g. moves draws to host memory to cap peak accelerator
-usage) must return the draws back on-device before returning: the metrics
-computed by :func:`evaluate_forecast` are jitted and expect array inputs.
+implementation can bound its own device memory. A closure may return draws
+committed to host memory (e.g. via ``device="host"``, to cap peak
+accelerator usage): every metric in :data:`DEFAULT_METRICS` accepts a
+host-committed ``pred`` or ``truth`` (or both), in any mix and regardless
+of ``batch_size``, moving a host-committed operand to device memory first
+where needed. Returning draws already on-device still avoids the extra
+host-to-device hop for metrics scored every window.
 
 A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
 + ``Predictive``)::
@@ -481,7 +531,12 @@ per_window_metrics
     window-dependent metrics such as a MASE scaled by that window's training
     data (:func:`numpyro_forecast.metrics.make_mase`).
 transform
-    Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+    Optional ``(pred, truth) -> (pred, truth)`` applied before metrics. It
+    runs before the metrics and receives the forecast/in-sample closure's
+    draws as-is, so a transform that does its own array math against a
+    device-resident operand must convert a host-committed ``pred`` or
+    ``truth`` first, e.g. with :func:`numpy.asarray` (or move it back
+    onto a device explicitly).
 window_type
     Windowing strategy. If ``None`` (default) it is inferred from
     ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and
@@ -658,7 +713,7 @@ predictions
     ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
     unless ``keep_predictions=True``.
 
-evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
+evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
 
 Evaluate forecast samples against ground truth for several metrics at once.
 
@@ -726,7 +781,7 @@ Raises
 ImportError
     If ``pandas`` is not installed (``pip install numpyro_forecast[dataframes]``).
 
-eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, batch_size: int | None = None) -> 'Array | np.floating'
+eval_crps(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, batch_size: int | None = None) -> jax.Array
 
 Empirical CRPS averaged over all data elements.
 
@@ -741,23 +796,32 @@ truth
 batch_size
     Optional number of flattened data cells (the product of the batch
     shape, e.g. time times series) evaluated on the accelerator per pass;
-    the sample axis is never chunked. With host-resident (NumPy) inputs
-    this bounds accelerator memory by ``sample * batch_size`` values plus
-    the CRPS sort workspace instead of the full panel. Chunking only
-    changes the summation order of the final mean (results are equal to
-    float tolerance, not bitwise); at or above the cell count the
-    single-pass path runs. ``None`` (default) evaluates in one pass.
+    the sample axis is never chunked. With host-resident inputs (e.g.
+    draws sampled with ``device="host"``) this bounds accelerator memory
+    by ``sample * batch_size`` values plus the CRPS sort workspace instead
+    of the full panel, since both ``pred`` and ``truth`` are staged as
+    NumPy views before chunking, whatever their own memory kind. Chunking
+    only changes the summation order of the final mean (results are equal
+    to float tolerance, not bitwise); at or above the cell count the
+    single-pass path runs instead, which moves any host-committed operand
+    back to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`) so either
+    ``pred`` or ``truth`` (or both) may be host-committed regardless of
+    ``batch_size``. ``None`` (default) evaluates in one pass.
 
 Returns
 -------
-Array | np.floating
-    The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
+Array
+    The mean empirical CRPS as a scalar array.
 
-eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
 Mean absolute error using the forecast sample median as point estimate.
 
 A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+``pred`` and ``truth`` are moved to device memory first
+(:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
 ----------
@@ -771,11 +835,14 @@ Returns
 Array
     The mean absolute error as a scalar array.
 
-eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch']) -> jax.Array
+eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
 Root mean squared error using the forecast sample mean as point estimate.
 
 A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+``pred`` and ``truth`` are moved to device memory first
+(:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
 ----------
@@ -789,7 +856,7 @@ Returns
 Array
     The root mean squared error as a scalar array.
 
-eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'], *, alpha: float = 0.9, batch_size: int | None = None) -> 'Array | np.floating'
+eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9, batch_size: int | None = None) -> jax.Array
 
 Empirical coverage of the central ``alpha`` prediction interval.
 
@@ -813,20 +880,23 @@ batch_size
     per pass (see :func:`eval_crps`; the sample axis is never chunked).
     Coverage is a count of exact 0/1 indicators, so chunking recovers
     the identical count; only the precision of the final division differs
-    from the single pass. ``None`` (default) evaluates in one pass.
+    from the single pass. Either path accepts a host-committed ``pred``
+    or ``truth`` (or both); the single pass moves them to device memory
+    first (:func:`~numpyro_forecast.functional._offload._device_view`).
+    ``None`` (default) evaluates in one pass.
 
 Returns
 -------
-Array | np.floating
+Array
     The fraction of ground truth inside the central ``alpha`` interval, as
-    a scalar (a NumPy scalar when chunked).
+    a scalar array.
 
 Raises
 ------
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``.
 
-crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch']) -> jaxtyping.Float[Array, '*batch']
+crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jaxtyping.Float[Array, '*batch']
 
 Compute the empirical Continuous Ranked Probability Score (CRPS).
 
@@ -845,6 +915,9 @@ Parameters
 ----------
 pred
     Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+    May be host-committed (e.g. draws sampled with ``device="host"``),
+    regardless of whether ``truth`` is: either operand is moved to device
+    memory first (:func:`~numpyro_forecast.functional._offload._device_view`).
 truth
     Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
 
@@ -859,7 +932,7 @@ Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
 Prediction, and Estimation". *Journal of the American Statistical
 Association*.
 
-eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, quantile: float = 0.5) -> jax.Array
+eval_pinball(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, quantile: float = 0.5) -> jax.Array
 
 Mean pinball (quantile) loss of the forecast ``quantile``.
 
@@ -867,7 +940,10 @@ The pinball loss for the forecast :math:`\hat q` of quantile :math:`\tau` is
 :math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
 data elements. At ``quantile=0.5`` it is half the mean absolute error. A
 pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`);
-``quantile`` is static so each level specializes its own branch.
+``quantile`` is static so each level specializes its own branch. ``pred``
+and ``truth`` are moved to device memory first
+(:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
 ----------
@@ -888,7 +964,7 @@ Raises
 ValueError
     If ``quantile`` is not strictly inside ``(0, 1)``.
 
-eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'], *, alpha: float = 0.9) -> jax.Array
+eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9) -> jax.Array
 
 Mean Winkler interval score for the central ``alpha`` prediction interval.
 
@@ -898,6 +974,9 @@ and :math:`1-(1-\alpha)/2` quantiles), the interval score is
 u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
 intervals and penalizes ground truth falling outside them; lower is better.
 A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+``pred`` and ``truth`` are moved to device memory first
+(:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
 ----------
@@ -918,7 +997,7 @@ Raises
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``.
 
-make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
+make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'] | jaxtyping.Float[ndarray, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
 
 Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
@@ -926,7 +1005,10 @@ MASE divides the forecast MAE (using the sample median as point estimate) by
 the in-sample MAE of the seasonal-naive forecast on ``train_data``,
 ``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
 time; the returned metric has the standard scalar-array signature (see
-:data:`~numpyro_forecast.typing.Metric`).
+:data:`~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
+metric's ``pred``/``truth`` are all moved to device memory first
+(:func:`~numpyro_forecast.functional._offload._device_view`), so any of
+them may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
 ----------
@@ -976,6 +1058,7 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
+    NumPy arrays are accepted directly.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -1025,6 +1108,7 @@ Parameters
 ----------
 y
     Time series with time on the last axis, shape ``(*batch, time)``.
+    NumPy arrays are accepted directly.
 max_lag
     Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -1378,7 +1462,7 @@ as ``__cause__``.
 Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, predictive_batch_size: int | None = None, predictive_device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, predictive_batch_size: int | None = None, predictive_device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Convert an already-drawn posterior into an ArviZ-schema :class:`xarray.DataTree`.
 
@@ -1437,8 +1521,10 @@ predictive_device
     the ``device`` argument of
     :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
     :func:`~numpyro_forecast.functional.prediction.forecast`. The default
-    ``"host"`` copies every chunk to host memory as a NumPy array (where
-    the tree is built anyway); it is what bounds accelerator memory when
+    ``"host"`` commits every chunk to host memory, returning
+    :class:`jax.Array` values whose sharding carries a host memory kind
+    (``"pinned_host"`` where the backend offers it, the form the tree is
+    built from anyway); it is what bounds accelerator memory when
     ``predictive_batch_size`` is set, and it needs no CPU backend, so it
     works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
     leaves only an accelerator backend initialized. A :class:`jax.Device`
@@ -1446,6 +1532,11 @@ predictive_device
     instead; pass ``None`` to keep the draws on the default device
     (chunked compute without per-chunk host transfers, for when the draws
     fit on the accelerator and transfers would dominate runtime).
+    Arithmetic that mixes a host-committed result with a device-resident
+    array raises in JAX rather than running on the accelerator; convert
+    such a result explicitly first with ``np.asarray(x)`` (stays on host)
+    or ``jax.device_put(x, device)`` (moves it to an accelerator) before
+    doing your own array math on it.
 coords
     Optional extra coordinates; these take precedence over the generated
     ``time`` coordinate. They also propagate to the forecast groups, where
@@ -1493,6 +1584,10 @@ ValueError
     not evenly divisible by ``num_chains``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
+RuntimeError
+    If ``predictive_device`` resolves to ``"host"`` and the array's device
+    exposes no host memory kind (see
+    :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
 Notes
 -----
@@ -1512,7 +1607,7 @@ manual control over the forecast draws, build the in-sample tree with
 matching-length covariates and attach the horizon with
 :func:`add_forecast_groups`.
 
-add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: 'Array | np.ndarray', covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample future obs'] | jaxtyping.Num[ndarray, 'sample future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 
@@ -1566,7 +1661,7 @@ CovariateDimsError
     the dimension names already stored on the tree's
     ``constant_data["covariates"]``.
 
-predictions_to_datatree(predictions: jaxtyping.Float[ndarray, 'sample time series'] | jaxtyping.Float[Array, 'sample time series'], x: jaxtyping.Num[ndarray, 'time'] | jaxtyping.Num[Array, 'time'], series: collections.abc.Sequence[typing.Any], *, group: str = 'posterior_predictive', observed: jaxtyping.Float[ndarray, 'time series'] | jaxtyping.Float[Array, 'time series'] | None = None) -> 'xarray.DataTree'
+predictions_to_datatree(predictions: jaxtyping.Float[Array, 'sample time series'] | jaxtyping.Float[ndarray, 'sample time series'], x: jaxtyping.Num[Array, 'time'] | jaxtyping.Num[ndarray, 'time'], series: collections.abc.Sequence[typing.Any], *, group: str = 'posterior_predictive', observed: jaxtyping.Float[Array, 'time series'] | jaxtyping.Float[ndarray, 'time series'] | None = None) -> 'xarray.DataTree'
 
 Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
 

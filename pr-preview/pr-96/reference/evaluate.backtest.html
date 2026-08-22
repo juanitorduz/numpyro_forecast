@@ -706,7 +706,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L687-L898" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L696-L915" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest</span>(</span>
@@ -744,7 +744,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <pre><code>in_sample_fn(
     rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
 ) -&gt; draws  # shape (num_samples, *batch, t1 - t0, obs)</code></pre>
-<p><code>batch_size</code> is forwarded unchanged into both closures so a chunked implementation can bound its own device memory. A closure that offloads work internally (e.g.&nbsp;moves draws to host memory to cap peak accelerator usage) must return the draws back on-device before returning: the metrics computed by <a href="evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast()</a> are jitted and expect array inputs.</p>
+<p><code>batch_size</code> is forwarded unchanged into both closures so a chunked implementation can bound its own device memory. A closure may return draws committed to host memory (e.g.&nbsp;via <code>device="host"</code>, to cap peak accelerator usage): every metric in <code>DEFAULT_METRICS</code> accepts a host-committed <code>pred</code> or <code>truth</code> (or both), in any mix and regardless of <code>batch_size</code>, moving a host-committed operand to device memory first where needed. Returning draws already on-device still avoids the extra host-to-device hop for metrics scored every window.</p>
 <p>A minimal <code>forecast_fn</code> built on plain NumPyro (<code>AutoNormal</code> + <code>SVI.run</code> + <code>Predictive</code>)::</p>
 <pre><code>import numpyro
 from jax import random
@@ -808,7 +808,7 @@ def forecast_fn(
 </dd>
 <dt><code><span class="doc-parameter-name">transform</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[Array, Array], tuple[Array, Array]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional <code>(pred, truth) -&gt; (pred, truth)</code> applied before metrics.</p>
+<p>Optional <code>(pred, truth) -&gt; (pred, truth)</code> applied before metrics. It runs before the metrics and receives the forecast/in-sample closure’s draws as-is, so a transform that does its own array math against a device-resident operand must convert a host-committed <code>pred</code> or <code>truth</code> first, e.g.&nbsp;with <code>numpy.asarray()</code> (or move it back onto a device explicitly).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">window_type</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">WindowType | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>

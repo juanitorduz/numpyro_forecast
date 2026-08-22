@@ -28,8 +28,8 @@ computed for all lags at once via the FFT of the centered series (the Wiener-Khi
 ## Parameters
 
 
-`y: Float[Array, ``" *batch time"] | Float[np.ndarray, `<span class="st">`" *batch time"``]`</span>  
-Time series with time on the last axis, shape `(*batch, time)`.
+`y: Float[ArrayLike, ``" *batch time"]`  
+Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly.
 
 `max_lag: int`  
 Largest lag to evaluate; must satisfy `1 <= max_lag < time`.

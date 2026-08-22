@@ -50,14 +50,14 @@ How to combine the per-path draws: `"auto"` (default), `"psis"`, or `"elbo"`; se
 Optional chunk size for the drawing itself; see `~numpyro_forecast.functional.posterior.draw_posterior()` (the same memory/reproducibility contract applies). Note that each chunk draws `num_paths * batch_size` samples internally.
 
 `device: jax.Device | str | None = None`  
-Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.functional.posterior.draw_posterior()`.
+Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.functional.posterior.draw_posterior()`, including for the JAX rule that arithmetic mixing a host-committed result with a device-resident array raises rather than running on the accelerator.
 
 
 ## Returns
 
 
-`dict[str, Array | np.ndarray]`  
-Posterior samples of the latent sites, sample axis leading (NumPy leaves when `device` resolves to `"host"`).
+`dict[str, Array]`  
+Posterior samples of the latent sites, sample axis leading (leaves committed to host memory when `device` resolves to `"host"`).
 
 
 ## Raises
@@ -65,6 +65,9 @@ Posterior samples of the latent sites, sample axis leading (NumPy leaves when `d
 
 `ValueError`  
 If `num_samples` or `batch_size` is not positive, or `resample` is not one of `"auto"`, `"psis"`, `"elbo"`.
+
+`RuntimeError`  
+If `device` resolves to `"host"` and the array's device exposes no host memory kind (see `~numpyro_forecast.functional._offload._host_memory_kind()`).
 
 
 ## Warns

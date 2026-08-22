@@ -742,7 +742,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L653-L729" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L652-L734" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">pathfinder_samples</span>(</span>
@@ -775,7 +775,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>.
+Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>, including for the JAX rule that arithmetic mixing a host-committed result with a device-resident array raises rather than running on the accelerator.
 </dd>
 </dl>
 </div>
@@ -784,9 +784,9 @@ Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_fo
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">dict[str, Array | np.ndarray]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
 <dd>
-Posterior samples of the latent sites, sample axis leading (NumPy leaves when <code>device</code> resolves to <code>"host"</code>).
+Posterior samples of the latent sites, sample axis leading (leaves committed to host memory when <code>device</code> resolves to <code>"host"</code>).
 </dd>
 </dl>
 </div>
@@ -797,7 +797,11 @@ Posterior samples of the latent sites, sample axis leading (NumPy leaves when <c
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>num_samples</code> or <code>batch_size</code> is not positive.
+<p>If <code>num_samples</code> or <code>batch_size</code> is not positive.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
+<dd>
+If <code>device</code> resolves to <code>"host"</code> and the array’s device exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
 </dd>
 </dl>
 </div>

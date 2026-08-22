@@ -706,7 +706,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L122-L166" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L157-L197" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">eval_interval_score</span>(
@@ -717,17 +717,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>For the central <code>alpha</code> interval :math:<code>[l, u]</code> (the :math:<code>(1-\alpha)/2</code> and :math:<code>1-(1-\alpha)/2</code> quantiles), the interval score is :math:<code>(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y&lt;l} + (y - u)\mathbf 1_{y&gt;u}\big]</code>, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>).</p>
+<p>For the central <code>alpha</code> interval :math:<code>[l, u]</code> (the :math:<code>(1-\alpha)/2</code> and :math:<code>1-(1-\alpha)/2</code> quantiles), the interval score is :math:<code>(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y&lt;l} + (y - u)\mathbf 1_{y&gt;u}\big]</code>, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>~numpyro_forecast.functional._offload._device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" sample *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
 <p>Forecast samples with the sample axis first.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *batch"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>
 <p>Ground-truth values (matching <code>pred</code> without the sample axis).</p>
 </dd>

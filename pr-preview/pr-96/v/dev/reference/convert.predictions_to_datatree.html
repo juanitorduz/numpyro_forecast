@@ -742,7 +742,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L573-L658" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L587-L672" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">predictions_to_datatree</span>(</span>
@@ -757,11 +757,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[np.ndarray | Array, <span class="st">" sample time series"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample time series"</span>]</span></code></dt>
 <dd>
 <p>Prediction draws with the sample axis first, shape <code>(sample, time, series)</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">x</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[np.ndarray | Array, <span class="st">" time"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">x</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[ArrayLike, <span class="st">" time"</span>]</span></code></dt>
 <dd>
 <p>Independent-variable values, shape <code>(time,)</code>. Must be numeric: <code>plot_lm</code> cannot draw <code>datetime64</code> values (it concatenates <code>x</code> with the float predictions internally), so pass <code>matplotlib.dates.date2num()</code> floats and re-format the tick labels with <code>matplotlib.dates.ConciseDateFormatter</code>.</p>
 </dd>
@@ -773,7 +773,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Predictive group to store the draws under (e.g.&nbsp;<code>"prior_predictive"</code>, <code>"posterior_predictive"</code>, <code>"predictions"</code>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">observed</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[np.ndarray | Array, <span class="st">" time series"</span>] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">observed</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" time series"</span>] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
 Optional observations, shape <code>(time, series)</code>, stored in <code>observed_data</code>; when <code>None</code> a zeros placeholder is stored instead.
 </dd>

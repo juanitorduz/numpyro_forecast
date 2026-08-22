@@ -2077,60 +2077,63 @@ empirical 94% coverage: 0.98  (nominal 0.94)</code></pre>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>post <span class="op">=</span> draw_posterior(rng_subkey, fit, num_samples<span class="op">=</span><span class="dv">1_000</span>, batch_size<span class="op">=</span><span class="dv">250</span>, device<span class="op">=</span><span class="st">"host"</span>)</span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>predictive <span class="op">=</span> Predictive(</span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    model,</span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    posterior_samples<span class="op">=</span>{k: v[:<span class="dv">500</span>] <span class="cf">for</span> k, v <span class="kw">in</span> post.items()},</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    return_sites<span class="op">=</span>[<span class="st">"z_forecast"</span>, <span class="st">"p_forecast"</span>],</span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>component_draws <span class="op">=</span> predictive(rng_subkey, covariates_full, train_data)</span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>i <span class="op">=</span> example_series</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>components <span class="op">=</span> np.concatenate(</span>
-<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>    [</span>
-<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>        np.asarray(component_draws[<span class="st">"z_forecast"</span>])[:, :, [i]],</span>
-<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>        np.asarray(component_draws[<span class="st">"p_forecast"</span>])[:, :, [i]],</span>
-<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>    ],</span>
-<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>    axis<span class="op">=-</span><span class="dv">1</span>,</span>
-<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a>idata_components <span class="op">=</span> predictions_to_datatree(</span>
-<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>    components, t_test.astype(<span class="bu">float</span>), [<span class="st">"demand size"</span>, <span class="st">"demand probability"</span>]</span>
-<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-24"><a href="#cb29-24" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_lm(</span>
-<span id="cb29-25"><a href="#cb29-25" aria-hidden="true" tabindex="-1"></a>    idata_components,</span>
-<span id="cb29-26"><a href="#cb29-26" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb29-27"><a href="#cb29-27" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"t"</span>,</span>
-<span id="cb29-28"><a href="#cb29-28" aria-hidden="true" tabindex="-1"></a>    plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb29-29"><a href="#cb29-29" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb29-30"><a href="#cb29-30" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>hdi_probs,</span>
-<span id="cb29-31"><a href="#cb29-31" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb29-32"><a href="#cb29-32" aria-hidden="true" tabindex="-1"></a>    point_estimate<span class="op">=</span><span class="st">"mean"</span>,</span>
-<span id="cb29-33"><a href="#cb29-33" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{</span>
-<span id="cb29-34"><a href="#cb29-34" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C2"</span>},</span>
-<span id="cb29-35"><a href="#cb29-35" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_scatter"</span>: <span class="va">False</span>,</span>
-<span id="cb29-36"><a href="#cb29-36" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pe_line"</span>: {<span class="st">"color"</span>: <span class="st">"C2"</span>, <span class="st">"alpha"</span>: <span class="fl">1.0</span>, <span class="st">"width"</span>: <span class="fl">1.5</span>},</span>
-<span id="cb29-37"><a href="#cb29-37" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb29-38"><a href="#cb29-38" aria-hidden="true" tabindex="-1"></a>    aes<span class="op">=</span>{<span class="st">"alpha"</span>: [<span class="st">"prob"</span>]},</span>
-<span id="cb29-39"><a href="#cb29-39" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span>hdi_alphas,</span>
-<span id="cb29-40"><a href="#cb29-40" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">5</span>), <span class="st">"sharex"</span>: <span class="va">True</span>},</span>
-<span id="cb29-41"><a href="#cb29-41" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-42"><a href="#cb29-42" aria-hidden="true" tabindex="-1"></a>axes <span class="op">=</span> pc.viz[<span class="st">"plot"</span>][<span class="st">"t"</span>]</span>
-<span id="cb29-43"><a href="#cb29-43" aria-hidden="true" tabindex="-1"></a>axes.sel(series<span class="op">=</span><span class="st">"demand size"</span>).item().<span class="bu">set</span>(</span>
-<span id="cb29-44"><a href="#cb29-44" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Demand size forecast"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"demand size"</span></span>
-<span id="cb29-45"><a href="#cb29-45" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-46"><a href="#cb29-46" aria-hidden="true" tabindex="-1"></a>axes.sel(series<span class="op">=</span><span class="st">"demand probability"</span>).item().<span class="bu">set</span>(</span>
-<span id="cb29-47"><a href="#cb29-47" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Demand probability forecast"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"demand probability"</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="co"># post lives in host memory (device="host"); np.asarray views the same buffer as</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="co"># NumPy so the half-ensemble slice below is taken on the host rather than through</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="co"># XLA on the accelerator. The draws are bitwise unchanged.</span></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>predictive <span class="op">=</span> Predictive(</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>    model,</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    posterior_samples<span class="op">=</span>{k: np.asarray(v)[:<span class="dv">500</span>] <span class="cf">for</span> k, v <span class="kw">in</span> post.items()},</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    return_sites<span class="op">=</span>[<span class="st">"z_forecast"</span>, <span class="st">"p_forecast"</span>],</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>component_draws <span class="op">=</span> predictive(rng_subkey, covariates_full, train_data)</span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>i <span class="op">=</span> example_series</span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>components <span class="op">=</span> np.concatenate(</span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>    [</span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>        np.asarray(component_draws[<span class="st">"z_forecast"</span>])[:, :, [i]],</span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>        np.asarray(component_draws[<span class="st">"p_forecast"</span>])[:, :, [i]],</span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a>    axis<span class="op">=-</span><span class="dv">1</span>,</span>
+<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-24"><a href="#cb29-24" aria-hidden="true" tabindex="-1"></a>idata_components <span class="op">=</span> predictions_to_datatree(</span>
+<span id="cb29-25"><a href="#cb29-25" aria-hidden="true" tabindex="-1"></a>    components, t_test.astype(<span class="bu">float</span>), [<span class="st">"demand size"</span>, <span class="st">"demand probability"</span>]</span>
+<span id="cb29-26"><a href="#cb29-26" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-27"><a href="#cb29-27" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_lm(</span>
+<span id="cb29-28"><a href="#cb29-28" aria-hidden="true" tabindex="-1"></a>    idata_components,</span>
+<span id="cb29-29"><a href="#cb29-29" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb29-30"><a href="#cb29-30" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"t"</span>,</span>
+<span id="cb29-31"><a href="#cb29-31" aria-hidden="true" tabindex="-1"></a>    plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb29-32"><a href="#cb29-32" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb29-33"><a href="#cb29-33" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>hdi_probs,</span>
+<span id="cb29-34"><a href="#cb29-34" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb29-35"><a href="#cb29-35" aria-hidden="true" tabindex="-1"></a>    point_estimate<span class="op">=</span><span class="st">"mean"</span>,</span>
+<span id="cb29-36"><a href="#cb29-36" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{</span>
+<span id="cb29-37"><a href="#cb29-37" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C2"</span>},</span>
+<span id="cb29-38"><a href="#cb29-38" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_scatter"</span>: <span class="va">False</span>,</span>
+<span id="cb29-39"><a href="#cb29-39" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pe_line"</span>: {<span class="st">"color"</span>: <span class="st">"C2"</span>, <span class="st">"alpha"</span>: <span class="fl">1.0</span>, <span class="st">"width"</span>: <span class="fl">1.5</span>},</span>
+<span id="cb29-40"><a href="#cb29-40" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb29-41"><a href="#cb29-41" aria-hidden="true" tabindex="-1"></a>    aes<span class="op">=</span>{<span class="st">"alpha"</span>: [<span class="st">"prob"</span>]},</span>
+<span id="cb29-42"><a href="#cb29-42" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span>hdi_alphas,</span>
+<span id="cb29-43"><a href="#cb29-43" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">5</span>), <span class="st">"sharex"</span>: <span class="va">True</span>},</span>
+<span id="cb29-44"><a href="#cb29-44" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-45"><a href="#cb29-45" aria-hidden="true" tabindex="-1"></a>axes <span class="op">=</span> pc.viz[<span class="st">"plot"</span>][<span class="st">"t"</span>]</span>
+<span id="cb29-46"><a href="#cb29-46" aria-hidden="true" tabindex="-1"></a>axes.sel(series<span class="op">=</span><span class="st">"demand size"</span>).item().<span class="bu">set</span>(</span>
+<span id="cb29-47"><a href="#cb29-47" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Demand size forecast"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"demand size"</span></span>
 <span id="cb29-48"><a href="#cb29-48" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-49"><a href="#cb29-49" aria-hidden="true" tabindex="-1"></a>bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>]</span>
-<span id="cb29-50"><a href="#cb29-50" aria-hidden="true" tabindex="-1"></a>band_94 <span class="op">=</span> bands.sel(series<span class="op">=</span><span class="st">"demand size"</span>, prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
-<span id="cb29-51"><a href="#cb29-51" aria-hidden="true" tabindex="-1"></a>band_50 <span class="op">=</span> bands.sel(series<span class="op">=</span><span class="st">"demand size"</span>, prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
-<span id="cb29-52"><a href="#cb29-52" aria-hidden="true" tabindex="-1"></a>band_94.set_label(hdi_label(<span class="fl">0.94</span>))</span>
-<span id="cb29-53"><a href="#cb29-53" aria-hidden="true" tabindex="-1"></a>band_50.set_label(hdi_label(<span class="fl">0.5</span>))</span>
-<span id="cb29-54"><a href="#cb29-54" aria-hidden="true" tabindex="-1"></a>pe_line <span class="op">=</span> pc.viz[<span class="st">"pe_line"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span><span class="st">"demand size"</span>).item()</span>
-<span id="cb29-55"><a href="#cb29-55" aria-hidden="true" tabindex="-1"></a>pe_line.set_label(<span class="st">"posterior mean"</span>)</span>
-<span id="cb29-56"><a href="#cb29-56" aria-hidden="true" tabindex="-1"></a>axes.sel(series<span class="op">=</span><span class="st">"demand size"</span>).item().legend(handles<span class="op">=</span>[band_94, band_50, pe_line], loc<span class="op">=</span><span class="st">"upper left"</span>)</span>
-<span id="cb29-57"><a href="#cb29-57" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
-<span id="cb29-58"><a href="#cb29-58" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="ss">f"Component forecasts (series </span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">)"</span>, fontsize<span class="op">=</span><span class="dv">16</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>, y<span class="op">=</span><span class="fl">1.05</span>)<span class="op">;</span></span></code></pre></div>
+<span id="cb29-49"><a href="#cb29-49" aria-hidden="true" tabindex="-1"></a>axes.sel(series<span class="op">=</span><span class="st">"demand probability"</span>).item().<span class="bu">set</span>(</span>
+<span id="cb29-50"><a href="#cb29-50" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Demand probability forecast"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"demand probability"</span></span>
+<span id="cb29-51"><a href="#cb29-51" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-52"><a href="#cb29-52" aria-hidden="true" tabindex="-1"></a>bands <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>]</span>
+<span id="cb29-53"><a href="#cb29-53" aria-hidden="true" tabindex="-1"></a>band_94 <span class="op">=</span> bands.sel(series<span class="op">=</span><span class="st">"demand size"</span>, prob<span class="op">=</span><span class="fl">0.94</span>).item()</span>
+<span id="cb29-54"><a href="#cb29-54" aria-hidden="true" tabindex="-1"></a>band_50 <span class="op">=</span> bands.sel(series<span class="op">=</span><span class="st">"demand size"</span>, prob<span class="op">=</span><span class="fl">0.5</span>).item()</span>
+<span id="cb29-55"><a href="#cb29-55" aria-hidden="true" tabindex="-1"></a>band_94.set_label(hdi_label(<span class="fl">0.94</span>))</span>
+<span id="cb29-56"><a href="#cb29-56" aria-hidden="true" tabindex="-1"></a>band_50.set_label(hdi_label(<span class="fl">0.5</span>))</span>
+<span id="cb29-57"><a href="#cb29-57" aria-hidden="true" tabindex="-1"></a>pe_line <span class="op">=</span> pc.viz[<span class="st">"pe_line"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span><span class="st">"demand size"</span>).item()</span>
+<span id="cb29-58"><a href="#cb29-58" aria-hidden="true" tabindex="-1"></a>pe_line.set_label(<span class="st">"posterior mean"</span>)</span>
+<span id="cb29-59"><a href="#cb29-59" aria-hidden="true" tabindex="-1"></a>axes.sel(series<span class="op">=</span><span class="st">"demand size"</span>).item().legend(handles<span class="op">=</span>[band_94, band_50, pe_line], loc<span class="op">=</span><span class="st">"upper left"</span>)</span>
+<span id="cb29-60"><a href="#cb29-60" aria-hidden="true" tabindex="-1"></a>fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
+<span id="cb29-61"><a href="#cb29-61" aria-hidden="true" tabindex="-1"></a>fig.suptitle(<span class="ss">f"Component forecasts (series </span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">)"</span>, fontsize<span class="op">=</span><span class="dv">16</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>, y<span class="op">=</span><span class="fl">1.05</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">

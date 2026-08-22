@@ -26,10 +26,10 @@ where :math:`X, X'` are independent draws from the forecast distribution :math:`
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"] | Float[np.ndarray, `<span class="st">`" sample *batch"``]`</span>  
-Forecast samples with the sample axis first, shape `(sample, *batch)`.
+`pred: Float[ArrayLike, ``" sample *batch"]`  
+Forecast samples with the sample axis first, shape `(sample, *batch)`. May be host-committed (e.g. draws sampled with `device="host"`), regardless of whether `truth` is: either operand is moved to device memory first (`~numpyro_forecast.functional._offload._device_view()`).
 
-`truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
+`truth: Float[ArrayLike, ``" *batch"]`  
 Ground-truth values with shape `(*batch)` (broadcastable to `pred`).
 
 

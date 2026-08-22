@@ -48,7 +48,7 @@ where `full_covariates` spans the *full* window, `covariates[..., t0:t2, :]` (tr
         rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
     ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
 
-`batch_size` is forwarded unchanged into both closures so a chunked implementation can bound its own device memory. A closure that offloads work internally (e.g. moves draws to host memory to cap peak accelerator usage) must return the draws back on-device before returning: the metrics computed by [evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast) are jitted and expect array inputs.
+`batch_size` is forwarded unchanged into both closures so a chunked implementation can bound its own device memory. A closure may return draws committed to host memory (e.g. via `device="host"`, to cap peak accelerator usage): every metric in `DEFAULT_METRICS` accepts a host-committed `pred` or `truth` (or both), in any mix and regardless of `batch_size`, moving a host-committed operand to device memory first where needed. Returning draws already on-device still avoids the extra host-to-device hop for metrics scored every window.
 
 A minimal `forecast_fn` built on plain NumPyro (`AutoNormal` + `SVI.run` + `Predictive`)::
 
@@ -105,7 +105,7 @@ Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each function
 Optional `(t0, t1, t2) -> Mapping[str, Metric]` callable producing extra metrics merged over `metrics` for each window. Use it for window-dependent metrics such as a MASE scaled by that window's training data ([numpyro_forecast.metrics.make_mase()](metrics.make_mase.md#numpyro_forecast.metrics.make_mase)).
 
 `transform: Callable[[Array, Array], tuple[Array, Array]] | None = None`  
-Optional `(pred, truth) -> (pred, truth)` applied before metrics.
+Optional `(pred, truth) -> (pred, truth)` applied before metrics. It runs before the metrics and receives the forecast/in-sample closure's draws as-is, so a transform that does its own array math against a device-resident operand must convert a host-committed `pred` or `truth` first, e.g. with `numpy.asarray()` (or move it back onto a device explicitly).
 
 `window_type: WindowType | None = None`  
 Windowing strategy. If `None` (default) it is inferred from `train_window`: `"expanding"` when `train_window` is `None` and `"rolling"` when it is set, matching the historical behavior. Pass `"expanding"` to always train on all history from `t0 = 0`, or `"rolling"` to hold the training length fixed at `train_window` and slide it forward. `"expanding"` and `train_window` are mutually exclusive, and `"rolling"` requires `train_window` (both validated).

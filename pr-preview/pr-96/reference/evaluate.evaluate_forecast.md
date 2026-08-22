@@ -29,10 +29,10 @@ Metric-specific parameters live with the metric in the `metrics` mapping, not on
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"] | Float[np.ndarray, `<span class="st">`" sample *batch"``]`</span>  
+`pred: Float[ArrayLike, ``" sample *batch"]`  
 Forecast samples with the sample axis first, shape `(sample, *batch)`.
 
-`truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
+`truth: Float[ArrayLike, ``" *batch"]`  
 Ground-truth values with shape `(*batch)`.
 
 `metrics: Mapping[str, Metric] | None = None`  

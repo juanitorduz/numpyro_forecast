@@ -28,8 +28,8 @@ The recursion runs along the last axis and broadcasts over any leading batch axe
 ## Parameters
 
 
-`y: Float[Array, ``" *batch time"] | Float[np.ndarray, `<span class="st">`" *batch time"``]`</span>  
-Time series with time on the last axis, shape `(*batch, time)`.
+`y: Float[ArrayLike, ``" *batch time"]`  
+Time series with time on the last axis, shape `(*batch, time)`. NumPy arrays are accepted directly.
 
 `max_lag: int`  
 Largest lag to evaluate; must satisfy `1 <= max_lag < time`.

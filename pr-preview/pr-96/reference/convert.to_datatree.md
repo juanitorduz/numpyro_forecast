@@ -37,7 +37,7 @@ PRNG key for the in-sample predictive draws and, when a horizon is present, the 
 `model: ForecastModel`  
 The forecasting model that produced `posterior`.
 
-`posterior: Mapping[str, Array | np.ndarray]`  
+`posterior: Mapping[str, ArrayLike]`  
 Posterior samples of the latent sites, with a single flattened sample axis leading (NumPyro's `mcmc.get_samples()` order, or the output of `~numpyro_forecast.functional.posterior.draw_posterior()`). NumPy leaves are accepted directly (e.g. host-offloaded draws).
 
 `data: Array`  
@@ -53,7 +53,7 @@ Number of chains to split `posterior`'s flattened sample axis into (and, identic
 Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to `predictive_device` before the next is drawn. The per-chunk accelerator footprint is a handful of `(batch_size, time, series)` buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per `(rng_key, predictive_batch_size)`. `None` (default) samples everything in one shot (the results are still moved to `predictive_device`).
 
 `predictive_device: jax.Device | str | None = ``"host"`  
-Where the predictive draws are moved as they are sampled, forwarded to the `device` argument of `~numpyro_forecast.functional.prediction.predict_in_sample()` and `~numpyro_forecast.functional.prediction.forecast()`. The default `"host"` copies every chunk to host memory as a NumPy array (where the tree is built anyway); it is what bounds accelerator memory when `predictive_batch_size` is set, and it needs no CPU backend, so it works even when `numpyro.set_platform("cuda")` (or `jax_platforms`) leaves only an accelerator backend initialized. A `jax.Device` or platform name like `"cpu"` commits the draws to that device instead; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).
+Where the predictive draws are moved as they are sampled, forwarded to the `device` argument of `~numpyro_forecast.functional.prediction.predict_in_sample()` and `~numpyro_forecast.functional.prediction.forecast()`. The default `"host"` commits every chunk to host memory, returning `jax.Array` values whose sharding carries a host memory kind (`"pinned_host"` where the backend offers it, the form the tree is built from anyway); it is what bounds accelerator memory when `predictive_batch_size` is set, and it needs no CPU backend, so it works even when `numpyro.set_platform("cuda")` (or `jax_platforms`) leaves only an accelerator backend initialized. A `jax.Device` or platform name like `"cpu"` commits the draws to that device instead; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime). Arithmetic that mixes a host-committed result with a device-resident array raises in JAX rather than running on the accelerator; convert such a result explicitly first with `np.asarray(x)` (stays on host) or `jax.device_put(x, device)` (moves it to an accelerator) before doing your own array math on it.
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
 Optional extra coordinates; these take precedence over the generated `time` coordinate. They also propagate to the forecast groups, where the generated forecast `time` takes precedence instead (a user `time` entry covers the in-sample window; use `time_coord` for explicit forecast time values).
@@ -83,6 +83,9 @@ If `covariates` is shorter than `data` along the time axis, if `time_coord` is g
 
 `CovariateDimsError`  
 If `covariate_dims` does not name every `covariates` axis.
+
+`RuntimeError`  
+If `predictive_device` resolves to `"host"` and the array's device exposes no host memory kind (see `~numpyro_forecast.functional._offload._host_memory_kind()`).
 
 
 ## Notes
