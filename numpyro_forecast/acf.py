@@ -100,6 +100,7 @@ def acf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
+        NumPy arrays are accepted directly.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 
@@ -156,6 +157,7 @@ def pacf(
     ----------
     y
         Time series with time on the last axis, shape ``(*batch, time)``.
+        NumPy arrays are accepted directly.
     max_lag
         Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
 

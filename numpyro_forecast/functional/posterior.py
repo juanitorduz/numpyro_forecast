@@ -136,7 +136,15 @@ def draw_posterior(
         name like ``"cpu"`` commits the draws to that device instead
         (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
         the CPU backend is not initialized). ``None`` keeps everything on the
-        default device. ``device`` never changes the draw values.
+        default device. ``device`` never changes the draw values. Arithmetic
+        that mixes a host-committed leaf with a device-resident array raises
+        in JAX rather than running on the accelerator, so feed a host-committed
+        posterior straight into
+        :func:`~numpyro_forecast.functional.prediction.forecast`,
+        :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, or
+        :func:`~numpyro_forecast.convert.to_datatree` (all of which already
+        accept it), or convert explicitly first with ``np.asarray(x)`` (stays
+        on host) or ``jax.device_put(x, device)`` (moves it to an accelerator).
 
     Returns
     -------
@@ -148,6 +156,10 @@ def draw_posterior(
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Notes
     -----

@@ -172,12 +172,16 @@ def eval_crps(
     batch_size
         Optional number of flattened data cells (the product of the batch
         shape, e.g. time times series) evaluated on the accelerator per pass;
-        the sample axis is never chunked. With host-resident (NumPy) inputs
-        this bounds accelerator memory by ``sample * batch_size`` values plus
-        the CRPS sort workspace instead of the full panel. Chunking only
-        changes the summation order of the final mean (results are equal to
-        float tolerance, not bitwise); at or above the cell count the
-        single-pass path runs. ``None`` (default) evaluates in one pass.
+        the sample axis is never chunked. With host-resident inputs (e.g.
+        draws sampled with ``device="host"``) this bounds accelerator memory
+        by ``sample * batch_size`` values plus the CRPS sort workspace instead
+        of the full panel, since both ``pred`` and ``truth`` are staged as
+        NumPy views before chunking, whatever their own memory kind. Chunking
+        only changes the summation order of the final mean (results are equal
+        to float tolerance, not bitwise); at or above the cell count the
+        single-pass path runs, which instead applies one jitted operation
+        directly to ``pred`` and ``truth`` and so raises in JAX if only one of
+        them is host-committed. ``None`` (default) evaluates in one pass.
 
     Returns
     -------
@@ -308,8 +312,13 @@ def evaluate_forecast(
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
-    # NumPy inputs (e.g. draws sampled with device="host") enter the jitted
-    # metric kernels as device arrays either way; convert once up front.
+    # NumPy (or any other ArrayLike) inputs are normalized once up front. A
+    # host-committed jax.Array input (e.g. draws sampled with device="host")
+    # passes through unchanged here: mixing it with a device-resident ``pred``
+    # or ``truth`` in the jitted metric kernels below raises in JAX rather
+    # than being silently staged onto the accelerator, so pass a batch_size
+    # -chunked metric (which normalizes both operands internally) or matching
+    # memory kinds when either input may be host-committed.
     pred_arr, truth_arr = jnp.asarray(pred), jnp.asarray(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
@@ -711,10 +720,15 @@ def backtest(
 
     ``batch_size`` is forwarded unchanged into both closures so a chunked
     implementation can bound its own device memory. A closure may return draws
-    offloaded to host memory (e.g. to cap peak accelerator usage): the metrics
-    computed by :func:`evaluate_forecast` accept NumPy directly and convert
-    once internally, though returning them already on-device avoids that
-    extra host-to-device hop for metrics scored every window.
+    committed to host memory (e.g. via ``device="host"``, to cap peak
+    accelerator usage): pair that with a ``batch_size``-chunked metric
+    (``eval_crps``/``eval_coverage`` with ``batch_size`` set), which stages
+    both operands through the same host view internally and so accepts the
+    mismatch; the unchunked metrics run a single jitted operation directly on
+    ``pred`` and ``truth``, which raises in JAX if only one of the two is
+    host-committed. Returning draws already on-device sidesteps the question
+    entirely and also avoids the extra host-to-device hop for metrics scored
+    every window.
 
     A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
     + ``Predictive``)::

@@ -74,10 +74,13 @@ window (train followed by test, i.e. ``covariates[..., t0:t2, :]``). Must return
 forecast samples with the sample axis first, shape
 ``(num_samples, *batch, t2 - t1, obs)``. ``batch_size`` is forwarded unchanged
 from ``backtest`` so a chunked closure can bound its own device memory; a
-closure may offload work internally (e.g. host memory) and return host-resident
-draws (:func:`~numpyro_forecast.evaluate.evaluate_forecast` accepts NumPy
-directly), though returning them already on-device avoids an extra
-host-to-device hop for the metrics scored every window. Typed loosely (a bare
+closure may offload work internally (e.g. via ``device="host"``) and return
+host-committed draws, which :func:`~numpyro_forecast.evaluate.evaluate_forecast`
+accepts, but pair them with a ``batch_size``-chunked metric if ``truth`` is not
+also host-committed (arithmetic mixing a host-committed array with a
+device-resident one raises in JAX rather than running on the accelerator).
+Returning draws already on-device avoids that question entirely, and also the
+extra host-to-device hop for the metrics scored every window. Typed loosely (a bare
 ``Callable``, like :data:`Metric`) because per-backend fit options differ; the
 exact shapes are pinned above rather than in the type itself.
 """

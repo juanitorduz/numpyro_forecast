@@ -26,6 +26,19 @@ chunk drivers when they *consume* such arrays: it exposes a host-committed leaf
 as a NumPy view so per-chunk gathers run on the host instead of dragging the
 full leaf back onto the accelerator. Anyone who needs plain pageable host memory
 can still call ``np.asarray(draws)`` on the result.
+
+Arithmetic that mixes a host-committed array with a device-resident one raises
+in JAX (``memory_space of all inputs ... must be the same``) rather than
+silently running the operation on the accelerator, so a host-committed result
+is not a drop-in replacement for a device array in your own ``jnp`` code. The
+documented contract is: feed a host-committed result straight into this
+package's own drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
+:func:`~numpyro_forecast.functional.prediction.predict_in_sample`,
+:func:`~numpyro_forecast.convert.to_datatree`, and the ``batch_size``-chunked
+evaluation metrics in :mod:`~numpyro_forecast.evaluate`), which already accept
+host-committed leaves, or convert it explicitly first: ``np.asarray(x)`` stays
+on host (no device traffic), and ``jax.device_put(x, device)`` moves it onto an
+accelerator.
 """
 
 import warnings

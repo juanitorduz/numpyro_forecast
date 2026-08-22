@@ -684,7 +684,9 @@ def pathfinder_samples(
         memory/reproducibility contract applies).
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
+        for the JAX rule that arithmetic mixing a host-committed result with a
+        device-resident array raises rather than running on the accelerator.
 
     Returns
     -------
@@ -696,6 +698,10 @@ def pathfinder_samples(
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
     """
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
@@ -1039,7 +1045,9 @@ def multipathfinder_samples(
         ``num_paths * batch_size`` samples internally.
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
+        for the JAX rule that arithmetic mixing a host-committed result with a
+        device-resident array raises rather than running on the accelerator.
 
     Returns
     -------
@@ -1052,6 +1060,10 @@ def multipathfinder_samples(
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
         not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Warns
     -----

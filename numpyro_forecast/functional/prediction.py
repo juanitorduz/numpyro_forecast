@@ -249,7 +249,14 @@ def forecast(
         ``batch_size`` strictly below the sample count: at or above it, the
         single-shot path runs and the full array is materialized on the
         default device before the one transfer. ``None`` keeps everything on
-        the default device.
+        the default device. Arithmetic that mixes a host-committed result
+        with a device-resident array raises in JAX rather than running on
+        the accelerator, so feed it straight into
+        :func:`~numpyro_forecast.convert.to_datatree` or the
+        ``batch_size``-chunked evaluation metrics in
+        :mod:`~numpyro_forecast.evaluate` (both already accept it), or
+        convert explicitly first with ``np.asarray(x)`` (stays on host) or
+        ``jax.device_put(x, device)`` (moves it to an accelerator).
 
     Returns
     -------
@@ -263,6 +270,10 @@ def forecast(
     ------
     ValueError
         If ``covariates`` does not extend beyond ``data`` along the time axis.
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Notes
     -----
@@ -359,13 +370,27 @@ def predict_in_sample(
         ``batch_size`` strictly below the sample count: at or above it, the
         single-shot path runs and the full array is materialized on the
         default device before the one transfer. ``None`` keeps everything on
-        the default device.
+        the default device. Arithmetic that mixes a host-committed result
+        with a device-resident array raises in JAX rather than running on
+        the accelerator, so feed it straight into
+        :func:`~numpyro_forecast.convert.to_datatree` or the
+        ``batch_size``-chunked evaluation metrics in
+        :mod:`~numpyro_forecast.evaluate` (both already accept it), or
+        convert explicitly first with ``np.asarray(x)`` (stays on host) or
+        ``jax.device_put(x, device)`` (moves it to an accelerator).
 
     Returns
     -------
     Num[Array, " sample *batch time obs"]
         In-sample posterior-predictive draws of the ``obs`` site (committed to
         host memory when ``device`` resolves to ``"host"``).
+
+    Raises
+    ------
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
     """
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
