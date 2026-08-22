@@ -514,3 +514,74 @@ def test_host_metric_raises_actionable_error() -> None:
             num_samples=10,
             metrics={"host_mae": host_mae},
         )
+
+
+def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit ``optim`` is the exact instance ``SVI`` is constructed with.
+
+    ``backtest_vectorized`` resolves ``resolved_optim = Adam(0.01) if optim is None
+    else optim`` and builds ``SVI(model, guide, resolved_optim, Trace_ELBO())``.
+    Monkeypatching :data:`numpyro_forecast.evaluate.SVI` with a thin recording
+    subclass pins both branches: an explicit ``optim`` is forwarded unchanged, and
+    ``optim=None`` falls back to a fresh ``Adam`` instance rather than the one we
+    passed in a previous call.
+    """
+    recorded_optims: list[object] = []
+
+    class _RecordingSVI(SVI):
+        """``SVI`` subclass that records its ``optim`` argument, otherwise delegates."""
+
+        def __init__(
+            self,
+            model: object,
+            guide: object,
+            optim: object,
+            loss: object,
+            **static_kwargs: object,
+        ) -> None:
+            recorded_optims.append(optim)
+            super().__init__(model, guide, optim, loss, **static_kwargs)
+
+    monkeypatch.setattr("numpyro_forecast.evaluate.SVI", _RecordingSVI)
+
+    duration = TRAIN + TEST
+    data, cov = _series(duration)
+    model = rw_model
+    expected_windows = (duration - TRAIN - TEST) // 1 + 1
+    explicit_optim = numpyro.optim.Adam(0.1)
+
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        data,
+        cov,
+        lambda: model,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        optim=explicit_optim,
+        stride=1,
+        num_steps=10,
+        num_samples=5,
+    )
+    assert len(recorded_optims) == 1
+    assert recorded_optims[0] is explicit_optim
+    assert result.t0.shape[0] == expected_windows
+    assert bool(jnp.all(jnp.isfinite(result.metrics["crps"])))
+
+    recorded_optims.clear()
+    backtest_vectorized(
+        random.PRNGKey(0),
+        data,
+        cov,
+        lambda: model,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        optim=None,
+        stride=1,
+        num_steps=10,
+        num_samples=5,
+    )
+    assert len(recorded_optims) == 1
+    assert isinstance(recorded_optims[0], numpyro.optim.Adam)
+    assert recorded_optims[0] is not explicit_optim

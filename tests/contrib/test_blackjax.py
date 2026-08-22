@@ -882,6 +882,25 @@ def test_fit_multipathfinder_invalid_num_paths_raises() -> None:
         )
 
 
+def test_fit_multipathfinder_zero_dim_initial_position_raises() -> None:
+    """A scalar (0-d) leaf in ``initial_positions`` raises the documented ``ValueError``.
+
+    Before the ``jnp.ndim`` guard, ``leaf.shape[0]`` on a 0-d leaf raised a bare
+    ``IndexError`` instead of the documented "leading axis of size num_paths"
+    ``ValueError``. Validation runs before any blackjax call, so this is instant.
+    """
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.raises(ValueError, match="leading axis"):
+        fit_multipathfinder(
+            random.PRNGKey(0),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=2,
+            initial_positions={"sigma": jnp.asarray(1.0)},
+        )
+
+
 def test_fit_multipathfinder_high_dim_finite_elbos() -> None:
     """Regression: a 300-step random walk gets finite ELBOs on every multipath path.
 

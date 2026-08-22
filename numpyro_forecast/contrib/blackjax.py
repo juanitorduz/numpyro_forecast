@@ -268,10 +268,12 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
     Run configuration
     -----------------
     Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
-    only**: the instance holds its step/postprocess functions as plain attributes
-    (``self._step_fn``, ``self._postprocess_fn``), and ``vmap``/``pmap`` chain
-    parallelism (``"vectorized"``/``"parallel"``) traces this instance, capturing
-    those attributes as tracers instead of running the closed-over blackjax step.
+    only**. With more than one chain, ``chain_method="vectorized"`` hands
+    :meth:`~_BlackjaxKernel.init` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+    rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
+    rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
+    ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
+    package and shares the same single-key assumption.
     Also pass **``num_warmup=0``**: adaptation runs once inside :meth:`~_BlackjaxKernel.init`
     (via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
     of that are simply discarded work, not additional tuning.
@@ -326,10 +328,12 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
     Run configuration
     -----------------
     Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
-    only**: the instance holds its step/postprocess functions as plain attributes
-    (``self._step_fn``, ``self._postprocess_fn``), and ``vmap``/``pmap`` chain
-    parallelism (``"vectorized"``/``"parallel"``) traces this instance, capturing
-    those attributes as tracers instead of running the closed-over blackjax step.
+    only**. With more than one chain, ``chain_method="vectorized"`` hands
+    :meth:`~_BlackjaxKernel.init` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+    rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
+    rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
+    ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
+    package and shares the same single-key assumption.
     Also pass **``num_warmup=0``**: tuning runs once inside :meth:`~_BlackjaxKernel.init`
     (via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
@@ -399,10 +403,12 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     Run configuration
     -----------------
     Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
-    only**: the instance holds its step/postprocess functions as plain attributes
-    (``self._step_fn``, ``self._postprocess_fn``), and ``vmap``/``pmap`` chain
-    parallelism (``"vectorized"``/``"parallel"``) traces this instance, capturing
-    those attributes as tracers instead of running the closed-over blackjax step.
+    only**. With more than one chain, ``chain_method="vectorized"`` hands
+    :meth:`~_BlackjaxKernel.init` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+    rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
+    rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
+    ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
+    package and shares the same single-key assumption.
     Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
     once inside :meth:`~_BlackjaxKernel.init`, so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
@@ -888,7 +894,7 @@ def fit_multipathfinder(
         raise ValueError(msg)
     if initial_positions is not None:
         leaves = jax.tree.leaves(initial_positions)
-        if not leaves or any(leaf.shape[0] != num_paths for leaf in leaves):
+        if not leaves or any(jnp.ndim(leaf) == 0 or leaf.shape[0] != num_paths for leaf in leaves):
             msg = (
                 "initial_positions must carry a leading axis of size "
                 f"num_paths={num_paths} on every leaf"

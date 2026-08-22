@@ -787,7 +787,7 @@ def backtest(
     covariates
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
-        Factory returning a fresh :data:`~numpyro_forecast.typing.ForecastModel` per window.
+        Factory returning a fresh :class:`~numpyro_forecast.typing.ForecastModel` per window.
     forecast_fn
         Closure that fits ``model`` on the training window and forecasts the
         test horizon (see :data:`~numpyro_forecast.typing.ForecastFn` and the
