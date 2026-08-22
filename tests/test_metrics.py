@@ -114,6 +114,64 @@ def test_crps_accepts_host_committed_inputs(
 # --- P7: pinball, interval score, MASE ---------------------------------------
 
 
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_pinball_accepts_host_committed_inputs(commit_pred: bool, commit_truth: bool) -> None:
+    """``eval_pinball`` must accept any mix of host-committed/device-resident inputs."""
+    pred = random.normal(random.PRNGKey(0), (100, 5))
+    truth = random.normal(random.PRNGKey(1), (5,))
+    expected = eval_pinball(pred, truth, quantile=0.3)
+
+    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
+    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    got = eval_pinball(pred_in, truth_in, quantile=0.3)
+
+    np.testing.assert_allclose(got, expected)
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_interval_score_accepts_host_committed_inputs(
+    commit_pred: bool, commit_truth: bool
+) -> None:
+    """``eval_interval_score`` must accept any mix of host-committed/device-resident inputs."""
+    pred = random.normal(random.PRNGKey(0), (100, 5))
+    truth = random.normal(random.PRNGKey(1), (5,))
+    expected = eval_interval_score(pred, truth, alpha=0.8)
+
+    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
+    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    got = eval_interval_score(pred_in, truth_in, alpha=0.8)
+
+    np.testing.assert_allclose(got, expected)
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_mase_accepts_host_committed_inputs(commit_pred: bool, commit_truth: bool) -> None:
+    """The ``mase`` closure must accept any mix of host-committed/device-resident inputs."""
+    train = jnp.sin(jnp.arange(12.0))[:, None]
+    mase = make_mase(train, seasonality=3)
+    pred = random.normal(random.PRNGKey(0), (100, 5, 1))
+    truth = random.normal(random.PRNGKey(1), (5, 1))
+    expected = mase(pred, truth)
+
+    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
+    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    got = mase(pred_in, truth_in)
+
+    np.testing.assert_allclose(got, expected)
+
+
 def test_pinball_median_is_half_mae() -> None:
     pred = jnp.linspace(0.0, 1.0, 101)[:, None] * jnp.ones((101, 4))
     truth = jnp.full((4,), 0.7)
@@ -215,6 +273,15 @@ def test_make_mase_rejects_short_train() -> None:
 def test_make_mase_rejects_constant_series() -> None:
     with pytest.raises(ValueError, match="scale is zero"):
         make_mase(jnp.ones((10, 1)), seasonality=1)
+
+
+def test_make_mase_accepts_host_committed_train_data() -> None:
+    """``make_mase`` itself must accept a host-committed ``train_data``."""
+    train = jnp.sin(jnp.arange(12.0))[:, None]
+    train_host = jax.device_put(train, _host_sharding(train))
+    expected_scale = _mase_scale(make_mase(train, seasonality=3))
+    got_scale = _mase_scale(make_mase(train_host, seasonality=3))
+    assert jnp.allclose(got_scale, expected_scale, atol=1e-6)
 
 
 # --- The array-metric contract: scalar-array returns, vmap composability -----
