@@ -3,9 +3,9 @@
 
 Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`
 
-One advantage of writing a forecasting model once is that you can fit it with different inference engines without touching the model code. In this notebook we take the weekly BART ridership model from the [univariate forecasting example](forecasting_univariate.md) (a random-walk local level, Fourier seasonality, and a Student-T likelihood) and fit it four ways: with **NUTS** (Markov chain Monte Carlo), with **SVI** (stochastic variational inference, using a custom [optax](https://optax.readthedocs.io/en/latest/) optimizer), with **Pathfinder** (quasi-Newton variational inference from [BlackJAX](https://blackjax-devs.github.io/blackjax/)), and with **MCLMC** (microcanonical Langevin Monte Carlo, a BlackJAX sampler that plugs into the same MCMC entry point through a kernel adapter).
+One advantage of writing a forecasting model once is that you can fit it with different inference engines without touching the model code. In this notebook we take the weekly BART ridership model from the [univariate forecasting example](forecasting_univariate.md) (a random-walk local level, Fourier seasonality, and a Student-T likelihood) and fit it four ways: with **NUTS** (Markov chain Monte Carlo), with **SVI** (stochastic variational inference, using a custom [optax](https://optax.readthedocs.io/en/latest/) optimizer), with **multi-path Pathfinder** (quasi-Newton variational inference run over several parallel L-BFGS paths, from [BlackJAX](https://blackjax-devs.github.io/blackjax/)), and with **MCLMC** (microcanonical Langevin Monte Carlo, a BlackJAX sampler that plugs into the same MCMC entry point through a kernel adapter).
 
-Every engine ends in the same shape: a dict of posterior samples with a leading sample axis, either read straight off an `MCMC` run (`mcmc.get_samples()`) or drawn from a fitted variational approximation ([draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [pathfinder_samples](../../reference/contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples)). A single [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call then turns any of them into an ArviZ `DataTree` holding both the in-sample posterior predictive and the forecast over the test horizon, which powers the plots and the evaluation alike. We compare the four engines on the continuous ranked probability score (CRPS) over the training and test windows, and on wall-clock time.
+Every engine ends in the same shape: a dict of posterior samples with a leading sample axis, either read straight off an `MCMC` run (`mcmc.get_samples()`) or drawn from a fitted variational approximation ([draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior), [multipathfinder_samples](../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples)). A single [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call then turns any of them into an ArviZ `DataTree` holding both the in-sample posterior predictive and the forecast over the test horizon, which powers the plots and the evaluation alike. We compare the four engines on the continuous ranked probability score (CRPS) over the training and test windows, and on wall-clock time.
 
 
 # Prepare notebook
@@ -34,8 +34,8 @@ from numpyro.optim import optax_to_numpyro
 from numpyro_forecast import draw_posterior, eval_crps, to_datatree
 from numpyro_forecast.contrib.blackjax import (
     BlackjaxMCLMCKernel,
-    fit_pathfinder,
-    pathfinder_samples,
+    fit_multipathfinder,
+    multipathfinder_samples,
 )
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.features import fourier_features
@@ -161,17 +161,17 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
 
 We now fit the same model four times, once per inference engine, using plain NumPyro (`MCMC`/`SVI`) or BlackJAX entry points directly against `univariate_model`; nothing about the model changes, only how we draw a posterior from it. In brief:
 
-- **NUTS** (the No-U-Turn Sampler) is gradient-based Markov chain Monte Carlo. It draws asymptotically exact samples from the posterior, which makes it our reference here, at the highest computational cost of the four.
+- **NUTS** (the No-U-Turn Sampler) is gradient-based Markov chain Monte Carlo. It draws asymptotically exact samples from the posterior, which makes it our reference here, usually at the highest computational cost of the four, though the discussion below shows that ranking is not absolute.
 - **SVI** (stochastic variational inference) turns inference into optimization: it fits the parameters of an approximating guide distribution (here `AutoNormal`, a diagonal Gaussian) by maximizing the evidence lower bound (ELBO). It is much faster than MCMC, and its accuracy is bounded by how well the guide family can match the true posterior.
-- **Pathfinder** is quasi-Newton variational inference. It runs L-BFGS toward the posterior mode and recycles the optimization path into a sequence of normal approximations, returning the one with the best ELBO. It is often used for fast approximate posteriors or to initialize MCMC.
+- **Multi-path Pathfinder** is quasi-Newton variational inference, run several times over. Each of several independent L-BFGS paths (vectorized under `vmap`) recycles its own optimization trajectory into a normal approximation and an ELBO estimate; instead of keeping only the best-ELBO path, all of them are kept and combined when the draws are taken, either by Pareto-smoothed importance sampling (PSIS) over the pooled draws or by weighting whole paths by their ELBO, with the `pareto_k` diagnostic deciding which of the two is trustworthy. It is often used for fast approximate posteriors or to initialize MCMC.
 - **MCLMC** (microcanonical Langevin Monte Carlo) is MCMC of a different flavor: it simulates energy-preserving isokinetic dynamics with stochastic momentum refreshment and skips the Metropolis accept/reject correction entirely. Every draw costs a fixed two gradient evaluations, far below the cost of a NUTS trajectory, in exchange for a small step-size-controlled bias in the stationary distribution.
 
-Each engine below hands us either raw posterior samples (`mcmc.get_samples()` for NUTS and MCLMC) or a fitted guide/approximation that a small drawing function turns into samples of the same shape ([draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior) for SVI, [pathfinder_samples](../../reference/contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples) for Pathfinder), and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) accepts either form, so the export below is one call whichever engine produced the posterior.
+Each engine below hands us either raw posterior samples (`mcmc.get_samples()` for NUTS and MCLMC) or a fitted guide/approximation that a small drawing function turns into samples of the same shape ([draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior) for SVI, [multipathfinder_samples](../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples) for Pathfinder), and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) accepts either form, so the export below is one call whichever engine produced the posterior.
 
 
 ## NUTS
 
-We run `4` chains in parallel with `2_000` warmup steps and `1_000` posterior draws each. The posterior includes one drift increment per training week (417 of them), so this is the most expensive fit in the notebook.
+We run `4` chains in parallel with `2_000` warmup steps and `1_000` posterior draws each. The posterior includes one drift increment per training week (417 of them), so this is an expensive fit: of the four engines here, only the eight-path Pathfinder run below takes longer.
 
 
 ``` python
@@ -194,7 +194,7 @@ print(f"NUTS: 4 chains x 1_000 draws in {nuts_seconds:.1f}s")
 ```
 
 
-    NUTS: 4 chains x 1_000 draws in 35.9s
+    NUTS: 4 chains x 1_000 draws in 33.8s
 
 
 ## SVI
@@ -258,7 +258,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI: 20_000 steps in 4.4s
+    SVI: 20_000 steps in 3.9s
 
 
 <figure class="figure">
@@ -277,38 +277,51 @@ svi_posterior = draw_posterior(rng_subkey, guide, svi_result.params, 2_000)
 
 ## Pathfinder
 
-[fit_pathfinder](../../reference/contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder) lives in `numpyro_forecast.contrib.blackjax` and needs the optional BlackJAX backend (install it with `pip install "numpyro_forecast[blackjax]"`). A single L-BFGS run traces a path toward the posterior mode, each point on the path induces a normal approximation, and the fit keeps the one with the best ELBO estimate.
+[fit_multipathfinder](../../reference/contrib.blackjax.fit_multipathfinder.md#numpyro_forecast.contrib.blackjax.fit_multipathfinder) lives in `numpyro_forecast.contrib.blackjax` and needs the optional BlackJAX backend (install it with `pip install "numpyro_forecast[blackjax]"`). It runs several independent L-BFGS paths toward the posterior mode, each inducing its own normal approximation and its own ELBO estimate, and keeps every one of them instead of returning only the best-ELBO path.
 
-Two settings matter here. The first is `maxiter`, the L-BFGS iteration budget: the default (`30`) suits posteriors with a handful of parameters, but ours has one drift increment per training week and needs a few hundred iterations to approach the high-density region. The second is the number of paths: a single Pathfinder run is noisy, because the quality of the approximation depends on where its optimization path happens to wander, so standard practice (the *multi-path* variant in the paper) is to run a few independent paths and keep the one with the best ELBO. We run `4` paths of `500` iterations each; the paths are fully independent, so in a production setting they can run in parallel.
+Three settings matter here. The first is `maxiter`, the L-BFGS iteration budget: the default (`30`) suits posteriors with a handful of parameters, but ours has one drift increment per training week and needs a few hundred iterations to approach the high-density region, so we set it to `500`. The second is `maxcor`, the L-BFGS history size: it caps the rank of the low-rank-plus-diagonal covariance correction at roughly twice its value, so the default of `10` gives a correction of rank about `20` on a posterior with roughly `474` parameters here, and we raise it to `50` to let the approximation capture more of that covariance structure. The third is `num_paths`, the number of independent L-BFGS paths: they run vectorized under `vmap`, so all eight share one compilation and advance together rather than one after another, and all of their approximations survive into the drawing step below rather than being discarded in favor of a single winner.
+
+`num_elbo_samples` is the memory knob rather than a quality knob. The fit estimates an ELBO at every L-BFGS iterate of every path, so it materializes on the order of `num_paths * maxiter * num_elbo_samples * 474` numbers at once; we keep it at `100` so that the `maxiter=500` this posterior needs stays affordable on a laptop. It also sets the size of the pool that the fit-time `pareto_k` diagnostic printed below is computed over, which is a separate pool from the draws taken in the next cell.
+
+This section also owns its own `PRNGKey`, split from a fixed seed rather than threaded through the notebook's running `rng_key`, so edits earlier in the notebook cannot reshuffle its random stream.
 
 
 ``` python
-rng_key, rng_subkey = random.split(rng_key)
-num_paths = 4
+key_pathfinder_fit, key_pathfinder_draw = random.split(random.PRNGKey(seed=2_025))
 
 start = perf_counter()
-path_fits = [
-    fit_pathfinder(path_key, univariate_model, y_train, covariates_train, maxiter=500)
-    for path_key in random.split(rng_subkey, num_paths)
-]
-pathfinder_fit = max(path_fits, key=lambda fit: fit.elbo)
+pathfinder_fit = fit_multipathfinder(
+    key_pathfinder_fit,
+    univariate_model,
+    y_train,
+    covariates_train,
+    num_paths=8,
+    num_elbo_samples=100,
+    maxiter=500,
+    maxcor=50,
+)
 pathfinder_seconds = perf_counter() - start
 
-print("per-path ELBO:", [round(fit.elbo, 1) for fit in path_fits])
-print(f"Pathfinder: best ELBO {pathfinder_fit.elbo:.2f} in {pathfinder_seconds:.1f}s")
+print("per-path ELBO:", [round(elbo, 1) for elbo in pathfinder_fit.elbos])
+print(f"pareto_k: {pathfinder_fit.pareto_k:.2f}")
+print(f"Pathfinder: {len(pathfinder_fit.elbos)} paths in {pathfinder_seconds:.1f}s")
 ```
 
 
-    per-path ELBO: [-1547.4, -1085.4, -2767.3, -857.8]
-    Pathfinder: best ELBO -857.80 in 19.7s
+    per-path ELBO: [-1347.7, -518.4, -842.8, -719.9, -572.6, -854.3, -899.2, -389.5]
+    pareto_k: 10.26
+    Pathfinder: 8 paths in 88.4s
 
 
-[pathfinder_samples](../../reference/contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples) draws from the winning approximation exactly like [draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior) draws from a fitted guide: `2_000` samples, leading sample axis, ready for [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
+[multipathfinder_samples](../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples) draws fresh samples from every path's fitted approximation on each call, `2_000` per path here, and then combines the `8` paths into the `2_000` returned draws. How it combines them is the `resample` argument. With `resample="psis"` all `8 * 2_000` fresh draws are pooled, scored both under the model and under the approximation that produced them, and importance-resampled with Pareto smoothing, which is the textbook multi-path Pathfinder estimator. With `resample="elbo"` each returned draw instead picks a whole path with probability proportional to `softmax` of the per-path ELBOs and takes one fresh draw from it, so a path that fits several hundred nats better than the rest simply takes over.
+
+The default, `resample="auto"`, chooses between the two using the `pareto_k` printed above: PSIS when `pareto_k` is at most `0.7`, and ELBO-weighted path sampling otherwise. The gate matters because importance weights degenerate in high dimensions. On a posterior with hundreds of parameters the log ratio between the target and the approximation is dominated by a handful of draws, `pareto_k` climbs far above `0.7`, and PSIS resampling collapses the answer onto those few draws; weighting whole paths cannot concentrate that way, because it reweights `8` well-separated numbers rather than thousands of individual draws. Reading the `pareto_k` printed above therefore tells you which branch the cell below took: below `0.5` the PSIS weights are reliable, `0.5` to `0.7` is borderline, and above `0.7` the draws come from ELBO-weighted path sampling instead, which is exactly what the warning printed by the fit cell above is telling you.
+
+The output contract is unchanged either way: `2_000` samples, leading sample axis, ready for [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exactly like [draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior).
 
 
 ``` python
-rng_key, rng_subkey = random.split(rng_key)
-pathfinder_posterior = pathfinder_samples(rng_subkey, pathfinder_fit, 2_000)
+pathfinder_posterior = multipathfinder_samples(key_pathfinder_draw, pathfinder_fit, 2_000)
 ```
 
 
@@ -338,12 +351,12 @@ print(f"MCLMC: 1 chain x 10_000 draws in {mclmc_seconds:.1f}s")
 ```
 
 
-    MCLMC: 1 chain x 10_000 draws in 4.9s
+    MCLMC: 1 chain x 10_000 draws in 4.7s
 
 
 # Exporting fits to ArviZ
 
-[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) is posterior-first: it never fits anything itself, so every engine above hands it a plain dict of latent-site draws with a leading sample axis, either `mcmc.get_samples()` for the two MCMC engines or the [draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior)/[pathfinder_samples](../../reference/contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples) output for the two variational ones. The `num_chains` argument reshapes that flat sample axis into `(chain, draw)`: `4` for the NUTS posterior (matching its `4` parallel chains) and the default `1` (a single pseudo chain) for the other three, whose draws carry no chain structure of their own. Because we pass the full-length covariates (longer than the training data, the package-wide shape convention for a forecast horizon), the same call also draws the forecast over the held-out year and stores it in the `predictions` and `predictions_constant_data` groups, continuing the in-sample time coordinate. If you need finer control over the forecast draws, [add_forecast_groups](../../reference/convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups) attaches them step by step.
+[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) is posterior-first: it never fits anything itself, so every engine above hands it a plain dict of latent-site draws with a leading sample axis, either `mcmc.get_samples()` for the two MCMC engines or the [draw_posterior](../../reference/functional.posterior.draw_posterior.md#numpyro_forecast.functional.posterior.draw_posterior)/[multipathfinder_samples](../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples) output for the two variational ones. The `num_chains` argument reshapes that flat sample axis into `(chain, draw)`: `4` for the NUTS posterior (matching its `4` parallel chains) and the default `1` (a single pseudo chain) for the other three, whose draws carry no chain structure of their own. Because we pass the full-length covariates (longer than the training data, the package-wide shape convention for a forecast horizon), the same call also draws the forecast over the held-out year and stores it in the `predictions` and `predictions_constant_data` groups, continuing the in-sample time coordinate. If you need finer control over the forecast draws, [add_forecast_groups](../../reference/convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups) attaches them step by step.
 
 The export is one call, identical for the four posteriors. The only post-processing we add is cosmetic, for plotting: this series is univariate, so we drop the singleton observation dimension and expose the week index as a variable that `az.plot_lm` can use as the x axis.
 
@@ -941,7 +954,7 @@ Group: /
 │           sigma                   (chain, draw) float32 16kB 0.01851 ... 0.01748
 │           weight                  (chain, draw, weight_dim_0) float32 832kB -0.0008...
 │       Attributes:
-│           created_at:                 2026-08-21T12:58:27.391350+00:00
+│           created_at:                 2026-08-22T08:10:00.372579+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -954,9 +967,9 @@ Group: /
 │         * time     (time) int64 3kB 0 1 2 3 4 5 6 7 ... 410 411 412 413 414 415 416
 │           obs_dim  int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time) float32 7MB 14.43 14.47 14.41 ... 14.7 14.18
+│           obs      (chain, draw, time) float32 7MB 14.39 14.49 14.42 ... 14.69 14.26
 │       Attributes:
-│           created_at:                 2026-08-21T12:58:28.030002+00:00
+│           created_at:                 2026-08-22T08:10:00.945216+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -969,7 +982,7 @@ Group: /
 │       Data variables:
 │           obs      (time) float32 2kB 14.41 14.45 14.42 14.53 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-08-21T12:58:28.030265+00:00
+│           created_at:                 2026-08-22T08:10:00.945490+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -983,7 +996,7 @@ Group: /
 │           covariates     (time, covariate_dim) float32 87kB 0.0 0.0 ... -0.2376
 │           week           (time) float64 3kB 0.0 1.0 2.0 3.0 ... 414.0 415.0 416.0
 │       Attributes:
-│           created_at:                 2026-08-21T12:58:28.030450+00:00
+│           created_at:                 2026-08-22T08:10:00.945673+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -996,9 +1009,9 @@ Group: /
 │         * time     (time) int64 416B 417 418 419 420 421 422 ... 464 465 466 467 468
 │           obs_dim  int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time) float32 832kB 14.38 14.6 14.58 ... 14.69 14.31
+│           obs      (chain, draw, time) float32 832kB 14.4 14.61 14.55 ... 14.63 14.3
 │       Attributes:
-│           created_at:                 2026-08-21T12:58:28.530234+00:00
+│           created_at:                 2026-08-22T08:10:01.430179+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1012,7 +1025,7 @@ Group: /
             covariates     (time, covariate_dim) float32 11kB -0.05158 -0.103 ... 0.3138
             week           (time) float64 416B 417.0 418.0 419.0 ... 466.0 467.0 468.0
         Attributes:
-            created_at:                 2026-08-21T12:58:28.530465+00:00
+            created_at:                 2026-08-22T08:10:01.430425+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1347,7 +1360,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T12:58:27.391350+00:00
+2026-08-22T08:10:00.372579+00:00
 
 creation_library :  
 ArviZ
@@ -1467,7 +1480,7 @@ obs
 float32
 
 
-14.43 14.47 14.41 ... 14.7 14.18
+14.39 14.49 14.42 ... 14.69 14.26
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1475,14 +1488,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[14.425568 , 14.471072 , 14.411615 , ..., 14.6911545,14.623937 , 14.226631 ],[14.441458 , 14.468333 , 14.466104 , ..., 14.657465 ,14.67608  , 14.159958 ],[14.366314 , 14.46994  , 14.443995 , ..., 14.712911 ,14.539455 , 14.184969 ],...,[14.437084 , 14.447189 , 14.420723 , ..., 14.871742 ,14.641291 , 14.1939745],[14.399136 , 14.426578 , 14.394961 , ..., 14.746548 ,14.680857 , 14.258565 ],[14.440858 , 14.453061 , 14.401768 , ..., 14.647291 ,14.65929  , 14.239913 ]],[[14.419286 , 14.462774 , 14.449819 , ..., 14.6796   ,14.632316 , 14.215644 ],[14.376794 , 14.493417 , 14.404429 , ..., 14.707751 ,14.652195 , 14.182086 ],[14.369764 , 14.444137 , 14.39981  , ..., 14.695209 ,14.701363 , 14.233603 ],...[14.400864 , 14.5097275, 14.421923 , ..., 14.699918 ,14.634558 , 14.246384 ],[14.440874 , 14.449691 , 14.43826  , ..., 14.6788225,14.684378 , 14.184778 ],[14.430645 , 14.474617 , 14.425566 , ..., 14.676712 ,14.633363 , 14.168206 ]],[[14.425482 , 14.501237 , 14.426284 , ..., 14.594585 ,14.654011 , 14.319027 ],[14.352409 , 14.440513 , 14.401631 , ..., 14.698851 ,14.691719 , 14.231279 ],[14.473069 , 14.483458 , 14.3791065, ..., 14.660948 ,14.627814 , 13.972554 ],...,[14.364082 , 14.446556 , 14.40232  , ..., 14.682473 ,14.655996 , 14.231193 ],[14.395958 , 14.469274 , 14.493689 , ..., 14.656786 ,14.627622 , 14.222335 ],[14.28655  , 14.46929  , 14.403868 , ..., 14.699968 ,14.703504 , 14.18228  ]]], shape=(4, 1000, 417), dtype=float32)
+    array([[[14.389358 , 14.489581 , 14.423768 , ..., 14.451334 ,14.658971 , 14.242201 ],[14.448819 , 14.423308 , 14.451392 , ..., 14.66513  ,14.664636 , 14.296945 ],[14.402937 , 14.496321 , 14.44433  , ..., 14.643264 ,14.617879 , 14.158988 ],...,[14.415517 , 14.428923 , 14.417479 , ..., 14.729381 ,14.679976 , 14.248692 ],[14.453001 , 14.436081 , 14.400553 , ..., 14.698324 ,14.65199  , 14.251332 ],[14.415844 , 14.41108  , 14.43257  , ..., 14.687001 ,14.669802 , 14.243077 ]],[[14.399852 , 14.463592 , 14.408819 , ..., 14.671786 ,14.6775255, 14.223101 ],[14.385962 , 14.451012 , 14.434265 , ..., 14.699163 ,14.646259 , 14.169722 ],[14.323748 , 14.4887085, 14.395894 , ..., 14.712639 ,14.652129 , 14.259047 ],...[14.357276 , 14.461845 , 14.382219 , ..., 14.702913 ,14.659779 , 14.219355 ],[14.42948  , 14.452558 , 14.390496 , ..., 14.67248  ,14.6704645, 14.223146 ],[14.44877  , 14.483903 , 14.411697 , ..., 14.772034 ,14.64512  , 14.174857 ]],[[14.448241 , 14.486111 , 14.429364 , ..., 14.697631 ,14.565958 , 14.208812 ],[14.400558 , 14.401174 , 14.397723 , ..., 14.679259 ,14.652962 , 14.2137985],[14.39201  , 14.406846 , 14.4379225, ..., 14.658405 ,14.630244 , 14.247904 ],...,[14.3914385, 14.465401 , 14.470663 , ..., 14.69374  ,14.636198 , 14.255938 ],[14.407443 , 14.438308 , 14.404227 , ..., 14.660438 ,14.639005 , 14.193889 ],[14.4203   , 14.459157 , 14.592629 , ..., 14.664954 ,14.6870165, 14.259334 ]]], shape=(4, 1000, 417), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-21T12:58:28.030002+00:00
+2026-08-22T08:10:00.945216+00:00
 
 creation_library :  
 ArviZ
@@ -1575,7 +1588,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T12:58:28.030265+00:00
+2026-08-22T08:10:00.945490+00:00
 
 creation_library :  
 ArviZ
@@ -1689,7 +1702,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T12:58:28.030450+00:00
+2026-08-22T08:10:00.945673+00:00
 
 creation_library :  
 ArviZ
@@ -1809,7 +1822,7 @@ obs
 float32
 
 
-14.38 14.6 14.58 ... 14.69 14.31
+14.4 14.61 14.55 ... 14.63 14.3
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1817,14 +1830,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[14.377357 , 14.604389 , 14.577475 , ..., 14.702681 ,14.736505 , 14.330895 ],[14.368823 , 14.553909 , 14.5184555, ..., 14.691671 ,14.732815 , 14.274667 ],[14.296529 , 14.580656 , 14.53323  , ..., 14.541211 ,14.586814 , 14.147413 ],...,[14.383959 , 14.616917 , 14.547596 , ..., 14.674626 ,14.698061 , 14.283534 ],[14.450228 , 14.516029 , 14.567883 , ..., 14.724831 ,14.757424 , 14.336538 ],[14.3731   , 14.645829 , 14.551581 , ..., 14.720754 ,14.802498 , 14.414987 ]],[[14.319198 , 14.607671 , 14.578171 , ..., 14.671162 ,14.726041 , 14.256266 ],[14.389625 , 14.602288 , 14.522035 , ..., 14.680685 ,14.693283 , 14.231291 ],[14.382468 , 14.62514  , 14.719989 , ..., 14.35913  ,14.719586 , 14.328946 ],...[14.330686 , 14.58741  , 14.557254 , ..., 14.702542 ,14.760969 , 14.250782 ],[14.391399 , 14.632681 , 14.587166 , ..., 14.754905 ,14.668116 , 14.321447 ],[14.361023 , 14.574268 , 14.546709 , ..., 14.600808 ,14.555934 , 14.194823 ]],[[14.330304 , 14.614084 , 14.56959  , ..., 14.665784 ,14.741398 , 14.347295 ],[14.377395 , 14.59833  , 14.558733 , ..., 14.780803 ,14.724479 , 14.329561 ],[14.715209 , 14.643443 , 14.462533 , ..., 14.740652 ,14.756716 , 14.280457 ],...,[14.382629 , 14.5842705, 14.490471 , ..., 14.694878 ,14.673174 , 14.143632 ],[14.393086 , 14.604464 , 14.539655 , ..., 14.617944 ,14.667461 , 14.278469 ],[14.387523 , 14.596172 , 14.533482 , ..., 14.435322 ,14.685585 , 14.308979 ]]], shape=(4, 1000, 52), dtype=float32)
+    array([[[14.401799 , 14.605514 , 14.552028 , ..., 14.656391 ,14.700013 , 14.276971 ],[14.4211855, 14.603886 , 14.465259 , ..., 14.28199  ,14.6897745, 14.295747 ],[14.31883  , 14.576052 , 14.781472 , ..., 14.697835 ,14.722642 , 14.2694845],...,[14.377834 , 14.590282 , 15.091375 , ..., 14.60325  ,14.671933 , 14.31673  ],[14.38635  , 14.631148 , 14.569338 , ..., 14.703589 ,14.726619 , 14.278282 ],[14.421915 , 14.627361 , 14.581016 , ..., 14.622246 ,14.715028 , 14.257583 ]],[[14.404532 , 14.039673 , 14.592765 , ..., 14.712724 ,14.728838 , 13.628599 ],[14.401943 , 14.586872 , 14.554804 , ..., 14.770137 ,14.730687 , 14.305362 ],[14.363672 , 14.361824 , 14.553688 , ..., 14.681727 ,14.4951935, 14.307852 ],...[14.366518 , 14.585205 , 14.558206 , ..., 14.594887 ,14.632103 , 14.193638 ],[14.417886 , 14.603548 , 14.554    , ..., 14.713362 ,14.749127 , 14.317268 ],[14.365586 , 14.520075 , 14.511091 , ..., 14.645766 ,14.67499  , 14.251827 ]],[[14.420744 , 14.680729 , 14.538606 , ..., 14.692215 ,14.699276 , 14.301189 ],[14.405694 , 14.593857 , 14.590373 , ..., 14.650225 ,14.72369  , 14.291927 ],[14.409795 , 14.62069  , 14.559815 , ..., 14.7149   ,14.6924305, 14.240272 ],...,[14.358958 , 14.570765 , 14.522149 , ..., 14.614387 ,14.6713295, 14.293046 ],[14.366239 , 14.5759945, 14.534605 , ..., 14.7134495,14.705154 , 14.267932 ],[14.412709 , 14.60519  , 14.575377 , ..., 14.697804 ,14.629218 , 14.299173 ]]], shape=(4, 1000, 52), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-21T12:58:28.530234+00:00
+2026-08-22T08:10:01.430179+00:00
 
 creation_library :  
 ArviZ
@@ -1938,7 +1951,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T12:58:28.530465+00:00
+2026-08-22T08:10:01.430425+00:00
 
 creation_library :  
 ArviZ
@@ -2020,10 +2033,10 @@ comparison.round(4)
 
 |            | train CRPS | test CRPS | walltime (s) |
 |------------|------------|-----------|--------------|
-| NUTS       | 0.0242     | 0.0302    | 35.9324      |
-| SVI        | 0.0269     | 0.0338    | 4.4134       |
-| Pathfinder | 0.0306     | 0.0468    | 19.6851      |
-| MCLMC      | 0.0243     | 0.0304    | 4.8688       |
+| NUTS       | 0.0242     | 0.0302    | 33.8225      |
+| SVI        | 0.0270     | 0.0339    | 3.8866       |
+| Pathfinder | 0.0261     | 0.0298    | 88.4011      |
+| MCLMC      | 0.0268     | 0.0336    | 4.6891       |
 
 
 # Forecast visualization
@@ -2148,7 +2161,11 @@ ax.set(title="CRPS by inference method", xlabel="inference method", ylabel="CRPS
 </figure>
 
 
-All four engines land in the same broad CRPS range, which is reassuring: the posterior of this model is well behaved enough that both normal approximations and unadjusted dynamics capture what matters for forecasting. The fine ordering still follows the usual cost-accuracy ladder, though not evenly: NUTS samples the exact posterior and sets the reference score on both windows, at the highest wall-clock cost. MCLMC tracks it almost exactly, on both windows, in a few seconds; it gets that speed from spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, but the silent-failure mode discussed above means its scores deserve the validation that NUTS's divergence diagnostics would otherwise provide for free. SVI, fit in a similarly small number of seconds, trails both by a clearer margin, since its diagonal-Gaussian guide cannot bend to the true posterior's shape as faithfully as sampling does. Pathfinder is the loosest fit of the four here, on both train and test, yet needs no tuning beyond its iteration budget and path count, and its paths parallelize trivially, which makes it a great first pass or an initializer before committing to a longer fit. On a model this small the absolute time differences are modest; they grow quickly with model size, and that is when the cheap engines pay off.
+NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `33.8`s across its `4` chains. MCLMC (`4.7`s) and SVI (`3.9`s) both track that reference closely at a small fraction of the cost: MCLMC's `0.0268`/`0.0336` train/test CRPS comes from spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0270`/`0.0339` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.
+
+Multi-path Pathfinder is the interesting case, because its forecasts and its own diagnostic point in opposite directions. Its scores are as good as anything in the table, `0.0261` train and `0.0298` test CRPS, narrowly the best test score of the four, while its `pareto_k` came out at `10.26`, more than an order of magnitude above the `0.7` reliability threshold. Both readings are correct, because they describe different objects. The `pareto_k` printed by the fit cell measures whether importance weights over the pooled per-path draws can be trusted, and on a `474`-parameter posterior they cannot: the log ratio between the target and the approximation is dominated by a handful of draws. The samples that produced the CRPS above never passed through those weights. Because `pareto_k` exceeded `0.7`, the default `resample="auto"` fell back to weighting whole paths by their ELBO, and the per-path ELBOs range from `-389.5` down to `-1347.7`, gaps of hundreds of nats, so that weighting concentrates on the best-fitting path and draws freshly from its normal approximation. A single well-converged L-BFGS path describes this posterior well; what fails is only the attempt to importance-reweight across paths, and the diagnostic caught that rather than letting it through silently.
+
+The cost side is less flattering. At `88.4`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `33.8`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.
 
 
 # Next steps
@@ -2163,8 +2180,9 @@ A single train/test split is only one view of forecasting skill; the [univariate
 - Hoffman, M. D., & Gelman, A. (2014). [*The No-U-Turn Sampler: Adaptively setting path lengths in Hamiltonian Monte Carlo*](https://jmlr.org/papers/v15/hoffman14a.html). JMLR.
 - Hoffman, M. D., Blei, D. M., Wang, C., & Paisley, J. (2013). [*Stochastic variational inference*](https://jmlr.org/papers/v14/hoffman13a.html). JMLR.
 - Zhang, L., Carpenter, B., Gelman, A., & Vehtari, A. (2022). [*Pathfinder: Parallel quasi-Newton variational inference*](https://jmlr.org/papers/v23/21-0889.html). JMLR.
+- Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J. (2024). [*Pareto smoothed importance sampling*](https://jmlr.org/papers/v25/19-556.html). JMLR.
 - Robnik, J., De Luca, G. B., Silverstein, E., & Seljak, U. (2023). [*Microcanonical Hamiltonian Monte Carlo*](https://jmlr.org/papers/v24/22-1450.html). JMLR.
 - Robnik, J., & Seljak, U. (2024). [*Fluctuation without dissipation: Microcanonical Langevin Monte Carlo*](https://arxiv.org/abs/2303.18221).
 - Smith, L. N., & Topin, N. (2019). [*Super-convergence: Very fast training of neural networks using large learning rates*](https://arxiv.org/abs/1708.07120).
 
-[Source: Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`](_src/inference_methods_comparison-preview.html#6ee33b9f)
+[Source: Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`](_src/inference_methods_comparison-preview.html#616bc096)

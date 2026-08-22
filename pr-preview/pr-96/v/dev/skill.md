@@ -131,6 +131,9 @@ Optional backends behind pyproject extras (never imported by default).
 - `contrib.blackjax.PathfinderFit`
 - `contrib.blackjax.fit_pathfinder`
 - `contrib.blackjax.pathfinder_samples`
+- `contrib.blackjax.MultiPathfinderFit`
+- `contrib.blackjax.fit_multipathfinder`
+- `contrib.blackjax.multipathfinder_samples`
 
 ### Datasets
 

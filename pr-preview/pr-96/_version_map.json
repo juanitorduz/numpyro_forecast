@@ -126,11 +126,23 @@
       "dev",
       "0.2.3"
     ],
+    "reference/contrib.blackjax.MultiPathfinderFit.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/contrib.blackjax.PathfinderFit.html": [
       "dev",
       "0.2.3"
     ],
+    "reference/contrib.blackjax.fit_multipathfinder.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/contrib.blackjax.fit_pathfinder.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/contrib.blackjax.multipathfinder_samples.html": [
       "dev",
       "0.2.3"
     ],

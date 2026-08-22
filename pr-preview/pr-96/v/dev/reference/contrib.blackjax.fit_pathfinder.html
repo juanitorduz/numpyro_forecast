@@ -647,6 +647,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">contrib.blackjax.pathfinder_samples</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.MultiPathfinderFit.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.MultiPathfinderFit</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.fit_multipathfinder.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.fit_multipathfinder</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.multipathfinder_samples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.multipathfinder_samples</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -693,6 +711,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See Also</a></li>
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
@@ -724,7 +743,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L523-L599" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L547-L650" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">fit_pathfinder</span>(</span>
@@ -735,8 +754,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_elbo_samples</span><span class="op">=</span><span class="dv">200</span>,</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">ftol</span><span class="op">=</span><span class="fl">1e-05</span>,</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">maxiter</span><span class="op">=</span><span class="dv">30</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">maxiter</span><span class="op">=</span><span class="dv">30</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">maxcor</span><span class="op">=</span><span class="dv">10</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">maxls</span><span class="op">=</span><span class="dv">1000</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">gtol</span><span class="op">=</span><span class="fl">1e-08</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">init_params</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>PRNG: <code>rng_key</code> is split into a model-initialization stream and a Pathfinder-approximation stream.</p>
@@ -771,7 +794,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">maxiter</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">30</span></span></code></dt>
 <dd>
-Maximum number of L-BFGS iterations (blackjax’s default is <code>30</code>). Models with per-step time latents typically need far more: the default suits tens of parameters, while a few hundred parameters (e.g.&nbsp;a 400-step random walk) converge around <code>1_000</code>.
+<p>Maximum number of L-BFGS iterations (blackjax’s default is <code>30</code>). Models with per-step time latents typically need far more: the default suits tens of parameters, while a few hundred parameters (e.g.&nbsp;a 400-step random walk) converge around <code>1_000</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">maxcor</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">10</span></span></code></dt>
+<dd>
+<p>L-BFGS history size; caps the rank of the low-rank-plus-diagonal covariance correction at roughly <code>2 * maxcor</code>. High-dimensional posteriors need it raised well above the default of <code>10</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">maxls</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1000</span></span></code></dt>
+<dd>
+<p>Maximum number of line-search steps per L-BFGS iteration.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">gtol</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">float</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="fl">1e-08</span></span></code></dt>
+<dd>
+<p>L-BFGS gradient-norm convergence tolerance.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">init_params</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional initial unconstrained position, overriding NumPyro’s own initialization draw (<code>param_info.z</code>); <code>initialize_model</code> still runs regardless, since it also builds the potential/postprocess functions.
 </dd>
 </dl>
 </div>
@@ -786,6 +825,15 @@ The fitted variational approximation.
 </dd>
 </dl>
 </div>
+</section>
+<section id="see-also" class="level2 doc-see-also">
+<h2 class="doc-see-also">See Also</h2>
+<dl>
+<dt><a href="contrib.blackjax.fit_multipathfinder.html#numpyro_forecast.contrib.blackjax.fit_multipathfinder" class="gdls-link gdls-code">fit_multipathfinder()</a> The recommended entry point</dt>
+<dd>
+<p>runs several L-BFGS paths in parallel and combines them (see <a href="contrib.blackjax.multipathfinder_samples.html#numpyro_forecast.contrib.blackjax.multipathfinder_samples" class="gdls-link gdls-code">multipathfinder_samples()</a>), instead of relying on this single path’s local normal approximation.</p>
+</dd>
+</dl>
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>

@@ -246,6 +246,15 @@ Fit a forecasting model with BlackJAX Pathfinder variational inference.
 [contrib.blackjax.pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples)  
 Draw `num_samples` posterior samples from a fitted Pathfinder approximation.
 
+[contrib.blackjax.MultiPathfinderFit](contrib.blackjax.MultiPathfinderFit.md#numpyro_forecast.contrib.blackjax.MultiPathfinderFit)  
+The result of fitting a forecasting model with multi-path BlackJAX Pathfinder.
+
+[contrib.blackjax.fit_multipathfinder()](contrib.blackjax.fit_multipathfinder.md#numpyro_forecast.contrib.blackjax.fit_multipathfinder)  
+Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
+
+[contrib.blackjax.multipathfinder_samples()](contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples)  
+Draw `num_samples` posterior samples from a fitted multipath Pathfinder fit.
+
 
 ## Datasets
 
