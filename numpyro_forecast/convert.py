@@ -20,6 +20,7 @@ import jax
 import numpy as np
 import xarray
 from jax import random
+from jax.typing import ArrayLike
 from jaxtyping import Float, Num
 
 from numpyro_forecast.exceptions import CovariateDimsError
@@ -227,7 +228,7 @@ def _forecast_group_datasets(
 def to_datatree(
     rng_key: Array,
     model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
+    posterior: Mapping[str, ArrayLike],
     data: Array,
     covariates: Array,
     *,
@@ -296,8 +297,10 @@ def to_datatree(
         the ``device`` argument of
         :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
         :func:`~numpyro_forecast.functional.prediction.forecast`. The default
-        ``"host"`` copies every chunk to host memory as a NumPy array (where
-        the tree is built anyway); it is what bounds accelerator memory when
+        ``"host"`` commits every chunk to host memory, returning
+        :class:`jax.Array` values whose sharding carries a host memory kind
+        (``"pinned_host"`` where the backend offers it, the form the tree is
+        built from anyway); it is what bounds accelerator memory when
         ``predictive_batch_size`` is set, and it needs no CPU backend, so it
         works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
         leaves only an accelerator backend initialized. A :class:`jax.Device`
@@ -305,6 +308,11 @@ def to_datatree(
         instead; pass ``None`` to keep the draws on the default device
         (chunked compute without per-chunk host transfers, for when the draws
         fit on the accelerator and transfers would dominate runtime).
+        Arithmetic that mixes a host-committed result with a device-resident
+        array raises in JAX rather than running on the accelerator; convert
+        such a result explicitly first with ``np.asarray(x)`` (stays on host)
+        or ``jax.device_put(x, device)`` (moves it to an accelerator) before
+        doing your own array math on it.
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -352,6 +360,10 @@ def to_datatree(
         not evenly divisible by ``num_chains``.
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
+    RuntimeError
+        If ``predictive_device`` resolves to ``"host"`` and the array's device
+        exposes no host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Notes
     -----
@@ -400,7 +412,8 @@ def to_datatree(
     merged_arg = cast("dict[Any, Any]", merged_coords)
 
     posterior_reshaped = {
-        name: _reshape_chains(value, num_chains) for name, value in posterior.items()
+        name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
+        for name, value in posterior.items()
     }
     posterior_ds = arviz_base.dict_to_dataset(
         posterior_reshaped,
@@ -477,7 +490,7 @@ def to_datatree(
 
 def add_forecast_groups(
     tree: "xarray.DataTree",
-    forecast_samples: "Array | np.ndarray",
+    forecast_samples: Num[ArrayLike, " sample future obs"],
     covariates_future: Array,
     *,
     time_coord: Sequence[Any] | None = None,
@@ -537,7 +550,8 @@ def add_forecast_groups(
     """
     covariate_dims = _reconcile_tree_covariate_dims(tree, covariates_future, covariate_dims)
     in_time = np.asarray(tree["observed_data"].coords["time"].values)
-    future_len = forecast_samples.shape[-2]
+    forecast_samples_arr = np.asarray(forecast_samples)
+    future_len = forecast_samples_arr.shape[-2]
     if time_coord is not None:
         future_time = np.asarray(time_coord)
         if future_time.shape[0] != future_len:
@@ -556,7 +570,7 @@ def add_forecast_groups(
         )
         raise ValueError(msg)
     predictions_ds, predictions_constant_ds = _forecast_group_datasets(
-        np.asarray(forecast_samples)[None],
+        forecast_samples_arr[None],
         covariates_future,
         future_time,
         covariate_dims=covariate_dims,
@@ -571,12 +585,12 @@ def add_forecast_groups(
 
 
 def predictions_to_datatree(
-    predictions: Float[np.ndarray | Array, " sample time series"],
-    x: Num[np.ndarray | Array, " time"],
+    predictions: Float[ArrayLike, " sample time series"],
+    x: Num[ArrayLike, " time"],
     series: Sequence[Any],
     *,
     group: str = "posterior_predictive",
-    observed: Float[np.ndarray | Array, " time series"] | None = None,
+    observed: Float[ArrayLike, " time series"] | None = None,
 ) -> "xarray.DataTree":
     """Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
 

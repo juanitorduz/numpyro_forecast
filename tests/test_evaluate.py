@@ -3,6 +3,7 @@
 from functools import partial
 from typing import Any, cast
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -27,6 +28,7 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError
+from numpyro_forecast.functional._offload import _host_sharding
 from numpyro_forecast.typing import ForecastFn, InSampleFn
 
 
@@ -172,13 +174,89 @@ def test_default_metrics_keys() -> None:
     assert set(DEFAULT_METRICS) == {"mae", "rmse", "crps", "coverage"}
 
 
-# --- Chunked cell evaluation (memory-bounded scoring on wide panels) --------------
-
-
 def _metric_inputs(n_cells: int = 30) -> tuple[Array, Array]:
     pred = random.normal(random.PRNGKey(0), (40, 3, n_cells // 3))
     truth = random.normal(random.PRNGKey(1), (3, n_cells // 3))
     return pred, truth
+
+
+# --- Host-committed inputs (device="host" draws mixed with a device-resident truth,
+# or vice versa) -------------------------------------------------------------------
+
+
+def _host(x: Array) -> Array:
+    """Commit ``x`` to host memory, the ``device="host"`` offload target."""
+    return jax.device_put(x, _host_sharding(x))
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_unchunked_metrics_accept_host_committed_inputs(
+    commit_pred: bool, commit_truth: bool
+) -> None:
+    """Every unchunked metric must accept any mix of host-committed/device-resident inputs.
+
+    Mixing a host-committed ``jax.Array`` (e.g. draws sampled with
+    ``device="host"``) with a device-resident one inside a fused ``jnp``/jitted
+    kernel used to raise (``memory_space of all inputs ... must be the
+    same``); each metric now moves a host-committed operand to device memory
+    first, so any mix produces the same value as the fully device-resident
+    call.
+    """
+    pred, truth = _metric_inputs()
+    pred_in = _host(pred) if commit_pred else pred
+    truth_in = _host(truth) if commit_truth else truth
+
+    np.testing.assert_allclose(eval_mae(pred_in, truth_in), eval_mae(pred, truth))
+    np.testing.assert_allclose(eval_rmse(pred_in, truth_in), eval_rmse(pred, truth))
+    np.testing.assert_allclose(eval_crps(pred_in, truth_in), eval_crps(pred, truth))
+    np.testing.assert_allclose(eval_coverage(pred_in, truth_in), eval_coverage(pred, truth))
+
+    expected = evaluate_forecast(pred, truth)
+    got = evaluate_forecast(pred_in, truth_in)
+    assert got.keys() == expected.keys()
+    for name in expected:
+        np.testing.assert_allclose(got[name], expected[name])
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_chunked_metrics_accept_host_committed_inputs(
+    commit_pred: bool, commit_truth: bool
+) -> None:
+    """The chunked (``batch_size``-bounded) path must accept the same input mixes.
+
+    :func:`~numpyro_forecast.evaluate._chunked_cell_metric` slices ``pred``
+    and ``truth`` into cell blocks through
+    :func:`~numpyro_forecast.functional._offload._leaf_view` rather than the
+    fused kernel used by the unchunked path, so it needs its own coverage: any
+    mix of host-committed/device-resident inputs must reproduce the
+    all-device, unchunked result.
+    """
+    pred, truth = _metric_inputs()
+    pred_in = _host(pred) if commit_pred else pred
+    truth_in = _host(truth) if commit_truth else truth
+
+    # rtol matches test_eval_crps_chunked_matches_single_pass: chunking only
+    # changes the summation order of the final mean (f32 rounding), regardless
+    # of which operand is host-committed.
+    np.testing.assert_allclose(
+        eval_crps(pred_in, truth_in, batch_size=7), eval_crps(pred, truth), rtol=1e-6
+    )
+    np.testing.assert_allclose(
+        eval_coverage(pred_in, truth_in, batch_size=7),
+        eval_coverage(pred, truth),
+        rtol=1e-6,
+    )
+
+
+# --- Chunked cell evaluation (memory-bounded scoring on wide panels) --------------
 
 
 def test_eval_crps_chunked_matches_single_pass() -> None:

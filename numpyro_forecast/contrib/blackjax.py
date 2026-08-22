@@ -39,7 +39,6 @@ from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jax import random
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
@@ -657,7 +656,7 @@ def pathfinder_samples(
     *,
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array | np.ndarray]:
+) -> dict[str, Array]:
     """Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
 
     The returned dict has the sample axis leading and is ready to pass to
@@ -685,18 +684,24 @@ def pathfinder_samples(
         memory/reproducibility contract applies).
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
+        for the JAX rule that arithmetic mixing a host-committed result with a
+        device-resident array raises rather than running on the accelerator.
 
     Returns
     -------
-    dict[str, Array | np.ndarray]
-        Posterior samples of the latent sites, sample axis leading (NumPy leaves
-        when ``device`` resolves to ``"host"``).
+    dict[str, Array]
+        Posterior samples of the latent sites, sample axis leading (leaves
+        committed to host memory when ``device`` resolves to ``"host"``).
 
     Raises
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
     """
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
@@ -975,7 +980,7 @@ def multipathfinder_samples(
     resample: Literal["auto", "psis", "elbo"] = "auto",
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array | np.ndarray]:
+) -> dict[str, Array]:
     """Draw ``num_samples`` posterior samples from a fitted multipath Pathfinder fit.
 
     Every call draws fresh unconstrained samples from each path's fitted normal
@@ -1040,19 +1045,25 @@ def multipathfinder_samples(
         ``num_paths * batch_size`` samples internally.
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
+        for the JAX rule that arithmetic mixing a host-committed result with a
+        device-resident array raises rather than running on the accelerator.
 
     Returns
     -------
-    dict[str, Array | np.ndarray]
-        Posterior samples of the latent sites, sample axis leading (NumPy leaves
-        when ``device`` resolves to ``"host"``).
+    dict[str, Array]
+        Posterior samples of the latent sites, sample axis leading (leaves
+        committed to host memory when ``device`` resolves to ``"host"``).
 
     Raises
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
         not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+    RuntimeError
+        If ``device`` resolves to ``"host"`` and the array's device exposes no
+        host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Warns
     -----

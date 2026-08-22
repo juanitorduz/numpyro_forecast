@@ -1,12 +1,13 @@
 """Tests for functional predictive sampling (``functional.prediction``)."""
 
 from collections.abc import Mapping
+from unittest import mock
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import empty_covariates, rw_model, svi_guide_params
+from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
 from jax import random
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.autoguide import AutoNormal
@@ -17,7 +18,14 @@ from numpyro_forecast.functional import (
     forecast,
     predict_in_sample,
 )
-from numpyro_forecast.functional._offload import _resolve_device
+from numpyro_forecast.functional._offload import (
+    _device_view,
+    _draw_chunked,
+    _host_memory_kind,
+    _host_sharding,
+    _leaf_view,
+    _resolve_device,
+)
 from numpyro_forecast.functional.prediction import (
     _chunk_indices,
     _chunked_draws,
@@ -439,36 +447,210 @@ def test_resolve_device_missing_platform_raises_actionable_error(
         _resolve_device("tpu")
 
 
-def test_chunked_draws_host_returns_numpy_and_matches_values() -> None:
+def test_host_memory_kind_prefers_pinned_host() -> None:
+    """The CPU backend exposes ``"pinned_host"``, which must win over ``"unpinned_host"``."""
+    assert _host_memory_kind(jax.devices()[0]) == "pinned_host"
+
+
+class _DeviceOnlyMemory:
+    """A memory stand-in reporting the ``"device"`` kind."""
+
+    kind = "device"
+
+
+def test_host_memory_kind_raises_without_a_host_kind() -> None:
+    """A device that addresses no host memory kind must raise, not silently degrade.
+
+    ``jax.Device`` is a C-extension (nanobind) type with no Python-accessible
+    constructor, so the stub is a ``MagicMock(spec=...)`` rather than a
+    subclass: ``spec`` makes ``isinstance(stub, jax.Device)`` true, which is
+    what the beartype-checked ``device: jax.Device`` parameter requires. Each
+    call builds a fresh mock (a distinct, freshly hashed object) so
+    ``_host_memory_kind``'s ``lru_cache`` cannot serve a stale answer cached
+    under another test's device.
+    """
+    stub_device = mock.MagicMock(spec=jax.devices()[0])
+    stub_device.addressable_memories.return_value = [_DeviceOnlyMemory()]
+
+    with pytest.raises(RuntimeError, match="exposes no host memory kind"):
+        _host_memory_kind(stub_device)
+
+
+def test_leaf_view_stages_host_committed_leaves_as_numpy() -> None:
+    """``_leaf_view`` is the host-gather switch: only host-committed leaves become NumPy.
+
+    A device-resident array must come back as the *same object* (no copy, no
+    round-trip), a host-committed one as ``np.ndarray`` so downstream indexing
+    gathers on the host instead of pulling the whole leaf into device memory,
+    and a NumPy input must pass straight through.
+    """
+    x = jnp.arange(6.0).reshape(3, 2)
+    hosted = jax.device_put(x, _host_sharding(x))
+
+    assert _leaf_view(x) is x  # device-resident: untouched, not even copied
+    viewed = _leaf_view(hosted)
+    assert isinstance(viewed, np.ndarray)
+    assert np.array_equal(viewed, np.asarray(x))
+    assert isinstance(_leaf_view(np.asarray(x)), np.ndarray)
+
+
+def test_leaf_view_passes_tracers_through() -> None:
+    """A tracer has no ``sharding``; ``_leaf_view`` must not reach for one.
+
+    Without the passthrough this raises ``AttributeError`` under ``vmap``,
+    which would mask the actionable ``VectorizedMetricError`` that
+    ``backtest_vectorized`` raises for host-staging metrics.
+    """
+    seen: list[bool] = []
+
+    def probe(row: Array) -> Array:
+        viewed = _leaf_view(row)
+        seen.append(viewed is row)
+        return jnp.sum(jnp.asarray(viewed))
+
+    out = jax.vmap(probe)(jnp.ones((3, 4)))
+    assert seen == [True]  # the tracer itself, not a NumPy copy
+    assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
+
+
+def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
+    """``_device_view`` is the metric-kernel-safe counterpart to ``_leaf_view``.
+
+    A host-committed leaf must come back as a device-resident ``jax.Array``
+    with the same values (so a fused metric kernel never mixes memory kinds),
+    a device-resident leaf must come back unchanged in value, and a NumPy
+    input must come back as a jax ``Array``.
+    """
+    x = jnp.arange(6.0).reshape(3, 2)
+    hosted = jax.device_put(x, _host_sharding(x))
+
+    viewed = _device_view(hosted)
+    assert isinstance(viewed, jax.Array)
+    assert viewed.sharding.memory_kind == "device"
+    assert jnp.array_equal(viewed, x)
+
+    same = _device_view(x)
+    assert isinstance(same, jax.Array)
+    assert jnp.array_equal(same, x)
+
+    from_numpy = _device_view(np.asarray(x))
+    assert isinstance(from_numpy, jax.Array)
+    assert jnp.array_equal(from_numpy, x)
+
+
+def test_device_view_passes_tracers_through() -> None:
+    """A tracer has no ``sharding``; ``_device_view`` must not reach for one."""
+    seen: list[bool] = []
+
+    def probe(row: Array) -> Array:
+        viewed = _device_view(row)
+        seen.append(viewed is row)
+        return jnp.sum(jnp.asarray(viewed))
+
+    out = jax.vmap(probe)(jnp.ones((3, 4)))
+    assert seen == [True]  # the tracer itself, not a converted copy
+    assert np.array_equal(np.asarray(out), np.full((3,), 4.0))
+
+
+def test_chunked_draws_gathers_host_posterior_chunks_on_the_host() -> None:
+    """A host-committed posterior must be indexed as NumPy, not as a jax Array.
+
+    This is the correctness contract of the host path on an accelerator:
+    indexing a host-committed ``jax.Array`` with a device-resident index array
+    raises (``memory_space of all inputs ... must be the same``), so
+    ``_chunked_draws`` stages every leaf through ``_leaf_view`` first, which
+    keeps the gather on the host. Spying on the chunks actually handed to
+    ``predict_fn`` is what pins that: drop the ``_leaf_view`` call and these
+    leaves come back as ``jax.Array``.
+    """
+    chunk_types: list[type] = []
+
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        chunk_types.append(type(post["x"]))
+        return jnp.asarray(post["x"]) * 2.0
+
+    x = jnp.arange(10.0)[:, None]
+    posterior = {"x": jax.device_put(x, _host_sharding(x))}
+
+    _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    assert len(chunk_types) == 3
+    assert all(issubclass(t, np.ndarray) for t in chunk_types), chunk_types
+
+    # The single-shot passthrough stages the posterior the same way.
+    chunk_types.clear()
+    _chunked_draws(random.PRNGKey(0), predict_fn, posterior, None)
+    assert [issubclass(t, np.ndarray) for t in chunk_types] == [True]
+
+
+def test_chunked_draws_host_is_host_resident_and_matches_values() -> None:
+    """``device="host"`` changes only where draws live, never what they are.
+
+    Ten samples in chunks of four also exercises the overdraw slice: the third
+    chunk wraps around, and the stitched result must be cut back to ten rows
+    that match the ``device=None`` result element for element.
+    """
+
     def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
         return jnp.asarray(post["x"]) * 2.0
 
     posterior = {"x": jnp.arange(10.0)[:, None]}
     plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
     hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, "host")
-    assert isinstance(hosted, np.ndarray)
-    assert np.array_equal(np.asarray(plain), hosted)
+    assert_host_resident(hosted)
+    assert hosted.shape == (10, 1)  # the 12 drawn rows are cut back to 10
+    assert np.array_equal(np.asarray(plain), np.asarray(hosted))
 
 
 def test_chunked_draws_host_transfers_each_chunk(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Memory contract of the host path: every chunk is copied off-device via device_get."""
+    """Memory contract of the host path: every chunk is committed to host memory as drawn."""
     transfers: list[tuple[int, ...]] = []
-    real_device_get = jax.device_get
+    real_device_put = jax.device_put
 
-    def spy_device_get(x: Array) -> "np.ndarray":
-        transfers.append(tuple(x.shape))
-        return real_device_get(x)
+    def spy_device_put(x: Array, device: object = None, **kwargs: object) -> Array:
+        if isinstance(device, jax.sharding.SingleDeviceSharding) and device.memory_kind in (
+            "pinned_host",
+            "unpinned_host",
+        ):
+            transfers.append(tuple(np.shape(x)))
+        return real_device_put(x, device, **kwargs)
 
-    monkeypatch.setattr(jax, "device_get", spy_device_get)
+    monkeypatch.setattr(jax, "device_put", spy_device_put)
     posterior = {"x": jnp.arange(10.0)[:, None]}
     _chunked_draws(
         random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, "host"
     )
-    assert transfers == [(4, 1), (4, 1), (4, 1)]  # one host copy per chunk
+    # One host copy per chunk, plus the single commit of the stitched result.
+    assert transfers == [(4, 1), (4, 1), (4, 1), (10, 1)]
+
+
+def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
+    """The shared draw driver's host path: same values, host memory, correct overdraw cut.
+
+    ``_draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
+    samplers, so its host contract is asserted directly on a deterministic
+    ``draw_fn``: for one ``(rng_key, batch_size)``, ``device="host"`` must
+    reproduce the ``device=None`` draws bit for bit while every leaf ends up
+    committed to host memory. Seven samples in chunks of three overdraw by two
+    rows, which the final slice must discard.
+    """
+
+    def draw_fn(key: Array, n: int) -> dict[str, Array]:
+        return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
+
+    key = random.PRNGKey(11)
+    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
+
+    assert_host_resident(hosted)
+    assert set(hosted) == {"a", "b"}
+    assert hosted["a"].shape == (7, 2)  # nine drawn rows cut back to seven
+    assert hosted["b"].shape == (7,)
+    for name, leaf in plain.items():
+        assert np.array_equal(np.asarray(leaf), np.asarray(hosted[name]))
 
 
 def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
-    # "host" is a placement/representation knob, never a draws knob.
+    # "host" is a placement knob, never a draws knob.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
@@ -478,9 +660,9 @@ def test_forecast_host_bitwise_matches_cpu_and_default() -> None:
     hosted = forecast(
         random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="host"
     )
-    assert isinstance(hosted, np.ndarray)
-    assert np.array_equal(np.asarray(plain), hosted)
-    assert np.array_equal(np.asarray(cpu), hosted)
+    assert_host_resident(hosted)
+    assert np.array_equal(np.asarray(plain), np.asarray(hosted))
+    assert np.array_equal(np.asarray(cpu), np.asarray(hosted))
 
 
 def test_predict_in_sample_host_bitwise_matches_default() -> None:
@@ -490,8 +672,8 @@ def test_predict_in_sample_host_bitwise_matches_default() -> None:
     hosted = predict_in_sample(
         random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="host"
     )
-    assert isinstance(hosted, np.ndarray)
-    assert np.array_equal(np.asarray(plain), hosted)
+    assert_host_resident(hosted)
+    assert np.array_equal(np.asarray(plain), np.asarray(hosted))
 
 
 def test_predictive_oom_reports_batch_size() -> None:
@@ -542,11 +724,11 @@ def test_predict_in_sample_numpy_posterior_bitwise_matches_jax() -> None:
     assert np.array_equal(np.asarray(from_jax), np.asarray(from_np))
 
 
-def test_forecast_unchunked_host_returns_numpy() -> None:
-    # The unchunked passthrough honors "host" too (single device_get of the result).
+def test_forecast_unchunked_host_is_host_resident() -> None:
+    # The unchunked passthrough honors "host" too (a single commit of the result).
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
     plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36))
     hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="host")
-    assert isinstance(hosted, np.ndarray)
-    assert np.array_equal(np.asarray(plain), hosted)
+    assert_host_resident(hosted)
+    assert np.array_equal(np.asarray(plain), np.asarray(hosted))

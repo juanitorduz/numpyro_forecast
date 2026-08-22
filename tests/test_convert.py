@@ -47,7 +47,7 @@ def _mcmc_posterior(
 
 def _svi_posterior(
     num_draws: int, t: int = 18, num_steps: int = 40
-) -> tuple[dict[str, "Array | np.ndarray"], Array, Array]:
+) -> tuple[dict[str, Array], Array, Array]:
     """An SVI-drawn posterior plus the data/covariates it was fit on."""
     guide, params = svi_guide_params(t, num_steps=num_steps)
     posterior = draw_posterior(random.PRNGKey(3), guide, params, num_draws)
@@ -585,7 +585,7 @@ def test_to_datatree_deterministic_given_key() -> None:
 
 def _svi_posterior_with_horizon(
     num_draws: int, horizon: int = 5
-) -> tuple[dict[str, "Array | np.ndarray"], Array, Array]:
+) -> tuple[dict[str, Array], Array, Array]:
     posterior, data, _ = _svi_posterior(num_draws=num_draws)
     n = data.shape[-2]
     return posterior, data, empty_covariates(n + horizon)

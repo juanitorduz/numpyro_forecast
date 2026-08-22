@@ -33,6 +33,7 @@ classifiers = [
 dependencies = [
     "arviz>=1.2.0",
     "beartype>=0.22",
+    "jax>=0.11.1",
     "jaxtyping>=0.3.11",
     "matplotlib>=3.8,<3.11",
     "numpyro>=0.20.0",

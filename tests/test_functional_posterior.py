@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import pytest
-from conftest import empty_covariates, rw_model, svi_guide_params
+from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
 from jax import random
 from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta
@@ -74,12 +74,12 @@ def test_draw_posterior_chunked_deterministic_given_key_and_batch() -> None:
     assert _trees_equal(first, second)
 
 
-def test_draw_posterior_host_returns_numpy_bitwise_match() -> None:
-    # device is a placement/representation knob, never a draws knob.
+def test_draw_posterior_host_is_host_resident_bitwise_match() -> None:
+    # device is a placement knob, never a draws knob.
     guide, params = svi_guide_params(t=30)
     plain = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     hosted = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="host")
-    assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
+    assert_host_resident(hosted)
     assert _trees_equal(plain, hosted)
 
 

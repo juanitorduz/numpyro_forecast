@@ -12,12 +12,13 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import lax, random
+from jax.typing import ArrayLike
 from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
@@ -28,7 +29,7 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional._offload import _oom_advice, _stitch_chunks, _transfer
+from numpyro_forecast.functional._offload import _device_view, _leaf_view, _oom_advice
 from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -51,10 +52,20 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 
 
 @jax.jit
-def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+    """Jitted MAE core; the host-committed-input handling lives in :func:`eval_mae`."""
+    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+
+
+def eval_mae(
+    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -68,14 +79,24 @@ def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"
     Array
         The mean absolute error as a scalar array.
     """
-    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+    return _eval_mae(_device_view(pred), _device_view(truth))
 
 
 @jax.jit
-def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+    """Jitted RMSE core; the host-committed-input handling lives in :func:`eval_rmse`."""
+    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+
+
+def eval_rmse(
+    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -89,7 +110,7 @@ def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch
     Array
         The root mean squared error as a scalar array.
     """
-    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+    return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
 _crps_cells = jax.jit(crps_empirical)
@@ -109,16 +130,19 @@ def _chunked_cell_metric(
     pred: "Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch']",
     truth: "Float[Array, ' *batch'] | Float[np.ndarray, ' *batch']",
     batch_size: int,
-) -> "np.floating":
+) -> Array:
     """Average a per-cell metric kernel over fixed-size cell chunks.
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
     (:func:`~numpyro_forecast.functional.prediction._chunk_indices`), so the
-    jitted ``kernel`` compiles once; each block's per-cell values are moved to
-    host memory before the next block runs, bounding accelerator memory by
+    jitted ``kernel`` compiles once; each block's per-cell values are staged on
+    the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
-    is never chunked.
+    is never chunked. Inputs are normalized with
+    :func:`~numpyro_forecast.functional._offload._leaf_view` so a host-committed
+    panel is sliced on the host instead of raising when a device-resident
+    index array gathers against it.
 
     Parameters
     ----------
@@ -134,40 +158,28 @@ def _chunked_cell_metric(
 
     Returns
     -------
-    np.floating
-        The host-side mean of the per-cell metric values.
+    Array
+        The mean of the per-cell metric values, as a scalar array.
     """
-    sample = pred.shape[0]
-    pred_flat = pred.reshape(sample, -1)
-    truth_flat = truth.reshape(-1)
+    pred_view = _leaf_view(pred)
+    truth_view = _leaf_view(truth)
+    sample = pred_view.shape[0]
+    pred_flat = pred_view.reshape(sample, -1)
+    truth_flat = truth_view.reshape(-1)
     n_cells = truth_flat.shape[0]
     indices = _chunk_indices(n_cells, batch_size)
     with _oom_advice("metric evaluation", batch_size):
-        chunks = [_transfer(kernel(pred_flat[:, idx], truth_flat[idx]), "host") for idx in indices]
-    values = cast("np.ndarray", _stitch_chunks(chunks, n_cells, "host"))
-    return values.mean()
+        chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
+    values = np.concatenate(chunks, axis=0)[:n_cells]
+    return jnp.asarray(values.mean())
 
 
-@overload
 def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    batch_size: None = None,
-) -> Array: ...
-@overload
-def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    batch_size: int,
-) -> "Array | np.floating": ...
-def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     batch_size: int | None = None,
-) -> "Array | np.floating":
+) -> Array:
     """Empirical CRPS averaged over all data elements.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
@@ -181,21 +193,32 @@ def eval_crps(
     batch_size
         Optional number of flattened data cells (the product of the batch
         shape, e.g. time times series) evaluated on the accelerator per pass;
-        the sample axis is never chunked. With host-resident (NumPy) inputs
-        this bounds accelerator memory by ``sample * batch_size`` values plus
-        the CRPS sort workspace instead of the full panel. Chunking only
-        changes the summation order of the final mean (results are equal to
-        float tolerance, not bitwise); at or above the cell count the
-        single-pass path runs. ``None`` (default) evaluates in one pass.
+        the sample axis is never chunked. With host-resident inputs (e.g.
+        draws sampled with ``device="host"``) this bounds accelerator memory
+        by ``sample * batch_size`` values plus the CRPS sort workspace instead
+        of the full panel, since both ``pred`` and ``truth`` are staged as
+        NumPy views before chunking, whatever their own memory kind. Chunking
+        only changes the summation order of the final mean (results are equal
+        to float tolerance, not bitwise); at or above the cell count the
+        single-pass path runs instead, which moves any host-committed operand
+        back to device memory first
+        (:func:`~numpyro_forecast.functional._offload._device_view`) so either
+        ``pred`` or ``truth`` (or both) may be host-committed regardless of
+        ``batch_size``. ``None`` (default) evaluates in one pass.
 
     Returns
     -------
-    Array | np.floating
-        The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
+    Array
+        The mean empirical CRPS as a scalar array.
     """
-    if batch_size is None or batch_size >= truth.size:
-        return _eval_crps_single_pass(pred, truth)
-    return _chunked_cell_metric(_crps_cells, pred, truth, batch_size)
+    if batch_size is None or batch_size >= np.size(truth):
+        return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
+    return _chunked_cell_metric(
+        _crps_cells,
+        cast("Array | np.ndarray", pred),
+        cast("Array | np.ndarray", truth),
+        batch_size,
+    )
 
 
 @partial(jax.jit, static_argnames=("alpha",))
@@ -207,29 +230,13 @@ def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
     return (truth >= lo) & (truth <= hi)
 
 
-@overload
 def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    alpha: float = ...,
-    batch_size: None = None,
-) -> Array: ...
-@overload
-def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    alpha: float = ...,
-    batch_size: int,
-) -> "Array | np.floating": ...
-def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
     batch_size: int | None = None,
-) -> "Array | np.floating":
+) -> Array:
     """Empirical coverage of the central ``alpha`` prediction interval.
 
     The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
@@ -252,13 +259,16 @@ def eval_coverage(
         per pass (see :func:`eval_crps`; the sample axis is never chunked).
         Coverage is a count of exact 0/1 indicators, so chunking recovers
         the identical count; only the precision of the final division differs
-        from the single pass. ``None`` (default) evaluates in one pass.
+        from the single pass. Either path accepts a host-committed ``pred``
+        or ``truth`` (or both); the single pass moves them to device memory
+        first (:func:`~numpyro_forecast.functional._offload._device_view`).
+        ``None`` (default) evaluates in one pass.
 
     Returns
     -------
-    Array | np.floating
+    Array
         The fraction of ground truth inside the central ``alpha`` interval, as
-        a scalar (a NumPy scalar when chunked).
+        a scalar array.
 
     Raises
     ------
@@ -268,10 +278,12 @@ def eval_coverage(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    if batch_size is None or batch_size >= truth.size:
-        return _coverage_indicator(pred, truth, alpha=alpha).mean()
+    if batch_size is None or batch_size >= np.size(truth):
+        return _coverage_indicator(_device_view(pred), _device_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
-    return _chunked_cell_metric(kernel, pred, truth, batch_size)
+    return _chunked_cell_metric(
+        kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
+    )
 
 
 DEFAULT_METRICS: dict[str, Metric] = {
@@ -284,8 +296,8 @@ DEFAULT_METRICS: dict[str, Metric] = {
 
 
 def evaluate_forecast(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
@@ -326,9 +338,12 @@ def evaluate_forecast(
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
-    # NumPy inputs (e.g. draws sampled with device="host") enter the jitted
-    # metric kernels as device arrays either way; convert once up front.
-    pred_arr, truth_arr = jnp.asarray(pred), jnp.asarray(truth)
+    # NumPy (or any other ArrayLike) input is normalized once up front, and any
+    # host-committed jax.Array input (e.g. draws sampled with device="host")
+    # is moved to device memory so the jitted metric kernels below never see a
+    # host/device memory-kind mismatch, whichever of pred/truth (or both) was
+    # host-committed.
+    pred_arr, truth_arr = _device_view(pred), _device_view(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
     stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
@@ -595,11 +610,8 @@ def _eval_train_window(
     A thin call into the user-supplied :data:`~numpyro_forecast.typing.InSampleFn`
     closure, which owns fitting the model and drawing its in-sample predictive.
     """
-    train_pred = cast(
-        "Array",
-        in_sample_fn(
-            rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
-        ),
+    train_pred = in_sample_fn(
+        rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
     )
     train_truth = train_data
     if transform is not None:
@@ -636,17 +648,14 @@ def _run_window(
 
     model = shared_model if shared_model is not None else model_fn()
     pred, walltime = _timed(
-        lambda: cast(
-            "Array",
-            forecast_fn(
-                rng_key,
-                model,
-                train_data,
-                train_covariates,
-                full_covariates,
-                num_samples,
-                batch_size=batch_size,
-            ),
+        lambda: forecast_fn(
+            rng_key,
+            model,
+            train_data,
+            train_covariates,
+            full_covariates,
+            num_samples,
+            batch_size=batch_size,
         )
     )
 
@@ -734,10 +743,13 @@ def backtest(
         ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
 
     ``batch_size`` is forwarded unchanged into both closures so a chunked
-    implementation can bound its own device memory. A closure that offloads
-    work internally (e.g. moves draws to host memory to cap peak accelerator
-    usage) must return the draws back on-device before returning: the metrics
-    computed by :func:`evaluate_forecast` are jitted and expect array inputs.
+    implementation can bound its own device memory. A closure may return draws
+    committed to host memory (e.g. via ``device="host"``, to cap peak
+    accelerator usage): every metric in :data:`DEFAULT_METRICS` accepts a
+    host-committed ``pred`` or ``truth`` (or both), in any mix and regardless
+    of ``batch_size``, moving a host-committed operand to device memory first
+    where needed. Returning draws already on-device still avoids the extra
+    host-to-device hop for metrics scored every window.
 
     A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
     + ``Predictive``)::
@@ -796,7 +808,12 @@ def backtest(
         window-dependent metrics such as a MASE scaled by that window's training
         data (:func:`numpyro_forecast.metrics.make_mase`).
     transform
-        Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+        Optional ``(pred, truth) -> (pred, truth)`` applied before metrics. It
+        runs before the metrics and receives the forecast/in-sample closure's
+        draws as-is, so a transform that does its own array math against a
+        device-resident operand must convert a host-committed ``pred`` or
+        ``truth`` first, e.g. with :func:`numpy.asarray` (or move it back
+        onto a device explicitly).
     window_type
         Windowing strategy. If ``None`` (default) it is inferred from
         ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and
