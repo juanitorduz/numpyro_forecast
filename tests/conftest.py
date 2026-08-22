@@ -93,6 +93,27 @@ def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleName
     return _tracker
 
 
+_HOST_MEMORY_KINDS = ("pinned_host", "unpinned_host")
+"""Host memory kinds a ``device="host"`` result may carry (see ``_offload._host_memory_kind``)."""
+
+
+def assert_host_resident(x: object) -> None:
+    """Assert every leaf of ``x`` is a jax Array committed to host memory.
+
+    The host-offload contract: ``device="host"`` keeps results jax-native but
+    off the accelerator, so each leaf must be a :class:`jax.Array` whose
+    sharding carries a host memory kind. The memory-kind check *is* the
+    "nothing lives in device memory" check.
+    """
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, jax.Array), f"expected a jax.Array, got {type(leaf)}"
+        assert leaf.sharding.memory_kind in _HOST_MEMORY_KINDS, (
+            f"leaf lives in memory kind {leaf.sharding.memory_kind!r}, not host memory"
+        )
+
+
 @pytest.fixture
 def sample_hierarchical() -> Array:
     """Short synthetic hierarchical series shaped ``(group, time, 1)``.
@@ -281,7 +302,7 @@ def posterior_factory(
     request: pytest.FixtureRequest,
     fast_svi: dict[str, int],
     fast_mcmc: dict[str, int],
-) -> Callable[[Array, ForecastModel, Array, Array], dict[str, "Array | np.ndarray"]]:
+) -> Callable[[Array, ForecastModel, Array, Array], dict[str, Array]]:
     """Build a posterior-sample dict with either SVI or NUTS, using fast settings.
 
     Parametrized over both inference backends so a single test exercises a model
@@ -297,7 +318,7 @@ def posterior_factory(
 
         def draw_svi(
             rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-        ) -> dict[str, "Array | np.ndarray"]:
+        ) -> dict[str, Array]:
             key_fit, key_draw = random.split(rng_key)
             guide = AutoNormal(model)
             svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
@@ -308,7 +329,7 @@ def posterior_factory(
 
     def draw_nuts(
         rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-    ) -> dict[str, "Array | np.ndarray"]:
+    ) -> dict[str, Array]:
         mcmc = MCMC(
             NUTS(model),
             num_warmup=fast_mcmc["num_warmup"],

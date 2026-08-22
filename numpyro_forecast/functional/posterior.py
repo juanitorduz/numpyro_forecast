@@ -93,7 +93,7 @@ def draw_posterior(
     *,
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array | np.ndarray]:
+) -> dict[str, Array]:
     """Draw ``num_samples`` posterior samples of the latent sites from a fitted guide.
 
     The returned dict has the sample axis leading and is ready to pass to
@@ -127,8 +127,10 @@ def draw_posterior(
         are reproducible per ``(rng_key, batch_size)``.
     device
         Where each chunk of draws is moved as soon as it is drawn. ``"host"``
-        copies to host memory with :func:`jax.device_get` and returns NumPy
-        leaves; it needs no CPU backend, so it works even when
+        commits every leaf to host memory and returns :class:`jax.Array` leaves
+        whose sharding carries a host memory kind (``"pinned_host"`` where the
+        backend offers it), so nothing of the result occupies accelerator
+        memory; it needs no CPU backend, so it works even when
         ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves only an
         accelerator backend initialized. A :class:`jax.Device` or platform
         name like ``"cpu"`` commits the draws to that device instead
@@ -138,9 +140,9 @@ def draw_posterior(
 
     Returns
     -------
-    dict[str, Array | np.ndarray]
-        Posterior samples of the latent sites, sample axis leading (NumPy
-        leaves when ``device`` resolves to ``"host"``).
+    dict[str, Array]
+        Posterior samples of the latent sites, sample axis leading (leaves
+        committed to host memory when ``device`` resolves to ``"host"``).
 
     Raises
     ------

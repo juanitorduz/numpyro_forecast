@@ -39,7 +39,6 @@ from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jax import random
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
@@ -657,7 +656,7 @@ def pathfinder_samples(
     *,
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array | np.ndarray]:
+) -> dict[str, Array]:
     """Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
 
     The returned dict has the sample axis leading and is ready to pass to
@@ -689,9 +688,9 @@ def pathfinder_samples(
 
     Returns
     -------
-    dict[str, Array | np.ndarray]
-        Posterior samples of the latent sites, sample axis leading (NumPy leaves
-        when ``device`` resolves to ``"host"``).
+    dict[str, Array]
+        Posterior samples of the latent sites, sample axis leading (leaves
+        committed to host memory when ``device`` resolves to ``"host"``).
 
     Raises
     ------
@@ -975,7 +974,7 @@ def multipathfinder_samples(
     resample: Literal["auto", "psis", "elbo"] = "auto",
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array | np.ndarray]:
+) -> dict[str, Array]:
     """Draw ``num_samples`` posterior samples from a fitted multipath Pathfinder fit.
 
     Every call draws fresh unconstrained samples from each path's fitted normal
@@ -1044,9 +1043,9 @@ def multipathfinder_samples(
 
     Returns
     -------
-    dict[str, Array | np.ndarray]
-        Posterior samples of the latent sites, sample axis leading (NumPy leaves
-        when ``device`` resolves to ``"host"``).
+    dict[str, Array]
+        Posterior samples of the latent sites, sample axis leading (leaves
+        committed to host memory when ``device`` resolves to ``"host"``).
 
     Raises
     ------

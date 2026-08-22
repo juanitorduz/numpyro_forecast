@@ -21,6 +21,7 @@ from jaxtyping import Num
 from numpyro.infer import Predictive
 
 from numpyro_forecast.functional._offload import (
+    _leaf_view,
     _oom_advice,
     _resolve_device,
     _stitch_chunks,
@@ -105,7 +106,7 @@ def _chunked_draws(
     posterior: Mapping[str, Array | np.ndarray],
     batch_size: int | None,
     device: jax.Device | Literal["host"] | None = None,
-) -> Array | np.ndarray:
+) -> Array:
     """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
 
     Shared chunk driver for :func:`forecast` and :func:`predict_in_sample`.
@@ -116,11 +117,14 @@ def _chunked_draws(
     jitted ``predict_fn`` compiles exactly once; one subkey is split per chunk,
     and the wrapped draws are discarded by a final slice (skipped when the
     sample count is an exact multiple of ``batch_size``, since JAX slices copy
-    and nothing wrapped). When ``device`` is
-    given, every chunk is moved there (:func:`_transfer`) before the next one
-    is drawn and the stitched result lives on ``device``, bounding accelerator
-    memory by a single chunk; ``"host"`` stitches the NumPy chunks with
-    :func:`numpy.concatenate` so the result never touches an accelerator.
+    and nothing wrapped). Every leaf of ``posterior`` is first normalized with
+    :func:`~numpyro_forecast.functional._offload._leaf_view`, so a
+    host-committed posterior (the output of a previous ``device="host"`` stage)
+    is gathered on the host and only the chunk reaches the accelerator. When
+    ``device`` is given, every chunk is moved there (:func:`_transfer`) before
+    the next one is drawn and the stitched result lives on ``device``, bounding
+    accelerator memory by a single chunk; ``"host"`` stitches through NumPy so
+    the result never touches an accelerator.
 
     Parameters
     ----------
@@ -138,19 +142,20 @@ def _chunked_draws(
 
     Returns
     -------
-    Array | np.ndarray
-        The stitched draws for the original sample count (a NumPy array when
-        ``device`` is ``"host"``).
+    Array
+        The stitched draws for the original sample count (committed to host
+        memory when ``device`` is ``"host"``).
     """
-    num = _sample_axis_size(posterior)
+    staged = {name: _leaf_view(leaf) for name, leaf in posterior.items()}
+    num = _sample_axis_size(staged)
     if batch_size is None or batch_size >= num:
         with _oom_advice("predictive sampling", batch_size):
-            return _transfer(predict_fn(rng_key, posterior), device)
+            return _transfer(predict_fn(rng_key, staged), device)
     indices = _chunk_indices(num, batch_size)
     keys = random.split(rng_key, len(indices))
     with _oom_advice("predictive sampling", batch_size):
         chunks = [
-            _transfer(predict_fn(keys[i], _index_tree(posterior, idx)), device)
+            _transfer(predict_fn(keys[i], _index_tree(staged, idx)), device)
             for i, idx in enumerate(indices)
         ]
         return _stitch_chunks(chunks, num, device)
@@ -191,7 +196,7 @@ def forecast(
     batch_size: int | None = None,
     parallel: bool = True,
     device: jax.Device | str | None = None,
-) -> Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]:
+) -> Num[Array, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
     Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
@@ -223,11 +228,14 @@ def forecast(
         the same draws up to floating-point reduction order.
     device
         Where each chunk of draws is placed as soon as it is drawn and where
-        the stitched result lives. ``"host"`` copies every chunk to host
-        memory with :func:`jax.device_get` and returns a NumPy array; it needs
-        no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
-        (or ``jax_platforms``) leaves only an accelerator backend initialized,
-        which makes it the recommended choice on GPU. A :class:`jax.Device` or
+        the stitched result lives. ``"host"`` commits every chunk to host
+        memory and returns a :class:`jax.Array` whose sharding carries a host
+        memory kind (``"pinned_host"`` where the backend offers it), so nothing
+        of the result occupies accelerator memory; call :func:`numpy.asarray`
+        on it for a plain NumPy copy. It needs no CPU backend, so it works even
+        when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves
+        only an accelerator backend initialized, which makes it the recommended
+        choice on GPU. A :class:`jax.Device` or
         platform name like ``"cpu"`` commits the draws to that device instead
         (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
         the CPU backend is not initialized). With ``batch_size`` set on an
@@ -241,11 +249,11 @@ def forecast(
 
     Returns
     -------
-    Num[Array, " sample *batch future obs"] | Num[np.ndarray, " sample *batch future obs"]
+    Num[Array, " sample *batch future obs"]
         Forecast samples over the ``future = duration - t`` horizon (floating
         point for continuous observations, integer for discrete/count models
-        built with :func:`~numpyro_forecast.functional.models.predict_glm`; a
-        NumPy array when ``device`` resolves to ``"host"``).
+        built with :func:`~numpyro_forecast.functional.models.predict_glm`;
+        committed to host memory when ``device`` resolves to ``"host"``).
 
     Raises
     ------
@@ -299,7 +307,7 @@ def predict_in_sample(
     batch_size: int | None = None,
     parallel: bool = True,
     device: jax.Device | str | None = None,
-) -> Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]:
+) -> Num[Array, " sample *batch time obs"]:
     """Sample the in-sample posterior predictive of the ``obs`` site.
 
     Runs ``Predictive`` with the in-sample ``covariates`` and the supplied posterior
@@ -329,11 +337,14 @@ def predict_in_sample(
         ``batch_size``.
     device
         Where each chunk of draws is placed as soon as it is drawn and where
-        the stitched result lives. ``"host"`` copies every chunk to host
-        memory with :func:`jax.device_get` and returns a NumPy array; it needs
-        no CPU backend, so it works even when ``numpyro.set_platform("cuda")``
-        (or ``jax_platforms``) leaves only an accelerator backend initialized,
-        which makes it the recommended choice on GPU. A :class:`jax.Device` or
+        the stitched result lives. ``"host"`` commits every chunk to host
+        memory and returns a :class:`jax.Array` whose sharding carries a host
+        memory kind (``"pinned_host"`` where the backend offers it), so nothing
+        of the result occupies accelerator memory; call :func:`numpy.asarray`
+        on it for a plain NumPy copy. It needs no CPU backend, so it works even
+        when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves
+        only an accelerator backend initialized, which makes it the recommended
+        choice on GPU. A :class:`jax.Device` or
         platform name like ``"cpu"`` commits the draws to that device instead
         (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
         the CPU backend is not initialized). With ``batch_size`` set on an
@@ -347,9 +358,9 @@ def predict_in_sample(
 
     Returns
     -------
-    Num[Array, " sample *batch time obs"] | Num[np.ndarray, " sample *batch time obs"]
-        In-sample posterior-predictive draws of the ``obs`` site (a NumPy
-        array when ``device`` resolves to ``"host"``).
+    Num[Array, " sample *batch time obs"]
+        In-sample posterior-predictive draws of the ``obs`` site (committed to
+        host memory when ``device`` resolves to ``"host"``).
     """
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:

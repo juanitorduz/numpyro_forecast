@@ -22,7 +22,7 @@ from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.functional import Horizon, forecast, predict, time_series
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import _api_canary
-from tests.conftest import rw_model
+from tests.conftest import assert_host_resident, rw_model
 
 pytest.importorskip("blackjax")
 
@@ -342,12 +342,12 @@ def test_pathfinder_samples_chunked_matches_unchunked_shape() -> None:
         assert bool(jnp.all(jnp.isfinite(chunked[name])))
 
 
-def test_pathfinder_samples_device_host_returns_numpy() -> None:
+def test_pathfinder_samples_device_host_contract() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)
     fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
     hosted = pathfinder_samples(random.PRNGKey(2), fit, 20, device="host")
-    assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
+    assert_host_resident(hosted)
     assert hosted["sigma"].shape == (20,)
 
 
@@ -632,7 +632,7 @@ def test_multipathfinder_samples_device_host_contract(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
     hosted = multipathfinder_samples(random.PRNGKey(2), multipathfinder_fit, 20, device="host")
-    assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
+    assert_host_resident(hosted)
     assert hosted["sigma"].shape == (20,)
 
 

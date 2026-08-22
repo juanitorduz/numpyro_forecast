@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -28,7 +28,7 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional._offload import _oom_advice, _stitch_chunks, _transfer
+from numpyro_forecast.functional._offload import _leaf_view, _oom_advice
 from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -109,16 +109,18 @@ def _chunked_cell_metric(
     pred: "Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch']",
     truth: "Float[Array, ' *batch'] | Float[np.ndarray, ' *batch']",
     batch_size: int,
-) -> "np.floating":
+) -> Array:
     """Average a per-cell metric kernel over fixed-size cell chunks.
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
     (:func:`~numpyro_forecast.functional.prediction._chunk_indices`), so the
-    jitted ``kernel`` compiles once; each block's per-cell values are moved to
-    host memory before the next block runs, bounding accelerator memory by
+    jitted ``kernel`` compiles once; each block's per-cell values are staged on
+    the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
-    is never chunked.
+    is never chunked. Inputs are normalized with
+    :func:`~numpyro_forecast.functional._offload._leaf_view` so a host-committed
+    panel is sliced on the host rather than dragged back onto the accelerator.
 
     Parameters
     ----------
@@ -134,40 +136,28 @@ def _chunked_cell_metric(
 
     Returns
     -------
-    np.floating
-        The host-side mean of the per-cell metric values.
+    Array
+        The mean of the per-cell metric values, as a scalar array.
     """
-    sample = pred.shape[0]
-    pred_flat = pred.reshape(sample, -1)
-    truth_flat = truth.reshape(-1)
+    pred_view = _leaf_view(pred)
+    truth_view = _leaf_view(truth)
+    sample = pred_view.shape[0]
+    pred_flat = pred_view.reshape(sample, -1)
+    truth_flat = truth_view.reshape(-1)
     n_cells = truth_flat.shape[0]
     indices = _chunk_indices(n_cells, batch_size)
     with _oom_advice("metric evaluation", batch_size):
-        chunks = [_transfer(kernel(pred_flat[:, idx], truth_flat[idx]), "host") for idx in indices]
-    values = cast("np.ndarray", _stitch_chunks(chunks, n_cells, "host"))
-    return values.mean()
+        chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
+    values = np.concatenate(chunks, axis=0)[:n_cells]
+    return jnp.asarray(values.mean())
 
 
-@overload
-def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    batch_size: None = None,
-) -> Array: ...
-@overload
-def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    batch_size: int,
-) -> "Array | np.floating": ...
 def eval_crps(
     pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
     truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
     *,
     batch_size: int | None = None,
-) -> "Array | np.floating":
+) -> Array:
     """Empirical CRPS averaged over all data elements.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
@@ -190,8 +180,8 @@ def eval_crps(
 
     Returns
     -------
-    Array | np.floating
-        The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
+    Array
+        The mean empirical CRPS as a scalar array.
     """
     if batch_size is None or batch_size >= truth.size:
         return _eval_crps_single_pass(pred, truth)
@@ -207,29 +197,13 @@ def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
     return (truth >= lo) & (truth <= hi)
 
 
-@overload
-def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    alpha: float = ...,
-    batch_size: None = None,
-) -> Array: ...
-@overload
-def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    alpha: float = ...,
-    batch_size: int,
-) -> "Array | np.floating": ...
 def eval_coverage(
     pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
     truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
     batch_size: int | None = None,
-) -> "Array | np.floating":
+) -> Array:
     """Empirical coverage of the central ``alpha`` prediction interval.
 
     The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
@@ -256,9 +230,9 @@ def eval_coverage(
 
     Returns
     -------
-    Array | np.floating
+    Array
         The fraction of ground truth inside the central ``alpha`` interval, as
-        a scalar (a NumPy scalar when chunked).
+        a scalar array.
 
     Raises
     ------

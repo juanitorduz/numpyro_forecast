@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import numpyro
 import pytest
 from example_models import make_hierarchical_model, univariate_model
@@ -18,7 +17,7 @@ from numpyro_forecast.features import fourier_features
 from numpyro_forecast.functional import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
-PosteriorFactory = Callable[[Array, ForecastModel, Array, Array], dict[str, "Array | np.ndarray"]]
+PosteriorFactory = Callable[[Array, ForecastModel, Array, Array], dict[str, Array]]
 
 
 def _svi_posterior_factory(num_steps: int, num_samples: int = 100) -> PosteriorFactory:
@@ -30,7 +29,7 @@ def _svi_posterior_factory(num_steps: int, num_samples: int = 100) -> PosteriorF
 
     def draw(
         rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-    ) -> dict[str, "Array | np.ndarray"]:
+    ) -> dict[str, Array]:
         key_fit, key_draw = random.split(rng_key)
         guide = AutoNormal(model)
         svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
