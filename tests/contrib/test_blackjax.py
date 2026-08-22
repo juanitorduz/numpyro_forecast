@@ -4,8 +4,10 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 (which must not import optional dependencies, invariant I8) never runs them.
 """
 
+import dataclasses
 import pickle
 from collections import namedtuple
+from typing import cast
 
 import jax.numpy as jnp
 import numpy as np
@@ -28,8 +30,11 @@ from numpyro_forecast.contrib.blackjax import (
     BlackjaxCustomKernel,
     BlackjaxMCLMCKernel,
     BlackjaxNUTSKernel,
+    MultiPathfinderFit,
     PathfinderFit,
+    fit_multipathfinder,
     fit_pathfinder,
+    multipathfinder_samples,
     pathfinder_samples,
 )
 
@@ -513,6 +518,416 @@ def test_fit_pathfinder_maxiter_passthrough(monkeypatch: pytest.MonkeyPatch) -> 
         maxiter=17,
     )
     assert captured["maxiter"] == 17
+
+
+# --- Multi-path Pathfinder ------------------------------------------------
+
+# Shared cheap settings for the multipath tests below: a short random walk and
+# the smallest num_paths/num_elbo_samples/maxiter that still exercise the API.
+_MULTIPATH_T = 24
+_MULTIPATH_NUM_PATHS = 2
+_MULTIPATH_NUM_ELBO_SAMPLES = 50
+_MULTIPATH_MAXITER = 50
+
+
+@pytest.fixture(scope="module")
+def multipathfinder_fit() -> MultiPathfinderFit:
+    """A cheap multipath fit shared by tests that only inspect its outputs.
+
+    Only 2 paths and 50 ELBO samples reliably push ``pareto_k`` above the 0.7
+    warning threshold on this toy posterior; that ``UserWarning`` is expected
+    here (a byproduct of the cheap settings, not something this fixture tests)
+    and is captured so it does not leak into the test-output summary.
+    """
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    covariates = _empty_covariates(_MULTIPATH_T)
+    with pytest.warns(UserWarning, match="pareto"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
+    return fit
+
+
+def test_multipathfinder_api_canary() -> None:
+    """Pin the exact ``blackjax.vi.multipathfinder`` symbols this module relies on."""
+    import inspect
+
+    import blackjax.vi.multipathfinder as multipathfinder_module
+
+    _api_canary(
+        "blackjax.vi.multipathfinder",
+        ["multi_approximate", "psis_weights", "MultipathfinderState", "as_top_level_api"],
+    )
+    assert multipathfinder_module.MultipathfinderState._fields == (
+        "path_states",
+        "samples",
+        "logp",
+        "logq",
+    )
+    params = inspect.signature(multipathfinder_module.multi_approximate).parameters
+    for name in ("maxcor", "maxls", "gtol", "ftol", "maxiter"):
+        assert name in params
+
+
+def test_stable_bfgs_patch_covers_multipath_route() -> None:
+    """``_ensure_stable_bfgs_sample`` also covers the multipath route.
+
+    ``multi_approximate`` calls ``approximate``/``sample`` imported from
+    ``blackjax.vi.pathfinder``, so those two functions' ``__globals__`` are the
+    same dict that :func:`fit_pathfinder`'s patch already targets.
+    """
+    import blackjax.vi.multipathfinder as multipathfinder_module
+
+    from numpyro_forecast.contrib.blackjax import (
+        _ensure_stable_bfgs_sample,
+        _stable_bfgs_sample,
+    )
+
+    _ensure_stable_bfgs_sample()
+    assert multipathfinder_module.approximate.__globals__["bfgs_sample"] is _stable_bfgs_sample
+    assert multipathfinder_module.sample.__globals__["bfgs_sample"] is _stable_bfgs_sample
+
+
+def test_fit_multipathfinder_basic(multipathfinder_fit: MultiPathfinderFit) -> None:
+    from jax.scipy.special import logsumexp
+
+    fit = multipathfinder_fit
+    assert len(fit.elbos) == _MULTIPATH_NUM_PATHS
+    assert bool(jnp.all(jnp.isfinite(jnp.asarray(fit.elbos))))
+    assert isinstance(fit.pareto_k, float)
+    assert bool(jnp.isfinite(jnp.asarray(fit.pareto_k)))
+    pool_size = _MULTIPATH_NUM_PATHS * _MULTIPATH_NUM_ELBO_SAMPLES
+    assert fit.log_weights.shape == (pool_size,)
+    assert float(logsumexp(fit.log_weights)) == pytest.approx(0.0, abs=1e-4)
+
+
+def test_multipathfinder_samples_constrained_support(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    post = multipathfinder_samples(random.PRNGKey(2), multipathfinder_fit, 200)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+    assert bool(jnp.all(post["drift_scale"] > 0.0))
+    assert post["sigma"].shape == (200,)
+
+
+def test_multipathfinder_samples_chunked_matches_unchunked_shape(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """Chunked and unchunked multipath draws agree on shape (values differ: distinct subkeys)."""
+    unchunked = multipathfinder_samples(random.PRNGKey(2), multipathfinder_fit, 10)
+    chunked = multipathfinder_samples(random.PRNGKey(2), multipathfinder_fit, 10, batch_size=4)
+    assert set(chunked) == set(unchunked)
+    for name in unchunked:
+        assert chunked[name].shape == unchunked[name].shape
+        assert bool(jnp.all(jnp.isfinite(chunked[name])))
+
+
+def test_multipathfinder_samples_device_host_contract(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    hosted = multipathfinder_samples(random.PRNGKey(2), multipathfinder_fit, 20, device="host")
+    assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
+    assert hosted["sigma"].shape == (20,)
+
+
+def test_multipathfinder_samples_reproducible_per_key(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """Resampling is deterministic in the key: same key repeats, different key differs."""
+    key = random.PRNGKey(7)
+    first = multipathfinder_samples(key, multipathfinder_fit, 50)
+    second = multipathfinder_samples(key, multipathfinder_fit, 50)
+    for name in first:
+        assert bool(jnp.array_equal(first[name], second[name]))
+
+    different = multipathfinder_samples(random.PRNGKey(8), multipathfinder_fit, 50)
+    assert any(not bool(jnp.array_equal(first[name], different[name])) for name in first)
+
+
+def test_multipathfinder_samples_elbo_exceeds_pool_size(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """``resample="elbo"`` draws fresh per-path samples, so the fit-time pool is no cap.
+
+    The fixture's stored pool holds only ``num_paths * num_elbo_samples = 100``
+    draws; asking for 500 used to duplicate them, and now draws 500 fresh ones
+    per path instead.
+    """
+    pool_size = _MULTIPATH_NUM_PATHS * _MULTIPATH_NUM_ELBO_SAMPLES
+    num_samples = 5 * pool_size
+    post = multipathfinder_samples(
+        random.PRNGKey(2), multipathfinder_fit, num_samples, resample="elbo"
+    )
+    assert post["sigma"].shape == (num_samples,)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+    assert bool(jnp.all(post["drift_scale"] > 0.0))
+    for leaf in post.values():
+        assert bool(jnp.all(jnp.isfinite(leaf)))
+    # Fresh draws: every one of the 500 is distinct, unlike pool resampling.
+    assert len(np.unique(np.asarray(post["drift"]), axis=0)) == num_samples
+
+
+def test_multipathfinder_samples_psis_reproducible_per_key(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """Explicit PSIS resampling works and is deterministic in the key.
+
+    The cheap fixture's importance weights are degenerate, so the sampling-time
+    ``pareto_k`` warning is expected here and captured rather than left to leak.
+    """
+    key = random.PRNGKey(7)
+    with pytest.warns(UserWarning, match="pareto"):
+        first = multipathfinder_samples(key, multipathfinder_fit, 50, resample="psis")
+    with pytest.warns(UserWarning, match="pareto"):
+        second = multipathfinder_samples(key, multipathfinder_fit, 50, resample="psis")
+    assert first["sigma"].shape == (50,)
+    assert bool(jnp.all(first["sigma"] > 0.0))
+    for name in first:
+        assert bool(jnp.array_equal(first[name], second[name]))
+
+
+def test_multipathfinder_samples_auto_follows_pareto_k(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    """``resample="auto"`` resolves to ``"elbo"`` above the 0.7 gate and ``"psis"`` below it."""
+    assert multipathfinder_fit.pareto_k > 0.7
+    key = random.PRNGKey(11)
+
+    auto_high = multipathfinder_samples(key, multipathfinder_fit, 40)
+    elbo = multipathfinder_samples(key, multipathfinder_fit, 40, resample="elbo")
+    for name in elbo:
+        assert bool(jnp.array_equal(auto_high[name], elbo[name]))
+
+    trusted = dataclasses.replace(multipathfinder_fit, pareto_k=0.3)
+    with pytest.warns(UserWarning, match="pareto"):
+        auto_low = multipathfinder_samples(key, trusted, 40)
+    with pytest.warns(UserWarning, match="pareto"):
+        psis = multipathfinder_samples(key, trusted, 40, resample="psis")
+    for name in psis:
+        assert bool(jnp.array_equal(auto_low[name], psis[name]))
+
+
+def test_multipathfinder_samples_invalid_resample_raises(
+    multipathfinder_fit: MultiPathfinderFit,
+) -> None:
+    with pytest.raises(ValueError, match="resample must be one of"):
+        multipathfinder_samples(
+            random.PRNGKey(2),
+            multipathfinder_fit,
+            10,
+            resample="nope",  # ty: ignore[invalid-argument-type]
+        )
+
+
+def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderFit) -> None:
+    posterior = multipathfinder_samples(random.PRNGKey(3), multipathfinder_fit, 100)
+    forecast_samples = forecast(
+        random.PRNGKey(4),
+        rw_model,
+        posterior,
+        multipathfinder_fit.data,
+        _empty_covariates(30),
+    )
+    assert forecast_samples.shape == (100, 6, 1)
+    assert bool(jnp.all(jnp.isfinite(forecast_samples)))
+
+
+def test_multipathfinder_fit_pickle_round_trip(multipathfinder_fit: MultiPathfinderFit) -> None:
+    restored = pickle.loads(pickle.dumps(multipathfinder_fit))  # noqa: S301 - our own data
+    assert isinstance(restored, MultiPathfinderFit)
+    # The restored fit still resamples a valid constrained posterior.
+    post = multipathfinder_samples(random.PRNGKey(5), restored, 50)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+    assert bool(jnp.all(post["drift_scale"] > 0.0))
+
+
+def test_fit_multipathfinder_knob_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
+    """maxcor/maxls/gtol/ftol/maxiter reach ``multi_approximate`` (pareto_k warning expected).
+
+    The real ``multi_approximate``/``psis_weights`` still run behind the spy, so
+    the same cheap-settings ``pareto_k > 0.7`` warning as the module fixture
+    fires here too; it is captured rather than left to leak into test output.
+    """
+    import blackjax.vi.multipathfinder as multipathfinder_module
+
+    captured: dict[str, object] = {}
+    real_multi_approximate = multipathfinder_module.multi_approximate
+
+    def spy_multi_approximate(*args: object, **kwargs: object) -> object:
+        captured["maxcor"] = kwargs["maxcor"]
+        captured["maxls"] = kwargs["maxls"]
+        captured["gtol"] = kwargs["gtol"]
+        captured["ftol"] = kwargs["ftol"]
+        captured["maxiter"] = kwargs["maxiter"]
+        return real_multi_approximate(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(multipathfinder_module, "multi_approximate", spy_multi_approximate)
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.warns(UserWarning, match="pareto"):
+        fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=41,
+            maxcor=6,
+            maxls=222,
+            gtol=1e-6,
+            ftol=1e-4,
+        )
+    assert captured == {
+        "maxcor": 6,
+        "maxls": 222,
+        "gtol": 1e-6,
+        "ftol": 1e-4,
+        "maxiter": 41,
+    }
+
+
+def test_fit_pathfinder_maxcor_gtol_maxls_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
+    """maxcor/maxls/gtol reach ``approximate``, and ``init_params`` is its positional position."""
+    import blackjax
+    from numpyro.infer.util import initialize_model
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    param_info, _potential_fn_gen, _postprocess_fn, _ = initialize_model(
+        random.PRNGKey(9),
+        rw_model,
+        dynamic_args=True,
+        model_args=(covariates, data),
+    )
+    init_params = param_info.z
+
+    captured: dict[str, object] = {}
+    real_approximate = blackjax.vi.pathfinder.approximate
+
+    def spy_approximate(*args: object, **kwargs: object) -> object:
+        captured["position"] = args[2]
+        captured["maxcor"] = kwargs["maxcor"]
+        captured["maxls"] = kwargs["maxls"]
+        captured["gtol"] = kwargs["gtol"]
+        return real_approximate(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(blackjax.vi.pathfinder, "approximate", spy_approximate)
+
+    fit_pathfinder(
+        random.PRNGKey(1),
+        rw_model,
+        data,
+        covariates,
+        num_elbo_samples=50,
+        maxiter=50,
+        maxcor=6,
+        maxls=222,
+        gtol=1e-6,
+        init_params=init_params,
+    )
+
+    assert captured["maxcor"] == 6
+    assert captured["maxls"] == 222
+    assert captured["gtol"] == 1e-6
+    position = captured["position"]
+    assert isinstance(position, dict)
+    assert set(position) == set(init_params)
+    typed_position = cast("dict[str, Array]", position)
+    for name, value in init_params.items():
+        assert bool(jnp.array_equal(typed_position[name], value))
+
+
+def test_fit_multipathfinder_num_paths_one() -> None:
+    """A single-path multipath fit runs and yields a pool-sized weight vector.
+
+    No equality with the single-path :func:`fit_pathfinder` API is asserted: the
+    PRNG streams differ by construction (per-path init keys vs. a single init
+    key), so their draws are not expected to match. A single path with only 50
+    ELBO samples reliably trips the ``pareto_k > 0.7`` warning, so it is
+    captured here rather than left to leak into test output.
+    """
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.warns(UserWarning, match="pareto"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=1,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
+    assert fit.log_weights.shape == (_MULTIPATH_NUM_ELBO_SAMPLES,)
+    post = multipathfinder_samples(random.PRNGKey(2), fit, 50)
+    assert bool(jnp.all(post["sigma"] > 0.0))
+    assert bool(jnp.all(post["drift_scale"] > 0.0))
+
+
+def test_fit_multipathfinder_invalid_num_paths_raises() -> None:
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.raises(ValueError, match="num_paths must be positive"):
+        fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=0,
+        )
+
+
+def test_fit_multipathfinder_high_dim_finite_elbos() -> None:
+    """Regression: a 300-step random walk gets finite ELBOs on every multipath path.
+
+    Multipath analogue of ``test_fit_pathfinder_high_dim_finite_elbo``: end-to-end
+    proof the stable-bfgs patch holds on the multipath route too (upstream floors
+    every ELBO at ``-inf`` beyond a few hundred parameters). The high-dimensional
+    posterior reliably pushes ``pareto_k`` above the 0.7 warning threshold at
+    these cheap settings, so that incidental warning is captured here.
+    """
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (300, 1)), axis=-2)
+    with pytest.warns(UserWarning, match="pareto"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            reparam_model,
+            data,
+            _empty_covariates(300),
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
+    assert bool(jnp.all(jnp.isfinite(jnp.asarray(fit.elbos))))
+
+
+def test_fit_multipathfinder_warns_on_high_pareto_k(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A high ``pareto_k`` from PSIS resampling warns (call-time attribute lookup)."""
+    import blackjax.vi.multipathfinder as multipathfinder_module
+
+    pool_size = _MULTIPATH_NUM_PATHS * _MULTIPATH_NUM_ELBO_SAMPLES
+    uniform_log_weights = -jnp.log(float(pool_size)) * jnp.ones(pool_size)
+
+    def fake_psis_weights(state: object) -> tuple[Array, Array]:
+        return uniform_log_weights, jnp.asarray(0.9)
+
+    monkeypatch.setattr(multipathfinder_module, "psis_weights", fake_psis_weights)
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.warns(UserWarning, match="pareto"):
+        fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=_MULTIPATH_NUM_PATHS,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
 
 
 def test_backtest_accepts_a_forecast_fn_closure() -> None:
