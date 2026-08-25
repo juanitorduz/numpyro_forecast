@@ -691,23 +691,30 @@ def pathfinder_samples(
     device
         Where each chunk of draws is moved as soon as it is drawn; see
         :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
-        for the JAX rule that arithmetic mixing a host-committed result with a
-        device-resident array raises rather than running on the accelerator.
+        for the pinned fallback when the JAX CPU backend is not initialized and
+        for the rules on mixing a host-committed result with other arrays.
 
     Returns
     -------
     dict[str, Array]
         Posterior samples of the latent sites, sample axis leading (leaves
-        committed to host memory when ``device`` resolves to ``"host"``).
+        committed to the CPU device, or to pinned host memory in the fallback,
+        when ``device`` is ``"host"``).
 
     Raises
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
     RuntimeError
-        If ``device`` resolves to ``"host"`` and the array's device exposes no
-        host memory kind (see
+        If the pinned fallback is taken and the array's device exposes no host
+        memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+    Warns
+    -----
+    UserWarning
+        If ``device`` is ``"host"`` or ``"cpu"`` and the JAX CPU backend is not
+        initialized, so the draws fall back to pinned host memory.
     """
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
@@ -1052,14 +1059,15 @@ def multipathfinder_samples(
     device
         Where each chunk of draws is moved as soon as it is drawn; see
         :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
-        for the JAX rule that arithmetic mixing a host-committed result with a
-        device-resident array raises rather than running on the accelerator.
+        for the pinned fallback when the JAX CPU backend is not initialized and
+        for the rules on mixing a host-committed result with other arrays.
 
     Returns
     -------
     dict[str, Array]
         Posterior samples of the latent sites, sample axis leading (leaves
-        committed to host memory when ``device`` resolves to ``"host"``).
+        committed to the CPU device, or to pinned host memory in the fallback,
+        when ``device`` is ``"host"``).
 
     Raises
     ------
@@ -1067,8 +1075,8 @@ def multipathfinder_samples(
         If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
         not one of ``"auto"``, ``"psis"``, ``"elbo"``.
     RuntimeError
-        If ``device`` resolves to ``"host"`` and the array's device exposes no
-        host memory kind (see
+        If the pinned fallback is taken and the array's device exposes no host
+        memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Warns
@@ -1076,7 +1084,9 @@ def multipathfinder_samples(
     UserWarning
         In PSIS mode, if the ``pareto_k`` recomputed on this call's fresh draws
         exceeds ``0.7``. This is a separate diagnostic from ``fit.pareto_k``,
-        which is computed once over the pool stored at fit time.
+        which is computed once over the pool stored at fit time. Also if
+        ``device`` is ``"host"`` or ``"cpu"`` and the JAX CPU backend is not
+        initialized, so the draws fall back to pinned host memory.
     """
     _require_positive_num_samples(num_samples)
     if resample not in ("auto", "psis", "elbo"):

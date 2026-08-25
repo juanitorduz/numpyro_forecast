@@ -21,6 +21,7 @@ from numpyro_forecast.functional import (
     predict_in_sample,
     time_series,
 )
+from numpyro_forecast.functional._offload import _host_sharding
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
 # ---------------------------------------------------------------------------
@@ -93,16 +94,42 @@ def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleName
 
 
 _HOST_MEMORY_KINDS = ("pinned_host", "unpinned_host")
-"""Host memory kinds a ``device="host"`` result may carry (see ``_offload._host_memory_kind``)."""
+"""Host memory kinds the pinned ``device="host"`` fallback may carry (``_offload._host_memory_kind``)."""
 
 
 def assert_host_resident(x: object) -> None:
-    """Assert every leaf of ``x`` is a jax Array committed to host memory.
+    """Assert every leaf of ``x`` is a jax Array committed to the CPU backend device.
 
     The host-offload contract: ``device="host"`` keeps results jax-native but
-    off the accelerator, so each leaf must be a :class:`jax.Array` whose
-    sharding carries a host memory kind. The memory-kind check *is* the
-    "nothing lives in device memory" check.
+    in pageable host memory, so each leaf must be a :class:`jax.Array` committed
+    to ``jax.devices("cpu")[0]`` with the plain ``"device"`` memory kind (the
+    pinned fallback has its own check, :func:`assert_pinned_host_resident`).
+
+    On a CPU-only machine ``committed`` is what separates a host result from a
+    ``device=None`` one: both live on the CPU device, but only the offloaded
+    result is committed. Committedness propagates through gathers, jitted calls,
+    and concatenation, so a stage *fed* a committed posterior returns committed
+    arrays even with ``device=None``; for those stages a per-chunk transfer spy
+    (see ``test_host_pipeline.py``) is the strong signal, not this helper.
+    """
+    cpu = jax.devices("cpu")[0]
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, jax.Array), f"expected a jax.Array, got {type(leaf)}"
+        assert leaf.committed, "leaf is not committed, so it is not a host-offloaded result"
+        assert leaf.devices() == {cpu}, f"leaf lives on {leaf.devices()}, not the CPU device"
+        assert leaf.sharding.memory_kind == "device", (
+            f"leaf carries memory kind {leaf.sharding.memory_kind!r}, expected pageable 'device'"
+        )
+
+
+def assert_pinned_host_resident(x: object) -> None:
+    """Assert every leaf of ``x`` is a jax Array in a pinned/unpinned host memory kind.
+
+    The contract of the ``device="host"`` *fallback* taken when the JAX CPU
+    backend is not initialized: results stay off the accelerator by living in
+    its host memory kind on the accelerator's own device.
     """
     leaves = jax.tree_util.tree_leaves(x)
     assert leaves, "expected at least one array leaf"
@@ -111,6 +138,20 @@ def assert_host_resident(x: object) -> None:
         assert leaf.sharding.memory_kind in _HOST_MEMORY_KINDS, (
             f"leaf lives in memory kind {leaf.sharding.memory_kind!r}, not host memory"
         )
+
+
+def commit_host(x: Array, kind: str) -> Array:
+    """Commit ``x`` the way one of the two ``device="host"`` paths would.
+
+    ``"cpu"`` commits to the CPU backend device (the primary path), ``"pinned"``
+    to the host memory kind of ``x``'s own device (the fallback path).
+    """
+    if kind == "cpu":
+        return jax.device_put(x, jax.devices("cpu")[0])
+    if kind == "pinned":
+        return jax.device_put(x, _host_sharding(x))
+    msg = f"unknown host commit kind {kind!r}"
+    raise ValueError(msg)
 
 
 @pytest.fixture

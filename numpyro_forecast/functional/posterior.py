@@ -127,19 +127,24 @@ def draw_posterior(
         are reproducible per ``(rng_key, batch_size)``.
     device
         Where each chunk of draws is moved as soon as it is drawn. ``"host"``
-        commits every leaf to host memory and returns :class:`jax.Array` leaves
-        whose sharding carries a host memory kind (``"pinned_host"`` where the
-        backend offers it), so nothing of the result occupies accelerator
-        memory; it needs no CPU backend, so it works even when
-        ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves only an
-        accelerator backend initialized. A :class:`jax.Device` or platform
-        name like ``"cpu"`` commits the draws to that device instead
-        (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
-        the CPU backend is not initialized). ``None`` keeps everything on the
-        default device. ``device`` never changes the draw values. Arithmetic
-        that mixes a host-committed leaf with a device-resident array raises
-        in JAX rather than running on the accelerator, so feed a host-committed
-        posterior straight into
+        commits every leaf to the CPU backend device (``jax.devices("cpu")[0]``,
+        pageable host RAM) and returns committed :class:`jax.Array` leaves, so
+        nothing of the result occupies accelerator memory; ``np.asarray`` on
+        such a leaf is a zero-copy view. When the CPU backend is not
+        initialized (for example after ``numpyro.set_platform("cuda")``), it
+        falls back to the accelerator's pinned host memory kind with a
+        :class:`UserWarning`; on CUDA that pool is capped by
+        ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB`` (64 GB by default) and fragments,
+        so initialize both backends with ``numpyro.set_platform("cuda,cpu")``
+        for large panels (``"pinned_host"`` requests that fallback explicitly).
+        A :class:`jax.Device` or platform name like ``"cpu"`` commits the draws
+        to that device instead (``"cpu"`` is the same as ``"host"``). ``None``
+        keeps everything on the default device. ``device`` never changes the
+        draw values. A host-committed result is not a drop-in replacement for
+        a device array in your own ``jnp`` code: mixed with an uncommitted
+        array an op runs on the CPU and returns a CPU-committed array, mixed
+        with an accelerator-committed array it raises, and a pinned fallback
+        result raises on any mix. Feed a host-committed posterior straight into
         :func:`~numpyro_forecast.functional.prediction.forecast`,
         :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, or
         :func:`~numpyro_forecast.convert.to_datatree` (all of which already
@@ -150,16 +155,25 @@ def draw_posterior(
     -------
     dict[str, Array]
         Posterior samples of the latent sites, sample axis leading (leaves
-        committed to host memory when ``device`` resolves to ``"host"``).
+        committed to the CPU device, or to pinned host memory in the fallback,
+        when ``device`` is ``"host"``).
 
     Raises
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
     RuntimeError
-        If ``device`` resolves to ``"host"`` and the array's device exposes no
-        host memory kind (see
+        If the pinned fallback is taken and the array's device exposes no host
+        memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+    Warns
+    -----
+    UserWarning
+        If ``device`` is ``"host"`` or ``"cpu"`` and the JAX CPU backend is not
+        initialized, so the draws fall back to pinned host memory. Silence it
+        with ``warnings.filterwarnings("ignore", message="the JAX CPU backend is
+        not initialized")`` once the trade-off is understood.
 
     Notes
     -----

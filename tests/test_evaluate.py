@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import rw_model_factory, svi_forecast_fn, svi_in_sample_fn
+from conftest import commit_host, rw_model_factory, svi_forecast_fn, svi_in_sample_fn
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
@@ -28,7 +28,6 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.functional._offload import _host_sharding
 from numpyro_forecast.typing import ForecastFn, InSampleFn
 
 
@@ -185,8 +184,8 @@ def _metric_inputs(n_cells: int = 30) -> tuple[Array, Array]:
 
 
 def _host(x: Array) -> Array:
-    """Commit ``x`` to host memory, the ``device="host"`` offload target."""
-    return jax.device_put(x, _host_sharding(x))
+    """Commit ``x`` to pinned host memory, the ``device="host"`` fallback target."""
+    return commit_host(x, "pinned")
 
 
 @pytest.mark.parametrize(
@@ -199,12 +198,11 @@ def test_unchunked_metrics_accept_host_committed_inputs(
 ) -> None:
     """Every unchunked metric must accept any mix of host-committed/device-resident inputs.
 
-    Mixing a host-committed ``jax.Array`` (e.g. draws sampled with
-    ``device="host"``) with a device-resident one inside a fused ``jnp``/jitted
-    kernel used to raise (``memory_space of all inputs ... must be the
-    same``); each metric now moves a host-committed operand to device memory
-    first, so any mix produces the same value as the fully device-resident
-    call.
+    Mixing a pinned ``jax.Array`` (the ``device="host"`` fallback) with a
+    device-resident one inside a fused ``jnp``/jitted kernel used to raise
+    (``memory_space of all inputs ... must be the same``); each metric now
+    moves a host-resident operand to device memory first, so any mix produces
+    the same value as the fully device-resident call.
     """
     pred, truth = _metric_inputs()
     pred_in = _host(pred) if commit_pred else pred
@@ -253,6 +251,27 @@ def test_chunked_metrics_accept_host_committed_inputs(
         eval_coverage(pred_in, truth_in, batch_size=7),
         eval_coverage(pred, truth),
         rtol=1e-6,
+    )
+
+
+def test_metrics_accept_cpu_committed_inputs_under_accelerator_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A CPU-committed ``pred`` (the primary ``device="host"`` result) scores unchanged.
+
+    On a CPU-only machine the move in ``_device_view`` is a same-device no-op,
+    so this pins the branch structurally: with the default backend reported as
+    an accelerator, the metric kernels must still accept the operand and
+    reproduce the plain value (both fused and chunked paths).
+    """
+    pred, truth = _metric_inputs()
+    pred_in = commit_host(pred, "cpu")
+    monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
+
+    np.testing.assert_allclose(eval_mae(pred_in, truth), eval_mae(pred, truth))
+    np.testing.assert_allclose(eval_crps(pred_in, truth), eval_crps(pred, truth))
+    np.testing.assert_allclose(
+        eval_crps(pred_in, truth, batch_size=7), eval_crps(pred, truth), rtol=1e-6
     )
 
 

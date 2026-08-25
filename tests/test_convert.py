@@ -675,7 +675,11 @@ def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> 
 def test_to_datatree_forwards_predictive_device(
     monkeypatch: pytest.MonkeyPatch, predictive_device: str | None
 ) -> None:
-    """Both predictive calls receive the predictive_device (default ``"host"``)."""
+    """Both predictive calls receive the *resolved* predictive_device (default ``"host"``).
+
+    ``to_datatree`` resolves the placement once (``"host"`` becomes the CPU
+    backend device) and hands the same value to both drivers.
+    """
     import numpyro_forecast.convert as convert_mod
 
     captured: dict[str, object] = {}
@@ -709,8 +713,9 @@ def test_to_datatree_forwards_predictive_device(
         to_datatree(
             random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=4
         )
-    assert captured["predict_in_sample"] == predictive_device
-    assert captured["forecast"] == predictive_device
+    expected = None if predictive_device is None else jax.devices("cpu")[0]
+    assert captured["predict_in_sample"] == expected
+    assert captured["forecast"] == expected
 
 
 def test_to_datatree_default_works_without_cpu_backend(
@@ -720,7 +725,9 @@ def test_to_datatree_default_works_without_cpu_backend(
 
     ``numpyro.set_platform("cuda")`` restricts ``jax_platforms`` to cuda only,
     so ``jax.devices("cpu")`` raises. The default ``predictive_device="host"``
-    never resolves a backend, so the export succeeds with no warning.
+    then falls back to pinned host memory: the export must still succeed, and
+    warn exactly once per call (the device is resolved once and handed to both
+    predictive drivers), naming the pinned-pool cap.
     """
     real_devices = jax.devices
 
@@ -732,13 +739,17 @@ def test_to_datatree_default_works_without_cpu_backend(
 
     monkeypatch.setattr(jax, "devices", fail_cpu_devices)
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
         tree = to_datatree(
             random.PRNGKey(7), _model(), posterior, data, covariates, predictive_batch_size=4
         )
     assert "posterior_predictive" in tree.children
     assert "predictions" in tree.children
+    fallback = [r for r in records if "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in str(r.message)]
+    assert len(fallback) == 1, [str(r.message) for r in records]
+    others = [r for r in records if r not in fallback and issubclass(r.category, UserWarning)]
+    assert not others, [str(r.message) for r in others]
 
 
 def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:

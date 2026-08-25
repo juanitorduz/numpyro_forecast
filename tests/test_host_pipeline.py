@@ -1,14 +1,17 @@
 """End-to-end ``device="host"`` pipeline test (spec roadmap, host-offload contract).
 
 ``device="host"`` keeps every result a :class:`jax.Array` while committing it to
-host memory (a ``"pinned_host"``/``"unpinned_host"`` memory kind on the array's
-own device), so nothing of a draw occupies accelerator memory. Every
-host-offload-aware function in the package (``draw_posterior``,
+the CPU backend device (pageable host memory, no pinned-pool cap), so nothing of
+a draw occupies accelerator memory; when the CPU backend is not initialized it
+falls back to a ``"pinned_host"``/``"unpinned_host"`` memory kind on the array's
+own device. Every host-offload-aware function in the package (``draw_posterior``,
 ``predict_in_sample``, ``forecast``, and internally ``to_datatree``) must both
 *produce* such arrays and *accept* them as input, so the output of one stage can
 be fed straight into the next without a device round-trip. Those signatures are
 enforced at *runtime* by the project's jaxtyping import hook, not merely checked
-statically, and the memory kind is enforced by ``assert_host_resident``.
+statically; placement is enforced by ``assert_host_resident`` and, because
+committedness propagates through gathers and jitted calls on a CPU-only machine,
+by a per-chunk transfer spy for the stages fed a committed posterior.
 
 A unit test scoped to a single function (e.g. only ``draw_posterior(...,
 device="host")`` asserting its own output) never exercises the next function in
@@ -16,18 +19,40 @@ the chain, because it never feeds its output onward. Only a full walk through
 ``draw_posterior -> predict_in_sample -> forecast -> to_datatree``, all pinned to
 ``device="host"`` and each stage consuming the previous stage's host-committed
 output, catches a regression anywhere in that chain, and is exactly the scenario
-that matters on GPU, where there may be no CPU backend to fall back to at all.
+that matters on GPU; the fallback walk covers the setup where there is no CPU
+backend at all.
 """
 
+import warnings
+
+import jax
 import jax.numpy as jnp
-from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
+import pytest
+from conftest import (
+    assert_host_resident,
+    assert_pinned_host_resident,
+    empty_covariates,
+    rw_model,
+    svi_guide_params,
+)
 from jax import random
 
 from numpyro_forecast.convert import to_datatree
 from numpyro_forecast.functional import draw_posterior, forecast, predict_in_sample
 
 
-def test_host_pipeline_draw_predict_forecast_datatree(fast_svi: dict[str, int]) -> None:
+def _is_cpu_target(device: object) -> bool:
+    """Whether a ``jax.device_put`` target is the CPU device or a sharding on it."""
+    if isinstance(device, jax.Device):
+        return device.platform == "cpu"
+    if isinstance(device, jax.sharding.SingleDeviceSharding):
+        return all(d.platform == "cpu" for d in device.device_set)
+    return False
+
+
+def test_host_pipeline_draw_predict_forecast_datatree(
+    fast_svi: dict[str, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Walk ``draw_posterior -> predict_in_sample -> forecast -> to_datatree`` on the host.
 
     Fits the shared random-walk model with plain SVI (``fast_svi``-sized), then
@@ -35,7 +60,11 @@ def test_host_pipeline_draw_predict_forecast_datatree(fast_svi: dict[str, int]) 
     below the draw count so chunking actually runs. Each stage's host-committed
     output is passed directly as the next stage's posterior input: that a
     host-offloaded posterior is *accepted* downstream is itself the contract
-    under test, not just the placement of any single call's result.
+    under test, not just the placement of any single call's result. A spy on
+    ``jax.device_put`` records every CPU-device transfer, so stages 2 and 3
+    are pinned by their per-chunk transfers (one per chunk plus the stitched
+    result) rather than by placement alone, which the committed posterior
+    would satisfy even without ``device="host"``.
     """
     t = 20
     horizon = 6
@@ -43,12 +72,24 @@ def test_host_pipeline_draw_predict_forecast_datatree(fast_svi: dict[str, int]) 
     batch_size = 8
     assert n > batch_size  # otherwise draw_posterior would take the unchunked path
 
+    transfers: list[tuple[int, ...]] = []
+    real_device_put = jax.device_put
+
+    def spy_device_put(x: jax.Array, device: object = None, **kwargs: object) -> jax.Array:
+        if _is_cpu_target(device):
+            transfers.append(tuple(x.shape))
+        return real_device_put(x, device, **kwargs)
+
+    monkeypatch.setattr(jax, "device_put", spy_device_put)
+
     guide, params = svi_guide_params(t, num_steps=fast_svi["num_steps"])
     key_draw, key_in_sample, key_forecast, key_tree = random.split(random.PRNGKey(0), 4)
 
     # Stage 1: draw the posterior, entirely on the host.
     posterior = draw_posterior(key_draw, guide, params, n, batch_size=batch_size, device="host")
     assert_host_resident(posterior)
+    assert next(iter(posterior)) and all(leaf.committed for leaf in posterior.values())
+    transfers.clear()
 
     # Stage 2: in-sample posterior predictive, fed the host posterior from stage 1.
     covariates = empty_covariates(t)
@@ -57,6 +98,8 @@ def test_host_pipeline_draw_predict_forecast_datatree(fast_svi: dict[str, int]) 
     )
     assert_host_resident(in_sample)
     assert in_sample.shape == (n, t, 1)
+    assert transfers == [(batch_size, t, 1), (batch_size, t, 1), (n, t, 1)]
+    transfers.clear()
 
     # Same deterministic recipe svi_guide_params uses internally, so `data` matches
     # what the guide was actually fit on.
@@ -75,6 +118,7 @@ def test_host_pipeline_draw_predict_forecast_datatree(fast_svi: dict[str, int]) 
     )
     assert_host_resident(forecasts)
     assert forecasts.shape == (n, horizon, 1)
+    assert transfers == [(batch_size, horizon, 1), (batch_size, horizon, 1), (n, horizon, 1)]
 
     # Stage 4: to_datatree, once more fed the host posterior; covariates_full extends
     # beyond data so it exercises to_datatree's internal forecast() call too (default
@@ -94,3 +138,61 @@ def test_host_pipeline_draw_predict_forecast_datatree(fast_svi: dict[str, int]) 
     assert post.sizes["draw"] == n
     assert tree["posterior_predictive"].sizes["time"] == t
     assert tree["predictions"].sizes["time"] == horizon
+
+
+def test_host_pipeline_without_cpu_backend_falls_back_to_pinned(
+    fast_svi: dict[str, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same four stages with no CPU backend land in pinned host memory and warn.
+
+    ``numpyro.set_platform("cuda")`` leaves only the accelerator backend, so
+    ``jax.devices("cpu")`` raises; every stage must still complete off the
+    accelerator (pinned host memory kind) and each call site warns about the
+    pinned-pool cap.
+    """
+    t = 20
+    horizon = 6
+    n = 16
+    batch_size = 8
+    real_devices = jax.devices
+
+    def fail_cpu_devices(backend: str | None = None) -> list[jax.Device]:
+        if backend == "cpu":
+            msg = "Unknown backend cpu. Available backends are ['cuda']"
+            raise RuntimeError(msg)
+        return real_devices(backend)
+
+    guide, params = svi_guide_params(t, num_steps=fast_svi["num_steps"])
+    key_draw, key_in_sample, key_forecast, key_tree = random.split(random.PRNGKey(0), 4)
+    monkeypatch.setattr(jax, "devices", fail_cpu_devices)
+
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        posterior = draw_posterior(
+            key_draw, guide, params, n, batch_size=batch_size, device="host"
+        )
+        assert_pinned_host_resident(posterior)
+        in_sample = predict_in_sample(
+            key_in_sample,
+            rw_model,
+            posterior,
+            empty_covariates(t),
+            batch_size=batch_size,
+            device="host",
+        )
+        assert_pinned_host_resident(in_sample)
+        data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
+        forecasts = forecast(
+            key_forecast,
+            rw_model,
+            posterior,
+            data,
+            empty_covariates(t + horizon),
+            batch_size=batch_size,
+            device="host",
+        )
+        assert_pinned_host_resident(forecasts)
+        tree = to_datatree(key_tree, rw_model, posterior, data, empty_covariates(t + horizon))
+    assert tree["predictions"].sizes["time"] == horizon
+    fallback = [r for r in records if "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in str(r.message)]
+    assert len(fallback) == 4  # draw, predict_in_sample, forecast, to_datatree (once)
