@@ -3,9 +3,11 @@
 import types
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
+from typing import cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
@@ -21,6 +23,7 @@ from numpyro_forecast.functional import (
     predict_in_sample,
     time_series,
 )
+from numpyro_forecast.functional._offload import _host_sharding
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
 # ---------------------------------------------------------------------------
@@ -93,16 +96,73 @@ def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleName
 
 
 _HOST_MEMORY_KINDS = ("pinned_host", "unpinned_host")
-"""Host memory kinds a ``device="host"`` result may carry (see ``_offload._host_memory_kind``)."""
+"""Host memory kinds an explicit ``device="pinned_host"`` result may carry."""
+
+
+def fail_devices_for(platform: str) -> Callable[[str | None], list[jax.Device]]:
+    """Build a ``jax.devices`` stand-in whose ``platform`` backend is missing.
+
+    Simulates ``numpyro.set_platform("cuda")`` (``jax_platforms`` restricted to
+    the accelerator), where ``jax.devices("cpu")`` raises ``RuntimeError``.
+    """
+    real_devices = jax.devices
+
+    def fake_devices(backend: str | None = None) -> list[jax.Device]:
+        if backend == platform:
+            msg = f"Unknown backend {platform}. Available backends are ['cuda']"
+            raise RuntimeError(msg)
+        return real_devices(backend)
+
+    return fake_devices
 
 
 def assert_host_resident(x: object) -> None:
-    """Assert every leaf of ``x`` is a jax Array committed to host memory.
+    """Assert every leaf of ``x`` is a jax Array committed to the CPU backend device.
 
     The host-offload contract: ``device="host"`` keeps results jax-native but
-    off the accelerator, so each leaf must be a :class:`jax.Array` whose
-    sharding carries a host memory kind. The memory-kind check *is* the
-    "nothing lives in device memory" check.
+    in pageable host memory, so each leaf must be a :class:`jax.Array` committed
+    to ``jax.devices("cpu")[0]`` with the plain ``"device"`` memory kind (the
+    pinned fallback has its own check, :func:`assert_pinned_host_resident`).
+
+    On a CPU-only machine ``committed`` is what separates a host result from a
+    ``device=None`` one: both live on the CPU device, but only the offloaded
+    result is committed. Committedness propagates through gathers, jitted calls,
+    and concatenation, so a stage *fed* a committed posterior returns committed
+    arrays even with ``device=None``; for those stages a per-chunk transfer spy
+    (see ``test_host_pipeline.py``) is the strong signal, not this helper.
+    """
+    cpu = jax.devices("cpu")[0]
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, jax.Array), f"expected a jax.Array, got {type(leaf)}"
+        assert leaf.committed, "leaf is not committed, so it is not a host-offloaded result"
+        assert leaf.devices() == {cpu}, f"leaf lives on {leaf.devices()}, not the CPU device"
+        assert leaf.sharding.memory_kind == "device", (
+            f"leaf carries memory kind {leaf.sharding.memory_kind!r}, expected pageable 'device'"
+        )
+
+
+def assert_numpy_host(x: object) -> None:
+    """Assert every leaf of ``x`` is a NumPy array (pageable host memory).
+
+    The contract of the backend-free ``device="host"`` path taken when the JAX
+    CPU backend is not initialized (and of an explicit ``device="numpy"``):
+    each chunk is copied with ``jax.device_get``, so nothing is pinned and no
+    backend beyond the accelerator's is needed.
+    """
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, np.ndarray), f"expected a NumPy array, got {type(leaf)}"
+
+
+def assert_pinned_host_resident(x: object) -> None:
+    """Assert every leaf of ``x`` is a jax Array in a pinned/unpinned host memory kind.
+
+    The contract of an explicit ``device="pinned_host"`` request: results stay
+    off the accelerator by living in its host memory kind on the accelerator's
+    own device (a pool capped at 64 GB by default on CUDA).
     """
     leaves = jax.tree_util.tree_leaves(x)
     assert leaves, "expected at least one array leaf"
@@ -111,6 +171,20 @@ def assert_host_resident(x: object) -> None:
         assert leaf.sharding.memory_kind in _HOST_MEMORY_KINDS, (
             f"leaf lives in memory kind {leaf.sharding.memory_kind!r}, not host memory"
         )
+
+
+def commit_host(x: Array, kind: str) -> Array:
+    """Commit ``x`` the way one of the two ``device="host"`` paths would.
+
+    ``"cpu"`` commits to the CPU backend device (the primary path), ``"pinned"``
+    to the host memory kind of ``x``'s own device (explicit ``device="pinned_host"``).
+    """
+    if kind == "cpu":
+        return jax.device_put(x, jax.devices("cpu")[0])
+    if kind == "pinned":
+        return jax.device_put(x, _host_sharding(x))
+    msg = f"unknown host commit kind {kind!r}"
+    raise ValueError(msg)
 
 
 @pytest.fixture
@@ -235,8 +309,11 @@ def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
         key_fit, key_post, key_pred = random.split(rng_key, 3)
         state = svi.run(key_fit, num_steps, train_covariates, train_data, progress_bar=False)
         posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
-        return forecast(
-            key_pred, model, posterior, train_data, test_covariates, batch_size=batch_size
+        return cast(
+            "Array",
+            forecast(
+                key_pred, model, posterior, train_data, test_covariates, batch_size=batch_size
+            ),
         )
 
     return forecast_fn
@@ -263,8 +340,9 @@ def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
         key_fit, key_post, key_pred = random.split(rng_key, 3)
         state = svi.run(key_fit, num_steps, train_covariates, train_data, progress_bar=False)
         posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
-        return predict_in_sample(
-            key_pred, model, posterior, train_covariates, batch_size=batch_size
+        return cast(
+            "Array",
+            predict_in_sample(key_pred, model, posterior, train_covariates, batch_size=batch_size),
         )
 
     return in_sample_fn
@@ -322,7 +400,9 @@ def posterior_factory(
             guide = AutoNormal(model)
             svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
             state = svi.run(key_fit, fast_svi["num_steps"], covariates, data, progress_bar=False)
-            return draw_posterior(key_draw, guide, state.params, num_samples)
+            return cast(
+                "dict[str, Array]", draw_posterior(key_draw, guide, state.params, num_samples)
+            )
 
         return draw_svi
 

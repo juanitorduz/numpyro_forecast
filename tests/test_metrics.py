@@ -6,10 +6,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
-from numpyro_forecast.functional._offload import _host_sharding
 from numpyro_forecast.metrics import (
     crps_empirical,
     eval_interval_score,
@@ -94,18 +94,18 @@ def test_crps_accepts_host_committed_inputs(
 ) -> None:
     """``crps_empirical`` must accept any mix of host-committed/device-resident inputs.
 
-    Mixing a host-committed ``jax.Array`` (e.g. draws sampled with
-    ``device="host"``) with a device-resident one inside the fused jitted CRPS
-    kernel used to raise (``memory_space of all inputs ... must be the
-    same``); ``crps_empirical`` now moves a host-committed operand to device
-    memory first, so any mix matches the fully device-resident result.
+    Mixing a pinned ``jax.Array`` (the ``device="host"`` fallback) with a
+    device-resident one inside the fused jitted CRPS kernel used to raise
+    (``memory_space of all inputs ... must be the same``); ``crps_empirical``
+    now moves a host-resident operand to device memory first, so any mix
+    matches the fully device-resident result.
     """
     pred = random.normal(rng_key, (100, 5))
     truth = random.normal(random.PRNGKey(1), (5,))
     expected = crps_empirical(pred, truth)
 
-    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
-    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    pred_in = commit_host(pred, "pinned") if commit_pred else pred
+    truth_in = commit_host(truth, "pinned") if commit_truth else truth
     got = crps_empirical(pred_in, truth_in)
 
     np.testing.assert_allclose(got, expected)
@@ -125,8 +125,8 @@ def test_pinball_accepts_host_committed_inputs(commit_pred: bool, commit_truth: 
     truth = random.normal(random.PRNGKey(1), (5,))
     expected = eval_pinball(pred, truth, quantile=0.3)
 
-    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
-    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    pred_in = commit_host(pred, "pinned") if commit_pred else pred
+    truth_in = commit_host(truth, "pinned") if commit_truth else truth
     got = eval_pinball(pred_in, truth_in, quantile=0.3)
 
     np.testing.assert_allclose(got, expected)
@@ -145,8 +145,8 @@ def test_interval_score_accepts_host_committed_inputs(
     truth = random.normal(random.PRNGKey(1), (5,))
     expected = eval_interval_score(pred, truth, alpha=0.8)
 
-    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
-    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    pred_in = commit_host(pred, "pinned") if commit_pred else pred
+    truth_in = commit_host(truth, "pinned") if commit_truth else truth
     got = eval_interval_score(pred_in, truth_in, alpha=0.8)
 
     np.testing.assert_allclose(got, expected)
@@ -165,11 +165,27 @@ def test_mase_accepts_host_committed_inputs(commit_pred: bool, commit_truth: boo
     truth = random.normal(random.PRNGKey(1), (5, 1))
     expected = mase(pred, truth)
 
-    pred_in = jax.device_put(pred, _host_sharding(pred)) if commit_pred else pred
-    truth_in = jax.device_put(truth, _host_sharding(truth)) if commit_truth else truth
+    pred_in = commit_host(pred, "pinned") if commit_pred else pred
+    truth_in = commit_host(truth, "pinned") if commit_truth else truth
     got = mase(pred_in, truth_in)
 
     np.testing.assert_allclose(got, expected)
+
+
+def test_crps_accepts_cpu_committed_pred_under_accelerator_default(
+    rng_key: Array, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CPU-committed ``pred`` (the primary ``device="host"`` result) scores unchanged.
+
+    Structural coverage of ``_device_view``'s CPU-committed branch: on a
+    CPU-only machine the move is a same-device no-op, but the kernel must
+    accept the operand under an accelerator default backend.
+    """
+    pred = random.normal(rng_key, (100, 5))
+    truth = random.normal(random.PRNGKey(1), (5,))
+    expected = crps_empirical(pred, truth)
+    monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
+    np.testing.assert_allclose(crps_empirical(commit_host(pred, "cpu"), truth), expected)
 
 
 def test_pinball_median_is_half_mae() -> None:
@@ -278,7 +294,7 @@ def test_make_mase_rejects_constant_series() -> None:
 def test_make_mase_accepts_host_committed_train_data() -> None:
     """``make_mase`` itself must accept a host-committed ``train_data``."""
     train = jnp.sin(jnp.arange(12.0))[:, None]
-    train_host = jax.device_put(train, _host_sharding(train))
+    train_host = commit_host(train, "pinned")
     expected_scale = _mase_scale(make_mase(train, seasonality=3))
     got_scale = _mase_scale(make_mase(train_host, seasonality=3))
     assert jnp.allclose(got_scale, expected_scale, atol=1e-6)

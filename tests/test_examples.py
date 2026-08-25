@@ -1,6 +1,7 @@
 """End-to-end smoke tests for the example models."""
 
 from collections.abc import Callable
+from typing import cast
 
 import jax
 import jax.numpy as jnp
@@ -34,7 +35,7 @@ def _svi_posterior_factory(num_steps: int, num_samples: int = 100) -> PosteriorF
         guide = AutoNormal(model)
         svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
         state = svi.run(key_fit, num_steps, covariates, data, progress_bar=False)
-        return draw_posterior(key_draw, guide, state.params, num_samples)
+        return cast("dict[str, Array]", draw_posterior(key_draw, guide, state.params, num_samples))
 
     return draw
 

@@ -6,9 +6,11 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 
 import dataclasses
 import pickle
+import warnings
 from collections import namedtuple
 from typing import cast
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -22,7 +24,7 @@ from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.functional import Horizon, forecast, predict, time_series
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import _api_canary
-from tests.conftest import assert_host_resident, rw_model
+from tests.conftest import assert_host_resident, assert_numpy_host, fail_devices_for, rw_model
 
 pytest.importorskip("blackjax")
 
@@ -348,6 +350,21 @@ def test_pathfinder_samples_device_host_contract() -> None:
     fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
     hosted = pathfinder_samples(random.PRNGKey(2), fit, 20, device="host")
     assert_host_resident(hosted)
+    assert hosted["sigma"].shape == (20,)
+
+
+def test_pathfinder_samples_host_without_cpu_backend_is_numpy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a CPU backend the sampler's ``"host"`` path returns NumPy leaves, silently."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
+    covariates = _empty_covariates(24)
+    fit = fit_pathfinder(random.PRNGKey(1), rw_model, data, covariates, num_elbo_samples=100)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        hosted = pathfinder_samples(random.PRNGKey(2), fit, 20, device="host", batch_size=8)
+    assert_numpy_host(hosted)
     assert hosted["sigma"].shape == (20,)
 
 

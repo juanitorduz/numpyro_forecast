@@ -25,6 +25,7 @@ from jaxtyping import Float, Num
 
 from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.functional import forecast, predict_in_sample
+from numpyro_forecast.functional._offload import _resolve_device
 from numpyro_forecast.functional._validation import _require_covariates_cover_data
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -258,8 +259,9 @@ def to_datatree(
     posterior
         Posterior samples of the latent sites, with a single flattened sample
         axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`). NumPy
-        leaves are accepted directly (e.g. host-offloaded draws).
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
+        Host-committed leaves (the output of ``draw_posterior(...,
+        device="host")``) and NumPy leaves are accepted directly.
     data
         In-sample data with time at axis ``-2``.
     covariates
@@ -296,23 +298,23 @@ def to_datatree(
         Where the predictive draws are moved as they are sampled, forwarded to
         the ``device`` argument of
         :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
-        :func:`~numpyro_forecast.functional.prediction.forecast`. The default
-        ``"host"`` commits every chunk to host memory, returning
-        :class:`jax.Array` values whose sharding carries a host memory kind
-        (``"pinned_host"`` where the backend offers it, the form the tree is
-        built from anyway); it is what bounds accelerator memory when
-        ``predictive_batch_size`` is set, and it needs no CPU backend, so it
-        works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
-        leaves only an accelerator backend initialized. A :class:`jax.Device`
-        or platform name like ``"cpu"`` commits the draws to that device
-        instead; pass ``None`` to keep the draws on the default device
+        :func:`~numpyro_forecast.functional.prediction.forecast`. It is
+        resolved once and the same placement is handed to both. The default
+        ``"host"`` keeps the predictive draws in pageable host memory, which
+        is what bounds accelerator memory when ``predictive_batch_size`` is
+        set: with the JAX CPU backend initialized every chunk is committed to
+        ``jax.devices("cpu")[0]`` (jax Arrays the tree views as NumPy without a
+        copy); without it (for example after ``numpyro.set_platform("cuda")``,
+        or a ``JAX_PLATFORMS`` preset) every chunk is copied with
+        :func:`jax.device_get` (NumPy arrays), so no CPU backend is needed and
+        nothing is pinned. ``"pinned_host"`` uses the accelerator's pinned
+        host memory kind instead (capped at 64 GB by default on CUDA,
+        ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``). A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device
+        (``"cpu"`` warns and takes the NumPy path when the CPU backend is
+        missing); pass ``None`` to keep the draws on the default device
         (chunked compute without per-chunk host transfers, for when the draws
         fit on the accelerator and transfers would dominate runtime).
-        Arithmetic that mixes a host-committed result with a device-resident
-        array raises in JAX rather than running on the accelerator; convert
-        such a result explicitly first with ``np.asarray(x)`` (stays on host)
-        or ``jax.device_put(x, device)`` (moves it to an accelerator) before
-        doing your own array math on it.
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -361,9 +363,16 @@ def to_datatree(
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     RuntimeError
-        If ``predictive_device`` resolves to ``"host"`` and the array's device
+        If ``predictive_device="pinned_host"`` is requested on a device that
         exposes no host memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+    Warns
+    -----
+    UserWarning
+        If ``predictive_device="cpu"`` is requested and the JAX CPU backend is
+        not initialized, so the predictive draws take the NumPy path of
+        ``"host"`` instead (once per call).
 
     Notes
     -----
@@ -423,13 +432,16 @@ def to_datatree(
     )
 
     covariates_insample = covariates[..., :n_time, :]
+    # Resolve once so the two predictive drivers share one placement (and an
+    # unmet explicit "cpu" request warns once per export).
+    resolved_device = _resolve_device(predictive_device)
     predictive = predict_in_sample(
         key_pred,
         model,
         posterior,
         covariates_insample,
         batch_size=predictive_batch_size,
-        device=predictive_device,
+        device=resolved_device,
     )
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_chains(predictive, num_chains)},
@@ -465,7 +477,7 @@ def to_datatree(
             data,
             covariates,
             batch_size=predictive_batch_size,
-            device=predictive_device,
+            device=resolved_device,
         )
         predictions_ds, predictions_constant_ds = _forecast_group_datasets(
             _reshape_chains(forecast_samples, num_chains),

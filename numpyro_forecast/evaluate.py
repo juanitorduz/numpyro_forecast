@@ -379,7 +379,7 @@ class BacktestResult:
     walltime: float
     metrics: dict[str, float]
     train_metrics: dict[str, float] = field(default_factory=dict)
-    prediction: Array | None = None
+    prediction: Array | np.ndarray | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
@@ -615,7 +615,9 @@ def _eval_train_window(
     )
     train_truth = train_data
     if transform is not None:
-        train_pred, train_truth = transform(train_pred, train_truth)
+        # A host forecast closure may return NumPy (no CPU backend); a transform
+        # sees whatever the closure returned, the metrics accept either.
+        train_pred, train_truth = transform(cast("Array", train_pred), train_truth)
     return evaluate_forecast(train_pred, train_truth, metrics=metrics)
 
 
@@ -660,7 +662,7 @@ def _run_window(
     )
 
     if transform is not None:
-        pred, truth = transform(pred, truth)
+        pred, truth = transform(cast("Array", pred), truth)
 
     train_metrics: dict[str, float] = {}
     if eval_train:
