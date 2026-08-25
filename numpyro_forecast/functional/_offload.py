@@ -16,33 +16,38 @@ splitting, and the per-chunk draw/transfer/stitch sequence, so
 :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples` differ only in the
 ``draw_fn`` they supply.
 
-The ``"host"`` target keeps results in host memory while keeping them
-:class:`jax.Array` values. Its primary form commits every chunk to the CPU
-backend device (``jax.devices("cpu")[0]``): pageable host RAM with no cap
-beyond the machine's, and a committed array whose ``np.asarray`` is a zero-copy
-view. When the CPU backend is not initialized (``numpyro.set_platform("cuda")``
-restricts ``jax_platforms``), :func:`_resolve_device` falls back to a
+The ``"host"`` target keeps results in pageable host memory. With the JAX CPU
+backend initialized it commits every chunk to the CPU backend device
+(``jax.devices("cpu")[0]``): a committed :class:`jax.Array` whose
+``np.asarray`` is a zero-copy view. Without a CPU backend
+(``numpyro.set_platform("cuda")`` or a ``JAX_PLATFORMS`` preset restricts
+``jax_platforms``) there is no pageable ``jax.Array`` container at all, since
+a CUDA client offers only device and pinned host memory, so
+:func:`_resolve_device` takes the backend-free path instead: each chunk is
+copied with :func:`jax.device_get` and the results are NumPy arrays (the
+``"numpy"`` sentinel, also requestable explicitly). Pinned host memory (a
 :class:`jax.sharding.SingleDeviceSharding` carrying a host memory kind on the
-accelerator's own device (:func:`_host_memory_kind`, ``"pinned_host"`` on
-CUDA) and warns: on CUDA that pool is capped at 64 GB by default
-(``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and its allocator fragments, which is
-what ran a 50,000-series posterior (46.8 GiB) out of host memory. Either way
-nothing of the stitched result occupies accelerator memory and the whole
-pipeline stays jax-native. :func:`_is_host_resident` is the one predicate
-behind the consumers: :func:`_leaf_view` exposes a host-resident leaf as a
-NumPy view so per-chunk gathers run on the host (a pinned leaf gathered with a
-device-resident index raises a memory-space mismatch; a CPU-committed leaf
-would instead drag the gather, and the jitted predictive it feeds, onto the
-CPU), and :func:`_device_view` is its counterpart for the unchunked metric
-entry points, handing the fused kernel an accelerator-resident copy.
+accelerator's own device, :func:`_host_memory_kind`) is used only on an
+explicit ``device="pinned_host"``: on CUDA that pool is capped at 64 GB by
+default (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and its allocator fragments,
+which is what ran a 50,000-series posterior (46.8 GiB) out of host memory when
+it was the default. Either way nothing of the stitched result occupies
+accelerator memory. :func:`_is_host_resident` is the one predicate behind the
+consumers: :func:`_leaf_view` exposes a host-resident jax leaf as a NumPy view
+(NumPy leaves pass straight through) so per-chunk gathers run on the host (a
+pinned leaf gathered with a device-resident index raises a memory-space
+mismatch; a CPU-committed leaf would instead drag the gather, and the jitted
+predictive it feeds, onto the CPU), and :func:`_device_view` is its
+counterpart for the unchunked metric entry points, handing the fused kernel an
+accelerator-resident copy.
 
-A host-committed result is not a drop-in replacement for a device array in
+A host-committed jax result is not a drop-in replacement for a device array in
 your own ``jnp`` code. Mixed with an *uncommitted* array (every fresh ``jnp``
 array), an op runs on the CPU and returns a CPU-committed array; mixed with an
 array committed to an accelerator it raises (``Received incompatible
-devices``); the pinned fallback raises on any mix (``memory_space of all
-inputs ... must be the same``). The documented contract is: feed a
-host-committed result straight into this package's own drivers
+devices``); a pinned array raises on any mix (``memory_space of all inputs
+... must be the same``); a NumPy result simply behaves as NumPy. The
+documented contract is: feed a host result straight into this package's own drivers
 (:func:`~numpyro_forecast.functional.prediction.forecast`,
 :func:`~numpyro_forecast.functional.prediction.predict_in_sample`,
 :func:`~numpyro_forecast.convert.to_datatree`, and every evaluation metric in
@@ -66,6 +71,7 @@ import jaxtyping
 import numpy as np
 from jax import random
 from jax.core import Tracer
+from jax.extend import backend as jex_backend
 from jax.sharding import SingleDeviceSharding
 from jax.typing import ArrayLike
 
@@ -74,6 +80,14 @@ from numpyro_forecast.typing import Array
 
 _HOST_MEMORY_KINDS: tuple[str, ...] = ("pinned_host", "unpinned_host")
 """Host memory kinds, in preference order (``pinned_host`` is jax's offload target)."""
+
+_ResolvedDevice = jax.Device | Literal["pinned_host", "numpy"] | None
+"""A resolved placement: a device, the pinned-memory or NumPy sentinel, or ``None``.
+
+``"numpy"`` is the backend-free path (one :func:`jax.device_get` per chunk,
+NumPy results); ``"pinned_host"`` commits to the host memory kind of the
+array's own device. Both are idempotent under :func:`_resolve_device`.
+"""
 
 _WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
     os.path.dirname(os.path.abspath(path))
@@ -92,15 +106,19 @@ Python's per-location deduplication of warnings never fires.
 
 
 def _available_platforms() -> list[str]:
-    """Return the initialized JAX platforms, deduplicated, in device order.
+    """Return every initialized JAX backend, in initialization order.
+
+    :func:`jax.devices` lists only the *default* backend's devices, so it
+    cannot tell whether the CPU backend exists next to an accelerator;
+    :func:`jax.extend.backend.backends` lists all initialized backends.
 
     Returns
     -------
     list[str]
-        Platform names such as ``["cuda", "cpu"]`` (multi-device platforms
-        appear once).
+        Backend names such as ``["cuda", "cpu"]`` (``jax_platforms`` also
+        accepts the ``gpu`` alias, so ``set_platform('gpu,cpu')`` is valid).
     """
-    return list(dict.fromkeys(d.platform for d in jax.devices()))
+    return list(jex_backend.backends().keys())
 
 
 def _accelerator_platform(platforms: list[str]) -> str:
@@ -173,9 +191,10 @@ def _oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
     DeviceMemoryError
         When the wrapped stage fails with an XLA ``RESOURCE_EXHAUSTED`` error.
         An accelerator OOM reports the device budget and the ``batch_size``
-        lever; a pinned host pool OOM (``Out of host memory``, the fallback
-        target of ``device="host"``) names the pool's cap and the CPU-backend
-        remedy instead, since the device budget is not what ran out.
+        lever; a pinned host pool OOM (``Out of host memory``, reached only
+        through an explicit ``device="pinned_host"``) names the pool's cap and
+        points at ``device="host"`` instead, since the device budget is not
+        what ran out.
     """
     try:
         yield
@@ -190,14 +209,13 @@ def _oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
             else "set batch_size to sample in chunks"
         )
         if "Out of host memory" in str(err):
-            accelerator = _accelerator_platform(_available_platforms())
             msg = (
                 f"the pinned host memory pool ran out during the {stage} (capped at 64 GB "
-                "by default on CUDA, XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB). device='host' uses "
-                "that pool only when the JAX CPU backend is not initialized: initialize it, "
-                f"e.g. numpyro.set_platform('{accelerator},cpu'), so results land in pageable "
-                f"host memory; if the CPU backend is already initialized, {knob} or raise "
-                "the cap."
+                "by default on CUDA, XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB). Only "
+                "device='pinned_host' (or pinned arrays of your own) uses that pool: switch "
+                "to device='host', which lands results in pageable host memory (the CPU "
+                f"backend device when it is initialized, NumPy arrays otherwise), {knob}, or "
+                "raise the cap."
             )
             raise DeviceMemoryError(msg) from err
         msg = (
@@ -214,8 +232,8 @@ def _oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
 def _host_memory_kind(device: jax.Device) -> str:
     """Return the host memory kind ``device`` exposes, preferring pinned memory.
 
-    Used by the pinned *fallback* of ``device="host"`` only (the primary path
-    commits to the CPU backend device). ``"pinned_host"`` is picked whenever
+    Used by an explicit ``device="pinned_host"`` only (``device="host"`` never
+    pins). ``"pinned_host"`` is picked whenever
     the backend offers it: it is the only host kind CUDA exposes, it is jax's
     standard offload target, and it takes the fast DMA path, so the CPU backend
     and CUDA agree on the memory kind of an offloaded result. Cached per
@@ -249,12 +267,11 @@ def _host_memory_kind(device: jax.Device) -> str:
 
 
 def _host_sharding(x: Array) -> SingleDeviceSharding:
-    """Build the host-memory sharding the pinned fallback offloads ``x`` to.
+    """Build the host-memory sharding ``device="pinned_host"`` offloads ``x`` to.
 
     Derived from ``x`` itself (``x.devices()``) rather than :func:`jax.devices`,
-    so the fallback never needs a backend other than the one ``x`` already lives
-    on: ``numpyro.set_platform("cuda")`` leaves the CPU backend uninitialized,
-    and this is exactly the case the fallback exists for.
+    so pinning never needs a backend other than the one ``x`` already lives on
+    (``numpyro.set_platform("cuda")`` leaves the CPU backend uninitialized).
 
     Parameters
     ----------
@@ -295,8 +312,8 @@ def _is_host_resident(leaf: Array) -> bool:
     """Whether ``leaf`` must be staged before it meets accelerator-side code.
 
     The one switch behind :func:`_leaf_view` and :func:`_device_view`. A leaf
-    in a host memory kind (:data:`_HOST_MEMORY_KINDS`, the pinned fallback of
-    ``device="host"``) is host-resident on every backend. A CPU-committed leaf
+    in a host memory kind (:data:`_HOST_MEMORY_KINDS`, an explicit
+    ``device="pinned_host"`` result) is host-resident on every backend. A CPU-committed leaf
     (the primary ``device="host"`` result) counts only when the default backend
     is an accelerator: staging exists to keep gathers and metric kernels off
     the accelerator, and on a CPU-only machine every array already lives on a
@@ -325,16 +342,16 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
 
     A device-resident :class:`jax.Array` is returned unchanged. A host-resident
     one (:func:`_is_host_resident`: a CPU-committed leaf under an accelerator
-    default backend, or a pinned fallback leaf) is wrapped as a zero-copy NumPy
-    view, which is the piece that makes chunked prediction work at all on an
+    default backend, or a pinned leaf) is wrapped as a zero-copy NumPy view,
+    which is the piece that makes chunked prediction work at all on an
     accelerator: indexing a pinned ``jax.Array`` with a device-resident index
     array raises (``memory_space of all inputs ... must be the same``), and
     indexing a CPU-committed one with an uncommitted index runs the gather on
     the CPU and returns a CPU-committed chunk that would then drag the jitted
-    predictive onto the CPU, whereas indexing the NumPy view gathers on the
-    host and hands only the chunk to the jitted predictive, which places it on
-    the default device. Anything else (NumPy arrays, lists, scalars) is
-    normalized with :func:`numpy.asarray`.
+    predictive onto the CPU, whereas indexing the NumPy view gathers on the host
+    and hands only the chunk to the jitted predictive, which places it on the
+    default device. Anything else (NumPy arrays, lists, scalars) is normalized
+    with :func:`numpy.asarray`.
 
     A tracer is passed through untouched. Tracers are ``jax.Array`` instances
     but have no ``sharding``, and more importantly nothing about a traced value
@@ -420,35 +437,39 @@ def _device_view(leaf: ArrayLike) -> Array:
     return jnp.asarray(leaf)
 
 
-def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["pinned_host"] | None:
-    """Resolve a device spec to a :class:`jax.Device` or the ``"pinned_host"`` sentinel.
+def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
+    """Resolve a device spec to a :class:`jax.Device` or a resolved sentinel.
 
-    ``"host"`` and ``"cpu"`` both resolve to the CPU backend device (pageable
-    host memory). When that backend is not initialized (e.g. after
-    ``numpyro.set_platform("cuda")`` restricted ``jax_platforms``) they fall
-    back to the ``"pinned_host"`` sentinel, which :func:`_transfer` and
-    :func:`_stitch_chunks` implement as a host memory kind on the array's own
-    device, and a :class:`UserWarning` names the pinned pool's cap and the
-    ``numpyro.set_platform("<accelerator>,cpu")`` remedy. The warning skips the
-    package's own frames and the jaxtyping/beartype wrappers
-    (:data:`_WARNING_SKIP_PREFIXES`), so it is attributed to, and deduplicated
-    per, the user's call site.
+    ``"host"`` resolves to the CPU backend device (pageable host memory,
+    committed jax Arrays). When that backend is not initialized (e.g. after
+    ``numpyro.set_platform("cuda")`` or a ``JAX_PLATFORMS`` preset restricted
+    ``jax_platforms``) it resolves to the ``"numpy"`` sentinel instead, which
+    :func:`_transfer` implements as one :func:`jax.device_get` per chunk and
+    :func:`_stitch_chunks` as :func:`numpy.concatenate`: pageable, backend-free,
+    NumPy results, and no warning since nothing is lost but the container
+    type. ``"cpu"`` is the same request made explicitly, so an unmet one warns
+    (a :class:`UserWarning` that skips the package's own frames and the
+    jaxtyping/beartype wrappers, :data:`_WARNING_SKIP_PREFIXES`, so it is
+    attributed to, and deduplicated per, the user's call site) before taking
+    the NumPy path. Both sentinels pass through unchanged, so a pre-resolved
+    value can be forwarded (``to_datatree`` resolves once for both drivers).
 
     Parameters
     ----------
     device
-        A device, ``"host"`` or ``"cpu"`` (the CPU backend device, pinned
-        fallback without it), ``"pinned_host"`` (the resolved fallback itself,
-        passed through silently so a pre-resolved value can be forwarded, or to
-        request pinned memory explicitly), another platform name accepted by
-        :func:`jax.devices` (resolved to the platform's first device), or
+        A device; ``"host"`` (the CPU backend device, NumPy without it);
+        ``"cpu"`` (the same, warning when the backend is missing);
+        ``"numpy"`` (force the backend-free NumPy path); ``"pinned_host"``
+        (commit to the host memory kind of the array's own device, a pool
+        capped at 64 GB by default on CUDA); another platform name accepted by
+        :func:`jax.devices` (resolved to the platform's first device); or
         ``None``.
 
     Returns
     -------
-    jax.Device | Literal["pinned_host"] | None
-        The resolved device, ``"pinned_host"``, or ``None`` when ``device`` is
-        ``None``.
+    jax.Device | Literal["pinned_host", "numpy"] | None
+        The resolved device, one of the two sentinels, or ``None`` when
+        ``device`` is ``None``.
 
     Raises
     ------
@@ -460,7 +481,14 @@ def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["pi
         return device
     if device == "pinned_host":
         return "pinned_host"
-    if device in ("host", "cpu"):
+    if device == "numpy":
+        return "numpy"
+    if device == "host":
+        try:
+            return jax.devices("cpu")[0]
+        except RuntimeError:
+            return "numpy"  # backend-free and pageable: fully functional, nothing to warn about
+    if device == "cpu":
         try:
             return jax.devices("cpu")[0]
         except RuntimeError:
@@ -468,89 +496,93 @@ def _resolve_device(device: jax.Device | str | None) -> jax.Device | Literal["pi
             accelerator = _accelerator_platform(platforms)
             warnings.warn(
                 f"the JAX CPU backend is not initialized (available platforms: {platforms}), "
-                f"so device={device!r} falls back to pinned host memory on the accelerator's "
-                "own device. On CUDA that pool is capped at 64 GB by default "
-                "(XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB) and larger results fail with 'Out of "
-                "host memory'. Initialize the CPU backend, e.g. "
-                f"numpyro.set_platform('{accelerator},cpu'), so results land in pageable "
-                "host memory instead.",
+                "so device='cpu' falls back to device='host': each chunk is copied to pageable "
+                "host memory with jax.device_get and the draws come back as NumPy arrays. Pass "
+                "device='host' explicitly, or initialize the CPU backend, e.g. "
+                f"numpyro.set_platform('{accelerator},cpu'), to silence this warning.",
                 UserWarning,
                 skip_file_prefixes=_WARNING_SKIP_PREFIXES,
             )
-            return "pinned_host"
+            return "numpy"
     try:
         return jax.devices(device)[0]
     except RuntimeError as err:
         platforms = _available_platforms()
         msg = (
             f"JAX platform {device!r} is not initialized (available platforms: {platforms}). "
-            "Pass one of those platforms, a jax.Device, 'host' (pageable host memory, pinned "
-            "when no CPU backend exists), or initialize the platform via jax_platforms, "
-            f"e.g. numpyro.set_platform('{platforms[0]},{device}')."
+            "Pass one of those platforms, a jax.Device, 'host' (pageable host memory: the CPU "
+            "device, or NumPy arrays without a CPU backend), 'numpy', 'pinned_host', or "
+            f"initialize the platform via jax_platforms, e.g. "
+            f"numpyro.set_platform('{platforms[0]},{device}')."
         )
         raise ValueError(msg) from err
 
 
-def _transfer(draws: Array, device: jax.Device | Literal["pinned_host"] | None) -> Array:
+def _transfer(draws: Array, device: _ResolvedDevice) -> Array | np.ndarray:
     """Move ``draws`` to ``device`` and wait for the transfer to finish.
 
     Blocking makes the memory profile deterministic: the source buffer is
     released before the next chunk is drawn, so the accelerator holds at most
     one chunk of draws at a time. ``device`` ``None`` is the identity; a
-    :class:`jax.Device` (the CPU device for the primary ``"host"`` path) is one
-    device-to-device copy; ``"pinned_host"`` commits the chunk to its own
-    device's host memory kind (:func:`_host_sharding`), one device-to-host DMA
-    per chunk, which needs no backend beyond the one ``draws`` already live on.
+    :class:`jax.Device` (the CPU device for ``"host"`` with a CPU backend) is
+    one device-to-device copy; ``"numpy"`` copies the chunk to pageable host
+    memory with :func:`jax.device_get` (a NumPy array, no backend needed);
+    ``"pinned_host"`` commits the chunk to its own device's host memory kind
+    (:func:`_host_sharding`), one device-to-host DMA per chunk.
 
     Parameters
     ----------
     draws
         The draws to move.
     device
-        Target device, ``"pinned_host"``, or ``None`` to leave ``draws`` where
-        they are.
+        Target device, ``"numpy"``, ``"pinned_host"``, or ``None`` to leave
+        ``draws`` where they are.
 
     Returns
     -------
-    Array
-        ``draws`` committed to ``device`` (``draws`` itself when ``None``, a
-        host-memory-kind :class:`jax.Array` when ``"pinned_host"``).
+    Array | np.ndarray
+        ``draws`` on ``device`` (``draws`` itself when ``None``, a NumPy array
+        when ``"numpy"``, a host-memory-kind :class:`jax.Array` when
+        ``"pinned_host"``).
     """
     if device is None:
         return draws
+    if device == "numpy":
+        return jax.device_get(draws)
     if device == "pinned_host":
         return jax.device_put(draws, _host_sharding(draws)).block_until_ready()
     return jax.device_put(draws, device).block_until_ready()
 
 
 def _stitch_chunks(
-    chunks: list[Array],
+    chunks: list[Array | np.ndarray],
     num_samples: int,
-    device: jax.Device | Literal["pinned_host"] | None,
-) -> Array:
+    device: _ResolvedDevice,
+) -> Array | np.ndarray:
     """Concatenate transferred chunks along the sample axis and drop the overdraw.
 
     Fixed-size chunking overdraws in the final chunk when ``num_samples`` is
     not an exact multiple of the chunk size; the trailing rows are discarded by
     a final slice (skipped when nothing was overdrawn, since slices copy).
 
-    On both host paths (``"pinned_host"`` chunks, or chunks committed to CPU
-    devices) the concatenation and the slice deliberately run through NumPy: a
-    ``jnp`` op on pinned arrays would copy them back into accelerator memory to
-    run, and on CPU-committed chunks it would compile one executable per site
-    shape for no gain. The chunks are viewed as NumPy (zero-copy, host to
-    host), stitched and sliced there, and the single result is committed back
-    to the chunks' sharding, which for the CPU device is again zero-copy.
-    Otherwise :func:`jax.numpy.concatenate` runs on the chunks' (committed)
-    accelerator.
+    NumPy chunks (the ``"numpy"`` path) are stitched with
+    :func:`numpy.concatenate` and stay NumPy. On the two jax host paths
+    (``"pinned_host"`` chunks, or chunks committed to CPU devices) the
+    concatenation and the slice also run through NumPy: a ``jnp`` op on pinned
+    arrays would copy them back into accelerator memory to run, and on
+    CPU-committed chunks it would compile one executable per site shape for no
+    gain. The chunks are viewed as NumPy (zero-copy, host to host), stitched
+    and sliced there, and the single result is committed back to the chunks'
+    sharding, which for the CPU device is again zero-copy. Otherwise
+    :func:`jax.numpy.concatenate` runs on the chunks' (committed) accelerator.
 
-    ``chunks`` is cleared right after the concatenation, before the final
-    ``device_put``, so the per-chunk buffers can be collected as soon as their
-    one caller reference (this function's own ``chunks`` parameter, the caller
-    is expected to hand over the sole reference) is dropped. The host peak is
-    therefore chunks plus one stitched copy of a single site (pageable on the
-    CPU device; pinned, and so counted against the pinned pool's cap, in the
-    fallback).
+    ``chunks`` is cleared right after the concatenation, so the per-chunk
+    buffers can be collected as soon as their one caller reference (this
+    function's own ``chunks`` parameter, the caller is expected to hand over
+    the sole reference) is dropped. The host peak is therefore chunks plus one
+    stitched copy of a single site (pageable on the NumPy and CPU-device paths;
+    pinned, and so counted against the pinned pool's cap, for
+    ``"pinned_host"``).
 
     Parameters
     ----------
@@ -567,12 +599,17 @@ def _stitch_chunks(
 
     Returns
     -------
-    Array
+    Array | np.ndarray
         The stitched draws with exactly ``num_samples`` leading rows, living
-        wherever the chunks lived.
+        wherever the chunks lived (NumPy for NumPy chunks).
     """
-    if device == "pinned_host" or _is_cpu_committed(chunks[0]):
-        sharding = chunks[0].sharding
+    first = chunks[0]
+    if isinstance(first, np.ndarray):
+        stitched_np = np.concatenate(chunks, axis=0)
+        chunks.clear()  # drop the per-chunk copies before the caller stitches the next site
+        return stitched_np if stitched_np.shape[0] == num_samples else stitched_np[:num_samples]
+    if device == "pinned_host" or _is_cpu_committed(first):
+        sharding = first.sharding
         staged = np.concatenate([np.asarray(chunk) for chunk in chunks], axis=0)
         chunks.clear()  # drop the per-chunk buffers before the final device_put
         if staged.shape[0] != num_samples:
@@ -590,7 +627,7 @@ def _draw_chunked(
     batch_size: int | None,
     device: jax.Device | str | None,
     stage: str,
-) -> dict[str, Array]:
+) -> dict[str, Array | np.ndarray]:
     """Draw ``num_samples`` samples from ``draw_fn`` in fixed-size, offloaded chunks.
 
     Shared chunk-and-transfer loop for :func:`~numpyro_forecast.functional.posterior.draw_posterior`
@@ -627,10 +664,10 @@ def _draw_chunked(
 
     Returns
     -------
-    dict[str, Array]
-        The drawn samples with exactly ``num_samples`` leading rows (leaves
-        committed to the CPU device, or to pinned host memory in the fallback,
-        when ``device`` is ``"host"``).
+    dict[str, Array | np.ndarray]
+        The drawn samples with exactly ``num_samples`` leading rows (with
+        ``device="host"``: leaves committed to the CPU device, or NumPy arrays
+        when no CPU backend is initialized).
 
     Raises
     ------
@@ -649,7 +686,7 @@ def _draw_chunked(
             return {name: _transfer(leaf, resolved) for name, leaf in samples.items()}
     num_chunks = -(-num_samples // batch_size)  # ceil; the last chunk overdraws
     keys = random.split(rng_key, num_chunks)
-    chunks: list[dict[str, Array]] = []
+    chunks: list[dict[str, Array | np.ndarray]] = []
     with _oom_advice(stage, batch_size):
         for key in keys:
             # An explicit loop with pop-per-leaf keeps the accelerator peak at

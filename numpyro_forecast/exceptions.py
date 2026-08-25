@@ -117,9 +117,9 @@ class DeviceMemoryError(NumpyroForecastError, RuntimeError):
     scales linearly with ``batch_size`` times the panel width, so lower (or
     set) ``batch_size``, free large device arrays still referenced elsewhere,
     and keep results off the accelerator with ``device="host"``. For a pinned
-    host pool OOM (``Out of host memory``, the fallback target of
-    ``device="host"`` when the JAX CPU backend is not initialized) it names the
-    pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and the
-    ``numpyro.set_platform("<accelerator>,cpu")`` remedy instead. The original
-    XLA error is chained as ``__cause__``.
+    host pool OOM (``Out of host memory``, reached only through an explicit
+    ``device="pinned_host"`` or the caller's own pinned arrays) it names the
+    pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
+    ``device="host"``, which lands results in pageable host memory, instead.
+    The original XLA error is chained as ``__cause__``.
     """

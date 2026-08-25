@@ -677,6 +677,37 @@ def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
         assert r.prediction.shape == (20, 4, 1)
 
 
+def test_backtest_keeps_numpy_predictions_from_host_forecast_fn(rng_key: Array) -> None:
+    """A ``forecast_fn`` returning NumPy (the backend-free ``device="host"`` result) is kept as is.
+
+    ``BacktestResult.prediction`` is type-checked at construction by the
+    jaxtyping import hook, so it must admit the NumPy container the host path
+    returns when no CPU backend is initialized.
+    """
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+
+    def numpy_forecast_fn(*args: object, **kwargs: object) -> np.ndarray:
+        return np.asarray(_canned_forecast_fn(*args, **kwargs))  # ty: ignore[invalid-argument-type]
+
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        rw_model_factory,
+        forecast_fn=numpy_forecast_fn,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        keep_predictions=True,
+    )
+    assert results
+    for r in results:
+        assert isinstance(r.prediction, np.ndarray)
+        assert r.prediction.shape == (20, 4, 1)
+
+
 def test_backtest_eval_train_applies_transform_twice_per_window(rng_key: Array) -> None:
     # With eval_train the same transform is applied to the OOS pair and the
     # in-sample pair, so it runs twice per window.

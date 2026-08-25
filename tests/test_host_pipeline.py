@@ -1,17 +1,18 @@
 """End-to-end ``device="host"`` pipeline test (spec roadmap, host-offload contract).
 
-``device="host"`` keeps every result a :class:`jax.Array` while committing it to
-the CPU backend device (pageable host memory, no pinned-pool cap), so nothing of
-a draw occupies accelerator memory; when the CPU backend is not initialized it
-falls back to a ``"pinned_host"``/``"unpinned_host"`` memory kind on the array's
-own device. Every host-offload-aware function in the package (``draw_posterior``,
+``device="host"`` keeps every result in pageable host memory: a :class:`jax.Array`
+committed to the CPU backend device when that backend is initialized, and a
+NumPy array (one ``jax.device_get`` per chunk, no backend needed) when it is
+not, so nothing of a draw occupies accelerator memory and nothing is pinned.
+Every host-offload-aware function in the package (``draw_posterior``,
 ``predict_in_sample``, ``forecast``, and internally ``to_datatree``) must both
 *produce* such arrays and *accept* them as input, so the output of one stage can
 be fed straight into the next without a device round-trip. Those signatures are
 enforced at *runtime* by the project's jaxtyping import hook, not merely checked
-statically; placement is enforced by ``assert_host_resident`` and, because
-committedness propagates through gathers and jitted calls on a CPU-only machine,
-by a per-chunk transfer spy for the stages fed a committed posterior.
+statically; placement is enforced by ``assert_host_resident`` /
+``assert_numpy_host`` and, because committedness propagates through gathers and
+jitted calls on a CPU-only machine, by a per-chunk transfer spy for the stages
+fed a committed posterior.
 
 A unit test scoped to a single function (e.g. only ``draw_posterior(...,
 device="host")`` asserting its own output) never exercises the next function in
@@ -19,19 +20,21 @@ the chain, because it never feeds its output onward. Only a full walk through
 ``draw_posterior -> predict_in_sample -> forecast -> to_datatree``, all pinned to
 ``device="host"`` and each stage consuming the previous stage's host-committed
 output, catches a regression anywhere in that chain, and is exactly the scenario
-that matters on GPU; the fallback walk covers the setup where there is no CPU
-backend at all.
+that matters on GPU; the backend-free walk covers the setup where there is no
+CPU backend at all (``jax_platforms`` restricted to the accelerator).
 """
 
 import warnings
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from conftest import (
     assert_host_resident,
-    assert_pinned_host_resident,
+    assert_numpy_host,
     empty_covariates,
+    fail_devices_for,
     rw_model,
     svi_guide_params,
 )
@@ -88,7 +91,6 @@ def test_host_pipeline_draw_predict_forecast_datatree(
     # Stage 1: draw the posterior, entirely on the host.
     posterior = draw_posterior(key_draw, guide, params, n, batch_size=batch_size, device="host")
     assert_host_resident(posterior)
-    assert next(iter(posterior)) and all(leaf.committed for leaf in posterior.values())
     transfers.clear()
 
     # Stage 2: in-sample posterior predictive, fed the host posterior from stage 1.
@@ -140,38 +142,40 @@ def test_host_pipeline_draw_predict_forecast_datatree(
     assert tree["predictions"].sizes["time"] == horizon
 
 
-def test_host_pipeline_without_cpu_backend_falls_back_to_pinned(
+def test_host_pipeline_without_cpu_backend_is_numpy_end_to_end(
     fast_svi: dict[str, int], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The same four stages with no CPU backend land in pinned host memory and warn.
+    """The same four stages with no CPU backend run backend-free on NumPy, silently.
 
     ``numpyro.set_platform("cuda")`` leaves only the accelerator backend, so
     ``jax.devices("cpu")`` raises; every stage must still complete off the
-    accelerator (pinned host memory kind) and each call site warns about the
-    pinned-pool cap.
+    accelerator with NumPy results (one ``jax.device_get`` per chunk, nothing
+    pinned) and without a single warning: this is the canonical GPU setup, not
+    a degraded one.
     """
     t = 20
     horizon = 6
     n = 16
     batch_size = 8
-    real_devices = jax.devices
+    gets: list[tuple[int, ...]] = []
+    real_device_get = jax.device_get
 
-    def fail_cpu_devices(backend: str | None = None) -> list[jax.Device]:
-        if backend == "cpu":
-            msg = "Unknown backend cpu. Available backends are ['cuda']"
-            raise RuntimeError(msg)
-        return real_devices(backend)
+    def spy_device_get(x: jax.Array) -> np.ndarray:
+        gets.append(tuple(np.shape(x)))
+        return real_device_get(x)
 
     guide, params = svi_guide_params(t, num_steps=fast_svi["num_steps"])
     key_draw, key_in_sample, key_forecast, key_tree = random.split(random.PRNGKey(0), 4)
-    monkeypatch.setattr(jax, "devices", fail_cpu_devices)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    monkeypatch.setattr(jax, "device_get", spy_device_get)
 
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         posterior = draw_posterior(
             key_draw, guide, params, n, batch_size=batch_size, device="host"
         )
-        assert_pinned_host_resident(posterior)
+        assert_numpy_host(posterior)
+        gets.clear()
         in_sample = predict_in_sample(
             key_in_sample,
             rw_model,
@@ -180,7 +184,9 @@ def test_host_pipeline_without_cpu_backend_falls_back_to_pinned(
             batch_size=batch_size,
             device="host",
         )
-        assert_pinned_host_resident(in_sample)
+        assert_numpy_host(in_sample)
+        assert gets == [(batch_size, t, 1), (batch_size, t, 1)]  # np.concatenate is no transfer
+        gets.clear()
         data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
         forecasts = forecast(
             key_forecast,
@@ -191,8 +197,7 @@ def test_host_pipeline_without_cpu_backend_falls_back_to_pinned(
             batch_size=batch_size,
             device="host",
         )
-        assert_pinned_host_resident(forecasts)
+        assert_numpy_host(forecasts)
+        assert gets == [(batch_size, horizon, 1), (batch_size, horizon, 1)]
         tree = to_datatree(key_tree, rw_model, posterior, data, empty_covariates(t + horizon))
     assert tree["predictions"].sizes["time"] == horizon
-    fallback = [r for r in records if "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in str(r.message)]
-    assert len(fallback) == 4  # draw, predict_in_sample, forecast, to_datatree (once)

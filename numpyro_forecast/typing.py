@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
 import jax
+import numpy as np
 
 Array = jax.Array
 """A JAX array (alias of :class:`jax.Array`)."""
@@ -64,7 +65,7 @@ class ForecastModel(Protocol):
 ModelFactory = Callable[[], ForecastModel]
 """A zero-argument callable returning a fresh :class:`ForecastModel` instance."""
 
-ForecastFn = Callable[..., Array]
+ForecastFn = Callable[..., Array | np.ndarray]
 """A closure that fits a model on a training window and forecasts its test horizon.
 
 Called by :func:`~numpyro_forecast.evaluate.backtest` positionally as
@@ -74,18 +75,19 @@ window (train followed by test, i.e. ``covariates[..., t0:t2, :]``). Must return
 forecast samples with the sample axis first, shape
 ``(num_samples, *batch, t2 - t1, obs)``. ``batch_size`` is forwarded unchanged
 from ``backtest`` so a chunked closure can bound its own device memory; a
-closure may return draws committed to host memory (e.g. via ``device="host"``,
-to cap peak accelerator usage): every metric in
-:data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts a host-committed
-``pred`` or ``truth`` (or both), in any mix and regardless of ``batch_size``,
-moving a host-committed operand to device memory first where needed.
-Returning draws already on-device still avoids the extra host-to-device hop
-for the metrics scored every window. Typed loosely (a bare
+closure may return draws kept in host memory (e.g. via ``device="host"``, to
+cap peak accelerator usage): a jax Array committed to the CPU backend device
+or, without a CPU backend, a NumPy array. Every metric in
+:data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred`` or
+``truth`` (or both), in any mix and regardless of ``batch_size``, moving a
+host-resident operand to device memory first where needed. Returning draws
+already on-device still avoids the extra host-to-device hop for the metrics
+scored every window. Typed loosely (a bare
 ``Callable``, like :data:`Metric`) because per-backend fit options differ; the
 exact shapes are pinned above rather than in the type itself.
 """
 
-InSampleFn = Callable[..., Array]
+InSampleFn = Callable[..., Array | np.ndarray]
 """A closure that fits a model on a training window and scores its in-sample fit.
 
 Called by :func:`~numpyro_forecast.evaluate.backtest` (only when

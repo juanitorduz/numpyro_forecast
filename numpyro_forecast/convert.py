@@ -300,25 +300,21 @@ def to_datatree(
         :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
         :func:`~numpyro_forecast.functional.prediction.forecast`. It is
         resolved once and the same placement is handed to both. The default
-        ``"host"`` commits every chunk to the CPU backend device
-        (``jax.devices("cpu")[0]``, pageable host RAM), returning committed
-        :class:`jax.Array` values that the tree views as NumPy without a copy;
-        it is what bounds accelerator memory when ``predictive_batch_size`` is
-        set. When the CPU backend is not initialized (for example after
-        ``numpyro.set_platform("cuda")``), it falls back to the accelerator's
-        pinned host memory kind with a :class:`UserWarning`; on CUDA that pool
-        is capped by ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB`` (64 GB by default)
-        and fragments, so initialize both backends with
-        ``numpyro.set_platform("cuda,cpu")`` for large panels. A
-        :class:`jax.Device` or platform name like ``"cpu"`` commits the draws
-        to that device instead; pass ``None`` to keep the draws on the default
-        device (chunked compute without per-chunk host transfers, for when the
-        draws fit on the accelerator and transfers would dominate runtime).
-        A host-committed result is not a drop-in replacement for a device
-        array in your own ``jnp`` code: mixed with an uncommitted array an op
-        runs on the CPU, mixed with an accelerator-committed array it raises;
-        convert explicitly first with ``np.asarray(x)`` (stays on host) or
-        ``jax.device_put(x, device)`` (moves it to an accelerator).
+        ``"host"`` keeps the predictive draws in pageable host memory, which
+        is what bounds accelerator memory when ``predictive_batch_size`` is
+        set: with the JAX CPU backend initialized every chunk is committed to
+        ``jax.devices("cpu")[0]`` (jax Arrays the tree views as NumPy without a
+        copy); without it (for example after ``numpyro.set_platform("cuda")``,
+        or a ``JAX_PLATFORMS`` preset) every chunk is copied with
+        :func:`jax.device_get` (NumPy arrays), so no CPU backend is needed and
+        nothing is pinned. ``"pinned_host"`` uses the accelerator's pinned
+        host memory kind instead (capped at 64 GB by default on CUDA,
+        ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``). A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device
+        (``"cpu"`` warns and takes the NumPy path when the CPU backend is
+        missing); pass ``None`` to keep the draws on the default device
+        (chunked compute without per-chunk host transfers, for when the draws
+        fit on the accelerator and transfers would dominate runtime).
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -367,18 +363,16 @@ def to_datatree(
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     RuntimeError
-        If the pinned fallback is taken and the array's device exposes no host
-        memory kind (see
+        If ``predictive_device="pinned_host"`` is requested on a device that
+        exposes no host memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Warns
     -----
     UserWarning
-        If ``predictive_device`` is ``"host"`` or ``"cpu"`` and the JAX CPU
-        backend is not initialized, so the predictive draws fall back to pinned
-        host memory (once per call). Silence it with
-        ``warnings.filterwarnings("ignore", message="the JAX CPU backend is not
-        initialized")`` once the trade-off is understood.
+        If ``predictive_device="cpu"`` is requested and the JAX CPU backend is
+        not initialized, so the predictive draws take the NumPy path of
+        ``"host"`` instead (once per call).
 
     Notes
     -----
@@ -438,8 +432,8 @@ def to_datatree(
     )
 
     covariates_insample = covariates[..., :n_time, :]
-    # Resolve once so the two predictive drivers share one placement (and a
-    # missing CPU backend warns once per export, not once per driver).
+    # Resolve once so the two predictive drivers share one placement (and an
+    # unmet explicit "cpu" request warns once per export).
     resolved_device = _resolve_device(predictive_device)
     predictive = predict_in_sample(
         key_pred,

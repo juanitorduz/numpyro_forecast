@@ -1,13 +1,14 @@
 """Tests for the ArviZ DataTree export (roadmap §5)."""
 
 import warnings
+from typing import cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray.testing as xarray_testing
-from conftest import empty_covariates, nuts_samples, rw_model, svi_guide_params
+from conftest import empty_covariates, fail_devices_for, nuts_samples, rw_model, svi_guide_params
 from jax import Array, random
 
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
@@ -50,7 +51,9 @@ def _svi_posterior(
 ) -> tuple[dict[str, Array], Array, Array]:
     """An SVI-drawn posterior plus the data/covariates it was fit on."""
     guide, params = svi_guide_params(t, num_steps=num_steps)
-    posterior = draw_posterior(random.PRNGKey(3), guide, params, num_draws)
+    posterior = cast(
+        "dict[str, Array]", draw_posterior(random.PRNGKey(3), guide, params, num_draws)
+    )
     return posterior, _series(t), empty_covariates(t)
 
 
@@ -718,6 +721,32 @@ def test_to_datatree_forwards_predictive_device(
     assert captured["forecast"] == expected
 
 
+def test_to_datatree_forwards_numpy_sentinel_without_cpu_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a CPU backend the default ``"host"`` resolves to ``"numpy"`` for both drivers."""
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, object] = {}
+    real_pred = convert_mod.predict_in_sample
+    real_forecast = convert_mod.forecast
+
+    def spy_pred(*args: object, **kwargs: object) -> object:
+        captured["predict_in_sample"] = kwargs["device"]
+        return real_pred(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    def spy_forecast(*args: object, **kwargs: object) -> object:
+        captured["forecast"] = kwargs["device"]
+        return real_forecast(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
+    monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
+    to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=4)
+    assert captured == {"predict_in_sample": "numpy", "forecast": "numpy"}
+
+
 def test_to_datatree_default_works_without_cpu_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -725,31 +754,42 @@ def test_to_datatree_default_works_without_cpu_backend(
 
     ``numpyro.set_platform("cuda")`` restricts ``jax_platforms`` to cuda only,
     so ``jax.devices("cpu")`` raises. The default ``predictive_device="host"``
-    then falls back to pinned host memory: the export must still succeed, and
-    warn exactly once per call (the device is resolved once and handed to both
-    predictive drivers), naming the pinned-pool cap.
+    then takes the backend-free NumPy path (one ``jax.device_get`` per chunk),
+    so the export succeeds with no warning.
     """
-    real_devices = jax.devices
-
-    def fail_cpu_devices(backend: str | None = None) -> list[jax.Device]:
-        if backend == "cpu":
-            msg = "Unknown backend cpu. Available backends are ['cuda']"
-            raise RuntimeError(msg)
-        return real_devices(backend)
-
-    monkeypatch.setattr(jax, "devices", fail_cpu_devices)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         tree = to_datatree(
             random.PRNGKey(7), _model(), posterior, data, covariates, predictive_batch_size=4
         )
     assert "posterior_predictive" in tree.children
     assert "predictions" in tree.children
-    fallback = [r for r in records if "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in str(r.message)]
+
+
+def test_to_datatree_cpu_without_cpu_backend_warns_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit ``predictive_device="cpu"`` with no CPU backend warns once per export.
+
+    The device is resolved once and the resolved ``"numpy"`` sentinel is handed
+    to both predictive drivers, so the unmet request is reported a single time.
+    """
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        tree = to_datatree(
+            random.PRNGKey(7),
+            _model(),
+            posterior,
+            data,
+            covariates,
+            predictive_batch_size=4,
+            predictive_device="cpu",
+        )
+    assert "predictions" in tree.children
+    fallback = [r for r in records if "falls back to device='host'" in str(r.message)]
     assert len(fallback) == 1, [str(r.message) for r in records]
-    others = [r for r in records if r not in fallback and issubclass(r.category, UserWarning)]
-    assert not others, [str(r.message) for r in others]
 
 
 def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:

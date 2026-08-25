@@ -39,6 +39,7 @@ from typing import Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import random
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
@@ -662,7 +663,7 @@ def pathfinder_samples(
     *,
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array]:
+) -> dict[str, Array | np.ndarray]:
     """Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
 
     The returned dict has the sample axis leading and is ready to pass to
@@ -691,30 +692,30 @@ def pathfinder_samples(
     device
         Where each chunk of draws is moved as soon as it is drawn; see
         :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
-        for the pinned fallback when the JAX CPU backend is not initialized and
+        for the NumPy path taken when the JAX CPU backend is not initialized and
         for the rules on mixing a host-committed result with other arrays.
 
     Returns
     -------
     dict[str, Array]
-        Posterior samples of the latent sites, sample axis leading (leaves
-        committed to the CPU device, or to pinned host memory in the fallback,
-        when ``device`` is ``"host"``).
+        Posterior samples of the latent sites, sample axis leading (with
+        ``device="host"``: leaves committed to the CPU device, or NumPy arrays
+        when no CPU backend is initialized).
 
     Raises
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
     RuntimeError
-        If the pinned fallback is taken and the array's device exposes no host
-        memory kind (see
+        If ``device="pinned_host"`` is requested on a device that exposes no
+        host memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Warns
     -----
     UserWarning
-        If ``device`` is ``"host"`` or ``"cpu"`` and the JAX CPU backend is not
-        initialized, so the draws fall back to pinned host memory.
+        If ``device="cpu"`` is requested and the JAX CPU backend is not
+        initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
     _require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
@@ -993,7 +994,7 @@ def multipathfinder_samples(
     resample: Literal["auto", "psis", "elbo"] = "auto",
     batch_size: int | None = None,
     device: jax.Device | str | None = None,
-) -> dict[str, Array]:
+) -> dict[str, Array | np.ndarray]:
     """Draw ``num_samples`` posterior samples from a fitted multipath Pathfinder fit.
 
     Every call draws fresh unconstrained samples from each path's fitted normal
@@ -1059,15 +1060,15 @@ def multipathfinder_samples(
     device
         Where each chunk of draws is moved as soon as it is drawn; see
         :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
-        for the pinned fallback when the JAX CPU backend is not initialized and
+        for the NumPy path taken when the JAX CPU backend is not initialized and
         for the rules on mixing a host-committed result with other arrays.
 
     Returns
     -------
     dict[str, Array]
-        Posterior samples of the latent sites, sample axis leading (leaves
-        committed to the CPU device, or to pinned host memory in the fallback,
-        when ``device`` is ``"host"``).
+        Posterior samples of the latent sites, sample axis leading (with
+        ``device="host"``: leaves committed to the CPU device, or NumPy arrays
+        when no CPU backend is initialized).
 
     Raises
     ------
@@ -1075,8 +1076,8 @@ def multipathfinder_samples(
         If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
         not one of ``"auto"``, ``"psis"``, ``"elbo"``.
     RuntimeError
-        If the pinned fallback is taken and the array's device exposes no host
-        memory kind (see
+        If ``device="pinned_host"`` is requested on a device that exposes no
+        host memory kind (see
         :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
 
     Warns
@@ -1085,8 +1086,8 @@ def multipathfinder_samples(
         In PSIS mode, if the ``pareto_k`` recomputed on this call's fresh draws
         exceeds ``0.7``. This is a separate diagnostic from ``fit.pareto_k``,
         which is computed once over the pool stored at fit time. Also if
-        ``device`` is ``"host"`` or ``"cpu"`` and the JAX CPU backend is not
-        initialized, so the draws fall back to pinned host memory.
+        ``device="cpu"`` is requested and the JAX CPU backend is not
+        initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
     _require_positive_num_samples(num_samples)
     if resample not in ("auto", "psis", "elbo"):

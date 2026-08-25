@@ -12,9 +12,11 @@ import numpy as np
 import pytest
 from conftest import (
     assert_host_resident,
+    assert_numpy_host,
     assert_pinned_host_resident,
     commit_host,
     empty_covariates,
+    fail_devices_for,
     rw_model,
     svi_guide_params,
 )
@@ -421,20 +423,7 @@ def test_single_compile_while_chunking_with_device(count_compilations, device: s
     assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
 
 
-# --- P7: host offloading (``device="host"``: CPU device, pinned fallback) --------
-
-
-def _fail_devices_for(platform: str) -> "object":
-    """Build a ``jax.devices`` stand-in whose ``platform`` backend is missing."""
-    real_devices = jax.devices
-
-    def fake_devices(backend: str | None = None) -> list[jax.Device]:
-        if backend == platform:
-            msg = f"Unknown backend {platform}. Available backends are ['cuda']"
-            raise RuntimeError(msg)
-        return real_devices(backend)
-
-    return fake_devices
+# --- P7: host offloading (``device="host"``: CPU device, NumPy fallback, explicit pinned)
 
 
 @pytest.mark.parametrize("device", ["host", "cpu"])
@@ -447,37 +436,48 @@ def test_resolve_device_host_resolves_to_the_cpu_device(device: str) -> None:
     assert _resolve_device(device) == jax.devices("cpu")[0]
 
 
-_FALLBACK_WARNING = r"XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB.*set_platform\('cuda,cpu'\)"
+_FALLBACK_WARNING = r"falls back to device='host'.*NumPy.*set_platform\('cuda,cpu'\)"
 
 
-@pytest.mark.parametrize("device", ["host", "cpu"])
-def test_resolve_device_missing_cpu_falls_back_to_pinned_with_warning(
-    monkeypatch: pytest.MonkeyPatch, device: str
+def test_resolve_device_host_without_cpu_backend_is_numpy_and_silent(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Without a CPU backend, ``"host"``/``"cpu"`` degrade to the pinned sentinel and warn.
+    """Without a CPU backend ``"host"`` is the backend-free NumPy path, with no warning.
 
     ``numpyro.set_platform("cuda")`` sets ``jax_platforms`` and leaves the CPU
-    backend uninitialized. The fallback keeps working (the regression behind the
-    original GPU ``to_datatree`` failure) but is capped by the pinned host pool,
-    so the warning must name the cap and the remedy.
+    backend uninitialized. A CUDA client offers no pageable ``jax.Array``
+    container, so ``"host"`` copies each chunk with ``jax.device_get`` instead
+    (PR #65): fully functional, no pinned-pool cap, hence nothing to warn about.
     """
-    monkeypatch.setattr(jax, "devices", _fail_devices_for("cpu"))
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        resolved = _resolve_device("host")
+    assert resolved == "numpy"
+    assert isinstance(_transfer(jnp.arange(4.0), resolved), np.ndarray)
+
+
+def test_resolve_device_cpu_without_cpu_backend_falls_back_to_numpy_with_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit ``"cpu"`` request that cannot be honored warns and takes the NumPy path."""
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     with pytest.warns(UserWarning, match=_FALLBACK_WARNING):
-        resolved = _resolve_device(device)
-    assert resolved == "pinned_host"
-    assert_pinned_host_resident(_transfer(jnp.arange(4.0), resolved))
+        resolved = _resolve_device("cpu")
+    assert resolved == "numpy"
 
 
-def test_resolve_device_pinned_host_passes_through_silently() -> None:
-    """The resolved fallback (and an explicit request for pinned memory) never re-warns.
+@pytest.mark.parametrize("sentinel", ["pinned_host", "numpy"])
+def test_resolved_sentinels_pass_through_silently(sentinel: str) -> None:
+    """Resolved sentinels (also explicit requests) are idempotent and never warn.
 
     ``to_datatree`` resolves once and hands the result to both predictive
-    drivers, which resolve again; the sentinel must be idempotent so a missing
-    CPU backend warns once per export.
+    drivers, which resolve again; a non-idempotent sentinel would re-warn or
+    re-resolve differently.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert _resolve_device("pinned_host") == "pinned_host"
+        assert _resolve_device(sentinel) == sentinel
 
 
 def test_is_host_resident_predicate(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -553,8 +553,13 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu() -
     be released before the next site is stitched.
     """
     cpu = jax.devices("cpu")[0]
-    chunks = [commit_host(jnp.arange(8.0).reshape(4, 2) + 10.0 * i, "cpu") for i in range(3)]
-    expected = np.concatenate([np.asarray(c) for c in chunks], axis=0)[:10]
+    # Chunks of 0.5 MiB: jax aliases a NumPy buffer only when it is suitably
+    # aligned, and small malloc blocks are not, whereas blocks this size are
+    # page-aligned (the multi-GB sites this path exists for are too).
+    chunks: list[Array | np.ndarray] = [
+        commit_host(jnp.arange(4096.0 * 32).reshape(4096, 32) + 10.0 * i, "cpu") for i in range(3)
+    ]
+    expected = np.concatenate([np.asarray(c) for c in chunks], axis=0)[:10_000]
     staged: list[np.ndarray] = []
     real_device_put = jax.device_put
 
@@ -564,11 +569,12 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu() -
         return real_device_put(x, device, **kwargs)
 
     with mock.patch.object(jax, "device_put", spy_device_put):
-        stitched = _stitch_chunks(chunks, 10, cpu)
+        stitched = _stitch_chunks(chunks, 10_000, cpu)
 
+    assert isinstance(stitched, jax.Array)
     assert stitched.committed
     assert stitched.devices() == {cpu}
-    assert stitched.shape == (10, 2)
+    assert stitched.shape == (10_000, 32)
     assert np.array_equal(np.asarray(stitched), expected)
     assert chunks == []
     assert len(staged) == 1
@@ -578,9 +584,9 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu() -
 def test_oom_advice_names_pinned_pool_for_host_memory_errors() -> None:
     """A pinned-pool OOM must not be reported as an accelerator OOM.
 
-    The accelerator message recommends ``device="host"``, which is exactly what
-    a caller hitting the pinned pool already used; the host branch names the
-    cap and the CPU-backend remedy instead, and skips the device budget line.
+    Only an explicit ``device="pinned_host"`` (or the caller's own pinned
+    arrays) uses that pool, so the host branch names the cap, points at
+    ``device="host"`` (pageable memory), and skips the device budget line.
     """
     msg = (
         "RESOURCE_EXHAUSTED: Out of host memory while trying to allocate 15200000000 bytes "
@@ -592,7 +598,8 @@ def test_oom_advice_names_pinned_pool_for_host_memory_errors() -> None:
     text = str(excinfo.value)
     assert "pinned host memory" in text
     assert "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in text
-    assert "set_platform" in text
+    assert "device='host'" in text
+    assert "set_platform" not in text
     assert "batch_size (currently 250)" in text
     assert "device memory budget" not in text
     assert "RESOURCE_EXHAUSTED" in str(excinfo.value.__cause__)
@@ -632,7 +639,7 @@ else:
 def test_resolve_device_missing_platform_raises_actionable_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(jax, "devices", _fail_devices_for("tpu"))
+    monkeypatch.setattr(jax, "devices", fail_devices_for("tpu"))
     with pytest.raises(ValueError, match="platform 'tpu' is not initialized"):
         _resolve_device("tpu")
 
@@ -812,6 +819,47 @@ def test_chunked_draws_cpu_device_is_host_resident_and_matches_values() -> None:
     assert np.array_equal(np.asarray(plain), np.asarray(hosted))
 
 
+def test_chunked_draws_numpy_sentinel_returns_numpy_and_matches_values() -> None:
+    """The resolved ``"numpy"`` sentinel inside ``_chunked_draws`` is the backend-free path."""
+
+    def predict_fn(key: Array, post: Mapping[str, "Array | np.ndarray"]) -> Array:
+        return jnp.asarray(post["x"]) * 2.0
+
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    plain = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4)
+    hosted = _chunked_draws(random.PRNGKey(0), predict_fn, posterior, 4, "numpy")
+    assert isinstance(hosted, np.ndarray)
+    assert hosted.shape == (10, 1)  # the 12 drawn rows are cut back to 10
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_chunked_draws_numpy_transfers_each_chunk_via_device_get(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Memory contract of the NumPy path: one ``device_get`` per chunk, nothing pinned."""
+    gets: list[tuple[int, ...]] = []
+    puts: list[object] = []
+    real_device_get = jax.device_get
+    real_device_put = jax.device_put
+
+    def spy_device_get(x: Array) -> np.ndarray:
+        gets.append(tuple(np.shape(x)))
+        return real_device_get(x)
+
+    def spy_device_put(x: Array, device: object = None, **kwargs: object) -> Array:
+        puts.append(device)
+        return real_device_put(x, device, **kwargs)
+
+    monkeypatch.setattr(jax, "device_get", spy_device_get)
+    monkeypatch.setattr(jax, "device_put", spy_device_put)
+    posterior = {"x": jnp.arange(10.0)[:, None]}
+    _chunked_draws(
+        random.PRNGKey(0), lambda _key, post: jnp.asarray(post["x"]), posterior, 4, "numpy"
+    )
+    assert gets == [(4, 1), (4, 1), (4, 1)]  # np.concatenate is not a transfer
+    assert not any(_is_cpu_target(d) or _is_pinned_target(d) for d in puts)
+
+
 def test_chunked_draws_pinned_sentinel_is_pinned_and_matches_values() -> None:
     """The resolved ``"pinned_host"`` sentinel inside ``_chunked_draws`` is the pinned fallback."""
 
@@ -929,26 +977,100 @@ def test_predict_in_sample_host_bitwise_matches_default() -> None:
     assert np.array_equal(np.asarray(plain), np.asarray(hosted))
 
 
-def test_draw_posterior_host_without_cpu_backend_is_pinned_and_warns(
+def test_draw_chunked_numpy_returns_numpy_and_matches_values() -> None:
+    """The shared draw driver's NumPy path: same values, NumPy leaves, correct overdraw cut."""
+
+    def draw_fn(key: Array, n: int) -> dict[str, Array]:
+        return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
+
+    key = random.PRNGKey(11)
+    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
+    assert_numpy_host(hosted)
+    assert hosted["a"].shape == (7, 2)
+    assert hosted["b"].shape == (7,)
+    for name, leaf in plain.items():
+        assert np.array_equal(np.asarray(leaf), hosted[name])
+
+
+def test_draw_posterior_host_without_cpu_backend_is_numpy_and_silent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Public fallback contract: no CPU backend means pinned leaves, one warning, same draws."""
+    """Public backend-free contract: no CPU backend means NumPy leaves, no warning, same draws."""
     _model, _data, guide, params = _fit_data()
     plain = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
 
-    monkeypatch.setattr(jax, "devices", _fail_devices_for("cpu"))
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         hosted = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="host")
-    matching = [r for r in records if "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in str(r.message)]
-    assert len(matching) == 1
-    assert_pinned_host_resident(hosted)
+    assert_numpy_host(hosted)
     for name, leaf in plain.items():
-        assert np.array_equal(np.asarray(leaf), np.asarray(hosted[name]))
+        assert np.array_equal(np.asarray(leaf), hosted[name])
 
 
-def test_host_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The fallback warning points at user code, not at the jaxtyping/beartype wrappers.
+def test_forecast_host_without_cpu_backend_returns_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        hosted = forecast(
+            random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="host"
+        )
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_predict_in_sample_host_without_cpu_backend_returns_numpy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model, _data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
+    plain = predict_in_sample(random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        hosted = predict_in_sample(
+            random.PRNGKey(3), model, post, empty_covariates(30), batch_size=4, device="host"
+        )
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_forecast_explicit_pinned_host_stays_pinned() -> None:
+    """``device="pinned_host"`` is the only way onto the pinned pool, and it is honored."""
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
+    pinned = forecast(
+        random.PRNGKey(3),
+        model,
+        post,
+        data,
+        empty_covariates(36),
+        batch_size=3,
+        device="pinned_host",
+    )
+    assert_pinned_host_resident(pinned)
+    assert np.array_equal(np.asarray(plain), np.asarray(pinned))
+
+
+def test_forecast_explicit_numpy_device_returns_numpy() -> None:
+    """``device="numpy"`` forces the backend-free NumPy path even with a CPU backend present."""
+    model, data, guide, params = _fit_data()
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10)
+    plain = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3)
+    hosted = forecast(
+        random.PRNGKey(3), model, post, data, empty_covariates(36), batch_size=3, device="numpy"
+    )
+    assert isinstance(hosted, np.ndarray)
+    assert np.array_equal(np.asarray(plain), hosted)
+
+
+def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ``"cpu"`` fallback warning points at user code, not at the jaxtyping wrappers.
 
     Every package function is wrapped by the jaxtyping import hook, so a plain
     ``stacklevel`` lands in ``jaxtyping/_decorator.py`` and Python's per-location
@@ -956,12 +1078,13 @@ def test_host_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPa
     wrapper frames so it is attributed to (and deduplicated per) the call site.
     """
     _model, _data, guide, params = _fit_data()
-    monkeypatch.setattr(jax, "devices", _fail_devices_for("cpu"))
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="host")
-    matching = [r for r in records if "XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB" in str(r.message)]
+        hosted = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="cpu")
+    matching = [r for r in records if "falls back to device='host'" in str(r.message)]
     assert [r.filename for r in matching] == [__file__]
+    assert_numpy_host(hosted)
 
 
 def test_predictive_oom_reports_batch_size() -> None:
