@@ -34,14 +34,14 @@ Number of posterior draws.
 Optional chunk size for the drawing itself; see `~numpyro_forecast.functional.posterior.draw_posterior()` (the same memory/reproducibility contract applies).
 
 `device: jax.Device | str | None = None`  
-Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.functional.posterior.draw_posterior()`, including for the JAX rule that arithmetic mixing a host-committed result with a device-resident array raises rather than running on the accelerator.
+Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.functional.posterior.draw_posterior()`, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
 
 
 ## Returns
 
 
 `dict[str, Array]`  
-Posterior samples of the latent sites, sample axis leading (leaves committed to host memory when `device` resolves to `"host"`).
+Posterior samples of the latent sites, sample axis leading (with `device="host"`: leaves committed to the CPU device, or NumPy arrays when no CPU backend is initialized).
 
 
 ## Raises
@@ -51,4 +51,11 @@ Posterior samples of the latent sites, sample axis leading (leaves committed to 
 If `num_samples` or `batch_size` is not positive.
 
 `RuntimeError`  
-If `device` resolves to `"host"` and the array's device exposes no host memory kind (see `~numpyro_forecast.functional._offload._host_memory_kind()`).
+If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `~numpyro_forecast.functional._offload._host_memory_kind()`).
+
+
+## Warns
+
+
+`UserWarning`  
+If `device="cpu"` is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of `"host"` instead.

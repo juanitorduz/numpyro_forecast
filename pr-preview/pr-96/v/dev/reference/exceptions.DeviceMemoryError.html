@@ -125,7 +125,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
   <link rel="alternate" type="text/markdown" href="exceptions.DeviceMemoryError.md">
-  <meta name="description" content="The accelerator ran out of memory during posterior or predictive sampling.">
+  <meta name="description" content="A memory pool ran out during posterior or predictive sampling.">
   <script type="application/ld+json">
 [
   {
@@ -156,12 +156,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="exceptions.DeviceMemoryError – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="The accelerator ran out of memory during posterior or predictive sampling.">
+  <meta property="og:description" content="A memory pool ran out during posterior or predictive sampling.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DeviceMemoryError.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="exceptions.DeviceMemoryError – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="The accelerator ran out of memory during posterior or predictive sampling.">
+  <meta name="twitter:description" content="A memory pool ran out during posterior or predictive sampling.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -730,17 +730,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>The accelerator ran out of memory during posterior or predictive sampling.</p>
+<p>A memory pool ran out during posterior or predictive sampling.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L108-L121" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L108-L125" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">DeviceMemoryError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Raised by <code>~numpyro_forecast.functional.posterior.draw_posterior()</code> and the predictive drivers (<code>~numpyro_forecast.functional.prediction.forecast()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, and everything built on them, e.g.&nbsp;<code>~numpyro_forecast.convert.to_datatree()</code>) when XLA reports <code>RESOURCE_EXHAUSTED</code>. The message embeds the device’s memory budget and the lever: the per-chunk footprint scales linearly with <code>batch_size</code> times the panel width, so lower (or set) <code>batch_size</code>, free large device arrays still referenced elsewhere, and keep results off the accelerator with <code>device="host"</code>. The original XLA error is chained as <code>__cause__</code>.</p>
+<p>Raised by <code>~numpyro_forecast.functional.posterior.draw_posterior()</code> and the predictive drivers (<code>~numpyro_forecast.functional.prediction.forecast()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, and everything built on them, e.g.&nbsp;<code>~numpyro_forecast.convert.to_datatree()</code>) when XLA reports <code>RESOURCE_EXHAUSTED</code>. For an accelerator OOM the message embeds the device’s memory budget and the lever: the per-chunk footprint scales linearly with <code>batch_size</code> times the panel width, so lower (or set) <code>batch_size</code>, free large device arrays still referenced elsewhere, and keep results off the accelerator with <code>device="host"</code>. For a pinned host pool OOM (<code>Out of host memory</code>, reached only through an explicit <code>device="pinned_host"</code> or the caller’s own pinned arrays) it names the pool’s cap (<code>XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB</code>) and points at <code>device="host"</code>, which lands results in pageable host memory, instead. The original XLA error is chained as <code>__cause__</code>.</p>
 </div>
 
 

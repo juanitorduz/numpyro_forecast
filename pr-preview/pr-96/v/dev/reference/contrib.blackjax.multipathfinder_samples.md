@@ -50,14 +50,14 @@ How to combine the per-path draws: `"auto"` (default), `"psis"`, or `"elbo"`; se
 Optional chunk size for the drawing itself; see `~numpyro_forecast.functional.posterior.draw_posterior()` (the same memory/reproducibility contract applies). Note that each chunk draws `num_paths * batch_size` samples internally.
 
 `device: jax.Device | str | None = None`  
-Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.functional.posterior.draw_posterior()`, including for the JAX rule that arithmetic mixing a host-committed result with a device-resident array raises rather than running on the accelerator.
+Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.functional.posterior.draw_posterior()`, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
 
 
 ## Returns
 
 
 `dict[str, Array]`  
-Posterior samples of the latent sites, sample axis leading (leaves committed to host memory when `device` resolves to `"host"`).
+Posterior samples of the latent sites, sample axis leading (with `device="host"`: leaves committed to the CPU device, or NumPy arrays when no CPU backend is initialized).
 
 
 ## Raises
@@ -67,11 +67,11 @@ Posterior samples of the latent sites, sample axis leading (leaves committed to 
 If `num_samples` or `batch_size` is not positive, or `resample` is not one of `"auto"`, `"psis"`, `"elbo"`.
 
 `RuntimeError`  
-If `device` resolves to `"host"` and the array's device exposes no host memory kind (see `~numpyro_forecast.functional._offload._host_memory_kind()`).
+If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `~numpyro_forecast.functional._offload._host_memory_kind()`).
 
 
 ## Warns
 
 
 `UserWarning`  
-In PSIS mode, if the `pareto_k` recomputed on this call's fresh draws exceeds `0.7`. This is a separate diagnostic from `fit.pareto_k`, which is computed once over the pool stored at fit time.
+In PSIS mode, if the `pareto_k` recomputed on this call's fresh draws exceeds `0.7`. This is a separate diagnostic from `fit.pareto_k`, which is computed once over the pool stored at fit time. Also if `device="cpu"` is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of `"host"` instead.

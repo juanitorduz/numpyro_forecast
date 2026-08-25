@@ -712,6 +712,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
   <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#warns" id="toc-warns" class="nav-link" data-scroll-target="#warns">Warns</a></li>
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
@@ -743,7 +744,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/prediction.py#L192-L292" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/prediction.py#L198-L312" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">prediction</span><span class="op">.</span><span class="va">forecast</span>(</span>
@@ -775,7 +776,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, ArrayLike]</span></code></dt>
 <dd>
-<p>Posterior samples of the latent sites, sample axis leading. NumPy leaves are accepted directly (e.g.&nbsp;host-offloaded draws).</p>
+<p>Posterior samples of the latent sites, sample axis leading. The output of a <code>device="host"</code> stage (CPU-committed jax leaves or NumPy leaves) is accepted directly.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -795,7 +796,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. <code>"host"</code> commits every chunk to host memory and returns a <code>jax.Array</code> whose sharding carries a host memory kind (<code>"pinned_host"</code> where the backend offers it), so nothing of the result occupies accelerator memory; call <code>numpy.asarray()</code> on it for a plain NumPy copy. It needs no CPU backend, so it works even when <code>numpyro.set_platform("cuda")</code> (or <code>jax_platforms</code>) leaves only an accelerator backend initialized, which makes it the recommended choice on GPU. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device instead (<code>"cpu"</code> falls back to <code>"host"</code> with a <code>UserWarning</code> when the CPU backend is not initialized). With <code>batch_size</code> set on an accelerator, either bounds accelerator memory by a single chunk instead of the full <code>(sample, future, obs)</code> array; the draw values are unchanged, only where the result lives. The bound requires <code>batch_size</code> strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. <code>None</code> keeps everything on the default device. Arithmetic that mixes a host-committed result with a device-resident array raises in JAX rather than running on the accelerator, so feed it straight into <code>~numpyro_forecast.convert.to_datatree()</code> or the <code>batch_size</code>-chunked evaluation metrics in <code>~numpyro_forecast.evaluate</code> (both already accept it), or convert explicitly first with <code>np.asarray(x)</code> (stays on host) or <code>jax.device_put(x, device)</code> (moves it to an accelerator).
+Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives. <code>"host"</code> keeps the result in pageable host memory, so nothing of it occupies accelerator memory: with the JAX CPU backend initialized it commits every chunk to <code>jax.devices("cpu")[0]</code> and returns a committed <code>jax.Array</code> (<code>np.asarray</code> on it is a zero-copy view); without it (for example after <code>numpyro.set_platform("cuda")</code>, or a <code>JAX_PLATFORMS</code> preset) it copies each chunk with <code>jax.device_get()</code> and returns a NumPy array, since a CUDA client offers no pageable <code>jax.Array</code> container. It therefore needs no CPU backend and never pins memory. <code>"numpy"</code> forces the NumPy path; <code>"pinned_host"</code> commits to the accelerator’s pinned host memory kind instead, a pool capped by <code>XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB</code> (64 GB by default on CUDA), so prefer <code>"host"</code> for large panels. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device (<code>"cpu"</code> warns and takes the NumPy path when the CPU backend is missing). With <code>batch_size</code> set on an accelerator, any of these bounds accelerator memory by a single chunk instead of the full <code>(sample, future, obs)</code> array; the draw values are unchanged, only where the result lives. The bound requires <code>batch_size</code> strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. <code>None</code> keeps everything on the default device. A host-committed jax result is not a drop-in replacement for a device array in your own <code>jnp</code> code: mixed with an uncommitted array an op runs on the CPU and returns a CPU-committed array, mixed with an accelerator-committed array it raises, and a pinned array raises on any mix. Feed it straight into <code>~numpyro_forecast.convert.to_datatree()</code> or the <code>batch_size</code>-chunked evaluation metrics in <code>~numpyro_forecast.evaluate</code> (both already accept it), or convert explicitly first with <code>np.asarray(x)</code> (stays on host) or <code>jax.device_put(x, device)</code> (moves it to an accelerator).
 </dd>
 </dl>
 </div>
@@ -806,7 +807,7 @@ Where each chunk of draws is placed as soon as it is drawn and where the stitche
 <dl>
 <dt><code> <span class="doc-parameter-annotation">Num[Array, <span class="st">" sample *batch future obs"</span>]</span></code></dt>
 <dd>
-Forecast samples over the <code>future = duration - t</code> horizon (floating point for continuous observations, integer for discrete/count models built with <code>~numpyro_forecast.functional.models.predict_glm()</code>; committed to host memory when <code>device</code> resolves to <code>"host"</code>).
+Forecast samples over the <code>future = duration - t</code> horizon (floating point for continuous observations, integer for discrete/count models built with <code>~numpyro_forecast.functional.models.predict_glm()</code>; with <code>device="host"</code> committed to the CPU device, or a NumPy array when no CPU backend is initialized).
 </dd>
 </dl>
 </div>
@@ -821,7 +822,18 @@ Forecast samples over the <code>future = duration - t</code> horizon (floating p
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device</code> resolves to <code>"host"</code> and the array’s device exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
+</dd>
+</dl>
+</div>
+</section>
+<section id="warns" class="level2 doc-warns">
+<h2 class="doc-warns">Warns</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">UserWarning</span></code></dt>
+<dd>
+If <code>device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of <code>"host"</code> instead.
 </dd>
 </dl>
 </div>

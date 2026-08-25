@@ -712,6 +712,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
   <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#warns" id="toc-warns" class="nav-link" data-scroll-target="#warns">Warns</a></li>
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
@@ -743,7 +744,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/posterior.py#L88-L186" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/functional/posterior.py#L88-L201" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">functional</span><span class="op">.</span><span class="va">posterior</span><span class="op">.</span><span class="va">draw_posterior</span>(</span>
@@ -779,7 +780,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is moved as soon as it is drawn. <code>"host"</code> commits every leaf to host memory and returns <code>jax.Array</code> leaves whose sharding carries a host memory kind (<code>"pinned_host"</code> where the backend offers it), so nothing of the result occupies accelerator memory; it needs no CPU backend, so it works even when <code>numpyro.set_platform("cuda")</code> (or <code>jax_platforms</code>) leaves only an accelerator backend initialized. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device instead (<code>"cpu"</code> falls back to <code>"host"</code> with a <code>UserWarning</code> when the CPU backend is not initialized). <code>None</code> keeps everything on the default device. <code>device</code> never changes the draw values. Arithmetic that mixes a host-committed leaf with a device-resident array raises in JAX rather than running on the accelerator, so feed a host-committed posterior straight into <code>~numpyro_forecast.functional.prediction.forecast()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, or <code>~numpyro_forecast.convert.to_datatree()</code> (all of which already accept it), or convert explicitly first with <code>np.asarray(x)</code> (stays on host) or <code>jax.device_put(x, device)</code> (moves it to an accelerator).
+Where each chunk of draws is moved as soon as it is drawn. <code>"host"</code> keeps every leaf in pageable host memory, so nothing of the result occupies accelerator memory: with the JAX CPU backend initialized it commits each leaf to <code>jax.devices("cpu")[0]</code> and returns committed <code>jax.Array</code> leaves (<code>np.asarray</code> on one is a zero-copy view); without it (for example after <code>numpyro.set_platform("cuda")</code>, or a <code>JAX_PLATFORMS</code> preset) it copies each chunk with <code>jax.device_get()</code> and returns NumPy arrays, since a CUDA client offers no pageable <code>jax.Array</code> container. It therefore needs no CPU backend and never pins memory. <code>"numpy"</code> forces the NumPy path; <code>"pinned_host"</code> commits to the accelerator’s pinned host memory kind instead, a pool capped by <code>XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB</code> (64 GB by default on CUDA), so prefer <code>"host"</code> for large panels. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device (<code>"cpu"</code> warns and takes the NumPy path when the CPU backend is missing). <code>None</code> keeps everything on the default device. <code>device</code> never changes the draw values. A host-committed jax result is not a drop-in replacement for a device array in your own <code>jnp</code> code: mixed with an uncommitted array an op runs on the CPU and returns a CPU-committed array, mixed with an accelerator-committed array it raises, and a pinned array raises on any mix. Feed a host posterior (in either container) straight into <code>~numpyro_forecast.functional.prediction.forecast()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, or <code>~numpyro_forecast.convert.to_datatree()</code> (all of which already accept it), or convert explicitly first with <code>np.asarray(x)</code> (stays on host) or <code>jax.device_put(x, device)</code> (moves it to an accelerator).
 </dd>
 </dl>
 </div>
@@ -788,9 +789,9 @@ Where each chunk of draws is moved as soon as it is drawn. <code>"host"</code> c
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">dict[str, Array | np.ndarray]</span></code></dt>
 <dd>
-Posterior samples of the latent sites, sample axis leading (leaves committed to host memory when <code>device</code> resolves to <code>"host"</code>).
+Posterior samples of the latent sites, sample axis leading. With <code>device="host"</code> the leaves are committed to the CPU device, or NumPy arrays when no CPU backend is initialized.
 </dd>
 </dl>
 </div>
@@ -805,7 +806,18 @@ Posterior samples of the latent sites, sample axis leading (leaves committed to 
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device</code> resolves to <code>"host"</code> and the array’s device exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
+</dd>
+</dl>
+</div>
+</section>
+<section id="warns" class="level2 doc-warns">
+<h2 class="doc-warns">Warns</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">UserWarning</span></code></dt>
+<dd>
+If <code>device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of <code>"host"</code> instead.
 </dd>
 </dl>
 </div>

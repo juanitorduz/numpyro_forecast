@@ -2684,9 +2684,9 @@ rng_key, rng_subkey = random.split(rng_key)
 post = draw_posterior(rng_subkey, fit, num_samples=1_000, batch_size=250, device="host")
 
 rng_key, rng_subkey = random.split(rng_key)
-# post lives in host memory (device="host"); np.asarray views the same buffer as
-# NumPy so the half-ensemble slice below is taken on the host rather than through
-# XLA on the accelerator. The draws are bitwise unchanged.
+# post lives in pageable host memory (device="host": jax arrays on the CPU device,
+# or NumPy arrays when no CPU backend is initialized); np.asarray views the same
+# buffer so the half-ensemble slice below is taken on the host, not through XLA.
 predictive = Predictive(
     model,
     posterior_samples={k: np.asarray(v)[:500] for k, v in post.items()},

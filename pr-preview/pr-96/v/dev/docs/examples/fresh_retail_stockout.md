@@ -4210,7 +4210,7 @@ sample_dims :
 
 We score on the original sales scale (rescaling the draws by each series' training mean and clipping negatives at zero, since sales are non-negative). CRPS is a proper scoring rule for probabilistic forecasts that generalizes the mean absolute error; coverage checks calibration by asking how often the central 94\\ and 50\\ intervals contain the truth. One terminology note to keep the sections consistent: the coverage metrics score *central* (equal-tailed) intervals bounded by fixed quantiles, while the forecast figures further below draw *HDI* bands; for a near-symmetric predictive the two nearly coincide, but on zero-clipped stockout days, where the predictive piles mass at zero, they can differ. As a reference point we use a seasonal-naive ensemble: the weekday-aligned 14-day windows from the training data, stacked as an empirical forecast distribution.
 
-We score with [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample) and [forecast](../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast) run on the very same `posterior_draws` the DataTree export consumed, so the metrics below and the tree describe one posterior, not two. The 1{,}000 draws are set by the far tails: each 3\\ tail of the central 94\\ interval rests on about 30 of them, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first 500 draws moves both coverages by about a hundredth (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="host"` commits every chunk (and the stitched ensemble) to host memory as a jax Array (pinned host memory), which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU. The package's own drivers and every evaluation metric accept these host-committed arrays directly, and `np.asarray` converts one to a plain NumPy array for our own rescaling and clipping below. Unlike `device="cpu"`, the host offload needs no JAX CPU backend, so it also works when `numpyro.set_platform("cuda")` leaves only the cuda backend initialized. The rest of the scoring keeps the ensembles in host memory end to end: the rescaling and zero-clipping run in NumPy, and the metrics evaluate in chunks of `batch_size` data cells ([eval_crps](../../reference/evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) / [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage)), so the accelerator never re-materializes the full ensemble either.
+We score with [predict_in_sample](../../reference/functional.prediction.predict_in_sample.md#numpyro_forecast.functional.prediction.predict_in_sample) and [forecast](../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast) run on the very same `posterior_draws` the DataTree export consumed, so the metrics below and the tree describe one posterior, not two. The 1{,}000 draws are set by the far tails: each 3\\ tail of the central 94\\ interval rests on about 30 of them, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first 500 draws moves both coverages by about a hundredth (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="host"` commits every chunk (and the stitched ensemble) to the CPU backend device as a jax Array in pageable host memory, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU (when the JAX CPU backend is not initialized, for example after `numpyro.set_platform("cuda")` or under a `JAX_PLATFORMS` preset, the same call returns NumPy arrays instead: each chunk is copied with `jax.device_get`, so it needs no CPU backend and no pinned memory; pinned host memory, a pool capped at 64 GB by default on CUDA, is used only when you ask for `device="pinned_host"`). The package's own drivers and every evaluation metric accept these host arrays directly in either form, and `np.asarray` views one as NumPy without a copy for our own rescaling and clipping below. A host-committed jax array is not a drop-in for a device array in your own `jnp` code: mixed with an uncommitted array an op runs on the CPU, mixed with an accelerator-committed array it raises, so convert explicitly at that boundary. The rest of the scoring keeps the ensembles in host memory end to end: the rescaling and zero-clipping run in NumPy, and the metrics evaluate in chunks of `batch_size` data cells ([eval_crps](../../reference/evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) / [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage)), so the accelerator never re-materializes the full ensemble either.
 
 
 ``` python
@@ -4291,10 +4291,10 @@ def metrics_table(
 
 
 rng_key, key_score_in, key_score_fc = random.split(rng_key, 3)
-# device="host" returns jax arrays committed to host memory; np.asarray views the
-# same buffer as NumPy. That is what keeps the rescale-and-clip below on the host:
-# a JAX multiply against scale_np would have to pull the full ensembles back onto
-# the accelerator first. The values are bitwise unchanged either way.
+# device="host" keeps the draws in pageable host memory: jax arrays committed to
+# the CPU device when that backend is initialized, NumPy arrays otherwise.
+# np.asarray is a zero-copy view either way, so the rescale-and-clip below runs
+# in NumPy on the host and the ensembles never touch the accelerator.
 pp_scaled = np.asarray(
     predict_in_sample(
         key_score_in, model, posterior_draws, covariates_train, batch_size=250, device="host"
@@ -4762,7 +4762,7 @@ covariates_demand: Float[
 )
 
 # np.asarray for the same reason as the scoring cell above: keep the rescale and
-# the clip on the host instead of copying the ensemble back to the accelerator.
+# the clip in NumPy on the host, sharing the buffer instead of copying it.
 fc_demand_scaled = np.asarray(
     forecast(
         key_score_fc,

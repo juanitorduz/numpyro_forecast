@@ -2101,9 +2101,9 @@ empirical 94% coverage: 0.98  (nominal 0.94)</code></pre>
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>post <span class="op">=</span> draw_posterior(rng_subkey, fit, num_samples<span class="op">=</span><span class="dv">1_000</span>, batch_size<span class="op">=</span><span class="dv">250</span>, device<span class="op">=</span><span class="st">"host"</span>)</span>
 <span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="co"># post lives in host memory (device="host"); np.asarray views the same buffer as</span></span>
-<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a><span class="co"># NumPy so the half-ensemble slice below is taken on the host rather than through</span></span>
-<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="co"># XLA on the accelerator. The draws are bitwise unchanged.</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="co"># post lives in pageable host memory (device="host": jax arrays on the CPU device,</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a><span class="co"># or NumPy arrays when no CPU backend is initialized); np.asarray views the same</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="co"># buffer so the half-ensemble slice below is taken on the host, not through XLA.</span></span>
 <span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>predictive <span class="op">=</span> Predictive(</span>
 <span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>    model,</span>
 <span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>    posterior_samples<span class="op">=</span>{k: np.asarray(v)[:<span class="dv">500</span>] <span class="cf">for</span> k, v <span class="kw">in</span> post.items()},</span>

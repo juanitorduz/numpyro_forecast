@@ -199,7 +199,7 @@ ValueError
 Drawing posterior samples and generating forecasts and in-sample predictions.
 
 
-draw_posterior(rng_key: jax.Array, guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jax.Array], num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array]
+draw_posterior(rng_key: jax.Array, guide: numpyro.infer.autoguide.AutoGuide, params: dict[str, jax.Array], num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
 
 Draw ``num_samples`` posterior samples of the latent sites from a fitted guide.
 
@@ -234,19 +234,27 @@ batch_size
     are reproducible per ``(rng_key, batch_size)``.
 device
     Where each chunk of draws is moved as soon as it is drawn. ``"host"``
-    commits every leaf to host memory and returns :class:`jax.Array` leaves
-    whose sharding carries a host memory kind (``"pinned_host"`` where the
-    backend offers it), so nothing of the result occupies accelerator
-    memory; it needs no CPU backend, so it works even when
-    ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves only an
-    accelerator backend initialized. A :class:`jax.Device` or platform
-    name like ``"cpu"`` commits the draws to that device instead
-    (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
-    the CPU backend is not initialized). ``None`` keeps everything on the
-    default device. ``device`` never changes the draw values. Arithmetic
-    that mixes a host-committed leaf with a device-resident array raises
-    in JAX rather than running on the accelerator, so feed a host-committed
-    posterior straight into
+    keeps every leaf in pageable host memory, so nothing of the result
+    occupies accelerator memory: with the JAX CPU backend initialized it
+    commits each leaf to ``jax.devices("cpu")[0]`` and returns committed
+    :class:`jax.Array` leaves (``np.asarray`` on one is a zero-copy view);
+    without it (for example after ``numpyro.set_platform("cuda")``, or a
+    ``JAX_PLATFORMS`` preset) it copies each chunk with
+    :func:`jax.device_get` and returns NumPy arrays, since a CUDA client
+    offers no pageable ``jax.Array`` container. It therefore needs no CPU
+    backend and never pins memory. ``"numpy"`` forces the NumPy path;
+    ``"pinned_host"`` commits to the accelerator's pinned host memory kind
+    instead, a pool capped by ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB`` (64 GB
+    by default on CUDA), so prefer ``"host"`` for large panels. A
+    :class:`jax.Device` or platform name like ``"cpu"`` commits the draws
+    to that device (``"cpu"`` warns and takes the NumPy path when the CPU
+    backend is missing). ``None`` keeps everything on the default device.
+    ``device`` never changes the draw values. A host-committed jax result
+    is not a drop-in replacement for a device array in your own ``jnp``
+    code: mixed with an uncommitted array an op runs on the CPU and
+    returns a CPU-committed array, mixed with an accelerator-committed
+    array it raises, and a pinned array raises on any mix. Feed a host
+    posterior (in either container) straight into
     :func:`~numpyro_forecast.functional.prediction.forecast`,
     :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, or
     :func:`~numpyro_forecast.convert.to_datatree` (all of which already
@@ -255,18 +263,25 @@ device
 
 Returns
 -------
-dict[str, Array]
-    Posterior samples of the latent sites, sample axis leading (leaves
-    committed to host memory when ``device`` resolves to ``"host"``).
+dict[str, Array | np.ndarray]
+    Posterior samples of the latent sites, sample axis leading. With
+    ``device="host"`` the leaves are committed to the CPU device, or NumPy
+    arrays when no CPU backend is initialized.
 
 Raises
 ------
 ValueError
     If ``num_samples`` or ``batch_size`` is not positive.
 RuntimeError
-    If ``device`` resolves to ``"host"`` and the array's device exposes no
+    If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
     :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+Warns
+-----
+UserWarning
+    If ``device="cpu"`` is requested and the JAX CPU backend is not
+    initialized, so the draws take the NumPy path of ``"host"`` instead.
 
 Notes
 -----
@@ -274,7 +289,7 @@ For an MCMC fit, use its samples directly (``mcmc.get_samples()``); this
 function draws afresh from a variational guide, and chunks drawn from
 independent subkeys remain valid i.i.d. posterior samples.
 
-forecast(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch future obs']
+forecast(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs']
 
 Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
@@ -291,8 +306,9 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading. NumPy
-    leaves are accepted directly (e.g. host-offloaded draws).
+    Posterior samples of the latent sites, sample axis leading. The output
+    of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
+    is accepted directly.
 data
     Observed data with time at axis ``-2`` and length ``t``.
 covariates
@@ -308,26 +324,32 @@ parallel
     the same draws up to floating-point reduction order.
 device
     Where each chunk of draws is placed as soon as it is drawn and where
-    the stitched result lives. ``"host"`` commits every chunk to host
-    memory and returns a :class:`jax.Array` whose sharding carries a host
-    memory kind (``"pinned_host"`` where the backend offers it), so nothing
-    of the result occupies accelerator memory; call :func:`numpy.asarray`
-    on it for a plain NumPy copy. It needs no CPU backend, so it works even
-    when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves
-    only an accelerator backend initialized, which makes it the recommended
-    choice on GPU. A :class:`jax.Device` or
-    platform name like ``"cpu"`` commits the draws to that device instead
-    (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
-    the CPU backend is not initialized). With ``batch_size`` set on an
-    accelerator, either bounds accelerator memory by a single chunk
-    instead of the full ``(sample, future, obs)`` array; the draw values
-    are unchanged, only where the result lives. The bound requires
-    ``batch_size`` strictly below the sample count: at or above it, the
-    single-shot path runs and the full array is materialized on the
-    default device before the one transfer. ``None`` keeps everything on
-    the default device. Arithmetic that mixes a host-committed result
-    with a device-resident array raises in JAX rather than running on
-    the accelerator, so feed it straight into
+    the stitched result lives. ``"host"`` keeps the result in pageable
+    host memory, so nothing of it occupies accelerator memory: with the JAX
+    CPU backend initialized it commits every chunk to
+    ``jax.devices("cpu")[0]`` and returns a committed :class:`jax.Array`
+    (``np.asarray`` on it is a zero-copy view); without it (for example
+    after ``numpyro.set_platform("cuda")``, or a ``JAX_PLATFORMS`` preset)
+    it copies each chunk with :func:`jax.device_get` and returns a NumPy
+    array, since a CUDA client offers no pageable ``jax.Array`` container.
+    It therefore needs no CPU backend and never pins memory. ``"numpy"``
+    forces the NumPy path; ``"pinned_host"`` commits to the accelerator's
+    pinned host memory kind instead, a pool capped by
+    ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB`` (64 GB by default on CUDA), so
+    prefer ``"host"`` for large panels. A :class:`jax.Device` or platform
+    name like ``"cpu"`` commits the draws to that device (``"cpu"`` warns
+    and takes the NumPy path when the CPU backend is missing). With
+    ``batch_size`` set on an accelerator, any of these bounds accelerator
+    memory by a single chunk instead of the full ``(sample, future, obs)`` array; the
+    draw values are unchanged, only where the result lives. The bound
+    requires ``batch_size`` strictly below the sample count: at or above
+    it, the single-shot path runs and the full array is materialized on
+    the default device before the one transfer. ``None`` keeps everything
+    on the default device. A host-committed jax result is not a drop-in
+    replacement for a device array in your own ``jnp`` code: mixed with
+    an uncommitted array an op runs on the CPU and returns a
+    CPU-committed array, mixed with an accelerator-committed array it
+    raises, and a pinned array raises on any mix. Feed it straight into
     :func:`~numpyro_forecast.convert.to_datatree` or the
     ``batch_size``-chunked evaluation metrics in
     :mod:`~numpyro_forecast.evaluate` (both already accept it), or
@@ -340,16 +362,23 @@ Num[Array, " sample *batch future obs"]
     Forecast samples over the ``future = duration - t`` horizon (floating
     point for continuous observations, integer for discrete/count models
     built with :func:`~numpyro_forecast.functional.models.predict_glm`;
-    committed to host memory when ``device`` resolves to ``"host"``).
+    with ``device="host"`` committed to the CPU device, or a NumPy array
+    when no CPU backend is initialized).
 
 Raises
 ------
 ValueError
     If ``covariates`` does not extend beyond ``data`` along the time axis.
 RuntimeError
-    If ``device`` resolves to ``"host"`` and the array's device exposes no
+    If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
     :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+Warns
+-----
+UserWarning
+    If ``device="cpu"`` is requested and the JAX CPU backend is not
+    initialized, so the draws take the NumPy path of ``"host"`` instead.
 
 Notes
 -----
@@ -360,7 +389,7 @@ so the underlying ``_predict`` compiles exactly once for a fixed shape, but
 changing ``batch_size`` changes the PRNG stream layout and therefore the
 exact draws. ``device`` never changes the draws, only where they live.
 
-predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs']
+predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs'] | jaxtyping.Num[ndarray, 'sample *batch time obs']
 
 Sample the in-sample posterior predictive of the ``obs`` site.
 
@@ -377,8 +406,9 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading. NumPy
-    leaves are accepted directly (e.g. host-offloaded draws).
+    Posterior samples of the latent sites, sample axis leading. The output
+    of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
+    is accepted directly.
 covariates
     Covariates with time at axis ``-2`` spanning the observed window. Its time
     length must match the data the ``posterior`` was fit on, since the in-sample
@@ -392,26 +422,32 @@ parallel
     ``batch_size``.
 device
     Where each chunk of draws is placed as soon as it is drawn and where
-    the stitched result lives. ``"host"`` commits every chunk to host
-    memory and returns a :class:`jax.Array` whose sharding carries a host
-    memory kind (``"pinned_host"`` where the backend offers it), so nothing
-    of the result occupies accelerator memory; call :func:`numpy.asarray`
-    on it for a plain NumPy copy. It needs no CPU backend, so it works even
-    when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``) leaves
-    only an accelerator backend initialized, which makes it the recommended
-    choice on GPU. A :class:`jax.Device` or
-    platform name like ``"cpu"`` commits the draws to that device instead
-    (``"cpu"`` falls back to ``"host"`` with a :class:`UserWarning` when
-    the CPU backend is not initialized). With ``batch_size`` set on an
-    accelerator, either bounds accelerator memory by a single chunk
-    instead of the full ``(sample, time, obs)`` array; the draw values are
-    unchanged, only where the result lives. The bound requires
-    ``batch_size`` strictly below the sample count: at or above it, the
-    single-shot path runs and the full array is materialized on the
-    default device before the one transfer. ``None`` keeps everything on
-    the default device. Arithmetic that mixes a host-committed result
-    with a device-resident array raises in JAX rather than running on
-    the accelerator, so feed it straight into
+    the stitched result lives. ``"host"`` keeps the result in pageable
+    host memory, so nothing of it occupies accelerator memory: with the JAX
+    CPU backend initialized it commits every chunk to
+    ``jax.devices("cpu")[0]`` and returns a committed :class:`jax.Array`
+    (``np.asarray`` on it is a zero-copy view); without it (for example
+    after ``numpyro.set_platform("cuda")``, or a ``JAX_PLATFORMS`` preset)
+    it copies each chunk with :func:`jax.device_get` and returns a NumPy
+    array, since a CUDA client offers no pageable ``jax.Array`` container.
+    It therefore needs no CPU backend and never pins memory. ``"numpy"``
+    forces the NumPy path; ``"pinned_host"`` commits to the accelerator's
+    pinned host memory kind instead, a pool capped by
+    ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB`` (64 GB by default on CUDA), so
+    prefer ``"host"`` for large panels. A :class:`jax.Device` or platform
+    name like ``"cpu"`` commits the draws to that device (``"cpu"`` warns
+    and takes the NumPy path when the CPU backend is missing). With
+    ``batch_size`` set on an accelerator, any of these bounds accelerator
+    memory by a single chunk instead of the full ``(sample, time, obs)`` array; the
+    draw values are unchanged, only where the result lives. The bound
+    requires ``batch_size`` strictly below the sample count: at or above
+    it, the single-shot path runs and the full array is materialized on
+    the default device before the one transfer. ``None`` keeps everything
+    on the default device. A host-committed jax result is not a drop-in
+    replacement for a device array in your own ``jnp`` code: mixed with
+    an uncommitted array an op runs on the CPU and returns a
+    CPU-committed array, mixed with an accelerator-committed array it
+    raises, and a pinned array raises on any mix. Feed it straight into
     :func:`~numpyro_forecast.convert.to_datatree` or the
     ``batch_size``-chunked evaluation metrics in
     :mod:`~numpyro_forecast.evaluate` (both already accept it), or
@@ -421,15 +457,22 @@ device
 Returns
 -------
 Num[Array, " sample *batch time obs"]
-    In-sample posterior-predictive draws of the ``obs`` site (committed to
-    host memory when ``device`` resolves to ``"host"``).
+    In-sample posterior-predictive draws of the ``obs`` site (with
+    ``device="host"`` committed to the CPU device, or a NumPy array when no
+    CPU backend is initialized).
 
 Raises
 ------
 RuntimeError
-    If ``device`` resolves to ``"host"`` and the array's device exposes no
+    If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
     :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+Warns
+-----
+UserWarning
+    If ``device="cpu"`` is requested and the JAX CPU backend is not
+    initialized, so the draws take the NumPy path of ``"host"`` instead.
 
 
 ## Backtesting & evaluation
@@ -437,7 +480,7 @@ RuntimeError
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, forecast_fn: collections.abc.Callable[..., jax.Array], in_sample_fn: collections.abc.Callable[..., jax.Array] | None = None, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, forecast_fn: collections.abc.Callable[..., jax.Array | numpy.ndarray], in_sample_fn: collections.abc.Callable[..., jax.Array | numpy.ndarray] | None = None, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -666,7 +709,7 @@ VectorizedMetricError
     If a metric forces a host conversion under ``vmap`` (it is not a pure
     JAX function).
 
-BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | None = None) -> None
+BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
 Per-window result of a :func:`backtest` run.
 
@@ -1443,18 +1486,22 @@ time-leading layout.
 
 DeviceMemoryError(message: str | None = None) -> None
 
-The accelerator ran out of memory during posterior or predictive sampling.
+A memory pool ran out during posterior or predictive sampling.
 
 Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
 the predictive drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
 :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
 everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
-when XLA reports ``RESOURCE_EXHAUSTED``. The message embeds the device's
-memory budget and the lever: the per-chunk footprint scales linearly with
-``batch_size`` times the panel width, so lower (or set) ``batch_size``,
-free large device arrays still referenced elsewhere, and keep results off
-the accelerator with ``device="host"``. The original XLA error is chained
-as ``__cause__``.
+when XLA reports ``RESOURCE_EXHAUSTED``. For an accelerator OOM the message
+embeds the device's memory budget and the lever: the per-chunk footprint
+scales linearly with ``batch_size`` times the panel width, so lower (or
+set) ``batch_size``, free large device arrays still referenced elsewhere,
+and keep results off the accelerator with ``device="host"``. For a pinned
+host pool OOM (``Out of host memory``, reached only through an explicit
+``device="pinned_host"`` or the caller's own pinned arrays) it names the
+pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
+``device="host"``, which lands results in pageable host memory, instead.
+The original XLA error is chained as ``__cause__``.
 
 
 ## ArviZ export
@@ -1482,8 +1529,9 @@ model
 posterior
     Posterior samples of the latent sites, with a single flattened sample
     axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
-    :func:`~numpyro_forecast.functional.posterior.draw_posterior`). NumPy
-    leaves are accepted directly (e.g. host-offloaded draws).
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
+    Host-committed leaves (the output of ``draw_posterior(...,
+    device="host")``) and NumPy leaves are accepted directly.
 data
     In-sample data with time at axis ``-2``.
 covariates
@@ -1520,23 +1568,23 @@ predictive_device
     Where the predictive draws are moved as they are sampled, forwarded to
     the ``device`` argument of
     :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
-    :func:`~numpyro_forecast.functional.prediction.forecast`. The default
-    ``"host"`` commits every chunk to host memory, returning
-    :class:`jax.Array` values whose sharding carries a host memory kind
-    (``"pinned_host"`` where the backend offers it, the form the tree is
-    built from anyway); it is what bounds accelerator memory when
-    ``predictive_batch_size`` is set, and it needs no CPU backend, so it
-    works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
-    leaves only an accelerator backend initialized. A :class:`jax.Device`
-    or platform name like ``"cpu"`` commits the draws to that device
-    instead; pass ``None`` to keep the draws on the default device
+    :func:`~numpyro_forecast.functional.prediction.forecast`. It is
+    resolved once and the same placement is handed to both. The default
+    ``"host"`` keeps the predictive draws in pageable host memory, which
+    is what bounds accelerator memory when ``predictive_batch_size`` is
+    set: with the JAX CPU backend initialized every chunk is committed to
+    ``jax.devices("cpu")[0]`` (jax Arrays the tree views as NumPy without a
+    copy); without it (for example after ``numpyro.set_platform("cuda")``,
+    or a ``JAX_PLATFORMS`` preset) every chunk is copied with
+    :func:`jax.device_get` (NumPy arrays), so no CPU backend is needed and
+    nothing is pinned. ``"pinned_host"`` uses the accelerator's pinned
+    host memory kind instead (capped at 64 GB by default on CUDA,
+    ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``). A :class:`jax.Device` or
+    platform name like ``"cpu"`` commits the draws to that device
+    (``"cpu"`` warns and takes the NumPy path when the CPU backend is
+    missing); pass ``None`` to keep the draws on the default device
     (chunked compute without per-chunk host transfers, for when the draws
     fit on the accelerator and transfers would dominate runtime).
-    Arithmetic that mixes a host-committed result with a device-resident
-    array raises in JAX rather than running on the accelerator; convert
-    such a result explicitly first with ``np.asarray(x)`` (stays on host)
-    or ``jax.device_put(x, device)`` (moves it to an accelerator) before
-    doing your own array math on it.
 coords
     Optional extra coordinates; these take precedence over the generated
     ``time`` coordinate. They also propagate to the forecast groups, where
@@ -1585,9 +1633,16 @@ ValueError
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 RuntimeError
-    If ``predictive_device`` resolves to ``"host"`` and the array's device
+    If ``predictive_device="pinned_host"`` is requested on a device that
     exposes no host memory kind (see
     :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+Warns
+-----
+UserWarning
+    If ``predictive_device="cpu"`` is requested and the JAX CPU backend is
+    not initialized, so the predictive draws take the NumPy path of
+    ``"host"`` instead (once per call).
 
 Notes
 -----

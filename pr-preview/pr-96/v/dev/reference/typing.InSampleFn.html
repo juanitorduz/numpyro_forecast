@@ -698,7 +698,7 @@ ul.task-list li input[type="checkbox"] {
 <p>A closure that fits a model on a training window and scores its in-sample fit.</p>
 </div>
 <div class="doc-signature doc-attribute">
-<p><code><span class="doc-parameter-name">typing.InSampleFn</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default">Callable[…, Array]</span></code></p>
+<p><code><span class="doc-parameter-name">typing.InSampleFn</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default">Callable[…, Array | np.ndarray]</span></code></p>
 </div>
 <div class="doc-text">
 <p>Called by <code>~numpyro_forecast.evaluate.backtest()</code> (only when <code>eval_train=True</code>) positionally as <code>in_sample_fn(rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None)</code>. Must return in-sample posterior-predictive samples with the sample axis first, shape <code>(num_samples, *batch, t1 - t0, obs)</code>. The same <code>batch_size</code>/host-offload notes as <a href="typing.ForecastFn.html#numpyro_forecast.typing.ForecastFn" class="gdls-link gdls-code">ForecastFn</a> apply.</p>

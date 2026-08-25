@@ -744,7 +744,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L981-L1162" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L989-L1173" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">multipathfinder_samples</span>(</span>
@@ -792,7 +792,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>, including for the JAX rule that arithmetic mixing a host-committed result with a device-resident array raises rather than running on the accelerator.
+Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
 </dd>
 </dl>
 </div>
@@ -803,7 +803,7 @@ Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_fo
 <dl>
 <dt><code> <span class="doc-parameter-annotation">dict[str, Array]</span></code></dt>
 <dd>
-Posterior samples of the latent sites, sample axis leading (leaves committed to host memory when <code>device</code> resolves to <code>"host"</code>).
+Posterior samples of the latent sites, sample axis leading (with <code>device="host"</code>: leaves committed to the CPU device, or NumPy arrays when no CPU backend is initialized).
 </dd>
 </dl>
 </div>
@@ -818,7 +818,7 @@ Posterior samples of the latent sites, sample axis leading (leaves committed to 
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device</code> resolves to <code>"host"</code> and the array’s device exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast.functional._offload._host_memory_kind()</code>).
 </dd>
 </dl>
 </div>
@@ -829,7 +829,7 @@ If <code>device</code> resolves to <code>"host"</code> and the array’s device 
 <dl>
 <dt><code> <span class="doc-parameter-annotation">UserWarning</span></code></dt>
 <dd>
-In PSIS mode, if the <code>pareto_k</code> recomputed on this call’s fresh draws exceeds <code>0.7</code>. This is a separate diagnostic from <code>fit.pareto_k</code>, which is computed once over the pool stored at fit time.
+In PSIS mode, if the <code>pareto_k</code> recomputed on this call’s fresh draws exceeds <code>0.7</code>. This is a separate diagnostic from <code>fit.pareto_k</code>, which is computed once over the pool stored at fit time. Also if <code>device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of <code>"host"</code> instead.
 </dd>
 </dl>
 </div>
