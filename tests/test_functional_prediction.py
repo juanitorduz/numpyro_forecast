@@ -544,22 +544,31 @@ def test_device_view_returns_uncommitted_copy_for_cpu_committed_leaf(
     assert jnp.array_equal(viewed, x)
 
 
-def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu() -> None:
+@pytest.mark.parametrize(
+    "chunk_shape", [(8,), (4_096, 32)], ids=["scalar-site-96-bytes", "half-MiB-chunks"]
+)
+def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu(
+    chunk_shape: tuple[int, ...],
+) -> None:
     """Stitching CPU-committed chunks stays on the CPU device and shares the staged buffer.
 
     The host peak is chunks plus one stitched copy; a silent alignment-triggered
     copy in the final ``device_put`` would double it, so the result must alias
-    the NumPy staging array. ``chunks`` is cleared so the per-chunk buffers can
-    be released before the next site is stitched.
+    the NumPy staging array. jax's CPU client aliases a NumPy buffer only when
+    it is 64-byte aligned, which neither small malloc blocks (a scalar site's
+    draws) nor glibc's mmap'd large blocks guarantee, so the staging buffer
+    must be allocated aligned rather than left to the allocator. ``chunks`` is
+    cleared so the per-chunk buffers can be released before the next site is
+    stitched.
     """
     cpu = jax.devices("cpu")[0]
-    # Chunks of 0.5 MiB: jax aliases a NumPy buffer only when it is suitably
-    # aligned, and small malloc blocks are not, whereas blocks this size are
-    # page-aligned (the multi-GB sites this path exists for are too).
+    rows = chunk_shape[0]
+    num_samples = 3 * rows - 2  # cut an overdraw so the slice path is covered too
     chunks: list[Array | np.ndarray] = [
-        commit_host(jnp.arange(4096.0 * 32).reshape(4096, 32) + 10.0 * i, "cpu") for i in range(3)
+        commit_host(jnp.arange(float(np.prod(chunk_shape))).reshape(chunk_shape) + 10.0 * i, "cpu")
+        for i in range(3)
     ]
-    expected = np.concatenate([np.asarray(c) for c in chunks], axis=0)[:10_000]
+    expected = np.concatenate([np.asarray(c) for c in chunks], axis=0)[:num_samples]
     staged: list[np.ndarray] = []
     real_device_put = jax.device_put
 
@@ -569,15 +578,16 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu() -
         return real_device_put(x, device, **kwargs)
 
     with mock.patch.object(jax, "device_put", spy_device_put):
-        stitched = _stitch_chunks(chunks, 10_000, cpu)
+        stitched = _stitch_chunks(chunks, num_samples, cpu)
 
     assert isinstance(stitched, jax.Array)
     assert stitched.committed
     assert stitched.devices() == {cpu}
-    assert stitched.shape == (10_000, 32)
+    assert stitched.shape == (num_samples, *chunk_shape[1:])
     assert np.array_equal(np.asarray(stitched), expected)
     assert chunks == []
     assert len(staged) == 1
+    assert staged[0].ctypes.data % 64 == 0
     assert stitched.unsafe_buffer_pointer() == staged[0].ctypes.data
 
 

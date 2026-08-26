@@ -554,6 +554,38 @@ def _transfer(draws: Array, device: _ResolvedDevice) -> Array | np.ndarray:
     return jax.device_put(draws, device).block_until_ready()
 
 
+_ZERO_COPY_ALIGNMENT = 64
+"""Byte alignment jax's CPU client requires to alias a NumPy buffer instead of copying it."""
+
+
+def _aligned_empty(shape: tuple[int, ...], dtype: np.dtype) -> np.ndarray:
+    """Allocate an uninitialized NumPy array whose data pointer is 64-byte aligned.
+
+    NumPy only guarantees its allocator's alignment (16 bytes on glibc's mmap'd
+    large blocks and on small malloc blocks), while :func:`jax.device_put`
+    aliases a NumPy buffer onto the CPU device only when it is aligned to
+    :data:`_ZERO_COPY_ALIGNMENT`; otherwise it copies silently. Over-allocating
+    a byte buffer and viewing it at the first aligned offset makes the aliasing
+    deterministic rather than a property of the platform allocator.
+
+    Parameters
+    ----------
+    shape
+        Shape of the array to allocate.
+    dtype
+        Element dtype.
+
+    Returns
+    -------
+    np.ndarray
+        A C-contiguous array of ``shape`` and ``dtype`` with an aligned pointer.
+    """
+    nbytes = int(np.prod(shape, dtype=np.int64)) * dtype.itemsize
+    raw = np.empty(nbytes + _ZERO_COPY_ALIGNMENT, dtype=np.uint8)
+    offset = (-raw.ctypes.data) % _ZERO_COPY_ALIGNMENT
+    return raw[offset : offset + nbytes].view(dtype).reshape(shape)
+
+
 def _stitch_chunks(
     chunks: list[Array | np.ndarray],
     num_samples: int,
@@ -572,9 +604,11 @@ def _stitch_chunks(
     arrays would copy them back into accelerator memory to run, and on
     CPU-committed chunks it would compile one executable per site shape for no
     gain. The chunks are viewed as NumPy (zero-copy, host to host), stitched
-    and sliced there, and the single result is committed back to the chunks'
-    sharding, which for the CPU device is again zero-copy. Otherwise
-    :func:`jax.numpy.concatenate` runs on the chunks' (committed) accelerator.
+    into a 64-byte-aligned staging buffer (:func:`_aligned_empty`) and sliced
+    there, and the single result is committed back to the chunks' sharding,
+    which for the CPU device is again zero-copy: jax aliases the aligned buffer
+    instead of copying it. Otherwise :func:`jax.numpy.concatenate` runs on the
+    chunks' (committed) accelerator.
 
     ``chunks`` is cleared right after the concatenation, so the per-chunk
     buffers can be collected as soon as their one caller reference (this
@@ -610,7 +644,11 @@ def _stitch_chunks(
         return stitched_np if stitched_np.shape[0] == num_samples else stitched_np[:num_samples]
     if device == "pinned_host" or _is_cpu_committed(first):
         sharding = first.sharding
-        staged = np.concatenate([np.asarray(chunk) for chunk in chunks], axis=0)
+        views = [np.asarray(chunk) for chunk in chunks]
+        total_rows = sum(view.shape[0] for view in views)
+        staged = _aligned_empty((total_rows, *views[0].shape[1:]), views[0].dtype)
+        np.concatenate(views, axis=0, out=staged)
+        del views
         chunks.clear()  # drop the per-chunk buffers before the final device_put
         if staged.shape[0] != num_samples:
             staged = staged[:num_samples]
