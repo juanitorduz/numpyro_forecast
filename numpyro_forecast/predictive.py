@@ -452,7 +452,7 @@ def forecast(
     Num[Array, " sample *batch future obs"]
         Forecast samples over the ``future = duration - t`` horizon (floating
         point for continuous observations, integer for discrete/count models
-        built with :func:`~numpyro_forecast.models.predict_glm`;
+        built with :func:`~numpyro_forecast.models.predict`;
         with ``device="host"`` committed to the CPU device, or a NumPy array
         when no CPU backend is initialized).
 

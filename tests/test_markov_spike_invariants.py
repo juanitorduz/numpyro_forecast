@@ -1,6 +1,6 @@
 """Permanent invariant suite ported from ``spikes/spike_scan_replay.py`` (S-M).
 
-Each test pins one NumPyro-internals behavior that ``markov_time_series``
+Each test pins one NumPyro-internals behavior that ``markov_series``
 (roadmap §7) relies on; the spike script is kept verbatim for provenance
 (recorded on jax 0.10.2 / numpyro 0.21.0) and these are its ⚙ canaries for
 K8/K10. A JAX or NumPyro upgrade that breaks a scan behavior fails a named
@@ -195,7 +195,7 @@ def test_plate_wrapping_scan_rejected() -> None:
     """S-M5: a plate WRAPPING the scan is rejected by NumPyro.
 
     Enclosing plates are unsupported: batching must happen with a plate INSIDE
-    the body (S-M3), which is why ``markov_time_series`` rejects enclosing
+    the body (S-M3), which is why ``markov_series`` rejects enclosing
     plates with actionable guidance.
     """
     cov = jnp.zeros((T_OBS, 1))

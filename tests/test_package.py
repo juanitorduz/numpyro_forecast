@@ -20,11 +20,11 @@ from numpyro_forecast import (
     eval_rmse,
     evaluate_forecast,
     forecast,
-    markov_time_series,
+    horizon,
+    innovations,
+    markov_series,
     predict,
-    predict_glm,
     predict_in_sample,
-    time_series,
 )
 
 
@@ -48,11 +48,11 @@ def test_public_api_is_importable() -> None:
         eval_rmse,
         evaluate_forecast,
         forecast,
-        markov_time_series,
+        horizon,
+        markov_series,
         predict,
-        predict_glm,
         predict_in_sample,
-        time_series,
+        innovations,
     }
     assert all(obj is not None for obj in exported)
 
@@ -83,14 +83,14 @@ def test_all_matches_exported_names() -> None:
         "eval_rmse",
         "evaluate_forecast",
         "forecast",
-        "markov_time_series",
+        "markov_series",
         "predict",
-        "predict_glm",
+        "horizon",
         "predict_in_sample",
         "predictions_to_datatree",
         "register_elementwise",
         "results_to_dataframe",
-        "time_series",
+        "innovations",
         "to_datatree",
     }
     for name in names:

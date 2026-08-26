@@ -129,7 +129,7 @@ draws, so you can fit with one and forecast with the other.
 - **Functional core.** The train/forecast split is an explicit, immutable
   `Horizon` value (derived from the covariate and data shapes) that is threaded
   into pure primitives. You write a model body `(Horizon, covariates) -> None`
-  that calls `time_series(...)` and `predict(...)`, wrap it with
+  that calls `innovations(...)` and `predict(...)`, wrap it with
   `forecasting_model(...)`, and drive inference with the free functions
   `fit_svi` / `fit_mcmc`, `draw_posterior`, and `forecast`. No global parameter
   store, explicit `PRNGKey` threading.
@@ -158,7 +158,7 @@ from numpyro_forecast import (
     forecast,
     forecasting_model,
     predict,
-    time_series,
+    innovations,
 )
 
 
@@ -173,7 +173,7 @@ def seasonal_body(h: Horizon, covariates):
     sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
     nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
 
-    drift = time_series(
+    drift = innovations(
         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
     )
     level = jnp.cumsum(drift, axis=-2)  # random-walk level

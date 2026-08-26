@@ -81,11 +81,11 @@ reference:
     desc: Plain model functions that register the train/forecast sites for you.
     contents:
       - models.Horizon
+      - models.horizon
       - models.Transition
-      - models.time_series
-      - models.markov_time_series
+      - models.innovations
+      - models.markov_series
       - models.predict
-      - models.predict_glm
 
   - title: Producing draws
     desc: Drawing posterior samples and generating forecasts and in-sample predictions.

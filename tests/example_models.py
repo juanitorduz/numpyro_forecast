@@ -1,7 +1,7 @@
 """Validated example forecasting models, kept for end-to-end tests.
 
 Reference models for :mod:`tests.test_examples`: plain functional models (a pure
-``(covariates, data=None)`` callable opening with ``Horizon.from_data``) that
+``(covariates, data=None)`` callable opening with ``horizon``) that
 mirror the example notebooks under ``docs/examples/`` and act as a regression
 target for the full fit-draw-forecast path.
 """
@@ -14,7 +14,7 @@ import numpyro.distributions as dist
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.features import periodic_repeat
-from numpyro_forecast.models import Horizon, predict, time_series
+from numpyro_forecast.models import horizon, innovations, predict
 from numpyro_forecast.typing import Array, ForecastModel
 
 
@@ -34,7 +34,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     data
         Observed data with time at axis ``-2`` (``None`` for prior sampling).
     """
-    h = Horizon.from_data(covariates, data)
+    h = horizon(covariates, data)
     num_features = covariates.shape[-1]
 
     bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
@@ -44,7 +44,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
     centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
 
-    drift = time_series(
+    drift = innovations(
         h,
         "drift",
         lambda: dist.Normal(0.0, drift_scale),
@@ -85,7 +85,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
         data
             Observed data with time at axis ``-2`` (``None`` for prior sampling).
         """
-        h = Horizon.from_data(covariates, data)
+        h = horizon(covariates, data)
         n_origin = covariates.shape[-3]
         n_destin = covariates.shape[-1]
         duration = covariates.shape[-2]
@@ -103,7 +103,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             destin_seasonal = numpyro.sample("destin_seasonal", dist.Normal(0.0, 5.0))
 
         with destin_plate:
-            drift = time_series(
+            drift = innovations(
                 h,
                 "drift",
                 lambda: dist.Normal(0.0, drift_scale),

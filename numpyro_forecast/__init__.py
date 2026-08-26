@@ -46,10 +46,10 @@ from numpyro_forecast.exceptions import (
 from numpyro_forecast.models import (
     Horizon,
     Transition,
-    markov_time_series,
+    horizon,
+    innovations,
+    markov_series,
     predict,
-    predict_glm,
-    time_series,
 )
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.surgery import register_elementwise
@@ -83,13 +83,13 @@ __all__ = [
     "eval_rmse",
     "evaluate_forecast",
     "forecast",
-    "markov_time_series",
+    "horizon",
+    "innovations",
+    "markov_series",
     "predict",
-    "predict_glm",
     "predict_in_sample",
     "predictions_to_datatree",
     "register_elementwise",
     "results_to_dataframe",
-    "time_series",
     "to_datatree",
 ]

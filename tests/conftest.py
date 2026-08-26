@@ -16,7 +16,7 @@ from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast._offload import _host_sharding
-from numpyro_forecast.models import Horizon, predict, time_series
+from numpyro_forecast.models import Horizon, horizon, innovations, predict
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
@@ -206,7 +206,7 @@ def rw_body(h: Horizon, covariates: Array) -> None:
     """Random-walk model body using the functional primitives (shared test helper)."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = time_series(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    drift = innovations(h, "drift", lambda: dist.Normal(0.0, drift_scale))
     predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
 
 
@@ -215,11 +215,11 @@ def rw_model(covariates: Array, data: Array | None = None) -> None:
 
     The functional-only replacement for the former ``RandomWalkModel``
     (a subclass of the former OOP ``ForecastingModel`` base class): derives
-    the :class:`Horizon` from the shapes itself via ``Horizon.from_data``, so
+    the :class:`Horizon` from the shapes itself via ``horizon``, so
     every non-legacy test drives it as a plain ``(covariates, data=None)``
     callable.
     """
-    rw_body(Horizon.from_data(covariates, data), covariates)
+    rw_body(horizon(covariates, data), covariates)
 
 
 def rw_model_factory() -> ForecastModel:

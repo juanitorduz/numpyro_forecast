@@ -23,7 +23,7 @@ from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.metrics import crps_empirical
-from numpyro_forecast.models import Horizon, predict, time_series
+from numpyro_forecast.models import horizon, innovations, predict
 from numpyro_forecast.optional import _api_canary
 from numpyro_forecast.predictive import forecast
 
@@ -49,7 +49,7 @@ def mean_model(covariates: Array, data: Array | None = None) -> None:
     posterior mean of ``mu`` is close to the sample mean of the data: a cheap
     closed-form recovery target.
     """
-    h = Horizon.from_data(covariates, data)
+    h = horizon(covariates, data)
     mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
     level = jnp.broadcast_to(mu, (h.duration, 1))
     predict(h, dist.Normal(0.0, 1.0), level)
@@ -57,10 +57,10 @@ def mean_model(covariates: Array, data: Array | None = None) -> None:
 
 def reparam_model(covariates: Array, data: Array | None = None) -> None:
     """Random-walk model with a ``LocScaleReparam`` drift (adds a ``_decentered`` site)."""
-    h = Horizon.from_data(covariates, data)
+    h = horizon(covariates, data)
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = time_series(
+    drift = innovations(
         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam()
     )
     level = jnp.cumsum(drift, axis=-2)
