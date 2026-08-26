@@ -16,15 +16,16 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
+from conftest import assert_host_resident, assert_numpy_host, fail_devices_for, rw_model
 from jax import Array, random
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.exceptions import KernelConfigError
-from numpyro_forecast.functional import Horizon, forecast, predict, time_series
 from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.optional import _api_canary
-from tests.conftest import assert_host_resident, assert_numpy_host, fail_devices_for, rw_model
+from numpyro_forecast.predictive import forecast
 
 pytest.importorskip("blackjax")
 
@@ -59,7 +60,7 @@ def reparam_model(covariates: Array, data: Array | None = None) -> None:
     h = Horizon.from_data(covariates, data)
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = time_series(
+    drift = innovations(
         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam()
     )
     level = jnp.cumsum(drift, axis=-2)
@@ -973,8 +974,9 @@ def test_backtest_accepts_a_forecast_fn_closure() -> None:
     real closure-based Pathfinder helper (Task 5); this only exercises the generic
     closure contract from this (BlackJAX-optional) test module.
     """
+    from conftest import rw_model_factory
+
     from numpyro_forecast.evaluate import backtest
-    from tests.conftest import rw_model_factory
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (24, 1)), axis=-2)
     covariates = _empty_covariates(24)

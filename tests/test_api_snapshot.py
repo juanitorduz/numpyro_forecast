@@ -107,7 +107,7 @@ class TestBuildSnapshot:
             "evaluate.BacktestResult",
             "evaluate.backtest",
             "exceptions.BacktestWindowError",
-            "functional.models.not_a_symbol",
+            "models.not_a_symbol",
             "gone.module.Thing",
         ]
         snapshot, skipped = api_snapshot.build_snapshot(entries, "9.9.9")
@@ -125,7 +125,7 @@ class TestBuildSnapshot:
             "NumpyroForecastError",
             "ValueError",
         ]
-        assert skipped == ["functional.models.not_a_symbol", "gone.module.Thing"]
+        assert skipped == ["models.not_a_symbol", "gone.module.Thing"]
 
 
 class TestMain:

@@ -76,9 +76,7 @@ class SeasonalForecaster(ForecastingModel):
     def model(self, zero_data, covariates):
         num_features = covariates.shape[-1]
         bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-        weight = numpyro.sample(
-            "weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1)
-        )
+        weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-3.0, 1.0))
         sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
         nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
@@ -120,7 +118,7 @@ print("CRPS:", eval_crps(samples, truth[t_obs:]))
 
 ## Two APIs: functional core and OOP shim
 
-The package is built around a **pure functional core** (`numpyro_forecast.functional`)
+The package is built around a **pure functional core** (`numpyro_forecast.models` and `numpyro_forecast.predictive`)
 and a thin **object-oriented shim** (`numpyro_forecast.forecaster`) that ports Pyro's
 class-based API. The two are fully interchangeable: both produce the same NumPyro
 model callable `(covariates, data=None)` and consume the same posterior dict of latent
@@ -129,7 +127,7 @@ draws, so you can fit with one and forecast with the other.
 - **Functional core.** The train/forecast split is an explicit, immutable
   `Horizon` value (derived from the covariate and data shapes) that is threaded
   into pure primitives. You write a model body `(Horizon, covariates) -> None`
-  that calls `time_series(...)` and `predict(...)`, wrap it with
+  that calls `innovations(...)` and `predict(...)`, wrap it with
   `forecasting_model(...)`, and drive inference with the free functions
   `fit_svi` / `fit_mcmc`, `draw_posterior`, and `forecast`. No global parameter
   store, explicit `PRNGKey` threading.
@@ -151,14 +149,14 @@ from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.evaluate import eval_crps
 from numpyro_forecast.features import fourier_features
-from numpyro_forecast.functional import (
+from numpyro_forecast import (
     Horizon,
     draw_posterior,
     fit_svi,
     forecast,
     forecasting_model,
     predict,
-    time_series,
+    innovations,
 )
 
 
@@ -166,14 +164,12 @@ def seasonal_body(h: Horizon, covariates):
     """Local-level random walk + Fourier seasonality, Student-T noise."""
     num_features = covariates.shape[-1]
     bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-    weight = numpyro.sample(
-        "weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1)
-    )
+    weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-3.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
     nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
 
-    drift = time_series(
+    drift = innovations(
         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
     )
     level = jnp.cumsum(drift, axis=-2)  # random-walk level

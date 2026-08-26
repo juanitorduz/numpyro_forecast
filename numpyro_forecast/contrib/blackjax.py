@@ -45,9 +45,9 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
+from numpyro_forecast._offload import _draw_chunked
+from numpyro_forecast._validation import _require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
-from numpyro_forecast.functional._offload import _draw_chunked
-from numpyro_forecast.functional._validation import _require_positive_num_samples
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
 
@@ -667,10 +667,10 @@ def pathfinder_samples(
     """Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
 
     The returned dict has the sample axis leading and is ready to pass to
-    :func:`~numpyro_forecast.functional.prediction.forecast` or NumPyro's
-    ``Predictive``, exactly like :func:`~numpyro_forecast.functional.posterior.draw_posterior`.
+    :func:`~numpyro_forecast.predictive.forecast` or NumPyro's
+    ``Predictive``, exactly like :func:`~numpyro_forecast.predictive.draw_posterior`.
     Chunking and device offload are delegated to the shared
-    :func:`~numpyro_forecast.functional._offload._draw_chunked` driver, so the same
+    :func:`~numpyro_forecast._offload._draw_chunked` driver, so the same
     memory-bounding contract applies.
 
     PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -687,11 +687,11 @@ def pathfinder_samples(
         Number of posterior draws.
     batch_size
         Optional chunk size for the drawing itself; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior` (the same
+        :func:`~numpyro_forecast.predictive.draw_posterior` (the same
         memory/reproducibility contract applies).
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
+        :func:`~numpyro_forecast.predictive.draw_posterior`, including
         for the NumPy path taken when the JAX CPU backend is not initialized and
         for the rules on mixing a host-committed result with other arrays.
 
@@ -709,7 +709,7 @@ def pathfinder_samples(
     RuntimeError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+        :func:`~numpyro_forecast._offload._host_memory_kind`).
 
     Warns
     -----
@@ -1003,11 +1003,11 @@ def multipathfinder_samples(
     ``num_samples`` draws. Nothing is recycled from the small pool stored at fit
     time, so asking for more draws than that pool held costs nothing in
     duplication. The output contract is identical to
-    :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
-    :func:`pathfinder_samples`: :func:`~numpyro_forecast.functional.prediction.forecast`
+    :func:`~numpyro_forecast.predictive.draw_posterior` and
+    :func:`pathfinder_samples`: :func:`~numpyro_forecast.predictive.forecast`
     and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
     are delegated to the shared
-    :func:`~numpyro_forecast.functional._offload._draw_chunked` driver, so the same
+    :func:`~numpyro_forecast._offload._draw_chunked` driver, so the same
     memory-bounding contract applies.
 
     Resampling strategies
@@ -1054,12 +1054,12 @@ def multipathfinder_samples(
         ``"elbo"``; see "Resampling strategies" above.
     batch_size
         Optional chunk size for the drawing itself; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior` (the same
+        :func:`~numpyro_forecast.predictive.draw_posterior` (the same
         memory/reproducibility contract applies). Note that each chunk draws
         ``num_paths * batch_size`` samples internally.
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`, including
+        :func:`~numpyro_forecast.predictive.draw_posterior`, including
         for the NumPy path taken when the JAX CPU backend is not initialized and
         for the rules on mixing a host-committed result with other arrays.
 
@@ -1078,7 +1078,7 @@ def multipathfinder_samples(
     RuntimeError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+        :func:`~numpyro_forecast._offload._host_memory_kind`).
 
     Warns
     -----

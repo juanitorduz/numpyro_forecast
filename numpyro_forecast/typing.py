@@ -42,8 +42,8 @@ class ForecastModel(Protocol):
 
     Any plain function with this signature satisfies this Protocol structurally
     (for example, one that derives its
-    :class:`~numpyro_forecast.functional.models.Horizon` from the shapes via
-    ``Horizon.from_data`` and calls the functional primitives), so nothing
+    :class:`~numpyro_forecast.models.Horizon` from the shapes via
+    ``Horizon.from_data`` and calls the model building blocks), so nothing
     needs to subclass it. The parameters are positional-only so a user model's
     own parameter names (``cov``, ``y``, ...) stay free instead of being forced
     to match ``covariates``/``data``.
@@ -65,35 +65,66 @@ class ForecastModel(Protocol):
 ModelFactory = Callable[[], ForecastModel]
 """A zero-argument callable returning a fresh :class:`ForecastModel` instance."""
 
-ForecastFn = Callable[..., Array | np.ndarray]
-"""A closure that fits a model on a training window and forecasts its test horizon.
 
-Called by :func:`~numpyro_forecast.evaluate.backtest` positionally as
-``forecast_fn(rng_key, model, train_data, train_covariates, full_covariates,
-num_samples, *, batch_size=None)``, where ``full_covariates`` spans the *full*
-window (train followed by test, i.e. ``covariates[..., t0:t2, :]``). Must return
-forecast samples with the sample axis first, shape
-``(num_samples, *batch, t2 - t1, obs)``. ``batch_size`` is forwarded unchanged
-from ``backtest`` so a chunked closure can bound its own device memory; a
-closure may return draws kept in host memory (e.g. via ``device="host"``, to
-cap peak accelerator usage): a jax Array committed to the CPU backend device
-or, without a CPU backend, a NumPy array. Every metric in
-:data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred`` or
-``truth`` (or both), in any mix and regardless of ``batch_size``, moving a
-host-resident operand to device memory first where needed. Returning draws
-already on-device still avoids the extra host-to-device hop for the metrics
-scored every window. Typed loosely (a bare
-``Callable``, like :data:`Metric`) because per-backend fit options differ; the
-exact shapes are pinned above rather than in the type itself.
-"""
+@runtime_checkable
+class ForecastFn(Protocol):
+    """A closure that fits a model on a training window and forecasts its test horizon.
 
-InSampleFn = Callable[..., Array | np.ndarray]
-"""A closure that fits a model on a training window and scores its in-sample fit.
+    Called by :func:`~numpyro_forecast.evaluate.backtest` positionally, with
+    ``full_covariates`` spanning the *full* window (train followed by test, i.e.
+    ``covariates[..., t0:t2, :]``) and ``batch_size`` forwarded unchanged from
+    ``backtest`` so a chunked closure can bound its own device memory. Returns
+    forecast samples with the sample axis first, shape
+    ``(num_samples, *batch, t2 - t1, obs)``. The draws may stay in host memory
+    (e.g. via ``device="host"``): a jax Array committed to the CPU backend
+    device or, without a CPU backend, a NumPy array. Every metric in
+    :data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred``
+    or ``truth`` (or both), in any mix and regardless of ``batch_size``, moving
+    a host-resident operand to device memory first where needed; draws already
+    on-device avoid that hop for the metrics scored every window. The
+    parameters are positional-only so a closure keeps its own parameter names.
+    At runtime the beartype hook only checks that the value is callable
+    (Python protocols never inspect signatures); ``ty`` checks the signature
+    structurally at the ``backtest`` call site.
+    """
 
-Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
-``eval_train=True``) positionally as ``in_sample_fn(rng_key, model, train_data,
-train_covariates, num_samples, *, batch_size=None)``. Must return in-sample
-posterior-predictive samples with the sample axis first, shape
-``(num_samples, *batch, t1 - t0, obs)``. The same ``batch_size``/host-offload
-notes as :data:`ForecastFn` apply.
-"""
+    def __call__(
+        self,
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Array,
+        train_covariates: Array,
+        full_covariates: Array,
+        num_samples: int,
+        /,
+        *,
+        batch_size: int | None = None,
+    ) -> Array | np.ndarray:
+        """Fit on the training window and return forecast draws for the test window."""
+        ...
+
+
+@runtime_checkable
+class InSampleFn(Protocol):
+    """A closure that fits a model on a training window and scores its in-sample fit.
+
+    Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
+    ``eval_train=True``) positionally. Returns in-sample posterior-predictive
+    samples with the sample axis first, shape ``(num_samples, *batch, t1 - t0,
+    obs)``. The same ``batch_size``/host-offload notes as :class:`ForecastFn`
+    apply.
+    """
+
+    def __call__(
+        self,
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Array,
+        train_covariates: Array,
+        num_samples: int,
+        /,
+        *,
+        batch_size: int | None = None,
+    ) -> Array | np.ndarray:
+        """Fit on the training window and return in-sample predictive draws."""
+        ...

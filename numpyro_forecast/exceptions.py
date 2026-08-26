@@ -108,9 +108,9 @@ class MVNLayoutError(NumpyroForecastError, NotImplementedError):
 class DeviceMemoryError(NumpyroForecastError, RuntimeError):
     """A memory pool ran out during posterior or predictive sampling.
 
-    Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
-    the predictive drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
-    :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
+    Raised by :func:`~numpyro_forecast.predictive.draw_posterior` and
+    the predictive drivers (:func:`~numpyro_forecast.predictive.forecast`,
+    :func:`~numpyro_forecast.predictive.predict_in_sample`, and
     everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
     when XLA reports ``RESOURCE_EXHAUSTED``. For an accelerator OOM the message
     embeds the device's memory budget and the lever: the per-chunk footprint

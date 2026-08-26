@@ -1,11 +1,9 @@
 """Validated example forecasting models, kept for end-to-end tests.
 
-These two models previously lived in the ``numpyro_forecast.models`` package. They
-were moved here when that module was removed in favour of defining models directly
-in the example notebooks (``docs/examples/``). They are retained as a regression target
-for :mod:`tests.test_examples`, now written as plain functional models (a pure
-``(covariates, data=None)`` callable opening with ``Horizon.from_data``) rather than
-subclasses of the former OOP ``ForecastingModel`` base class.
+Reference models for :mod:`tests.test_examples`: plain functional models (a pure
+``(covariates, data=None)`` callable opening with ``Horizon.from_data``) that
+mirror the example notebooks under ``docs/examples/`` and act as a regression
+target for the full fit-draw-forecast path.
 """
 
 from typing import cast
@@ -16,7 +14,7 @@ import numpyro.distributions as dist
 from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.features import periodic_repeat
-from numpyro_forecast.functional import Horizon, predict, time_series
+from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.typing import Array, ForecastModel
 
 
@@ -46,7 +44,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
     centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
 
-    drift = time_series(
+    drift = innovations(
         h,
         "drift",
         lambda: dist.Normal(0.0, drift_scale),
@@ -105,7 +103,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             destin_seasonal = numpyro.sample("destin_seasonal", dist.Normal(0.0, 5.0))
 
         with destin_plate:
-            drift = time_series(
+            drift = innovations(
                 h,
                 "drift",
                 lambda: dist.Normal(0.0, drift_scale),

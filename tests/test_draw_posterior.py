@@ -1,4 +1,4 @@
-"""Tests for drawing posterior samples from a fitted guide (``functional.posterior``)."""
+"""Tests for drawing posterior samples from a fitted guide (``numpyro_forecast.predictive``)."""
 
 import jax
 import jax.numpy as jnp
@@ -11,8 +11,7 @@ from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta
 
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.functional import draw_posterior
-from numpyro_forecast.functional.posterior import _jitted_sample_posterior
+from numpyro_forecast.predictive import _jitted_sample_posterior, draw_posterior
 from numpyro_forecast.typing import Array
 
 
@@ -92,10 +91,10 @@ def test_draw_posterior_chunked_calls_guide_per_fixed_size_chunk(
     per-chunk transfers (tested via the host path elsewhere) bound accelerator
     memory by one chunk of the posterior instead of all of it.
     """
-    import numpyro_forecast.functional.posterior as posterior_mod
+    import numpyro_forecast.predictive as predictive_mod
 
     calls: list[tuple[int, Array]] = []
-    real_jitted = posterior_mod._jitted_sample_posterior
+    real_jitted = predictive_mod._jitted_sample_posterior
 
     def spy_jitted(guide):  # type: ignore[no-untyped-def]
         real_sample = real_jitted(guide)
@@ -106,7 +105,7 @@ def test_draw_posterior_chunked_calls_guide_per_fixed_size_chunk(
 
         return wrapped
 
-    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", spy_jitted)
+    monkeypatch.setattr(predictive_mod, "_jitted_sample_posterior", spy_jitted)
     guide, params = svi_guide_params(t=30)
     draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     assert [n for n, _ in calls] == [4, 4, 4]  # ceil(10 / 4) chunks, fixed size
@@ -158,9 +157,9 @@ def _raise_oom(guide):  # type: ignore[no-untyped-def]
 
 def test_draw_posterior_chunked_oom_reports_batch_size(monkeypatch: pytest.MonkeyPatch) -> None:
     """A device OOM is re-raised with the budget and the batch-size lever."""
-    import numpyro_forecast.functional.posterior as posterior_mod
+    import numpyro_forecast.predictive as predictive_mod
 
-    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", _raise_oom)
+    monkeypatch.setattr(predictive_mod, "_jitted_sample_posterior", _raise_oom)
     guide, params = svi_guide_params(t=30)
     with pytest.raises(
         DeviceMemoryError, match=r"posterior drawing.*lower batch_size \(currently 4\)"
@@ -172,9 +171,9 @@ def test_draw_posterior_chunked_oom_reports_batch_size(monkeypatch: pytest.Monke
 def test_draw_posterior_unchunked_oom_says_set_batch_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import numpyro_forecast.functional.posterior as posterior_mod
+    import numpyro_forecast.predictive as predictive_mod
 
-    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", _raise_oom)
+    monkeypatch.setattr(predictive_mod, "_jitted_sample_posterior", _raise_oom)
     guide, params = svi_guide_params(t=30)
     with pytest.raises(DeviceMemoryError, match="set batch_size to sample in chunks"):
         draw_posterior(random.PRNGKey(2), guide, params, 10)
@@ -183,7 +182,7 @@ def test_draw_posterior_unchunked_oom_says_set_batch_size(
 def test_draw_posterior_non_oom_errors_propagate_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import numpyro_forecast.functional.posterior as posterior_mod
+    import numpyro_forecast.predictive as predictive_mod
 
     def raise_other(guide):  # type: ignore[no-untyped-def]
         def _raise(key: Array, params: dict, *, sample_shape: tuple[int, ...]):  # type: ignore[no-untyped-def]
@@ -192,7 +191,7 @@ def test_draw_posterior_non_oom_errors_propagate_unchanged(
 
         return _raise
 
-    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", raise_other)
+    monkeypatch.setattr(predictive_mod, "_jitted_sample_posterior", raise_other)
     guide, params = svi_guide_params(t=30)
     with pytest.raises(ValueError, match="boom"):
         draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)

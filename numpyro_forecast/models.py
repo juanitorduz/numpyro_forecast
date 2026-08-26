@@ -1,21 +1,25 @@
-"""Model-building primitives for the functional API.
+"""Model building blocks: plain functions that register the train/forecast sites.
 
-The :class:`Horizon` value carries the train/forecast split, and the
-site-registration functions (:func:`time_series`, :func:`markov_time_series`,
-:func:`predict`, :func:`predict_glm`) sample latents and observation sites
-against it. A model is a plain function ``(covariates, data=None) -> None``
-that derives its :class:`Horizon` from the shapes (via ``Horizon.from_data``)
-and calls those primitives directly.
+The :class:`Horizon` value carries the train/forecast split, and the building
+blocks (:func:`innovations`, :func:`markov_series`, :func:`predict`) sample
+latents and observation sites against it. A model is a plain NumPyro function
+``(covariates, data=None) -> None`` whose first line derives its
+:class:`Horizon` from the shapes with :meth:`Horizon.from_data` and which then
+calls the blocks directly. They are ordinary Python functions that call
+``numpyro.sample`` and ``numpyro.deterministic`` on your behalf: not NumPyro
+primitives, and not effect handlers.
 """
 
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import cast
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
+from jaxtyping import PyTree
 from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 
@@ -28,10 +32,9 @@ from numpyro_forecast.typing import Array
 class Horizon:
     """The train/forecast split for a single model call.
 
-    Replaces the mutable ``self._*`` state of the OOP base class with an
-    immutable value derived from the covariate and data shapes via
-    :meth:`from_data`. The functional primitives (:func:`time_series`,
-    :func:`predict`) take it as their first argument.
+    An immutable value derived once per model call from the covariate and data
+    shapes by :meth:`from_data`; every building block (:func:`innovations`,
+    :func:`markov_series`, :func:`predict`) takes it as its first argument.
 
     Attributes
     ----------
@@ -79,7 +82,9 @@ class Horizon:
 
     @classmethod
     def from_data(cls, covariates: Array, data: Array | None) -> "Horizon":
-        """Derive the horizon from covariate and data shapes.
+        """Derive the horizon from the covariate and data shapes.
+
+        The first line of every model: ``h = Horizon.from_data(covariates, data)``.
 
         Parameters
         ----------
@@ -123,20 +128,22 @@ def _sample_time_block(
         return cast(Array, numpyro.sample(site, dist_fn()))
 
 
-def time_series(
+def innovations(
     h: Horizon,
     name: str,
     dist_fn: Callable[[], dist.Distribution],
     *,
     reparam: Reparam | None = None,
 ) -> Array:
-    """Sample a time-varying latent over the full horizon.
+    """Sample conditionally iid per-step innovations over the full horizon.
 
     The in-sample portion is sampled under ``plate("time", t)`` with the fixed
     site ``name``; when forecasting, the horizon portion is sampled under a
     separate site ``f"{name}_future"`` and concatenated. The separate site keeps
     the guide shape fixed and lets ``Predictive`` draw the forecast suffix from
-    the prior.
+    the prior. Build the series arithmetically from the result (a random walk
+    is ``jnp.cumsum(drift, axis=-2)``); a latent whose per-step distribution
+    depends on the previous state is :func:`markov_series`.
 
     Parameters
     ----------
@@ -162,16 +169,15 @@ def time_series(
     return concat_future(prefix, suffix, axis=-2)
 
 
-Transition = Callable[
-    [Any, Array | None],
-    tuple[dist.Distribution, Callable[[Array], Any]],
+type Transition[Carry] = Callable[
+    [Carry, PyTree[Array] | None],
+    tuple[dist.Distribution, Callable[[Array], Carry]],
 ]
-"""(carry, x_t) -> (dist_t, carry_fn) where carry_fn(z_t) builds the next carry
-from the *sampled* latent. The wrapper owns the sample statement.
+"""``(carry, x_t) -> (dist_t, carry_fn)`` where ``carry_fn(z_t)`` builds the next
+carry from the *sampled* latent. The wrapper owns the sample statement.
 
-``carry`` is an arbitrary PyTree (hence ``Any``): typing it as ``object`` would,
-by function-parameter contravariance, reject every concretely-typed transition a
-user might write (e.g. ``carry: Array``)."""
+``Carry`` is the user's carry type (any PyTree), bound per :func:`markov_series`
+call; ``x_t`` is one row of the ``xs`` PyTree (``None`` for autonomous dynamics)."""
 
 
 @contextmanager
@@ -184,14 +190,14 @@ def _plate_stack(plates: Sequence[tuple[str, int]]):
 
 
 def _reject_enclosing_plates() -> None:
-    """Raise if ``markov_time_series`` is called inside an enclosing plate."""
+    """Raise if ``markov_series`` is called inside an enclosing plate."""
     try:
         from numpyro.primitives import _PYRO_STACK
 
         for msg in _PYRO_STACK:
             if type(msg).__name__ == "plate":
                 msg_text = (
-                    "markov_time_series opens plates internally via the plates= "
+                    "markov_series opens plates internally via the plates= "
                     "argument; do not wrap the call in an enclosing numpyro.plate."
                 )
                 raise ValueError(msg_text)
@@ -203,18 +209,18 @@ def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
     """Require a non-degenerate per-step shape with an observation axis."""
     if len(dist_t.event_shape) == 0 and len(dist_t.batch_shape) == 0:
         msg = (
-            "markov_time_series requires the transition distribution to carry "
+            "markov_series requires the transition distribution to carry "
             "the trailing observation dimension; add it, e.g. loc=...[..., None]."
         )
         raise ValueError(msg)
 
 
-def markov_time_series(
+def markov_series[Carry](
     h: Horizon,
     name: str,
-    init_carry: Any,
-    transition: Transition,
-    xs: Array | None = None,
+    init_carry: Carry,
+    transition: Transition[Carry],
+    xs: PyTree[Array] | None = None,
     *,
     plates: Sequence[tuple[str, int]] = (),
     reparam_config: Mapping[str, Reparam] | None = None,
@@ -224,7 +230,7 @@ def markov_time_series(
     In-sample steps run in a ``numpyro.contrib.control_flow.scan`` with site
     ``name``; when forecasting, horizon steps run in a second scan with site
     ``f"{name}_future"`` **seeded by the final in-sample carry**. The guide
-    never sees the future site (same invariant as :func:`time_series`), and
+    never sees the future site (same invariant as :func:`innovations`), and
     under posterior replay the carry is a deterministic function of the replayed
     draws, so the forecast is conditioned through the state.
 
@@ -240,8 +246,10 @@ def markov_time_series(
         Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
         owns the ``numpyro.sample`` statement.
     xs
-        Optional exogenous inputs over the full horizon with time at axis ``-2``,
-        moved into scan layout internally; ``None`` for autonomous dynamics.
+        Optional exogenous inputs over the full horizon: a PyTree of arrays
+        with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
+        leaf by leaf into scan layout internally; ``None`` for autonomous
+        dynamics.
     plates
         ``(name, size)`` pairs opened **inside** the scan body around the sample
         statement (the only placement NumPyro supports for scan + plate).
@@ -262,12 +270,12 @@ def markov_time_series(
         observation dimension, or if an enclosing plate is detected.
     """
     if h.future > 0 and h.data is None:
-        msg = "markov_time_series requires observed data when forecasting"
+        msg = "markov_series requires observed data when forecasting"
         raise ValueError(msg)
     _reject_enclosing_plates()
 
-    def _body(site_name: str) -> Callable[[object, Array | None], tuple[object, Array]]:
-        def body(carry: object, x_t: Array | None) -> tuple[object, Array]:
+    def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
+        def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
             dist_t, carry_fn = transition(carry, x_t)
             _validate_markov_step_dist(dist_t)
             ctx = (
@@ -281,11 +289,11 @@ def markov_time_series(
 
         return body
 
-    xs_scan = None if xs is None else jnp.moveaxis(xs, -2, 0)
+    xs_scan = None if xs is None else jax.tree.map(lambda leaf: jnp.moveaxis(leaf, -2, 0), xs)
     final_carry, zs = scan(
         _body(name),
         init_carry,
-        None if xs_scan is None else xs_scan[: h.t_obs],
+        None if xs_scan is None else jax.tree.map(lambda leaf: leaf[: h.t_obs], xs_scan),
         length=h.t_obs if xs_scan is None else None,
     )
     if h.future == 0:
@@ -293,51 +301,72 @@ def markov_time_series(
     _, zf = scan(
         _body(f"{name}_future"),
         final_carry,
-        None if xs_scan is None else xs_scan[h.t_obs :],
+        None if xs_scan is None else jax.tree.map(lambda leaf: leaf[h.t_obs :], xs_scan),
         length=h.future if xs_scan is None else None,
     )
     return jnp.moveaxis(jnp.concatenate([zs, zf], axis=0), 0, -2)
 
 
-def predict_glm(
+def predict(
     h: Horizon,
-    obs_dist_fn: Callable[[Array], dist.Distribution],
-    latent: Array,
+    obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
+    prediction: Array,
 ) -> None:
-    """Register GLM-style observation/forecast sites from a latent predictor.
+    """Register the observation and forecast sites for the model.
 
-    The generalized-linear counterpart of :func:`predict`: instead of a
-    zero-centered noise distribution shifted by a mean, the caller supplies a link
-    ``obs_dist_fn`` that maps the full-horizon ``latent`` predictor to the
-    observation distribution directly (e.g. ``lambda eta: Poisson(jnp.exp(eta))``).
-    The prefix/suffix mirroring is identical to :func:`predict`: while training the
-    observation is observed; while forecasting the in-sample prefix is observed and
-    the forecast suffix is sampled and exposed as the ``"forecast"`` deterministic
-    site. The observation distribution must support time-axis surgery
+    ``prediction`` is the deterministic predictor over the full horizon (time at
+    axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
+    two forms. A :class:`~numpyro.distributions.Distribution` is zero-centered
+    observation noise (e.g. ``dist.StudentT(nu, 0.0, sigma)``) shifted onto the
+    predictor with :func:`~numpyro_forecast.surgery.shift_loc`, which also owns
+    the multivariate-normal layout check. A callable is a link mapping the
+    predictor to the observation distribution directly (the GLM form, e.g.
+    ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the
+    observation site ``"obs"`` is observed; while forecasting the in-sample
+    prefix is observed and the forecast suffix is sampled at ``"obs_future"``
+    and exposed as the ``"forecast"`` deterministic site that
+    :func:`~numpyro_forecast.predictive.forecast` reads. The observation
+    distribution must support time-axis surgery
     (:func:`~numpyro_forecast.surgery.slice_time` /
-    :func:`~numpyro_forecast.surgery.prefix_condition`), i.e. an elementwise family.
+    :func:`~numpyro_forecast.surgery.prefix_condition`), i.e. an elementwise
+    family or a registered one.
 
     Parameters
     ----------
     h
         The horizon for the current model call (see :class:`Horizon`).
-    obs_dist_fn
-        Link mapping the full-horizon ``latent`` to the observation distribution
-        (time at axis ``-2``, shape ``(*batch, duration, obs)``).
-    latent
-        The deterministic latent predictor over the full horizon, time at axis
-        ``-2``.
+    obs_dist
+        Zero-centered noise distribution (shifted onto ``prediction``) or a
+        link callable from the full-horizon predictor to the observation
+        distribution.
+    prediction
+        The deterministic predictor over the full horizon, time at axis ``-2``.
 
     Raises
     ------
+    TypeError
+        If ``obs_dist`` is a callable that does not return a distribution (for
+        example a link that returns the predictor itself).
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     ValueError
         If the observation distribution has discrete support but ``h.data`` is
         not integer-dtyped (the usual mistake for count models).
     """
-    obs_dist = obs_dist_fn(latent)
-    support = obs_dist.support
+    full_dist = (
+        shift_loc(obs_dist, prediction)
+        if isinstance(obs_dist, dist.Distribution)
+        else obs_dist(prediction)
+    )
+    if not isinstance(full_dist, dist.Distribution):
+        msg = (
+            "obs_dist must be a zero-centered noise Distribution or a link callable that "
+            f"returns a Distribution, got {type(full_dist).__name__} from the link; e.g. "
+            "predict(h, dist.Normal(0.0, sigma), mu) or "
+            "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
+        )
+        raise TypeError(msg)
+    support = full_dist.support
     if support is not None and support.is_discrete and h.data is not None:
         if not jnp.issubdtype(h.data.dtype, jnp.integer):
             msg = (
@@ -347,41 +376,13 @@ def predict_glm(
             )
             raise ValueError(msg)
     if h.future == 0:
-        numpyro.sample("obs", obs_dist, obs=h.data)
+        numpyro.sample("obs", full_dist, obs=h.data)
         return
     data = h.data
     if data is None:
         msg = "forecasting requires observed data"
         raise RuntimeError(msg)
-    prefix = slice_time(obs_dist, slice(None, h.t_obs))
+    prefix = slice_time(full_dist, slice(None, h.t_obs))
     numpyro.sample("obs", prefix, obs=data)
-    forecast = numpyro.sample("obs_future", prefix_condition(obs_dist, data))
+    forecast = numpyro.sample("obs_future", prefix_condition(full_dist, data))
     numpyro.deterministic("forecast", forecast)
-
-
-def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> None:
-    """Register the observation/forecast sites for the model.
-
-    ``noise_dist`` is a zero-centered observation noise distribution and
-    ``prediction`` the deterministic mean over the full horizon. While training
-    the residual is observed; while forecasting the in-sample prefix is observed
-    and the forecast suffix is sampled and exposed as the ``"forecast"``
-    deterministic site. A thin wrapper over :func:`predict_glm` with the
-    location-shift link ``lambda mu: shift_loc(noise_dist, mu)``.
-
-    Parameters
-    ----------
-    h
-        The horizon for the current model call (see :class:`Horizon`).
-    noise_dist
-        Zero-centered observation noise (e.g. ``Normal(0, sigma)``).
-    prediction
-        Deterministic mean with time at axis ``-2``, shape
-        ``(*batch, duration, obs)``.
-
-    Raises
-    ------
-    RuntimeError
-        If forecasting (``future > 0``) but no observed data is available.
-    """
-    predict_glm(h, lambda mu: shift_loc(noise_dist, mu), prediction)

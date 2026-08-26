@@ -13,9 +13,10 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         evaluate,
         exceptions,
         features,
-        functional,
         metrics,
+        models,
         optional,
+        predictive,
         surgery,
     )
 
@@ -42,17 +43,14 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional import (
+from numpyro_forecast.models import (
     Horizon,
     Transition,
-    draw_posterior,
-    forecast,
-    markov_time_series,
+    innovations,
+    markov_series,
     predict,
-    predict_glm,
-    predict_in_sample,
-    time_series,
 )
+from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.surgery import register_elementwise
 
 try:
@@ -84,13 +82,12 @@ __all__ = [
     "eval_rmse",
     "evaluate_forecast",
     "forecast",
-    "markov_time_series",
+    "innovations",
+    "markov_series",
     "predict",
-    "predict_glm",
     "predict_in_sample",
     "predictions_to_datatree",
     "register_elementwise",
     "results_to_dataframe",
-    "time_series",
     "to_datatree",
 ]

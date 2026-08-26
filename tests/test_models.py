@@ -1,4 +1,4 @@
-"""Tests for the functional model-building primitives (``functional.models``)."""
+"""Tests for the model building blocks (``numpyro_forecast.models``)."""
 
 from collections.abc import Callable
 
@@ -12,18 +12,13 @@ from numpyro.handlers import seed, trace
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.functional import (
-    Horizon,
-    forecast,
-    predict,
-    predict_glm,
-    time_series,
-)
+from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.predictive import forecast
 from numpyro_forecast.surgery import shift_loc
 from numpyro_forecast.typing import Array, ForecastModel
 
 
-def test_horizon_from_data_training() -> None:
+def test_horizon_training() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((20, 0))
     h = Horizon.from_data(covariates, data)
@@ -33,7 +28,7 @@ def test_horizon_from_data_training() -> None:
     assert h.data is data
 
 
-def test_horizon_from_data_forecast() -> None:
+def test_horizon_forecast() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))
     h = Horizon.from_data(covariates, data)
@@ -42,7 +37,7 @@ def test_horizon_from_data_forecast() -> None:
     assert h.future == 5
 
 
-def test_horizon_from_data_prior() -> None:
+def test_horizon_prior() -> None:
     covariates = jnp.zeros((20, 0))
     h = Horizon.from_data(covariates, None)
     assert h.duration == 20
@@ -82,7 +77,7 @@ def test_horizon_rejects_negative_future() -> None:
         Horizon(data=None, t_obs=5, future=-1, duration=4)
 
 
-def test_time_series_predict_training_sites() -> None:
+def test_innovations_predict_training_sites() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((20, 0))
     h = Horizon.from_data(covariates, data)
@@ -94,7 +89,7 @@ def test_time_series_predict_training_sites() -> None:
     assert "forecast" not in tr
 
 
-def test_time_series_predict_forecast_sites() -> None:
+def test_innovations_predict_forecast_sites() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))
     h = Horizon.from_data(covariates, data)
@@ -105,14 +100,14 @@ def test_time_series_predict_forecast_sites() -> None:
     assert tr["forecast"]["value"].shape == (5, 1)
 
 
-def test_time_series_reparam_applies() -> None:
+def test_innovations_reparam_applies() -> None:
     data = jnp.zeros((10, 1))
     covariates = jnp.zeros((10, 0))
     h = Horizon.from_data(covariates, data)
 
     def body() -> None:
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        drift = time_series(
+        drift = innovations(
             h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
         )
         predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
@@ -162,7 +157,7 @@ def test_rw_model_prior_sampling() -> None:
     assert "forecast" not in tr
 
 
-# --- P13: predict_glm + predict refactor (I9) --------------------------------
+# --- predict: distribution form vs link form ----------------------------------
 
 
 def _as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
@@ -174,12 +169,12 @@ def _as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
     return model
 
 
-def _predict_glm_body(h: Horizon, covariates: Array) -> None:
-    """Random-walk body written directly with predict_glm and a shift_loc link."""
+def _link_form_body(h: Horizon, covariates: Array) -> None:
+    """Random-walk body written with the link form of predict and a shift_loc link."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = time_series(h, "drift", lambda: dist.Normal(0.0, drift_scale))
-    predict_glm(h, lambda mu: shift_loc(dist.Normal(0.0, sigma), mu), jnp.cumsum(drift, axis=-2))
+    drift = innovations(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    predict(h, lambda mu: shift_loc(dist.Normal(0.0, sigma), mu), jnp.cumsum(drift, axis=-2))
 
 
 def _traces_equal(model_a: ForecastModel, model_b: ForecastModel, *args: Array) -> None:
@@ -199,18 +194,31 @@ def _traces_equal(model_a: ForecastModel, model_b: ForecastModel, *args: Array) 
 
 
 @pytest.mark.parametrize("future", [0, 6])
-def test_predict_predict_glm_trace_equivalence(future: int) -> None:
-    """Invariant I9: predict == predict_glm o shift_loc (identical traces)."""
+def test_predict_distribution_and_link_forms_are_equivalent(future: int) -> None:
+    """The distribution form of predict equals the link form through shift_loc (same traces)."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (24, 1)), axis=-2)
     covariates = empty_covariates(24 + future)
-    model_glm = _as_model(_predict_glm_body)
+    model_glm = _as_model(_link_form_body)
     _traces_equal(rw_model, model_glm, covariates, data)
 
 
-def test_predict_glm_rejects_float_data_for_discrete_obs() -> None:
+def test_predict_rejects_link_that_returns_no_distribution() -> None:
+    """A link returning the predictor itself fails with a message naming both forms."""
+
+    def bad_body(h: Horizon, covariates: Array) -> None:
+        level = innovations(h, "level", lambda: dist.Normal(0.0, 1.0))
+        # ty rejects this link statically; the runtime guard covers untyped callers.
+        predict(h, lambda mu: mu, jnp.cumsum(level, axis=-2))  # ty: ignore[invalid-argument-type]
+
+    model = _as_model(bad_body)
+    with pytest.raises(TypeError, match="returns a Distribution, got ArrayImpl"):
+        trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), jnp.zeros((12, 1)))
+
+
+def test_predict_rejects_float_data_for_discrete_obs() -> None:
     def poisson_body(h: Horizon, covariates: Array) -> None:
-        rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
-        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
+        rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
     model = _as_model(poisson_body)
     float_data = jnp.abs(random.normal(random.PRNGKey(0), (12, 1)))
@@ -218,10 +226,10 @@ def test_predict_glm_rejects_float_data_for_discrete_obs() -> None:
         trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
 
 
-def test_predict_glm_accepts_integer_data_for_discrete_obs() -> None:
+def test_predict_accepts_integer_data_for_discrete_obs() -> None:
     def poisson_body(h: Horizon, covariates: Array) -> None:
-        rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
-        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
+        rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
     model = _as_model(poisson_body)
     int_data = jnp.asarray(random.poisson(random.PRNGKey(0), 3.0, (12, 1)), dtype=jnp.int32)
@@ -234,8 +242,8 @@ def test_poisson_local_level_end_to_end() -> None:
 
     def poisson_body(h: Horizon, covariates: Array) -> None:
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 0.5))
-        log_rate = time_series(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
-        predict_glm(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
+        log_rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
+        predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
 
     model = _as_model(poisson_body)
     true_rate = 5.0

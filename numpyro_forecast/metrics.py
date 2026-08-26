@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
-from numpyro_forecast.functional._offload import _device_view
+from numpyro_forecast._offload import _device_view
 from numpyro_forecast.typing import Array, Metric
 
 
@@ -59,7 +59,7 @@ def crps_empirical(
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
         May be host-committed (e.g. draws sampled with ``device="host"``),
         regardless of whether ``truth`` is: either operand is moved to device
-        memory first (:func:`~numpyro_forecast.functional._offload._device_view`).
+        memory first (:func:`~numpyro_forecast._offload._device_view`).
     truth
         Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
 
@@ -109,7 +109,7 @@ def eval_pinball(
     pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`);
     ``quantile`` is static so each level specializes its own branch. ``pred``
     and ``truth`` are moved to device memory first
-    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    (:func:`~numpyro_forecast._offload._device_view`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -169,7 +169,7 @@ def eval_interval_score(
     intervals and penalizes ground truth falling outside them; lower is better.
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    (:func:`~numpyro_forecast._offload._device_view`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -220,7 +220,7 @@ def make_mase(
     time; the returned metric has the standard scalar-array signature (see
     :data:`~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
     metric's ``pred``/``truth`` are all moved to device memory first
-    (:func:`~numpyro_forecast.functional._offload._device_view`), so any of
+    (:func:`~numpyro_forecast._offload._device_view`), so any of
     them may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters

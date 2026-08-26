@@ -12,7 +12,7 @@ from conftest import empty_covariates, fail_devices_for, nuts_samples, rw_model,
 from jax import Array, random
 
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
-from numpyro_forecast.functional import draw_posterior, forecast
+from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
 arviz_base = pytest.importorskip("arviz_base")
