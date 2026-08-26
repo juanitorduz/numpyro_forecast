@@ -76,9 +76,7 @@ class SeasonalForecaster(ForecastingModel):
     def model(self, zero_data, covariates):
         num_features = covariates.shape[-1]
         bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-        weight = numpyro.sample(
-            "weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1)
-        )
+        weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-3.0, 1.0))
         sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
         nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
@@ -166,9 +164,7 @@ def seasonal_body(h: Horizon, covariates):
     """Local-level random walk + Fourier seasonality, Student-T noise."""
     num_features = covariates.shape[-1]
     bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-    weight = numpyro.sample(
-        "weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1)
-    )
+    weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-3.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
     nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))

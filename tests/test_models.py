@@ -12,7 +12,7 @@ from numpyro.handlers import seed, trace
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.models import Horizon, horizon, innovations, predict
+from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.predictive import forecast
 from numpyro_forecast.surgery import shift_loc
 from numpyro_forecast.typing import Array, ForecastModel
@@ -21,7 +21,7 @@ from numpyro_forecast.typing import Array, ForecastModel
 def test_horizon_training() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((20, 0))
-    h = horizon(covariates, data)
+    h = Horizon.from_data(covariates, data)
     assert h.duration == 20
     assert h.t_obs == 20
     assert h.future == 0
@@ -31,7 +31,7 @@ def test_horizon_training() -> None:
 def test_horizon_forecast() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))
-    h = horizon(covariates, data)
+    h = Horizon.from_data(covariates, data)
     assert h.duration == 25
     assert h.t_obs == 20
     assert h.future == 5
@@ -39,7 +39,7 @@ def test_horizon_forecast() -> None:
 
 def test_horizon_prior() -> None:
     covariates = jnp.zeros((20, 0))
-    h = horizon(covariates, None)
+    h = Horizon.from_data(covariates, None)
     assert h.duration == 20
     assert h.t_obs == 20
     assert h.future == 0
@@ -50,20 +50,20 @@ def test_horizon_rejects_data_longer_than_covariates() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((15, 0))
     with pytest.raises(ValueError, match="data must not be longer than covariates"):
-        horizon(covariates, data)
+        Horizon.from_data(covariates, data)
 
 
 def test_horizon_zero_data_shape() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))
-    h = horizon(covariates, data)
+    h = Horizon.from_data(covariates, data)
     assert h.zero_data is not None
     assert h.zero_data.shape == (25, 1)
 
 
 def test_horizon_zero_data_none_for_prior() -> None:
     covariates = jnp.zeros((20, 0))
-    h = horizon(covariates, None)
+    h = Horizon.from_data(covariates, None)
     assert h.zero_data is None
 
 
@@ -80,7 +80,7 @@ def test_horizon_rejects_negative_future() -> None:
 def test_time_series_predict_training_sites() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((20, 0))
-    h = horizon(covariates, data)
+    h = Horizon.from_data(covariates, data)
     tr = trace(seed(lambda: rw_body(h, covariates), random.PRNGKey(0))).get_trace()
     assert tr["drift"]["value"].shape == (20, 1)
     assert "obs" in tr
@@ -92,7 +92,7 @@ def test_time_series_predict_training_sites() -> None:
 def test_time_series_predict_forecast_sites() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))
-    h = horizon(covariates, data)
+    h = Horizon.from_data(covariates, data)
     tr = trace(seed(lambda: rw_body(h, covariates), random.PRNGKey(0))).get_trace()
     # In-sample site keeps its training shape; the horizon uses a separate site.
     assert tr["drift"]["value"].shape == (20, 1)
@@ -103,7 +103,7 @@ def test_time_series_predict_forecast_sites() -> None:
 def test_time_series_reparam_applies() -> None:
     data = jnp.zeros((10, 1))
     covariates = jnp.zeros((10, 0))
-    h = horizon(covariates, data)
+    h = Horizon.from_data(covariates, data)
 
     def body() -> None:
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
@@ -164,7 +164,7 @@ def _as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
     """Wrap a ``(Horizon, covariates)`` body as a plain ``(covariates, data=None)`` model."""
 
     def model(covariates: Array, data: Array | None = None) -> None:
-        body(horizon(covariates, data), covariates)
+        body(Horizon.from_data(covariates, data), covariates)
 
     return model
 

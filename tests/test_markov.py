@@ -12,7 +12,7 @@ from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.models import Horizon, horizon, markov_series, predict
+from numpyro_forecast.models import Horizon, markov_series, predict
 from numpyro_forecast.predictive import draw_posterior, forecast
 from tests.conftest import empty_covariates
 
@@ -34,7 +34,7 @@ def _ar1_body(h: Horizon, covariates: Array) -> None:
 
 def _ar1_model(covariates: Array, data: Array | None = None) -> None:
     """Plain-function AR(1) model on :func:`_ar1_body`."""
-    _ar1_body(horizon(covariates, data), covariates)
+    _ar1_body(Horizon.from_data(covariates, data), covariates)
 
 
 @pytest.mark.parametrize("fitter", ["svi", "mcmc"])
@@ -86,7 +86,7 @@ def test_carry_threading_extreme_state() -> None:
 
 def test_batched_plates_argument() -> None:
     """A ``(B,)`` plate yields scan storage ``(t, B, obs)``."""
-    h = horizon(empty_covariates(10), jnp.zeros((6, 1)))
+    h = Horizon.from_data(empty_covariates(10), jnp.zeros((6, 1)))
 
     def trans(carry: Array, _: Array | None) -> tuple[dist.Distribution, Callable[[Array], Array]]:
         return dist.Normal(PHI * carry, DRIFT), lambda z: z
@@ -112,14 +112,14 @@ def test_missing_obs_dim_raises_with_guidance() -> None:
     ) -> tuple[dist.Distribution, Callable[[Array], Array]]:
         return dist.Normal(PHI * carry, DRIFT), lambda z: z
 
-    h = horizon(empty_covariates(5), jnp.zeros((5, 1)))
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
     with pytest.raises(ValueError, match="observation dimension"):
         markov_series(h, "z", jnp.zeros(()), bad_trans)
 
 
 def test_enclosing_plate_rejected_with_guidance() -> None:
     """An enclosing user plate is rejected with guidance."""
-    h = horizon(empty_covariates(5), jnp.zeros((5, 1)))
+    h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
 
     def body() -> None:
         with numpyro.plate("outer", 2):
@@ -131,7 +131,7 @@ def test_enclosing_plate_rejected_with_guidance() -> None:
 
 def test_reparam_config_end_to_end() -> None:
     """Decentered reparam inside the scan body exposes ``z_decentered``."""
-    h = horizon(empty_covariates(10), jnp.zeros((10, 1)))
+    h = Horizon.from_data(empty_covariates(10), jnp.zeros((10, 1)))
 
     def traced() -> None:
         markov_series(
@@ -149,7 +149,7 @@ def test_reparam_config_end_to_end() -> None:
 
 def test_xs_threading() -> None:
     """Exogenous ``xs`` are sliced and moved into scan layout correctly."""
-    h = horizon(empty_covariates(8), jnp.zeros((8, 1)))
+    h = Horizon.from_data(empty_covariates(8), jnp.zeros((8, 1)))
     xs = jnp.arange(8.0)[:, None]
 
     def driven(

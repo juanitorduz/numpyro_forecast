@@ -46,7 +46,6 @@ from numpyro_forecast.exceptions import (
 from numpyro_forecast.models import (
     Horizon,
     Transition,
-    horizon,
     innovations,
     markov_series,
     predict,
@@ -83,7 +82,6 @@ __all__ = [
     "eval_rmse",
     "evaluate_forecast",
     "forecast",
-    "horizon",
     "innovations",
     "markov_series",
     "predict",

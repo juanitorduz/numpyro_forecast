@@ -81,7 +81,6 @@ reference:
     desc: Plain model functions that register the train/forecast sites for you.
     contents:
       - models.Horizon
-      - models.horizon
       - models.Transition
       - models.innovations
       - models.markov_series

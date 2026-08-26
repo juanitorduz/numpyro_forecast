@@ -9,7 +9,7 @@ from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.exceptions import MVNLayoutError
-from numpyro_forecast.models import horizon, predict
+from numpyro_forecast.models import Horizon, predict
 from numpyro_forecast.predictive import draw_posterior
 from numpyro_forecast.surgery import (
     _mvn_time_params,
@@ -122,7 +122,7 @@ def test_gp_noise_end_to_end() -> None:
     """GP-style correlated noise fits through plain NumPyro SVI."""
 
     def gp_model(covariates: Array, data: Array | None = None) -> None:
-        h = horizon(covariates, data)
+        h = Horizon.from_data(covariates, data)
         time = h.duration
         sigma = numpyro.sample("sigma", dist.HalfNormal(1.0))
         rho = numpyro.sample("rho", dist.Beta(2.0, 2.0))

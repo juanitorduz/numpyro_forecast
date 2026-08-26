@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 `numpyro_forecast` is a functional, JAX-native port of the ideas in Pyro's `pyro.contrib.forecast` module (the `_future`-site trick, prefix conditioning, horizon bookkeeping, backtesting), not of its class hierarchy: inference is whatever plain NumPyro you write. The design context lives in the module docstrings (`models.py`, `predictive.py`, `_offload.py`, `evaluate.py`, `surgery.py`) and the example notebooks under `docs/examples/`; read the relevant ones before making non-trivial changes.
 
-The model-side API is a small set of **model building blocks** (`horizon`, `innovations`, `markov_series`, `predict`): plain functions that call `numpyro.sample` and `numpyro.deterministic` on your behalf inside a model function `(covariates, data=None)`. Call them "building blocks" in headings and "model functions" in prose, never "primitives" (that word means `numpyro.primitives`: `sample`, `plate`, ...).
+The model-side API is a small set of **model building blocks** (`Horizon.from_data`, `innovations`, `markov_series`, `predict`): plain functions that call `numpyro.sample` and `numpyro.deterministic` on your behalf inside a model function `(covariates, data=None)`. Call them "building blocks" in headings and "model functions" in prose, never "primitives" (that word means `numpyro.primitives`: `sample`, `plate`, ...).
 
 ## Conventions
 

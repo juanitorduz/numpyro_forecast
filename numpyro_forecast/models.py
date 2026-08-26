@@ -4,8 +4,8 @@ The :class:`Horizon` value carries the train/forecast split, and the building
 blocks (:func:`innovations`, :func:`markov_series`, :func:`predict`) sample
 latents and observation sites against it. A model is a plain NumPyro function
 ``(covariates, data=None) -> None`` whose first line derives its
-:class:`Horizon` from the shapes with :func:`horizon` and which then calls the
-blocks directly. They are ordinary Python functions that call
+:class:`Horizon` from the shapes with :meth:`Horizon.from_data` and which then
+calls the blocks directly. They are ordinary Python functions that call
 ``numpyro.sample`` and ``numpyro.deterministic`` on your behalf: not NumPyro
 primitives, and not effect handlers.
 """
@@ -33,7 +33,7 @@ class Horizon:
     """The train/forecast split for a single model call.
 
     An immutable value derived once per model call from the covariate and data
-    shapes by :func:`horizon`; every building block (:func:`innovations`,
+    shapes by :meth:`from_data`; every building block (:func:`innovations`,
     :func:`markov_series`, :func:`predict`) takes it as its first argument.
 
     Attributes
@@ -80,37 +80,37 @@ class Horizon:
             return None
         return _zeros_like_data(self.data, self.duration)
 
+    @classmethod
+    def from_data(cls, covariates: Array, data: Array | None) -> "Horizon":
+        """Derive the horizon from the covariate and data shapes.
 
-def horizon(covariates: Array, data: Array | None) -> Horizon:
-    """Derive the :class:`Horizon` from the covariate and data shapes.
+        The first line of every model: ``h = Horizon.from_data(covariates, data)``.
 
-    The first line of every model: ``h = horizon(covariates, data)``.
+        Parameters
+        ----------
+        covariates
+            Covariates with time at axis ``-2`` spanning the full horizon.
+        data
+            Observed data with time at axis ``-2`` (``None`` for prior sampling).
 
-    Parameters
-    ----------
-    covariates
-        Covariates with time at axis ``-2`` spanning the full horizon.
-    data
-        Observed data with time at axis ``-2`` (``None`` for prior sampling).
+        Returns
+        -------
+        Horizon
+            The horizon with ``duration = covariates.shape[-2]``,
+            ``t_obs = data.shape[-2]`` (or ``duration`` when ``data`` is ``None``),
+            and ``future = duration - t_obs``.
 
-    Returns
-    -------
-    Horizon
-        The horizon with ``duration = covariates.shape[-2]``,
-        ``t_obs = data.shape[-2]`` (or ``duration`` when ``data`` is ``None``),
-        and ``future = duration - t_obs``.
-
-    Raises
-    ------
-    ValueError
-        If ``data`` is longer than ``covariates`` along the time axis.
-    """
-    duration = covariates.shape[-2]
-    t_obs = duration if data is None else data.shape[-2]
-    if t_obs > duration:
-        msg = "data must not be longer than covariates along the time axis"
-        raise ValueError(msg)
-    return Horizon(data=data, t_obs=t_obs, future=duration - t_obs, duration=duration)
+        Raises
+        ------
+        ValueError
+            If ``data`` is longer than ``covariates`` along the time axis.
+        """
+        duration = covariates.shape[-2]
+        t_obs = duration if data is None else data.shape[-2]
+        if t_obs > duration:
+            msg = "data must not be longer than covariates along the time axis"
+            raise ValueError(msg)
+        return cls(data=data, t_obs=t_obs, future=duration - t_obs, duration=duration)
 
 
 def _sample_time_block(

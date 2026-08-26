@@ -43,7 +43,7 @@ class ForecastModel(Protocol):
     Any plain function with this signature satisfies this Protocol structurally
     (for example, one that derives its
     :class:`~numpyro_forecast.models.Horizon` from the shapes via
-    ``horizon`` and calls the model building blocks), so nothing
+    ``Horizon.from_data`` and calls the model building blocks), so nothing
     needs to subclass it. The parameters are positional-only so a user model's
     own parameter names (``cov``, ``y``, ...) stay free instead of being forced
     to match ``covariates``/``data``.
