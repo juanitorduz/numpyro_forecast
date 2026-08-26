@@ -287,6 +287,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.ssoe</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEStep</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/models.predict.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.predict</span></a>
   </div>
@@ -467,6 +485,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">arrays.concat_future</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.pad_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.pad_future</span></a>
   </div>
 </li>
       </ul>
@@ -735,7 +759,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L131-L169" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L132-L171" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">innovations</span>(
@@ -747,7 +771,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The in-sample portion is sampled under <code>plate("time", t)</code> with the fixed site <code>name</code>; when forecasting, the horizon portion is sampled under a separate site <code>f"{name}_future"</code> and concatenated. The separate site keeps the guide shape fixed and lets <code>Predictive</code> draw the forecast suffix from the prior. Build the series arithmetically from the result (a random walk is <code>jnp.cumsum(drift, axis=-2)</code>); a latent whose per-step distribution depends on the previous state is <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>.</p>
+<p>The in-sample portion is sampled under <code>plate("time", t)</code> with the fixed site <code>name</code>; when forecasting, the horizon portion is sampled under a separate site <code>f"{name}_future"</code> and concatenated. The separate site keeps the guide shape fixed and lets <code>Predictive</code> draw the forecast suffix from the prior. Build the series arithmetically from the result (a random walk is <code>jnp.cumsum(drift, axis=-2)</code>); a latent whose per-step distribution depends on the previous state is <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>, and a deterministic error-feedback recursion driven by the observed series is <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

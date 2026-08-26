@@ -20,6 +20,9 @@
 - [models.Transition](https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html)
 - [models.innovations](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html)
 - [models.markov_series](https://juanitorduz.github.io/numpyro_forecast/reference/models.markov_series.html)
+- [models.ssoe](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html)
+- [models.SSOEStep](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEStep.html)
+- [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
 - [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
 
 #### Producing draws
@@ -64,6 +67,7 @@
 
 - [arrays.zero_data_like](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.zero_data_like.html)
 - [arrays.concat_future](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html)
+- [arrays.pad_future](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html)
 
 #### Distribution surgery
 > Time-axis operations on observation distributions, extensible via singledispatch.

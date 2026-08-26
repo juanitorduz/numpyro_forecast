@@ -287,6 +287,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.ssoe</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEStep</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/models.predict.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.predict</span></a>
   </div>
@@ -467,6 +485,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">arrays.concat_future</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.pad_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.pad_future</span></a>
   </div>
 </li>
       </ul>
@@ -743,7 +767,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L31-L113" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L31-L114" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">Horizon</span>(
@@ -754,7 +778,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>An immutable value derived once per model call from the covariate and data shapes by <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">from_data()</a>; every building block (<a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a>, <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>, <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a>) takes it as its first argument.</p>
+<p>An immutable value derived once per model call from the covariate and data shapes by <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">from_data()</a>; every building block (<a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a>, <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>, <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>, <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a>) takes it as its first argument.</p>
 </div>
 <section id="attributes" class="level2 doc-attributes">
 <h2 class="doc-attributes">Attributes</h2>
@@ -857,7 +881,7 @@ Derive the horizon from the covariate and data shapes.
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L57-L64" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L58-L65" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>__post_init__()</span></code></pre></div>
@@ -871,7 +895,7 @@ Derive the horizon from the covariate and data shapes.
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L83-L113" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L84-L114" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>from_data(covariates, data)</span></code></pre></div>

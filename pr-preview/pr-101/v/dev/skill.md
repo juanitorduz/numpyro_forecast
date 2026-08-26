@@ -34,6 +34,9 @@ Plain model functions that register the train/forecast sites for you.
 - `models.Transition`
 - `models.innovations`
 - `models.markov_series`
+- `models.ssoe`
+- `models.SSOEStep`
+- `models.SSOEResult`
 - `models.predict`
 
 ### Producing draws
@@ -83,6 +86,7 @@ Time-axis array shaping for the train/forecast split.
 
 - `arrays.zero_data_like`
 - `arrays.concat_future`
+- `arrays.pad_future`
 
 ### Distribution surgery
 

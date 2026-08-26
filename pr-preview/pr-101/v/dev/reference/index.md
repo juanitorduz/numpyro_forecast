@@ -35,6 +35,15 @@ Sample conditionally iid per-step innovations over the full horizon.
 [models.markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series)  
 Sample a Markov (state-space) latent over the full horizon.
 
+[models.ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe)  
+Run a single-source-of-error recursion over the full horizon.
+
+[models.SSOEStep](models.SSOEStep.md#numpyro_forecast.models.SSOEStep)  
+`(carry, x_t) -> (mu_t, carry_fn)` where `mu_t` is the one-step-ahead mean
+
+[models.SSOEResult](models.SSOEResult.md#numpyro_forecast.models.SSOEResult)  
+The means and sampled future values produced by `ssoe()`.
+
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
 
@@ -141,6 +150,9 @@ Return zeros shaped like `data` but extended to the covariate duration.
 
 [arrays.concat_future()](arrays.concat_future.md#numpyro_forecast.arrays.concat_future)  
 Concatenate in-sample and forecast-horizon arrays along the time axis.
+
+[arrays.pad_future()](arrays.pad_future.md#numpyro_forecast.arrays.pad_future)  
+Append `future` rows filled with `value` along the time axis.
 
 
 ## Distribution surgery

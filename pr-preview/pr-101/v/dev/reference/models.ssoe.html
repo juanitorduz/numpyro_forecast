@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>arrays.concat_future() – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>models.ssoe() – numpyro_forecast (dev) | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -124,8 +124,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
 
-  <link rel="alternate" type="text/markdown" href="arrays.concat_future.md">
-  <meta name="description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
+  <link rel="alternate" type="text/markdown" href="models.ssoe.md">
+  <meta name="description" content="Run a single-source-of-error recursion over the full horizon.">
   <script type="application/ld+json">
 [
   {
@@ -145,23 +145,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "arrays.concat_future - numpyro_forecast",
+    "name": "models.ssoe - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="arrays.concat_future() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html">
+  <meta property="og:title" content="models.ssoe() – numpyro_forecast (dev) | numpyro_forecast">
+  <meta property="og:description" content="Run a single-source-of-error recursion over the full horizon.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="arrays.concat_future() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="Concatenate in-sample and forecast-horizon arrays along the time axis.">
+  <meta name="twitter:title" content="models.ssoe() – numpyro_forecast (dev) | numpyro_forecast">
+  <meta name="twitter:description" content="Run a single-source-of-error recursion over the full horizon.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -211,7 +211,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">arrays.concat_future()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">models.ssoe()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -287,7 +287,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">models.ssoe</span></a>
   </div>
 </li>
@@ -483,7 +483,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">arrays.concat_future</span></a>
   </div>
 </li>
@@ -729,6 +729,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#examples" id="toc-examples" class="nav-link" data-scroll-target="#examples">Examples</a></li>
   </ul>
 </nav>
     </div>
@@ -737,7 +739,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">arrays.concat_future()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">models.ssoe()</span></h2>
 </div>
 
 
@@ -755,35 +757,61 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Concatenate in-sample and forecast-horizon arrays along the time axis.</p>
+<p>Run a single-source-of-error recursion over the full horizon.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/arrays.py#L50-L67" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L454-L644" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">arrays</span><span class="op">.</span><span class="sig-name">concat_future</span>(
-    <span class="va">prefix</span>,
-    <span class="va">suffix</span>,
-    <span class="op">*</span>,
-    <span class="va">axis</span><span class="op">=-</span><span class="dv">2</span>,
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">ssoe</span>(
+    <span class="va">h</span>,
+    <span class="va">name</span>,
+    <span class="va">y</span>,
+    <span class="va">init_carry</span>,
+    <span class="va">step</span>,
+    <span class="va">noise_dist</span>,
+    <span class="va">xs</span><span class="op">=</span><span class="cn-none">None</span>,
 )</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>The building block for innovations state-space models (ARMA, exponential smoothing, Croston/TSB levels, censored autoregressions): a deterministic filter whose state is driven by the one-step-ahead <em>error</em> <code>eps_t = y_t - mu_t</code>. In-sample it runs <code>step</code> in a raw <code>jax.lax.scan</code> over the observed series <code>y</code> (no sample sites inside); when forecasting it draws iid future errors at the site <code>f"{name}_future"</code> from <code>noise_dist</code> under <code>plate("time_future", h.future, dim=-2)</code> and runs a second scan from the final in-sample carry with <code>y_t = mu_t + eps_t</code> fed back through <code>carry_fn</code>. The guide never sees the future site, because fitting always happens with <code>future == 0</code>. Linear-Gaussian members (ARMA, additive exponential smoothing) can be marginalized exactly by a Kalman filter; the error-feedback form is the one that also covers the nonlinear members.</p>
+<p>The block registers nothing but the error site. The caller writes the likelihood against <code>r.mu</code> and registers <code>numpyro.deterministic("forecast", r.y_future)</code> when <code>h.future &gt; 0</code> (an unconditional registration is harmless to <code>~numpyro_forecast.predictive.forecast()</code>, but lands a size-0 variable in every posterior). Driver contract: <code>~numpyro_forecast.predictive.predict_in_sample()</code> and <code>~numpyro_forecast.convert.to_datatree()</code> call the model with <code>data=None</code> and read <code>"obs"</code>, so <code>y</code> must come from <code>covariates</code> or be computed in the model, never from <code>h.data</code>; <code>~numpyro_forecast.predictive.forecast()</code> reads <code>"forecast"</code>.</p>
+<p><strong>Frozen gates.</strong> Route an update gate (Croston’s demand indicator, an availability mask) through an <code>xs</code> leaf frozen over the horizon with <code>~numpyro_forecast.arrays.pad_future()</code>, and read it from <code>x_t</code>, never from <code>y_t</code> (over the horizon <code>y_t = mu_t + eps_t</code> is nonzero). With the gate off, <code>carry_fn</code> is the identity and the forecast is the last level plus iid errors. <code>~numpyro_forecast.evaluate.backtest()</code> and <code>~numpyro_forecast.predictive.forecast()</code> hand the model <em>real</em> future covariate rows, so a gate sliced from the full covariates keeps updating on sampled values and leaks the test window; scenario inputs such as a future availability mask are the only thing to read from those rows.</p>
+<p><strong>Shapes.</strong> Rows are <code>(*batch, obs)</code>: a scalar state emits <code>mu[None]</code> and starts from <code>init[None]</code> (the block refuses a scalar or a wider mean because either would silently broadcast the likelihood into a <code>(t, t)</code> log-prob); a tuple carry with scalar leaves reads <code>eps_t[0]</code> (the ETS idiom). A panel puts the series on the observation axis: <code>y</code> is <code>(t_obs, series)</code>, the carry <code>(series,)</code>, and a <code>noise</code> sampled under <code>plate("series")</code> has exactly the batch shape <code>(series,)</code> the block needs. Batch dims to the left of time (<code>(B, t_obs, obs)</code>) take a <code>(B, obs)</code> carry and a <code>(B, 1, obs)</code> noise batch. Inputs are jax Arrays (the import hook rejects NumPy). With <code>obs == 1</code> a noise batch shape <code>(future, 1)</code> is indistinguishable from time and is consumed as such: per-step error scales, if that is what you meant.</p>
+<p><strong>Composition.</strong> Two channels are two calls sharing the same <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>; each opens its own <code>time_future</code> plate. Scoping a helper that contains the call is fine (<code>handlers.scope</code> prefixes the error site and the plate; use <code>name="eps"</code> inside a scoped helper so the site reads <code>z_eps_future</code>); register <code>"obs"</code> and <code>"forecast"</code> outside any scope and build the forecast from the channels’ <code>y_future</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">prefix</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">h</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Horizon</span></code></dt>
 <dd>
-<p>In-sample array.</p>
+<p>The horizon for the current model call (see <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">suffix</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">name</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span></code></dt>
 <dd>
-<p>Forecast-horizon array (same shape as <code>prefix</code> except along <code>axis</code>).</p>
+<p>Base name of the error site; the future errors are drawn at <code>f"{name}_future"</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">axis</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">-2</span></span></code></dt>
+<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array | None</span></code></dt>
 <dd>
-Time axis to concatenate along (defaults to <code>-2</code>).
+<p>The driving series over the observed window, shape <code>(*batch, t_obs, obs)</code> with time at axis <code>-2</code> (integer counts are fine as long as the carry, hence the mean, is floating; the error promotes). Sliced from <code>covariates</code> or computed in the model; <code>None</code> (the value of <code>h.data</code> under <code>data=None</code>) raises.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">init_carry</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Carry</span></code></dt>
+<dd>
+<p>Initial carry, any PyTree, already broadcast to the <code>(*batch, obs)</code> rows: a scalar level is <code>init[None]</code>, a panel level <code>(series,)</code>. Every leaf must keep its shape and dtype through <code>carry_fn</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">step</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">SSOEStep[Carry]</span></code></dt>
+<dd>
+<p><code>(carry, x_t) -&gt; (mu_t, carry_fn)</code> (see <a href="models.SSOEStep.html#numpyro_forecast.models.SSOEStep" class="gdls-link gdls-code">SSOEStep</a>): <code>mu_t</code> is the mean for the current row (shape <code>(*batch, obs)</code>, so a scalar state emits <code>mu[None]</code>) and <code>carry_fn(y_t, eps_t)</code> the next carry. <code>carry_fn</code> receives the drawn <code>eps_t</code> over the horizon (not a recomputed <code>y_t - mu_t</code>, which can differ by an ulp), so close over <code>mu_t</code> when the update needs it.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">noise_dist</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
+<dd>
+<p>Zero-centered per-step error distribution. Its batch shape must be <code>(obs,)</code> for a <code>(t_obs, obs)</code> series (<code>()</code> is fine when <code>obs == 1</code>) and <code>(B, 1, obs)</code> for a batched <code>(B, t_obs, obs)</code> series, so the draw under the time plate is exactly <code>(*batch, future, obs)</code> with the dtype of the means; event-shaped distributions are rejected.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">xs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">PyTree[Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis <code>-2</code> and <code>duration</code> rows (a single array, a tuple, a dict, …), split at <code>h.t_obs</code> and handed to <code>step</code> row by row as <code>x_t</code>; <code>None</code> for autonomous dynamics.
 </dd>
 </dl>
 </div>
@@ -792,12 +820,43 @@ Time axis to concatenate along (defaults to <code>-2</code>).
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">SSOEResult</span></code></dt>
 <dd>
-The concatenation of <code>prefix</code> and <code>suffix</code> along <code>axis</code>.
+<code>mu</code> (in-sample means), <code>mu_future</code> and <code>y_future</code> (forecast means and sampled values; size-0 time axis while training).
 </dd>
 </dl>
 </div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>y</code> is <code>None</code>, lacks the time or observation axis, or does not cover exactly <code>h.t_obs</code> rows; if an <code>xs</code> leaf lacks the axes or does not span <code>h.duration</code> rows; if <code>step</code> returns a mean without the observation axis or a carry with a different tree structure, shape or dtype; if <code>step</code> calls <code>numpyro.sample</code>; or if <code>noise_dist</code> draws errors of the wrong shape or dtype.
+</dd>
+</dl>
+</div>
+</section>
+<section id="examples" class="level2 doc-examples">
+<h2 class="doc-examples">Examples</h2>
+<p>ARMA(1,1) with the lambda form of <code>carry_fn</code> (<code>y</code> is the observed series routed through <code>covariates</code>):</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> step(carry, _):</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>...     y_prev, eps_prev <span class="op">=</span> carry</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>...     mu_t <span class="op">=</span> mu <span class="op">+</span> phi <span class="op">*</span> y_prev <span class="op">+</span> theta <span class="op">*</span> eps_prev</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> mu_t, <span class="kw">lambda</span> y_t, eps_t: (y_t, eps_t)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, (mu[<span class="va">None</span>], jnp.zeros((<span class="dv">1</span>,))), step, dist.Normal(<span class="fl">0.0</span>, sigma))</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> numpyro.sample(<span class="st">"obs"</span>, dist.Normal(r.mu, sigma), obs<span class="op">=</span>h.data)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>...     numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
+<p>A gated level (Croston, TSB) with the gate frozen over the horizon:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> step(level, gate_t):</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>...     <span class="kw">def</span> carry_fn(y_t, _):</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>...         <span class="cf">return</span> jnp.where(gate_t, alpha <span class="op">*</span> y_t <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> alpha) <span class="op">*</span> level, level)</span></code></pre></div>
+<p>…</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> level, carry_fn</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> gate_full <span class="op">=</span> pad_future(gate, h.future)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, init[<span class="va">None</span>], step, dist.Normal(<span class="fl">0.0</span>, noise), xs<span class="op">=</span>gate_full)</span></code></pre></div>
 
 
 </section>

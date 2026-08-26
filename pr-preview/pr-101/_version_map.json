@@ -110,6 +110,10 @@
       "dev",
       "0.2.3"
     ],
+    "reference/arrays.pad_future.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/arrays.zero_data_like.html": [
       "dev",
       "0.2.3"
@@ -282,6 +286,14 @@
       "dev",
       "0.2.3"
     ],
+    "reference/models.SSOEResult.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.SSOEStep.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/models.Transition.html": [
       "dev",
       "0.2.3"
@@ -295,6 +307,10 @@
       "0.2.3"
     ],
     "reference/models.predict.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.ssoe.html": [
       "dev",
       "0.2.3"
     ],

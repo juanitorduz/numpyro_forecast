@@ -17,7 +17,7 @@ models.innovations(
 ```
 
 
-The in-sample portion is sampled under `plate("time", t)` with the fixed site `name`; when forecasting, the horizon portion is sampled under a separate site `f"{name}_future"` and concatenated. The separate site keeps the guide shape fixed and lets `Predictive` draw the forecast suffix from the prior. Build the series arithmetically from the result (a random walk is `jnp.cumsum(drift, axis=-2)`); a latent whose per-step distribution depends on the previous state is [markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series).
+The in-sample portion is sampled under `plate("time", t)` with the fixed site `name`; when forecasting, the horizon portion is sampled under a separate site `f"{name}_future"` and concatenated. The separate site keeps the guide shape fixed and lets `Predictive` draw the forecast suffix from the prior. Build the series arithmetically from the result (a random walk is `jnp.cumsum(drift, axis=-2)`); a latent whose per-step distribution depends on the previous state is [markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series), and a deterministic error-feedback recursion driven by the observed series is [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe).
 
 
 ## Parameters
