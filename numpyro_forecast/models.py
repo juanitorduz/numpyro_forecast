@@ -1,8 +1,8 @@
 """Model building blocks: plain functions that register the train/forecast sites.
 
 The :class:`Horizon` value carries the train/forecast split, and the building
-blocks (:func:`innovations`, :func:`markov_series`, :func:`predict`) sample
-latents and observation sites against it. A model is a plain NumPyro function
+blocks (:func:`innovations`, :func:`markov_series`, :func:`ssoe`, :func:`predict`)
+sample latents and observation sites against it. A model is a plain NumPyro function
 ``(covariates, data=None) -> None`` whose first line derives its
 :class:`Horizon` from the shapes with :meth:`Horizon.from_data` and which then
 calls the blocks directly. They are ordinary Python functions that call
@@ -19,7 +19,7 @@ import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
-from jaxtyping import PyTree
+from jaxtyping import Float, PyTree
 from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 
@@ -34,7 +34,8 @@ class Horizon:
 
     An immutable value derived once per model call from the covariate and data
     shapes by :meth:`from_data`; every building block (:func:`innovations`,
-    :func:`markov_series`, :func:`predict`) takes it as its first argument.
+    :func:`markov_series`, :func:`ssoe`, :func:`predict`) takes it as its first
+    argument.
 
     Attributes
     ----------
@@ -143,7 +144,8 @@ def innovations(
     the guide shape fixed and lets ``Predictive`` draw the forecast suffix from
     the prior. Build the series arithmetically from the result (a random walk
     is ``jnp.cumsum(drift, axis=-2)``); a latent whose per-step distribution
-    depends on the previous state is :func:`markov_series`.
+    depends on the previous state is :func:`markov_series`, and a deterministic
+    error-feedback recursion driven by the observed series is :func:`ssoe`.
 
     Parameters
     ----------
@@ -305,6 +307,316 @@ def markov_series[Carry](
         length=h.future if xs_scan is None else None,
     )
     return jnp.moveaxis(jnp.concatenate([zs, zf], axis=0), 0, -2)
+
+
+type SSOEStep[Carry] = Callable[
+    [Carry, PyTree[Array] | None],
+    tuple[Float[Array, " *batch obs"], Callable[[Array, Array], Carry]],
+]
+"""``(carry, x_t) -> (mu_t, carry_fn)`` where ``mu_t`` is the one-step-ahead mean
+of the current row (shape ``(*batch, obs)``) and ``carry_fn(y_t, eps_t)`` builds
+the next carry from the row's value and error. :func:`ssoe` owns the error
+site: ``step`` must not call ``numpyro.sample`` (that is :func:`markov_series`).
+
+``Carry`` is the user's carry type (any PyTree), bound per :func:`ssoe` call;
+``x_t`` is one row of the ``xs`` PyTree (``None`` when ``xs`` is ``None``)."""
+
+
+@dataclass(frozen=True)
+class SSOEResult:
+    """The means and sampled future values produced by :func:`ssoe`.
+
+    Attributes
+    ----------
+    mu
+        In-sample one-step-ahead means, shape ``(*batch, t_obs, obs)``: the
+        predictor the caller writes its likelihood against.
+    mu_future
+        Forecast-horizon one-step-ahead means, shape ``(*batch, future, obs)``
+        (a size-0 time axis while training).
+    y_future
+        Sampled future values ``mu_future + eps``, shape ``(*batch, future, obs)``
+        (a size-0 time axis while training); the caller registers them as the
+        ``"forecast"`` deterministic when ``h.future > 0``.
+    """
+
+    mu: Float[Array, " *batch t_obs obs"]
+    mu_future: Float[Array, " *batch future obs"]
+    y_future: Float[Array, " *batch future obs"]
+
+
+def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None) -> Array:
+    """Check the driving series and the ``xs`` leaves against the horizon."""
+    if y is None:
+        msg = (
+            "ssoe requires the driving series y: pass the observed series from covariates "
+            "(or compute it in the model), never h.data, because predict_in_sample and "
+            "to_datatree call the model with data=None."
+        )
+        raise ValueError(msg)
+    if y.ndim < 2:
+        msg = (
+            "ssoe expects y with time at axis -2 and a trailing observation axis, shape "
+            f"(*batch, t_obs, obs); got shape {y.shape}. Slice the series as "
+            "covariates[..., :h.t_obs, :] rather than [..., 0]."
+        )
+        raise ValueError(msg)
+    if y.shape[-2] != h.t_obs:
+        msg = (
+            f"ssoe expects y to cover exactly the observed window: y.shape[-2] = {y.shape[-2]} "
+            f"but h.t_obs = {h.t_obs}. Slice the driving series as covariates[..., :h.t_obs, :]."
+        )
+        raise ValueError(msg)
+    if xs is not None:
+        for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
+            leaf_name = jax.tree_util.keystr(path) or "<root>"
+            if leaf.ndim < 2:
+                msg = (
+                    "ssoe expects every xs leaf to carry time at axis -2 and a trailing "
+                    f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
+                    "with [..., None]."
+                )
+                raise ValueError(msg)
+            if leaf.shape[-2] != h.duration:
+                msg = (
+                    "ssoe expects every xs leaf to span the full horizon (duration = "
+                    f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. "
+                    "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
+                )
+                raise ValueError(msg)
+    return y
+
+
+def _validate_ssoe_mean(mu_t: Array, y_t: Array) -> None:
+    """Require the per-step mean to span the series rows with a trailing obs axis."""
+    try:
+        rows: tuple[int, ...] | None = jnp.broadcast_shapes(mu_t.shape, y_t.shape)
+    except ValueError:
+        rows = None
+    if mu_t.ndim == 0 or rows != mu_t.shape:
+        msg = (
+            "step must return a per-step mean carrying the trailing observation axis and "
+            f"spanning the series rows (shape (*batch, obs)); got mean shape {mu_t.shape} for "
+            f"rows of shape {y_t.shape}. Add the axis with mu[..., None] and broadcast "
+            "init_carry to the rows."
+        )
+        raise ValueError(msg)
+
+
+def _validate_ssoe_carry[Carry](carry: Carry, new_carry: Carry) -> Carry:
+    """Require ``carry_fn`` to preserve the carry's tree structure, shapes and dtypes."""
+    new_carry = jax.tree.map(jnp.asarray, new_carry)
+    old_structure = jax.tree.structure(carry)
+    new_structure = jax.tree.structure(new_carry)
+    if old_structure != new_structure:
+        msg = (
+            "carry_fn must return a carry with the same tree structure as init_carry; got "
+            f"{new_structure} instead of {old_structure}."
+        )
+        raise ValueError(msg)
+    old_leaves = jax.tree_util.tree_leaves_with_path(carry)
+    for (path, old), new in zip(old_leaves, jax.tree.leaves(new_carry), strict=True):
+        old_arr = jnp.asarray(old)
+        if old_arr.shape != new.shape or old_arr.dtype != new.dtype:
+            leaf_name = jax.tree_util.keystr(path) or "<root>"
+            msg = (
+                f"carry_fn changed carry leaf {leaf_name} from {old_arr.dtype}{old_arr.shape} to "
+                f"{new.dtype}{new.shape}; init_carry must already match what carry_fn returns "
+                "(broadcast it to the (*batch, obs) rows, and align dtypes with e.g. "
+                "jax.tree.map(lambda c: c.astype(y.dtype), init_carry))."
+            )
+            raise ValueError(msg)
+    return new_carry
+
+
+def _validate_future_errors(eps: Array, mu: Array, future: int) -> None:
+    """Require the drawn errors to line up exactly with the in-sample means."""
+    expected = (*mu.shape[:-2], future, mu.shape[-1])
+    if eps.shape != expected:
+        msg = (
+            f"ssoe expects noise_dist to draw errors of shape {expected} under the time_future "
+            f"plate, got {eps.shape}: the batch shape of noise_dist must be (obs,) for a "
+            "(t_obs, obs) series (or () when obs == 1) and (B, 1, obs) for a (B, t_obs, obs) "
+            "panel; event-shaped distributions are not supported."
+        )
+        raise ValueError(msg)
+
+
+def ssoe[Carry](
+    h: Horizon,
+    name: str,
+    y: Array | None,
+    init_carry: Carry,
+    step: SSOEStep[Carry],
+    noise_dist: dist.Distribution,
+    xs: PyTree[Array] | None = None,
+) -> SSOEResult:
+    """Run a single-source-of-error recursion over the full horizon.
+
+    The building block for innovations state-space models (ARMA, exponential
+    smoothing, Croston/TSB levels, censored autoregressions): a deterministic
+    filter whose state is driven by the one-step-ahead *error*
+    ``eps_t = y_t - mu_t``. In-sample it runs ``step`` in a raw ``jax.lax.scan``
+    over the observed series ``y`` (no sample sites inside); when forecasting it
+    draws iid future errors at the site ``f"{name}_future"`` from ``noise_dist``
+    under ``plate("time_future", h.future, dim=-2)`` and runs a second scan from
+    the final in-sample carry with ``y_t = mu_t + eps_t`` fed back through
+    ``carry_fn``. The guide never sees the future site, because fitting always
+    happens with ``future == 0``. Linear-Gaussian members (ARMA, additive
+    exponential smoothing) can be marginalized exactly by a Kalman filter; the
+    error-feedback form is the one that also covers the nonlinear members.
+
+    The block registers nothing but the error site. The caller writes the
+    likelihood against ``r.mu`` and registers ``numpyro.deterministic("forecast",
+    r.y_future)`` when ``h.future > 0`` (an unconditional registration is
+    harmless to :func:`~numpyro_forecast.predictive.forecast`, but lands a
+    size-0 variable in every posterior). Driver contract:
+    :func:`~numpyro_forecast.predictive.predict_in_sample` and
+    :func:`~numpyro_forecast.convert.to_datatree` call the model with
+    ``data=None`` and read ``"obs"``, so ``y`` must come from ``covariates`` or be
+    computed in the model, never from ``h.data``;
+    :func:`~numpyro_forecast.predictive.forecast` reads ``"forecast"``.
+
+    **Frozen gates.** Route an update gate (Croston's demand indicator, an
+    availability mask) through an ``xs`` leaf frozen over the horizon with
+    :func:`~numpyro_forecast.arrays.pad_future`, and read it from ``x_t``, never
+    from ``y_t`` (over the horizon ``y_t = mu_t + eps_t`` is nonzero). With the
+    gate off, ``carry_fn`` is the identity and the forecast is the last level
+    plus iid errors. :func:`~numpyro_forecast.evaluate.backtest` and
+    :func:`~numpyro_forecast.predictive.forecast` hand the model *real* future
+    covariate rows, so a gate sliced from the full covariates keeps updating on
+    sampled values and leaks the test window; scenario inputs such as a future
+    availability mask are the only thing to read from those rows.
+
+    **Composition.** Two channels are two calls sharing the same ``Horizon``;
+    each opens its own ``time_future`` plate. Scoping a helper that contains the
+    call is fine (``handlers.scope`` prefixes the error site and the plate; use
+    ``name="eps"`` inside a scoped helper so the site reads ``z_eps_future``);
+    register ``"obs"`` and ``"forecast"`` outside any scope and build the
+    forecast from the channels' ``y_future``.
+
+    Parameters
+    ----------
+    h
+        The horizon for the current model call (see :class:`Horizon`).
+    name
+        Base name of the error site; the future errors are drawn at
+        ``f"{name}_future"``.
+    y
+        The driving series over the observed window, shape
+        ``(*batch, t_obs, obs)`` with time at axis ``-2`` (integer counts are
+        fine; the error promotes). Sliced from ``covariates`` or computed in
+        the model; ``None`` (the value of ``h.data`` under ``data=None``) raises.
+    init_carry
+        Initial carry, any PyTree, already broadcast to the ``(*batch, obs)``
+        rows: a scalar level is ``init[None]``, a panel level ``(series,)``.
+        Every leaf must keep its shape and dtype through ``carry_fn``.
+    step
+        ``(carry, x_t) -> (mu_t, carry_fn)`` (see :data:`SSOEStep`): ``mu_t`` is
+        the mean for the current row (shape ``(*batch, obs)``, so a scalar
+        state emits ``mu[None]``) and ``carry_fn(y_t, eps_t)`` the next carry.
+        ``carry_fn`` receives the drawn ``eps_t`` over the horizon (not a
+        recomputed ``y_t - mu_t``, which differs by an ulp), so close over
+        ``mu_t`` when the update needs it.
+    noise_dist
+        Zero-centered per-step error distribution. Its batch shape must be
+        ``(obs,)`` for a ``(t_obs, obs)`` series (``()`` is fine when
+        ``obs == 1``) and ``(B, 1, obs)`` for a ``(B, t_obs, obs)`` panel, so the
+        draw under the time plate is exactly ``(*batch, future, obs)``;
+        event-shaped distributions are rejected.
+    xs
+        Optional exogenous inputs over the full horizon: a PyTree of arrays with
+        time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
+        dict, ...), split at ``h.t_obs`` and handed to ``step`` row by row as
+        ``x_t``; ``None`` for autonomous dynamics.
+
+    Returns
+    -------
+    SSOEResult
+        ``mu`` (in-sample means), ``mu_future`` and ``y_future`` (forecast
+        means and sampled values; size-0 time axis while training).
+
+    Raises
+    ------
+    ValueError
+        If ``y`` is ``None``, lacks the time or observation axis, or does not
+        cover exactly ``h.t_obs`` rows; if an ``xs`` leaf lacks the axes or does
+        not span ``h.duration`` rows; if ``step`` returns a mean without the
+        observation axis or a carry with a different tree structure, shape or
+        dtype; if ``step`` calls ``numpyro.sample``; or if ``noise_dist`` draws
+        errors of the wrong shape.
+
+    Examples
+    --------
+    ARMA(1,1) with the lambda form of ``carry_fn`` (``y`` is the observed series
+    routed through ``covariates``):
+
+    >>> def step(carry, _):
+    ...     y_prev, eps_prev = carry
+    ...     mu_t = mu + phi * y_prev + theta * eps_prev
+    ...     return mu_t, lambda y_t, eps_t: (y_t, eps_t)
+    >>> r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), step, dist.Normal(0.0, sigma))
+    >>> numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
+    >>> if h.future > 0:
+    ...     numpyro.deterministic("forecast", r.y_future)
+
+    A gated level (Croston, TSB) with the gate frozen over the horizon:
+
+    >>> def step(level, gate_t):
+    ...     def carry_fn(y_t, _):
+    ...         return jnp.where(gate_t, alpha * y_t + (1 - alpha) * level, level)
+    ...
+    ...     return level, carry_fn
+    >>> gate_full = pad_future(gate, h.future)
+    >>> r = ssoe(h, "eps", y, init[None], step, dist.Normal(0.0, noise), xs=gate_full)
+    """
+    y = _validate_ssoe_inputs(h, y, xs)
+    y_scan = jnp.moveaxis(y, -2, 0)
+    xs_scan = None if xs is None else jax.tree.map(lambda leaf: jnp.moveaxis(leaf, -2, 0), xs)
+    xs_obs = None if xs_scan is None else jax.tree.map(lambda leaf: leaf[: h.t_obs], xs_scan)
+    xs_future = None if xs_scan is None else jax.tree.map(lambda leaf: leaf[h.t_obs :], xs_scan)
+
+    def filter_body(
+        carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
+    ) -> tuple[Carry, Array]:
+        y_t, x_t = inputs
+        mu_t, carry_fn = step(carry, x_t)
+        _validate_ssoe_mean(mu_t, y_t)
+        new_carry = _validate_ssoe_carry(carry, carry_fn(y_t, y_t - mu_t))
+        return new_carry, mu_t
+
+    with numpyro.handlers.trace() as filter_trace:
+        final_carry, mu_scan = jax.lax.scan(filter_body, init_carry, (y_scan, xs_obs))
+    if filter_trace:
+        msg = (
+            "step must not call numpyro.sample or numpyro.deterministic (found sites: "
+            f"{sorted(filter_trace)}); a sampled transition is markov_series."
+        )
+        raise ValueError(msg)
+    mu = jnp.moveaxis(mu_scan, 0, -2)
+    if h.future == 0:
+        empty = jnp.zeros((*mu.shape[:-2], 0, mu.shape[-1]), mu.dtype)
+        return SSOEResult(mu=mu, mu_future=empty, y_future=empty)
+
+    with numpyro.plate("time_future", h.future, dim=-2):
+        eps = cast(Array, numpyro.sample(f"{name}_future", noise_dist))
+    _validate_future_errors(eps, mu, h.future)
+    eps_scan = jnp.moveaxis(eps, -2, 0)
+
+    def forecast_body(
+        carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
+    ) -> tuple[Carry, tuple[Array, Array]]:
+        eps_t, x_t = inputs
+        mu_t, carry_fn = step(carry, x_t)
+        y_t = mu_t + eps_t
+        return carry_fn(y_t, eps_t), (mu_t, y_t)
+
+    _, (mu_future, y_future) = jax.lax.scan(forecast_body, final_carry, (eps_scan, xs_future))
+    return SSOEResult(
+        mu=mu,
+        mu_future=jnp.moveaxis(mu_future, 0, -2),
+        y_future=jnp.moveaxis(y_future, 0, -2),
+    )
 
 
 def predict(

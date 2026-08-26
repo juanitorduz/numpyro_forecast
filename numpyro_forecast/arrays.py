@@ -1,8 +1,10 @@
 """Array shaping helpers for the package's time-axis layout.
 
 Arrays put time at axis ``-2`` and the observation dim at ``-1`` (matching
-Pyro). These helpers build horizon-shaped zeros and concatenate in-sample and
-forecast-horizon segments along the time axis.
+Pyro). These helpers build horizon-shaped zeros, concatenate in-sample and
+forecast-horizon segments along the time axis, and pad an in-sample array with
+constant forecast-horizon rows (the frozen-gate recipe of
+:func:`numpyro_forecast.models.ssoe`).
 """
 
 import jax.numpy as jnp
@@ -63,3 +65,30 @@ def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:
         The concatenation of ``prefix`` and ``suffix`` along ``axis``.
     """
     return jnp.concatenate([prefix, suffix], axis=axis)
+
+
+def pad_future(x: Array, future: int, *, value: float = 0.0) -> Array:
+    """Append ``future`` rows filled with ``value`` along the time axis.
+
+    The frozen-gate recipe of :func:`numpyro_forecast.models.ssoe`: an update
+    gate observed in-sample (``(*batch, t_obs, obs)``) becomes a full-horizon
+    ``xs`` leaf whose forecast rows are ``value`` (``0.0`` freezes the carry,
+    ``1.0`` keeps an availability mask open). Zero ``future`` returns ``x``
+    unchanged in shape.
+
+    Parameters
+    ----------
+    x
+        In-sample array with time at axis ``-2``, shape ``(*batch, t_obs, obs)``.
+    future
+        Number of forecast rows to append.
+    value
+        Fill value of the appended rows, cast to ``x.dtype``.
+
+    Returns
+    -------
+    Array
+        ``x`` followed by ``future`` constant rows, shape ``(*batch, t_obs + future, obs)``.
+    """
+    suffix = jnp.full((*x.shape[:-2], future, x.shape[-1]), value, dtype=x.dtype)
+    return concat_future(x, suffix)

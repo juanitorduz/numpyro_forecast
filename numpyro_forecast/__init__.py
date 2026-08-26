@@ -45,10 +45,13 @@ from numpyro_forecast.exceptions import (
 )
 from numpyro_forecast.models import (
     Horizon,
+    SSOEResult,
+    SSOEStep,
     Transition,
     innovations,
     markov_series,
     predict,
+    ssoe,
 )
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.surgery import register_elementwise
@@ -67,6 +70,8 @@ __all__ = [
     "KernelConfigError",
     "MVNLayoutError",
     "NumpyroForecastError",
+    "SSOEResult",
+    "SSOEStep",
     "Transition",
     "VectorizedBacktestResult",
     "VectorizedGuideError",
@@ -89,5 +94,6 @@ __all__ = [
     "predictions_to_datatree",
     "register_elementwise",
     "results_to_dataframe",
+    "ssoe",
     "to_datatree",
 ]

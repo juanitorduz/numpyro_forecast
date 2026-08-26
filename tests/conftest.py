@@ -238,6 +238,15 @@ def rw_model_factory() -> ForecastModel:
     return model
 
 
+def as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
+    """Wrap a ``(Horizon, covariates)`` body as a plain ``(covariates, data=None)`` model."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        body(Horizon.from_data(covariates, data), covariates)
+
+    return model
+
+
 def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str, Array]]:
     """Fit the shared random-walk body with raw NumPyro SVI (test helper).
 

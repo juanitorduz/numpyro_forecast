@@ -6,15 +6,19 @@ mirror the example notebooks under ``docs/examples/`` and act as a regression
 target for the full fit-draw-forecast path.
 """
 
+from collections.abc import Callable
 from typing import cast
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
+from numpyro.handlers import scope
 from numpyro.infer.reparam import LocScaleReparam
 
+from numpyro_forecast.arrays import pad_future
 from numpyro_forecast.features import periodic_repeat
-from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.models import Horizon, SSOEResult, innovations, predict, ssoe
 from numpyro_forecast.typing import Array, ForecastModel
 
 
@@ -127,3 +131,90 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
         predict(h, dist.Normal(0.0, scale), prediction)
 
     return hierarchical_model
+
+
+def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[SSOEResult, Array]:
+    """Gated simple exponential smoothing level channel on :func:`ssoe`.
+
+    Samples the channel priors (``smoothing``, ``init``, ``noise``) and runs the
+    where-gated level recursion; the level updates only where ``gate`` is true
+    and is frozen over the forecast horizon (``pad_future`` zeroes the gate
+    there), so the forecast is the last level plus iid errors. Meant to be
+    called under :func:`numpyro.handlers.scope`, which prefixes the parameter
+    sites and the block's ``f"{name}_future"`` site per channel.
+
+    Parameters
+    ----------
+    h
+        The train/forecast horizon for the current model call.
+    name
+        Error-site name handed to :func:`ssoe` (``"eps"`` under a scope).
+    values
+        Driving series ``(t_obs, 1)``; read only where ``gate`` is true.
+    gate
+        Boolean update gate ``(t_obs, 1)``.
+
+    Returns
+    -------
+    tuple[SSOEResult, Array]
+        The block result (in-sample means, forecast means, sampled future
+        values) and the observation noise scale.
+    """
+    smoothing = jnp.asarray(numpyro.sample("smoothing", dist.Beta(2.0, 20.0)))
+    init = jnp.asarray(numpyro.sample("init", dist.Normal(0.0, 1.0)))
+    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(1.0)))
+
+    def step(level: Array, gate_t: Array | None) -> tuple[Array, Callable[[Array, Array], Array]]:
+        assert gate_t is not None  # xs is always passed here
+
+        def carry_fn(y_t: Array, _: Array) -> Array:
+            return jnp.where(gate_t, smoothing * y_t + (1.0 - smoothing) * level, level)
+
+        return level, carry_fn
+
+    result = ssoe(
+        h, name, values, init[None], step, dist.Normal(0.0, noise), xs=pad_future(gate, h.future)
+    )
+    return result, noise
+
+
+def croston_model(covariates: Array, data: Array | None = None) -> None:
+    """Croston's method as two scoped level channels composed on :func:`ssoe`.
+
+    The observed demand series doubles as the covariate: ``covariates`` is the
+    series over the full horizon with shape ``(duration, 1)`` and only its first
+    ``h.t_obs`` rows are read (the block's ``t_obs`` check is the leak guard).
+    The demand-size channel ``z`` smooths the demand at demand events; the
+    inverse-interval channel ``p_inv`` smooths ``1 / interval`` at the same
+    events. The likelihoods and the ``"forecast"`` product are registered
+    outside the scopes, from the channels' results.
+
+    Parameters
+    ----------
+    covariates
+        The demand series over the full horizon, shape ``(duration, 1)``.
+    data
+        Observed demand with time at axis ``-2`` (``None`` for prior sampling
+        and under ``predict_in_sample``).
+    """
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :]
+    is_demand = y > 0
+    idx = jnp.arange(h.t_obs)[:, None]
+    last_at_or_before = jax.lax.cummax(jnp.where(is_demand, idx, -1), axis=0)
+    last_before = jnp.concatenate([jnp.full((1, 1), -1), last_at_or_before[:-1]])
+    p_inv_obs = 1.0 / (idx - last_before).astype(y.dtype)
+
+    z, z_noise = scope(_level_channel, "z", divider="_")(h, "eps", y, is_demand)
+    p_inv, p_inv_noise = scope(_level_channel, "p_inv", divider="_")(
+        h, "eps", p_inv_obs, is_demand
+    )
+
+    numpyro.deterministic("rate", z.mu * p_inv.mu)
+    numpyro.sample("obs", dist.Normal(z.mu, z_noise).mask(is_demand), obs=h.data)
+    numpyro.sample(
+        "obs_intervals", dist.Normal(p_inv.mu, p_inv_noise).mask(is_demand), obs=p_inv_obs
+    )
+    if h.future > 0:
+        numpyro.deterministic("rate_future", z.mu_future * p_inv.mu_future)
+        numpyro.deterministic("forecast", z.y_future * p_inv.y_future)
