@@ -38,7 +38,7 @@ def _capture(body: Body) -> tuple[ForecastModel, list[SSOEResult]]:
     box: list[SSOEResult] = []
 
     def wrapped(h: Horizon, covariates: Array) -> None:
-        box.append(body(h, covariates))
+        box[:] = [body(h, covariates)]
 
     return as_model(wrapped), box
 
@@ -478,6 +478,23 @@ def _carry_shape(h: Horizon) -> None:
     ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
 
 
+def _mu_wide(h: Horizon) -> None:
+    init = jnp.zeros((2, 1))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, _identity_step, dist.Normal(0.0, 1.0))
+
+
+def _mu_float(h: Horizon) -> None:
+    def step(carry: Array, _: object) -> tuple[Any, CarryFn]:
+        return 0.0, lambda y_t, eps_t: carry
+
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
+
+
+def _mu_int(h: Horizon) -> None:
+    init = jnp.zeros((1,), dtype=jnp.int32)
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, _identity_step, dist.Normal(0.0, 1.0))
+
+
 def _carry_dtype(h: Horizon) -> None:
     def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
         return carry.astype(jnp.float32), lambda y_t, eps_t: y_t
@@ -495,6 +512,9 @@ def _carry_dtype(h: Horizon) -> None:
         (_xs_short, r"span the full horizon.*\['gate'\]"),
         (_xs_1d, r"Add the axis"),
         (_mu_scalar, "per-step mean"),
+        (_mu_wide, "per-step mean"),
+        (_mu_float, "per-step mean"),
+        (_mu_int, "floating per-step mean"),
         (_carry_tree, "same tree structure"),
         (_carry_shape, r"changed carry leaf"),
         (_carry_dtype, r"astype"),
@@ -506,6 +526,9 @@ def _carry_dtype(h: Horizon) -> None:
         "xs-short",
         "xs-1d",
         "mu-scalar",
+        "mu-wide",
+        "mu-float",
+        "mu-int",
         "carry-tree",
         "carry-shape",
         "carry-dtype",
@@ -541,6 +564,18 @@ def test_noise_shape_is_enforced(
 
     _run_body(body, T_OBS, 0)
     with pytest.raises(ValueError, match="time_future plate"):
+        _run_body(body, T_OBS, FUTURE)
+
+
+def test_noise_dtype_is_enforced() -> None:
+    y = jnp.zeros((T_OBS, 1), dtype=jnp.float16)
+
+    def body(h: Horizon) -> None:
+        init = jnp.zeros((1,), dtype=jnp.float16)
+        ssoe(h, "eps", y, init, _identity_step, dist.Normal(0.0, 1.0))
+
+    _run_body(body, T_OBS, 0)
+    with pytest.raises(ValueError, match="dtype of the means"):
         _run_body(body, T_OBS, FUTURE)
 
 
@@ -654,8 +689,16 @@ def test_ar1_round_trip_closed_form(fitter: str, rng_key: Array) -> None:
         post = mcmc.get_samples()
     phi = jnp.asarray(post["phi"])
     assert abs(float(phi.mean()) - PHI_AR) < 0.15
-    preds = forecast(random.PRNGKey(2), AR1_SSOE, post, data, series, batch_size=100)
-    mean_fc = preds.mean(axis=0)[:, 0]
     powers = jnp.arange(1, future + 1)
     closed = (phi[:, None] ** powers).mean(axis=0) * data[-1, 0]
+    # With the future errors zeroed the recursion is exactly phi^k * y_last per draw, so the
+    # posterior-mean forecast must match the closed form to float precision.
+    zero_errors = substitute(AR1_SSOE, data={"eps_future": jnp.zeros((future, 1))})
+    exact = Predictive(zero_errors, posterior_samples=post, return_sites=["forecast"])
+    det = exact(random.PRNGKey(2), series, data)["forecast"]
+    assert jnp.allclose(det.mean(axis=0)[:, 0], closed, rtol=1e-4, atol=1e-6)
+    # The real forecast adds Monte Carlo noise from 400 sampled error paths (about 0.01 at
+    # the far end), hence the absolute tolerance.
+    preds = forecast(random.PRNGKey(2), AR1_SSOE, post, data, series, batch_size=100)
+    mean_fc = preds.mean(axis=0)[:, 0]
     assert jnp.allclose(mean_fc, closed, rtol=0.05, atol=0.03)

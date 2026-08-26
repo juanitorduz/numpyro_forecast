@@ -388,17 +388,19 @@ def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None)
 
 
 def _validate_ssoe_mean(mu_t: Array, y_t: Array) -> None:
-    """Require the per-step mean to span the series rows with a trailing obs axis."""
-    try:
-        rows: tuple[int, ...] | None = jnp.broadcast_shapes(mu_t.shape, y_t.shape)
-    except ValueError:
-        rows = None
-    if mu_t.ndim == 0 or rows != mu_t.shape:
+    """Require a floating per-step mean shaped exactly like the series rows."""
+    if mu_t.ndim == 0 or mu_t.shape != y_t.shape:
         msg = (
-            "step must return a per-step mean carrying the trailing observation axis and "
-            f"spanning the series rows (shape (*batch, obs)); got mean shape {mu_t.shape} for "
-            f"rows of shape {y_t.shape}. Add the axis with mu[..., None] and broadcast "
-            "init_carry to the rows."
+            "step must return a per-step mean shaped exactly like the series rows "
+            f"((*batch, obs)); got mean shape {mu_t.shape} for rows of shape {y_t.shape}. "
+            "Add the trailing axis with mu[..., None] and broadcast init_carry to the rows "
+            "(a wider or narrower mean would silently broadcast the likelihood)."
+        )
+        raise ValueError(msg)
+    if not jnp.issubdtype(mu_t.dtype, jnp.floating):
+        msg = (
+            f"step must return a floating per-step mean, got dtype {mu_t.dtype}. Cast the "
+            "carry that produces it, e.g. init_carry = y[0].astype(float)."
         )
         raise ValueError(msg)
 
@@ -436,8 +438,15 @@ def _validate_future_errors(eps: Array, mu: Array, future: int) -> None:
         msg = (
             f"ssoe expects noise_dist to draw errors of shape {expected} under the time_future "
             f"plate, got {eps.shape}: the batch shape of noise_dist must be (obs,) for a "
-            "(t_obs, obs) series (or () when obs == 1) and (B, 1, obs) for a (B, t_obs, obs) "
-            "panel; event-shaped distributions are not supported."
+            "(t_obs, obs) series (or () when obs == 1) and (B, 1, obs) for a batched "
+            "(B, t_obs, obs) series; event-shaped distributions are not supported."
+        )
+        raise ValueError(msg)
+    if eps.dtype != mu.dtype:
+        msg = (
+            f"ssoe expects noise_dist to draw errors with the dtype of the means ({mu.dtype}), "
+            f"got {eps.dtype}; the forecast scan feeds y_t = mu_t + eps_t back into the carry, "
+            "so match the dtypes (e.g. build noise_dist's parameters with y.dtype)."
         )
         raise ValueError(msg)
 
@@ -488,6 +497,19 @@ def ssoe[Carry](
     sampled values and leaks the test window; scenario inputs such as a future
     availability mask are the only thing to read from those rows.
 
+    **Shapes.** Rows are ``(*batch, obs)``: a scalar state emits ``mu[None]``
+    and starts from ``init[None]`` (the block refuses a scalar or a wider mean
+    because either would silently broadcast the likelihood into a
+    ``(t, t)`` log-prob); a tuple carry with scalar leaves reads ``eps_t[0]``
+    (the ETS idiom). A panel puts the series on the observation axis: ``y`` is
+    ``(t_obs, series)``, the carry ``(series,)``, and a ``noise`` sampled under
+    ``plate("series")`` has exactly the batch shape ``(series,)`` the block
+    needs. Batch dims to the left of time (``(B, t_obs, obs)``) take a
+    ``(B, obs)`` carry and a ``(B, 1, obs)`` noise batch. Inputs are jax
+    Arrays (the import hook rejects NumPy). With ``obs == 1`` a noise batch
+    shape ``(future, 1)`` is indistinguishable from time and is consumed as
+    such: per-step error scales, if that is what you meant.
+
     **Composition.** Two channels are two calls sharing the same ``Horizon``;
     each opens its own ``time_future`` plate. Scoping a helper that contains the
     call is fine (``handlers.scope`` prefixes the error site and the plate; use
@@ -505,8 +527,9 @@ def ssoe[Carry](
     y
         The driving series over the observed window, shape
         ``(*batch, t_obs, obs)`` with time at axis ``-2`` (integer counts are
-        fine; the error promotes). Sliced from ``covariates`` or computed in
-        the model; ``None`` (the value of ``h.data`` under ``data=None``) raises.
+        fine as long as the carry, hence the mean, is floating; the error
+        promotes). Sliced from ``covariates`` or computed in the model;
+        ``None`` (the value of ``h.data`` under ``data=None``) raises.
     init_carry
         Initial carry, any PyTree, already broadcast to the ``(*batch, obs)``
         rows: a scalar level is ``init[None]``, a panel level ``(series,)``.
@@ -516,14 +539,15 @@ def ssoe[Carry](
         the mean for the current row (shape ``(*batch, obs)``, so a scalar
         state emits ``mu[None]``) and ``carry_fn(y_t, eps_t)`` the next carry.
         ``carry_fn`` receives the drawn ``eps_t`` over the horizon (not a
-        recomputed ``y_t - mu_t``, which differs by an ulp), so close over
+        recomputed ``y_t - mu_t``, which can differ by an ulp), so close over
         ``mu_t`` when the update needs it.
     noise_dist
         Zero-centered per-step error distribution. Its batch shape must be
         ``(obs,)`` for a ``(t_obs, obs)`` series (``()`` is fine when
-        ``obs == 1``) and ``(B, 1, obs)`` for a ``(B, t_obs, obs)`` panel, so the
-        draw under the time plate is exactly ``(*batch, future, obs)``;
-        event-shaped distributions are rejected.
+        ``obs == 1``) and ``(B, 1, obs)`` for a batched ``(B, t_obs, obs)``
+        series, so the draw under the time plate is exactly
+        ``(*batch, future, obs)`` with the dtype of the means; event-shaped
+        distributions are rejected.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays with
         time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
@@ -544,7 +568,7 @@ def ssoe[Carry](
         not span ``h.duration`` rows; if ``step`` returns a mean without the
         observation axis or a carry with a different tree structure, shape or
         dtype; if ``step`` calls ``numpyro.sample``; or if ``noise_dist`` draws
-        errors of the wrong shape.
+        errors of the wrong shape or dtype.
 
     Examples
     --------
@@ -580,7 +604,8 @@ def ssoe[Carry](
         carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
     ) -> tuple[Carry, Array]:
         y_t, x_t = inputs
-        mu_t, carry_fn = step(carry, x_t)
+        mu_raw, carry_fn = step(carry, x_t)
+        mu_t = jnp.asarray(mu_raw)
         _validate_ssoe_mean(mu_t, y_t)
         new_carry = _validate_ssoe_carry(carry, carry_fn(y_t, y_t - mu_t))
         return new_carry, mu_t
