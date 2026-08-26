@@ -203,7 +203,7 @@ def empty_covariates(duration: int) -> Array:
 
 
 def rw_body(h: Horizon, covariates: Array) -> None:
-    """Random-walk model body using the functional primitives (shared test helper)."""
+    """Random-walk model body using the model building blocks (shared test helper)."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
     drift = innovations(h, "drift", lambda: dist.Normal(0.0, drift_scale))
@@ -280,7 +280,7 @@ def nuts_samples(
 
 
 def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
-    """Build a ``backtest``-compatible :data:`ForecastFn` closure from plain NumPyro.
+    """Build a ``backtest``-compatible :class:`ForecastFn` closure from plain NumPyro.
 
     Fits ``model`` with ``AutoNormal`` + ``SVI.run`` and forecasts with the
     package's :func:`~numpyro_forecast.predictive.forecast`. Deliberately built on
@@ -314,7 +314,7 @@ def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
 
 
 def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
-    """Build a ``backtest``-compatible :data:`InSampleFn` closure from plain NumPyro.
+    """Build a ``backtest``-compatible :class:`InSampleFn` closure from plain NumPyro.
 
     Mirrors :func:`svi_forecast_fn` but scores the in-sample fit with the
     package's :func:`~numpyro_forecast.predictive.predict_in_sample`.

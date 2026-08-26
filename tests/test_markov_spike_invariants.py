@@ -58,7 +58,7 @@ def test_scan_site_stored_time_leading() -> None:
     """S-M1: a scan sample site is stored time-leading ``(t, obs)``.
 
     The scan layout keeps time at axis 0; conversion to the package contract
-    (time at ``-2``) happens only in the primitive's return (invariant I5).
+    (time at ``-2``) happens only in the block's return (invariant I5).
     """
     cov = jnp.zeros((T_OBS, 1))
     tr = trace(seed(lambda: _ar1_latent(cov), random.PRNGKey(0))).get_trace()

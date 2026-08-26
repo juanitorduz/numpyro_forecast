@@ -2,7 +2,7 @@
 
 This is the JAX/NumPyro port of ``pyro.contrib.forecast.evaluate``. Unlike Pyro
 there is no global parameter store, so each backtest window is a pure call into
-a user-supplied fit/forecast closure (see :data:`~numpyro_forecast.typing.ForecastFn`).
+a user-supplied fit/forecast closure (see :class:`~numpyro_forecast.typing.ForecastFn`).
 :func:`backtest` supports two windowing strategies, an
 ``"expanding"`` window (always trains from ``t0 = 0``) and a fixed-size
 ``"rolling"`` window (see :data:`WindowType`), selected via ``window_type``.
@@ -607,7 +607,7 @@ def _eval_train_window(
 ) -> dict[str, float]:
     """Score the in-sample posterior predictive over one training window.
 
-    A thin call into the user-supplied :data:`~numpyro_forecast.typing.InSampleFn`
+    A thin call into the user-supplied :class:`~numpyro_forecast.typing.InSampleFn`
     closure, which owns fitting the model and drawing its in-sample predictive.
     """
     train_pred = in_sample_fn(
@@ -728,7 +728,7 @@ def backtest(
     has no dependency on how a model is fit.
 
     ``forecast_fn`` has the call signature (see
-    :data:`~numpyro_forecast.typing.ForecastFn`)::
+    :class:`~numpyro_forecast.typing.ForecastFn`)::
 
         forecast_fn(
             rng_key, model, train_data, train_covariates, full_covariates,
@@ -738,7 +738,7 @@ def backtest(
     where ``full_covariates`` spans the *full* window, ``covariates[..., t0:t2, :]``
     (train followed by test), matching what the model needs to run the forecast
     horizon. The optional ``in_sample_fn`` has the call signature (see
-    :data:`~numpyro_forecast.typing.InSampleFn`)::
+    :class:`~numpyro_forecast.typing.InSampleFn`)::
 
         in_sample_fn(
             rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
@@ -792,11 +792,11 @@ def backtest(
         Factory returning a fresh :class:`~numpyro_forecast.typing.ForecastModel` per window.
     forecast_fn
         Closure that fits ``model`` on the training window and forecasts the
-        test horizon (see :data:`~numpyro_forecast.typing.ForecastFn` and the
+        test horizon (see :class:`~numpyro_forecast.typing.ForecastFn` and the
         contract above).
     in_sample_fn
         Optional closure that fits ``model`` on the training window and scores
-        its in-sample fit (see :data:`~numpyro_forecast.typing.InSampleFn` and
+        its in-sample fit (see :class:`~numpyro_forecast.typing.InSampleFn` and
         the contract above). Required when ``eval_train=True``.
     metrics
         Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.

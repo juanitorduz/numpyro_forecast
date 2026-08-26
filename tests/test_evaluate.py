@@ -28,7 +28,7 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.typing import ForecastFn, InSampleFn
+from numpyro_forecast.typing import ForecastFn
 
 
 def _canned_forecast_fn(
@@ -465,7 +465,7 @@ def test_backtest_rolling_requires_train_window(rng_key: Array) -> None:
             jnp.zeros((24, 1)),
             jnp.zeros((24, 0)),
             rw_model_factory,
-            forecast_fn=cast("ForecastFn", _never_called),
+            forecast_fn=_never_called,
             window_type="rolling",
             test_window=4,
         )
@@ -478,7 +478,7 @@ def test_backtest_expanding_rejects_train_window(rng_key: Array) -> None:
             jnp.zeros((24, 1)),
             jnp.zeros((24, 0)),
             rw_model_factory,
-            forecast_fn=cast("ForecastFn", _never_called),
+            forecast_fn=_never_called,
             window_type="expanding",
             train_window=12,
             test_window=4,
@@ -547,7 +547,7 @@ def test_backtest_rejects_length_mismatch() -> None:
             jnp.zeros((20, 1)),
             jnp.zeros((18, 0)),
             rw_model_factory,
-            forecast_fn=cast("ForecastFn", _never_called),
+            forecast_fn=_never_called,
         )
 
 
@@ -748,7 +748,7 @@ def test_backtest_eval_train_requires_in_sample_fn(rng_key: Array) -> None:
             data,
             covariates,
             rw_model_factory,
-            forecast_fn=cast("ForecastFn", _never_called),
+            forecast_fn=_never_called,
             test_window=4,
             min_train_window=12,
             stride=4,
@@ -785,7 +785,7 @@ def test_backtest_forwards_batch_size_into_both_closures(rng_key: Array) -> None
         covariates,
         rw_model_factory,
         forecast_fn=_spy_closure(forecast_calls),
-        in_sample_fn=cast("InSampleFn", in_sample_fn),
+        in_sample_fn=in_sample_fn,
         test_window=4,
         min_train_window=12,
         stride=4,

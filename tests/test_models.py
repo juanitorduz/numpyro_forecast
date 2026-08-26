@@ -1,4 +1,4 @@
-"""Tests for the functional model-building primitives (``functional.models``)."""
+"""Tests for the model building blocks (``numpyro_forecast.models``)."""
 
 from collections.abc import Callable
 
