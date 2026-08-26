@@ -47,10 +47,10 @@ def test_public_api_is_importable() -> None:
         eval_rmse,
         evaluate_forecast,
         forecast,
+        innovations,
         markov_series,
         predict,
         predict_in_sample,
-        innovations,
     }
     assert all(obj is not None for obj in exported)
 

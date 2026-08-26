@@ -77,7 +77,7 @@ def test_horizon_rejects_negative_future() -> None:
         Horizon(data=None, t_obs=5, future=-1, duration=4)
 
 
-def test_time_series_predict_training_sites() -> None:
+def test_innovations_predict_training_sites() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((20, 0))
     h = Horizon.from_data(covariates, data)
@@ -89,7 +89,7 @@ def test_time_series_predict_training_sites() -> None:
     assert "forecast" not in tr
 
 
-def test_time_series_predict_forecast_sites() -> None:
+def test_innovations_predict_forecast_sites() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))
     h = Horizon.from_data(covariates, data)
@@ -100,7 +100,7 @@ def test_time_series_predict_forecast_sites() -> None:
     assert tr["forecast"]["value"].shape == (5, 1)
 
 
-def test_time_series_reparam_applies() -> None:
+def test_innovations_reparam_applies() -> None:
     data = jnp.zeros((10, 1))
     covariates = jnp.zeros((10, 0))
     h = Horizon.from_data(covariates, data)
@@ -200,6 +200,19 @@ def test_predict_distribution_and_link_forms_are_equivalent(future: int) -> None
     covariates = empty_covariates(24 + future)
     model_glm = _as_model(_link_form_body)
     _traces_equal(rw_model, model_glm, covariates, data)
+
+
+def test_predict_rejects_link_that_returns_no_distribution() -> None:
+    """A link returning the predictor itself fails with a message naming both forms."""
+
+    def bad_body(h: Horizon, covariates: Array) -> None:
+        level = innovations(h, "level", lambda: dist.Normal(0.0, 1.0))
+        # ty rejects this link statically; the runtime guard covers untyped callers.
+        predict(h, lambda mu: mu, jnp.cumsum(level, axis=-2))  # ty: ignore[invalid-argument-type]
+
+    model = _as_model(bad_body)
+    with pytest.raises(TypeError, match="returns a Distribution, got ArrayImpl"):
+        trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), jnp.zeros((12, 1)))
 
 
 def test_predict_rejects_float_data_for_discrete_obs() -> None:

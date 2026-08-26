@@ -344,6 +344,9 @@ def predict(
 
     Raises
     ------
+    TypeError
+        If ``obs_dist`` is a callable that does not return a distribution (for
+        example a link that returns the predictor itself).
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     ValueError
@@ -355,6 +358,14 @@ def predict(
         if isinstance(obs_dist, dist.Distribution)
         else obs_dist(prediction)
     )
+    if not isinstance(full_dist, dist.Distribution):
+        msg = (
+            "obs_dist must be a zero-centered noise Distribution or a link callable that "
+            f"returns a Distribution, got {type(full_dist).__name__} from the link; e.g. "
+            "predict(h, dist.Normal(0.0, sigma), mu) or "
+            "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
+        )
+        raise TypeError(msg)
     support = full_dist.support
     if support is not None and support.is_discrete and h.data is not None:
         if not jnp.issubdtype(h.data.dtype, jnp.integer):

@@ -1,4 +1,4 @@
-"""Tests for functional predictive sampling (``functional.prediction``)."""
+"""Tests for producing draws (``numpyro_forecast.predictive``) and the offload helpers."""
 
 import os
 import subprocess

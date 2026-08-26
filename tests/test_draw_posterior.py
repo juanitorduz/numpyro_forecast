@@ -1,4 +1,4 @@
-"""Tests for drawing posterior samples from a fitted guide (``functional.posterior``)."""
+"""Tests for drawing posterior samples from a fitted guide (``numpyro_forecast.predictive``)."""
 
 import jax
 import jax.numpy as jnp
