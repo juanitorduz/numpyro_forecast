@@ -84,6 +84,9 @@ reference:
       - models.Transition
       - models.innovations
       - models.markov_series
+      - models.ssoe
+      - models.SSOEStep
+      - models.SSOEResult
       - models.predict
 
   - title: Producing draws
@@ -128,6 +131,7 @@ reference:
     contents:
       - arrays.zero_data_like
       - arrays.concat_future
+      - arrays.pad_future
 
   - title: Distribution surgery
     desc: Time-axis operations on observation distributions, extensible via singledispatch.

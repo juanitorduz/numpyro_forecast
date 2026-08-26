@@ -11,6 +11,8 @@ from numpyro_forecast import (
     DEFAULT_METRICS,
     BacktestResult,
     Horizon,
+    SSOEResult,
+    SSOEStep,
     Transition,
     backtest,
     draw_posterior,
@@ -24,6 +26,7 @@ from numpyro_forecast import (
     markov_series,
     predict,
     predict_in_sample,
+    ssoe,
 )
 
 
@@ -38,6 +41,8 @@ def test_public_api_is_importable() -> None:
     exported = {
         BacktestResult,
         Horizon,
+        SSOEResult,
+        SSOEStep,
         Transition,
         backtest,
         draw_posterior,
@@ -51,6 +56,7 @@ def test_public_api_is_importable() -> None:
         markov_series,
         predict,
         predict_in_sample,
+        ssoe,
     }
     assert all(obj is not None for obj in exported)
 
@@ -66,6 +72,8 @@ def test_all_matches_exported_names() -> None:
         "KernelConfigError",
         "MVNLayoutError",
         "NumpyroForecastError",
+        "SSOEResult",
+        "SSOEStep",
         "Transition",
         "VectorizedBacktestResult",
         "VectorizedGuideError",
@@ -88,6 +96,7 @@ def test_all_matches_exported_names() -> None:
         "register_elementwise",
         "results_to_dataframe",
         "innovations",
+        "ssoe",
         "to_datatree",
     }
     for name in names:

@@ -1,12 +1,10 @@
 """Tests for the model building blocks (``numpyro_forecast.models``)."""
 
-from collections.abc import Callable
-
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import empty_covariates, rw_body, rw_model
+from conftest import as_model, empty_covariates, rw_body, rw_model
 from jax import random
 from numpyro.handlers import seed, trace
 from numpyro.infer import MCMC, NUTS
@@ -160,15 +158,6 @@ def test_rw_model_prior_sampling() -> None:
 # --- predict: distribution form vs link form ----------------------------------
 
 
-def _as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
-    """Wrap a ``(Horizon, covariates)`` body as a plain ``(covariates, data=None)`` model."""
-
-    def model(covariates: Array, data: Array | None = None) -> None:
-        body(Horizon.from_data(covariates, data), covariates)
-
-    return model
-
-
 def _link_form_body(h: Horizon, covariates: Array) -> None:
     """Random-walk body written with the link form of predict and a shift_loc link."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
@@ -198,7 +187,7 @@ def test_predict_distribution_and_link_forms_are_equivalent(future: int) -> None
     """The distribution form of predict equals the link form through shift_loc (same traces)."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(1), (24, 1)), axis=-2)
     covariates = empty_covariates(24 + future)
-    model_glm = _as_model(_link_form_body)
+    model_glm = as_model(_link_form_body)
     _traces_equal(rw_model, model_glm, covariates, data)
 
 
@@ -210,7 +199,7 @@ def test_predict_rejects_link_that_returns_no_distribution() -> None:
         # ty rejects this link statically; the runtime guard covers untyped callers.
         predict(h, lambda mu: mu, jnp.cumsum(level, axis=-2))  # ty: ignore[invalid-argument-type]
 
-    model = _as_model(bad_body)
+    model = as_model(bad_body)
     with pytest.raises(TypeError, match="returns a Distribution, got ArrayImpl"):
         trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), jnp.zeros((12, 1)))
 
@@ -220,7 +209,7 @@ def test_predict_rejects_float_data_for_discrete_obs() -> None:
         rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
         predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
-    model = _as_model(poisson_body)
+    model = as_model(poisson_body)
     float_data = jnp.abs(random.normal(random.PRNGKey(0), (12, 1)))
     with pytest.raises(ValueError, match="discrete support"):
         trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
@@ -231,7 +220,7 @@ def test_predict_accepts_integer_data_for_discrete_obs() -> None:
         rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
         predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
-    model = _as_model(poisson_body)
+    model = as_model(poisson_body)
     int_data = jnp.asarray(random.poisson(random.PRNGKey(0), 3.0, (12, 1)), dtype=jnp.int32)
     tr = trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), int_data)
     assert "obs" in tr
@@ -245,7 +234,7 @@ def test_poisson_local_level_end_to_end() -> None:
         log_rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
         predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
 
-    model = _as_model(poisson_body)
+    model = as_model(poisson_body)
     true_rate = 5.0
     data = jnp.asarray(random.poisson(random.PRNGKey(0), true_rate, (40, 1)), dtype=jnp.int32)
     mcmc = MCMC(
