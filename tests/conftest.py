@@ -3,31 +3,28 @@
 import types
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
+from typing import cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import Array, random
+from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 
-from numpyro_forecast.forecaster import (
-    Forecaster,
-    ForecastingModel,
-    HMCForecaster,
-    _BaseForecaster,
-)
 from numpyro_forecast.functional import (
     Horizon,
-    MCMCFit,
-    SVIFit,
-    fit_mcmc,
-    fit_svi,
-    forecasting_model,
+    draw_posterior,
+    forecast,
     predict,
+    predict_in_sample,
     time_series,
 )
-from numpyro_forecast.typing import ForecastModel
+from numpyro_forecast.functional._offload import _host_sharding
+from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
 # ---------------------------------------------------------------------------
 # Compile-count harness (roadmap §4.5). A single process-wide JAX monitoring
@@ -98,6 +95,98 @@ def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleName
     return _tracker
 
 
+_HOST_MEMORY_KINDS = ("pinned_host", "unpinned_host")
+"""Host memory kinds an explicit ``device="pinned_host"`` result may carry."""
+
+
+def fail_devices_for(platform: str) -> Callable[[str | None], list[jax.Device]]:
+    """Build a ``jax.devices`` stand-in whose ``platform`` backend is missing.
+
+    Simulates ``numpyro.set_platform("cuda")`` (``jax_platforms`` restricted to
+    the accelerator), where ``jax.devices("cpu")`` raises ``RuntimeError``.
+    """
+    real_devices = jax.devices
+
+    def fake_devices(backend: str | None = None) -> list[jax.Device]:
+        if backend == platform:
+            msg = f"Unknown backend {platform}. Available backends are ['cuda']"
+            raise RuntimeError(msg)
+        return real_devices(backend)
+
+    return fake_devices
+
+
+def assert_host_resident(x: object) -> None:
+    """Assert every leaf of ``x`` is a jax Array committed to the CPU backend device.
+
+    The host-offload contract: ``device="host"`` keeps results jax-native but
+    in pageable host memory, so each leaf must be a :class:`jax.Array` committed
+    to ``jax.devices("cpu")[0]`` with the plain ``"device"`` memory kind (the
+    pinned fallback has its own check, :func:`assert_pinned_host_resident`).
+
+    On a CPU-only machine ``committed`` is what separates a host result from a
+    ``device=None`` one: both live on the CPU device, but only the offloaded
+    result is committed. Committedness propagates through gathers, jitted calls,
+    and concatenation, so a stage *fed* a committed posterior returns committed
+    arrays even with ``device=None``; for those stages a per-chunk transfer spy
+    (see ``test_host_pipeline.py``) is the strong signal, not this helper.
+    """
+    cpu = jax.devices("cpu")[0]
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, jax.Array), f"expected a jax.Array, got {type(leaf)}"
+        assert leaf.committed, "leaf is not committed, so it is not a host-offloaded result"
+        assert leaf.devices() == {cpu}, f"leaf lives on {leaf.devices()}, not the CPU device"
+        assert leaf.sharding.memory_kind == "device", (
+            f"leaf carries memory kind {leaf.sharding.memory_kind!r}, expected pageable 'device'"
+        )
+
+
+def assert_numpy_host(x: object) -> None:
+    """Assert every leaf of ``x`` is a NumPy array (pageable host memory).
+
+    The contract of the backend-free ``device="host"`` path taken when the JAX
+    CPU backend is not initialized (and of an explicit ``device="numpy"``):
+    each chunk is copied with ``jax.device_get``, so nothing is pinned and no
+    backend beyond the accelerator's is needed.
+    """
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, np.ndarray), f"expected a NumPy array, got {type(leaf)}"
+
+
+def assert_pinned_host_resident(x: object) -> None:
+    """Assert every leaf of ``x`` is a jax Array in a pinned/unpinned host memory kind.
+
+    The contract of an explicit ``device="pinned_host"`` request: results stay
+    off the accelerator by living in its host memory kind on the accelerator's
+    own device (a pool capped at 64 GB by default on CUDA).
+    """
+    leaves = jax.tree_util.tree_leaves(x)
+    assert leaves, "expected at least one array leaf"
+    for leaf in leaves:
+        assert isinstance(leaf, jax.Array), f"expected a jax.Array, got {type(leaf)}"
+        assert leaf.sharding.memory_kind in _HOST_MEMORY_KINDS, (
+            f"leaf lives in memory kind {leaf.sharding.memory_kind!r}, not host memory"
+        )
+
+
+def commit_host(x: Array, kind: str) -> Array:
+    """Commit ``x`` the way one of the two ``device="host"`` paths would.
+
+    ``"cpu"`` commits to the CPU backend device (the primary path), ``"pinned"``
+    to the host memory kind of ``x``'s own device (explicit ``device="pinned_host"``).
+    """
+    if kind == "cpu":
+        return jax.device_put(x, jax.devices("cpu")[0])
+    if kind == "pinned":
+        return jax.device_put(x, _host_sharding(x))
+    msg = f"unknown host commit kind {kind!r}"
+    raise ValueError(msg)
+
+
 @pytest.fixture
 def sample_hierarchical() -> Array:
     """Short synthetic hierarchical series shaped ``(group, time, 1)``.
@@ -114,17 +203,6 @@ def sample_hierarchical() -> Array:
     return series[..., None]
 
 
-class RandomWalkModel(ForecastingModel):
-    """Local-level random walk with Normal observation noise (shared by tests)."""
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-        drift = self.time_series("drift", lambda: dist.Normal(0.0, drift_scale))
-        level = jnp.cumsum(drift, axis=-2)
-        self.predict(dist.Normal(0.0, sigma), level)
-
-
 def empty_covariates(duration: int) -> Array:
     """Return a ``(duration, 0)`` covariate array (no exogenous features)."""
     return jnp.zeros((duration, 0))
@@ -138,25 +216,136 @@ def rw_body(h: Horizon, covariates: Array) -> None:
     predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
 
 
-def svi_fit(t: int, num_steps: int = 40) -> SVIFit:
-    """Fit the shared random-walk body with SVI on a synthetic series (test helper)."""
-    model = forecasting_model(rw_body)
-    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    return fit_svi(random.PRNGKey(1), model, data, empty_covariates(t), num_steps=num_steps)
+def rw_model(covariates: Array, data: Array | None = None) -> None:
+    """Plain-function random-walk model on :func:`rw_body` (shared by tests).
+
+    The functional-only replacement for the former ``RandomWalkModel``
+    (a subclass of the former OOP ``ForecastingModel`` base class): derives
+    the :class:`Horizon` from the shapes itself via ``Horizon.from_data``, so
+    every non-legacy test drives it as a plain ``(covariates, data=None)``
+    callable.
+    """
+    rw_body(Horizon.from_data(covariates, data), covariates)
 
 
-def mcmc_fit(t: int, num_warmup: int = 20, num_samples: int = 20) -> MCMCFit:
-    """Fit the shared random-walk body with MCMC on a synthetic series (test helper)."""
-    model = forecasting_model(rw_body)
+def rw_model_factory() -> ForecastModel:
+    """A :data:`~numpyro_forecast.typing.ModelFactory` returning a fresh ``rw_model`` wrapper.
+
+    ``rw_model`` itself is a plain module-level function: every ``ModelFactory``
+    call would return the exact same object, unlike the former ``RandomWalkModel``
+    class (a fresh instance per call). Tests that rely on ``model_fn()`` producing
+    a distinct object each call (e.g. the ``reuse_model=False`` compile-cache
+    invariant in ``evaluate.backtest``) use this instead of ``lambda: rw_model``.
+    """
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        rw_model(covariates, data)
+
+    return model
+
+
+def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str, Array]]:
+    """Fit the shared random-walk body with raw NumPyro SVI (test helper).
+
+    Deliberately built on plain NumPyro rather than a fit-wrapper, so tests that
+    only need a guide/params pair for
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior` exercise the
+    guide-based contract directly.
+    """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
-    return fit_mcmc(
-        random.PRNGKey(1),
-        model,
-        data,
-        empty_covariates(t),
+    guide = AutoNormal(rw_model)
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    result = svi.run(random.PRNGKey(1), num_steps, empty_covariates(t), data, progress_bar=False)
+    return guide, result.params
+
+
+def nuts_samples(
+    t: int, num_warmup: int = 20, num_samples: int = 20, num_chains: int = 1
+) -> dict[str, Array]:
+    """Fit the shared random-walk body with raw NumPyro NUTS (test helper).
+
+    Deliberately built on plain NumPyro rather than a fit-wrapper, returning
+    ``mcmc.get_samples()`` directly (flattened, ``group_by_chain=False``): this is
+    the posterior dict MCMC users pass straight to
+    :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``/
+    :func:`~numpyro_forecast.convert.to_datatree`, with no ``draw_posterior`` step
+    in between. ``chain_method="sequential"`` keeps ``num_chains > 1`` on a single
+    CPU device.
+    """
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
+    mcmc = MCMC(
+        NUTS(rw_model),
         num_warmup=num_warmup,
         num_samples=num_samples,
+        num_chains=num_chains,
+        chain_method="sequential",
+        progress_bar=False,
     )
+    mcmc.run(random.PRNGKey(1), empty_covariates(t), data)
+    return mcmc.get_samples()
+
+
+def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
+    """Build a ``backtest``-compatible :data:`ForecastFn` closure from plain NumPyro.
+
+    Fits ``model`` with ``AutoNormal`` + ``SVI.run`` and forecasts with the
+    package's :func:`~numpyro_forecast.functional.forecast`. Deliberately built on
+    plain NumPyro rather than a fit-wrapper, so backtest tests exercise the
+    closure contract directly.
+    """
+
+    def forecast_fn(
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Array,
+        train_covariates: Array,
+        test_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        key_fit, key_post, key_pred = random.split(rng_key, 3)
+        state = svi.run(key_fit, num_steps, train_covariates, train_data, progress_bar=False)
+        posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+        return cast(
+            "Array",
+            forecast(
+                key_pred, model, posterior, train_data, test_covariates, batch_size=batch_size
+            ),
+        )
+
+    return forecast_fn
+
+
+def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
+    """Build a ``backtest``-compatible :data:`InSampleFn` closure from plain NumPyro.
+
+    Mirrors :func:`svi_forecast_fn` but scores the in-sample fit with the
+    package's :func:`~numpyro_forecast.functional.predict_in_sample`.
+    """
+
+    def in_sample_fn(
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Array,
+        train_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        key_fit, key_post, key_pred = random.split(rng_key, 3)
+        state = svi.run(key_fit, num_steps, train_covariates, train_data, progress_bar=False)
+        posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+        return cast(
+            "Array",
+            predict_in_sample(key_pred, model, posterior, train_covariates, batch_size=batch_size),
+        )
+
+    return in_sample_fn
 
 
 @pytest.fixture
@@ -186,36 +375,49 @@ def fast_mcmc() -> dict[str, int]:
 
 
 @pytest.fixture(params=["svi", "nuts"])
-def forecaster_factory(
+def posterior_factory(
     request: pytest.FixtureRequest,
     fast_svi: dict[str, int],
     fast_mcmc: dict[str, int],
-) -> Callable[..., _BaseForecaster]:
-    """Build a fitted forecaster with either SVI or NUTS, using fast settings.
+) -> Callable[[Array, ForecastModel, Array, Array], dict[str, Array]]:
+    """Build a posterior-sample dict with either SVI or NUTS, using fast settings.
 
     Parametrized over both inference backends so a single test exercises a model
-    under ``Forecaster`` (SVI) and ``HMCForecaster`` (NUTS).
+    under a variational posterior (``AutoNormal`` + ``SVI.run`` + ``draw_posterior``)
+    and an MCMC posterior (raw ``MCMC(NUTS(model))`` + ``get_samples()``), with the
+    same ``(rng_key, model, data, covariates) -> posterior`` call signature. The
+    functional-only replacement for the former ``forecaster_factory`` (which built
+    an OOP ``Forecaster``/``HMCForecaster`` instead of a bare posterior dict).
     """
+    num_samples = fast_mcmc["num_samples"]
+
     if request.param == "svi":
 
-        def make_svi(
+        def draw_svi(
             rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-        ) -> _BaseForecaster:
-            return Forecaster(rng_key, model, data, covariates, num_steps=fast_svi["num_steps"])
+        ) -> dict[str, Array]:
+            key_fit, key_draw = random.split(rng_key)
+            guide = AutoNormal(model)
+            svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+            state = svi.run(key_fit, fast_svi["num_steps"], covariates, data, progress_bar=False)
+            return cast(
+                "dict[str, Array]", draw_posterior(key_draw, guide, state.params, num_samples)
+            )
 
-        return make_svi
+        return draw_svi
 
-    def make_nuts(
+    def draw_nuts(
         rng_key: Array, model: ForecastModel, data: Array, covariates: Array
-    ) -> _BaseForecaster:
-        return HMCForecaster(
-            rng_key,
-            model,
-            data,
-            covariates,
+    ) -> dict[str, Array]:
+        mcmc = MCMC(
+            NUTS(model),
             num_warmup=fast_mcmc["num_warmup"],
-            num_samples=fast_mcmc["num_samples"],
+            num_samples=num_samples,
             num_chains=fast_mcmc["num_chains"],
+            chain_method="sequential",
+            progress_bar=False,
         )
+        mcmc.run(rng_key, covariates, data)
+        return mcmc.get_samples()
 
-    return make_nuts
+    return draw_nuts

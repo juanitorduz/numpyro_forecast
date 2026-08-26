@@ -1,67 +1,45 @@
-"""Tests for drawing posterior samples from fits (``functional.posterior``)."""
+"""Tests for drawing posterior samples from a fitted guide (``functional.posterior``)."""
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
 import pytest
-from conftest import mcmc_fit, svi_fit
+from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
 from jax import random
+from numpyro.infer import SVI, Trace_ELBO
+from numpyro.infer.autoguide import AutoDelta
 
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.functional import MCMCFit, draw_posterior
+from numpyro_forecast.functional import draw_posterior
 from numpyro_forecast.functional.posterior import _jitted_sample_posterior
 from numpyro_forecast.typing import Array
 
 
 def test_draw_posterior_svi_leading_sample_axis() -> None:
-    fit = svi_fit(t=30)
-    post = draw_posterior(random.PRNGKey(2), fit, 8)
+    guide, params = svi_guide_params(t=30)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 8)
     assert post["drift"].shape == (8, 30, 1)
 
 
 def test_draw_posterior_rejects_non_positive() -> None:
-    fit = svi_fit(t=30, num_steps=20)
+    guide, params = svi_guide_params(t=30, num_steps=20)
     with pytest.raises(ValueError, match="num_samples must be positive"):
-        draw_posterior(random.PRNGKey(2), fit, 0)
+        draw_posterior(random.PRNGKey(2), guide, params, 0)
 
 
-def test_draw_posterior_mcmc_leading_sample_axis() -> None:
-    fit = mcmc_fit(t=20)
-    post = draw_posterior(random.PRNGKey(2), fit, 7)
-    assert post["drift"].shape == (7, 20, 1)
-
-
-def test_draw_posterior_rejects_unsupported_fit_type() -> None:
-    # The singledispatch fallback rejects anything that is not a known fit.
-    with pytest.raises(NotImplementedError, match="does not support"):
-        draw_posterior(random.PRNGKey(0), object(), 4)
-
-
-def test_draw_posterior_mcmc_thins_without_replacement() -> None:
-    # Fewer draws requested than the chain holds: thin on an evenly spaced grid,
-    # which is deterministic, strictly increasing, and duplicate-free.
-    fit = MCMCFit(samples={"x": jnp.arange(10.0)[:, None]})
-    post = draw_posterior(random.PRNGKey(0), fit, 5)
-    values = post["x"][:, 0]
-    assert post["x"].shape == (5, 1)
-    assert len(set(values.tolist())) == 5
-    assert bool(jnp.all(jnp.diff(values) > 0))
-
-
-def test_draw_posterior_mcmc_equal_returns_every_draw() -> None:
-    # Requesting exactly the chain length returns the draws unchanged, in order.
-    fit = MCMCFit(samples={"x": jnp.arange(6.0)[:, None]})
-    post = draw_posterior(random.PRNGKey(0), fit, 6)
-    assert jnp.array_equal(post["x"][:, 0], jnp.arange(6.0))
-
-
-def test_draw_posterior_mcmc_oversample_resamples_with_replacement() -> None:
-    # More draws requested than available: resample with replacement, drawing
-    # only from the existing posterior values.
-    fit = MCMCFit(samples={"x": jnp.arange(4.0)[:, None]})
-    post = draw_posterior(random.PRNGKey(0), fit, 16)
-    assert post["x"].shape == (16, 1)
-    assert set(post["x"][:, 0].tolist()) <= set(jnp.arange(4.0).tolist())
+def test_draw_posterior_autodelta_tiled_sample_axis() -> None:
+    # AutoDelta is a MAP point estimate: it carries no posterior spread of its
+    # own, so it is drawn once and tiled to the leading sample axis (dispatch by
+    # guide type, never shape inspection).
+    data = jnp.zeros((20, 1))
+    covariates = empty_covariates(20)
+    guide = AutoDelta(rw_model)
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    result = svi.run(random.PRNGKey(0), 10, covariates, data, progress_bar=False)
+    post = draw_posterior(random.PRNGKey(1), guide, result.params, 7)
+    assert post["sigma"].shape[0] == 7
+    assert jnp.allclose(post["sigma"][0], post["sigma"][1])
 
 
 # --- Chunked drawing with host offload (GPU OOM in draw_posterior) --------------
@@ -73,39 +51,39 @@ def _trees_equal(a: dict, b: dict) -> bool:
 
 def test_draw_posterior_chunked_shape_finite_and_truncated() -> None:
     # 10 draws in chunks of 4: the last chunk overdraws and is cut back to 10.
-    fit = svi_fit(t=30)
-    post = draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
+    guide, params = svi_guide_params(t=30)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     assert post["drift"].shape == (10, 30, 1)
     assert bool(jnp.all(jnp.isfinite(post["drift"])))
 
 
 def test_draw_posterior_batch_ge_samples_bitwise_matches_default() -> None:
     # At or above the draw count the single-shot path runs: same key, same draws.
-    fit = svi_fit(t=30)
-    plain = draw_posterior(random.PRNGKey(2), fit, 8)
-    batched = draw_posterior(random.PRNGKey(2), fit, 8, batch_size=8)
-    oversized = draw_posterior(random.PRNGKey(2), fit, 8, batch_size=64)
+    guide, params = svi_guide_params(t=30)
+    plain = draw_posterior(random.PRNGKey(2), guide, params, 8)
+    batched = draw_posterior(random.PRNGKey(2), guide, params, 8, batch_size=8)
+    oversized = draw_posterior(random.PRNGKey(2), guide, params, 8, batch_size=64)
     assert _trees_equal(plain, batched)
     assert _trees_equal(plain, oversized)
 
 
 def test_draw_posterior_chunked_deterministic_given_key_and_batch() -> None:
-    fit = svi_fit(t=30)
-    first = draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
-    second = draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
+    guide, params = svi_guide_params(t=30)
+    first = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
+    second = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     assert _trees_equal(first, second)
 
 
-def test_draw_posterior_host_returns_numpy_bitwise_match() -> None:
-    # device is a placement/representation knob, never a draws knob.
-    fit = svi_fit(t=30)
-    plain = draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
-    hosted = draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4, device="host")
-    assert all(isinstance(leaf, np.ndarray) for leaf in hosted.values())
+def test_draw_posterior_host_is_host_resident_bitwise_match() -> None:
+    # device is a placement knob, never a draws knob.
+    guide, params = svi_guide_params(t=30)
+    plain = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
+    hosted = draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4, device="host")
+    assert_host_resident(hosted)
     assert _trees_equal(plain, hosted)
 
 
-def test_draw_posterior_chunked_calls_impl_per_fixed_size_chunk(
+def test_draw_posterior_chunked_calls_guide_per_fixed_size_chunk(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Memory contract: the guide is sampled ceil(n/b) times with exactly b draws each.
@@ -117,15 +95,20 @@ def test_draw_posterior_chunked_calls_impl_per_fixed_size_chunk(
     import numpyro_forecast.functional.posterior as posterior_mod
 
     calls: list[tuple[int, Array]] = []
-    real_impl = posterior_mod._draw_posterior_impl
+    real_jitted = posterior_mod._jitted_sample_posterior
 
-    def spy_impl(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
-        calls.append((num_samples, rng_key))
-        return real_impl(fit, num_samples, rng_key)
+    def spy_jitted(guide):  # type: ignore[no-untyped-def]
+        real_sample = real_jitted(guide)
 
-    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", spy_impl)
-    fit = svi_fit(t=30)
-    draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
+        def wrapped(key: Array, params: dict, *, sample_shape: tuple[int, ...]):  # type: ignore[no-untyped-def]
+            calls.append((sample_shape[0], key))
+            return real_sample(key, params, sample_shape=sample_shape)
+
+        return wrapped
+
+    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", spy_jitted)
+    guide, params = svi_guide_params(t=30)
+    draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     assert [n for n, _ in calls] == [4, 4, 4]  # ceil(10 / 4) chunks, fixed size
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for _, k in calls]
     assert len(set(raw)) == len(raw)  # one distinct subkey per chunk
@@ -139,61 +122,50 @@ def test_draw_posterior_chunked_single_compile(count_compilations) -> None:
     chunked draw (and any later draw with the same batch size, regardless of
     ``num_samples``) must compile nothing.
     """
-    fit = svi_fit(t=30)
-    jax.block_until_ready(draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4))  # warm-up
+    guide, params = svi_guide_params(t=30)
+    jax.block_until_ready(
+        draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
+    )  # warm-up
 
     with count_compilations() as tally:
-        jax.block_until_ready(draw_posterior(random.PRNGKey(3), fit, 10, batch_size=4))
+        jax.block_until_ready(draw_posterior(random.PRNGKey(3), guide, params, 10, batch_size=4))
     assert tally.count == 0
 
     # A different num_samples with the same batch size reuses the sampling
     # executable (the chunk shape, not the total, keys the compilation); only
     # trivial stitching kernels differ, so the jitted sampler stays at one entry.
-    jax.block_until_ready(draw_posterior(random.PRNGKey(4), fit, 7, batch_size=4))
-    sample = _jitted_sample_posterior(fit.guide)
+    jax.block_until_ready(draw_posterior(random.PRNGKey(4), guide, params, 7, batch_size=4))
+    sample = _jitted_sample_posterior(guide)
     assert sample._cache_size() == 1  # ty: ignore[unresolved-attribute]
 
 
-def test_draw_posterior_mcmc_batch_size_is_a_draws_noop() -> None:
-    # MCMC thins deterministically from materialized draws: chunked selection
-    # would duplicate them, so batch_size is bypassed and draws are unchanged.
-    fit = MCMCFit(samples={"x": jnp.arange(10.0)[:, None]})
-    plain = draw_posterior(random.PRNGKey(0), fit, 5)
-    batched = draw_posterior(random.PRNGKey(0), fit, 5, batch_size=2)
-    assert _trees_equal(plain, batched)
-
-
-def test_draw_posterior_mcmc_host_returns_numpy() -> None:
-    fit = MCMCFit(samples={"x": jnp.arange(10.0)[:, None]})
-    hosted = draw_posterior(random.PRNGKey(0), fit, 5, device="host")
-    assert isinstance(hosted["x"], np.ndarray)
-    assert np.array_equal(hosted["x"][:, 0], np.asarray([0.0, 2.0, 4.0, 7.0, 9.0]))
-
-
 def test_draw_posterior_rejects_non_positive_batch_size() -> None:
-    fit = MCMCFit(samples={"x": jnp.arange(10.0)[:, None]})
+    guide, params = svi_guide_params(t=30, num_steps=10)
     with pytest.raises(ValueError, match="batch_size must be positive"):
-        draw_posterior(random.PRNGKey(0), fit, 5, batch_size=0)
+        draw_posterior(random.PRNGKey(0), guide, params, 5, batch_size=0)
 
 
 # --- Self-diagnosing device OOM errors -------------------------------------------
 
 
-def _raise_oom(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
-    msg = "RESOURCE_EXHAUSTED: Out of memory while trying to allocate 3800000000 bytes."
-    raise RuntimeError(msg)
+def _raise_oom(guide):  # type: ignore[no-untyped-def]
+    def _raise(key: Array, params: dict, *, sample_shape: tuple[int, ...]):  # type: ignore[no-untyped-def]
+        msg = "RESOURCE_EXHAUSTED: Out of memory while trying to allocate 3800000000 bytes."
+        raise RuntimeError(msg)
+
+    return _raise
 
 
 def test_draw_posterior_chunked_oom_reports_batch_size(monkeypatch: pytest.MonkeyPatch) -> None:
     """A device OOM is re-raised with the budget and the batch-size lever."""
     import numpyro_forecast.functional.posterior as posterior_mod
 
-    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", _raise_oom)
-    fit = svi_fit(t=30)
+    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", _raise_oom)
+    guide, params = svi_guide_params(t=30)
     with pytest.raises(
         DeviceMemoryError, match=r"posterior drawing.*lower batch_size \(currently 4\)"
     ) as excinfo:
-        draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
+        draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
     assert "RESOURCE_EXHAUSTED" in str(excinfo.value.__cause__)
 
 
@@ -202,10 +174,10 @@ def test_draw_posterior_unchunked_oom_says_set_batch_size(
 ) -> None:
     import numpyro_forecast.functional.posterior as posterior_mod
 
-    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", _raise_oom)
-    fit = svi_fit(t=30)
+    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", _raise_oom)
+    guide, params = svi_guide_params(t=30)
     with pytest.raises(DeviceMemoryError, match="set batch_size to sample in chunks"):
-        draw_posterior(random.PRNGKey(2), fit, 10)
+        draw_posterior(random.PRNGKey(2), guide, params, 10)
 
 
 def test_draw_posterior_non_oom_errors_propagate_unchanged(
@@ -213,11 +185,14 @@ def test_draw_posterior_non_oom_errors_propagate_unchanged(
 ) -> None:
     import numpyro_forecast.functional.posterior as posterior_mod
 
-    def raise_other(fit: object, num_samples: int, rng_key: Array) -> dict[str, Array]:
-        msg = "boom"
-        raise ValueError(msg)
+    def raise_other(guide):  # type: ignore[no-untyped-def]
+        def _raise(key: Array, params: dict, *, sample_shape: tuple[int, ...]):  # type: ignore[no-untyped-def]
+            msg = "boom"
+            raise ValueError(msg)
 
-    monkeypatch.setattr(posterior_mod, "_draw_posterior_impl", raise_other)
-    fit = svi_fit(t=30)
+        return _raise
+
+    monkeypatch.setattr(posterior_mod, "_jitted_sample_posterior", raise_other)
+    guide, params = svi_guide_params(t=30)
     with pytest.raises(ValueError, match="boom"):
-        draw_posterior(random.PRNGKey(2), fit, 10, batch_size=4)
+        draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)

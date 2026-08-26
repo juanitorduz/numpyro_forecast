@@ -1,8 +1,9 @@
 """Backtesting and evaluation metrics.
 
 This is the JAX/NumPyro port of ``pyro.contrib.forecast.evaluate``. Unlike Pyro
-there is no global parameter store, so each backtest window is a pure call that
-fits its own forecaster. :func:`backtest` supports two windowing strategies, an
+there is no global parameter store, so each backtest window is a pure call into
+a user-supplied fit/forecast closure (see :data:`~numpyro_forecast.typing.ForecastFn`).
+:func:`backtest` supports two windowing strategies, an
 ``"expanding"`` window (always trains from ``t0 = 0``) and a fixed-size
 ``"rolling"`` window (see :data:`WindowType`), selected via ``window_type``.
 """
@@ -11,33 +12,39 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from functools import partial
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import lax, random
+from jax.typing import ArrayLike
 from jaxtyping import Float
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
+from numpyro.optim import Adam
 
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.forecaster import Forecaster
-from numpyro_forecast.functional import resolve_guide, resolve_optimizer
-from numpyro_forecast.functional._offload import _oom_advice, _stitch_chunks, _transfer
+from numpyro_forecast.functional._offload import _device_view, _leaf_view, _oom_advice
 from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
-from numpyro_forecast.typing import Array, ForecasterFactory, ForecastModel, Metric, ModelFactory
+from numpyro_forecast.typing import (
+    Array,
+    ForecastFn,
+    ForecastModel,
+    InSampleFn,
+    Metric,
+    ModelFactory,
+)
 
 if TYPE_CHECKING:
     import pandas as pd
-
-    from numpyro_forecast.typing import GuideLike, OptimizerLike
+    from numpyro.optim import _NumPyroOptim
 
 
 _DEFAULT_COVERAGE_ALPHA = 0.9
@@ -45,10 +52,20 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 
 
 @jax.jit
-def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+    """Jitted MAE core; the host-committed-input handling lives in :func:`eval_mae`."""
+    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+
+
+def eval_mae(
+    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -62,14 +79,24 @@ def eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"
     Array
         The mean absolute error as a scalar array.
     """
-    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+    return _eval_mae(_device_view(pred), _device_view(truth))
 
 
 @jax.jit
-def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
+    """Jitted RMSE core; the host-committed-input handling lives in :func:`eval_rmse`."""
+    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+
+
+def eval_rmse(
+    pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -83,7 +110,7 @@ def eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch
     Array
         The root mean squared error as a scalar array.
     """
-    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+    return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
 _crps_cells = jax.jit(crps_empirical)
@@ -103,16 +130,19 @@ def _chunked_cell_metric(
     pred: "Float[Array, ' sample *batch'] | Float[np.ndarray, ' sample *batch']",
     truth: "Float[Array, ' *batch'] | Float[np.ndarray, ' *batch']",
     batch_size: int,
-) -> "np.floating":
+) -> Array:
     """Average a per-cell metric kernel over fixed-size cell chunks.
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
     (:func:`~numpyro_forecast.functional.prediction._chunk_indices`), so the
-    jitted ``kernel`` compiles once; each block's per-cell values are moved to
-    host memory before the next block runs, bounding accelerator memory by
+    jitted ``kernel`` compiles once; each block's per-cell values are staged on
+    the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
-    is never chunked.
+    is never chunked. Inputs are normalized with
+    :func:`~numpyro_forecast.functional._offload._leaf_view` so a host-committed
+    panel is sliced on the host instead of raising when a device-resident
+    index array gathers against it.
 
     Parameters
     ----------
@@ -128,40 +158,28 @@ def _chunked_cell_metric(
 
     Returns
     -------
-    np.floating
-        The host-side mean of the per-cell metric values.
+    Array
+        The mean of the per-cell metric values, as a scalar array.
     """
-    sample = pred.shape[0]
-    pred_flat = pred.reshape(sample, -1)
-    truth_flat = truth.reshape(-1)
+    pred_view = _leaf_view(pred)
+    truth_view = _leaf_view(truth)
+    sample = pred_view.shape[0]
+    pred_flat = pred_view.reshape(sample, -1)
+    truth_flat = truth_view.reshape(-1)
     n_cells = truth_flat.shape[0]
     indices = _chunk_indices(n_cells, batch_size)
     with _oom_advice("metric evaluation", batch_size):
-        chunks = [_transfer(kernel(pred_flat[:, idx], truth_flat[idx]), "host") for idx in indices]
-    values = cast("np.ndarray", _stitch_chunks(chunks, n_cells, "host"))
-    return values.mean()
+        chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
+    values = np.concatenate(chunks, axis=0)[:n_cells]
+    return jnp.asarray(values.mean())
 
 
-@overload
 def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    batch_size: None = None,
-) -> Array: ...
-@overload
-def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    batch_size: int,
-) -> "Array | np.floating": ...
-def eval_crps(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     batch_size: int | None = None,
-) -> "Array | np.floating":
+) -> Array:
     """Empirical CRPS averaged over all data elements.
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
@@ -175,21 +193,32 @@ def eval_crps(
     batch_size
         Optional number of flattened data cells (the product of the batch
         shape, e.g. time times series) evaluated on the accelerator per pass;
-        the sample axis is never chunked. With host-resident (NumPy) inputs
-        this bounds accelerator memory by ``sample * batch_size`` values plus
-        the CRPS sort workspace instead of the full panel. Chunking only
-        changes the summation order of the final mean (results are equal to
-        float tolerance, not bitwise); at or above the cell count the
-        single-pass path runs. ``None`` (default) evaluates in one pass.
+        the sample axis is never chunked. With host-resident inputs (e.g.
+        draws sampled with ``device="host"``) this bounds accelerator memory
+        by ``sample * batch_size`` values plus the CRPS sort workspace instead
+        of the full panel, since both ``pred`` and ``truth`` are staged as
+        NumPy views before chunking, whatever their own memory kind. Chunking
+        only changes the summation order of the final mean (results are equal
+        to float tolerance, not bitwise); at or above the cell count the
+        single-pass path runs instead, which moves any host-committed operand
+        back to device memory first
+        (:func:`~numpyro_forecast.functional._offload._device_view`) so either
+        ``pred`` or ``truth`` (or both) may be host-committed regardless of
+        ``batch_size``. ``None`` (default) evaluates in one pass.
 
     Returns
     -------
-    Array | np.floating
-        The mean empirical CRPS as a scalar (a NumPy scalar when chunked).
+    Array
+        The mean empirical CRPS as a scalar array.
     """
-    if batch_size is None or batch_size >= truth.size:
-        return _eval_crps_single_pass(pred, truth)
-    return _chunked_cell_metric(_crps_cells, pred, truth, batch_size)
+    if batch_size is None or batch_size >= np.size(truth):
+        return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
+    return _chunked_cell_metric(
+        _crps_cells,
+        cast("Array | np.ndarray", pred),
+        cast("Array | np.ndarray", truth),
+        batch_size,
+    )
 
 
 @partial(jax.jit, static_argnames=("alpha",))
@@ -201,29 +230,13 @@ def _coverage_indicator(pred: Array, truth: Array, *, alpha: float) -> Array:
     return (truth >= lo) & (truth <= hi)
 
 
-@overload
 def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    alpha: float = ...,
-    batch_size: None = None,
-) -> Array: ...
-@overload
-def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
-    *,
-    alpha: float = ...,
-    batch_size: int,
-) -> "Array | np.floating": ...
-def eval_coverage(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     alpha: float = _DEFAULT_COVERAGE_ALPHA,
     batch_size: int | None = None,
-) -> "Array | np.floating":
+) -> Array:
     """Empirical coverage of the central ``alpha`` prediction interval.
 
     The central ``alpha`` interval is bounded by the ``(1 - alpha) / 2`` and
@@ -246,13 +259,16 @@ def eval_coverage(
         per pass (see :func:`eval_crps`; the sample axis is never chunked).
         Coverage is a count of exact 0/1 indicators, so chunking recovers
         the identical count; only the precision of the final division differs
-        from the single pass. ``None`` (default) evaluates in one pass.
+        from the single pass. Either path accepts a host-committed ``pred``
+        or ``truth`` (or both); the single pass moves them to device memory
+        first (:func:`~numpyro_forecast.functional._offload._device_view`).
+        ``None`` (default) evaluates in one pass.
 
     Returns
     -------
-    Array | np.floating
+    Array
         The fraction of ground truth inside the central ``alpha`` interval, as
-        a scalar (a NumPy scalar when chunked).
+        a scalar array.
 
     Raises
     ------
@@ -262,10 +278,12 @@ def eval_coverage(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    if batch_size is None or batch_size >= truth.size:
-        return _coverage_indicator(pred, truth, alpha=alpha).mean()
+    if batch_size is None or batch_size >= np.size(truth):
+        return _coverage_indicator(_device_view(pred), _device_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
-    return _chunked_cell_metric(kernel, pred, truth, batch_size)
+    return _chunked_cell_metric(
+        kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
+    )
 
 
 DEFAULT_METRICS: dict[str, Metric] = {
@@ -278,8 +296,8 @@ DEFAULT_METRICS: dict[str, Metric] = {
 
 
 def evaluate_forecast(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     metrics: Mapping[str, Metric] | None = None,
 ) -> dict[str, float]:
@@ -320,9 +338,12 @@ def evaluate_forecast(
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
-    # NumPy inputs (e.g. draws sampled with device="host") enter the jitted
-    # metric kernels as device arrays either way; convert once up front.
-    pred_arr, truth_arr = jnp.asarray(pred), jnp.asarray(truth)
+    # NumPy (or any other ArrayLike) input is normalized once up front, and any
+    # host-committed jax.Array input (e.g. draws sampled with device="host")
+    # is moved to device memory so the jitted metric kernels below never see a
+    # host/device memory-kind mismatch, whichever of pred/truth (or both) was
+    # host-committed.
+    pred_arr, truth_arr = _device_view(pred), _device_view(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
     stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
@@ -339,12 +360,10 @@ class BacktestResult:
         Train-begin, train/test split, and test-end time indices.
     num_samples
         Number of forecast samples drawn.
-    train_walltime, test_walltime
-        Wall-clock seconds for fitting and forecasting.
+    walltime
+        Wall-clock seconds for the window's timed ``forecast_fn`` call.
     metrics
         Mapping of metric name to value for the window.
-    params
-        Mapping of scalar parameter name to value (when available).
     train_metrics
         Mapping of metric name to in-sample value for the window. Empty unless
         ``backtest`` was called with ``eval_train=True``.
@@ -357,12 +376,10 @@ class BacktestResult:
     t1: int
     t2: int
     num_samples: int
-    train_walltime: float
-    test_walltime: float
+    walltime: float
     metrics: dict[str, float]
-    params: dict[str, float] = field(default_factory=dict)
     train_metrics: dict[str, float] = field(default_factory=dict)
-    prediction: Array | None = None
+    prediction: Array | np.ndarray | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
@@ -375,50 +392,12 @@ class BacktestResult:
         return asdict(self)
 
 
-def _scalar_params(forecaster: object) -> dict[str, float]:
-    """Extract scalar variational parameters from a fitted forecaster, if any."""
-    params = getattr(forecaster, "params", None)
-    if not isinstance(params, Mapping):
-        return {}
-    return {name: float(value) for name, value in params.items() if jnp.size(value) == 1}
-
-
-def _block_object[T](obj: T) -> T:
-    """Block until every JAX array transitively reachable from ``obj`` is ready.
-
-    JAX arrays materialize asynchronously, so timing a call that returns a
-    container (e.g. a fitted forecaster) without blocking would report only the
-    dispatch time. This passes ``vars(obj)`` (the instance ``__dict__``) to
-    :func:`jax.block_until_ready`, which recurses through the dict as a pytree:
-    array leaves nested inside lists/tuples/dicts/registered dataclasses are all
-    awaited, not just top-level attributes. Objects without a ``__dict__``
-    (``__slots__``-only or ``vars``-less) are a safe no-op.
-
-    Parameters
-    ----------
-    obj
-        Any object; its array-valued attributes are awaited.
-
-    Returns
-    -------
-    T
-        ``obj`` unchanged (returned so it can wrap a call inline).
-    """
-    try:
-        attrs = vars(obj)
-    except TypeError:
-        return obj
-    jax.block_until_ready(attrs)
-    return obj
-
-
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
     """Run ``fn``, block until its result is ready, and return ``(result, seconds)``.
 
     The ``jax.block_until_ready`` call folds asynchronous compute time into the
     measurement so reported walltimes reflect real work rather than dispatch
-    time; array results are awaited directly, containers should be pre-wrapped
-    with :func:`_block_object`.
+    time; array results are awaited directly.
     """
     start = perf_counter()
     result = fn()
@@ -603,34 +582,21 @@ def _iter_windows(
     )
 
 
-def _resolve_options(
-    forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None,
-    t0: int,
-    t1: int,
-    t2: int,
-) -> Mapping[str, Any]:
-    """Resolve per-window forecaster options from a mapping or a ``(t0, t1, t2)`` callable."""
-    if forecaster_options is None:
-        return {}
-    if callable(forecaster_options) and not isinstance(forecaster_options, Mapping):
-        return forecaster_options(t0=t0, t1=t1, t2=t2)
-    return cast("Mapping[str, Any]", forecaster_options)
-
-
 def _slice_window(
     data: Array, covariates: Array, t0: int, t1: int, t2: int
 ) -> tuple[Array, Array, Array, Array]:
-    """Slice ``(train_data, train_covariates, test_covariates, truth)`` for one window."""
+    """Slice ``(train_data, train_covariates, full_covariates, truth)`` for one window."""
     train_data = data[..., t0:t1, :]
     train_covariates = covariates[..., t0:t1, :]
-    test_covariates = covariates[..., t0:t2, :]
+    full_covariates = covariates[..., t0:t2, :]
     truth = data[..., t1:t2, :]
-    return train_data, train_covariates, test_covariates, truth
+    return train_data, train_covariates, full_covariates, truth
 
 
 def _eval_train_window(
     rng_key: Array,
-    forecaster: object,
+    in_sample_fn: InSampleFn,
+    model: ForecastModel,
     train_data: Array,
     train_covariates: Array,
     *,
@@ -641,29 +607,17 @@ def _eval_train_window(
 ) -> dict[str, float]:
     """Score the in-sample posterior predictive over one training window.
 
-    ``forecaster`` is typed loosely (``object``) so ``ty`` does not reject
-    duck-typed forecasters at the ``forecaster`` boundary; the explicit guard
-    below raises a clear :class:`TypeError` when ``predict_in_sample`` is missing.
-
-    Raises
-    ------
-    TypeError
-        If ``forecaster`` does not expose ``predict_in_sample``.
+    A thin call into the user-supplied :data:`~numpyro_forecast.typing.InSampleFn`
+    closure, which owns fitting the model and drawing its in-sample predictive.
     """
-    predict_in_sample = getattr(forecaster, "predict_in_sample", None)
-    if not callable(predict_in_sample):
-        msg = (
-            "eval_train=True requires a forecaster exposing "
-            "predict_in_sample(rng_key, covariates, num_samples, *, batch_size=None); "
-            f"{type(forecaster).__name__} does not."
-        )
-        raise TypeError(msg)
-    train_pred = cast(
-        "Array", predict_in_sample(rng_key, train_covariates, num_samples, batch_size=batch_size)
+    train_pred = in_sample_fn(
+        rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
     )
     train_truth = train_data
     if transform is not None:
-        train_pred, train_truth = transform(train_pred, train_truth)
+        # A host forecast closure may return NumPy (no CPU backend); a transform
+        # sees whatever the closure returned, the metrics accept either.
+        train_pred, train_truth = transform(cast("Array", train_pred), train_truth)
     return evaluate_forecast(train_pred, train_truth, metrics=metrics)
 
 
@@ -677,8 +631,8 @@ def _run_window(
     covariates: Array,
     model_fn: ModelFactory,
     shared_model: ForecastModel | None,
-    forecaster_fn: ForecasterFactory,
-    options: Mapping[str, Any],
+    forecast_fn: ForecastFn,
+    in_sample_fn: InSampleFn | None,
     num_samples: int,
     batch_size: int | None,
     metrics: Mapping[str, Metric],
@@ -688,41 +642,39 @@ def _run_window(
     keep_predictions: bool,
 ) -> BacktestResult:
     """Fit, forecast, and score a single backtest window into a :class:`BacktestResult`."""
-    train_data, train_covariates, test_covariates, truth = _slice_window(
+    train_data, train_covariates, full_covariates, truth = _slice_window(
         data, covariates, t0, t1, t2
     )
     if per_window_metrics is not None:
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
-    key_fit, key_forecast = random.split(rng_key)
 
     model = shared_model if shared_model is not None else model_fn()
-    forecaster, train_walltime = _timed(
-        lambda: _block_object(
-            forecaster_fn(key_fit, model, train_data, train_covariates, **options)
-        )
-    )
-    pred, test_walltime = _timed(
-        # Without a device argument the forecaster always returns a jax.Array
-        # (the NumPy variant only arises for device="host").
-        lambda: cast(
-            "Array",
-            forecaster(
-                key_forecast, train_data, test_covariates, num_samples, batch_size=batch_size
-            ),
+    pred, walltime = _timed(
+        lambda: forecast_fn(
+            rng_key,
+            model,
+            train_data,
+            train_covariates,
+            full_covariates,
+            num_samples,
+            batch_size=batch_size,
         )
     )
 
     if transform is not None:
-        pred, truth = transform(pred, truth)
+        pred, truth = transform(cast("Array", pred), truth)
 
     train_metrics: dict[str, float] = {}
     if eval_train:
+        # in_sample_fn is guaranteed non-None here: backtest's entry check raises
+        # before any window runs when eval_train=True and in_sample_fn is None.
         # In-sample scoring is an optional diagnostic: derive its key as an
-        # independent substream via fold_in so enabling it never shifts the
-        # fit/forecast keys above.
+        # independent substream via fold_in so enabling it never shifts the key
+        # passed to forecast_fn above.
         train_metrics = _eval_train_window(
             random.fold_in(rng_key, 2),
-            forecaster,
+            cast("InSampleFn", in_sample_fn),
+            model,
             train_data,
             train_covariates,
             num_samples=num_samples,
@@ -736,10 +688,8 @@ def _run_window(
         t1=t1,
         t2=t2,
         num_samples=num_samples,
-        train_walltime=train_walltime,
-        test_walltime=test_walltime,
+        walltime=walltime,
         metrics=evaluate_forecast(pred, truth, metrics=metrics),
-        params=_scalar_params(forecaster),
         train_metrics=train_metrics,
         prediction=pred if keep_predictions else None,
     )
@@ -751,7 +701,8 @@ def backtest(
     covariates: Array,
     model_fn: ModelFactory,
     *,
-    forecaster_fn: ForecasterFactory = Forecaster,
+    forecast_fn: ForecastFn,
+    in_sample_fn: InSampleFn | None = None,
     metrics: Mapping[str, Metric] | None = None,
     per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None,
     transform: Callable[[Array, Array], tuple[Array, Array]] | None = None,
@@ -763,12 +714,71 @@ def backtest(
     stride: int = 1,
     num_samples: int = 100,
     batch_size: int | None = None,
-    forecaster_options: Mapping[str, Any] | Callable[..., Mapping[str, Any]] | None = None,
     eval_train: bool = False,
     keep_predictions: bool = False,
     reuse_model: bool = True,
 ) -> list[BacktestResult]:
     """Backtest a forecasting model on a moving window of ``(train, test)`` data.
+
+    Fitting and forecasting are delegated entirely to user-supplied closures
+    rather than an OOP forecaster: ``forecast_fn`` fits ``model`` on the
+    training window and forecasts the test horizon, and the optional
+    ``in_sample_fn`` fits and scores the in-sample fit. Both closures own their
+    own inference backend (SVI, MCMC, or anything else), so ``backtest`` itself
+    has no dependency on how a model is fit.
+
+    ``forecast_fn`` has the call signature (see
+    :data:`~numpyro_forecast.typing.ForecastFn`)::
+
+        forecast_fn(
+            rng_key, model, train_data, train_covariates, full_covariates,
+            num_samples, *, batch_size=None,
+        ) -> draws  # shape (num_samples, *batch, t2 - t1, obs)
+
+    where ``full_covariates`` spans the *full* window, ``covariates[..., t0:t2, :]``
+    (train followed by test), matching what the model needs to run the forecast
+    horizon. The optional ``in_sample_fn`` has the call signature (see
+    :data:`~numpyro_forecast.typing.InSampleFn`)::
+
+        in_sample_fn(
+            rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
+        ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
+
+    ``batch_size`` is forwarded unchanged into both closures so a chunked
+    implementation can bound its own device memory. A closure may return draws
+    committed to host memory (e.g. via ``device="host"``, to cap peak
+    accelerator usage): every metric in :data:`DEFAULT_METRICS` accepts a
+    host-committed ``pred`` or ``truth`` (or both), in any mix and regardless
+    of ``batch_size``, moving a host-committed operand to device memory first
+    where needed. Returning draws already on-device still avoids the extra
+    host-to-device hop for metrics scored every window.
+
+    A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
+    + ``Predictive``)::
+
+        import numpyro
+        from jax import random
+        from numpyro.infer import SVI, Predictive, Trace_ELBO
+        from numpyro.infer.autoguide import AutoNormal
+
+
+        def forecast_fn(
+            rng_key,
+            model,
+            train_data,
+            train_covariates,
+            full_covariates,
+            num_samples,
+            *,
+            batch_size=None,
+        ):
+            guide = AutoNormal(model)
+            svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+            key_fit, key_post, key_pred = random.split(rng_key, 3)
+            state = svi.run(key_fit, 1_000, train_covariates, train_data, progress_bar=False)
+            posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+            predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
+            return predictive(key_pred, full_covariates, train_data)["forecast"]
 
     Parameters
     ----------
@@ -779,9 +789,15 @@ def backtest(
     covariates
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
-        Factory returning a fresh :class:`ForecastingModel` per window.
-    forecaster_fn
-        Factory returning a fitted forecaster (defaults to :class:`Forecaster`).
+        Factory returning a fresh :class:`~numpyro_forecast.typing.ForecastModel` per window.
+    forecast_fn
+        Closure that fits ``model`` on the training window and forecasts the
+        test horizon (see :data:`~numpyro_forecast.typing.ForecastFn` and the
+        contract above).
+    in_sample_fn
+        Optional closure that fits ``model`` on the training window and scores
+        its in-sample fit (see :data:`~numpyro_forecast.typing.InSampleFn` and
+        the contract above). Required when ``eval_train=True``.
     metrics
         Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
         Each function takes ``(pred, truth)`` and returns a scalar array (see
@@ -794,7 +810,12 @@ def backtest(
         window-dependent metrics such as a MASE scaled by that window's training
         data (:func:`numpyro_forecast.metrics.make_mase`).
     transform
-        Optional ``(pred, truth) -> (pred, truth)`` applied before metrics.
+        Optional ``(pred, truth) -> (pred, truth)`` applied before metrics. It
+        runs before the metrics and receives the forecast/in-sample closure's
+        draws as-is, so a transform that does its own array math against a
+        device-resident operand must convert a host-committed ``pred`` or
+        ``truth`` first, e.g. with :func:`numpy.asarray` (or move it back
+        onto a device explicitly).
     window_type
         Windowing strategy. If ``None`` (default) it is inferred from
         ``train_window``: ``"expanding"`` when ``train_window`` is ``None`` and
@@ -818,16 +839,12 @@ def backtest(
     num_samples
         Number of forecast samples per window.
     batch_size
-        Optional forecast-sampling chunk size.
-    forecaster_options
-        Options dict passed to ``forecaster_fn``, or a callable
-        ``(t0, t1, t2) -> dict`` returning per-window options.
+        Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
+        (see the contract above).
     eval_train
         If ``True``, also score the in-sample posterior predictive over each training
         window with the same ``metrics`` and store them in
-        ``BacktestResult.train_metrics``. Requires a forecaster exposing
-        ``predict_in_sample`` (the built-in :class:`Forecaster` and
-        :class:`HMCForecaster` do).
+        ``BacktestResult.train_metrics``. Requires ``in_sample_fn``.
     keep_predictions
         If ``True``, store each window's out-of-sample forecast samples (after
         ``transform``) on ``BacktestResult.prediction``. Defaults to ``False`` to
@@ -844,7 +861,16 @@ def backtest(
     -------
     list[BacktestResult]
         One result per backtest window.
+
+    Raises
+    ------
+    ValueError
+        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
+        but ``in_sample_fn`` is ``None``.
     """
+    if eval_train and in_sample_fn is None:
+        msg = "eval_train=True requires in_sample_fn to be set"
+        raise ValueError(msg)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
@@ -876,8 +902,8 @@ def backtest(
                 covariates=covariates,
                 model_fn=model_fn,
                 shared_model=shared_model,
-                forecaster_fn=forecaster_fn,
-                options=_resolve_options(forecaster_options, t0, t1, t2),
+                forecast_fn=forecast_fn,
+                in_sample_fn=in_sample_fn,
                 num_samples=num_samples,
                 batch_size=batch_size,
                 metrics=metrics,
@@ -986,10 +1012,10 @@ def backtest_vectorized(
     *,
     train_window: int,
     test_window: int,
+    guide: "AutoGuide | Callable[..., None]",
+    optim: "_NumPyroOptim | None" = None,
     stride: int = 1,
     num_steps: int = 1_001,
-    optim: "OptimizerLike" = None,
-    guide: "GuideLike" = None,
     num_samples: int = 100,
     metrics: Mapping[str, Metric] | None = None,
     keep_predictions: bool = False,
@@ -1017,21 +1043,27 @@ def backtest_vectorized(
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
         Factory returning a fresh model; called exactly once (per-window model
-        variation is unsupported here, use :func:`backtest`).
+        variation is unsupported here, use :func:`backtest`). Must return the
+        same model object ``guide`` was built on (see ``guide`` below).
     train_window
         Fixed training-window length (``>= 1``).
     test_window
         Fixed test-window length (``>= 1``).
+    guide
+        An ``AutoGuide`` instance built on the same model object ``model_fn``
+        returns (hand-written guides are not vmappable, use :func:`backtest`
+        instead)::
+
+            model = make_model()
+            backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+
+    optim
+        NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
+        optax optimizer, wrap it with ``numpyro.optim.optax_to_numpyro`` first.
     stride
         Step between successive windows (``>= 1``).
     num_steps
         Number of SVI steps per window.
-    optim
-        Optimizer specification resolved by
-        :func:`~numpyro_forecast.functional.svi.resolve_optimizer`.
-    guide
-        Guide specification; must resolve to an ``AutoGuide`` (hand-written
-        guides are not vmappable, use :func:`backtest`).
     num_samples
         Number of forecast samples drawn per window.
     metrics
@@ -1058,7 +1090,7 @@ def backtest_vectorized(
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
     VectorizedGuideError
-        If the resolved guide is not an ``AutoGuide``.
+        If ``guide`` is not an ``AutoGuide`` instance.
     VectorizedMetricError
         If a metric forces a host conversion under ``vmap`` (it is not a pure
         JAX function).
@@ -1090,10 +1122,10 @@ def backtest_vectorized(
     train_d, train_c, hor_c, truth = jax.vmap(slice_one)(starts)
 
     model = model_fn()
-    resolved_guide = resolve_guide(guide, model)
-    if not isinstance(resolved_guide, AutoGuide):
+    if not isinstance(guide, AutoGuide):
         raise VectorizedGuideError()
-    svi = SVI(model, resolved_guide, resolve_optimizer(optim), Trace_ELBO())
+    resolved_optim = Adam(0.01) if optim is None else optim
+    svi = SVI(model, guide, resolved_optim, Trace_ELBO())
 
     # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
     # caches its prototype trace on the instance at first init, so if that
@@ -1116,7 +1148,7 @@ def backtest_vectorized(
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, int(starts.shape[0]))
     params, losses = jax.jit(jax.vmap(fit_one))(init_keys, train_d, train_c)
     posterior = jax.jit(
-        jax.vmap(lambda k, p: resolved_guide.sample_posterior(k, p, sample_shape=(num_samples,)))
+        jax.vmap(lambda k, p: guide.sample_posterior(k, p, sample_shape=(num_samples,)))
     )(post_keys, params)
 
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
@@ -1144,19 +1176,17 @@ def results_to_dataframe(
 ) -> "pd.DataFrame":
     """Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
 
-    Columns are prefix-namespaced so metric, in-sample-metric, and parameter
-    names never collide: window metrics become ``metric_<name>``, in-sample
-    metrics ``train_metric_<name>``, and scalar parameters ``param_<name>``,
-    alongside the window indices ``t0``/``t1``/``t2``, ``num_samples``, and
-    ``train_walltime``/``test_walltime``. Forecast samples are excluded.
-    Windows may carry different metric sets (e.g. via
-    ``backtest(per_window_metrics=...)``); the union of columns is used and
-    missing entries are left as ``NaN``.
+    Columns are prefix-namespaced so metric and in-sample-metric names never
+    collide: window metrics become ``metric_<name>`` and in-sample metrics
+    ``train_metric_<name>``, alongside the window indices ``t0``/``t1``/``t2``,
+    ``num_samples``, and ``walltime``. Forecast samples are excluded. Windows
+    may carry different metric sets (e.g. via ``backtest(per_window_metrics=...)``);
+    the union of columns is used and missing entries are left as ``NaN``.
 
     A :class:`VectorizedBacktestResult` from :func:`backtest_vectorized` is also
     accepted; it produces the same ``metric_<name>`` columns for the same metric
-    set, but has no ``train_metric_*``, ``param_*``, or walltime columns (a
-    vectorized run has no per-window walltimes), which are simply absent.
+    set, but has no ``train_metric_*`` or ``walltime`` columns (a vectorized run
+    has no per-window walltimes), which are simply absent.
 
     Parameters
     ----------
@@ -1184,15 +1214,12 @@ def results_to_dataframe(
             "t1": result.t1,
             "t2": result.t2,
             "num_samples": result.num_samples,
-            "train_walltime": result.train_walltime,
-            "test_walltime": result.test_walltime,
+            "walltime": result.walltime,
         }
         for name, value in result.metrics.items():
             row[f"metric_{name}"] = value
         for name, value in result.train_metrics.items():
             row[f"train_metric_{name}"] = value
-        for name, value in result.params.items():
-            row[f"param_{name}"] = value
         rows.append(row)
     return pandas.DataFrame(rows)
 

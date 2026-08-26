@@ -3,8 +3,9 @@
 The :class:`Horizon` value carries the train/forecast split, and the
 site-registration functions (:func:`time_series`, :func:`markov_time_series`,
 :func:`predict`, :func:`predict_glm`) sample latents and observation sites
-against it. :func:`forecasting_model` wraps a pure model body into the
-standard NumPyro model callable ``(covariates, data=None)``.
+against it. A model is a plain function ``(covariates, data=None) -> None``
+that derives its :class:`Horizon` from the shapes (via ``Horizon.from_data``)
+and calls those primitives directly.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -20,7 +21,7 @@ from numpyro.infer.reparam import Reparam
 
 from numpyro_forecast.arrays import _zeros_like_data, concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.typing import Array
 
 
 @dataclass(frozen=True)
@@ -384,34 +385,3 @@ def predict(h: Horizon, noise_dist: dist.Distribution, prediction: Array) -> Non
         If forecasting (``future > 0``) but no observed data is available.
     """
     predict_glm(h, lambda mu: shift_loc(noise_dist, mu), prediction)
-
-
-def forecasting_model(model_fn: Callable[[Horizon, Array], None]) -> ForecastModel:
-    """Build a NumPyro model from a functional model body.
-
-    The functional analogue of subclassing
-    :class:`~numpyro_forecast.forecaster.ForecastingModel`. ``model_fn`` is a
-    pure function ``(Horizon, covariates) -> None`` that calls :func:`time_series`
-    and :func:`predict`; this wraps it into the standard NumPyro model callable
-    ``(covariates, data=None)``, deriving the :class:`Horizon` from the shapes.
-
-    Parameters
-    ----------
-    model_fn
-        The model body. It receives the per-call :class:`Horizon` (use
-        ``h.zero_data`` for the Pyro-style ``zero_data``) and the covariates with
-        time at axis ``-2``.
-
-    Returns
-    -------
-    ForecastModel
-        A callable ``(covariates, data=None) -> None`` usable with ``SVI``,
-        ``MCMC``, ``Predictive``, :func:`~numpyro_forecast.functional.svi.fit_svi`,
-        :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`, and the OOP forecaster
-        classes.
-    """
-
-    def numpyro_model(covariates: Array, data: Array | None = None) -> None:
-        model_fn(Horizon.from_data(covariates, data), covariates)
-
-    return numpyro_model

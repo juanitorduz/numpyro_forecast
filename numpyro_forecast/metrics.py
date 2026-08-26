@@ -8,9 +8,10 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
+from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from numpyro_forecast.functional._offload import _device_view
 from numpyro_forecast.typing import Array, Metric
 
 
@@ -36,8 +37,8 @@ def _crps_empirical(
 
 
 def crps_empirical(
-    pred: Float[Array, " sample *batch"] | Float[np.ndarray, " sample *batch"],
-    truth: Float[Array, " *batch"] | Float[np.ndarray, " *batch"],
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
 ) -> Float[Array, " *batch"]:
     r"""Compute the empirical Continuous Ranked Probability Score (CRPS).
 
@@ -56,6 +57,9 @@ def crps_empirical(
     ----------
     pred
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
+        May be host-committed (e.g. draws sampled with ``device="host"``),
+        regardless of whether ``truth`` is: either operand is moved to device
+        memory first (:func:`~numpyro_forecast.functional._offload._device_view`).
     truth
         Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
 
@@ -70,17 +74,30 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    num_samples = pred.shape[0]
+    pred_arr = _device_view(pred)
+    num_samples = pred_arr.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-    return _crps_empirical(pred, truth)
+    return _crps_empirical(pred_arr, _device_view(truth))
 
 
 @partial(jax.jit, static_argnames=("quantile",))
-def eval_pinball(
+def _eval_pinball(
     pred: Float[Array, " sample *batch"],
     truth: Float[Array, " *batch"],
+    *,
+    quantile: float,
+) -> Array:
+    """Jitted pinball-loss core; host-committed handling lives in :func:`eval_pinball`."""
+    estimate = jnp.quantile(pred, quantile, axis=0)
+    diff = truth - estimate
+    return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
+
+
+def eval_pinball(
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     quantile: float = 0.5,
 ) -> Array:
@@ -90,7 +107,10 @@ def eval_pinball(
     :math:`\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))`, averaged over all
     data elements. At ``quantile=0.5`` it is half the mean absolute error. A
     pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`);
-    ``quantile`` is static so each level specializes its own branch.
+    ``quantile`` is static so each level specializes its own branch. ``pred``
+    and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -114,15 +134,29 @@ def eval_pinball(
     if not 0.0 < quantile < 1.0:
         msg = f"quantile must be in (0, 1), got {quantile}"
         raise ValueError(msg)
-    estimate = jnp.quantile(pred, quantile, axis=0)
-    diff = truth - estimate
-    return jnp.maximum(quantile * diff, (quantile - 1.0) * diff).mean()
+    return _eval_pinball(_device_view(pred), _device_view(truth), quantile=quantile)
 
 
 @partial(jax.jit, static_argnames=("alpha",))
-def eval_interval_score(
+def _eval_interval_score(
     pred: Float[Array, " sample *batch"],
     truth: Float[Array, " *batch"],
+    *,
+    alpha: float,
+) -> Array:
+    """Jitted interval-score core; host-committed handling lives in :func:`eval_interval_score`."""
+    tail = (1.0 - alpha) / 2.0
+    lo = jnp.quantile(pred, tail, axis=0)
+    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
+    penalty = 2.0 / (1.0 - alpha)
+    below = penalty * (lo - truth) * (truth < lo)
+    above = penalty * (truth - hi) * (truth > hi)
+    return (hi - lo + below + above).mean()
+
+
+def eval_interval_score(
+    pred: Float[ArrayLike, " sample *batch"],
+    truth: Float[ArrayLike, " *batch"],
     *,
     alpha: float = 0.9,
 ) -> Array:
@@ -134,6 +168,9 @@ def eval_interval_score(
     u)\mathbf 1_{y>u}\big]`, averaged over all data elements. It rewards narrow
     intervals and penalizes ground truth falling outside them; lower is better.
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    ``pred`` and ``truth`` are moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -157,23 +194,34 @@ def eval_interval_score(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    tail = (1.0 - alpha) / 2.0
-    lo = jnp.quantile(pred, tail, axis=0)
-    hi = jnp.quantile(pred, 1.0 - tail, axis=0)
-    penalty = 2.0 / (1.0 - alpha)
-    below = penalty * (lo - truth) * (truth < lo)
-    above = penalty * (truth - hi) * (truth > hi)
-    return (hi - lo + below + above).mean()
+    return _eval_interval_score(_device_view(pred), _device_view(truth), alpha=alpha)
 
 
-def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: int = 1) -> Metric:
+@partial(jax.jit, static_argnames=("scale",))
+def _mase(
+    pred: Float[Array, " sample *batch"],
+    truth: Float[Array, " *batch"],
+    *,
+    scale: float,
+) -> Array:
+    """Jitted MASE core; host-committed handling lives in the :func:`make_mase` closure."""
+    mae = jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+    return mae / scale
+
+
+def make_mase(
+    train_data: Float[ArrayLike, "*batch time obs_dim"], *, seasonality: int = 1
+) -> Metric:
     """Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 
     MASE divides the forecast MAE (using the sample median as point estimate) by
     the in-sample MAE of the seasonal-naive forecast on ``train_data``,
     ``mean(|y_t - y_{t-seasonality}|)``. The scale is computed once at factory
     time; the returned metric has the standard scalar-array signature (see
-    :data:`~numpyro_forecast.typing.Metric`).
+    :data:`~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
+    metric's ``pred``/``truth`` are all moved to device memory first
+    (:func:`~numpyro_forecast.functional._offload._device_view`), so any of
+    them may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
     ----------
@@ -198,14 +246,15 @@ def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: i
     if seasonality < 1:
         msg = f"seasonality must be >= 1, got {seasonality}"
         raise ValueError(msg)
-    if train_data.shape[-2] <= seasonality:
+    train_arr = _device_view(train_data)
+    if train_arr.shape[-2] <= seasonality:
         msg = (
             f"train_data must be longer than seasonality along the time axis "
-            f"(got length {train_data.shape[-2]}, seasonality {seasonality})"
+            f"(got length {train_arr.shape[-2]}, seasonality {seasonality})"
         )
         raise ValueError(msg)
     scale = float(
-        jnp.abs(train_data[..., seasonality:, :] - train_data[..., :-seasonality, :]).mean()
+        jnp.abs(train_arr[..., seasonality:, :] - train_arr[..., :-seasonality, :]).mean()
     )
     if scale == 0.0:
         msg = (
@@ -214,8 +263,10 @@ def make_mase(train_data: Float[Array, "*batch time obs_dim"], *, seasonality: i
         )
         raise ValueError(msg)
 
-    def mase(pred: Array, truth: Array) -> Array:
-        mae = jnp.abs(jnp.median(pred, axis=0) - truth).mean()
-        return mae / scale
+    def mase(
+        pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
+    ) -> Array:
+        """MASE for one ``(pred, truth)`` pair, scaled by the enclosing ``train_data``."""
+        return _mase(_device_view(pred), _device_view(truth), scale=scale)
 
     return mase

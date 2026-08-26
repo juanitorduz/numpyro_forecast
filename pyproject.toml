@@ -33,6 +33,8 @@ classifiers = [
 dependencies = [
     "arviz>=1.2.0",
     "beartype>=0.22",
+    # <0.11.1 until numpyro releases pyro-ppl/numpyro#2245 (render_model provenance on jax 0.11.1)
+    "jax>=0.10.0,<0.11.1",
     "jaxtyping>=0.3.11",
     "matplotlib>=3.8,<3.11",
     "numpyro>=0.20.0",
@@ -156,6 +158,21 @@ exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
 ]
+
+[tool.ty.src]
+# TODO(refactor3): temporary during the v0.3.0 integration window; example
+# notebooks still call the pre-refactor API and are re-typechecked as they
+# are rewritten (PR-A Task 12, PR-E). Remove this exclude at the integration
+# merge.
+#
+# This is the mechanism that actually works: the vendored `ty` pre-commit hook
+# hardcodes `pass_filenames: false` and `always_run: true` (it always checks
+# the whole project, by design, since a change in one file can surface new
+# diagnostics in another), so a per-file `exclude:`/`files:` key on the hook
+# in .pre-commit-config.yaml has no effect. Excluding here, in ty's own
+# project config, is what `ty check`/`uv check` (used by both the hook and
+# CI) actually honor.
+exclude = ["docs/examples/**"]
 
 [tool.ty.environment]
 python-version = "3.12"

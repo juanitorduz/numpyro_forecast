@@ -13,7 +13,6 @@ groups are then assembled with :meth:`xarray.DataTree.from_dict`.
 """
 
 from collections.abc import Mapping, Sequence
-from functools import singledispatch
 from typing import Any, cast
 
 import arviz_base
@@ -21,15 +20,14 @@ import jax
 import numpy as np
 import xarray
 from jax import random
+from jax.typing import ArrayLike
 from jaxtyping import Float, Num
 
 from numpyro_forecast.exceptions import CovariateDimsError
-from numpyro_forecast.functional import MCMCFit, draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.functional import forecast, predict_in_sample
+from numpyro_forecast.functional._offload import _resolve_device
 from numpyro_forecast.functional._validation import _require_covariates_cover_data
 from numpyro_forecast.typing import Array, ForecastModel
-
-_DEFAULT_NUM_PREDICTIVE_SAMPLES = 1_000
-"""Default posterior draw count for variational fits when unspecified."""
 
 _SAMPLE_DIMS = ["chain", "draw"]
 """The ArviZ sample dimensions shared by the posterior groups."""
@@ -132,44 +130,51 @@ def _reconcile_tree_covariate_dims(
     return covariate_dims
 
 
-@singledispatch
-def _posterior_reshape(
-    fit: object, samples: "dict[str, Array | np.ndarray]"
-) -> dict[str, "np.ndarray"]:
-    """Reshape sample-leading draws to ``(chain, draw, ...)`` per fit type.
+def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray":
+    """Split a flattened leading sample axis into ``(num_chains, draw, ...)``.
 
-    The default adds a single pseudo-chain (``leaf[None]``), which is correct for
-    the variational fits (SVI, Pathfinder) that have no chain structure. The
-    :class:`~numpyro_forecast.functional.mcmc.MCMCFit` override splits the flattened
-    draws back into ``fit.num_chains`` chains.
+    Applied to every posterior leaf and to the in-sample/forecast predictive
+    draws alike: both are drawn with a sample count equal to the posterior's,
+    so the same ``num_chains`` reshape recovers a consistent ``(chain, draw,
+    ...)`` layout across all groups.
 
     Parameters
     ----------
-    fit
-        The fit whose chain structure determines the reshape.
-    samples
-        Posterior draws with the sample axis leading.
+    array
+        Draws with a single flattened sample axis leading, of length
+        ``num_chains * draw``.
+    num_chains
+        Number of chains to split the leading axis into (``1`` for a fit with
+        no chain structure, e.g. SVI or Pathfinder).
 
     Returns
     -------
-    dict[str, numpy.ndarray]
-        Draws reshaped to ``(chain, draw, ...)``.
+    numpy.ndarray
+        ``array`` reshaped to ``(num_chains, draw, *array.shape[1:])``.
+
+    Raises
+    ------
+    ValueError
+        If the leading axis length is not evenly divisible by ``num_chains``.
+
+    Notes
+    -----
+    NumPyro's flattened ``mcmc.get_samples()`` (the default,
+    ``group_by_chain=False``) concatenates chains in a fixed order, so this
+    plain reshape recovers the exact per-chain layout. ``to_datatree`` (and
+    hence this helper) only accepts that flattened, chain-major layout;
+    ``mcmc.get_samples(group_by_chain=True)`` output, whose leaves already
+    carry explicit ``(chain, draw, ...)`` axes, is not a valid input here. If
+    the flattened ordering guarantee is a concern, draw with
+    ``group_by_chain=True`` upstream only to disambiguate chain order for
+    yourself, then flatten back before passing samples to ``to_datatree``.
     """
-    return {name: np.asarray(value)[None] for name, value in samples.items()}
-
-
-@_posterior_reshape.register
-def _(fit: MCMCFit, samples: "dict[str, Array | np.ndarray]") -> dict[str, "np.ndarray"]:
-    reshaped: dict[str, np.ndarray] = {}
-    for name, value in samples.items():
-        array = np.asarray(value)
-        reshaped[name] = array.reshape(fit.num_chains, -1, *array.shape[1:])
-    return reshaped
-
-
-def _reshape_predictive(fit: object, predictive: "Array | np.ndarray") -> "np.ndarray":
-    """Apply the fit's chain reshape to a single predictive array."""
-    return _posterior_reshape(fit, {"obs": predictive})["obs"]
+    reshaped = np.asarray(array)
+    n = reshaped.shape[0]
+    if n % num_chains != 0:
+        msg = f"posterior sample count {n} is not evenly divisible by num_chains {num_chains}"
+        raise ValueError(msg)
+    return reshaped.reshape(num_chains, n // num_chains, *reshaped.shape[1:])
 
 
 def _merge_coords(
@@ -223,12 +228,12 @@ def _forecast_group_datasets(
 
 def to_datatree(
     rng_key: Array,
-    fit: object,
     model: ForecastModel,
+    posterior: Mapping[str, ArrayLike],
     data: Array,
     covariates: Array,
     *,
-    num_predictive_samples: int | None = None,
+    num_chains: int = 1,
     predictive_batch_size: int | None = None,
     predictive_device: jax.Device | str | None = "host",
     coords: Mapping[str, Sequence[Any]] | None = None,
@@ -236,22 +241,27 @@ def to_datatree(
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
     covariate_dims: Sequence[str] | None = None,
 ) -> "xarray.DataTree":
-    r"""Convert a fit into an ArviZ-schema :class:`xarray.DataTree`.
+    r"""Convert an already-drawn posterior into an ArviZ-schema :class:`xarray.DataTree`.
 
-    PRNG: ``rng_key`` is consumed by the in-sample posterior-predictive draws (for
-    a variational fit, also the posterior draws) and, when a forecast horizon is
-    present, the forecast draws.
+    Posterior-first: callers draw their own posterior (``mcmc.get_samples()``
+    for MCMC, :func:`~numpyro_forecast.functional.posterior.draw_posterior` for a
+    variational fit) and pass it in; ``to_datatree`` never draws a posterior of
+    its own. ``rng_key`` is consumed only by the in-sample posterior-predictive
+    draws and, when a forecast horizon is present, the forecast draws.
 
     Parameters
     ----------
     rng_key
-        PRNG key for the predictive (and variational posterior) draws.
-    fit
-        A fit from :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`,
-        :func:`~numpyro_forecast.functional.svi.fit_svi`, or
-        :func:`~numpyro_forecast.contrib.blackjax.fit_pathfinder`.
+        PRNG key for the in-sample predictive draws and, when a horizon is
+        present, the forecast draws.
     model
-        The forecasting model that produced ``fit``.
+        The forecasting model that produced ``posterior``.
+    posterior
+        Posterior samples of the latent sites, with a single flattened sample
+        axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
+        :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
+        Host-committed leaves (the output of ``draw_posterior(...,
+        device="host")``) and NumPy leaves are accepted directly.
     data
         In-sample data with time at axis ``-2``.
     covariates
@@ -261,43 +271,48 @@ def to_datatree(
         the returned tree additionally carries ``predictions`` (forecast ``obs``
         draws from :func:`~numpyro_forecast.functional.prediction.forecast`) and
         ``predictions_constant_data`` groups.
-    num_predictive_samples
-        Number of posterior draws for a variational fit (ignored for
-        :class:`~numpyro_forecast.functional.mcmc.MCMCFit`, which uses its own draws).
-        The same draws drive the in-sample predictive and the forecast. Defaults
-        to ``1_000``.
+    num_chains
+        Number of chains to split ``posterior``'s flattened sample axis into
+        (and, identically, the in-sample/forecast predictive draws, which are
+        drawn with the same sample count). Defaults to ``1`` (a single
+        pseudo-chain, correct for a posterior with no chain structure, e.g.
+        SVI or Pathfinder draws). For an MCMC posterior, pass the
+        ``num_chains`` the sampler was run with; see :func:`_reshape_chains`
+        for the reshape contract and its divisibility requirement.
     predictive_batch_size
         Optional chunk size that bounds how many draws touch the accelerator
-        at once, across both stages of the export. When set, the posterior
-        drawing itself (for variational fits; on a wide panel it is the
-        largest allocation, since every latent and deterministic site is
-        materialized for all draws) and the in-sample/forecast predictive
-        sampling run in chunks of this many draws, each chunk moved to
-        ``predictive_device`` before the next is drawn. The per-chunk
+        at once, across both the in-sample and forecast predictive sampling.
+        When set, sampling runs in chunks of this many draws, each chunk moved
+        to ``predictive_device`` before the next is drawn. The per-chunk
         accelerator footprint is a handful of ``(batch_size, time, series)``
         buffers, so it scales linearly with this value times the panel width:
         on wide panels lower it until a chunk fits. The batch size must be
         strictly below the draw count for that bound to hold: at or above it,
         sampling falls back to the single-shot path and the full array is
         materialized on the default device before the single transfer.
-        Chunking changes the PRNG stream layout of both the posterior and the
-        predictive draws (including the ``posterior`` group), so results are
-        reproducible per ``(rng_key, predictive_batch_size)``. ``None``
-        (default) samples everything in one shot (the results are still moved
-        to ``predictive_device``).
+        Chunking changes the PRNG stream layout of the predictive draws, so
+        results are reproducible per ``(rng_key, predictive_batch_size)``.
+        ``None`` (default) samples everything in one shot (the results are
+        still moved to ``predictive_device``).
     predictive_device
-        Where the posterior and predictive draws are moved as they are
-        sampled, forwarded to the ``device`` argument of
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`,
-        :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
-        :func:`~numpyro_forecast.functional.prediction.forecast`. The default
-        ``"host"`` copies every chunk to host memory as a NumPy array (where
-        the tree is built anyway); it is what bounds accelerator memory when
-        ``predictive_batch_size`` is set, and it needs no CPU backend, so it
-        works even when ``numpyro.set_platform("cuda")`` (or ``jax_platforms``)
-        leaves only an accelerator backend initialized. A :class:`jax.Device`
-        or platform name like ``"cpu"`` commits the draws to that device
-        instead; pass ``None`` to keep the draws on the default device
+        Where the predictive draws are moved as they are sampled, forwarded to
+        the ``device`` argument of
+        :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
+        :func:`~numpyro_forecast.functional.prediction.forecast`. It is
+        resolved once and the same placement is handed to both. The default
+        ``"host"`` keeps the predictive draws in pageable host memory, which
+        is what bounds accelerator memory when ``predictive_batch_size`` is
+        set: with the JAX CPU backend initialized every chunk is committed to
+        ``jax.devices("cpu")[0]`` (jax Arrays the tree views as NumPy without a
+        copy); without it (for example after ``numpyro.set_platform("cuda")``,
+        or a ``JAX_PLATFORMS`` preset) every chunk is copied with
+        :func:`jax.device_get` (NumPy arrays), so no CPU backend is needed and
+        nothing is pinned. ``"pinned_host"`` uses the accelerator's pinned
+        host memory kind instead (capped at 64 GB by default on CUDA,
+        ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``). A :class:`jax.Device` or
+        platform name like ``"cpu"`` commits the draws to that device
+        (``"cpu"`` warns and takes the NumPy path when the CPU backend is
+        missing); pass ``None`` to keep the draws on the default device
         (chunked compute without per-chunk host transfers, for when the draws
         fit on the accelerator and transfers would dominate runtime).
     coords
@@ -331,32 +346,51 @@ def to_datatree(
     Returns
     -------
     xarray.DataTree
-        A tree with ``posterior`` (``(chain, draw, ...)``; a single pseudo-chain
-        plus ``variational: True`` attrs for SVI/Pathfinder), ``posterior_predictive``
-        (in-sample ``obs``), ``observed_data``, and ``constant_data`` groups. When
-        ``covariates`` extends beyond ``data``, also ``predictions`` and
-        ``predictions_constant_data`` groups (the forecast keeps an MCMC fit's real
-        chain structure).
+        A tree with ``posterior`` (``(chain, draw, ...)``, split per
+        ``num_chains``), ``posterior_predictive`` (in-sample ``obs``),
+        ``observed_data``, and ``constant_data`` groups. When ``covariates``
+        extends beyond ``data``, also ``predictions`` and
+        ``predictions_constant_data`` groups (sharing the same ``num_chains``
+        split).
 
     Raises
     ------
     ValueError
-        If ``covariates`` is shorter than ``data`` along the time axis, or if
+        If ``covariates`` is shorter than ``data`` along the time axis, if
         ``time_coord`` is given but its length does not match the in-sample
-        window plus the forecast horizon.
+        window plus the forecast horizon, or if ``posterior``'s sample count is
+        not evenly divisible by ``num_chains``.
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
+    RuntimeError
+        If ``predictive_device="pinned_host"`` is requested on a device that
+        exposes no host memory kind (see
+        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+
+    Warns
+    -----
+    UserWarning
+        If ``predictive_device="cpu"`` is requested and the JAX CPU backend is
+        not initialized, so the predictive draws take the NumPy path of
+        ``"host"`` instead (once per call).
 
     Notes
     -----
-    ``rng_key`` is split internally: one subkey drives the posterior draws (for
-    variational fits), one the in-sample predictive, and, when a horizon is
-    present, a third the forecast. The split is a deterministic derivation
-    applied for every fit type, so passing the same key twice never correlates
-    the sample sets. ``predictive_batch_size`` is the built-in route to
-    memory-bounded predictive sampling; for fully manual control over the
-    forecast draws, build the in-sample tree with matching-length covariates
-    and attach the horizon with :func:`add_forecast_groups`.
+    ``to_datatree`` no longer accepts a fit object or draws a posterior itself
+    (no ``num_predictive_samples``, no internal
+    :func:`~numpyro_forecast.functional.posterior.draw_posterior` call): callers
+    draw the posterior first and pass it in. The ``variational``/``is_mcmc``
+    attrs previously stamped on the ``posterior`` group are gone too, since a
+    fit type is no longer knowable from a plain posterior dict; use
+    ``num_chains`` (``1`` vs. ``> 1``) to tell the two apart if needed.
+    When a forecast horizon is present, ``rng_key`` is split internally into a
+    predictive subkey and a forecast subkey, so passing the same key twice
+    never correlates the two sample sets. When there is no horizon, ``rng_key``
+    is used unsplit for the in-sample predictive draw. ``predictive_batch_size``
+    is the built-in route to memory-bounded predictive sampling; for fully
+    manual control over the forecast draws, build the in-sample tree with
+    matching-length covariates and attach the horizon with
+    :func:`add_forecast_groups`.
     """
     _require_covariates_cover_data(data, covariates)
     cov_dims = _resolve_covariate_dims(covariates, covariate_dims)
@@ -364,23 +398,9 @@ def to_datatree(
     horizon = covariates.shape[-2] - n_time
 
     if horizon > 0:
-        key_post, key_pred, key_forecast = random.split(rng_key, 3)
+        key_pred, key_forecast = random.split(rng_key, 2)
     else:
-        key_post, key_pred = random.split(rng_key)
-        key_forecast = None
-
-    is_mcmc = isinstance(fit, MCMCFit)
-    if is_mcmc:
-        samples: dict[str, Array | np.ndarray] = dict(fit.samples)  # type: ignore[attr-defined]
-    else:
-        num = (
-            _DEFAULT_NUM_PREDICTIVE_SAMPLES
-            if num_predictive_samples is None
-            else num_predictive_samples
-        )
-        samples = draw_posterior(
-            key_post, fit, num, batch_size=predictive_batch_size, device=predictive_device
-        )
+        key_pred, key_forecast = rng_key, None
 
     if time_coord is not None:
         time_values = np.asarray(time_coord)
@@ -400,27 +420,31 @@ def to_datatree(
 
     merged_arg = cast("dict[Any, Any]", merged_coords)
 
-    posterior = _posterior_reshape(fit, samples)
-    posterior_attrs = None if is_mcmc else {"variational": True}
+    posterior_reshaped = {
+        name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
+        for name, value in posterior.items()
+    }
     posterior_ds = arviz_base.dict_to_dataset(
-        posterior,
+        posterior_reshaped,
         sample_dims=_SAMPLE_DIMS,
         dims=cast("dict[Any, Any] | None", posterior_dims),
         coords=merged_arg,
-        attrs=posterior_attrs,
     )
 
     covariates_insample = covariates[..., :n_time, :]
+    # Resolve once so the two predictive drivers share one placement (and an
+    # unmet explicit "cpu" request warns once per export).
+    resolved_device = _resolve_device(predictive_device)
     predictive = predict_in_sample(
         key_pred,
         model,
-        samples,
+        posterior,
         covariates_insample,
         batch_size=predictive_batch_size,
-        device=predictive_device,
+        device=resolved_device,
     )
     pp_ds = arviz_base.dict_to_dataset(
-        {"obs": _reshape_predictive(fit, predictive)},
+        {"obs": _reshape_chains(predictive, num_chains)},
         sample_dims=_SAMPLE_DIMS,
         dims={"obs": ["time", "obs_dim"]},
         coords=merged_arg,
@@ -449,14 +473,14 @@ def to_datatree(
         forecast_samples = forecast(
             key_forecast,
             model,
-            samples,
+            posterior,
             data,
             covariates,
             batch_size=predictive_batch_size,
-            device=predictive_device,
+            device=resolved_device,
         )
         predictions_ds, predictions_constant_ds = _forecast_group_datasets(
-            _reshape_predictive(fit, forecast_samples),
+            _reshape_chains(forecast_samples, num_chains),
             covariates[..., n_time:, :],
             future_time,
             coords=coords,
@@ -478,7 +502,7 @@ def to_datatree(
 
 def add_forecast_groups(
     tree: "xarray.DataTree",
-    forecast_samples: "Array | np.ndarray",
+    forecast_samples: Num[ArrayLike, " sample future obs"],
     covariates_future: Array,
     *,
     time_coord: Sequence[Any] | None = None,
@@ -538,7 +562,8 @@ def add_forecast_groups(
     """
     covariate_dims = _reconcile_tree_covariate_dims(tree, covariates_future, covariate_dims)
     in_time = np.asarray(tree["observed_data"].coords["time"].values)
-    future_len = forecast_samples.shape[-2]
+    forecast_samples_arr = np.asarray(forecast_samples)
+    future_len = forecast_samples_arr.shape[-2]
     if time_coord is not None:
         future_time = np.asarray(time_coord)
         if future_time.shape[0] != future_len:
@@ -557,7 +582,7 @@ def add_forecast_groups(
         )
         raise ValueError(msg)
     predictions_ds, predictions_constant_ds = _forecast_group_datasets(
-        np.asarray(forecast_samples)[None],
+        forecast_samples_arr[None],
         covariates_future,
         future_time,
         covariate_dims=covariate_dims,
@@ -572,12 +597,12 @@ def add_forecast_groups(
 
 
 def predictions_to_datatree(
-    predictions: Float[np.ndarray | Array, " sample time series"],
-    x: Num[np.ndarray | Array, " time"],
+    predictions: Float[ArrayLike, " sample time series"],
+    x: Num[ArrayLike, " time"],
     series: Sequence[Any],
     *,
     group: str = "posterior_predictive",
-    observed: Float[np.ndarray | Array, " time series"] | None = None,
+    observed: Float[ArrayLike, " time series"] | None = None,
 ) -> "xarray.DataTree":
     """Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
 

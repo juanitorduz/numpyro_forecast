@@ -1,45 +1,65 @@
 """Tests for the ArviZ DataTree export (roadmap §5)."""
 
 import warnings
+from typing import cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray.testing as xarray_testing
-from conftest import RandomWalkModel, empty_covariates
+from conftest import empty_covariates, fail_devices_for, nuts_samples, rw_model, svi_guide_params
 from jax import Array, random
 
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
-from numpyro_forecast.functional import draw_posterior, fit_mcmc, fit_svi, forecast
+from numpyro_forecast.functional import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
 arviz_base = pytest.importorskip("arviz_base")
 arviz_stats = pytest.importorskip("arviz_stats")
 
 
+def _model() -> ForecastModel:
+    """The functional random-walk model matching conftest's posterior-drawing helpers."""
+    return rw_model
+
+
 def _series(n: int = 18) -> Array:
     return jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (n, 1)), axis=-2)
 
 
-def _mcmc_fit(num_chains: int = 2):  # type: ignore[no-untyped-def]
-    data = _series()
-    covariates = empty_covariates(data.shape[-2])
-    fit = fit_mcmc(
-        random.PRNGKey(1),
-        RandomWalkModel(),
-        data,
-        covariates,
-        num_warmup=50,
-        num_samples=50,
-        num_chains=num_chains,
+def _mcmc_posterior(
+    num_chains: int = 2, t: int = 18, num_warmup: int = 50, num_samples: int = 50
+) -> tuple[dict[str, Array], Array, Array]:
+    """An MCMC posterior plus the data/covariates it was fit on.
+
+    ``nuts_samples`` builds ``data`` internally with the exact deterministic
+    recipe :func:`_series` reproduces, so calling both with the same ``t``
+    yields the data the posterior was actually fit on. The model never reads
+    covariate *values* (only the time-axis length, via ``Horizon``), so the
+    ``covariates`` passed to ``to_datatree``/``forecast`` in a given test may
+    differ in shape from ``empty_covariates(t)`` used here for fitting.
+    """
+    posterior = nuts_samples(
+        t, num_warmup=num_warmup, num_samples=num_samples, num_chains=num_chains
     )
-    return fit, data, covariates
+    return posterior, _series(t), empty_covariates(t)
+
+
+def _svi_posterior(
+    num_draws: int, t: int = 18, num_steps: int = 40
+) -> tuple[dict[str, Array], Array, Array]:
+    """An SVI-drawn posterior plus the data/covariates it was fit on."""
+    guide, params = svi_guide_params(t, num_steps=num_steps)
+    posterior = cast(
+        "dict[str, Array]", draw_posterior(random.PRNGKey(3), guide, params, num_draws)
+    )
+    return posterior, _series(t), empty_covariates(t)
 
 
 def test_to_datatree_mcmc_groups_and_dims() -> None:
-    fit, data, covariates = _mcmc_fit()
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    posterior, data, covariates = _mcmc_posterior()
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     assert set(tree.children) == {
         "posterior",
         "posterior_predictive",
@@ -57,8 +77,8 @@ def test_to_datatree_mcmc_groups_and_dims() -> None:
 
 
 def test_to_datatree_observed_and_constant_roundtrip() -> None:
-    fit, data, covariates = _mcmc_fit()
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    posterior, data, covariates = _mcmc_posterior()
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     obs = np.asarray(tree["observed_data"]["obs"])
     np.testing.assert_allclose(obs, np.asarray(data), rtol=1e-6)
     const = np.asarray(tree["constant_data"]["covariates"])
@@ -67,10 +87,10 @@ def test_to_datatree_observed_and_constant_roundtrip() -> None:
 
 def test_mcmc_chain_reshape_roundtrip() -> None:
     """The (num_samples,...) -> (chain, draw, ...) reshape matches group_by_chain."""
-    fit, data, covariates = _mcmc_fit(num_chains=2)
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    posterior, data, covariates = _mcmc_posterior(num_chains=2)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     reshaped = np.asarray(tree["posterior"]["sigma"])  # (chain, draw)
-    flat = np.asarray(fit.samples["sigma"])  # (num_samples,)
+    flat = np.asarray(posterior["sigma"])  # (num_samples,)
     # get_samples(group_by_chain=False) concatenates chains in order, so a plain
     # reshape recovers the per-chain layout.
     np.testing.assert_allclose(reshaped.reshape(-1), flat, rtol=1e-6)
@@ -79,49 +99,51 @@ def test_mcmc_chain_reshape_roundtrip() -> None:
 
 def test_rhat_runs_warning_free_on_two_chain_posterior() -> None:
     """Acceptance: az rhat runs warning-free on a 2-chain posterior."""
-    fit, data, covariates = _mcmc_fit(num_chains=2)
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    posterior, data, covariates = _mcmc_posterior(num_chains=2)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         rhat = arviz_stats.rhat(tree["posterior"].dataset)
     assert "sigma" in rhat
 
 
-def test_to_datatree_svi_has_variational_metadata() -> None:
-    data = _series()
-    covariates = empty_covariates(data.shape[-2])
-    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, covariates, num_steps=60)
-    tree = to_datatree(
-        random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
-        data,
-        covariates,
-        num_predictive_samples=40,
-    )
+def test_to_datatree_svi_posterior_single_chain_has_no_variational_attrs() -> None:
+    """A variational (SVI-drawn) posterior gets a single pseudo-chain and no dropped attrs.
+
+    The fit-type-derived ``variational``/``is_mcmc`` attrs are gone now that
+    ``to_datatree`` never sees a fit object, only a posterior dict.
+    """
+    posterior, data, covariates = _svi_posterior(num_draws=40)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates)
     assert tree["posterior"].sizes["chain"] == 1
     assert tree["posterior"].sizes["draw"] == 40
-    assert tree["posterior"].dataset.attrs.get("variational") is True
+    assert "variational" not in tree["posterior"].dataset.attrs
+    assert "is_mcmc" not in tree["posterior"].dataset.attrs
 
 
 def test_to_datatree_time_coord_threading() -> None:
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     custom_time = list(range(100, 100 + n))
     tree = to_datatree(
-        random.PRNGKey(2), fit, RandomWalkModel(), data, covariates, time_coord=custom_time
+        random.PRNGKey(2),
+        _model(),
+        posterior,
+        data,
+        covariates,
+        num_chains=2,
+        time_coord=custom_time,
     )
     np.testing.assert_array_equal(tree["observed_data"].coords["time"].values, custom_time)
     np.testing.assert_array_equal(tree["posterior_predictive"].coords["time"].values, custom_time)
 
 
 def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     out = add_forecast_groups(tree, fc, future_covariates[n:])
     assert "predictions" in out.children
     assert "predictions_constant_data" in out.children
@@ -132,12 +154,11 @@ def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
 
 
 def test_add_forecast_groups_explicit_time_coord() -> None:
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 3)
-    post = draw_posterior(random.PRNGKey(3), fit, 60)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=[900, 901, 902])
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, [900, 901, 902])
 
@@ -148,12 +169,11 @@ def test_add_forecast_groups_rejects_wrong_length_time_coord() -> None:
     Without the guard the mismatch flowed into ``dict_to_dataset`` and died deep
     in xarray with a shape message that never mentioned ``time_coord``.
     """
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 3)
-    post = draw_posterior(random.PRNGKey(3), fit, 60)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     with pytest.raises(ValueError, match="time_coord has length 2"):
         add_forecast_groups(tree, fc, future_covariates[n:], time_coord=[900, 901])
 
@@ -164,14 +184,19 @@ def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
     The default integer continuation would otherwise raise an opaque cast error;
     the frequency of a datetime index is deliberately not guessed.
     """
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     days = np.datetime64("2024-01-01") + np.arange(n)
     future_covariates = empty_covariates(n + 3)
-    post = draw_posterior(random.PRNGKey(3), fit, 60)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
     tree = to_datatree(
-        random.PRNGKey(2), fit, RandomWalkModel(), data, covariates, time_coord=list(days)
+        random.PRNGKey(2),
+        _model(),
+        posterior,
+        data,
+        covariates,
+        num_chains=2,
+        time_coord=list(days),
     )
     with pytest.raises(ValueError, match="pass explicit time_coord"):
         add_forecast_groups(tree, fc, future_covariates[n:])
@@ -182,9 +207,11 @@ def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
 
 def test_to_datatree_forecast_covariates_add_prediction_groups() -> None:
     """Covariates extending beyond the data attach the forecast groups in one call."""
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n + 5))
+    tree = to_datatree(
+        random.PRNGKey(2), _model(), posterior, data, empty_covariates(n + 5), num_chains=2
+    )
     assert "predictions" in tree.children
     assert "predictions_constant_data" in tree.children
     np.testing.assert_array_equal(tree["predictions"].coords["time"].values, np.arange(n, n + 5))
@@ -195,10 +222,12 @@ def test_to_datatree_forecast_covariates_add_prediction_groups() -> None:
 
 
 def test_to_datatree_forecast_keeps_mcmc_chain_structure() -> None:
-    """The predictions group preserves the fit's real (chain, draw) layout."""
-    fit, data, _ = _mcmc_fit(num_chains=2)
+    """The predictions group preserves the requested (chain, draw) layout."""
+    posterior, data, _ = _mcmc_posterior(num_chains=2)
     n = data.shape[-2]
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n + 4))
+    tree = to_datatree(
+        random.PRNGKey(2), _model(), posterior, data, empty_covariates(n + 4), num_chains=2
+    )
     preds = tree["predictions"]
     assert preds.sizes["chain"] == 2
     assert preds.sizes["draw"] == 50
@@ -206,18 +235,10 @@ def test_to_datatree_forecast_keeps_mcmc_chain_structure() -> None:
 
 
 def test_to_datatree_forecast_variational_draw_count() -> None:
-    """A variational fit forecasts with the same draws as the in-sample predictive."""
-    data = _series()
+    """A variational posterior forecasts with the same draws as the in-sample predictive."""
+    posterior, data, _ = _svi_posterior(num_draws=20)
     n = data.shape[-2]
-    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, empty_covariates(n), num_steps=40)
-    tree = to_datatree(
-        random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
-        data,
-        empty_covariates(n + 3),
-        num_predictive_samples=20,
-    )
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, empty_covariates(n + 3))
     preds = tree["predictions"]
     assert preds.sizes["chain"] == 1
     assert preds.sizes["draw"] == 20
@@ -226,15 +247,16 @@ def test_to_datatree_forecast_variational_draw_count() -> None:
 
 def test_to_datatree_forecast_full_length_time_coord_splits() -> None:
     """With a horizon, an explicit time_coord covers the full covariates length."""
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
     custom_time = list(range(300, 300 + n + 3))
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         empty_covariates(n + 3),
+        num_chains=2,
         time_coord=custom_time,
     )
     np.testing.assert_array_equal(tree["observed_data"].coords["time"].values, custom_time[:n])
@@ -243,45 +265,39 @@ def test_to_datatree_forecast_full_length_time_coord_splits() -> None:
 
 def test_to_datatree_forecast_rejects_insample_length_time_coord() -> None:
     """An in-sample-length time_coord with a horizon present raises by name."""
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
     with pytest.raises(ValueError, match="time_coord has length"):
         to_datatree(
             random.PRNGKey(2),
-            fit,
-            RandomWalkModel(),
+            _model(),
+            posterior,
             data,
             empty_covariates(n + 3),
+            num_chains=2,
             time_coord=list(range(n)),
         )
 
 
 def test_to_datatree_rejects_short_covariates() -> None:
     """Covariates shorter than the data raise a clear error instead of a shape failure."""
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
     with pytest.raises(ValueError, match="covariates cover"):
-        to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n - 3))
+        to_datatree(
+            random.PRNGKey(2), _model(), posterior, data, empty_covariates(n - 3), num_chains=2
+        )
 
 
 def test_to_datatree_coords_reach_forecast_groups() -> None:
     """User coords propagate to the forecast groups; the forecast time coordinate wins."""
-    data = _series()
+    posterior, data, _ = _mcmc_posterior(num_chains=1)
     n = data.shape[-2]
-    fit = fit_mcmc(
-        random.PRNGKey(1),
-        RandomWalkModel(),
-        data,
-        jnp.zeros((n, 2)),
-        num_warmup=50,
-        num_samples=50,
-        num_chains=1,
-    )
     labels = ["x0", "x1"]
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         jnp.zeros((n + 3, 2)),
         coords={"covariate_dim": labels},
@@ -295,17 +311,15 @@ def test_to_datatree_coords_reach_forecast_groups() -> None:
 
 def test_to_datatree_covariate_dims_panel_tensor() -> None:
     """3-D (channel, time, series) covariates keep their layout under covariate_dims."""
-    data = _series()
+    posterior, data, _ = _svi_posterior(num_draws=40)
     n = data.shape[-2]
     labels = ["availability", "discount", "holiday"]
-    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, jnp.zeros((3, n, 1)), num_steps=60)
     tree = to_datatree(
         random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         jnp.zeros((3, n + 2, 1)),
-        num_predictive_samples=40,
         coords={"channel": labels},
         covariate_dims=["channel", "time", "series"],
     )
@@ -321,31 +335,32 @@ def test_to_datatree_covariate_dims_panel_tensor() -> None:
 
 def test_to_datatree_rejects_wrong_covariate_dims_length() -> None:
     """A covariate_dims length mismatch raises a clear error before any sampling."""
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     with pytest.raises(ValueError, match="covariate_dims"):
         to_datatree(
             random.PRNGKey(2),
-            fit,
-            RandomWalkModel(),
+            _model(),
+            posterior,
             data,
             covariates,
+            num_chains=2,
             covariate_dims=["time"],
         )
 
 
 def test_add_forecast_groups_covariate_dims() -> None:
     """add_forecast_groups stores tensor covariates under the given dim names."""
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
     future_covariates = jnp.zeros((2, n + 5, 1))
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         future_covariates[..., :n, :],
+        num_chains=2,
         covariate_dims=["channel", "time", "series"],
     )
     out = add_forecast_groups(
@@ -367,17 +382,17 @@ def test_add_forecast_groups_inherits_covariate_dims() -> None:
     leaving constant_data and predictions_constant_data disagreeing on axis
     names.
     """
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         covariates,
+        num_chains=2,
         covariate_dims=["time", "feature"],
     )
     out = add_forecast_groups(tree, fc, future_covariates[n:])
@@ -389,17 +404,17 @@ def test_add_forecast_groups_rejects_mismatched_covariate_dims() -> None:
     """Explicit covariate_dims disagreeing with the tree's stored names raise."""
     from numpyro_forecast.exceptions import CovariateDimsError
 
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         covariates,
+        num_chains=2,
         covariate_dims=["time", "feature"],
     )
     with pytest.raises(CovariateDimsError, match="disagree with the names"):
@@ -412,18 +427,18 @@ def test_add_forecast_groups_inherited_dims_reject_wrong_ndim() -> None:
     """Inherited dims that cannot cover every covariates_future axis raise by name."""
     from numpyro_forecast.exceptions import CovariateDimsError
 
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
     insample_covariates = jnp.zeros((2, n, 1))
     future_covariates = empty_covariates(n + 5)
-    post = draw_posterior(random.PRNGKey(3), fit, 100)
-    fc = forecast(random.PRNGKey(4), RandomWalkModel(), post, data, future_covariates)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         insample_covariates,
+        num_chains=2,
         covariate_dims=["channel", "time", "series"],
     )
     with pytest.raises(CovariateDimsError, match="carry 3 axis names"):
@@ -440,9 +455,11 @@ def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.Mon
         return real(*args, **kwargs)
 
     monkeypatch.setattr(arviz_base, "dict_to_dataset", spy)
-    fit, data, _ = _mcmc_fit()
+    posterior, data, _ = _mcmc_posterior()
     n = data.shape[-2]
-    to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, empty_covariates(n + 2))
+    to_datatree(
+        random.PRNGKey(2), _model(), posterior, data, empty_covariates(n + 2), num_chains=2
+    )
     # The four in-sample groups plus predictions and predictions_constant_data.
     assert calls["count"] == 6
 
@@ -457,23 +474,24 @@ def test_all_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None
         return real(*args, **kwargs)
 
     monkeypatch.setattr(arviz_base, "dict_to_dataset", spy)
-    fit, data, covariates = _mcmc_fit()
-    to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    posterior, data, covariates = _mcmc_posterior()
+    to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     # posterior + posterior_predictive + observed_data + constant_data.
     assert calls["count"] == 4
 
 
 def test_posterior_time_site_shares_time_coord() -> None:
     """A per-time posterior site listed in posterior_dims shares the tree time coord."""
-    fit, data, covariates = _mcmc_fit()
+    posterior, data, covariates = _mcmc_posterior()
     n = data.shape[-2]
     custom_time = list(range(200, 200 + n))
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         covariates,
+        num_chains=2,
         time_coord=custom_time,
         posterior_dims={"drift": ["time", "obs_dim"]},
     )
@@ -486,26 +504,42 @@ def test_posterior_time_site_shares_time_coord() -> None:
 
 def test_posterior_dims_default_is_backward_compatible() -> None:
     """Without posterior_dims, per-time sites keep ArviZ's auto-named dims."""
-    fit, data, covariates = _mcmc_fit()
-    tree = to_datatree(random.PRNGKey(2), fit, RandomWalkModel(), data, covariates)
+    posterior, data, covariates = _mcmc_posterior()
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=2)
     assert "time" not in tree["posterior"]["drift"].dims
 
 
-def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Posterior draws and in-sample predictive must receive distinct subkeys.
+def test_to_datatree_rejects_non_divisible_num_chains() -> None:
+    """A posterior sample count not evenly divisible by num_chains raises by name."""
+    posterior = nuts_samples(18, num_warmup=20, num_samples=20)
+    data = _series(18)
+    covariates = empty_covariates(18)
+    with pytest.raises(
+        ValueError, match=r"posterior sample count 20 is not evenly divisible by num_chains 3"
+    ):
+        to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=3)
 
-    Spies on the ``draw_posterior``/``predict_in_sample`` names as looked up
-    inside ``convert``; a variational fit exercises both draws.
+
+def test_to_datatree_accepts_numpy_posterior() -> None:
+    """A NumPy posterior dict (host-offloaded draws) passes straight through."""
+    posterior, data, covariates = _mcmc_posterior(num_chains=1)
+    numpy_posterior = {name: np.asarray(value) for name, value in posterior.items()}
+    tree = to_datatree(random.PRNGKey(2), _model(), numpy_posterior, data, covariates)
+    assert tree["posterior"].sizes["chain"] == 1
+    assert tree["posterior"].sizes["draw"] == posterior["sigma"].shape[0]
+
+
+def test_to_datatree_splits_rng_key_for_forecast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The in-sample predictive and forecast draws receive distinct subkeys.
+
+    Spies on the ``predict_in_sample``/``forecast`` names as looked up inside
+    ``convert``; a horizon exercises both draws.
     """
     import numpyro_forecast.convert as convert_mod
 
     captured: dict[str, Array] = {}
-    real_draw = convert_mod.draw_posterior
     real_pred = convert_mod.predict_in_sample
-
-    def spy_draw(rng_key: Array, fit: object, num: int, **kwargs: object) -> object:
-        captured["post"] = rng_key
-        return real_draw(rng_key, fit, num, **kwargs)  # ty: ignore[invalid-argument-type]
+    real_forecast = convert_mod.forecast
 
     def spy_pred(
         rng_key: Array,
@@ -517,31 +551,28 @@ def test_to_datatree_splits_rng_key(monkeypatch: pytest.MonkeyPatch) -> None:
         captured["pred"] = rng_key
         return real_pred(rng_key, model, posterior, covariates, **kwargs)  # ty: ignore[invalid-argument-type]
 
-    monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
+    def spy_forecast(rng_key: Array, *args: object, **kwargs: object) -> object:
+        captured["forecast"] = rng_key
+        return real_forecast(rng_key, *args, **kwargs)  # ty: ignore[invalid-argument-type]
+
     monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
+    monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
 
-    data = _series()
-    covariates = empty_covariates(data.shape[-2])
-    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, covariates, num_steps=40)
+    posterior, data, _ = _svi_posterior(num_draws=20)
+    n = data.shape[-2]
     parent = random.PRNGKey(2)
-    to_datatree(parent, svi, RandomWalkModel(), data, covariates, num_predictive_samples=20)
+    to_datatree(parent, _model(), posterior, data, empty_covariates(n + 3))
 
-    assert not jnp.array_equal(captured["post"], captured["pred"])
-    assert not jnp.array_equal(captured["post"], parent)
+    assert not jnp.array_equal(captured["pred"], captured["forecast"])
     assert not jnp.array_equal(captured["pred"], parent)
+    assert not jnp.array_equal(captured["forecast"], parent)
 
 
 def test_to_datatree_deterministic_given_key() -> None:
     """Two calls with the same rng_key produce identical trees (derived split)."""
-    data = _series()
-    covariates = empty_covariates(data.shape[-2])
-    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, covariates, num_steps=40)
-    a = to_datatree(
-        random.PRNGKey(7), svi, RandomWalkModel(), data, covariates, num_predictive_samples=20
-    )
-    b = to_datatree(
-        random.PRNGKey(7), svi, RandomWalkModel(), data, covariates, num_predictive_samples=20
-    )
+    posterior, data, covariates = _svi_posterior(num_draws=20)
+    a = to_datatree(random.PRNGKey(7), _model(), posterior, data, covariates)
+    b = to_datatree(random.PRNGKey(7), _model(), posterior, data, covariates)
     np.testing.assert_array_equal(
         np.asarray(a["posterior_predictive"]["obs"]),
         np.asarray(b["posterior_predictive"]["obs"]),
@@ -555,24 +586,24 @@ def test_to_datatree_deterministic_given_key() -> None:
 # --- predictive_batch_size (issue #64) ----------------------------------------
 
 
-def _svi_fit_with_horizon(horizon: int = 5):  # type: ignore[no-untyped-def]
-    data = _series()
+def _svi_posterior_with_horizon(
+    num_draws: int, horizon: int = 5
+) -> tuple[dict[str, Array], Array, Array]:
+    posterior, data, _ = _svi_posterior(num_draws=num_draws)
     n = data.shape[-2]
-    svi = fit_svi(random.PRNGKey(1), RandomWalkModel(), data, empty_covariates(n), num_steps=40)
-    return svi, data, empty_covariates(n + horizon)
+    return posterior, data, empty_covariates(n + horizon)
 
 
 def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
     """Chunked predictive sampling produces the same tree layout as the default."""
-    svi, data, covariates = _svi_fit_with_horizon()
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     n = data.shape[-2]
     tree = to_datatree(
         random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         covariates,
-        num_predictive_samples=10,
         predictive_batch_size=4,
     )
     assert set(tree.children) == {
@@ -593,39 +624,20 @@ def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
 
 def test_to_datatree_predictive_batch_size_ge_samples_matches_default() -> None:
     """A batch size at or above the draw count hits the passthrough: identical tree."""
-    svi, data, covariates = _svi_fit_with_horizon()
-    default = to_datatree(
-        random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
-        data,
-        covariates,
-        num_predictive_samples=10,
-    )
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
+    default = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates)
     batched = to_datatree(
-        random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
-        data,
-        covariates,
-        num_predictive_samples=10,
-        predictive_batch_size=64,
+        random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=64
     )
     for group in default.children:
         xarray_testing.assert_equal(default[group].dataset, batched[group].dataset)
 
 
 def test_to_datatree_predictive_batch_size_deterministic_given_key() -> None:
-    svi, data, covariates = _svi_fit_with_horizon()
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     trees = [
         to_datatree(
-            random.PRNGKey(7),
-            svi,
-            RandomWalkModel(),
-            data,
-            covariates,
-            num_predictive_samples=10,
-            predictive_batch_size=4,
+            random.PRNGKey(7), _model(), posterior, data, covariates, predictive_batch_size=4
         )
         for _ in range(2)
     ]
@@ -633,70 +645,26 @@ def test_to_datatree_predictive_batch_size_deterministic_given_key() -> None:
         xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
 
 
-def test_to_datatree_forwards_batch_and_device_to_draw_posterior(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The posterior drawing gets the same memory knobs as the predictive sampling.
-
-    On a wide panel the posterior draw is the largest allocation of the whole
-    export, so ``predictive_batch_size``/``predictive_device`` must chunk and
-    offload it too (the GPU OOM behind the second issue #64 follow-up). This
-    also means the ``posterior`` group's draws change when chunking is enabled
-    (reproducible per ``rng_key`` and batch size), which is why no
-    posterior-group-unaffected invariant exists anymore.
-    """
-    import numpyro_forecast.convert as convert_mod
-
-    captured: dict[str, object] = {}
-    real_draw = convert_mod.draw_posterior
-
-    def spy_draw(*args: object, **kwargs: object) -> object:
-        captured["batch_size"] = kwargs["batch_size"]
-        captured["device"] = kwargs["device"]
-        return real_draw(*args, **kwargs)  # ty: ignore[invalid-argument-type]
-
-    monkeypatch.setattr(convert_mod, "draw_posterior", spy_draw)
-    svi, data, covariates = _svi_fit_with_horizon()
-    to_datatree(
-        random.PRNGKey(2),
-        svi,
-        RandomWalkModel(),
-        data,
-        covariates,
-        num_predictive_samples=10,
-        predictive_batch_size=4,
-    )
-    assert captured["batch_size"] == 4
-    assert captured["device"] == "host"
-
-
 def test_to_datatree_rejects_non_positive_predictive_batch_size() -> None:
     """The batch-size contract is enforced at the public to_datatree surface."""
-    svi, data, covariates = _svi_fit_with_horizon()
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     with pytest.raises(ValueError, match="batch_size must be positive"):
         to_datatree(
-            random.PRNGKey(2),
-            svi,
-            RandomWalkModel(),
-            data,
-            covariates,
-            num_predictive_samples=10,
-            predictive_batch_size=0,
+            random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=0
         )
 
 
 @pytest.mark.parametrize("other_device", [None, "host"])
 def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> None:
     """predictive_device is a placement knob, never a draws knob: equal trees."""
-    svi, data, covariates = _svi_fit_with_horizon()
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     trees = [
         to_datatree(
             random.PRNGKey(7),
-            svi,
-            RandomWalkModel(),
+            _model(),
+            posterior,
             data,
             covariates,
-            num_predictive_samples=10,
             predictive_batch_size=4,
             predictive_device=device,
         )
@@ -710,7 +678,11 @@ def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> 
 def test_to_datatree_forwards_predictive_device(
     monkeypatch: pytest.MonkeyPatch, predictive_device: str | None
 ) -> None:
-    """Both predictive calls receive the predictive_device (default ``"host"``)."""
+    """Both predictive calls receive the *resolved* predictive_device (default ``"host"``).
+
+    ``to_datatree`` resolves the placement once (``"host"`` becomes the CPU
+    backend device) and hands the same value to both drivers.
+    """
     import numpyro_forecast.convert as convert_mod
 
     captured: dict[str, object] = {}
@@ -728,31 +700,51 @@ def test_to_datatree_forwards_predictive_device(
     monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
     monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
 
-    svi, data, covariates = _svi_fit_with_horizon()
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     if predictive_device is None:
         to_datatree(
             random.PRNGKey(2),
-            svi,
-            RandomWalkModel(),
+            _model(),
+            posterior,
             data,
             covariates,
-            num_predictive_samples=10,
             predictive_batch_size=4,
             predictive_device=None,
         )
     else:
         # The default must forward "host", so predictive_device is deliberately omitted.
         to_datatree(
-            random.PRNGKey(2),
-            svi,
-            RandomWalkModel(),
-            data,
-            covariates,
-            num_predictive_samples=10,
-            predictive_batch_size=4,
+            random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=4
         )
-    assert captured["predict_in_sample"] == predictive_device
-    assert captured["forecast"] == predictive_device
+    expected = None if predictive_device is None else jax.devices("cpu")[0]
+    assert captured["predict_in_sample"] == expected
+    assert captured["forecast"] == expected
+
+
+def test_to_datatree_forwards_numpy_sentinel_without_cpu_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a CPU backend the default ``"host"`` resolves to ``"numpy"`` for both drivers."""
+    import numpyro_forecast.convert as convert_mod
+
+    captured: dict[str, object] = {}
+    real_pred = convert_mod.predict_in_sample
+    real_forecast = convert_mod.forecast
+
+    def spy_pred(*args: object, **kwargs: object) -> object:
+        captured["predict_in_sample"] = kwargs["device"]
+        return real_pred(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    def spy_forecast(*args: object, **kwargs: object) -> object:
+        captured["forecast"] = kwargs["device"]
+        return real_forecast(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(convert_mod, "predict_in_sample", spy_pred)
+    monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
+    to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=4)
+    assert captured == {"predict_in_sample": "numpy", "forecast": "numpy"}
 
 
 def test_to_datatree_default_works_without_cpu_backend(
@@ -762,42 +754,54 @@ def test_to_datatree_default_works_without_cpu_backend(
 
     ``numpyro.set_platform("cuda")`` restricts ``jax_platforms`` to cuda only,
     so ``jax.devices("cpu")`` raises. The default ``predictive_device="host"``
-    never resolves a backend, so the export succeeds with no warning.
+    then takes the backend-free NumPy path (one ``jax.device_get`` per chunk),
+    so the export succeeds with no warning.
     """
-    real_devices = jax.devices
-
-    def fail_cpu_devices(backend: str | None = None) -> list[jax.Device]:
-        if backend == "cpu":
-            msg = "Unknown backend cpu. Available backends are ['cuda']"
-            raise RuntimeError(msg)
-        return real_devices(backend)
-
-    monkeypatch.setattr(jax, "devices", fail_cpu_devices)
-    svi, data, covariates = _svi_fit_with_horizon()
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         tree = to_datatree(
-            random.PRNGKey(7),
-            svi,
-            RandomWalkModel(),
-            data,
-            covariates,
-            num_predictive_samples=10,
-            predictive_batch_size=4,
+            random.PRNGKey(7), _model(), posterior, data, covariates, predictive_batch_size=4
         )
     assert "posterior_predictive" in tree.children
     assert "predictions" in tree.children
 
 
+def test_to_datatree_cpu_without_cpu_backend_warns_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit ``predictive_device="cpu"`` with no CPU backend warns once per export.
+
+    The device is resolved once and the resolved ``"numpy"`` sentinel is handed
+    to both predictive drivers, so the unmet request is reported a single time.
+    """
+    monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
+    posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
+    with warnings.catch_warnings(record=True) as records:
+        warnings.simplefilter("always")
+        tree = to_datatree(
+            random.PRNGKey(7),
+            _model(),
+            posterior,
+            data,
+            covariates,
+            predictive_batch_size=4,
+            predictive_device="cpu",
+        )
+    assert "predictions" in tree.children
+    fallback = [r for r in records if "falls back to device='host'" in str(r.message)]
+    assert len(fallback) == 1, [str(r.message) for r in records]
+
+
 def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:
-    fit, data, _covariates = _mcmc_fit(num_chains=2)
+    posterior, data, _covariates = _mcmc_posterior(num_chains=2)
     n = data.shape[-2]
     tree = to_datatree(
         random.PRNGKey(2),
-        fit,
-        RandomWalkModel(),
+        _model(),
+        posterior,
         data,
         empty_covariates(n + 4),
+        num_chains=2,
         predictive_batch_size=16,
     )
     pp = tree["posterior_predictive"]["obs"]

@@ -1,53 +1,17 @@
 """Shared type aliases used across the package.
 
 Keeping these in a dependency-free module avoids import cycles between
-``forecaster`` and ``evaluate``.
+``evaluate`` and the rest of the package.
 """
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import Protocol, runtime_checkable
 
 import jax
-
-if TYPE_CHECKING:
-    import optax
-    from numpyro.infer.autoguide import AutoGuide
-    from numpyro.infer.mcmc import MCMCKernel
-    from numpyro.optim import _NumPyroOptim
-
-    from numpyro_forecast.forecaster import _BaseForecaster
+import numpy as np
 
 Array = jax.Array
 """A JAX array (alias of :class:`jax.Array`)."""
-
-if TYPE_CHECKING:
-    # Precise unions for static checkers. At runtime (the ``else`` branch) each is
-    # ``object`` so the beartype import hook accepts any resolvable form without
-    # forcing an ``optax``/``numpyro`` import at package import time.
-    OptimizerLike = float | int | _NumPyroOptim | optax.GradientTransformation | None
-    """An optimizer specification accepted by :func:`~numpyro_forecast.functional.svi.fit_svi`.
-
-    Resolved by :func:`~numpyro_forecast.functional.svi.resolve_optimizer`: ``None``
-    (default ``Adam``), a positive scalar learning rate, an
-    ``optax.GradientTransformation``, or a NumPyro ``_NumPyroOptim``.
-    """
-
-    GuideLike = AutoGuide | type[AutoGuide] | Callable[..., object] | None
-    """A guide specification accepted by :func:`~numpyro_forecast.functional.svi.fit_svi`.
-
-    Resolved by :func:`~numpyro_forecast.functional.svi.resolve_guide`: ``None``
-    (``AutoNormal``), an ``AutoGuide`` instance, an ``AutoGuide`` subclass or a
-    ``functools.partial`` factory of one, or a hand-written guide function.
-    """
-
-    KernelLike = MCMCKernel | type[MCMCKernel] | None
-    """A kernel specification accepted by :func:`~numpyro_forecast.functional.mcmc.fit_mcmc`.
-
-    Resolved by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel`: ``None``
-    (``NUTS``), an ``MCMCKernel`` instance, or an ``MCMCKernel`` subclass.
-    """
-else:
-    OptimizerLike = GuideLike = KernelLike = object
 
 BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
@@ -71,23 +35,65 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 :func:`~numpyro_forecast.metrics.make_mase`.
 """
 
-ForecastModel = Callable[..., None]
-"""A NumPyro forecasting model callable ``(covariates, data=None) -> None``.
 
-Both an OOP :class:`~numpyro_forecast.forecaster.ForecastingModel` instance and a
-plain function built by :func:`numpyro_forecast.functional.models.forecasting_model`
-satisfy this. Typed loosely (a bare ``Callable``) on purpose: the package's
-beartype import hook performs an ``isinstance``-style check on annotated
-parameters, so a nominal ``ForecastingModel`` hint would reject functional
-models at runtime, whereas ``Callable`` accepts either.
-"""
+@runtime_checkable
+class ForecastModel(Protocol):
+    """A NumPyro forecasting model: a callable ``(covariates, data=None) -> None``.
+
+    Any plain function with this signature satisfies this Protocol structurally
+    (for example, one that derives its
+    :class:`~numpyro_forecast.functional.models.Horizon` from the shapes via
+    ``Horizon.from_data`` and calls the functional primitives), so nothing
+    needs to subclass it. The parameters are positional-only so a user model's
+    own parameter names (``cov``, ``y``, ...) stay free instead of being forced
+    to match ``covariates``/``data``.
+
+    ``ty`` checks call sites against this signature structurally (duck typing),
+    which is the main payoff of the Protocol over a bare ``Callable`` alias.
+    At runtime, the beartype import hook's ``isinstance`` check on a
+    ``runtime_checkable`` Protocol only verifies that the named methods exist
+    (Python runtime protocols never inspect signatures), so it reduces to
+    ``callable(model)``: a model missing the ``data=None`` default still
+    passes this check and only fails loudly at the first driver call that
+    invokes it with ``data=None``.
+    """
+
+    def __call__(self, covariates: Array, data: Array | None = None, /) -> None:
+        """Run the forecasting model against ``covariates`` and optional ``data``."""
+
 
 ModelFactory = Callable[[], ForecastModel]
-"""A zero-argument callable returning a fresh forecasting model (OOP or functional)."""
+"""A zero-argument callable returning a fresh :class:`ForecastModel` instance."""
 
-ForecasterFactory = Callable[..., "_BaseForecaster"]
-"""Callable ``(rng_key, model, data, covariates, **options)`` returning a forecaster.
+ForecastFn = Callable[..., Array | np.ndarray]
+"""A closure that fits a model on a training window and forecasts its test horizon.
 
-Typed loosely (like Pyro's ``forecaster_fn``) because per-backend options differ;
-the concrete classes are :class:`Forecaster` and :class:`HMCForecaster`.
+Called by :func:`~numpyro_forecast.evaluate.backtest` positionally as
+``forecast_fn(rng_key, model, train_data, train_covariates, full_covariates,
+num_samples, *, batch_size=None)``, where ``full_covariates`` spans the *full*
+window (train followed by test, i.e. ``covariates[..., t0:t2, :]``). Must return
+forecast samples with the sample axis first, shape
+``(num_samples, *batch, t2 - t1, obs)``. ``batch_size`` is forwarded unchanged
+from ``backtest`` so a chunked closure can bound its own device memory; a
+closure may return draws kept in host memory (e.g. via ``device="host"``, to
+cap peak accelerator usage): a jax Array committed to the CPU backend device
+or, without a CPU backend, a NumPy array. Every metric in
+:data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred`` or
+``truth`` (or both), in any mix and regardless of ``batch_size``, moving a
+host-resident operand to device memory first where needed. Returning draws
+already on-device still avoids the extra host-to-device hop for the metrics
+scored every window. Typed loosely (a bare
+``Callable``, like :data:`Metric`) because per-backend fit options differ; the
+exact shapes are pinned above rather than in the type itself.
+"""
+
+InSampleFn = Callable[..., Array | np.ndarray]
+"""A closure that fits a model on a training window and scores its in-sample fit.
+
+Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
+``eval_train=True``) positionally as ``in_sample_fn(rng_key, model, train_data,
+train_covariates, num_samples, *, batch_size=None)``. Must return in-sample
+posterior-predictive samples with the sample axis first, shape
+``(num_samples, *batch, t1 - t0, obs)``. The same ``batch_size``/host-offload
+notes as :data:`ForecastFn` apply.
 """

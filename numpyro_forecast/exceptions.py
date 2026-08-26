@@ -32,15 +32,15 @@ class BacktestWindowError(NumpyroForecastError, ValueError):
 
 
 class VectorizedGuideError(NumpyroForecastError, ValueError):
-    """The vectorized backtest requires an ``AutoGuide``.
+    """The vectorized backtest requires an ``AutoGuide`` instance.
 
-    Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when the
-    resolved guide is hand-written: those are not vmappable, use
+    Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
+    ``guide`` is hand-written: those are not vmappable, use
     :func:`~numpyro_forecast.evaluate.backtest` instead.
     """
 
     default_message = (
-        "backtest_vectorized requires an AutoGuide (guide resolves to one); "
+        "backtest_vectorized requires an AutoGuide instance; "
         "hand-written guides are not vmappable here, use backtest() instead."
     )
 
@@ -61,53 +61,6 @@ class VectorizedMetricError(NumpyroForecastError, TypeError):
     )
 
 
-class OptimizerResolutionError(NumpyroForecastError, TypeError):
-    """An optimizer specification could not be resolved.
-
-    Raised by :func:`~numpyro_forecast.functional.svi.resolve_optimizer` for
-    boolean inputs of any form (``bool`` is an ``int`` subclass, so a bool
-    would silently mean ``Adam(1.0)``; the default message) and for any other
-    unrecognized type.
-    """
-
-    default_message = (
-        "resolve_optimizer() does not accept bool; pass a positive float learning "
-        "rate, an optax.GradientTransformation, a numpyro optimizer, or None."
-    )
-
-
-class GuideResolutionError(NumpyroForecastError, TypeError):
-    """A guide specification could not be resolved.
-
-    Raised by :func:`~numpyro_forecast.functional.svi.resolve_guide` for a
-    callable shaped like a guide *factory* (the default message) or for an
-    unsupported type.
-    """
-
-    default_message = (
-        "resolve_guide() received a callable taking a single required positional "
-        "argument and no defaults. This is ambiguous: it looks like a guide *factory* "
-        "(e.g. `lambda model: AutoNormal(model)`), which must be passed as the class "
-        "or a functools.partial of it, not a lambda; or it is a hand-written guide, "
-        "which must use the model signature `(covariates, data=None)`."
-    )
-
-
-class GuideSampleArgsError(NumpyroForecastError, ValueError):
-    """Drawing from a hand-written guide needs the in-sample arguments.
-
-    Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` when an
-    :class:`~numpyro_forecast.functional.svi.SVIFit` holding a hand-written guide
-    was constructed without its in-sample covariates/data.
-    """
-
-    default_message = (
-        "drawing from a hand-written guide requires the in-sample covariates/data, "
-        "which this SVIFit was constructed without. Fit via fit_svi (which records "
-        "them) or provide them explicitly."
-    )
-
-
 class CovariateDimsError(NumpyroForecastError, ValueError):
     """Covariate dimension names are inconsistent or malformed.
 
@@ -120,23 +73,18 @@ class CovariateDimsError(NumpyroForecastError, ValueError):
     """
 
 
-class KernelResolutionError(NumpyroForecastError, TypeError):
-    """A kernel specification could not be resolved.
-
-    Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` for a type
-    that is neither ``None``, an ``MCMCKernel`` subclass, nor an ``MCMCKernel``
-    instance.
-    """
-
-
 class KernelConfigError(NumpyroForecastError, ValueError):
-    """A kernel is combined with an invalid configuration.
+    """A ``contrib.blackjax`` kernel is run unbound or misconfigured.
 
-    Raised by :func:`~numpyro_forecast.functional.mcmc.resolve_kernel` when
-    ``kernel_kwargs`` accompany an already-constructed instance, and by
-    :func:`~numpyro_forecast.functional.mcmc.fit_mcmc` for run-config constraints
-    (ensemble samplers need multiple vectorized chains; BlackJAX kernels need
-    sequential chains).
+    Raised by :meth:`~numpyro_forecast.contrib.blackjax._BlackjaxKernel.init`
+    when the kernel was constructed with no model bound (e.g.
+    ``BlackjaxNUTSKernel()`` instead of ``BlackjaxNUTSKernel(model)``); the fix
+    is to pass the model as the kernel's first argument at construction time,
+    before handing the kernel to :class:`~numpyro.infer.MCMC`. BlackJAX kernels
+    also require ``chain_method="sequential"`` and
+    ``num_warmup=0``; see the "Run configuration" section of
+    :class:`~numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel` and its
+    sibling kernels for why, and how misconfiguring either surfaces.
     """
 
 
@@ -158,16 +106,20 @@ class MVNLayoutError(NumpyroForecastError, NotImplementedError):
 
 
 class DeviceMemoryError(NumpyroForecastError, RuntimeError):
-    """The accelerator ran out of memory during posterior or predictive sampling.
+    """A memory pool ran out during posterior or predictive sampling.
 
     Raised by :func:`~numpyro_forecast.functional.posterior.draw_posterior` and
     the predictive drivers (:func:`~numpyro_forecast.functional.prediction.forecast`,
     :func:`~numpyro_forecast.functional.prediction.predict_in_sample`, and
     everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
-    when XLA reports ``RESOURCE_EXHAUSTED``. The message embeds the device's
-    memory budget and the lever: the per-chunk footprint scales linearly with
-    ``batch_size`` times the panel width, so lower (or set) ``batch_size``,
-    free large device arrays still referenced elsewhere, and keep results off
-    the accelerator with ``device="host"``. The original XLA error is chained
-    as ``__cause__``.
+    when XLA reports ``RESOURCE_EXHAUSTED``. For an accelerator OOM the message
+    embeds the device's memory budget and the lever: the per-chunk footprint
+    scales linearly with ``batch_size`` times the panel width, so lower (or
+    set) ``batch_size``, free large device arrays still referenced elsewhere,
+    and keep results off the accelerator with ``device="host"``. For a pinned
+    host pool OOM (``Out of host memory``, reached only through an explicit
+    ``device="pinned_host"`` or the caller's own pinned arrays) it names the
+    pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
+    ``device="host"``, which lands results in pageable host memory, instead.
+    The original XLA error is chained as ``__cause__``.
     """
