@@ -172,7 +172,15 @@ exclude_lines = [
 # in .pre-commit-config.yaml has no effect. Excluding here, in ty's own
 # project config, is what `ty check`/`uv check` (used by both the hook and
 # CI) actually honor.
-exclude = ["docs/examples/**"]
+exclude = [
+    "docs/examples/availability_tsb.ipynb",
+    "docs/examples/croston.ipynb",
+    "docs/examples/electricity_forecast.ipynb",
+    "docs/examples/electricity_forecast_calibration.ipynb",
+    "docs/examples/hierarchical_forecasting_1.ipynb",
+    "docs/examples/hierarchical_forecasting_2.ipynb",
+    "docs/examples/tsb.ipynb",
+]
 
 [tool.ty.environment]
 python-version = "3.12"
