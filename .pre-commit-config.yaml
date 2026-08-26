@@ -14,17 +14,6 @@ repos:
     rev: v0.0.72
     hooks:
       - id: ty
-        exclude: ^docs/examples/
-        # TODO(refactor3): temporary during the v0.3.0 integration window; example
-        # notebooks still call the pre-refactor API and are re-typechecked as they
-        # are rewritten (PR-A Task 12, PR-E). Remove this exclude at the integration merge.
-        #
-        # Note: the vendored hook hardcodes pass_filenames: false and
-        # always_run: true (it always checks the whole project), so this
-        # per-file exclude alone does not stop it from scanning docs/examples/;
-        # the exclusion that actually takes effect is [tool.ty.src] in
-        # pyproject.toml, which `ty check`/`uv check` honor directly. Keep both
-        # in sync and remove both at the integration merge.
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
