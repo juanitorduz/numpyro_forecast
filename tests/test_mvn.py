@@ -9,11 +9,8 @@ from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
 from numpyro_forecast.exceptions import MVNLayoutError
-from numpyro_forecast.functional import (
-    Horizon,
-    draw_posterior,
-    predict,
-)
+from numpyro_forecast.models import Horizon, predict
+from numpyro_forecast.predictive import draw_posterior
 from numpyro_forecast.surgery import (
     _mvn_time_params,
     prefix_condition,

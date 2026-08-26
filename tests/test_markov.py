@@ -12,13 +12,8 @@ from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.functional import (
-    Horizon,
-    draw_posterior,
-    forecast,
-    markov_time_series,
-    predict,
-)
+from numpyro_forecast.models import Horizon, markov_time_series, predict
+from numpyro_forecast.predictive import draw_posterior, forecast
 from tests.conftest import empty_covariates
 
 PHI = 0.85

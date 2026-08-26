@@ -120,7 +120,7 @@ print("CRPS:", eval_crps(samples, truth[t_obs:]))
 
 ## Two APIs: functional core and OOP shim
 
-The package is built around a **pure functional core** (`numpyro_forecast.functional`)
+The package is built around a **pure functional core** (`numpyro_forecast.models` and `numpyro_forecast.predictive`)
 and a thin **object-oriented shim** (`numpyro_forecast.forecaster`) that ports Pyro's
 class-based API. The two are fully interchangeable: both produce the same NumPyro
 model callable `(covariates, data=None)` and consume the same posterior dict of latent
@@ -151,7 +151,7 @@ from numpyro.infer.reparam import LocScaleReparam
 
 from numpyro_forecast.evaluate import eval_crps
 from numpyro_forecast.features import fourier_features
-from numpyro_forecast.functional import (
+from numpyro_forecast import (
     Horizon,
     draw_posterior,
     fit_svi,

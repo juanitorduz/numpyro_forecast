@@ -41,7 +41,7 @@ from conftest import (
 from jax import random
 
 from numpyro_forecast.convert import to_datatree
-from numpyro_forecast.functional import draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 
 
 def _is_cpu_target(device: object) -> bool:

@@ -232,7 +232,7 @@ def test_chunked_metrics_accept_host_committed_inputs(
 
     :func:`~numpyro_forecast.evaluate._chunked_cell_metric` slices ``pred``
     and ``truth`` into cell blocks through
-    :func:`~numpyro_forecast.functional._offload._leaf_view` rather than the
+    :func:`~numpyro_forecast._offload._leaf_view` rather than the
     fused kernel used by the unchunked path, so it needs its own coverage: any
     mix of host-committed/device-resident inputs must reproduce the
     all-device, unchunked result.
@@ -1106,7 +1106,7 @@ def test_rolling_backtest_reuse_model_predict_cache(
     """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
     import jax
 
-    from numpyro_forecast.functional.prediction import _predict
+    from numpyro_forecast.predictive import _predict
 
     duration = 80
     train, test, stride = 25, 5, 5

@@ -77,22 +77,22 @@ reference:
       - typing.ForecastFn
       - typing.InSampleFn
 
-  - title: "Functional core: model primitives"
-    desc: Pure functional primitives for the train/forecast split.
+  - title: Model building blocks
+    desc: Plain model functions that register the train/forecast sites for you.
     contents:
-      - functional.models.Horizon
-      - functional.models.Transition
-      - functional.models.time_series
-      - functional.models.markov_time_series
-      - functional.models.predict
-      - functional.models.predict_glm
+      - models.Horizon
+      - models.Transition
+      - models.time_series
+      - models.markov_time_series
+      - models.predict
+      - models.predict_glm
 
-  - title: "Functional core: posterior and prediction"
+  - title: Producing draws
     desc: Drawing posterior samples and generating forecasts and in-sample predictions.
     contents:
-      - functional.posterior.draw_posterior
-      - functional.prediction.forecast
-      - functional.prediction.predict_in_sample
+      - predictive.draw_posterior
+      - predictive.forecast
+      - predictive.predict_in_sample
 
   - title: Backtesting & evaluation
     desc: Rolling-window backtesting and forecast metrics.

@@ -14,7 +14,7 @@ def _zeros_like_data(data: Array, duration: int) -> Array:
     """Return zeros shaped like ``data`` with the time axis ``-2`` set to ``duration``.
 
     Shared core of :func:`zero_data_like` and
-    :attr:`numpyro_forecast.functional.models.Horizon.zero_data`: it exposes the
+    :attr:`numpyro_forecast.models.Horizon.zero_data`: it exposes the
     shape/dtype of the data over the full forecast horizon without leaking
     observed values into the model.
     """
@@ -28,7 +28,7 @@ def zero_data_like(data: Array, covariates: Array) -> Array:
     Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
     full forecast horizon without leaking observed values into the model. The
     functional API exposes the equivalent value as
-    :attr:`numpyro_forecast.functional.models.Horizon.zero_data`.
+    :attr:`numpyro_forecast.models.Horizon.zero_data`.
 
     Parameters
     ----------

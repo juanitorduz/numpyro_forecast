@@ -1,5 +1,6 @@
 """Tests for functional predictive sampling (``functional.prediction``)."""
 
+import os
 import subprocess
 import sys
 import warnings
@@ -24,13 +25,9 @@ from jax import random
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.autoguide import AutoNormal
 
-from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.functional import (
-    draw_posterior,
-    forecast,
-    predict_in_sample,
-)
-from numpyro_forecast.functional._offload import (
+import numpyro_forecast
+from numpyro_forecast._offload import (
+    _WARNING_SKIP_PREFIXES,
     _device_view,
     _draw_chunked,
     _host_memory_kind,
@@ -43,11 +40,15 @@ from numpyro_forecast.functional._offload import (
     _stitch_chunks,
     _transfer,
 )
-from numpyro_forecast.functional.prediction import (
+from numpyro_forecast.exceptions import DeviceMemoryError
+from numpyro_forecast.predictive import (
     _chunk_indices,
     _chunked_draws,
     _predict,
     _sample_axis_size,
+    draw_posterior,
+    forecast,
+    predict_in_sample,
 )
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -1095,6 +1096,9 @@ def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPat
     matching = [r for r in records if "falls back to device='host'" in str(r.message)]
     assert [r.filename for r in matching] == [__file__]
     assert_numpy_host(hosted)
+    # The package prefix must be exactly the package directory: one level too high
+    # would skip the whole checkout (tests included) and misattribute the warning.
+    assert _WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
 
 
 def test_predictive_oom_reports_batch_size() -> None:

@@ -1,8 +1,8 @@
 """Device-offload helpers shared by the chunked posterior and predictive drivers.
 
-Both the posterior drivers (:func:`~numpyro_forecast.functional.posterior.draw_posterior`,
+Both the posterior drivers (:func:`~numpyro_forecast.predictive.draw_posterior`,
 :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`) and the predictive
-drivers in :mod:`~numpyro_forecast.functional.prediction` draw large sample arrays
+drivers in :mod:`~numpyro_forecast.predictive` draw large sample arrays
 in fixed-size chunks and move each chunk off the accelerator before the next one
 is produced. The helpers here own the device semantics of that loop:
 :func:`_resolve_device` turns the public ``device`` argument into a concrete
@@ -12,7 +12,7 @@ target (a :class:`jax.Device`, the ``"pinned_host"`` fallback sentinel, or
 them back onto the accelerator. :func:`_draw_chunked` is the shared chunk-and-transfer
 loop itself: it owns batch-size validation, the single-shot passthrough, key
 splitting, and the per-chunk draw/transfer/stitch sequence, so
-:func:`~numpyro_forecast.functional.posterior.draw_posterior` and
+:func:`~numpyro_forecast.predictive.draw_posterior` and
 :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples` differ only in the
 ``draw_fn`` they supply.
 
@@ -48,8 +48,8 @@ array committed to an accelerator it raises (``Received incompatible
 devices``); a pinned array raises on any mix (``memory_space of all inputs
 ... must be the same``); a NumPy result simply behaves as NumPy. The
 documented contract is: feed a host result straight into this package's own drivers
-(:func:`~numpyro_forecast.functional.prediction.forecast`,
-:func:`~numpyro_forecast.functional.prediction.predict_in_sample`,
+(:func:`~numpyro_forecast.predictive.forecast`,
+:func:`~numpyro_forecast.predictive.predict_in_sample`,
 :func:`~numpyro_forecast.convert.to_datatree`, and every evaluation metric in
 :mod:`~numpyro_forecast.evaluate` and :mod:`~numpyro_forecast.metrics`), which
 all accept host-committed leaves in any mix with device-resident ones, or
@@ -92,9 +92,9 @@ array's own device. Both are idempotent under :func:`_resolve_device`.
 _WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
     os.path.dirname(os.path.abspath(path))
     for path in (
-        os.path.dirname(__file__),  # numpyro_forecast/ (this file lives in functional/)
-        jaxtyping.__file__,
-        beartype.__file__,
+        __file__,  # numpyro_forecast/ (this file lives in the package root)
+        jaxtyping.__file__,  # <site-packages>/jaxtyping/
+        beartype.__file__,  # <site-packages>/beartype/
     )
 )
 """Directories skipped when attributing warnings, so they point at the caller's frame.
@@ -668,7 +668,7 @@ def _draw_chunked(
 ) -> dict[str, Array | np.ndarray]:
     """Draw ``num_samples`` samples from ``draw_fn`` in fixed-size, offloaded chunks.
 
-    Shared chunk-and-transfer loop for :func:`~numpyro_forecast.functional.posterior.draw_posterior`
+    Shared chunk-and-transfer loop for :func:`~numpyro_forecast.predictive.draw_posterior`
     and :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`. With
     ``batch_size`` ``None`` (or at least ``num_samples``) ``draw_fn`` is called once
     for the full count with ``rng_key`` itself (the single-shot passthrough).

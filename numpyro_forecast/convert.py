@@ -23,10 +23,10 @@ from jax import random
 from jax.typing import ArrayLike
 from jaxtyping import Float, Num
 
+from numpyro_forecast._offload import _resolve_device
+from numpyro_forecast._validation import _require_covariates_cover_data
 from numpyro_forecast.exceptions import CovariateDimsError
-from numpyro_forecast.functional import forecast, predict_in_sample
-from numpyro_forecast.functional._offload import _resolve_device
-from numpyro_forecast.functional._validation import _require_covariates_cover_data
+from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
 
 _SAMPLE_DIMS = ["chain", "draw"]
@@ -244,7 +244,7 @@ def to_datatree(
     r"""Convert an already-drawn posterior into an ArviZ-schema :class:`xarray.DataTree`.
 
     Posterior-first: callers draw their own posterior (``mcmc.get_samples()``
-    for MCMC, :func:`~numpyro_forecast.functional.posterior.draw_posterior` for a
+    for MCMC, :func:`~numpyro_forecast.predictive.draw_posterior` for a
     variational fit) and pass it in; ``to_datatree`` never draws a posterior of
     its own. ``rng_key`` is consumed only by the in-sample posterior-predictive
     draws and, when a forecast horizon is present, the forecast draws.
@@ -259,7 +259,7 @@ def to_datatree(
     posterior
         Posterior samples of the latent sites, with a single flattened sample
         axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
-        :func:`~numpyro_forecast.functional.posterior.draw_posterior`).
+        :func:`~numpyro_forecast.predictive.draw_posterior`).
         Host-committed leaves (the output of ``draw_posterior(...,
         device="host")``) and NumPy leaves are accepted directly.
     data
@@ -269,7 +269,7 @@ def to_datatree(
         ``data`` along the time axis (the package-wide shape convention for a
         forecast horizon), the trailing rows are treated as future covariates:
         the returned tree additionally carries ``predictions`` (forecast ``obs``
-        draws from :func:`~numpyro_forecast.functional.prediction.forecast`) and
+        draws from :func:`~numpyro_forecast.predictive.forecast`) and
         ``predictions_constant_data`` groups.
     num_chains
         Number of chains to split ``posterior``'s flattened sample axis into
@@ -297,24 +297,17 @@ def to_datatree(
     predictive_device
         Where the predictive draws are moved as they are sampled, forwarded to
         the ``device`` argument of
-        :func:`~numpyro_forecast.functional.prediction.predict_in_sample` and
-        :func:`~numpyro_forecast.functional.prediction.forecast`. It is
-        resolved once and the same placement is handed to both. The default
-        ``"host"`` keeps the predictive draws in pageable host memory, which
-        is what bounds accelerator memory when ``predictive_batch_size`` is
-        set: with the JAX CPU backend initialized every chunk is committed to
-        ``jax.devices("cpu")[0]`` (jax Arrays the tree views as NumPy without a
-        copy); without it (for example after ``numpyro.set_platform("cuda")``,
-        or a ``JAX_PLATFORMS`` preset) every chunk is copied with
-        :func:`jax.device_get` (NumPy arrays), so no CPU backend is needed and
-        nothing is pinned. ``"pinned_host"`` uses the accelerator's pinned
-        host memory kind instead (capped at 64 GB by default on CUDA,
-        ``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``). A :class:`jax.Device` or
-        platform name like ``"cpu"`` commits the draws to that device
-        (``"cpu"`` warns and takes the NumPy path when the CPU backend is
-        missing); pass ``None`` to keep the draws on the default device
-        (chunked compute without per-chunk host transfers, for when the draws
-        fit on the accelerator and transfers would dominate runtime).
+        :func:`~numpyro_forecast.predictive.predict_in_sample` and
+        :func:`~numpyro_forecast.predictive.forecast` (the placement contract
+        of :func:`~numpyro_forecast.predictive.draw_posterior`). It is resolved
+        once and the same placement is handed to both, so an unmet ``"cpu"``
+        warns once per export. The default ``"host"`` keeps the predictive
+        draws in pageable host memory (jax Arrays the tree views as NumPy
+        without a copy, or NumPy arrays when no CPU backend is initialized),
+        which is what bounds accelerator memory when ``predictive_batch_size``
+        is set; pass ``None`` to keep the draws on the default device (chunked
+        compute without per-chunk host transfers, for when the draws fit on
+        the accelerator and transfers would dominate runtime).
     coords
         Optional extra coordinates; these take precedence over the generated
         ``time`` coordinate. They also propagate to the forecast groups, where
@@ -365,7 +358,7 @@ def to_datatree(
     RuntimeError
         If ``predictive_device="pinned_host"`` is requested on a device that
         exposes no host memory kind (see
-        :func:`~numpyro_forecast.functional._offload._host_memory_kind`).
+        :func:`~numpyro_forecast._offload._host_memory_kind`).
 
     Warns
     -----
@@ -378,7 +371,7 @@ def to_datatree(
     -----
     ``to_datatree`` no longer accepts a fit object or draws a posterior itself
     (no ``num_predictive_samples``, no internal
-    :func:`~numpyro_forecast.functional.posterior.draw_posterior` call): callers
+    :func:`~numpyro_forecast.predictive.draw_posterior` call): callers
     draw the posterior first and pass it in. The ``variational``/``is_mcmc``
     attrs previously stamped on the ``posterior`` group are gone too, since a
     fit type is no longer knowable from a plain posterior dict; use
@@ -524,7 +517,7 @@ def add_forecast_groups(
         continued).
     forecast_samples
         Forecast draws shaped ``(num_samples, future, obs)`` from
-        :func:`~numpyro_forecast.functional.prediction.forecast`.
+        :func:`~numpyro_forecast.predictive.forecast`.
     covariates_future
         Future covariates shaped ``(future, covariate_dim)``, or any layout
         with time at axis ``-2`` when ``covariate_dims`` names the axes.

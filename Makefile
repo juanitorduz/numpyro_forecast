@@ -9,7 +9,7 @@ tests:
 # Re-record per-test runtimes for pytest-split (must run sequentially, without
 # xdist) and refresh the committed .test_durations file.
 store-durations:
-	uv run pytest --store-durations
+	uv run pytest --store-durations --clean-durations
 
 prek:
 	uv run prek run --all-files

@@ -15,7 +15,7 @@ from numpyro.infer.autoguide import AutoNormal
 from numpyro_forecast.datasets import bart_available, load_bart_hierarchical, load_bart_weekly
 from numpyro_forecast.evaluate import eval_crps
 from numpyro_forecast.features import fourier_features
-from numpyro_forecast.functional import draw_posterior, forecast
+from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
 PosteriorFactory = Callable[[Array, ForecastModel, Array, Array], dict[str, Array]]

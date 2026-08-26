@@ -35,7 +35,7 @@ from numpyro_forecast.exceptions import (
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional import draw_posterior, forecast
+from numpyro_forecast.predictive import draw_posterior, forecast
 
 TRAIN, TEST = 30, 5
 

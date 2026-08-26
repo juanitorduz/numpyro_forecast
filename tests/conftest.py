@@ -15,15 +15,9 @@ from jax import Array, random
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
-from numpyro_forecast.functional import (
-    Horizon,
-    draw_posterior,
-    forecast,
-    predict,
-    predict_in_sample,
-    time_series,
-)
-from numpyro_forecast.functional._offload import _host_sharding
+from numpyro_forecast._offload import _host_sharding
+from numpyro_forecast.models import Horizon, predict, time_series
+from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 
 # ---------------------------------------------------------------------------
@@ -249,7 +243,7 @@ def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str,
 
     Deliberately built on plain NumPyro rather than a fit-wrapper, so tests that
     only need a guide/params pair for
-    :func:`~numpyro_forecast.functional.posterior.draw_posterior` exercise the
+    :func:`~numpyro_forecast.predictive.draw_posterior` exercise the
     guide-based contract directly.
     """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
@@ -267,7 +261,7 @@ def nuts_samples(
     Deliberately built on plain NumPyro rather than a fit-wrapper, returning
     ``mcmc.get_samples()`` directly (flattened, ``group_by_chain=False``): this is
     the posterior dict MCMC users pass straight to
-    :func:`~numpyro_forecast.functional.prediction.forecast`/``predict_in_sample``/
+    :func:`~numpyro_forecast.predictive.forecast`/``predict_in_sample``/
     :func:`~numpyro_forecast.convert.to_datatree`, with no ``draw_posterior`` step
     in between. ``chain_method="sequential"`` keeps ``num_chains > 1`` on a single
     CPU device.
@@ -289,7 +283,7 @@ def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
     """Build a ``backtest``-compatible :data:`ForecastFn` closure from plain NumPyro.
 
     Fits ``model`` with ``AutoNormal`` + ``SVI.run`` and forecasts with the
-    package's :func:`~numpyro_forecast.functional.forecast`. Deliberately built on
+    package's :func:`~numpyro_forecast.predictive.forecast`. Deliberately built on
     plain NumPyro rather than a fit-wrapper, so backtest tests exercise the
     closure contract directly.
     """
@@ -323,7 +317,7 @@ def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
     """Build a ``backtest``-compatible :data:`InSampleFn` closure from plain NumPyro.
 
     Mirrors :func:`svi_forecast_fn` but scores the in-sample fit with the
-    package's :func:`~numpyro_forecast.functional.predict_in_sample`.
+    package's :func:`~numpyro_forecast.predictive.predict_in_sample`.
     """
 
     def in_sample_fn(

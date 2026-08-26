@@ -12,13 +12,8 @@ from numpyro.handlers import seed, trace
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
-from numpyro_forecast.functional import (
-    Horizon,
-    forecast,
-    predict,
-    predict_glm,
-    time_series,
-)
+from numpyro_forecast.models import Horizon, predict, predict_glm, time_series
+from numpyro_forecast.predictive import forecast
 from numpyro_forecast.surgery import shift_loc
 from numpyro_forecast.typing import Array, ForecastModel
 

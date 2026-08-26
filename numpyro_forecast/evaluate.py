@@ -24,15 +24,15 @@ from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
+from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.functional._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast.functional.prediction import _chunk_indices
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
+from numpyro_forecast.predictive import _chunk_indices
 from numpyro_forecast.typing import (
     Array,
     ForecastFn,
@@ -64,7 +64,7 @@ def eval_mae(
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    (:func:`~numpyro_forecast._offload._device_view`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -95,7 +95,7 @@ def eval_rmse(
 
     A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (:func:`~numpyro_forecast.functional._offload._device_view`), so either (or
+    (:func:`~numpyro_forecast._offload._device_view`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -135,12 +135,12 @@ def _chunked_cell_metric(
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
-    (:func:`~numpyro_forecast.functional.prediction._chunk_indices`), so the
+    (:func:`~numpyro_forecast.predictive._chunk_indices`), so the
     jitted ``kernel`` compiles once; each block's per-cell values are staged on
     the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
     is never chunked. Inputs are normalized with
-    :func:`~numpyro_forecast.functional._offload._leaf_view` so a host-committed
+    :func:`~numpyro_forecast._offload._leaf_view` so a host-committed
     panel is sliced on the host instead of raising when a device-resident
     index array gathers against it.
 
@@ -202,7 +202,7 @@ def eval_crps(
         to float tolerance, not bitwise); at or above the cell count the
         single-pass path runs instead, which moves any host-committed operand
         back to device memory first
-        (:func:`~numpyro_forecast.functional._offload._device_view`) so either
+        (:func:`~numpyro_forecast._offload._device_view`) so either
         ``pred`` or ``truth`` (or both) may be host-committed regardless of
         ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -261,7 +261,7 @@ def eval_coverage(
         the identical count; only the precision of the final division differs
         from the single pass. Either path accepts a host-committed ``pred``
         or ``truth`` (or both); the single pass moves them to device memory
-        first (:func:`~numpyro_forecast.functional._offload._device_view`).
+        first (:func:`~numpyro_forecast._offload._device_view`).
         ``None`` (default) evaluates in one pass.
 
     Returns
