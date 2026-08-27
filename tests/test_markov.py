@@ -117,8 +117,29 @@ def test_missing_obs_dim_raises_with_guidance() -> None:
         markov_series(h, "z", jnp.zeros(()), bad_trans)
 
 
+def test_forecast_without_data_rejected_for_hand_built_horizon() -> None:
+    """A hand-built ``Horizon`` with ``future > 0`` and no data is rejected.
+
+    ``Horizon.from_data`` never produces this combination, so the guard is only
+    reachable by constructing the dataclass directly.
+    """
+    h = Horizon(data=None, t_obs=5, future=3, duration=8)
+
+    def body() -> None:
+        markov_series(h, "z", jnp.zeros((1,)), _ar1_transition)
+
+    with pytest.raises(ValueError, match="requires observed data when forecasting"):
+        trace(seed(body, random.PRNGKey(0))).get_trace()
+
+
 def test_enclosing_plate_rejected_with_guidance() -> None:
-    """An enclosing user plate is rejected with guidance."""
+    """An enclosing user plate is rejected with guidance.
+
+    This is also the canary for ``_reject_enclosing_plates``, which walks
+    numpyro's private ``_PYRO_STACK``: if numpyro's internals shift so that the
+    enclosing plate is no longer detected, this test fails instead of the
+    check silently disabling itself.
+    """
     h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
 
     def body() -> None:

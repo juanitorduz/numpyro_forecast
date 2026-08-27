@@ -140,6 +140,7 @@ reference:
     contents:
       - typing.ForecastModel
       - typing.ForecastFn
+      - typing.Guide
       - typing.InSampleFn
       - typing.Metric
       - typing.ModelFactory
@@ -181,12 +182,13 @@ reference:
     contents:
       - exceptions.NumpyroForecastError
       - exceptions.BacktestWindowError
-      - exceptions.VectorizedGuideError
       - exceptions.VectorizedMetricError
       - exceptions.KernelConfigError
       - exceptions.CovariateDimsError
       - exceptions.MVNLayoutError
       - exceptions.DeviceMemoryError
+      - exceptions.HostMemoryKindError
+      - exceptions.DevicePlatformError
 
 # Example notebooks live in docs/examples/. The .qmd wrapper pages that embed
 # their stored outputs are generated at build time by scripts/build_docs.py

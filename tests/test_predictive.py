@@ -35,12 +35,13 @@ from numpyro_forecast._offload import (
     _is_cpu_committed,
     _is_host_resident,
     _leaf_view,
+    _memory_budget_line,
     _oom_advice,
     _resolve_device,
     _stitch_chunks,
     _transfer,
 )
-from numpyro_forecast.exceptions import DeviceMemoryError
+from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
 from numpyro_forecast.predictive import (
     _chunk_indices,
     _chunked_draws,
@@ -651,7 +652,7 @@ def test_resolve_device_missing_platform_raises_actionable_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(jax, "devices", fail_devices_for("tpu"))
-    with pytest.raises(ValueError, match="platform 'tpu' is not initialized"):
+    with pytest.raises(DevicePlatformError, match="platform 'tpu' is not initialized"):
         _resolve_device("tpu")
 
 
@@ -680,7 +681,7 @@ def test_host_memory_kind_raises_without_a_host_kind() -> None:
     stub_device = mock.MagicMock(spec=jax.devices()[0])
     stub_device.addressable_memories.return_value = [_DeviceOnlyMemory()]
 
-    with pytest.raises(RuntimeError, match="exposes no host memory kind"):
+    with pytest.raises(HostMemoryKindError, match="exposes no host memory kind"):
         _host_memory_kind(stub_device)
 
 
@@ -744,6 +745,58 @@ def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
     from_numpy = _device_view(np.asarray(x))
     assert isinstance(from_numpy, jax.Array)
     assert jnp.array_equal(from_numpy, x)
+
+
+@pytest.mark.parametrize("error", [ValueError, NotImplementedError])
+def test_device_view_falls_back_to_numpy_when_device_put_rejects_pinned(
+    error: type[Exception],
+) -> None:
+    """A pinned leaf whose ``device_put`` back to device memory fails is staged via NumPy.
+
+    Some backends reject a memory-kind move outright; the fallback copies the
+    leaf through its zero-copy NumPy view onto the default device, so the
+    metric kernel still receives a device-resident ``jax.Array`` with the same
+    values.
+    """
+    x = jnp.arange(6.0).reshape(3, 2)
+    hosted = jax.device_put(x, _host_sharding(x))
+
+    with mock.patch.object(jax, "device_put", side_effect=error("no memory-kind move")):
+        viewed = _device_view(hosted)
+
+    assert isinstance(viewed, jax.Array)
+    assert viewed.sharding.memory_kind == "device"
+    assert not _is_host_resident(viewed)
+    assert jnp.array_equal(viewed, x)
+
+
+def test_memory_budget_line_formats_stats_in_gib() -> None:
+    """A backend with memory statistics reports the three budget figures in GiB.
+
+    The CPU backend's ``memory_stats()`` returns ``None``, so the formatted
+    branch only runs against a stub device here.
+    """
+    stub_device = mock.MagicMock(spec=jax.devices()[0])
+    stub_device.memory_stats.return_value = {
+        "bytes_limit": 2**30,
+        "bytes_in_use": 2**29,
+        "peak_bytes_in_use": 3 * 2**28,
+    }
+    with mock.patch.object(jax, "local_devices", return_value=[stub_device]):
+        line = _memory_budget_line()
+    assert line == (
+        "device memory budget: bytes_limit=1.00 GiB, bytes_in_use=0.50 GiB, "
+        "peak_bytes_in_use=0.75 GiB"
+    )
+
+
+def test_memory_budget_line_swallows_memory_stats_errors() -> None:
+    """A failing ``memory_stats()`` degrades to the placeholder: diagnostics never mask the OOM."""
+    stub_device = mock.MagicMock(spec=jax.devices()[0])
+    stub_device.memory_stats.side_effect = RuntimeError("no stats")
+    with mock.patch.object(jax, "local_devices", return_value=[stub_device]):
+        line = _memory_budget_line()
+    assert line == "device memory statistics are unavailable on this backend"
 
 
 def test_device_view_passes_tracers_through() -> None:

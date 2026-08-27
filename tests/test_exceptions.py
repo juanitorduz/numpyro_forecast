@@ -4,10 +4,13 @@ import pytest
 
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
+    CovariateDimsError,
+    DeviceMemoryError,
+    DevicePlatformError,
+    HostMemoryKindError,
     KernelConfigError,
     MVNLayoutError,
     NumpyroForecastError,
-    VectorizedGuideError,
     VectorizedMetricError,
 )
 
@@ -16,10 +19,13 @@ from numpyro_forecast.exceptions import (
     ("exc_cls", "builtin"),
     [
         (BacktestWindowError, ValueError),
-        (VectorizedGuideError, ValueError),
         (VectorizedMetricError, TypeError),
         (KernelConfigError, ValueError),
+        (CovariateDimsError, ValueError),
         (MVNLayoutError, NotImplementedError),
+        (DeviceMemoryError, RuntimeError),
+        (HostMemoryKindError, RuntimeError),
+        (DevicePlatformError, ValueError),
     ],
 )
 def test_exception_subclasses_base_and_builtin(
@@ -33,7 +39,6 @@ def test_exception_subclasses_base_and_builtin(
 @pytest.mark.parametrize(
     "exc_cls",
     [
-        VectorizedGuideError,
         VectorizedMetricError,
         MVNLayoutError,
     ],
