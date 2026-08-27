@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "numpyro_forecast"
-version = "0.2.3"
+version = "0.3.0"
 description = "A JAX/NumPyro port of the ideas in Pyro's forecasting module."
 readme = "README.md"
 requires-python = ">=3.12"
