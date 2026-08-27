@@ -41,7 +41,7 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
 
 For the tests, we use `pytest`. `make tests` runs the suite in parallel with pytest-xdist (`-n auto`); a plain `uv run pytest tests/test_foo.py` stays sequential for debugging. CI splits the suite into duration-balanced parallel jobs with [pytest-split](https://pypi.org/project/pytest-split/), driven by the committed `.test_durations` file. Refreshing that file is optional: tests missing from it are assigned the average duration, so staleness only degrades group balance, never correctness. When you add or remove notably slow tests, or CI group times drift apart, refresh it with `make store-durations` (a full sequential run) and commit the result.
 
-`README.md` is a pytest doctest file (`--doctest-glob`): every `>>>` example in it runs in the suite, so keep the examples self-contained, prompt-formatted and under 99 characters per line.
+`README.md` is a pytest doctest file (`--doctest-glob`): every `>>>` example in it runs in the suite, so keep the examples self-contained, prompt-formatted and under 99 characters per line, and keep the blank line before each closing fence (without it pytest reads the fence as expected output).
 
 ## Docstrings
 

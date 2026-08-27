@@ -47,7 +47,7 @@ For a local checkout:
 uv sync --extra all
 ```
 
-The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`).
+The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`). `all` (used above) pulls those three in along with the `dev` and `docs` tooling; `cuda` adds the CUDA jax plugin, and `all_cuda` is `all` plus `cuda`.
 
 ## Quickstart
 
@@ -62,8 +62,9 @@ Define a model, fit it with SVI, and draw probabilistic forecasts:
 >>> from numpyro.infer.autoguide import AutoNormal
 >>> from numpyro.infer.reparam import LocScaleReparam
 >>> from numpyro.optim import Adam
->>> from numpyro_forecast import Horizon, draw_posterior, eval_crps, forecast, innovations
->>> from numpyro_forecast import predict
+>>> from numpyro_forecast import (
+...     Horizon, draw_posterior, eval_crps, forecast, innovations, predict
+... )
 >>> from numpyro_forecast.features import fourier_features
 >>> def seasonal_model(covariates, data=None):
 ...     """Local-level random walk + Fourier seasonality, Student-T noise."""
@@ -125,7 +126,7 @@ A model is a plain NumPyro function `(covariates, data=None)` whose first line d
 
 The three latent blocks differ in where the sampling happens. `innovations` samples conditionally iid per-step innovations outside any loop, and you build the series arithmetically from them (a random walk is `jnp.cumsum(drift, axis=-2)`). `ssoe` is an iid error plate plus a deterministic scan that consumes those errors, the single-source-of-error form behind ARMA, exponential smoothing and Croston/TSB. `markov_series` samples inside `numpyro.contrib.control_flow.scan`, one step at a time, which is what you need when the per-step distribution depends on the previous state.
 
-Reuse a group of sites across channels with NumPyro's `handlers.scope`, with one caveat: `scope` prefixes every site inside it, `obs`, `obs_future` and `forecast` included, after which the drivers can no longer find `"forecast"` and `"obs"`. Scope the latent helpers and call `predict` outside the scope (the Croston and TSB examples do exactly this). `scope` is the composition tool; it is not a replacement for the `_future` suffix, which is what keeps the guide's shape fixed.
+Reuse a group of sites across channels with NumPyro's `handlers.scope`, with one caveat: `scope` prefixes every site inside it, `obs`, `obs_future` and `forecast` included, after which the drivers can no longer find `"forecast"` and `"obs"`. Scope the latent helpers and register the observation and forecast sites outside the scope, by calling `predict` there or, as the Croston and TSB examples do, by writing `obs` and `forecast` yourself. `scope` is the composition tool; it is not a replacement for the `_future` suffix, which is what keeps the guide's shape fixed.
 
 Dimensions beyond `(time, obs)` stack leftward, and the two loop-shaped blocks take opposite approaches to plates. `innovations` is called inside the plates you open yourself: the [multi-series example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_1.html) wraps it in `plate("n_series", n_series, dim=-1)`, and the [hierarchical origin-destination example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_2.html) opens `origin` at `dim=-3` and `destin` at `dim=-1` and puts the call inside the latter. `markov_series` flips the idiom: it rejects an enclosing plate and takes `plates=[(name, size)]`, which it opens inside the scan body, the only placement NumPyro supports for scan plus plate.
 
@@ -139,7 +140,7 @@ Dimensions beyond `(time, obs)` stack leftward, and the two loop-shaped blocks t
 
 `to_datatree(rng_key, model, posterior, data, covariates)` converts an already-drawn posterior into an ArviZ-schema `xarray.DataTree`: posterior, in-sample posterior predictive, observed data and covariates in one object, plus the forecast groups when `covariates` extends past `data`. It is posterior-first and never draws a posterior of its own.
 
-`backtest(rng_key, data, covariates, model_fn, forecast_fn=...)` runs the moving-window loop and scores every window. Fitting and forecasting are delegated to closures you write, so `backtest` itself has no dependency on how a model is fit; `backtest_vectorized` is the estimator-equivalent shortcut that fits every rolling window in one vmapped SVI run.
+`backtest(rng_key, data, covariates, model_fn, *, forecast_fn)` runs the moving-window loop and scores every window. Fitting and forecasting are delegated to closures you write, so `backtest` itself has no dependency on how a model is fit; `backtest_vectorized` is the estimator-equivalent shortcut that fits every rolling window in one vmapped SVI run.
 
 On an accelerator, the draws are usually the largest allocation of the workflow, so every driver that materializes them takes `batch_size` (chunk the sample axis) and `device` (move each chunk off the accelerator as it is drawn, `device="host"` being the useful setting). This is spelled `batch_size`/`device` on `draw_posterior`, `forecast`, `predict_in_sample` and the Pathfinder samplers, `predictive_batch_size`/`predictive_device` on `to_datatree`, and `batch_size` on `backtest`, which forwards it to your closures. The [stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) walks through a panel where this matters.
 
