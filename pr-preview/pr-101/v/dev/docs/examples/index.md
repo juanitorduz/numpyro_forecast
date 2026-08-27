@@ -88,7 +88,7 @@ Forecast 1,000 daily store-product demand series from FreshRetailNet-50K with a 
 Hierarchical forecasting I
 
 
-Forecast hourly BART arrivals from eight origin stations to a fixed destination with a hierarchical model that pools information across series, fit with SVI.
+Forecast hourly BART arrivals across 50 origin stations to a fixed destination with a hierarchical model that pools information across series, fit with SVI.
 
 
 <a href="../../docs/examples/hierarchical_forecasting_2.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/hierarchical_forecasting_2.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>

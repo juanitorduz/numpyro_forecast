@@ -1,7 +1,7 @@
 # Hierarchical forecasting II with `numpyro_forecast`
 
 
-This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part II)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itelf a port of the second part of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). Where [part I](hierarchical_forecasting_1.md) fixed a single destination, here we model the **full `50x50` origin-destination panel** at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static **pairwise** term for the affinity of each origin-destination pair.
+This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part II)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itself a port of the second part of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). Where [part I](hierarchical_forecasting_1.md) fixed a single destination, here we model the **full `50x50` origin-destination panel** at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static **pairwise** term for the affinity of each origin-destination pair.
 
 > **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism rather than re-running the guide over the full covariates. Because the full panel is large, predictive draws are done in memory-bounded batches.
 
@@ -24,15 +24,23 @@ import numpyro.distributions as dist
 import pandas as pd
 import xarray as xr
 from jax import random
-from jax.tree_util import tree_map
-from numpyro.infer import Predictive
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.reparam import LocScaleReparam
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel, eval_crps
+from numpyro_forecast import (
+    Horizon,
+    draw_posterior,
+    eval_crps,
+    forecast,
+    innovations,
+    predict,
+    predict_in_sample,
+)
 from numpyro_forecast.datasets import load_bart_hierarchical
 from numpyro_forecast.features import periodic_repeat
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -122,29 +130,26 @@ The structure mirrors part I but spreads the effects across two hierarchies, ori
 
 \begin{align\*} \mu & = \text{level} + (\text{origin\\seasonal} + \text{destin\\seasonal}) + \text{pairwise} \\ y & \sim \text{Normal}(\mu,\\ \text{origin\\scale} + \text{destin\\scale}) \end{align\*}
 
-We declare three plates, `origin` (dim `-3`), `hour_of_week` (dim `-2`) and `destin` (dim `-1`), and open each effect under the plates it depends on. The per-destination level is sampled with `self.time_series(...)` under the `destin` plate, and the seasonal effect is tiled across the full horizon with [periodic_repeat](../../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Broadcasting over the three plate dimensions assembles the `(origin, time, destin)` mean.
+We declare three plates, `origin` (dim `-3`), `hour_of_week` (dim `-2`) and `destin` (dim `-1`), and open each effect under the plates it depends on. The per-destination level comes from the [innovations](../../../reference/models.innovations.md#numpyro_forecast.models.innovations) building block called under the `destin` plate (it opens its own `time` plate at axis `-2`), and the seasonal effect is tiled across the full horizon with [periodic_repeat](../../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Broadcasting over the three plate dimensions assembles the `(origin, time, destin)` mean. As in part I, the model is a plain NumPyro model function `(covariates, data=None)` returned by a small factory that closes over the seasonal period.
 
 
     In [4]:
 
 
 ``` python
-class HierarchicalForecaster(ForecastingModel):
-    """Hierarchical OD model with per-station seasonality, drift and pairwise term."""
+def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
+    """Build the hierarchical OD model with per-station seasonality, drift and pairwise term."""
 
-    def __init__(self, period: int = 24 * 7) -> None:
-        super().__init__()
-        self.period = period
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
+    def hierarchical_model(covariates: Array, data: Array | None = None) -> None:
         """Define the hierarchical forecasting model."""
+        h = Horizon.from_data(covariates, data)
         n_origin = covariates.shape[-3]
         n_destin = covariates.shape[-1]
         duration = covariates.shape[-2]
 
         origin_plate = numpyro.plate("origin", n_origin, dim=-3)
         destin_plate = numpyro.plate("destin", n_destin, dim=-1)
-        hour_plate = numpyro.plate("hour_of_week", self.period, dim=-2)
+        hour_plate = numpyro.plate("hour_of_week", period, dim=-2)
 
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-20.0, 5.0))
         destin_centered = numpyro.sample("destin_centered", dist.Uniform(0.0, 1.0))
@@ -155,7 +160,8 @@ class HierarchicalForecaster(ForecastingModel):
             destin_seasonal = numpyro.sample("destin_seasonal", dist.Normal(0.0, 5.0))
 
         with destin_plate:
-            drift = self.time_series(
+            drift = innovations(
+                h,
                 "drift",
                 lambda: dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=destin_centered),
@@ -171,15 +177,18 @@ class HierarchicalForecaster(ForecastingModel):
             destin_scale = numpyro.sample("destin_scale", dist.LogNormal(-5.0, 5.0))
         scale = origin_scale + destin_scale
 
+        # The sum of two raw sample results needs a cast for the type checker.
         seasonal = cast("Array", origin_seasonal + destin_seasonal)
         seasonal_repeat = periodic_repeat(seasonal, duration, axis=-2)
         prediction = level + seasonal_repeat + pairwise
 
-        self.predict(dist.Normal(0.0, scale), prediction)
+        predict(h, dist.Normal(0.0, scale), prediction)
+
+    return hierarchical_model
 ```
 
 
-Let's visialize the model:
+Let's visualize the model:
 
 
     In [5]:
@@ -187,9 +196,10 @@ Let's visialize the model:
 
 ``` python
 period = 24 * 7  # weekly seasonality (hours)
+model = make_hierarchical_model(period=period)
 
 numpyro.render_model(
-    HierarchicalForecaster(period=period),
+    model,
     model_args=(covariates_train, y_train),
     render_distributions=True,
 )
@@ -203,7 +213,7 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-As usual (highly recommended!), we run prior predictive checks. The full panel is large, so we draw the samples in memory-bounded batches with the `batched_obs` helper and keep only what we plot (eight origins arriving at `ANTC`, last three training weeks). The prior ranges look reasonable, if anything a touch too wide.
+As usual (highly recommended!), we run prior predictive checks. The full panel is large, so we draw the samples in memory-bounded batches with a small hand-rolled `batched_obs` helper around `Predictive` and keep only what we plot (eight origins arriving at `ANTC`, last three training weeks); the package's chunked drivers need a posterior, so the prior band is the one place where we chunk by hand. The prior ranges look reasonable, if anything a touch too wide.
 
 
     In [6]:
@@ -246,7 +256,6 @@ def batched_obs(make_pred, key, covariates, num_samples, batch_size, select=None
     return np.concatenate(chunks, axis=0)
 
 
-model = HierarchicalForecaster(period=period)
 lo = T1 - 3 * period  # last three train weeks
 
 rng_key, rng_subkey = random.split(rng_key)
@@ -314,7 +323,7 @@ fig.tight_layout();
     prior band shape: (500, 8, 504)
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_58116/741911304.py:98: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_67697/1283448653.py:97: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -325,7 +334,7 @@ fig.tight_layout();
 
 # Inference with SVI
 
-We fit the model with SVI through `Forecaster` (an `AutoNormal` guide with `Adam`). The panel is much larger than in part I, so this step takes a few minutes; the ELBO on a log scale should still settle into a clear plateau.
+We fit the model with plain NumPyro SVI: an `AutoNormal` guide, `Adam`, and `SVI.run`. The panel is much larger than in part I, so this step takes a few minutes; the ELBO on a log scale should still settle into a clear plateau.
 
 
     In [7]:
@@ -333,17 +342,12 @@ We fit the model with SVI through `Forecaster` (an `AutoNormal` guide with `Adam
 
 ``` python
 rng_key, rng_subkey = random.split(rng_key)
-forecaster = Forecaster(
-    rng_subkey,
-    model,
-    y_train,
-    covariates_train,
-    optim=Adam(step_size=0.1),
-    num_steps=10_000,
-)
+guide = AutoNormal(model)
+svi = SVI(model, guide, Adam(step_size=0.1), Trace_ELBO())
+svi_result = svi.run(rng_subkey, 10_000, covariates_train, y_train, progress_bar=False)
 
 fig, ax = plt.subplots()
-ax.plot(forecaster.losses)
+ax.plot(svi_result.losses)
 ax.set_yscale("log")
 ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
@@ -356,7 +360,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 # Posterior predictive check
 
-We draw the in-sample posterior predictive and the forecast, both in memory-bounded batches: the in-sample draws through `batched_obs`, the forecast through `Forecaster`'s own `batch_size` argument. The full-panel train CRPS is accumulated one origin at a time so the intermediate arrays never blow up host memory. As before, predictions are clipped at zero (the `log1p` scale is non-negative) before scoring.
+We draw `200` posterior samples with [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), then produce the in-sample posterior predictive with [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and the forecast with [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast). Both drivers take the same two memory knobs: `batch_size=50` pushes the draws through the model `50` at a time, and `device="host"` moves each finished chunk to host memory, so the `(200, 50, 2160, 50)` in-sample panel is never resident on the accelerator at once (the prior band above chunked by hand only because the drivers need a posterior). The full-panel train CRPS is then accumulated one origin at a time so the intermediate arrays never blow up host memory. As before, predictions are clipped at zero (the `log1p` scale is non-negative) before scoring.
 
 
     In [8]:
@@ -366,42 +370,33 @@ We draw the in-sample posterior predictive and the forecast, both in memory-boun
 rng_key, key_post, key_pp, key_fc = random.split(rng_key, 4)
 num_post = 200
 
-posterior_samples = forecaster.guide.sample_posterior(
-    key_post, forecaster.params, sample_shape=(num_post,)
-)
-train_pp = batched_obs(
-    lambda start, n: Predictive(
-        model,
-        posterior_samples=tree_map(lambda x: x[start : start + n], posterior_samples),
-        return_sites=["obs"],
-    ),
-    key_pp,
-    covariates_train,
-    num_samples=num_post,
-    batch_size=50,
+posterior = draw_posterior(key_post, guide, svi_result.params, num_post)
+train_pp = predict_in_sample(
+    key_pp, model, posterior, covariates_train, batch_size=50, device="host"
 )  # (num_post, origin, train, destin) on host
-
-forecast = forecaster(key_fc, y_train, covariates, num_samples=num_post, batch_size=50)
-forecast = jnp.clip(forecast, min=0.0)
+forecast_draws = forecast(
+    key_fc, model, posterior, y_train, covariates, batch_size=50, device="host"
+)
+forecast_draws = jnp.clip(forecast_draws, min=0.0)
 
 # Full-panel train CRPS, accumulated per origin to bound memory.
 train_crps_per_origin = [
     eval_crps(jnp.clip(jnp.asarray(train_pp[:, i]), min=0.0), y_train[i]) for i in range(n_origin)
 ]
 crps_train = float(np.mean(train_crps_per_origin))
-crps_test = eval_crps(forecast, y_test)
+crps_test = eval_crps(forecast_draws, y_test)
 print(f"Train CRPS: {crps_train:.4f}")
 print(f"Test CRPS:  {crps_test:.4f}")
 ```
 
 
     Train CRPS: 0.2388
-    Test CRPS:  0.2806
+    Test CRPS:  0.2808
 
 
 # Forecast visualization
 
-Eight origins arriving at `ANTC`: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50% and 94% HDI bands, against the observed series, with the train/test split and the Christmas day band marked. With origin, destination and pairwise effects in play, the full panel is fit jointly, yet each individual origin-to-destination forecast still tracks its own weekly pattern. As in part I, Christmas is the visible soft spot, since the model has no holiday feature.
+Eight origins arriving at `ANTC`: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50\\ and 94\\ HDI bands, against the observed series, with the train/test split and the Christmas day band marked. With origin, destination and pairwise effects in play, the full panel is fit jointly, yet each individual origin-to-destination forecast still tracks its own weekly pattern. As in part I, Christmas is the visible soft spot, since the model has no holiday feature.
 
 
     In [9]:
@@ -409,8 +404,10 @@ Eight origins arriving at `ANTC`: the in-sample posterior predictive (blue, last
 
 ``` python
 # Predictions arrive as (draws, origin, time); move time before the series facet dim.
-train_plot = np.transpose(np.clip(train_pp[:, :n_plot, lo:T1, antc], 0, None), (0, 2, 1))
-forecast_plot = np.transpose(np.asarray(forecast[:, :n_plot, :, antc]), (0, 2, 1))
+train_plot = np.transpose(
+    np.clip(np.asarray(train_pp[:, :n_plot, lo:T1, antc]), 0, None), (0, 2, 1)
+)
+forecast_plot = np.transpose(np.asarray(forecast_draws[:, :n_plot, :, antc]), (0, 2, 1))
 
 t_train = time_train[lo:T1].astype(float)
 t_test = time_test.astype(float)
@@ -517,7 +514,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_58116/2085423411.py:106: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_67697/2900007941.py:106: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
