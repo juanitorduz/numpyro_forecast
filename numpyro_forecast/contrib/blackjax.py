@@ -1,30 +1,30 @@
-"""BlackJAX MCMC kernels exposed as NumPyro :class:`~numpyro.infer.mcmc.MCMCKernel`.
+"""BlackJAX MCMC kernels exposed as NumPyro `numpyro.infer.mcmc.MCMCKernel`.
 
-This module adapts `BlackJAX <https://blackjax-devs.github.io/blackjax/>`_ sampling
+This module adapts [BlackJAX](https://blackjax-devs.github.io/blackjax/) sampling
 algorithms to the NumPyro ``MCMCKernel`` interface so they can be passed straight to
-:class:`~numpyro.infer.MCMC` like any built-in kernel.
+`numpyro.infer.MCMC` like any built-in kernel.
 
 BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``,
 requiring ``blackjax>=1.6`` whose MCLMC tuning API this module targets) and is
 never imported at package import time: it is pulled in lazily, via
-:func:`numpyro_forecast.optional.require`, the first time a kernel is initialized. All three
+`numpyro_forecast.optional.require()`, the first time a kernel is initialized. All three
 kernels run one blackjax step per NumPyro sampling step; adaptation happens once inside
-:meth:`_BlackjaxKernel.init`, so every run against one of these kernels must use
+`_BlackjaxKernel.init()`, so every run against one of these kernels must use
 ``chain_method="sequential"`` and ``num_warmup=0``: see the "Run configuration"
-section on :class:`BlackjaxNUTSKernel`, :class:`BlackjaxMCLMCKernel`, and
-:class:`BlackjaxCustomKernel` for why, and :exc:`~numpyro_forecast.exceptions.KernelConfigError`
+section on `BlackjaxNUTSKernel`, `BlackjaxMCLMCKernel`, and
+`BlackjaxCustomKernel` for why, and `~~numpyro_forecast.exceptions.KernelConfigError`
 for the one constraint (a kernel with no bound model) these kernels reject outright.
 
 This module also exposes a two-tier Pathfinder variational-inference API. The
-single-path tier, :func:`fit_pathfinder` and :func:`pathfinder_samples`, runs one
+single-path tier, `fit_pathfinder()` and `pathfinder_samples()`, runs one
 L-BFGS optimization path and returns a single local normal approximation: cheap,
 but a single path can settle in one mode and miss the rest of a multimodal or
-otherwise hard posterior. The multi-path tier, :func:`fit_multipathfinder` and
-:func:`multipathfinder_samples`, runs several L-BFGS paths in parallel from
+otherwise hard posterior. The multi-path tier, `fit_multipathfinder()` and
+`multipathfinder_samples()`, runs several L-BFGS paths in parallel from
 diverse starting points and combines them into one approximation that is not
 tied to a single mode; it is the recommended entry point over the single-path
 functions. How the paths are combined at drawing time is chosen by the
-``resample`` argument of :func:`multipathfinder_samples`: Pareto-smoothed
+``resample`` argument of `multipathfinder_samples()`: Pareto-smoothed
 importance sampling (PSIS) over the pooled draws when its ``pareto_k``
 diagnostic says the weights are trustworthy, and ELBO-weighted sampling of whole
 paths when it does not (PSIS weights degenerate in high dimensions).
@@ -52,7 +52,7 @@ from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
 
 _BJState = namedtuple("_BJState", ["position", "inner", "rng_key"])
-"""MCMC state threaded by every :class:`_BlackjaxKernel`.
+"""MCMC state threaded by every `_BlackjaxKernel`.
 
 ``position`` is the unconstrained sample dict (the NumPyro ``sample_field``),
 ``inner`` is the opaque blackjax algorithm state, and ``rng_key`` is the PRNG key
@@ -71,11 +71,11 @@ weights are dominated by a handful of draws.
 class _BlackjaxKernel(MCMCKernel):
     """Base adapter turning a blackjax sampler into a NumPyro ``MCMCKernel``.
 
-    Subclasses implement :meth:`_build`, which runs adaptation and returns the
+    Subclasses implement `_build()`, which runs adaptation and returns the
     initial blackjax state together with a one-step transition function. This base
     owns the shared plumbing: it builds the model's log density via
-    :func:`~numpyro.infer.util.initialize_model`, drives the blackjax step in
-    :meth:`sample`, exposes ``sample_field = "position"``, and validates that the
+    `numpyro.infer.util.initialize_model()`, drives the blackjax step in
+    `sample()`, exposes ``sample_field = "position"``, and validates that the
     built state exposes a ``position`` with the same key set as the initial one (a
     tripwire for a malformed custom ``build_fn``).
 
@@ -84,9 +84,9 @@ class _BlackjaxKernel(MCMCKernel):
     model
         The NumPyro forecasting model the kernel samples from. Pass it directly
         to the kernel constructor (``BlackjaxNUTSKernel(model, ...)``) before
-        handing the instance to :class:`~numpyro.infer.MCMC`; a kernel
+        handing the instance to `numpyro.infer.MCMC`; a kernel
         constructed without a model is unbound and raises
-        :exc:`~numpyro_forecast.exceptions.KernelConfigError` from :meth:`init`.
+        `~~numpyro_forecast.exceptions.KernelConfigError` from `init()`.
     """
 
     sample_field = "position"
@@ -148,7 +148,7 @@ class _BlackjaxKernel(MCMCKernel):
         rng_key
             PRNG key for initialization and adaptation.
         num_warmup
-            Number of warmup steps (forwarded to :meth:`_build`; blackjax kernels
+            Number of warmup steps (forwarded to `_build()`; blackjax kernels
             adapt in ``init`` instead).
         init_params
             Optional initial unconstrained parameters; defaults to NumPyro's
@@ -168,7 +168,7 @@ class _BlackjaxKernel(MCMCKernel):
         KernelConfigError
             If the kernel has no bound model.
         TypeError
-            If :meth:`_build` returns a state whose ``position`` key set differs
+            If `_build()` returns a state whose ``position`` key set differs
             from the initial one (a malformed ``build_fn``).
         """
         require("blackjax", extra="blackjax")
@@ -222,7 +222,7 @@ class _BlackjaxKernel(MCMCKernel):
             The current sampler state.
         model_args
             Positional arguments to the model (unused; the log density is closed
-            over in :meth:`init`).
+            over in `init()`).
         model_kwargs
             Keyword arguments to the model (unused).
 
@@ -263,19 +263,19 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
     """BlackJAX NUTS with Stan-style window adaptation.
 
     Adaptation (step size and inverse mass matrix) runs once in
-    :meth:`~_BlackjaxKernel.init` via ``blackjax.window_adaptation``; each MCMC step
+    `_BlackjaxKernel.init()` via ``blackjax.window_adaptation``; each MCMC step
     is then a single tuned NUTS step.
 
     Run configuration
     -----------------
-    Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
+    Pass this kernel to `numpyro.infer.MCMC` with **``chain_method="sequential"``
     only**. With more than one chain, ``chain_method="vectorized"`` hands
-    :meth:`~_BlackjaxKernel.init` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+    `_BlackjaxKernel.init()` a stacked ``rng_key`` of shape ``(num_chains, 2)``
     rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
     rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
     ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
     package and shares the same single-key assumption.
-    Also pass **``num_warmup=0``**: adaptation runs once inside :meth:`~_BlackjaxKernel.init`
+    Also pass **``num_warmup=0``**: adaptation runs once inside `_BlackjaxKernel.init()`
     (via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
     of that are simply discarded work, not additional tuning.
 
@@ -322,20 +322,20 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
     """BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 
     The step size, trajectory length ``L``, and diagonal preconditioner (inverse
-    mass matrix) are tuned once in :meth:`~_BlackjaxKernel.init` via
+    mass matrix) are tuned once in `_BlackjaxKernel.init()` via
     ``blackjax.mclmc_find_L_and_step_size``; each MCMC step is then a single
     tuned MCLMC step.
 
     Run configuration
     -----------------
-    Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
+    Pass this kernel to `numpyro.infer.MCMC` with **``chain_method="sequential"``
     only**. With more than one chain, ``chain_method="vectorized"`` hands
-    :meth:`~_BlackjaxKernel.init` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+    `_BlackjaxKernel.init()` a stacked ``rng_key`` of shape ``(num_chains, 2)``
     rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
     rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
     ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
     package and shares the same single-key assumption.
-    Also pass **``num_warmup=0``**: tuning runs once inside :meth:`~_BlackjaxKernel.init`
+    Also pass **``num_warmup=0``**: tuning runs once inside `_BlackjaxKernel.init()`
     (via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
 
@@ -399,19 +399,19 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     ``(inner_state, step_fn)``, where ``inner_state`` exposes ``.position`` over the
     same sites as the model and ``step_fn`` has signature
     ``(rng_key, inner_state) -> (inner_state, info)``. The base class validates the
-    returned state's key set and raises :class:`TypeError` if it is malformed.
+    returned state's key set and raises `TypeError` if it is malformed.
 
     Run configuration
     -----------------
-    Pass this kernel to :class:`~numpyro.infer.MCMC` with **``chain_method="sequential"``
+    Pass this kernel to `numpyro.infer.MCMC` with **``chain_method="sequential"``
     only**. With more than one chain, ``chain_method="vectorized"`` hands
-    :meth:`~_BlackjaxKernel.init` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+    `_BlackjaxKernel.init()` a stacked ``rng_key`` of shape ``(num_chains, 2)``
     rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
     rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
     ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
     package and shares the same single-key assumption.
     Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
-    once inside :meth:`~_BlackjaxKernel.init`, so any NumPyro-driven warmup steps
+    once inside `_BlackjaxKernel.init()`, so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
 
     Parameters
@@ -505,11 +505,11 @@ def _stable_bfgs_sample(
 
 
 def _ensure_stable_bfgs_sample() -> None:
-    """Swap blackjax's ``bfgs_sample`` for :func:`_stable_bfgs_sample` (idempotent).
+    """Swap blackjax's ``bfgs_sample`` for `_stable_bfgs_sample()` (idempotent).
 
     ``blackjax.vi.pathfinder.approximate`` scores every point on the L-BFGS path
     with an ELBO estimate built on ``bfgs_sample``; the upstream log-determinant
-    underflow (see :func:`_stable_bfgs_sample`) makes those estimates ``-inf``
+    underflow (see `_stable_bfgs_sample()`) makes those estimates ``-inf``
     for any model beyond a few hundred parameters, so Pathfinder silently returns
     a garbage state. Until the fix lands upstream, the pathfinder entry points in
     this module patch both namespaces that hold the symbol before running.
@@ -527,7 +527,7 @@ class PathfinderFit:
     A plain-data (picklable) container: it holds the raw blackjax
     ``PathfinderState``, the model and its data/covariates (needed to rebuild the
     unconstrained-to-constrained transform when drawing), and the fitted ELBO.
-    Draws are produced lazily by :func:`pathfinder_samples`.
+    Draws are produced lazily by `pathfinder_samples()`.
 
     Attributes
     ----------
@@ -611,13 +611,13 @@ def fit_pathfinder(
     --------
     fit_multipathfinder
         The recommended entry point: runs several L-BFGS paths in parallel and
-        combines them (see :func:`multipathfinder_samples`), instead of relying
+        combines them (see `multipathfinder_samples()`), instead of relying
         on this single path's local normal approximation.
 
     Notes
     -----
-    Runs with :func:`_stable_bfgs_sample` patched into blackjax (via
-    :func:`_ensure_stable_bfgs_sample`): upstream's ``bfgs_sample`` underflows its
+    Runs with `_stable_bfgs_sample()` patched into blackjax (via
+    `_ensure_stable_bfgs_sample()`): upstream's ``bfgs_sample`` underflows its
     log-determinant beyond a few hundred parameters, which floors every path ELBO
     at ``-inf`` and makes the returned state garbage.
     """
@@ -667,10 +667,10 @@ def pathfinder_samples(
     """Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
 
     The returned dict has the sample axis leading and is ready to pass to
-    :func:`~numpyro_forecast.predictive.forecast` or NumPyro's
-    ``Predictive``, exactly like :func:`~numpyro_forecast.predictive.draw_posterior`.
+    `~~numpyro_forecast.predictive.forecast()` or NumPyro's
+    ``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
     Chunking and device offload are delegated to the shared
-    :func:`~numpyro_forecast._offload._draw_chunked` driver, so the same
+    `~~numpyro_forecast._offload._draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -682,16 +682,16 @@ def pathfinder_samples(
     rng_key
         PRNG key.
     fit
-        A fit from :func:`fit_pathfinder`.
+        A fit from `fit_pathfinder()`.
     num_samples
         Number of posterior draws.
     batch_size
         Optional chunk size for the drawing itself; see
-        :func:`~numpyro_forecast.predictive.draw_posterior` (the same
+        `~~numpyro_forecast.predictive.draw_posterior()` (the same
         memory/reproducibility contract applies).
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.predictive.draw_posterior`, including
+        `~~numpyro_forecast.predictive.draw_posterior()`, including
         for the NumPy path taken when the JAX CPU backend is not initialized and
         for the rules on mixing a host-committed result with other arrays.
 
@@ -709,7 +709,7 @@ def pathfinder_samples(
     RuntimeError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        :func:`~numpyro_forecast._offload._host_memory_kind`).
+        `~~numpyro_forecast._offload._host_memory_kind()`).
 
     Warns
     -----
@@ -752,11 +752,11 @@ def pathfinder_samples(
 class MultiPathfinderFit:
     """The result of fitting a forecasting model with multi-path BlackJAX Pathfinder.
 
-    A plain-data (picklable) container, mirroring :class:`PathfinderFit`: it holds
+    A plain-data (picklable) container, mirroring `PathfinderFit`: it holds
     the raw blackjax ``MultipathfinderState`` (the pooled per-path approximations),
     the model and its data/covariates, the per-path ELBOs, and the Pareto-smoothed
     importance sampling (PSIS) weights/diagnostic over the pooled draws. Draws are
-    produced lazily by :func:`multipathfinder_samples`.
+    produced lazily by `multipathfinder_samples()`.
 
     Attributes
     ----------
@@ -777,13 +777,13 @@ class MultiPathfinderFit:
         Normalized PSIS log importance weights over the flattened pool of
         ``num_paths * num_elbo_samples`` draws (path-major, matching
         ``state.samples``); a fit-time diagnostic, valid only for that exact
-        stored pool. :func:`multipathfinder_samples` draws fresh samples and
+        stored pool. `multipathfinder_samples()` draws fresh samples and
         recomputes its own weights, so it never consumes these.
     pareto_k
         The Pareto shape-parameter diagnostic for the fit-time PSIS weights:
         below ``0.5`` is reliable, ``0.5`` to ``0.7`` is borderline, and above
         ``0.7`` indicates the importance weights are unreliable.
-        :func:`multipathfinder_samples` reads it to decide whether
+        `multipathfinder_samples()` reads it to decide whether
         ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
     """
 
@@ -818,10 +818,10 @@ def fit_multipathfinder(
     ``init_to_uniform`` starting point) and scores the pooled per-path draws
     with Pareto-smoothed importance sampling (PSIS), so the returned fit is not
     tied to a single mode. This is the recommended entry point over
-    :func:`fit_pathfinder`: a single L-BFGS path can settle in one mode and its
+    `fit_pathfinder()`: a single L-BFGS path can settle in one mode and its
     local normal approximation may not reflect the rest of a multimodal or
     otherwise hard posterior. The PSIS weights computed here are a fit-time
-    diagnostic; the draws themselves come from :func:`multipathfinder_samples`,
+    diagnostic; the draws themselves come from `multipathfinder_samples()`,
     which resamples fresh per-path draws and reads ``pareto_k`` to pick between
     PSIS and ELBO-weighted path sampling.
 
@@ -890,12 +890,12 @@ def fit_multipathfinder(
 
     Notes
     -----
-    Runs with :func:`_stable_bfgs_sample` patched into blackjax (via
-    :func:`_ensure_stable_bfgs_sample`, called before
+    Runs with `_stable_bfgs_sample()` patched into blackjax (via
+    `_ensure_stable_bfgs_sample()`, called before
     ``blackjax.vi.multipathfinder.multi_approximate``): ``multi_approximate``
     calls ``approximate``/``sample`` imported from ``blackjax.vi.pathfinder``,
     whose module globals hold ``bfgs_sample``, so patching that module (as
-    :func:`fit_pathfinder` already does) covers the multipath route too.
+    `fit_pathfinder()` already does) covers the multipath route too.
     """
     if num_paths < 1:
         msg = "num_paths must be positive"
@@ -1003,11 +1003,11 @@ def multipathfinder_samples(
     ``num_samples`` draws. Nothing is recycled from the small pool stored at fit
     time, so asking for more draws than that pool held costs nothing in
     duplication. The output contract is identical to
-    :func:`~numpyro_forecast.predictive.draw_posterior` and
-    :func:`pathfinder_samples`: :func:`~numpyro_forecast.predictive.forecast`
+    `~~numpyro_forecast.predictive.draw_posterior()` and
+    `pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
     and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
     are delegated to the shared
-    :func:`~numpyro_forecast._offload._draw_chunked` driver, so the same
+    `~~numpyro_forecast._offload._draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     Resampling strategies
@@ -1046,7 +1046,7 @@ def multipathfinder_samples(
     rng_key
         PRNG key.
     fit
-        A fit from :func:`fit_multipathfinder`.
+        A fit from `fit_multipathfinder()`.
     num_samples
         Number of posterior draws.
     resample
@@ -1054,12 +1054,12 @@ def multipathfinder_samples(
         ``"elbo"``; see "Resampling strategies" above.
     batch_size
         Optional chunk size for the drawing itself; see
-        :func:`~numpyro_forecast.predictive.draw_posterior` (the same
+        `~~numpyro_forecast.predictive.draw_posterior()` (the same
         memory/reproducibility contract applies). Note that each chunk draws
         ``num_paths * batch_size`` samples internally.
     device
         Where each chunk of draws is moved as soon as it is drawn; see
-        :func:`~numpyro_forecast.predictive.draw_posterior`, including
+        `~~numpyro_forecast.predictive.draw_posterior()`, including
         for the NumPy path taken when the JAX CPU backend is not initialized and
         for the rules on mixing a host-committed result with other arrays.
 
@@ -1078,7 +1078,7 @@ def multipathfinder_samples(
     RuntimeError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        :func:`~numpyro_forecast._offload._host_memory_kind`).
+        `~~numpyro_forecast._offload._host_memory_kind()`).
 
     Warns
     -----

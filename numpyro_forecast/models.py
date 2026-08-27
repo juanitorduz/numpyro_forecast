@@ -1,10 +1,10 @@
 """Model building blocks: plain functions that register the train/forecast sites.
 
-The :class:`Horizon` value carries the train/forecast split, and the building
-blocks (:func:`innovations`, :func:`markov_series`, :func:`ssoe`, :func:`predict`)
+The `Horizon` value carries the train/forecast split, and the building
+blocks (`innovations()`, `markov_series()`, `ssoe()`, `predict()`)
 sample latents and observation sites against it. A model is a plain NumPyro function
 ``(covariates, data=None) -> None`` whose first line derives its
-:class:`Horizon` from the shapes with :meth:`Horizon.from_data` and which then
+`Horizon` from the shapes with `Horizon.from_data()` and which then
 calls the blocks directly. They are ordinary Python functions that call
 ``numpyro.sample`` and ``numpyro.deterministic`` on your behalf: not NumPyro
 primitives, and not effect handlers.
@@ -33,8 +33,8 @@ class Horizon:
     """The train/forecast split for a single model call.
 
     An immutable value derived once per model call from the covariate and data
-    shapes by :meth:`from_data`; every building block (:func:`innovations`,
-    :func:`markov_series`, :func:`ssoe`, :func:`predict`) takes it as its first
+    shapes by `from_data()`; every building block (`innovations()`,
+    `markov_series()`, `ssoe()`, `predict()`) takes it as its first
     argument.
 
     Attributes
@@ -68,7 +68,7 @@ class Horizon:
     def zero_data(self) -> Array | None:
         """Zeros shaped like ``data`` extended to the full horizon.
 
-        Mirrors Pyro's ``zero_data`` (and :func:`numpyro_forecast.arrays.zero_data_like`):
+        Mirrors Pyro's ``zero_data`` (and `numpyro_forecast.arrays.zero_data_like()`):
         it exposes the shape/dtype of the data over the forecast horizon without
         leaking observed values. ``None`` when there is no data.
 
@@ -144,13 +144,13 @@ def innovations(
     the guide shape fixed and lets ``Predictive`` draw the forecast suffix from
     the prior. Build the series arithmetically from the result (a random walk
     is ``jnp.cumsum(drift, axis=-2)``); a latent whose per-step distribution
-    depends on the previous state is :func:`markov_series`, and a deterministic
-    error-feedback recursion driven by the observed series is :func:`ssoe`.
+    depends on the previous state is `markov_series()`, and a deterministic
+    error-feedback recursion driven by the observed series is `ssoe()`.
 
     Parameters
     ----------
     h
-        The horizon for the current model call (see :class:`Horizon`).
+        The horizon for the current model call (see `Horizon`).
     name
         Base sample-site name for the in-sample latent.
     dist_fn
@@ -178,7 +178,7 @@ type Transition[Carry] = Callable[
 """``(carry, x_t) -> (dist_t, carry_fn)`` where ``carry_fn(z_t)`` builds the next
 carry from the *sampled* latent. The wrapper owns the sample statement.
 
-``Carry`` is the user's carry type (any PyTree), bound per :func:`markov_series`
+``Carry`` is the user's carry type (any PyTree), bound per `markov_series()`
 call; ``x_t`` is one row of the ``xs`` PyTree (``None`` for autonomous dynamics)."""
 
 
@@ -232,14 +232,14 @@ def markov_series[Carry](
     In-sample steps run in a ``numpyro.contrib.control_flow.scan`` with site
     ``name``; when forecasting, horizon steps run in a second scan with site
     ``f"{name}_future"`` **seeded by the final in-sample carry**. The guide
-    never sees the future site (same invariant as :func:`innovations`), and
+    never sees the future site (same invariant as `innovations()`), and
     under posterior replay the carry is a deterministic function of the replayed
     draws, so the forecast is conditioned through the state.
 
     Parameters
     ----------
     h
-        The horizon for the current model call (see :class:`Horizon`).
+        The horizon for the current model call (see `Horizon`).
     name
         Base sample-site name for the in-sample latent scan.
     init_carry
@@ -256,7 +256,7 @@ def markov_series[Carry](
         ``(name, size)`` pairs opened **inside** the scan body around the sample
         statement (the only placement NumPyro supports for scan + plate).
     reparam_config
-        Site-name -> :class:`~numpyro.infer.reparam.Reparam` mapping applied
+        Site-name -> `numpyro.infer.reparam.Reparam` mapping applied
         **inside** the scan body.
 
     Returns
@@ -315,16 +315,16 @@ type SSOEStep[Carry] = Callable[
 ]
 """``(carry, x_t) -> (mu_t, carry_fn)`` where ``mu_t`` is the one-step-ahead mean
 of the current row (shape ``(*batch, obs)``) and ``carry_fn(y_t, eps_t)`` builds
-the next carry from the row's value and error. :func:`ssoe` owns the error
-site: ``step`` must not call ``numpyro.sample`` (that is :func:`markov_series`).
+the next carry from the row's value and error. `ssoe()` owns the error
+site: ``step`` must not call ``numpyro.sample`` (that is `markov_series()`).
 
-``Carry`` is the user's carry type (any PyTree), bound per :func:`ssoe` call;
+``Carry`` is the user's carry type (any PyTree), bound per `ssoe()` call;
 ``x_t`` is one row of the ``xs`` PyTree (``None`` when ``xs`` is ``None``)."""
 
 
 @dataclass(frozen=True)
 class SSOEResult:
-    """The means and sampled future values produced by :func:`ssoe`.
+    """The means and sampled future values produced by `ssoe()`.
 
     Attributes
     ----------
@@ -478,21 +478,21 @@ def ssoe[Carry](
     The block registers nothing but the error site. The caller writes the
     likelihood against ``r.mu`` and registers ``numpyro.deterministic("forecast",
     r.y_future)`` when ``h.future > 0`` (an unconditional registration is
-    harmless to :func:`~numpyro_forecast.predictive.forecast`, but lands a
+    harmless to `~~numpyro_forecast.predictive.forecast()`, but lands a
     size-0 variable in every posterior). Driver contract:
-    :func:`~numpyro_forecast.predictive.predict_in_sample` and
-    :func:`~numpyro_forecast.convert.to_datatree` call the model with
+    `~~numpyro_forecast.predictive.predict_in_sample()` and
+    `~~numpyro_forecast.convert.to_datatree()` call the model with
     ``data=None`` and read ``"obs"``, so ``y`` must come from ``covariates`` or be
     computed in the model, never from ``h.data``;
-    :func:`~numpyro_forecast.predictive.forecast` reads ``"forecast"``.
+    `~~numpyro_forecast.predictive.forecast()` reads ``"forecast"``.
 
     **Frozen gates.** Route an update gate (Croston's demand indicator, an
     availability mask) through an ``xs`` leaf frozen over the horizon with
-    :func:`~numpyro_forecast.arrays.pad_future`, and read it from ``x_t``, never
+    `~~numpyro_forecast.arrays.pad_future()`, and read it from ``x_t``, never
     from ``y_t`` (over the horizon ``y_t = mu_t + eps_t`` is nonzero). With the
     gate off, ``carry_fn`` is the identity and the forecast is the last level
-    plus iid errors. :func:`~numpyro_forecast.evaluate.backtest` and
-    :func:`~numpyro_forecast.predictive.forecast` hand the model *real* future
+    plus iid errors. `~~numpyro_forecast.evaluate.backtest()` and
+    `~~numpyro_forecast.predictive.forecast()` hand the model *real* future
     covariate rows, so a gate sliced from the full covariates keeps updating on
     sampled values and leaks the test window; scenario inputs such as a future
     availability mask are the only thing to read from those rows.
@@ -520,7 +520,7 @@ def ssoe[Carry](
     Parameters
     ----------
     h
-        The horizon for the current model call (see :class:`Horizon`).
+        The horizon for the current model call (see `Horizon`).
     name
         Base name of the error site; the future errors are drawn at
         ``f"{name}_future"``.
@@ -535,7 +535,7 @@ def ssoe[Carry](
         rows: a scalar level is ``init[None]``, a panel level ``(series,)``.
         Every leaf must keep its shape and dtype through ``carry_fn``.
     step
-        ``(carry, x_t) -> (mu_t, carry_fn)`` (see :data:`SSOEStep`): ``mu_t`` is
+        ``(carry, x_t) -> (mu_t, carry_fn)`` (see `SSOEStep`): ``mu_t`` is
         the mean for the current row (shape ``(*batch, obs)``, so a scalar
         state emits ``mu[None]``) and ``carry_fn(y_t, eps_t)`` the next carry.
         ``carry_fn`` receives the drawn ``eps_t`` over the horizon (not a
@@ -653,25 +653,25 @@ def predict(
 
     ``prediction`` is the deterministic predictor over the full horizon (time at
     axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
-    two forms. A :class:`~numpyro.distributions.Distribution` is zero-centered
+    two forms. A `numpyro.distributions.Distribution` is zero-centered
     observation noise (e.g. ``dist.StudentT(nu, 0.0, sigma)``) shifted onto the
-    predictor with :func:`~numpyro_forecast.surgery.shift_loc`, which also owns
+    predictor with `~~numpyro_forecast.surgery.shift_loc()`, which also owns
     the multivariate-normal layout check. A callable is a link mapping the
     predictor to the observation distribution directly (the GLM form, e.g.
     ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the
     observation site ``"obs"`` is observed; while forecasting the in-sample
     prefix is observed and the forecast suffix is sampled at ``"obs_future"``
     and exposed as the ``"forecast"`` deterministic site that
-    :func:`~numpyro_forecast.predictive.forecast` reads. The observation
+    `~~numpyro_forecast.predictive.forecast()` reads. The observation
     distribution must support time-axis surgery
-    (:func:`~numpyro_forecast.surgery.slice_time` /
-    :func:`~numpyro_forecast.surgery.prefix_condition`), i.e. an elementwise
+    (`~~numpyro_forecast.surgery.slice_time()` /
+    `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
     family or a registered one.
 
     Parameters
     ----------
     h
-        The horizon for the current model call (see :class:`Horizon`).
+        The horizon for the current model call (see `Horizon`).
     obs_dist
         Zero-centered noise distribution (shifted onto ``prediction``) or a
         link callable from the full-horizon predictor to the observation

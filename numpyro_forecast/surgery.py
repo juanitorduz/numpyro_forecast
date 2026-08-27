@@ -1,10 +1,10 @@
 """Distribution surgery: time-axis operations on observation distributions.
 
-:func:`shift_loc`, :func:`slice_time`, and :func:`prefix_condition` are
-implemented with :func:`functools.singledispatch` so new distribution families
+`shift_loc()`, `slice_time()`, and `prefix_condition()` are
+implemented with `functools.singledispatch()` so new distribution families
 can be registered without modifying call sites, the functional analogue of
 Pyro's messenger-based dispatch. Elementwise families (independent per time/obs
-cell) are declared with :func:`register_elementwise`; correlated families such
+cell) are declared with `register_elementwise()`; correlated families such
 as ``MultivariateNormal`` register dedicated dispatches for all three
 surgeries.
 """
@@ -22,21 +22,21 @@ _ELEMENTWISE_FAMILIES: set[type[dist.Distribution]] = set()
 """Distribution families declared elementwise (independent per time/obs cell).
 
 Membership is by exact type (subclasses do not inherit it). Elementwise
-families get generic :func:`slice_time` and :func:`prefix_condition` support:
+families get generic `slice_time()` and `prefix_condition()` support:
 slicing a parameter along the time axis is a valid restriction, and the
 forecast-horizon conditional reduces to the horizon marginal.
 """
 
 _ELEMENTWISE_CHECKED: set[type[dist.Distribution]] = set()
-"""Cache of families that have passed :func:`_check_elementwise` (keyed by type)."""
+"""Cache of families that have passed `_check_elementwise()` (keyed by type)."""
 
 
 def register_elementwise(cls: type[dist.Distribution]) -> type[dist.Distribution]:
     """Declare a distribution family elementwise (usable as a decorator).
 
     An elementwise family is independent across every batch cell with an empty
-    event shape, so :func:`slice_time` may slice its broadcast parameters along
-    the time axis and :func:`prefix_condition` may reduce to the horizon
+    event shape, so `slice_time()` may slice its broadcast parameters along
+    the time axis and `prefix_condition()` may reduce to the horizon
     marginal. Membership is by exact type; register each concrete subclass you
     rely on.
 
@@ -144,7 +144,7 @@ def _shift_loc_elementwise(noise_dist: dist.Distribution, loc: Array) -> dist.Di
     family's constructor parameters are read back from ``arg_constraints`` (each a
     distribution attribute), the ``loc`` parameter is shifted by ``loc``, and the
     distribution is reconstructed. It is registered only for the explicit families
-    in :data:`_SHIFT_LOC_FAMILIES`, so the generic ``shift_loc`` keeps refusing
+    in `_SHIFT_LOC_FAMILIES`, so the generic ``shift_loc`` keeps refusing
     unknown families.
     """
     kwargs = {name: getattr(noise_dist, name) for name in type(noise_dist).arg_constraints}
@@ -160,7 +160,7 @@ _SHIFT_LOC_FAMILIES: tuple[type[dist.Distribution], ...] = (
     dist.Gumbel,
     dist.AsymmetricLaplace,
 )
-"""Location-scale families that share :func:`_shift_loc_elementwise`."""
+"""Location-scale families that share `_shift_loc_elementwise()`."""
 
 for _family in _SHIFT_LOC_FAMILIES:
     shift_loc.register(_family, _shift_loc_elementwise)

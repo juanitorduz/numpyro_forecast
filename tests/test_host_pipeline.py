@@ -1,6 +1,6 @@
 """End-to-end ``device="host"`` pipeline test (spec roadmap, host-offload contract).
 
-``device="host"`` keeps every result in pageable host memory: a :class:`jax.Array`
+``device="host"`` keeps every result in pageable host memory: a `jax.Array`
 committed to the CPU backend device when that backend is initialized, and a
 NumPy array (one ``jax.device_get`` per chunk, no backend needed) when it is
 not, so nothing of a draw occupies accelerator memory and nothing is pinned.

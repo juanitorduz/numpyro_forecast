@@ -1,8 +1,8 @@
 """Optional-dependency gating behind ``pyproject`` extras.
 
 Optional features (dataframes, blackjax, optax) are never imported at package
-import time: :func:`require` imports them lazily at first use with an
-actionable install hint, and :func:`_api_canary` asserts a pinned upstream API
+import time: `require()` imports them lazily at first use with an
+actionable install hint, and `_api_canary()` asserts a pinned upstream API
 surface so drift fails loudly.
 """
 

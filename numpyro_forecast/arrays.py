@@ -4,7 +4,7 @@ Arrays put time at axis ``-2`` and the observation dim at ``-1`` (matching
 Pyro). These helpers build horizon-shaped zeros, concatenate in-sample and
 forecast-horizon segments along the time axis, and pad an in-sample array with
 constant forecast-horizon rows (the frozen-gate recipe of
-:func:`numpyro_forecast.models.ssoe`).
+`numpyro_forecast.models.ssoe()`).
 """
 
 import jax.numpy as jnp
@@ -15,8 +15,8 @@ from numpyro_forecast.typing import Array
 def _zeros_like_data(data: Array, duration: int) -> Array:
     """Return zeros shaped like ``data`` with the time axis ``-2`` set to ``duration``.
 
-    Shared core of :func:`zero_data_like` and
-    :attr:`numpyro_forecast.models.Horizon.zero_data`: it exposes the
+    Shared core of `zero_data_like()` and
+    `numpyro_forecast.models.Horizon.zero_data`: it exposes the
     shape/dtype of the data over the full forecast horizon without leaking
     observed values into the model.
     """
@@ -30,7 +30,7 @@ def zero_data_like(data: Array, covariates: Array) -> Array:
     Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
     full forecast horizon without leaking observed values into the model. The
     functional API exposes the equivalent value as
-    :attr:`numpyro_forecast.models.Horizon.zero_data`.
+    `numpyro_forecast.models.Horizon.zero_data`.
 
     Parameters
     ----------
@@ -70,7 +70,7 @@ def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:
 def pad_future(x: Array, future: int, *, value: float = 0.0) -> Array:
     """Append ``future`` rows filled with ``value`` along the time axis.
 
-    The frozen-gate recipe of :func:`numpyro_forecast.models.ssoe`: an update
+    The frozen-gate recipe of `numpyro_forecast.models.ssoe()`: an update
     gate observed in-sample (``(*batch, t_obs, obs)``) becomes a full-horizon
     ``xs`` leaf whose forecast rows are ``value`` (``0.0`` freezes the carry,
     ``1.0`` keeps an availability mask open). Zero ``future`` returns ``x``

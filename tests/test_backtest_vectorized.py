@@ -1,6 +1,6 @@
-"""Tests for :func:`backtest_vectorized` (roadmap §4.3).
+"""Tests for `backtest_vectorized()` (roadmap §4.3).
 
-Covers estimator equivalence with the loop :func:`backtest` (window indices +
+Covers estimator equivalence with the loop `backtest()` (window indices +
 statistical metric closeness), every validator, the window-count formula, the
 compile-discipline gate (I3: the vmapped SVI fit does not recompile per window),
 and the I6 acceptance check that a subsequent eager plain-NumPyro SVI fit with a
@@ -521,7 +521,7 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
 
     ``backtest_vectorized`` resolves ``resolved_optim = Adam(0.01) if optim is None
     else optim`` and builds ``SVI(model, guide, resolved_optim, Trace_ELBO())``.
-    Monkeypatching :data:`numpyro_forecast.evaluate.SVI` with a thin recording
+    Monkeypatching `numpyro_forecast.evaluate.SVI` with a thin recording
     subclass pins both branches: an explicit ``optim`` is forwarded unchanged, and
     ``optim=None`` falls back to a fresh ``Adam`` instance rather than the one we
     passed in a previous call.

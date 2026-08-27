@@ -71,13 +71,13 @@ def resolve_entry(entry: str) -> object:
     ----------
     entry
         A reference entry such as ``"forecaster.Forecaster"``: everything up to
-        the last dot is a module path below :data:`PACKAGE`, the last component
+        the last dot is a module path below `PACKAGE`, the last component
         is an attribute of that module.
 
     Returns
     -------
     object
-        The resolved symbol, or the :data:`_MISSING` sentinel when the module
+        The resolved symbol, or the `_MISSING` sentinel when the module
         path or the attribute does not exist in this package tree. An
         ``ImportError`` from outside the package (e.g. a missing third-party
         dependency) propagates so a broken environment cannot silently produce
@@ -119,7 +119,7 @@ def build_snapshot(entries: list[str], version: str) -> tuple[dict[str, Any], li
     Parameters
     ----------
     entries
-        Dotted reference entries from :func:`reference_entries`.
+        Dotted reference entries from `reference_entries()`.
     version
         Version label recorded in the snapshot.
 

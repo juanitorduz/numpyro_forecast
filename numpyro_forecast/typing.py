@@ -11,14 +11,14 @@ import jax
 import numpy as np
 
 Array = jax.Array
-"""A JAX array (alias of :class:`jax.Array`)."""
+"""A JAX array (alias of `jax.Array`)."""
 
 BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
 Returns ``(inner_state, step_fn)``. ``rng_key`` is first, matching the package's
 rng-key-first convention. Consumed by
-:class:`~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
+`~~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
 """
 
 Metric = Callable[[Array, Array], Array]
@@ -27,12 +27,12 @@ Metric = Callable[[Array, Array], Array]
 ``pred`` has the sample axis first, shape ``(sample, *batch)``; ``truth`` has
 shape ``(*batch)``; the result is a 0-d array. Metrics must be pure JAX
 functions (jit- and vmap-compatible): host floats appear only at result
-boundaries (:func:`~numpyro_forecast.evaluate.evaluate_forecast`,
-:class:`~numpyro_forecast.evaluate.BacktestResult`), never inside metrics, so
-:func:`~numpyro_forecast.evaluate.backtest_vectorized` can vmap any metric over
+boundaries (`~~numpyro_forecast.evaluate.evaluate_forecast()`,
+`~~numpyro_forecast.evaluate.BacktestResult`), never inside metrics, so
+`~~numpyro_forecast.evaluate.backtest_vectorized()` can vmap any metric over
 the window axis. Parametrize by closure: ``functools.partial`` for keywords
 (e.g. ``partial(eval_coverage, alpha=0.5)``) or a factory like
-:func:`~numpyro_forecast.metrics.make_mase`.
+`~~numpyro_forecast.metrics.make_mase()`.
 """
 
 
@@ -42,7 +42,7 @@ class ForecastModel(Protocol):
 
     Any plain function with this signature satisfies this Protocol structurally
     (for example, one that derives its
-    :class:`~numpyro_forecast.models.Horizon` from the shapes via
+    `~~numpyro_forecast.models.Horizon` from the shapes via
     ``Horizon.from_data`` and calls the model building blocks), so nothing
     needs to subclass it. The parameters are positional-only so a user model's
     own parameter names (``cov``, ``y``, ...) stay free instead of being forced
@@ -63,14 +63,14 @@ class ForecastModel(Protocol):
 
 
 ModelFactory = Callable[[], ForecastModel]
-"""A zero-argument callable returning a fresh :class:`ForecastModel` instance."""
+"""A zero-argument callable returning a fresh `ForecastModel` instance."""
 
 
 @runtime_checkable
 class ForecastFn(Protocol):
     """A closure that fits a model on a training window and forecasts its test horizon.
 
-    Called by :func:`~numpyro_forecast.evaluate.backtest` positionally, with
+    Called by `~~numpyro_forecast.evaluate.backtest()` positionally, with
     ``full_covariates`` spanning the *full* window (train followed by test, i.e.
     ``covariates[..., t0:t2, :]``) and ``batch_size`` forwarded unchanged from
     ``backtest`` so a chunked closure can bound its own device memory. Returns
@@ -78,7 +78,7 @@ class ForecastFn(Protocol):
     ``(num_samples, *batch, t2 - t1, obs)``. The draws may stay in host memory
     (e.g. via ``device="host"``): a jax Array committed to the CPU backend
     device or, without a CPU backend, a NumPy array. Every metric in
-    :data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred``
+    `~~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred``
     or ``truth`` (or both), in any mix and regardless of ``batch_size``, moving
     a host-resident operand to device memory first where needed; draws already
     on-device avoid that hop for the metrics scored every window. The
@@ -108,10 +108,10 @@ class ForecastFn(Protocol):
 class InSampleFn(Protocol):
     """A closure that fits a model on a training window and scores its in-sample fit.
 
-    Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
+    Called by `~~numpyro_forecast.evaluate.backtest()` (only when
     ``eval_train=True``) positionally. Returns in-sample posterior-predictive
     samples with the sample axis first, shape ``(num_samples, *batch, t1 - t0,
-    obs)``. The same ``batch_size``/host-offload notes as :class:`ForecastFn`
+    obs)``. The same ``batch_size``/host-offload notes as `ForecastFn`
     apply.
     """
 

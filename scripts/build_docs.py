@@ -247,7 +247,7 @@ def generate_pages() -> list[Path]:
     -------
     list[pathlib.Path]
         The wrapper files that were created (the ``_src/`` and ``thumbnails/``
-        directories are removed wholesale by :func:`clean_pages`).
+        directories are removed wholesale by `clean_pages()`).
     """
     EMBED_DIR.mkdir(exist_ok=True)
     THUMBNAILS_DIR.mkdir(exist_ok=True)

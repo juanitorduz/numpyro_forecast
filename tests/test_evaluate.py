@@ -62,7 +62,7 @@ def _canned_in_sample_fn(
     *,
     batch_size: int | None = None,
 ) -> Array:
-    """The in-sample counterpart of :func:`_canned_forecast_fn`."""
+    """The in-sample counterpart of `_canned_forecast_fn()`."""
     del model
     return train_data.mean() + random.normal(rng_key, (num_samples, *train_data.shape))
 
@@ -230,9 +230,9 @@ def test_chunked_metrics_accept_host_committed_inputs(
 ) -> None:
     """The chunked (``batch_size``-bounded) path must accept the same input mixes.
 
-    :func:`~numpyro_forecast.evaluate._chunked_cell_metric` slices ``pred``
+    `~~numpyro_forecast.evaluate._chunked_cell_metric()` slices ``pred``
     and ``truth`` into cell blocks through
-    :func:`~numpyro_forecast._offload._leaf_view` rather than the
+    `~~numpyro_forecast._offload._leaf_view()` rather than the
     fused kernel used by the unchunked path, so it needs its own coverage: any
     mix of host-committed/device-resident inputs must reproduce the
     all-device, unchunked result.

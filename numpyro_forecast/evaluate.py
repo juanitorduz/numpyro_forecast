@@ -2,10 +2,10 @@
 
 This is the JAX/NumPyro port of ``pyro.contrib.forecast.evaluate``. Unlike Pyro
 there is no global parameter store, so each backtest window is a pure call into
-a user-supplied fit/forecast closure (see :class:`~numpyro_forecast.typing.ForecastFn`).
-:func:`backtest` supports two windowing strategies, an
+a user-supplied fit/forecast closure (see `~~numpyro_forecast.typing.ForecastFn`).
+`backtest()` supports two windowing strategies, an
 ``"expanding"`` window (always trains from ``t0 = 0``) and a fixed-size
-``"rolling"`` window (see :data:`WindowType`), selected via ``window_type``.
+``"rolling"`` window (see `WindowType`), selected via ``window_type``.
 """
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -53,7 +53,7 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 
 @jax.jit
 def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
-    """Jitted MAE core; the host-committed-input handling lives in :func:`eval_mae`."""
+    """Jitted MAE core; the host-committed-input handling lives in `eval_mae()`."""
     return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
 
 
@@ -62,9 +62,9 @@ def eval_mae(
 ) -> Array:
     """Mean absolute error using the forecast sample median as point estimate.
 
-    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (:func:`~numpyro_forecast._offload._device_view`), so either (or
+    (`~~numpyro_forecast._offload._device_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -84,7 +84,7 @@ def eval_mae(
 
 @jax.jit
 def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
-    """Jitted RMSE core; the host-committed-input handling lives in :func:`eval_rmse`."""
+    """Jitted RMSE core; the host-committed-input handling lives in `eval_rmse()`."""
     return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
 
 
@@ -93,9 +93,9 @@ def eval_rmse(
 ) -> Array:
     """Root mean squared error using the forecast sample mean as point estimate.
 
-    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (:func:`~numpyro_forecast._offload._device_view`), so either (or
+    (`~~numpyro_forecast._offload._device_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -135,12 +135,12 @@ def _chunked_cell_metric(
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
-    (:func:`~numpyro_forecast.predictive._chunk_indices`), so the
+    (`~~numpyro_forecast.predictive._chunk_indices()`), so the
     jitted ``kernel`` compiles once; each block's per-cell values are staged on
     the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
     is never chunked. Inputs are normalized with
-    :func:`~numpyro_forecast._offload._leaf_view` so a host-committed
+    `~~numpyro_forecast._offload._leaf_view()` so a host-committed
     panel is sliced on the host instead of raising when a device-resident
     index array gathers against it.
 
@@ -182,7 +182,7 @@ def eval_crps(
 ) -> Array:
     """Empirical CRPS averaged over all data elements.
 
-    A pure JAX scalar kernel (see :data:`~numpyro_forecast.typing.Metric`).
+    A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 
     Parameters
     ----------
@@ -202,7 +202,7 @@ def eval_crps(
         to float tolerance, not bitwise); at or above the cell count the
         single-pass path runs instead, which moves any host-committed operand
         back to device memory first
-        (:func:`~numpyro_forecast._offload._device_view`) so either
+        (`~~numpyro_forecast._offload._device_view()`) so either
         ``pred`` or ``truth`` (or both) may be host-committed regardless of
         ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -243,7 +243,7 @@ def eval_coverage(
     ``1 - (1 - alpha) / 2`` quantiles of the forecast samples; the metric is the
     fraction of ground-truth values that fall inside it. A well-calibrated
     forecast has coverage close to ``alpha``. A pure JAX scalar kernel (see
-    :data:`~numpyro_forecast.typing.Metric`); bind a non-default level with
+    `~~numpyro_forecast.typing.Metric`); bind a non-default level with
     ``functools.partial(eval_coverage, alpha=...)``.
 
     Parameters
@@ -256,12 +256,12 @@ def eval_coverage(
         Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
     batch_size
         Optional number of flattened data cells evaluated on the accelerator
-        per pass (see :func:`eval_crps`; the sample axis is never chunked).
+        per pass (see `eval_crps()`; the sample axis is never chunked).
         Coverage is a count of exact 0/1 indicators, so chunking recovers
         the identical count; only the precision of the final division differs
         from the single pass. Either path accepts a host-committed ``pred``
         or ``truth`` (or both); the single pass moves them to device memory
-        first (:func:`~numpyro_forecast._offload._device_view`).
+        first (`~~numpyro_forecast._offload._device_view()`).
         ``None`` (default) evaluates in one pass.
 
     Returns
@@ -292,7 +292,7 @@ DEFAULT_METRICS: dict[str, Metric] = {
     "crps": eval_crps,
     "coverage": eval_coverage,
 }
-"""Default metrics used by :func:`backtest` and :func:`backtest_vectorized`."""
+"""Default metrics used by `backtest()` and `backtest_vectorized()`."""
 
 
 def evaluate_forecast(
@@ -305,17 +305,19 @@ def evaluate_forecast(
 
     A one-call convenience that applies each metric in ``metrics`` to the same
     forecast samples and ground truth, converting to host floats at the end. It
-    is the one-shot counterpart to :func:`backtest` and is also used internally
-    by :func:`backtest` to score each rolling window.
+    is the one-shot counterpart to `backtest()` and is also used internally
+    by `backtest()` to score each rolling window.
 
     Metric-specific parameters live with the metric in the ``metrics`` mapping,
     not on this function. To tune a metric, bind its keyword with
-    :func:`functools.partial`; for example, to score coverage at the 80% level::
+    `functools.partial()`; for example, to score coverage at the 80% level:
 
-        from functools import partial
+    ```python
+    from functools import partial
 
-        metrics = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}
-        evaluate_forecast(pred, truth, metrics=metrics)
+    metrics = {**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}
+    evaluate_forecast(pred, truth, metrics=metrics)
+    ```
 
     Parameters
     ----------
@@ -325,10 +327,10 @@ def evaluate_forecast(
         Ground-truth values with shape ``(*batch)``.
     metrics
         Mapping of metric name to function; when ``None`` defaults to
-        :data:`DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
+        `DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
         Each function takes ``(pred, truth)`` and returns a scalar array (see
-        :data:`~numpyro_forecast.typing.Metric`); bind any extra parameters
-        with :func:`functools.partial` (see above).
+        `~~numpyro_forecast.typing.Metric`); bind any extra parameters
+        with `functools.partial()` (see above).
 
     Returns
     -------
@@ -352,7 +354,7 @@ def evaluate_forecast(
 
 @dataclass(frozen=True)
 class BacktestResult:
-    """Per-window result of a :func:`backtest` run.
+    """Per-window result of a `backtest()` run.
 
     Attributes
     ----------
@@ -539,7 +541,7 @@ def _iter_windows(
     duration
         Total number of time steps in the series.
     window_type
-        Resolved strategy (see :func:`_resolve_window_type`).
+        Resolved strategy (see `_resolve_window_type()`).
     train_window
         Fixed training-window size; required (not ``None``) when
         ``window_type="rolling"`` and ignored otherwise.
@@ -607,7 +609,7 @@ def _eval_train_window(
 ) -> dict[str, float]:
     """Score the in-sample posterior predictive over one training window.
 
-    A thin call into the user-supplied :class:`~numpyro_forecast.typing.InSampleFn`
+    A thin call into the user-supplied `~~numpyro_forecast.typing.InSampleFn`
     closure, which owns fitting the model and drawing its in-sample predictive.
     """
     train_pred = in_sample_fn(
@@ -641,7 +643,7 @@ def _run_window(
     eval_train: bool,
     keep_predictions: bool,
 ) -> BacktestResult:
-    """Fit, forecast, and score a single backtest window into a :class:`BacktestResult`."""
+    """Fit, forecast, and score a single backtest window into a `BacktestResult`."""
     train_data, train_covariates, full_covariates, truth = _slice_window(
         data, covariates, t0, t1, t2
     )
@@ -728,57 +730,63 @@ def backtest(
     has no dependency on how a model is fit.
 
     ``forecast_fn`` has the call signature (see
-    :class:`~numpyro_forecast.typing.ForecastFn`)::
+    `~~numpyro_forecast.typing.ForecastFn`):
 
-        forecast_fn(
-            rng_key, model, train_data, train_covariates, full_covariates,
-            num_samples, *, batch_size=None,
-        ) -> draws  # shape (num_samples, *batch, t2 - t1, obs)
+    ```python
+    forecast_fn(
+        rng_key, model, train_data, train_covariates, full_covariates,
+        num_samples, *, batch_size=None,
+    ) -> draws  # shape (num_samples, *batch, t2 - t1, obs)
+    ```
 
     where ``full_covariates`` spans the *full* window, ``covariates[..., t0:t2, :]``
     (train followed by test), matching what the model needs to run the forecast
     horizon. The optional ``in_sample_fn`` has the call signature (see
-    :class:`~numpyro_forecast.typing.InSampleFn`)::
+    `~~numpyro_forecast.typing.InSampleFn`):
 
-        in_sample_fn(
-            rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
-        ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
+    ```python
+    in_sample_fn(
+        rng_key, model, train_data, train_covariates, num_samples, *, batch_size=None,
+    ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
+    ```
 
     ``batch_size`` is forwarded unchanged into both closures so a chunked
     implementation can bound its own device memory. A closure may return draws
     committed to host memory (e.g. via ``device="host"``, to cap peak
-    accelerator usage): every metric in :data:`DEFAULT_METRICS` accepts a
+    accelerator usage): every metric in `DEFAULT_METRICS` accepts a
     host-committed ``pred`` or ``truth`` (or both), in any mix and regardless
     of ``batch_size``, moving a host-committed operand to device memory first
     where needed. Returning draws already on-device still avoids the extra
     host-to-device hop for metrics scored every window.
 
     A minimal ``forecast_fn`` built on plain NumPyro (``AutoNormal`` + ``SVI.run``
-    + ``Predictive``)::
+    + ``Predictive``):
 
-        import numpyro
-        from jax import random
-        from numpyro.infer import SVI, Predictive, Trace_ELBO
-        from numpyro.infer.autoguide import AutoNormal
+    ```python
+    import numpyro
+    from jax import random
+    from numpyro.infer import SVI, Predictive, Trace_ELBO
+    from numpyro.infer.autoguide import AutoNormal
 
 
-        def forecast_fn(
-            rng_key,
-            model,
-            train_data,
-            train_covariates,
-            full_covariates,
-            num_samples,
-            *,
-            batch_size=None,
-        ):
-            guide = AutoNormal(model)
-            svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
-            key_fit, key_post, key_pred = random.split(rng_key, 3)
-            state = svi.run(key_fit, 1_000, train_covariates, train_data, progress_bar=False)
-            posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
-            predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
-            return predictive(key_pred, full_covariates, train_data)["forecast"]
+    def forecast_fn(
+        rng_key,
+        model,
+        train_data,
+        train_covariates,
+        full_covariates,
+        num_samples,
+        *,
+        batch_size=None,
+    ):
+        guide = AutoNormal(model)
+        svi = SVI(model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        key_fit, key_post, key_pred = random.split(rng_key, 3)
+        state = svi.run(key_fit, 1_000, train_covariates, train_data, progress_bar=False)
+        posterior = guide.sample_posterior(key_post, state.params, sample_shape=(num_samples,))
+        predictive = Predictive(model, posterior_samples=posterior, return_sites=["forecast"])
+        return predictive(key_pred, full_covariates, train_data)["forecast"]
+    ```
 
     Parameters
     ----------
@@ -789,32 +797,32 @@ def backtest(
     covariates
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
-        Factory returning a fresh :class:`~numpyro_forecast.typing.ForecastModel` per window.
+        Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
     forecast_fn
         Closure that fits ``model`` on the training window and forecasts the
-        test horizon (see :class:`~numpyro_forecast.typing.ForecastFn` and the
+        test horizon (see `~~numpyro_forecast.typing.ForecastFn` and the
         contract above).
     in_sample_fn
         Optional closure that fits ``model`` on the training window and scores
-        its in-sample fit (see :class:`~numpyro_forecast.typing.InSampleFn` and
+        its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
         the contract above). Required when ``eval_train=True``.
     metrics
-        Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+        Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each function takes ``(pred, truth)`` and returns a scalar array (see
-        :data:`~numpyro_forecast.typing.Metric`); bind any metric-specific
-        parameters with :func:`functools.partial`, e.g.
+        `~~numpyro_forecast.typing.Metric`); bind any metric-specific
+        parameters with `functools.partial()`, e.g.
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}``.
     per_window_metrics
         Optional ``(t0, t1, t2) -> Mapping[str, Metric]`` callable producing
         extra metrics merged over ``metrics`` for each window. Use it for
         window-dependent metrics such as a MASE scaled by that window's training
-        data (:func:`numpyro_forecast.metrics.make_mase`).
+        data (`numpyro_forecast.metrics.make_mase()`).
     transform
         Optional ``(pred, truth) -> (pred, truth)`` applied before metrics. It
         runs before the metrics and receives the forecast/in-sample closure's
         draws as-is, so a transform that does its own array math against a
         device-resident operand must convert a host-committed ``pred`` or
-        ``truth`` first, e.g. with :func:`numpy.asarray` (or move it back
+        ``truth`` first, e.g. with `numpy.asarray()` (or move it back
         onto a device explicitly).
     window_type
         Windowing strategy. If ``None`` (default) it is inferred from
@@ -854,7 +862,7 @@ def backtest(
         instance returned by the first ``model_fn()`` call is reused for every
         window so forecast/predict kernels can cache across windows. SVI still
         recompiles per window; for a single fused fit over all windows use
-        :func:`backtest_vectorized`. Ignored for expanding windows and when
+        `backtest_vectorized()`. Ignored for expanding windows and when
         ``False``.
 
     Returns
@@ -919,9 +927,9 @@ def backtest(
 
 @dataclass(frozen=True)
 class VectorizedBacktestResult:
-    """Result of a :func:`backtest_vectorized` run (all windows at once).
+    """Result of a `backtest_vectorized()` run (all windows at once).
 
-    Unlike :class:`BacktestResult` this holds every window's values stacked
+    Unlike `BacktestResult` this holds every window's values stacked
     along a leading window axis, because the windows are fitted, drawn, and
     scored in single vmapped passes rather than one call each. There are no
     per-window walltimes (a single fused computation covers all windows).
@@ -969,7 +977,7 @@ def _vmapped_metrics(
     """Score every window at once, returning ``name -> (num_windows,)`` arrays.
 
     Metrics are pure JAX scalar kernels (see
-    :data:`~numpyro_forecast.typing.Metric`), so any mapping, default or
+    `~~numpyro_forecast.typing.Metric`), so any mapping, default or
     custom, is scored by one ``vmap`` per metric over the leading window axis;
     the single device-to-host transfer is deferred to the caller.
     """
@@ -1022,7 +1030,7 @@ def backtest_vectorized(
 ) -> VectorizedBacktestResult:
     """Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
-    Estimator-equivalent to :func:`backtest` with rolling windows; it differs
+    Estimator-equivalent to `backtest()` with rolling windows; it differs
     only in PRNG stream layout and float reduction order, so the equivalence is
     statistical, not bitwise. Model, guide, and SVI compile once regardless of
     the number of windows, giving order-of-magnitude wall-clock wins for tens
@@ -1031,7 +1039,7 @@ def backtest_vectorized(
     PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
     ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
     posterior-draw, and forecast subkeys (the parent itself is never consumed;
-    see :func:`_window_key_streams`).
+    see `_window_key_streams()`).
 
     Parameters
     ----------
@@ -1043,7 +1051,7 @@ def backtest_vectorized(
         Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
         Factory returning a fresh model; called exactly once (per-window model
-        variation is unsupported here, use :func:`backtest`). Must return the
+        variation is unsupported here, use `backtest()`). Must return the
         same model object ``guide`` was built on (see ``guide`` below).
     train_window
         Fixed training-window length (``>= 1``).
@@ -1051,11 +1059,13 @@ def backtest_vectorized(
         Fixed test-window length (``>= 1``).
     guide
         An ``AutoGuide`` instance built on the same model object ``model_fn``
-        returns (hand-written guides are not vmappable, use :func:`backtest`
-        instead)::
+        returns (hand-written guides are not vmappable, use `backtest()`
+        instead):
 
-            model = make_model()
-            backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+        ```python
+        model = make_model()
+        backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+        ```
 
     optim
         NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
@@ -1067,12 +1077,12 @@ def backtest_vectorized(
     num_samples
         Number of forecast samples drawn per window.
     metrics
-        Mapping of metric name to function; defaults to :data:`DEFAULT_METRICS`.
+        Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
         including partial-bound variants such as
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
         is scored inside the single fused computation. Host-side metrics are
-        unsupported here; use :func:`backtest`, or ``keep_predictions=True``
+        unsupported here; use `backtest()`, or ``keep_predictions=True``
         and score on the host.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
@@ -1183,7 +1193,7 @@ def results_to_dataframe(
     may carry different metric sets (e.g. via ``backtest(per_window_metrics=...)``);
     the union of columns is used and missing entries are left as ``NaN``.
 
-    A :class:`VectorizedBacktestResult` from :func:`backtest_vectorized` is also
+    A `VectorizedBacktestResult` from `backtest_vectorized()` is also
     accepted; it produces the same ``metric_<name>`` columns for the same metric
     set, but has no ``train_metric_*`` or ``walltime`` columns (a vectorized run
     has no per-window walltimes), which are simply absent.
@@ -1191,8 +1201,8 @@ def results_to_dataframe(
     Parameters
     ----------
     results
-        A sequence of :class:`BacktestResult` from :func:`backtest`, or a single
-        :class:`VectorizedBacktestResult` from :func:`backtest_vectorized`.
+        A sequence of `BacktestResult` from `backtest()`, or a single
+        `VectorizedBacktestResult` from `backtest_vectorized()`.
 
     Returns
     -------

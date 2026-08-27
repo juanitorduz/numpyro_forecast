@@ -24,7 +24,7 @@ def test_wrong_signature_callable_still_satisfies_forecast_model() -> None:
     A ``runtime_checkable`` Protocol's ``isinstance`` check reduces to
     ``callable(obj)`` here: Python never inspects parameter names, counts, or
     defaults at runtime, so a callable with an unrelated signature still
-    passes. This is intentional and documented on :class:`ForecastModel`; the
+    passes. This is intentional and documented on `ForecastModel`; the
     real signature check is ``ty``'s static structural check at call sites,
     and a genuinely incompatible model only fails at the first driver call
     that invokes it with an unsupported argument.

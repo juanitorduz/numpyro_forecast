@@ -1,7 +1,7 @@
 """Dataset helpers for the example notebooks.
 
 The BART loaders are thin wrappers around
-:func:`numpyro.examples.datasets.load_bart_od`; :func:`load_victoria_electricity`
+`numpyro.examples.datasets.load_bart_od()`; `load_victoria_electricity()`
 reads a small bundled CSV. All return arrays in the package convention (time at
 axis ``-2``).
 """
@@ -23,7 +23,7 @@ def bart_available() -> bool:
     Returns
     -------
     bool
-        ``True`` if :func:`load_bart_od` loads without error.
+        ``True`` if `load_bart_od()` loads without error.
     """
     try:
         _load_counts()
