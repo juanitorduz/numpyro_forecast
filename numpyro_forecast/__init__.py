@@ -37,10 +37,12 @@ from numpyro_forecast.evaluate import (
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     CovariateDimsError,
+    DeviceMemoryError,
+    DevicePlatformError,
+    HostMemoryKindError,
     KernelConfigError,
     MVNLayoutError,
     NumpyroForecastError,
-    VectorizedGuideError,
     VectorizedMetricError,
 )
 from numpyro_forecast.models import (
@@ -66,7 +68,10 @@ __all__ = [
     "BacktestResult",
     "BacktestWindowError",
     "CovariateDimsError",
+    "DeviceMemoryError",
+    "DevicePlatformError",
     "Horizon",
+    "HostMemoryKindError",
     "KernelConfigError",
     "MVNLayoutError",
     "NumpyroForecastError",
@@ -74,7 +79,6 @@ __all__ = [
     "SSOEStep",
     "Transition",
     "VectorizedBacktestResult",
-    "VectorizedGuideError",
     "VectorizedMetricError",
     "__version__",
     "add_forecast_groups",

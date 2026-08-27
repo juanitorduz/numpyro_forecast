@@ -75,7 +75,7 @@ from jax.extend import backend as jex_backend
 from jax.sharding import SingleDeviceSharding
 from jax.typing import ArrayLike
 
-from numpyro_forecast.exceptions import DeviceMemoryError
+from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
 from numpyro_forecast.typing import Array
 
 _HOST_MEMORY_KINDS: tuple[str, ...] = ("pinned_host", "unpinned_host")
@@ -251,7 +251,7 @@ def _host_memory_kind(device: jax.Device) -> str:
 
     Raises
     ------
-    RuntimeError
+    HostMemoryKindError
         If ``device`` addresses no host memory kind at all.
     """
     kinds = {memory.kind for memory in device.addressable_memories()}
@@ -263,7 +263,7 @@ def _host_memory_kind(device: jax.Device) -> str:
         'so device="host" cannot commit results to host memory. Pass a jax.Device or a '
         "platform name (e.g. device='cpu') instead, or call np.asarray on the result."
     )
-    raise RuntimeError(msg)
+    raise HostMemoryKindError(msg)
 
 
 def _host_sharding(x: Array) -> SingleDeviceSharding:
@@ -473,7 +473,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
 
     Raises
     ------
-    ValueError
+    DevicePlatformError
         If ``device`` names any other platform whose backend is not
         initialized.
     """
@@ -515,7 +515,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
             f"initialize the platform via jax_platforms, e.g. "
             f"numpyro.set_platform('{platforms[0]},{device}')."
         )
-        raise ValueError(msg) from err
+        raise DevicePlatformError(msg) from err
 
 
 def _transfer(draws: Array, device: _ResolvedDevice) -> Array | np.ndarray:

@@ -25,11 +25,7 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast.exceptions import (
-    BacktestWindowError,
-    VectorizedGuideError,
-    VectorizedMetricError,
-)
+from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
 from numpyro_forecast.predictive import _chunk_indices
@@ -37,6 +33,7 @@ from numpyro_forecast.typing import (
     Array,
     ForecastFn,
     ForecastModel,
+    Guide,
     InSampleFn,
     Metric,
     ModelFactory,
@@ -1020,7 +1017,7 @@ def backtest_vectorized(
     *,
     train_window: int,
     test_window: int,
-    guide: "AutoGuide | Callable[..., None]",
+    guide: Guide,
     optim: "_NumPyroOptim | None" = None,
     stride: int = 1,
     num_steps: int = 1_001,
@@ -1058,13 +1055,17 @@ def backtest_vectorized(
     test_window
         Fixed test-window length (``>= 1``).
     guide
-        An ``AutoGuide`` instance built on the same model object ``model_fn``
-        returns (hand-written guides are not vmappable, use `backtest()`
-        instead):
+        Any guide for the model object ``model_fn`` returns (see
+        `~~numpyro_forecast.typing.Guide`): an autoguide instance built on that
+        same object, sampled through its ``sample_posterior``, or a hand-written
+        guide function with the model's signature, sampled through
+        ``numpyro.infer.Predictive(guide, params=...)`` on each window's
+        training data. Either way one guide is shared by every window:
 
         ```python
         model = make_model()
         backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+        backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
         ```
 
     optim
@@ -1099,8 +1100,6 @@ def backtest_vectorized(
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
-    VectorizedGuideError
-        If ``guide`` is not an ``AutoGuide`` instance.
     VectorizedMetricError
         If a metric forces a host conversion under ``vmap`` (it is not a pure
         JAX function).
@@ -1132,8 +1131,6 @@ def backtest_vectorized(
     train_d, train_c, hor_c, truth = jax.vmap(slice_one)(starts)
 
     model = model_fn()
-    if not isinstance(guide, AutoGuide):
-        raise VectorizedGuideError()
     resolved_optim = Adam(0.01) if optim is None else optim
     svi = SVI(model, guide, resolved_optim, Trace_ELBO())
 
@@ -1155,11 +1152,17 @@ def backtest_vectorized(
         state, losses = lax.scan(step, state, length=num_steps)
         return svi.get_params(state), losses
 
+    def sample_one(key: Array, p: dict[str, Array], d: Array, c: Array) -> dict[str, Array]:
+        # An autoguide samples its own posterior; any other guide is a plain
+        # NumPyro program, sampled by replaying it under its learned params on
+        # the window's training data (the same args it was fitted with).
+        if isinstance(guide, AutoGuide):
+            return guide.sample_posterior(key, p, sample_shape=(num_samples,))
+        return Predictive(guide, params=p, num_samples=num_samples)(key, c, d)
+
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, int(starts.shape[0]))
     params, losses = jax.jit(jax.vmap(fit_one))(init_keys, train_d, train_c)
-    posterior = jax.jit(
-        jax.vmap(lambda k, p: guide.sample_posterior(k, p, sample_shape=(num_samples,)))
-    )(post_keys, params)
+    posterior = jax.jit(jax.vmap(sample_one))(post_keys, params, train_d, train_c)
 
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
         pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])

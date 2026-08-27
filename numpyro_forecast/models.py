@@ -10,7 +10,7 @@ calls the blocks directly. They are ordinary Python functions that call
 primitives, and not effect handlers.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import cast
@@ -22,6 +22,7 @@ import numpyro.distributions as dist
 from jaxtyping import Float, PyTree
 from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
+from numpyro.primitives import _PYRO_STACK
 
 from numpyro_forecast.arrays import _zeros_like_data, concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
@@ -183,7 +184,7 @@ call; ``x_t`` is one row of the ``xs`` PyTree (``None`` for autonomous dynamics)
 
 
 @contextmanager
-def _plate_stack(plates: Sequence[tuple[str, int]]):
+def _plate_stack(plates: Sequence[tuple[str, int]]) -> Iterator[None]:
     """Open nested ``numpyro.plate`` contexts (innermost last)."""
     with ExitStack() as stack:
         for plate_name, size in plates:
@@ -192,19 +193,23 @@ def _plate_stack(plates: Sequence[tuple[str, int]]):
 
 
 def _reject_enclosing_plates() -> None:
-    """Raise if ``markov_series`` is called inside an enclosing plate."""
-    try:
-        from numpyro.primitives import _PYRO_STACK
+    """Raise if ``markov_series`` is called inside an enclosing plate.
 
-        for msg in _PYRO_STACK:
-            if type(msg).__name__ == "plate":
-                msg_text = (
-                    "markov_series opens plates internally via the plates= "
-                    "argument; do not wrap the call in an enclosing numpyro.plate."
-                )
-                raise ValueError(msg_text)
-    except (ImportError, AttributeError, TypeError):
-        pass
+    NumPyro exposes no public accessor for the active effect handlers, so this
+    deliberately walks its private message stack (``numpyro.primitives._PYRO_STACK``,
+    imported at module level so a rename fails at import time rather than
+    silently disabling the check). ``numpyro.plate`` is the public handler class,
+    so the match is an ``isinstance`` check, not a name comparison.
+    ``tests/test_markov.py::test_enclosing_plate_rejected_with_guidance`` is the
+    canary that fails loudly if numpyro's internals shift.
+    """
+    for msg in _PYRO_STACK:
+        if isinstance(msg, numpyro.plate):
+            msg_text = (
+                "markov_series opens plates internally via the plates= "
+                "argument; do not wrap the call in an enclosing numpyro.plate."
+            )
+            raise ValueError(msg_text)
 
 
 def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
@@ -268,8 +273,10 @@ def markov_series[Carry](
     Raises
     ------
     ValueError
-        If forecasting without observed data, if the per-step shape lacks the
-        observation dimension, or if an enclosing plate is detected.
+        If forecasting without observed data (only reachable with a hand-built
+        `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
+        data), if the per-step shape lacks the observation dimension, or if an
+        enclosing plate is detected.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
@@ -644,6 +651,24 @@ def ssoe[Carry](
     )
 
 
+def _has_discrete_support(d: dist.Distribution) -> bool:
+    """Whether ``d`` has discrete support, treating an undetermined support as continuous.
+
+    `numpyro.distributions.Distribution` defaults ``support`` to
+    ``constraints.dependent``, whose ``is_discrete`` raises ``NotImplementedError``
+    when it cannot be determined statically (``ImproperUniform``, or a custom
+    subclass that never sets ``support``). Those are not count families, so
+    they take the continuous path instead of surfacing that error from `predict()`.
+    """
+    # numpyro's annotation reaches ty as ``Constraint | None``; no distribution
+    # actually sets ``support = None``, so the short-circuit is for the checker.
+    support = d.support
+    try:
+        return support is not None and bool(support.is_discrete)
+    except NotImplementedError:
+        return False
+
+
 def predict(
     h: Horizon,
     obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
@@ -703,8 +728,7 @@ def predict(
             "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
         )
         raise TypeError(msg)
-    support = full_dist.support
-    if support is not None and support.is_discrete and h.data is not None:
+    if h.data is not None and _has_discrete_support(full_dist):
         if not jnp.issubdtype(h.data.dtype, jnp.integer):
             msg = (
                 "the observation distribution has discrete support, so data must "

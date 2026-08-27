@@ -888,6 +888,135 @@ def test_fit_multipathfinder_num_paths_one() -> None:
     assert bool(jnp.all(post["drift_scale"] > 0.0))
 
 
+def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A path whose ELBO is non-finite is counted and reported as failed.
+
+    The real ``multi_approximate`` runs behind the spy, which only overwrites
+    the first path's ELBO with ``nan`` (``MultipathfinderState``/``PathfinderState``
+    are NamedTuples); ``psis_weights`` reads ``logp``/``logq``, so the PSIS
+    diagnostics are unaffected. The cheap-settings ``pareto_k`` warning fires
+    too and is captured by the same ``pytest.warns`` block.
+    """
+    import blackjax.vi.multipathfinder as multipathfinder_module
+
+    real_multi_approximate = multipathfinder_module.multi_approximate
+
+    def nan_first_path(*args: object, **kwargs: object) -> object:
+        state, info = real_multi_approximate(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+        elbo = state.path_states.elbo.at[0].set(jnp.nan)
+        return state._replace(path_states=state.path_states._replace(elbo=elbo)), info
+
+    monkeypatch.setattr(multipathfinder_module, "multi_approximate", nan_first_path)
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)"):
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=2,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+        )
+    assert len(fit.elbos) == 2
+    assert not np.isfinite(fit.elbos[0])
+    assert np.isfinite(fit.elbos[1])
+
+
+def test_multipathfinder_samples_all_paths_failed_falls_back_to_uniform(
+    multipathfinder_fit: MultiPathfinderFit, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With every path's ELBO non-finite, ELBO mode picks paths uniformly.
+
+    There is no signal to weight by, so the path choice degrades to
+    ``1 / num_paths`` each; the draws themselves still come from the stored
+    (finite) path states.
+    """
+    num_paths = len(multipathfinder_fit.elbos)
+    failed = dataclasses.replace(multipathfinder_fit, elbos=(float("nan"),) * num_paths)
+    captured: list[np.ndarray] = []
+    real_choice = jax.random.choice
+
+    def spy_choice(*args: object, **kwargs: object) -> Array:
+        captured.append(np.asarray(kwargs["p"]))
+        return real_choice(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(jax.random, "choice", spy_choice)
+    post = multipathfinder_samples(random.PRNGKey(2), failed, 40, resample="elbo")
+
+    assert len(captured) == 1
+    assert np.allclose(captured[0], np.full((num_paths,), 1.0 / num_paths))
+    assert post["sigma"].shape == (40,)
+    assert bool(jnp.all(jnp.isfinite(post["sigma"])))
+    assert bool(jnp.all(post["sigma"] > 0.0))
+
+
+def test_fit_multipathfinder_uses_supplied_initial_positions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Valid ``initial_positions`` seed the paths as given, skipping the per-path init loop.
+
+    The stacked unconstrained positions must reach ``multi_approximate``
+    unchanged (a spy captures its ``position`` argument), and the fit still
+    carries one ELBO per path. Warnings are silenced: whether the cheap
+    settings trip the ``pareto_k`` threshold depends on the start points.
+    """
+    import blackjax.vi.multipathfinder as multipathfinder_module
+    from numpyro.infer.util import initialize_model
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    covariates = _empty_covariates(_MULTIPATH_T)
+    positions = [
+        initialize_model(key, rw_model, dynamic_args=True, model_args=(covariates, data))[0].z
+        for key in random.split(random.PRNGKey(7), 2)
+    ]
+    stacked = jax.tree.map(lambda *xs: jnp.stack(xs), *positions)
+
+    captured: list[object] = []
+    real_multi_approximate = multipathfinder_module.multi_approximate
+
+    def spy_multi_approximate(*args: object, **kwargs: object) -> object:
+        captured.append(args[2])
+        return real_multi_approximate(*args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(multipathfinder_module, "multi_approximate", spy_multi_approximate)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        fit = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_paths=2,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            initial_positions=stacked,
+        )
+
+    assert len(captured) == 1
+    assert jax.tree.all(
+        jax.tree.map(lambda a, b: bool(jnp.array_equal(a, b)), captured[0], stacked)
+    )
+    assert len(fit.elbos) == 2
+
+
+def test_fit_multipathfinder_empty_initial_positions_raises() -> None:
+    """An empty ``initial_positions`` pytree has no leading axis to check and is rejected."""
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    with pytest.raises(ValueError, match="leading axis of size num_paths=2"):
+        fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            _empty_covariates(_MULTIPATH_T),
+            num_paths=2,
+            initial_positions={},
+        )
+
+
 def test_fit_multipathfinder_invalid_num_paths_raises() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
     with pytest.raises(ValueError, match="num_paths must be positive"):

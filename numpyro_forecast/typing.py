@@ -67,6 +67,29 @@ ModelFactory = Callable[[], ForecastModel]
 
 
 @runtime_checkable
+class Guide(Protocol):
+    """A NumPyro guide for a `ForecastModel`: a callable with the model's signature.
+
+    A guide is called with the same ``(covariates, data=None)`` arguments as the
+    model it approximates, so this Protocol has the same shape as
+    `ForecastModel`. Both an autoguide instance
+    (`numpyro.infer.autoguide.AutoGuide` subclasses are callables) and a
+    hand-written guide function satisfy it structurally; nothing needs to
+    subclass it. `~~numpyro_forecast.evaluate.backtest_vectorized()` samples an
+    autoguide through its ``sample_posterior`` and any other guide through
+    ``numpyro.infer.Predictive(guide, params=...)``.
+
+    The same runtime caveat as `ForecastModel` applies: the beartype hook's
+    ``isinstance`` check on a ``runtime_checkable`` Protocol reduces to
+    ``callable(guide)`` (Python never inspects signatures at runtime), while
+    ``ty`` checks the signature structurally at the call site.
+    """
+
+    def __call__(self, covariates: Array, data: Array | None = None, /) -> None:
+        """Run the guide against ``covariates`` and optional ``data``."""
+
+
+@runtime_checkable
 class ForecastFn(Protocol):
     """A closure that fits a model on a training window and forecasts its test horizon.
 
@@ -101,7 +124,6 @@ class ForecastFn(Protocol):
         batch_size: int | None = None,
     ) -> Array | np.ndarray:
         """Fit on the training window and return forecast draws for the test window."""
-        ...
 
 
 @runtime_checkable
@@ -127,4 +149,3 @@ class InSampleFn(Protocol):
         batch_size: int | None = None,
     ) -> Array | np.ndarray:
         """Fit on the training window and return in-sample predictive draws."""
-        ...

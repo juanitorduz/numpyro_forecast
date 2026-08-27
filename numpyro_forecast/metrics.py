@@ -210,7 +210,7 @@ def _mase(
 
 
 def make_mase(
-    train_data: Float[ArrayLike, "*batch time obs_dim"], *, seasonality: int = 1
+    train_data: Float[ArrayLike, " *batch time obs_dim"], *, seasonality: int = 1
 ) -> Metric:
     """Build a Mean Absolute Scaled Error metric scaled by ``train_data``.
 

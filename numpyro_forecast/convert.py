@@ -355,10 +355,13 @@ def to_datatree(
         not evenly divisible by ``num_chains``.
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
-    RuntimeError
+    HostMemoryKindError
         If ``predictive_device="pinned_host"`` is requested on a device that
         exposes no host memory kind (see
         `~~numpyro_forecast._offload._host_memory_kind()`).
+    DevicePlatformError
+        If ``predictive_device`` names a platform whose backend is not
+        initialized (see `~~numpyro_forecast._offload._resolve_device()`).
 
     Warns
     -----

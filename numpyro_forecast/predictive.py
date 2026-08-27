@@ -192,10 +192,13 @@ def draw_posterior(
     ------
     ValueError
         If ``num_samples`` or ``batch_size`` is not positive.
-    RuntimeError
+    HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
         `~~numpyro_forecast._offload._host_memory_kind()`).
+    DevicePlatformError
+        If ``device`` names a platform whose backend is not initialized (see
+        `~~numpyro_forecast._offload._resolve_device()`).
 
     Warns
     -----
@@ -460,10 +463,13 @@ def forecast(
     ------
     ValueError
         If ``covariates`` does not extend beyond ``data`` along the time axis.
-    RuntimeError
+    HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
         `~~numpyro_forecast._offload._host_memory_kind()`).
+    DevicePlatformError
+        If ``device`` names a platform whose backend is not initialized (see
+        `~~numpyro_forecast._offload._resolve_device()`).
 
     Warns
     -----
@@ -575,10 +581,13 @@ def predict_in_sample(
 
     Raises
     ------
-    RuntimeError
+    HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
         `~~numpyro_forecast._offload._host_memory_kind()`).
+    DevicePlatformError
+        If ``device`` names a platform whose backend is not initialized (see
+        `~~numpyro_forecast._offload._resolve_device()`).
 
     Warns
     -----

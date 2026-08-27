@@ -30,11 +30,7 @@ from numpyro_forecast.evaluate import (
     eval_coverage,
     eval_crps,
 )
-from numpyro_forecast.exceptions import (
-    BacktestWindowError,
-    VectorizedGuideError,
-    VectorizedMetricError,
-)
+from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.predictive import draw_posterior, forecast
 
 TRAIN, TEST = 30, 5
@@ -145,25 +141,71 @@ def test_window_size_validators(
         )
 
 
-def test_handwritten_guide_rejected() -> None:
-    """A non-AutoGuide guide is rejected with guidance to use ``backtest``."""
+def _rw_mean_field_guide(covariates: Array, data: Array | None = None) -> None:
+    """A hand-written mean-field guide over ``rw_model``'s sites for a ``TRAIN``-long window.
+
+    Mirrors the model's ``time`` plate for the ``drift`` innovations so the
+    guide's site shapes match the model's ``(TRAIN, 1)`` layout.
+    """
+    positive = dist.constraints.positive
+    scale_loc = numpyro.param("drift_scale_loc", -1.0)
+    scale_sd = numpyro.param("drift_scale_sd", 1.0, constraint=positive)
+    numpyro.sample("drift_scale", dist.LogNormal(scale_loc, scale_sd))
+    sigma_loc = numpyro.param("sigma_loc", -1.0)
+    sigma_sd = numpyro.param("sigma_sd", 1.0, constraint=positive)
+    numpyro.sample("sigma", dist.LogNormal(sigma_loc, sigma_sd))
+    drift_loc = numpyro.param("drift_loc", jnp.zeros((TRAIN, 1)))
+    drift_sd = numpyro.param("drift_sd", 0.1 * jnp.ones((TRAIN, 1)), constraint=positive)
+    with numpyro.plate("time", TRAIN, dim=-2):
+        numpyro.sample("drift", dist.Normal(drift_loc, drift_sd))
+
+
+def test_handwritten_guide_runs_and_matches_autoguide_shapes() -> None:
+    """A hand-written guide is fitted and sampled in the same vmapped run as an autoguide.
+
+    Any guide with the model's signature is accepted: an autoguide is sampled
+    through ``sample_posterior``, a plain guide function through
+    ``Predictive(guide, params=...)`` on each window's training data. Both
+    runs must produce the same window indices and result shapes.
+    """
     data, cov = _series(50)
-
-    def handwritten_guide(covariates: Array, data: Array | None = None) -> None:
-        loc = numpyro.param("loc", 0.0)
-        numpyro.sample("drift_scale", dist.Delta(loc))
-
-    with pytest.raises(VectorizedGuideError, match="AutoGuide"):
-        backtest_vectorized(
-            random.PRNGKey(0),
-            data,
-            cov,
-            lambda: rw_model,
-            train_window=TRAIN,
-            test_window=TEST,
-            guide=handwritten_guide,
-            num_steps=10,
-        )
+    hand = backtest_vectorized(
+        random.PRNGKey(0),
+        data,
+        cov,
+        lambda: rw_model,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=_rw_mean_field_guide,
+        stride=5,
+        num_steps=50,
+        num_samples=20,
+        keep_predictions=True,
+    )
+    auto = backtest_vectorized(
+        random.PRNGKey(0),
+        data,
+        cov,
+        lambda: rw_model,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(rw_model),
+        stride=5,
+        num_steps=50,
+        num_samples=20,
+        keep_predictions=True,
+    )
+    for name in ("t0", "t1", "t2"):
+        assert jnp.array_equal(getattr(hand, name), getattr(auto, name))
+    assert hand.losses.shape == auto.losses.shape
+    assert bool(jnp.all(jnp.isfinite(hand.losses)))
+    assert hand.metrics.keys() == auto.metrics.keys()
+    for name, values in hand.metrics.items():
+        assert values.shape == auto.metrics[name].shape
+        assert bool(jnp.all(jnp.isfinite(values)))
+    assert hand.predictions is not None and auto.predictions is not None
+    assert hand.predictions.shape == auto.predictions.shape
+    assert bool(jnp.all(jnp.isfinite(hand.predictions)))
 
 
 def test_duration_too_short_rejected() -> None:

@@ -215,6 +215,32 @@ def test_predict_rejects_float_data_for_discrete_obs() -> None:
         trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
 
 
+class _UndeterminedSupportNormal(dist.Normal):
+    """A Normal whose ``support`` is numpyro's bare ``constraints.dependent`` default.
+
+    ``constraints.dependent.is_discrete`` raises ``NotImplementedError`` (the
+    support cannot be determined statically), which is what a custom
+    ``Distribution`` subclass that never sets ``support`` inherits.
+    """
+
+    support = dist.constraints.dependent
+
+
+def test_predict_treats_undetermined_support_as_continuous() -> None:
+    """An undetermined support must not raise from the discrete-data check."""
+
+    def body(h: Horizon, covariates: Array) -> None:
+        level = innovations(h, "level", lambda: dist.Normal(0.0, 1.0))
+        predict(h, lambda mu: _UndeterminedSupportNormal(mu, 0.5), jnp.cumsum(level, axis=-2))
+
+    with pytest.raises(NotImplementedError, match="cannot be determined statically"):
+        _ = dist.constraints.dependent.is_discrete
+    model = as_model(body)
+    float_data = random.normal(random.PRNGKey(0), (12, 1))
+    tr = trace(seed(model, random.PRNGKey(1))).get_trace(empty_covariates(12), float_data)
+    assert "obs" in tr
+
+
 def test_predict_accepts_integer_data_for_discrete_obs() -> None:
     def poisson_body(h: Horizon, covariates: Array) -> None:
         rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))

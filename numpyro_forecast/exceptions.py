@@ -31,20 +31,6 @@ class BacktestWindowError(NumpyroForecastError, ValueError):
     """
 
 
-class VectorizedGuideError(NumpyroForecastError, ValueError):
-    """The vectorized backtest requires an ``AutoGuide`` instance.
-
-    Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when
-    ``guide`` is hand-written: those are not vmappable, use
-    `~~numpyro_forecast.evaluate.backtest()` instead.
-    """
-
-    default_message = (
-        "backtest_vectorized requires an AutoGuide instance; "
-        "hand-written guides are not vmappable here, use backtest() instead."
-    )
-
-
 class VectorizedMetricError(NumpyroForecastError, TypeError):
     """A metric is not vmappable in the vectorized backtest.
 
@@ -122,4 +108,30 @@ class DeviceMemoryError(NumpyroForecastError, RuntimeError):
     pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
     ``device="host"``, which lands results in pageable host memory, instead.
     The original XLA error is chained as ``__cause__``.
+    """
+
+
+class HostMemoryKindError(NumpyroForecastError, RuntimeError):
+    """A device exposes no host memory kind for ``device="pinned_host"``.
+
+    Raised by `~~numpyro_forecast._offload._host_memory_kind()`, reached from
+    `~~numpyro_forecast.predictive.draw_posterior()`, the predictive drivers
+    and everything built on them, when an explicit ``device="pinned_host"``
+    targets a device whose addressable memories include neither
+    ``"pinned_host"`` nor ``"unpinned_host"``. The message lists the kinds the
+    device does expose; pass a `jax.Device` or a platform name (for example
+    ``device="cpu"``), or ``device="host"``, instead.
+    """
+
+
+class DevicePlatformError(NumpyroForecastError, ValueError):
+    """A ``device`` platform name has no initialized JAX backend.
+
+    Raised by `~~numpyro_forecast._offload._resolve_device()` (reached from
+    every function with a ``device`` parameter) when ``device`` names a platform,
+    e.g. ``"tpu"``, whose backend is not initialized in this process. The
+    message lists the available platforms and how to initialize the missing one
+    via ``jax_platforms``. ``"host"``, ``"cpu"``, ``"numpy"`` and ``"pinned_host"``
+    never raise this: they degrade to the NumPy path when the CPU backend is
+    missing (see `~~numpyro_forecast.predictive.draw_posterior()`).
     """
