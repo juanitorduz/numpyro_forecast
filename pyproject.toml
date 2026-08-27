@@ -159,25 +159,5 @@ exclude_lines = [
     "if TYPE_CHECKING:",
 ]
 
-[tool.ty.src]
-# TODO(refactor3): temporary during the v0.3.0 integration window; example
-# notebooks still call the pre-refactor API and are re-typechecked as they
-# are rewritten (PR-A Task 12, PR-E). Remove this exclude at the integration
-# merge.
-#
-# This is the mechanism that actually works: the vendored `ty` pre-commit hook
-# hardcodes `pass_filenames: false` and `always_run: true` (it always checks
-# the whole project, by design, since a change in one file can surface new
-# diagnostics in another), so a per-file `exclude:`/`files:` key on the hook
-# in .pre-commit-config.yaml has no effect. Excluding here, in ty's own
-# project config, is what `ty check`/`uv check` (used by both the hook and
-# CI) actually honor.
-exclude = [
-    "docs/examples/electricity_forecast.ipynb",
-    "docs/examples/electricity_forecast_calibration.ipynb",
-    "docs/examples/hierarchical_forecasting_1.ipynb",
-    "docs/examples/hierarchical_forecasting_2.ipynb",
-]
-
 [tool.ty.environment]
 python-version = "3.12"
