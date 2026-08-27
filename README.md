@@ -150,6 +150,7 @@ The same model, fitted with NUTS instead of SVI:
 
 ```python
 >>> from numpyro.infer import MCMC, NUTS
+...
 >>> mcmc = MCMC(
 ...     NUTS(seasonal_model), num_warmup=500, num_samples=500, num_chains=1, progress_bar=False
 ... )
