@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -776,7 +788,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Runs <code>Predictive</code> with the in-sample <code>covariates</code> and the supplied posterior latent draws. Unlike <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> there is no forecast horizon: <code>covariates</code> span only the observed window, so the model’s <code>obs</code> site is sampled at every step. The number of predictive samples equals the leading (sample) axis of <code>posterior</code> (see <code>~numpyro_forecast.predictive.draw_posterior()</code>).</p>
+<p>Runs <code>Predictive</code> with the in-sample <code>covariates</code> and the supplied posterior latent draws. Unlike <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> there is no forecast horizon: <code>covariates</code> span only the observed window, so the model’s <code>obs</code> site is sampled at every step. The number of predictive samples equals the leading (sample) axis of <code>posterior</code> (see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>).</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -808,7 +820,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives; the same placement contract as the <code>device</code> argument of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> (<code>"host"</code> for pageable host memory as a CPU-committed <code>jax.Array</code>, or a NumPy array when no CPU backend is initialized; <code>"numpy"</code>; <code>"pinned_host"</code>; a <code>jax.Device</code> or platform name; <code>None</code> for the default device), including its mixing rules for host-committed results. With <code>batch_size</code> set on an accelerator, any host target bounds accelerator memory by a single chunk instead of the full <code>(sample, time, obs)</code> array; the draw values are unchanged, only where the result lives. The bound requires <code>batch_size</code> strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. The result feeds straight into <code>~numpyro_forecast.convert.to_datatree()</code> and the <code>batch_size</code>-chunked evaluation metrics in <code>~numpyro_forecast.evaluate</code>, which accept host-resident draws.
+Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives; the same placement contract as the <code>device</code> argument of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> (<code>"host"</code> for pageable host memory as a CPU-committed <code>jax.Array</code>, or a NumPy array when no CPU backend is initialized; <code>"numpy"</code>; <code>"pinned_host"</code>; a <code>jax.Device</code> or platform name; <code>None</code> for the default device), including its mixing rules for host-committed results. With <code>batch_size</code> set on an accelerator, any host target bounds accelerator memory by a single chunk instead of the full <code>(sample, time, obs)</code> array; the draw values are unchanged, only where the result lives. The bound requires <code>batch_size</code> strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. The result feeds straight into <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> and the <code>batch_size</code>-chunked evaluation metrics in <code>evaluate</code>, which accept host-resident draws.
 </dd>
 </dl>
 </div>
@@ -830,7 +842,7 @@ In-sample posterior-predictive draws of the <code>obs</code> site (with <code>de
 <dl>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).
 </dd>
 </dl>
 </div>

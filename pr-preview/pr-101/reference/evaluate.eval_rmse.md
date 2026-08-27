@@ -14,7 +14,7 @@ evaluate.eval_rmse(
 ```
 
 
-A pure JAX scalar kernel (see `~numpyro_forecast.typing.Metric`). `pred` and `truth` are moved to device memory first (`~numpyro_forecast._offload._device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
+A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `pred` and `truth` are moved to device memory first (`_device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
 
 
 ## Parameters

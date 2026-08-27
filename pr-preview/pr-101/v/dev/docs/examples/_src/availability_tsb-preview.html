@@ -711,9 +711,9 @@ share of periods with demand lost to a stock-out: 0.33</code></pre>
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co">    Samples the per-series component priors (sites ``smoothing``, ``noise``)</span></span>
 <span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="co">    inside a plate over series and runs the gated level recursion along the</span></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co">    calendar axis through :func:`ssoe`, whose ``eps_future`` innovation site</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co">    calendar axis through `ssoe()`, whose ``eps_future`` innovation site</span></span>
 <span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="co">    provides the flat forecast predictive. Meant to be called under</span></span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="co">    :func:`numpyro.handlers.scope`, which prefixes the site names per component.</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="co">    `numpyro.handlers.scope()`, which prefixes the site names per component.</span></span>
 <span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="co">    This is the sibling notebooks' ``level_channel`` promoted to a panel, with</span></span>
 <span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="co">    deterministic inits and a hierarchical noise scale following the blog post.</span></span>
 <span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>

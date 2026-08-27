@@ -387,9 +387,9 @@ def panel_level_channel(
 
     Samples the per-series component priors (sites ``smoothing``, ``noise``)
     inside a plate over series and runs the gated level recursion along the
-    calendar axis through :func:`ssoe`, whose ``eps_future`` innovation site
+    calendar axis through `ssoe()`, whose ``eps_future`` innovation site
     provides the flat forecast predictive. Meant to be called under
-    :func:`numpyro.handlers.scope`, which prefixes the site names per component.
+    `numpyro.handlers.scope()`, which prefixes the site names per component.
     This is the sibling notebooks' ``level_channel`` promoted to a panel, with
     deterministic inits and a hierarchical noise scale following the blog post.
 

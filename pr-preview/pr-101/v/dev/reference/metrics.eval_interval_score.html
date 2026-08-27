@@ -123,6 +123,49 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
   <link rel="alternate" type="text/markdown" href="metrics.eval_interval_score.md">
   <meta name="description" content="Mean Winkler interval score for the central alpha prediction interval.">
@@ -547,6 +590,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -771,7 +826,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>For the central <code>alpha</code> interval :math:<code>[l, u]</code> (the :math:<code>(1-\alpha)/2</code> and :math:<code>1-(1-\alpha)/2</code> quantiles), the interval score is :math:<code>(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y&lt;l} + (y - u)\mathbf 1_{y&gt;u}\big]</code>, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>~numpyro_forecast._offload._device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>For the central <code>alpha</code> interval <span class="math inline">[l, u]</span> (the <span class="math inline">(1-\alpha)/2</span> and <span class="math inline">1-(1-\alpha)/2</span> quantiles), the interval score is <span class="math inline">(u - l) + \tfrac{2}{1-\alpha}\big[(l - y)\mathbf 1_{y&lt;l} + (y - u)\mathbf 1_{y&gt;u}\big]</span>, averaged over all data elements. It rewards narrow intervals and penalizes ground truth falling outside them; lower is better. A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>_device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

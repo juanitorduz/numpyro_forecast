@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -758,7 +770,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">KernelConfigError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Raised by <code>~numpyro_forecast.contrib.blackjax._BlackjaxKernel.init()</code> when the kernel was constructed with no model bound (e.g. <a href="contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="gdls-link gdls-code">BlackjaxNUTSKernel()</a> instead of <code>BlackjaxNUTSKernel(model)</code>); the fix is to pass the model as the kernel’s first argument at construction time, before handing the kernel to <code>~numpyro.infer.MCMC</code>. BlackJAX kernels also require <code>chain_method="sequential"</code> and <code>num_warmup=0</code>; see the “Run configuration” section of <code>~numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel</code> and its sibling kernels for why, and how misconfiguring either surfaces.</p>
+<p>Raised by <code>init()</code> when the kernel was constructed with no model bound (e.g. <a href="contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="gdls-link gdls-code">BlackjaxNUTSKernel()</a> instead of <code>BlackjaxNUTSKernel(model)</code>); the fix is to pass the model as the kernel’s first argument at construction time, before handing the kernel to <code>numpyro.infer.MCMC</code>. BlackJAX kernels also require <code>chain_method="sequential"</code> and <code>num_warmup=0</code>; see the “Run configuration” section of <a href="contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="gdls-link gdls-code">BlackjaxNUTSKernel</a> and its sibling kernels for why, and how misconfiguring either surfaces.</p>
 </div>
 
 

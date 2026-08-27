@@ -14,13 +14,9 @@ acf.pacf(
 ```
 
 
-The lag-:math:`k` partial autocorrelation is the correlation between :math:`y_t` and :math:`y_{t-k}` after removing the linear effect of the intermediate observations :math:`y_{t-1}, \ldots, y_{t-k+1}`; it equals the last coefficient :math:`\phi_{kk}` of the best linear predictor of order :math:`k`. The coefficients are obtained from the empirical autocorrelations (see [acf()](acf.acf.md#numpyro_forecast.acf.acf)) with the Durbin-Levinson recursion
+The lag-k partial autocorrelation is the correlation between y_t and y\_{t-k} after removing the linear effect of the intermediate observations y\_{t-1}, \ldots, y\_{t-k+1}; it equals the last coefficient \phi\_{kk} of the best linear predictor of order k. The coefficients are obtained from the empirical autocorrelations (see [acf()](acf.acf.md#numpyro_forecast.acf.acf)) with the Durbin-Levinson recursion
 
-.. math::
-
-    \phi_{kk} =
-    \frac{\hat{\rho}_k - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_{k-j}}
-         {1 - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_j}.
+ \phi\_{kk} = \frac{\hat{\rho}\_k - \sum\_{j=1}^{k-1} \phi\_{k-1,j}\\ \hat{\rho}\_{k-j}} {1 - \sum\_{j=1}^{k-1} \phi\_{k-1,j}\\ \hat{\rho}\_j}. 
 
 The recursion runs along the last axis and broadcasts over any leading batch axes.
 

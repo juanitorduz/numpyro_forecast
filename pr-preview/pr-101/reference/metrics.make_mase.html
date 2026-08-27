@@ -429,6 +429,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.ForecastModel</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -646,7 +658,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on <code>train_data</code>, <code>mean(|y_t - y_{t-seasonality}|)</code>. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see <code>~numpyro_forecast.typing.Metric</code>). <code>train_data</code> and the returned metric’s <code>pred</code>/<code>truth</code> are all moved to device memory first (<code>~numpyro_forecast._offload._device_view()</code>), so any of them may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on <code>train_data</code>, <code>mean(|y_t - y_{t-seasonality}|)</code>. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>train_data</code> and the returned metric’s <code>pred</code>/<code>truth</code> are all moved to device memory first (<code>_device_view()</code>), so any of them may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

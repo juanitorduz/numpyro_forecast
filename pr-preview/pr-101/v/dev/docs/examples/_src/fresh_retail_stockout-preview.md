@@ -2028,7 +2028,7 @@ def make_fresh_retail_model(
 
     The panel shapes are fixed once, here, and the returned model function is the
     plain ``(covariates, data=None)`` callable every driver in the package
-    consumes: it derives its :class:`~numpyro_forecast.Horizon` from the shapes
+    consumes: it derives its `~~numpyro_forecast.Horizon` from the shapes
     and closes over the store index and the panel dimensions.
 
     Parameters

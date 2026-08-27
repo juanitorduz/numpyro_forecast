@@ -123,6 +123,49 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
   <link rel="alternate" type="text/markdown" href="acf.acf.md">
   <meta name="description" content="Compute the empirical autocorrelation function up to max_lag.">
@@ -547,6 +590,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -771,12 +826,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The lag-:math:<code>k</code> autocorrelation of a series :math:<code>y_1, \ldots, y_T</code> with sample mean :math:<code>\bar{y}</code> is estimated with the biased normalization</p>
-<p>.. math::</p>
-<pre><code>\hat{\rho}_k =
+<p>The lag-<span class="math inline">k</span> autocorrelation of a series <span class="math inline">y_1, \ldots, y_T</span> with sample mean <span class="math inline">\bar{y}</span> is estimated with the biased normalization</p>
+<p><span class="math display">
+\hat{\rho}_k =
 \frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
-     {\sum_{t=1}^{T} (y_t - \bar{y})^2},</code></pre>
-<p>computed for all lags at once via the FFT of the centered series (the Wiener-Khinchin identity), so the cost is :math:<code>O(T \log T)</code> instead of :math:<code>O(T \, k_{\max})</code>. The computation runs along the last axis and broadcasts over any leading batch axes.</p>
+     {\sum_{t=1}^{T} (y_t - \bar{y})^2},
+</span></p>
+<p>computed for all lags at once via the FFT of the centered series (the Wiener-Khinchin identity), so the cost is <span class="math inline">O(T \log T)</span> instead of <span class="math inline">O(T \, k_{\max})</span>. The computation runs along the last axis and broadcasts over any leading batch axes.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

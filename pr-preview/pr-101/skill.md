@@ -96,6 +96,8 @@ Public type contracts.
 - `typing.ForecastModel`
 - `typing.ForecastFn`
 - `typing.InSampleFn`
+- `typing.Metric`
+- `typing.ModelFactory`
 
 ### Autocorrelation
 

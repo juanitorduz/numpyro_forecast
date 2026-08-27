@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -769,7 +781,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The returned dict has the sample axis leading and is ready to pass to <code>~numpyro_forecast.predictive.forecast()</code> or NumPyro’s <code>Predictive</code>, exactly like <code>~numpyro_forecast.predictive.draw_posterior()</code>. Chunking and device offload are delegated to the shared <code>~numpyro_forecast._offload._draw_chunked()</code> driver, so the same memory-bounding contract applies.</p>
+<p>The returned dict has the sample axis leading and is ready to pass to <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> or NumPyro’s <code>Predictive</code>, exactly like <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>. Chunking and device offload are delegated to the shared <code>_draw_chunked()</code> driver, so the same memory-bounding contract applies.</p>
 <p>PRNG: within each chunk (the whole draw, when unchunked), the chunk key is split into a model-initialization stream and a Pathfinder-sampling stream (the init param draws are unused, but the streams are kept isolated).</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
@@ -790,11 +802,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional chunk size for the drawing itself; see <code>~numpyro_forecast.predictive.draw_posterior()</code> (the same memory/reproducibility contract applies).</p>
+<p>Optional chunk size for the drawing itself; see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> (the same memory/reproducibility contract applies).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_forecast.predictive.draw_posterior()</code>, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
+Where each chunk of draws is moved as soon as it is drawn; see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
 </dd>
 </dl>
 </div>
@@ -820,7 +832,7 @@ Posterior samples of the latent sites, sample axis leading (with <code>device="h
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).
 </dd>
 </dl>
 </div>

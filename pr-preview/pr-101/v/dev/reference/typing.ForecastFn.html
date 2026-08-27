@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -767,7 +779,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">typing</span><span class="op">.</span><span class="sig-name">ForecastFn</span>()</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Called by <code>~numpyro_forecast.evaluate.backtest()</code> positionally, with <code>full_covariates</code> spanning the <em>full</em> window (train followed by test, i.e. <code>covariates[..., t0:t2, :]</code>) and <code>batch_size</code> forwarded unchanged from <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> so a chunked closure can bound its own device memory. Returns forecast samples with the sample axis first, shape <code>(num_samples, *batch, t2 - t1, obs)</code>. The draws may stay in host memory (e.g.&nbsp;via <code>device="host"</code>): a jax Array committed to the CPU backend device or, without a CPU backend, a NumPy array. Every metric in <code>~numpyro_forecast.evaluate.DEFAULT_METRICS</code> accepts such a <code>pred</code> or <code>truth</code> (or both), in any mix and regardless of <code>batch_size</code>, moving a host-resident operand to device memory first where needed; draws already on-device avoid that hop for the metrics scored every window. The parameters are positional-only so a closure keeps its own parameter names. At runtime the beartype hook only checks that the value is callable (Python protocols never inspect signatures); <code>ty</code> checks the signature structurally at the <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> call site.</p>
+<p>Called by <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> positionally, with <code>full_covariates</code> spanning the <em>full</em> window (train followed by test, i.e. <code>covariates[..., t0:t2, :]</code>) and <code>batch_size</code> forwarded unchanged from <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> so a chunked closure can bound its own device memory. Returns forecast samples with the sample axis first, shape <code>(num_samples, *batch, t2 - t1, obs)</code>. The draws may stay in host memory (e.g.&nbsp;via <code>device="host"</code>): a jax Array committed to the CPU backend device or, without a CPU backend, a NumPy array. Every metric in <code>DEFAULT_METRICS</code> accepts such a <code>pred</code> or <code>truth</code> (or both), in any mix and regardless of <code>batch_size</code>, moving a host-resident operand to device memory first where needed; draws already on-device avoid that hop for the metrics scored every window. The parameters are positional-only so a closure keeps its own parameter names. At runtime the beartype hook only checks that the value is callable (Python protocols never inspect signatures); <code>ty</code> checks the signature structurally at the <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> call site.</p>
 </div>
 <section id="methods" class="level2 doc-methods">
 <h2 class="doc-methods">Methods</h2>

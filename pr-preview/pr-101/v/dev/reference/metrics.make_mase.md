@@ -15,7 +15,7 @@ metrics.make_mase(
 ```
 
 
-MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on `train_data`, `mean(|y_t - y_{t-seasonality}|)`. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see `~numpyro_forecast.typing.Metric`). `train_data` and the returned metric's `pred`/`truth` are all moved to device memory first (`~numpyro_forecast._offload._device_view()`), so any of them may be host-committed, e.g. draws sampled with `device="host"`.
+MASE divides the forecast MAE (using the sample median as point estimate) by the in-sample MAE of the seasonal-naive forecast on `train_data`, `mean(|y_t - y_{t-seasonality}|)`. The scale is computed once at factory time; the returned metric has the standard scalar-array signature (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `train_data` and the returned metric's `pred`/`truth` are all moved to device memory first (`_device_view()`), so any of them may be host-committed, e.g. draws sampled with `device="host"`.
 
 
 ## Parameters

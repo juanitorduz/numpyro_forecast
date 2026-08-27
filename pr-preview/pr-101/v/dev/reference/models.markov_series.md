@@ -45,7 +45,7 @@ Optional exogenous inputs over the full horizon: a PyTree of arrays with time at
 `(name, size)` pairs opened **inside** the scan body around the sample statement (the only placement NumPyro supports for scan + plate).
 
 `reparam_config: Mapping[str, Reparam] | None = None`  
-Site-name -\> `~numpyro.infer.reparam.Reparam` mapping applied **inside** the scan body.
+Site-name -\> `numpyro.infer.reparam.Reparam` mapping applied **inside** the scan body.
 
 
 ## Returns

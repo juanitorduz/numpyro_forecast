@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -768,7 +780,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The central <code>alpha</code> interval is bounded by the <code>(1 - alpha) / 2</code> and <code>1 - (1 - alpha) / 2</code> quantiles of the forecast samples; the metric is the fraction of ground-truth values that fall inside it. A well-calibrated forecast has coverage close to <code>alpha</code>. A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>); bind a non-default level with <code>functools.partial(eval_coverage, alpha=...)</code>.</p>
+<p>The central <code>alpha</code> interval is bounded by the <code>(1 - alpha) / 2</code> and <code>1 - (1 - alpha) / 2</code> quantiles of the forecast samples; the metric is the fraction of ground-truth values that fall inside it. A well-calibrated forecast has coverage close to <code>alpha</code>. A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind a non-default level with <code>functools.partial(eval_coverage, alpha=...)</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -788,7 +800,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional number of flattened data cells evaluated on the accelerator per pass (see <a href="evaluate.eval_crps.html#numpyro_forecast.evaluate.eval_crps" class="gdls-link gdls-code">eval_crps()</a>; the sample axis is never chunked). Coverage is a count of exact 0/1 indicators, so chunking recovers the identical count; only the precision of the final division differs from the single pass. Either path accepts a host-committed <code>pred</code> or <code>truth</code> (or both); the single pass moves them to device memory first (<code>~numpyro_forecast._offload._device_view()</code>). <code>None</code> (default) evaluates in one pass.
+Optional number of flattened data cells evaluated on the accelerator per pass (see <a href="evaluate.eval_crps.html#numpyro_forecast.evaluate.eval_crps" class="gdls-link gdls-code">eval_crps()</a>; the sample axis is never chunked). Coverage is a count of exact 0/1 indicators, so chunking recovers the identical count; only the precision of the final division differs from the single pass. Either path accepts a host-committed <code>pred</code> or <code>truth</code> (or both); the single pass moves them to device memory first (<code>_device_view()</code>). <code>None</code> (default) evaluates in one pass.
 </dd>
 </dl>
 </div>

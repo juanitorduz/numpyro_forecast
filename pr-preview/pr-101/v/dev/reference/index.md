@@ -181,6 +181,12 @@ A closure that fits a model on a training window and forecasts its test horizon.
 [typing.InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn)  
 A closure that fits a model on a training window and scores its in-sample fit.
 
+[typing.Metric](typing.Metric.md#numpyro_forecast.typing.Metric)  
+A metric maps `(pred, truth)` forecast samples and ground truth to a scalar array.
+
+[typing.ModelFactory](typing.ModelFactory.md#numpyro_forecast.typing.ModelFactory)  
+A zero-argument callable returning a fresh `ForecastModel` instance.
+
 
 ## Autocorrelation
 

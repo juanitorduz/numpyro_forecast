@@ -11,7 +11,7 @@ typing.InSampleFn()
 ```
 
 
-Called by `~numpyro_forecast.evaluate.backtest()` (only when `eval_train=True`) positionally. Returns in-sample posterior-predictive samples with the sample axis first, shape `(num_samples, *batch, t1 - t0, obs)`. The same `batch_size`/host-offload notes as [ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn) apply.
+Called by [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) (only when `eval_train=True`) positionally. Returns in-sample posterior-predictive samples with the sample axis first, shape `(num_samples, *batch, t1 - t0, obs)`. The same `batch_size`/host-offload notes as [ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn) apply.
 
 
 ## Methods

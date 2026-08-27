@@ -577,9 +577,9 @@ empirical demand rate (share of periods with demand): 0.294</code></pre>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Masked simple exponential smoothing level channel on the calendar axis.</span></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">    Samples the component priors (sites ``smoothing``, ``init``, ``noise``) and</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co">    runs the gated level recursion through :func:`ssoe`, whose ``eps_future``</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co">    runs the gated level recursion through `ssoe()`, whose ``eps_future``</span></span>
 <span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">    innovation site provides the flat forecast predictive. Meant to be called</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co">    under :func:`numpyro.handlers.scope`, which prefixes the site names per</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co">    under `numpyro.handlers.scope()`, which prefixes the site names per</span></span>
 <span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co">    component. This is the exact helper used in the Croston example; TSB</span></span>
 <span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co">    differs only in the ``gate`` it passes for the probability channel.</span></span>
 <span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>

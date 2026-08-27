@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -767,7 +779,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">typing</span><span class="op">.</span><span class="sig-name">ForecastModel</span>()</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Any plain function with this signature satisfies this Protocol structurally (for example, one that derives its <code>~numpyro_forecast.models.Horizon</code> from the shapes via <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data</a> and calls the model building blocks), so nothing needs to subclass it. The parameters are positional-only so a user model’s own parameter names (<code>cov</code>, <code>y</code>, …) stay free instead of being forced to match <code>covariates</code>/<code>data</code>.</p>
+<p>Any plain function with this signature satisfies this Protocol structurally (for example, one that derives its <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a> from the shapes via <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data</a> and calls the model building blocks), so nothing needs to subclass it. The parameters are positional-only so a user model’s own parameter names (<code>cov</code>, <code>y</code>, …) stay free instead of being forced to match <code>covariates</code>/<code>data</code>.</p>
 <p><code>ty</code> checks call sites against this signature structurally (duck typing), which is the main payoff of the Protocol over a bare <code>Callable</code> alias. At runtime, the beartype import hook’s <code>isinstance</code> check on a <code>runtime_checkable</code> Protocol only verifies that the named methods exist (Python runtime protocols never inspect signatures), so it reduces to <code>callable(model)</code>: a model missing the <code>data=None</code> default still passes this check and only fails loudly at the first driver call that invokes it with <code>data=None</code>.</p>
 </div>
 <section id="methods" class="level2 doc-methods">

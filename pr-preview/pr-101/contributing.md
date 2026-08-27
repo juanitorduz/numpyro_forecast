@@ -45,7 +45,7 @@ If they are missing, the build falls back to the first sentence of the notebook'
 # Guidelines
 
 - Every function (public and private) must have complete input and return type hints. Type checking is enforced with `ty`.
-- Every public function and class must have a NumPy-style docstring.
+- Every public function and class must have a NumPy-style docstring. Cross references, math and code blocks use the great-docs Markdown dialect described in `AGENTS.md` (Docstring markup); `tests/test_docstring_markup.py` enforces it.
 - Array shapes are annotated with `jaxtyping`, with a leading space in the shape string (e.g. `Float[Array, " time obs"]`).
 - Follow the array convention: time at axis `-2`, the observation dim at `-1`, batch dims to the left.
 - Add tests for new functionality. Keep one logical change per pull request.

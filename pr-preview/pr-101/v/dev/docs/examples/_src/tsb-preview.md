@@ -249,9 +249,9 @@ def level_channel(h: Horizon, values: Array, gate: Array) -> tuple[SSOEResult, A
     """Masked simple exponential smoothing level channel on the calendar axis.
 
     Samples the component priors (sites ``smoothing``, ``init``, ``noise``) and
-    runs the gated level recursion through :func:`ssoe`, whose ``eps_future``
+    runs the gated level recursion through `ssoe()`, whose ``eps_future``
     innovation site provides the flat forecast predictive. Meant to be called
-    under :func:`numpyro.handlers.scope`, which prefixes the site names per
+    under `numpyro.handlers.scope()`, which prefixes the site names per
     component. This is the exact helper used in the Croston example; TSB
     differs only in the ``gate`` it passes for the probability channel.
 

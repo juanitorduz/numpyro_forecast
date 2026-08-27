@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -769,7 +781,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p><code>prediction</code> is the deterministic predictor over the full horizon (time at axis <code>-2</code>, shape <code>(*batch, duration, obs)</code>). <code>obs_dist</code> takes one of two forms. A <code>~numpyro.distributions.Distribution</code> is zero-centered observation noise (e.g.&nbsp;<code>dist.StudentT(nu, 0.0, sigma)</code>) shifted onto the predictor with <code>~numpyro_forecast.surgery.shift_loc()</code>, which also owns the multivariate-normal layout check. A callable is a link mapping the predictor to the observation distribution directly (the GLM form, e.g. <code>lambda eta: dist.Poisson(jnp.exp(eta))</code>). Either way, while training the observation site <code>"obs"</code> is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled at <code>"obs_future"</code> and exposed as the <code>"forecast"</code> deterministic site that <code>~numpyro_forecast.predictive.forecast()</code> reads. The observation distribution must support time-axis surgery (<code>~numpyro_forecast.surgery.slice_time()</code> / <code>~numpyro_forecast.surgery.prefix_condition()</code>), i.e.&nbsp;an elementwise family or a registered one.</p>
+<p><code>prediction</code> is the deterministic predictor over the full horizon (time at axis <code>-2</code>, shape <code>(*batch, duration, obs)</code>). <code>obs_dist</code> takes one of two forms. A <code>numpyro.distributions.Distribution</code> is zero-centered observation noise (e.g.&nbsp;<code>dist.StudentT(nu, 0.0, sigma)</code>) shifted onto the predictor with <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a>, which also owns the multivariate-normal layout check. A callable is a link mapping the predictor to the observation distribution directly (the GLM form, e.g. <code>lambda eta: dist.Poisson(jnp.exp(eta))</code>). Either way, while training the observation site <code>"obs"</code> is observed; while forecasting the in-sample prefix is observed and the forecast suffix is sampled at <code>"obs_future"</code> and exposed as the <code>"forecast"</code> deterministic site that <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> reads. The observation distribution must support time-axis surgery (<a href="surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="gdls-link gdls-code">slice_time()</a> / <a href="surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="gdls-link gdls-code">prefix_condition()</a>), i.e.&nbsp;an elementwise family or a registered one.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

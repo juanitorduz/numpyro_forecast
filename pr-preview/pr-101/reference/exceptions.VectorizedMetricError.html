@@ -429,6 +429,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.ForecastModel</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -634,7 +646,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">VectorizedMetricError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Raised by <code>~numpyro_forecast.evaluate.backtest_vectorized()</code> when a metric forces a host conversion (e.g.&nbsp;<code>float(...)</code> or <code>numpy</code> calls) under <code>vmap</code>. Metrics must be pure JAX functions returning a scalar array; see <code>~numpyro_forecast.typing.Metric</code>.</p>
+<p>Raised by <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> when a metric forces a host conversion (e.g.&nbsp;<code>float(...)</code> or <code>numpy</code> calls) under <code>vmap</code>. Metrics must be pure JAX functions returning a scalar array; see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>.</p>
 </div>
 
 

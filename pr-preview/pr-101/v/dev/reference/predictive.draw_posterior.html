@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -798,7 +810,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is moved as soon as it is drawn. <code>"host"</code> keeps every leaf in pageable host memory, so nothing of the result occupies accelerator memory: with the JAX CPU backend initialized it commits each leaf to <code>jax.devices("cpu")[0]</code> and returns committed <code>jax.Array</code> leaves (<code>np.asarray</code> on one is a zero-copy view); without it (for example after <code>numpyro.set_platform("cuda")</code>, or a <code>JAX_PLATFORMS</code> preset) it copies each chunk with <code>jax.device_get()</code> and returns NumPy arrays, since a CUDA client offers no pageable <code>jax.Array</code> container. It therefore needs no CPU backend and never pins memory. <code>"numpy"</code> forces the NumPy path; <code>"pinned_host"</code> commits to the accelerator’s pinned host memory kind instead, a pool capped by <code>XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB</code> (64 GB by default on CUDA), so prefer <code>"host"</code> for large panels. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device (<code>"cpu"</code> warns and takes the NumPy path when the CPU backend is missing). <code>None</code> keeps everything on the default device. <code>device</code> never changes the draw values. A host-committed jax result is not a drop-in replacement for a device array in your own <code>jnp</code> code: mixed with an uncommitted array an op runs on the CPU and returns a CPU-committed array, mixed with an accelerator-committed array it raises, and a pinned array raises on any mix. Feed a host posterior (in either container) straight into <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>, <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a>, or <code>~numpyro_forecast.convert.to_datatree()</code> (all of which already accept it), or convert explicitly first with <code>np.asarray(x)</code> (stays on host) or <code>jax.device_put(x, device)</code> (moves it to an accelerator).
+Where each chunk of draws is moved as soon as it is drawn. <code>"host"</code> keeps every leaf in pageable host memory, so nothing of the result occupies accelerator memory: with the JAX CPU backend initialized it commits each leaf to <code>jax.devices("cpu")[0]</code> and returns committed <code>jax.Array</code> leaves (<code>np.asarray</code> on one is a zero-copy view); without it (for example after <code>numpyro.set_platform("cuda")</code>, or a <code>JAX_PLATFORMS</code> preset) it copies each chunk with <code>jax.device_get()</code> and returns NumPy arrays, since a CUDA client offers no pageable <code>jax.Array</code> container. It therefore needs no CPU backend and never pins memory. <code>"numpy"</code> forces the NumPy path; <code>"pinned_host"</code> commits to the accelerator’s pinned host memory kind instead, a pool capped by <code>XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB</code> (64 GB by default on CUDA), so prefer <code>"host"</code> for large panels. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device (<code>"cpu"</code> warns and takes the NumPy path when the CPU backend is missing). <code>None</code> keeps everything on the default device. <code>device</code> never changes the draw values. A host-committed jax result is not a drop-in replacement for a device array in your own <code>jnp</code> code: mixed with an uncommitted array an op runs on the CPU and returns a CPU-committed array, mixed with an accelerator-committed array it raises, and a pinned array raises on any mix. Feed a host posterior (in either container) straight into <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>, <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a>, or <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> (all of which already accept it), or convert explicitly first with <code>np.asarray(x)</code> (stays on host) or <code>jax.device_put(x, device)</code> (moves it to an accelerator).
 </dd>
 </dl>
 </div>
@@ -824,7 +836,7 @@ Posterior samples of the latent sites, sample axis leading. With <code>device="h
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).
 </dd>
 </dl>
 </div>

@@ -53,10 +53,12 @@ Fixed training-window length (`>= 1`).
 Fixed test-window length (`>= 1`).
 
 `guide: AutoGuide | Callable[…, None]`  
-An `AutoGuide` instance built on the same model object `model_fn` returns (hand-written guides are not vmappable, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) instead)::
+An `AutoGuide` instance built on the same model object `model_fn` returns (hand-written guides are not vmappable, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) instead):
 
-    model = make_model()
-    backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+``` python
+model = make_model()
+backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+```
 
 `optim: _NumPyroOptim | None = None`  
 NumPyro optimizer; `None` uses `numpyro.optim.Adam(0.01)`. For an optax optimizer, wrap it with `numpyro.optim.optax_to_numpyro` first.

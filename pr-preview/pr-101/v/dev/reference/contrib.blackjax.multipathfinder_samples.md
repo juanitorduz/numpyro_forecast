@@ -19,7 +19,7 @@ contrib.blackjax.multipathfinder_samples(
 ```
 
 
-Every call draws fresh unconstrained samples from each path's fitted normal approximation (`num_samples` per path, via `blackjax.vi.pathfinder.sample` vmapped over the paths) and then combines the paths into a single set of `num_samples` draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to `~numpyro_forecast.predictive.draw_posterior()` and [pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples): `~numpyro_forecast.predictive.forecast()` and NumPyro's `Predictive` consume it unchanged. Chunking and device offload are delegated to the shared `~numpyro_forecast._offload._draw_chunked()` driver, so the same memory-bounding contract applies.
+Every call draws fresh unconstrained samples from each path's fitted normal approximation (`num_samples` per path, via `blackjax.vi.pathfinder.sample` vmapped over the paths) and then combines the paths into a single set of `num_samples` draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) and [pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples): [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) and NumPyro's `Predictive` consume it unchanged. Chunking and device offload are delegated to the shared `_draw_chunked()` driver, so the same memory-bounding contract applies.
 
 
 ## Resampling Strategies
@@ -47,10 +47,10 @@ Number of posterior draws.
 How to combine the per-path draws: `"auto"` (default), `"psis"`, or `"elbo"`; see "Resampling strategies" above.
 
 `batch_size: int | None = None`  
-Optional chunk size for the drawing itself; see `~numpyro_forecast.predictive.draw_posterior()` (the same memory/reproducibility contract applies). Note that each chunk draws `num_paths * batch_size` samples internally.
+Optional chunk size for the drawing itself; see [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) (the same memory/reproducibility contract applies). Note that each chunk draws `num_paths * batch_size` samples internally.
 
 `device: jax.Device | str | None = None`  
-Where each chunk of draws is moved as soon as it is drawn; see `~numpyro_forecast.predictive.draw_posterior()`, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
+Where each chunk of draws is moved as soon as it is drawn; see [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
 
 
 ## Returns
@@ -67,7 +67,7 @@ Posterior samples of the latent sites, sample axis leading (with `device="host"`
 If `num_samples` or `batch_size` is not positive, or `resample` is not one of `"auto"`, `"psis"`, `"elbo"`.
 
 `RuntimeError`  
-If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `~numpyro_forecast._offload._host_memory_kind()`).
+If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 
 ## Warns

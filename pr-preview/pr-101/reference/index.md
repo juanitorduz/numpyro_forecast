@@ -116,6 +116,12 @@ Public type contracts.
 [typing.ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel)  
 A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
 
+[typing.Metric](typing.Metric.md#numpyro_forecast.typing.Metric)  
+A metric maps `(pred, truth)` forecast samples and ground truth to a scalar array.
+
+[typing.ModelFactory](typing.ModelFactory.md#numpyro_forecast.typing.ModelFactory)  
+A zero-argument callable returning a fresh `ForecastModel` instance.
+
 
 ## Autocorrelation
 

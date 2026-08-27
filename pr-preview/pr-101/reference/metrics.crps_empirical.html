@@ -122,6 +122,49 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
   <link rel="alternate" type="text/markdown" href="metrics.crps_empirical.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/metrics.crps_empirical.html">
@@ -429,6 +472,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.ForecastModel</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -646,9 +701,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-text">
 <p>The CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as</p>
-<p>.. math::</p>
-<pre><code>\mathrm{CRPS}(F, y) = \mathbb{E}|X - y| - \tfrac{1}{2}\,\mathbb{E}|X - X'|,</code></pre>
-<p>where :math:<code>X, X'</code> are independent draws from the forecast distribution :math:<code>F</code>. The expectations are estimated from the forecast <code>sample</code> axis using the sorted-sample :math:<code>O(n \log n)</code> identity.</p>
+<p><span class="math display">
+\mathrm{CRPS}(F, y) = \mathbb{E}|X - y| - \tfrac{1}{2}\,\mathbb{E}|X - X'|,
+</span></p>
+<p>where <span class="math inline">X, X'</span> are independent draws from the forecast distribution <span class="math inline">F</span>. The expectations are estimated from the forecast <code>sample</code> axis using the sorted-sample <span class="math inline">O(n \log n)</span> identity.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -656,7 +712,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dl>
 <dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
-<p>Forecast samples with the sample axis first, shape <code>(sample, *batch)</code>. May be host-committed (e.g.&nbsp;draws sampled with <code>device="host"</code>), regardless of whether <code>truth</code> is: either operand is moved to device memory first (<code>~numpyro_forecast._offload._device_view()</code>).</p>
+<p>Forecast samples with the sample axis first, shape <code>(sample, *batch)</code>. May be host-committed (e.g.&nbsp;draws sampled with <code>device="host"</code>), regardless of whether <code>truth</code> is: either operand is moved to device memory first (<code>_device_view()</code>).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>

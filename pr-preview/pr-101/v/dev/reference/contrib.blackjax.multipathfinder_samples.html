@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -776,7 +788,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Every call draws fresh unconstrained samples from each path’s fitted normal approximation (<code>num_samples</code> per path, via <code>blackjax.vi.pathfinder.sample</code> vmapped over the paths) and then combines the paths into a single set of <code>num_samples</code> draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to <code>~numpyro_forecast.predictive.draw_posterior()</code> and <a href="contrib.blackjax.pathfinder_samples.html#numpyro_forecast.contrib.blackjax.pathfinder_samples" class="gdls-link gdls-code">pathfinder_samples()</a>: <code>~numpyro_forecast.predictive.forecast()</code> and NumPyro’s <code>Predictive</code> consume it unchanged. Chunking and device offload are delegated to the shared <code>~numpyro_forecast._offload._draw_chunked()</code> driver, so the same memory-bounding contract applies.</p>
+<p>Every call draws fresh unconstrained samples from each path’s fitted normal approximation (<code>num_samples</code> per path, via <code>blackjax.vi.pathfinder.sample</code> vmapped over the paths) and then combines the paths into a single set of <code>num_samples</code> draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> and <a href="contrib.blackjax.pathfinder_samples.html#numpyro_forecast.contrib.blackjax.pathfinder_samples" class="gdls-link gdls-code">pathfinder_samples()</a>: <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> and NumPyro’s <code>Predictive</code> consume it unchanged. Chunking and device offload are delegated to the shared <code>_draw_chunked()</code> driver, so the same memory-bounding contract applies.</p>
 </div>
 <section id="resampling-strategies" class="level2 doc-resampling-strategies">
 <h2 class="doc-resampling-strategies">Resampling Strategies</h2>
@@ -806,11 +818,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional chunk size for the drawing itself; see <code>~numpyro_forecast.predictive.draw_posterior()</code> (the same memory/reproducibility contract applies). Note that each chunk draws <code>num_paths * batch_size</code> samples internally.</p>
+<p>Optional chunk size for the drawing itself; see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> (the same memory/reproducibility contract applies). Note that each chunk draws <code>num_paths * batch_size</code> samples internally.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Where each chunk of draws is moved as soon as it is drawn; see <code>~numpyro_forecast.predictive.draw_posterior()</code>, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
+Where each chunk of draws is moved as soon as it is drawn; see <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>, including for the NumPy path taken when the JAX CPU backend is not initialized and for the rules on mixing a host-committed result with other arrays.
 </dd>
 </dl>
 </div>
@@ -836,7 +848,7 @@ Posterior samples of the latent sites, sample axis leading (with <code>device="h
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast._offload._host_memory_kind()</code>).
+If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).
 </dd>
 </dl>
 </div>

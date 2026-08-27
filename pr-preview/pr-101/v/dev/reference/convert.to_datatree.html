@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -782,7 +794,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Posterior-first: callers draw their own posterior (<code>mcmc.get_samples()</code> for MCMC, <code>~numpyro_forecast.predictive.draw_posterior()</code> for a variational fit) and pass it in; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> never draws a posterior of its own. <code>rng_key</code> is consumed only by the in-sample posterior-predictive draws and, when a forecast horizon is present, the forecast draws.</p>
+<p>Posterior-first: callers draw their own posterior (<code>mcmc.get_samples()</code> for MCMC, <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> for a variational fit) and pass it in; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> never draws a posterior of its own. <code>rng_key</code> is consumed only by the in-sample posterior-predictive draws and, when a forecast horizon is present, the forecast draws.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -798,7 +810,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, ArrayLike]</span></code></dt>
 <dd>
-<p>Posterior samples of the latent sites, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <code>~numpyro_forecast.predictive.draw_posterior()</code>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly.</p>
+<p>Posterior samples of the latent sites, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -806,7 +818,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Covariates with time at axis <code>-2</code>. When <code>covariates</code> extends beyond <code>data</code> along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries <code>predictions</code> (forecast <code>obs</code> draws from <code>~numpyro_forecast.predictive.forecast()</code>) and <code>predictions_constant_data</code> groups.</p>
+<p>Covariates with time at axis <code>-2</code>. When <code>covariates</code> extends beyond <code>data</code> along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries <code>predictions</code> (forecast <code>obs</code> draws from <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>) and <code>predictions_constant_data</code> groups.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">num_chains</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
 <dd>
@@ -818,7 +830,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">predictive_device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"host"</span></span></code></dt>
 <dd>
-<p>Where the predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <code>~numpyro_forecast.predictive.predict_in_sample()</code> and <code>~numpyro_forecast.predictive.forecast()</code> (the placement contract of <code>~numpyro_forecast.predictive.draw_posterior()</code>). It is resolved once and the same placement is handed to both, so an unmet <code>"cpu"</code> warns once per export. The default <code>"host"</code> keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when <code>predictive_batch_size</code> is set; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
+<p>Where the predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> (the placement contract of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). It is resolved once and the same placement is handed to both, so an unmet <code>"cpu"</code> warns once per export. The default <code>"host"</code> keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when <code>predictive_batch_size</code> is set; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -864,7 +876,7 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If <code>predictive_device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>~numpyro_forecast._offload._host_memory_kind()</code>).
+If <code>predictive_device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).
 </dd>
 </dl>
 </div>
@@ -882,7 +894,7 @@ If <code>predictive_device="cpu"</code> is requested and the JAX CPU backend is 
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p><a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> no longer accepts a fit object or draws a posterior itself (no <code>num_predictive_samples</code>, no internal <code>~numpyro_forecast.predictive.draw_posterior()</code> call): callers draw the posterior first and pass it in. The <code>variational</code>/<code>is_mcmc</code> attrs previously stamped on the <code>posterior</code> group are gone too, since a fit type is no longer knowable from a plain posterior dict; use <code>num_chains</code> (<code>1</code> vs.&nbsp;<code>&gt; 1</code>) to tell the two apart if needed. When a forecast horizon is present, <code>rng_key</code> is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, <code>rng_key</code> is used unsplit for the in-sample predictive draw. <code>predictive_batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
+<p><a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> no longer accepts a fit object or draws a posterior itself (no <code>num_predictive_samples</code>, no internal <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> call): callers draw the posterior first and pass it in. The <code>variational</code>/<code>is_mcmc</code> attrs previously stamped on the <code>posterior</code> group are gone too, since a fit type is no longer knowable from a plain posterior dict; use <code>num_chains</code> (<code>1</code> vs.&nbsp;<code>&gt; 1</code>) to tell the two apart if needed. When a forecast horizon is present, <code>rng_key</code> is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, <code>rng_key</code> is used unsplit for the in-sample predictive draw. <code>predictive_batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
 
 
 </section>

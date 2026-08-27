@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -767,11 +779,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Adaptation (step size and inverse mass matrix) runs once in <code>~_BlackjaxKernel.init()</code> via <code>blackjax.window_adaptation</code>; each MCMC step is then a single tuned NUTS step.</p>
+<p>Adaptation (step size and inverse mass matrix) runs once in <code>_BlackjaxKernel.init()</code> via <code>blackjax.window_adaptation</code>; each MCMC step is then a single tuned NUTS step.</p>
 </div>
 <section id="run-configuration" class="level2 doc-run-configuration">
 <h2 class="doc-run-configuration">Run Configuration</h2>
-<p>Pass this kernel to <code>~numpyro.infer.MCMC</code> with <strong><code>chain_method="sequential"</code> only</strong>. With more than one chain, <code>chain_method="vectorized"</code> hands <code>~_BlackjaxKernel.init()</code> a stacked <code>rng_key</code> of shape <code>(num_chains, 2)</code> rather than vmapping a per-chain call, and the <code>jax.random.split</code> inside <code>init</code> rejects a non-scalar key with a <code>ValueError</code> (pinned by the test suite). <code>chain_method="parallel"</code> is likewise unsupported: it is not exercised by this package and shares the same single-key assumption. Also pass <strong><code>num_warmup=0</code></strong>: adaptation runs once inside <code>~_BlackjaxKernel.init()</code> (via <code>blackjax.window_adaptation</code>), so any NumPyro-driven warmup steps on top of that are simply discarded work, not additional tuning.</p>
+<p>Pass this kernel to <code>numpyro.infer.MCMC</code> with <strong><code>chain_method="sequential"</code> only</strong>. With more than one chain, <code>chain_method="vectorized"</code> hands <code>_BlackjaxKernel.init()</code> a stacked <code>rng_key</code> of shape <code>(num_chains, 2)</code> rather than vmapping a per-chain call, and the <code>jax.random.split</code> inside <code>init</code> rejects a non-scalar key with a <code>ValueError</code> (pinned by the test suite). <code>chain_method="parallel"</code> is likewise unsupported: it is not exercised by this package and shares the same single-key assumption. Also pass <strong><code>num_warmup=0</code></strong>: adaptation runs once inside <code>_BlackjaxKernel.init()</code> (via <code>blackjax.window_adaptation</code>), so any NumPyro-driven warmup steps on top of that are simply discarded work, not additional tuning.</p>
 </section>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

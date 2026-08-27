@@ -77,6 +77,8 @@
 - [typing.ForecastModel](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ForecastModel.html)
 - [typing.ForecastFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ForecastFn.html)
 - [typing.InSampleFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.InSampleFn.html)
+- [typing.Metric](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Metric.html)
+- [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
 
 #### Autocorrelation
 > Batched autocorrelation and partial autocorrelation diagnostics.

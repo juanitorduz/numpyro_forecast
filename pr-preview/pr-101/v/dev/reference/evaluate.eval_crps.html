@@ -547,6 +547,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -770,7 +782,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>).</p>
+<p>A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>).</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -786,7 +798,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional number of flattened data cells (the product of the batch shape, e.g.&nbsp;time times series) evaluated on the accelerator per pass; the sample axis is never chunked. With host-resident inputs (e.g. draws sampled with <code>device="host"</code>) this bounds accelerator memory by <code>sample * batch_size</code> values plus the CRPS sort workspace instead of the full panel, since both <code>pred</code> and <code>truth</code> are staged as NumPy views before chunking, whatever their own memory kind. Chunking only changes the summation order of the final mean (results are equal to float tolerance, not bitwise); at or above the cell count the single-pass path runs instead, which moves any host-committed operand back to device memory first (<code>~numpyro_forecast._offload._device_view()</code>) so either <code>pred</code> or <code>truth</code> (or both) may be host-committed regardless of <code>batch_size</code>. <code>None</code> (default) evaluates in one pass.
+Optional number of flattened data cells (the product of the batch shape, e.g.&nbsp;time times series) evaluated on the accelerator per pass; the sample axis is never chunked. With host-resident inputs (e.g. draws sampled with <code>device="host"</code>) this bounds accelerator memory by <code>sample * batch_size</code> values plus the CRPS sort workspace instead of the full panel, since both <code>pred</code> and <code>truth</code> are staged as NumPy views before chunking, whatever their own memory kind. Chunking only changes the summation order of the final mean (results are equal to float tolerance, not bitwise); at or above the cell count the single-pass path runs instead, which moves any host-committed operand back to device memory first (<code>_device_view()</code>) so either <code>pred</code> or <code>truth</code> (or both) may be host-committed regardless of <code>batch_size</code>. <code>None</code> (default) evaluates in one pass.
 </dd>
 </dl>
 </div>

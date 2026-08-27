@@ -135,7 +135,7 @@ The scan version threads a carry `(y_prev, error_prev)` through the innovations 
 def generate_arma_1_1_data_scan(
     rng_key: Array, n_samples: int, phi: float, theta: float, noise_scale: float
 ) -> Float[Array, " t"]:
-    """Simulate an ARMA(1,1) series with :func:`jax.lax.scan`.
+    """Simulate an ARMA(1,1) series with `jax.lax.scan()`.
 
     Parameters
     ----------

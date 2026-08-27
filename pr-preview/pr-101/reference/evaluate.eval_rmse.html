@@ -429,6 +429,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.ForecastModel</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -644,7 +656,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>A pure JAX scalar kernel (see <code>~numpyro_forecast.typing.Metric</code>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>~numpyro_forecast._offload._device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>). <code>pred</code> and <code>truth</code> are moved to device memory first (<code>_device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

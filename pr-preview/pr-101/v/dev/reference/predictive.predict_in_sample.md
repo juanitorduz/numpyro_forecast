@@ -20,7 +20,7 @@ predictive.predict_in_sample(
 ```
 
 
-Runs `Predictive` with the in-sample `covariates` and the supplied posterior latent draws. Unlike [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) there is no forecast horizon: `covariates` span only the observed window, so the model's `obs` site is sampled at every step. The number of predictive samples equals the leading (sample) axis of `posterior` (see `~numpyro_forecast.predictive.draw_posterior()`).
+Runs `Predictive` with the in-sample `covariates` and the supplied posterior latent draws. Unlike [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) there is no forecast horizon: `covariates` span only the observed window, so the model's `obs` site is sampled at every step. The number of predictive samples equals the leading (sample) axis of `posterior` (see [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)).
 
 
 ## Parameters
@@ -45,7 +45,7 @@ Optional chunk size for sampling (caps peak memory).
 Whether `Predictive` vectorizes over the sample axis with `vmap` (`True`, faster, higher peak memory) or maps it serially with `lax.map` (`False`). See [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) for how this interacts with `batch_size`.
 
 `device: jax.Device | str | None = None`  
-Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives; the same placement contract as the `device` argument of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) (`"host"` for pageable host memory as a CPU-committed `jax.Array`, or a NumPy array when no CPU backend is initialized; `"numpy"`; `"pinned_host"`; a `jax.Device` or platform name; `None` for the default device), including its mixing rules for host-committed results. With `batch_size` set on an accelerator, any host target bounds accelerator memory by a single chunk instead of the full `(sample, time, obs)` array; the draw values are unchanged, only where the result lives. The bound requires `batch_size` strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. The result feeds straight into `~numpyro_forecast.convert.to_datatree()` and the `batch_size`-chunked evaluation metrics in `~numpyro_forecast.evaluate`, which accept host-resident draws.
+Where each chunk of draws is placed as soon as it is drawn and where the stitched result lives; the same placement contract as the `device` argument of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) (`"host"` for pageable host memory as a CPU-committed `jax.Array`, or a NumPy array when no CPU backend is initialized; `"numpy"`; `"pinned_host"`; a `jax.Device` or platform name; `None` for the default device), including its mixing rules for host-committed results. With `batch_size` set on an accelerator, any host target bounds accelerator memory by a single chunk instead of the full `(sample, time, obs)` array; the draw values are unchanged, only where the result lives. The bound requires `batch_size` strictly below the sample count: at or above it, the single-shot path runs and the full array is materialized on the default device before the one transfer. The result feeds straight into [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) and the `batch_size`-chunked evaluation metrics in `evaluate`, which accept host-resident draws.
 
 
 ## Returns
@@ -59,7 +59,7 @@ In-sample posterior-predictive draws of the `obs` site (with `device="host"` com
 
 
 `RuntimeError`  
-If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `~numpyro_forecast._offload._host_memory_kind()`).
+If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 
 ## Warns

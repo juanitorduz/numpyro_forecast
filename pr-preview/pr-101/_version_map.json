@@ -358,6 +358,14 @@
       "dev",
       "0.2.3"
     ],
+    "reference/typing.Metric.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.ModelFactory.html": [
+      "dev",
+      "0.2.3"
+    ],
     "skill.html": [
       "dev",
       "0.2.3"
