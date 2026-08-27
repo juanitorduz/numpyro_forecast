@@ -65,11 +65,13 @@ _install_compile_listener()
 def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleNamespace]]:
     """Return a factory of context managers that count backend compilations.
 
-    Usage::
+    Usage:
 
-        with count_compilations() as tally:
-            jax.block_until_ready(jitted(x))
-        assert tally.count == 1
+    ```python
+    with count_compilations() as tally:
+        jax.block_until_ready(jitted(x))
+    assert tally.count == 1
+    ```
 
     When the monitoring backend is unavailable the block imperatively xfails
     (non-strict), never a silent skip (roadmap §4.5).

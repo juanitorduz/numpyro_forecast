@@ -17,10 +17,12 @@ It is normally invoked by ``scripts/build_docs.py`` at build time, against a tem
 worktree of the newest release tag, with the output cached in the gitignored
 ``.great-docs-cache/``. Manual runs are only for debugging.
 
-Usage::
+Usage:
 
-    uv run python scripts/api_snapshot.py                          # snapshot the working tree
-    uv run python scripts/api_snapshot.py --package-root <path>    # e.g. a release-tag worktree
+```bash
+uv run python scripts/api_snapshot.py                          # snapshot the working tree
+uv run python scripts/api_snapshot.py --package-root <path>    # e.g. a release-tag worktree
+```
 """
 
 import argparse
