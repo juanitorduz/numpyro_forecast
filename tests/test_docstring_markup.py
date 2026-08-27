@@ -6,7 +6,7 @@ markup" section of ``AGENTS.md``): Sphinx cross-reference roles, math directives
 literal-block markers and old-style RST hyperlinks all render literally or as dead
 code spans instead of the intended cross reference, math or code block. This
 module scans every module/class/function docstring under ``numpyro_forecast/``,
-``tests/`` and ``scripts/``, plus every markdown cell of the example notebooks,
+``tests/`` and ``scripts/``, plus every markdown and code cell of the example notebooks,
 for the RST markup great-docs cannot render.
 """
 
@@ -38,7 +38,7 @@ BANNED: dict[str, re.Pattern[str]] = {
 _SEE_ALSO_HELP = 'see the "Docstring markup" section of AGENTS.md'
 
 
-def _docstrings(path: Path) -> list[tuple[int, str, bool]]:
+def _docstrings(path: Path) -> list[tuple[int, str, bool, str]]:
     """Collect every module/class/function docstring in a Python source file.
 
     Parameters
@@ -48,11 +48,12 @@ def _docstrings(path: Path) -> list[tuple[int, str, bool]]:
 
     Returns
     -------
-    list[tuple[int, str, bool]]
-        One ``(lineno, text, is_raw)`` tuple per docstring, where ``lineno`` is the
-        line the docstring's string literal starts on and ``is_raw`` is whether that
-        literal opens with a raw-string prefix (``r`` or ``R``, single or double
-        quoted).
+    list[tuple[int, str, bool, str]]
+        One ``(lineno, text, is_raw, segment)`` tuple per docstring, where ``lineno``
+        is the line the docstring's string literal starts on, ``is_raw`` is whether
+        that literal opens with a raw-string prefix (``r`` or ``R``, single or double
+        quoted) and ``segment`` is the literal's source text (backslashes intact, so
+        escapes such as ``\\f`` are not lost before the raw-string check).
     """
     source = path.read_text()
     tree = ast.parse(source, filename=str(path))
@@ -61,7 +62,7 @@ def _docstrings(path: Path) -> list[tuple[int, str, bool]]:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             nodes.append(node)
 
-    results: list[tuple[int, str, bool]] = []
+    results: list[tuple[int, str, bool, str]] = []
     for node in nodes:
         text = ast.get_docstring(node, clean=False)
         if text is None:
@@ -69,7 +70,7 @@ def _docstrings(path: Path) -> list[tuple[int, str, bool]]:
         doc_node = tree.body[0] if node is tree else node.body[0]
         segment = ast.get_source_segment(source, doc_node)
         is_raw = segment is not None and segment.lstrip()[:2] in {'r"', 'R"', "r'", "R'"}
-        results.append((doc_node.lineno, text, is_raw))
+        results.append((doc_node.lineno, text, is_raw, segment or ""))
     return results
 
 
@@ -100,7 +101,7 @@ def test_python_docstrings_use_great_docs_markup(path: Path) -> None:
     """Every docstring in ``path`` must avoid Sphinx roles and RST directives."""
     rel = path.relative_to(REPO)
     messages: list[str] = []
-    for lineno, text, _is_raw in _docstrings(path):
+    for lineno, text, _is_raw, _segment in _docstrings(path):
         for offset_line, rule in _scan(text):
             messages.append(f"{rel}:{lineno + offset_line}: {rule}")
     assert not messages, (
@@ -114,8 +115,8 @@ def test_math_docstrings_are_raw(path: Path) -> None:
     """Every docstring containing both ``$`` and a backslash must be a raw string."""
     rel = path.relative_to(REPO)
     messages: list[str] = []
-    for lineno, text, is_raw in _docstrings(path):
-        if "$" in text and "\\" in text and not is_raw:
+    for lineno, _text, is_raw, segment in _docstrings(path):
+        if "$" in segment and "\\" in segment and not is_raw:
             messages.append(f"{rel}:{lineno}: math docstring is not a raw string")
     assert not messages, (
         f'docstrings with LaTeX and a backslash must be r""", {_SEE_ALSO_HELP}:\n'
@@ -124,13 +125,13 @@ def test_math_docstrings_are_raw(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=lambda p: str(p.relative_to(REPO)))
-def test_notebook_markdown_uses_great_docs_markup(path: Path) -> None:
-    """Every markdown cell in ``path`` must avoid Sphinx roles and RST directives."""
+def test_notebook_cells_use_great_docs_markup(path: Path) -> None:
+    """Every cell in ``path`` (prose and code) must avoid Sphinx roles and RST directives."""
     rel = path.relative_to(REPO)
     notebook = json.loads(path.read_text())
     messages: list[str] = []
     for cell_index, cell in enumerate(notebook.get("cells", [])):
-        if cell.get("cell_type") != "markdown":
+        if cell.get("cell_type") not in {"markdown", "code"}:
             continue
         source = cell.get("source", "")
         text = "".join(source) if isinstance(source, list) else source
