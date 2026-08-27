@@ -543,6 +543,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Guide</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/typing.InSampleFn.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
@@ -693,12 +699,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedGuideError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">exceptions.VectorizedMetricError</span></a>
   </div>
@@ -725,6 +725,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">exceptions.DeviceMemoryError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.HostMemoryKindError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.HostMemoryKindError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DevicePlatformError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DevicePlatformError</span></a>
   </div>
 </li>
       </ul>
@@ -772,7 +784,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L220-L309" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L225-L316" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">markov_series</span>(</span>
@@ -841,7 +853,7 @@ The latent over the full horizon in package layout <code>(*plate_batch, duration
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If forecasting without observed data, if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.
+If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.
 </dd>
 </dl>
 </div>

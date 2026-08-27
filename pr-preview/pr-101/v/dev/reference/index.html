@@ -496,6 +496,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Guide</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/typing.InSampleFn.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.InSampleFn</span></a>
   </div>
@@ -646,12 +652,6 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedGuideError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">exceptions.VectorizedMetricError</span></a>
   </div>
@@ -678,6 +678,18 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">exceptions.DeviceMemoryError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.HostMemoryKindError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.HostMemoryKindError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DevicePlatformError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DevicePlatformError</span></a>
   </div>
 </li>
       </ul>
@@ -956,6 +968,10 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>A closure that fits a model on a training window and forecasts its test horizon.</p>
 </dd>
+<dt><a href="../reference/typing.Guide.html#numpyro_forecast.typing.Guide" class="doc-class doc-label doc-label-protocol">typing.Guide</a></dt>
+<dd>
+<p>A NumPyro guide for a <code>ForecastModel</code>: a callable with the model’s signature.</p>
+</dd>
 <dt><a href="../reference/typing.InSampleFn.html#numpyro_forecast.typing.InSampleFn" class="doc-class doc-label doc-label-protocol">typing.InSampleFn</a></dt>
 <dd>
 <p>A closure that fits a model on a training window and scores its in-sample fit.</p>
@@ -1072,10 +1088,6 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>A backtest window configuration is invalid.</p>
 </dd>
-<dt><a href="../reference/exceptions.VectorizedGuideError.html#numpyro_forecast.exceptions.VectorizedGuideError" class="doc-class doc-label doc-label-exception">exceptions.VectorizedGuideError</a></dt>
-<dd>
-<p>The vectorized backtest requires an <code>AutoGuide</code> instance.</p>
-</dd>
 <dt><a href="../reference/exceptions.VectorizedMetricError.html#numpyro_forecast.exceptions.VectorizedMetricError" class="doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</a></dt>
 <dd>
 <p>A metric is not vmappable in the vectorized backtest.</p>
@@ -1095,6 +1107,14 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/exceptions.DeviceMemoryError.html#numpyro_forecast.exceptions.DeviceMemoryError" class="doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</a></dt>
 <dd>
 <p>A memory pool ran out during posterior or predictive sampling.</p>
+</dd>
+<dt><a href="../reference/exceptions.HostMemoryKindError.html#numpyro_forecast.exceptions.HostMemoryKindError" class="doc-class doc-label doc-label-exception">exceptions.HostMemoryKindError</a></dt>
+<dd>
+<p>A device exposes no host memory kind for <code>device="pinned_host"</code>.</p>
+</dd>
+<dt><a href="../reference/exceptions.DevicePlatformError.html#numpyro_forecast.exceptions.DevicePlatformError" class="doc-class doc-label doc-label-exception">exceptions.DevicePlatformError</a></dt>
+<dd>
+<p>A <code>device</code> platform name has no initialized JAX backend.</p>
 </dd>
 </dl>
 

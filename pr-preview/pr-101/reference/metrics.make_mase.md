@@ -21,7 +21,7 @@ MASE divides the forecast MAE (using the sample median as point estimate) by the
 ## Parameters
 
 
-`train_data: Float[ArrayLike, ``"*batch time obs_dim"]`  
+`train_data: Float[ArrayLike, ``" *batch time obs_dim"]`  
 Training data with time at axis `-2`; leading batch axes are allowed and the seasonal-naive scale is averaged over all axes.
 
 `seasonality: int = ``1`  

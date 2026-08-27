@@ -58,8 +58,11 @@ In-sample posterior-predictive draws of the `obs` site (with `device="host"` com
 ## Raises
 
 
-`RuntimeError`  
+`HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
+
+`DevicePlatformError`  
+If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
 
 
 ## Warns

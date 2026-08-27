@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>acf.acf() – numpyro_forecast (dev) | numpyro_forecast</title>
+<title>exceptions.HostMemoryKindError – numpyro_forecast (dev) | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -123,52 +123,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 <script>document.addEventListener("DOMContentLoaded",function(){var base="https://juanitorduz.github.io/numpyro_forecast";var path=window.location.pathname;var prefix="/v/dev/";if(path.startsWith(prefix)){path=path.slice(prefix.length-1)}var link=document.createElement("link");link.rel="canonical";link.href=base+path;document.head.appendChild(link)});</script>
 
-  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
-  <script>document.addEventListener("DOMContentLoaded", function () {
- var mathElements = document.getElementsByClassName("math");
- var macros = [];
- for (var i = 0; i < mathElements.length; i++) {
-  var texText = mathElements[i].firstChild;
-  if (mathElements[i].tagName == "SPAN") {
-   katex.render(texText.data, mathElements[i], {
-    displayMode: mathElements[i].classList.contains('display'),
-    throwOnError: false,
-    macros: macros,
-    fleqn: false
-   });
-}}});
-  </script>
-  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
 
-<script type="text/javascript">
-const typesetMath = (el) => {
-  if (window.MathJax) {
-    // MathJax Typeset
-    window.MathJax.typeset([el]);
-  } else if (window.katex) {
-    // KaTeX Render
-    var mathElements = el.getElementsByClassName("math");
-    var macros = [];
-    for (var i = 0; i < mathElements.length; i++) {
-      var texText = mathElements[i].firstChild;
-      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
-        window.katex.render(texText.data, mathElements[i], {
-          displayMode: mathElements[i].classList.contains('display'),
-          throwOnError: false,
-          macros: macros,
-          fleqn: false
-        });
-      }
-    }
-  }
-}
-window.Quarto = {
-  typesetMath
-};
-</script>
-
-  <link rel="alternate" type="text/markdown" href="acf.acf.md">
-  <meta name="description" content="Compute the empirical autocorrelation function up to max_lag.">
+  <link rel="alternate" type="text/markdown" href="exceptions.HostMemoryKindError.md">
+  <meta name="description" content="A device exposes no host memory kind for device=&quot;pinned_host&quot;.">
   <script type="application/ld+json">
 [
   {
@@ -188,23 +145,23 @@ window.Quarto = {
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "acf.acf - numpyro_forecast",
+    "name": "exceptions.HostMemoryKindError - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.HostMemoryKindError.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="acf.acf() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="Compute the empirical autocorrelation function up to max_lag.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html">
+  <meta property="og:title" content="exceptions.HostMemoryKindError – numpyro_forecast (dev) | numpyro_forecast">
+  <meta property="og:description" content="A device exposes no host memory kind for device=&amp;quot;pinned_host&amp;quot;.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.HostMemoryKindError.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="acf.acf() – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="Compute the empirical autocorrelation function up to max_lag.">
+  <meta name="twitter:title" content="exceptions.HostMemoryKindError – numpyro_forecast (dev) | numpyro_forecast">
+  <meta name="twitter:description" content="A device exposes no host memory kind for device=&amp;quot;pinned_host&amp;quot;.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -254,7 +211,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">acf.acf()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">exceptions.HostMemoryKindError</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -618,7 +575,7 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">acf.acf</span></a>
   </div>
 </li>
@@ -772,7 +729,7 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.HostMemoryKindError.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/exceptions.HostMemoryKindError.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">exceptions.HostMemoryKindError</span></a>
   </div>
 </li>
@@ -789,25 +746,15 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h3 id="toc-title">On this page</h3>
-   
-  <ul class="collapse">
-  <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
-  <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
-  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
-  <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
-  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
-  </ul>
-</nav>
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">acf.acf()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-class doc-label doc-label-exception">exceptions.HostMemoryKindError</span></h2>
 </div>
 
 
@@ -825,74 +772,20 @@ window.Quarto = {
 
 
 <div class="doc-subject">
-<p>Compute the empirical autocorrelation function up to <code>max_lag</code>.</p>
+<p>A device exposes no host memory kind for <code>device="pinned_host"</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L79-L131" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L114-L124" target="_blank" rel="noopener">Source</a></p>
 </div>
-<div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">acf</span><span class="op">.</span><span class="sig-name">acf</span>(
-    <span class="va">y</span>,
-    <span class="va">max_lag</span>,
-)</span></code></pre></div>
+<div class="doc-signature doc-Kind.CLASS">
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">HostMemoryKindError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The lag-<span class="math inline">k</span> autocorrelation of a series <span class="math inline">y_1, \ldots, y_T</span> with sample mean <span class="math inline">\bar{y}</span> is estimated with the biased normalization</p>
-<p><span class="math display">
-\hat{\rho}_k =
-\frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
-     {\sum_{t=1}^{T} (y_t - \bar{y})^2},
-</span></p>
-<p>computed for all lags at once via the FFT of the centered series (the Wiener-Khinchin identity), so the cost is <span class="math inline">O(T \log T)</span> instead of <span class="math inline">O(T \, k_{\max})</span>. The computation runs along the last axis and broadcasts over any leading batch axes.</p>
+<p>Raised by <code>_host_memory_kind()</code>, reached from <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>, the predictive drivers and everything built on them, when an explicit <code>device="pinned_host"</code> targets a device whose addressable memories include neither <code>"pinned_host"</code> nor <code>"unpinned_host"</code>. The message lists the kinds the device does expose; pass a <code>jax.Device</code> or a platform name (for example <code>device="cpu"</code>), or <code>device="host"</code>, instead.</p>
 </div>
-<section id="parameters" class="level2 doc-parameters">
-<h2 class="doc-parameters">Parameters</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code><span class="doc-parameter-name">y</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch time"</span>]</span></code></dt>
-<dd>
-<p>Time series with time on the last axis, shape <code>(*batch, time)</code>. NumPy arrays are accepted directly.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">max_lag</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
-<dd>
-Largest lag to evaluate; must satisfy <code>1 &lt;= max_lag &lt; time</code>.
-</dd>
-</dl>
-</div>
-</section>
-<section id="returns" class="level2 doc-returns">
-<h2 class="doc-returns">Returns</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch lags"</span>]</span></code></dt>
-<dd>
-Autocorrelations for lags <code>0, 1, ..., max_lag</code> (<code>max_lag + 1</code> values; lag <code>0</code> is identically <code>1.0</code>).
-</dd>
-</dl>
-</div>
-</section>
-<section id="raises" class="level2 doc-raises">
-<h2 class="doc-raises">Raises</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
-<dd>
-If <code>max_lag</code> is not in <code>[1, time)</code>.
-</dd>
-</dl>
-</div>
-</section>
-<section id="notes" class="level2 doc-notes">
-<h2 class="doc-notes">Notes</h2>
-<p>A constant series has zero variance, so the result is meaningless: all NaN in eager execution (a <code>0 / 0</code>), while under <code>jax.jit()</code> the rounding of the mean can instead yield arbitrary finite values.</p>
-</section>
-<section id="references" class="level2 doc-references">
-<h2 class="doc-references">References</h2>
-<p>Adapted from <code>numpyro.diagnostics.autocorrelation()</code>, itself adapted from the Stan implementation.</p>
 
 
-</section>
 
 </main>
 <hr style="padding: 0; margin: 0;">

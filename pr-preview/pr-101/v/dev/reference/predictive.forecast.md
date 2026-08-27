@@ -65,8 +65,11 @@ Forecast samples over the `future = duration - t` horizon (floating point for co
 `ValueError`  
 If `covariates` does not extend beyond `data` along the time axis.
 
-`RuntimeError`  
+`HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
+
+`DevicePlatformError`  
+If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
 
 
 ## Warns

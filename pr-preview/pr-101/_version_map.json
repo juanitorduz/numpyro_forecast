@@ -234,6 +234,14 @@
       "dev",
       "0.2.3"
     ],
+    "reference/exceptions.DevicePlatformError.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/exceptions.HostMemoryKindError.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/exceptions.KernelConfigError.html": [
       "dev",
       "0.2.3"
@@ -243,10 +251,6 @@
       "0.2.3"
     ],
     "reference/exceptions.NumpyroForecastError.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/exceptions.VectorizedGuideError.html": [
       "dev",
       "0.2.3"
     ],
@@ -351,6 +355,10 @@
       "0.2.3"
     ],
     "reference/typing.ForecastModel.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.Guide.html": [
       "dev",
       "0.2.3"
     ],

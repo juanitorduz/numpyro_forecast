@@ -127,8 +127,10 @@ Array
 Raises
 ------
 ValueError
-    If forecasting without observed data, if the per-step shape lacks the
-    observation dimension, or if an enclosing plate is detected.
+    If forecasting without observed data (only reachable with a hand-built
+    `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
+    data), if the per-step shape lacks the observation dimension, or if an
+    enclosing plate is detected.
 
 ssoe(h: numpyro_forecast.models.Horizon, name: str, y: jax.Array | None, init_carry: Carry, step: SSOEStep[Carry], noise_dist: numpyro.distributions.distribution.Distribution, xs: jaxtyping.PyTree[jax.Array] | None = None) -> numpyro_forecast.models.SSOEResult
 
@@ -536,10 +538,13 @@ Raises
 ------
 ValueError
     If ``num_samples`` or ``batch_size`` is not positive.
-RuntimeError
+HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
     `~~numpyro_forecast._offload._host_memory_kind()`).
+DevicePlatformError
+    If ``device`` names a platform whose backend is not initialized (see
+    `~~numpyro_forecast._offload._resolve_device()`).
 
 Warns
 -----
@@ -617,10 +622,13 @@ Raises
 ------
 ValueError
     If ``covariates`` does not extend beyond ``data`` along the time axis.
-RuntimeError
+HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
     `~~numpyro_forecast._offload._host_memory_kind()`).
+DevicePlatformError
+    If ``device`` names a platform whose backend is not initialized (see
+    `~~numpyro_forecast._offload._resolve_device()`).
 
 Warns
 -----
@@ -695,10 +703,13 @@ Num[Array, " sample *batch time obs"]
 
 Raises
 ------
-RuntimeError
+HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
     `~~numpyro_forecast._offload._host_memory_kind()`).
+DevicePlatformError
+    If ``device`` names a platform whose backend is not initialized (see
+    `~~numpyro_forecast._offload._resolve_device()`).
 
 Warns
 -----
@@ -870,7 +881,7 @@ ValueError
     If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
     but ``in_sample_fn`` is ``None``.
 
-backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, train_window: int, test_window: int, guide: 'AutoGuide | Callable[..., None]', optim: '_NumPyroOptim | None' = None, stride: int = 1, num_steps: int = 1001, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
+backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, train_window: int, test_window: int, guide: numpyro_forecast.typing.Guide, optim: '_NumPyroOptim | None' = None, stride: int = 1, num_steps: int = 1001, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
 
 Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
@@ -902,13 +913,17 @@ train_window
 test_window
     Fixed test-window length (``>= 1``).
 guide
-    An ``AutoGuide`` instance built on the same model object ``model_fn``
-    returns (hand-written guides are not vmappable, use `backtest()`
-    instead):
+    Any guide for the model object ``model_fn`` returns (see
+    `~~numpyro_forecast.typing.Guide`): an autoguide instance built on that
+    same object, sampled through its ``sample_posterior``, or a hand-written
+    guide function with the model's signature, sampled through
+    ``numpyro.infer.Predictive(guide, params=...)`` on each window's
+    training data. Either way one guide is shared by every window:
 
     ```python
     model = make_model()
     backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+    backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
     ```
 
 optim
@@ -943,8 +958,6 @@ ValueError
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
-VectorizedGuideError
-    If ``guide`` is not an ``AutoGuide`` instance.
 VectorizedMetricError
     If a metric forces a host conversion under ``vmap`` (it is not a pure
     JAX function).
@@ -1437,10 +1450,13 @@ ValueError
     not evenly divisible by ``num_chains``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
-RuntimeError
+HostMemoryKindError
     If ``predictive_device="pinned_host"`` is requested on a device that
     exposes no host memory kind (see
     `~~numpyro_forecast._offload._host_memory_kind()`).
+DevicePlatformError
+    If ``predictive_device`` names a platform whose backend is not
+    initialized (see `~~numpyro_forecast._offload._resolve_device()`).
 
 Warns
 -----
@@ -1623,6 +1639,24 @@ parameters are positional-only so a closure keeps its own parameter names.
 At runtime the beartype hook only checks that the value is callable
 (Python protocols never inspect signatures); ``ty`` checks the signature
 structurally at the ``backtest`` call site.
+
+Guide(*args, **kwargs)
+
+A NumPyro guide for a `ForecastModel`: a callable with the model's signature.
+
+A guide is called with the same ``(covariates, data=None)`` arguments as the
+model it approximates, so this Protocol has the same shape as
+`ForecastModel`. Both an autoguide instance
+(`numpyro.infer.autoguide.AutoGuide` subclasses are callables) and a
+hand-written guide function satisfy it structurally; nothing needs to
+subclass it. `~~numpyro_forecast.evaluate.backtest_vectorized()` samples an
+autoguide through its ``sample_posterior`` and any other guide through
+``numpyro.infer.Predictive(guide, params=...)``.
+
+The same runtime caveat as `ForecastModel` applies: the beartype hook's
+``isinstance`` check on a ``runtime_checkable`` Protocol reduces to
+``callable(guide)`` (Python never inspects signatures at runtime), while
+``ty`` checks the signature structurally at the call site.
 
 InSampleFn(*args, **kwargs)
 
@@ -1991,14 +2025,6 @@ Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when
 ``train_window``, ``test_window``, or ``stride`` is below 1, or when the
 series has no room for a single window.
 
-VectorizedGuideError(message: str | None = None) -> None
-
-The vectorized backtest requires an ``AutoGuide`` instance.
-
-Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when
-``guide`` is hand-written: those are not vmappable, use
-`~~numpyro_forecast.evaluate.backtest()` instead.
-
 VectorizedMetricError(message: str | None = None) -> None
 
 A metric is not vmappable in the vectorized backtest.
@@ -2061,3 +2087,27 @@ host pool OOM (``Out of host memory``, reached only through an explicit
 pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
 ``device="host"``, which lands results in pageable host memory, instead.
 The original XLA error is chained as ``__cause__``.
+
+HostMemoryKindError(message: str | None = None) -> None
+
+A device exposes no host memory kind for ``device="pinned_host"``.
+
+Raised by `~~numpyro_forecast._offload._host_memory_kind()`, reached from
+`~~numpyro_forecast.predictive.draw_posterior()`, the predictive drivers
+and everything built on them, when an explicit ``device="pinned_host"``
+targets a device whose addressable memories include neither
+``"pinned_host"`` nor ``"unpinned_host"``. The message lists the kinds the
+device does expose; pass a `jax.Device` or a platform name (for example
+``device="cpu"``), or ``device="host"``, instead.
+
+DevicePlatformError(message: str | None = None) -> None
+
+A ``device`` platform name has no initialized JAX backend.
+
+Raised by `~~numpyro_forecast._offload._resolve_device()` (reached from
+every function with a ``device`` parameter) when ``device`` names a platform,
+e.g. ``"tpu"``, whose backend is not initialized in this process. The
+message lists the available platforms and how to initialize the missing one
+via ``jax_platforms``. ``"host"``, ``"cpu"``, ``"numpy"`` and ``"pinned_host"``
+never raise this: they degrade to the NumPy path when the CPU backend is
+missing (see `~~numpyro_forecast.predictive.draw_posterior()`).

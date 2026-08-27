@@ -59,4 +59,4 @@ The latent over the full horizon in package layout `(*plate_batch, duration, obs
 
 
 `ValueError`  
-If forecasting without observed data, if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.
+If forecasting without observed data (only reachable with a hand-built [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon): [Horizon.from_data()](models.Horizon.md#numpyro_forecast.models.Horizon.from_data) never sets `future > 0` without data), if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.

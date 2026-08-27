@@ -52,12 +52,13 @@ Fixed training-window length (`>= 1`).
 `test_window: int`  
 Fixed test-window length (`>= 1`).
 
-`guide: AutoGuide | Callable[…, None]`  
-An `AutoGuide` instance built on the same model object `model_fn` returns (hand-written guides are not vmappable, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) instead):
+`guide: Guide`  
+Any guide for the model object `model_fn` returns (see [Guide](typing.Guide.md#numpyro_forecast.typing.Guide)): an autoguide instance built on that same object, sampled through its `sample_posterior`, or a hand-written guide function with the model's signature, sampled through `numpyro.infer.Predictive(guide, params=...)` on each window's training data. Either way one guide is shared by every window:
 
 ``` python
 model = make_model()
 backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
 ```
 
 `optim: _NumPyroOptim | None = None`  
@@ -94,9 +95,6 @@ If `data` and `covariates` durations differ.
 
 `BacktestWindowError`  
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.
-
-`VectorizedGuideError`  
-If `guide` is not an `AutoGuide` instance.
 
 `VectorizedMetricError`  
 If a metric forces a host conversion under `vmap` (it is not a pure JAX function).

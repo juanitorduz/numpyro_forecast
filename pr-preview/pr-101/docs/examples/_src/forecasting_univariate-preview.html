@@ -1073,7 +1073,7 @@ vectorized mean 94% coverage: 0.95  (nominal 0.94)</code></pre>
 </div>
 </div></div>
 <div id="643c0ced" class="cell markdown">
-<p>Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the <a href="../../../reference/evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized</a> docstring: fixed-size rolling windows only, one shared model instance, an <code>AutoGuide</code>, and pure JAX metrics, which the coverage partials above already are.</p>
+<p>Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the <a href="../../../reference/evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized</a> docstring: fixed-size rolling windows only, one shared model instance, a single guide shared by every window (an autoguide or a hand-written guide function), and pure JAX metrics, which the coverage partials above already are.</p>
 </div>
 <div id="8a41ff09" class="cell markdown">
 <section id="next-steps" class="level1">

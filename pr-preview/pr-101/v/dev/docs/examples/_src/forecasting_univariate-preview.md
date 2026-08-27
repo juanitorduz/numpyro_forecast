@@ -810,7 +810,7 @@ ax.set(
 </figure>
 
 
-Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, an `AutoGuide`, and pure JAX metrics, which the coverage partials above already are.
+Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, a single guide shared by every window (an autoguide or a hand-written guide function), and pure JAX metrics, which the coverage partials above already are.
 
 
 # Next steps

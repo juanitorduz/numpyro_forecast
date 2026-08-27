@@ -84,8 +84,11 @@ If `covariates` is shorter than `data` along the time axis, if `time_coord` is g
 `CovariateDimsError`  
 If `covariate_dims` does not name every `covariates` axis.
 
-`RuntimeError`  
+`HostMemoryKindError`  
 If `predictive_device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
+
+`DevicePlatformError`  
+If `predictive_device` names a platform whose backend is not initialized (see `_resolve_device()`).
 
 
 ## Warns

@@ -178,6 +178,9 @@ A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
 [typing.ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn)  
 A closure that fits a model on a training window and forecasts its test horizon.
 
+[typing.Guide](typing.Guide.md#numpyro_forecast.typing.Guide)  
+A NumPyro guide for a `ForecastModel`: a callable with the model's signature.
+
 [typing.InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn)  
 A closure that fits a model on a training window and scores its in-sample fit.
 
@@ -271,9 +274,6 @@ Base class for all deliberate `numpyro_forecast` errors.
 [exceptions.BacktestWindowError](exceptions.BacktestWindowError.md#numpyro_forecast.exceptions.BacktestWindowError)  
 A backtest window configuration is invalid.
 
-[exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
-The vectorized backtest requires an `AutoGuide` instance.
-
 [exceptions.VectorizedMetricError](exceptions.VectorizedMetricError.md#numpyro_forecast.exceptions.VectorizedMetricError)  
 A metric is not vmappable in the vectorized backtest.
 
@@ -288,3 +288,9 @@ A `MultivariateNormal` layout is unsupported for time-axis surgery.
 
 [exceptions.DeviceMemoryError](exceptions.DeviceMemoryError.md#numpyro_forecast.exceptions.DeviceMemoryError)  
 A memory pool ran out during posterior or predictive sampling.
+
+[exceptions.HostMemoryKindError](exceptions.HostMemoryKindError.md#numpyro_forecast.exceptions.HostMemoryKindError)  
+A device exposes no host memory kind for `device="pinned_host"`.
+
+[exceptions.DevicePlatformError](exceptions.DevicePlatformError.md#numpyro_forecast.exceptions.DevicePlatformError)  
+A `device` platform name has no initialized JAX backend.

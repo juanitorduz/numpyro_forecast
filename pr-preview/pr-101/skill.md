@@ -95,6 +95,7 @@ Public type contracts.
 
 - `typing.ForecastModel`
 - `typing.ForecastFn`
+- `typing.Guide`
 - `typing.InSampleFn`
 - `typing.Metric`
 - `typing.ModelFactory`
@@ -142,12 +143,13 @@ Package exception hierarchy raised at validation boundaries.
 
 - `exceptions.NumpyroForecastError`
 - `exceptions.BacktestWindowError`
-- `exceptions.VectorizedGuideError`
 - `exceptions.VectorizedMetricError`
 - `exceptions.KernelConfigError`
 - `exceptions.CovariateDimsError`
 - `exceptions.MVNLayoutError`
 - `exceptions.DeviceMemoryError`
+- `exceptions.HostMemoryKindError`
+- `exceptions.DevicePlatformError`
 
 ## Resources
 

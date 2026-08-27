@@ -203,9 +203,6 @@ Base class for all deliberate `numpyro_forecast` errors.
 [exceptions.BacktestWindowError](exceptions.BacktestWindowError.md#numpyro_forecast.exceptions.BacktestWindowError)  
 A backtest window configuration is invalid.
 
-[exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
-The vectorized backtest requires an `AutoGuide` instance.
-
 [exceptions.VectorizedMetricError](exceptions.VectorizedMetricError.md#numpyro_forecast.exceptions.VectorizedMetricError)  
 A metric is not vmappable in the vectorized backtest.
 

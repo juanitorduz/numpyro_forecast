@@ -569,12 +569,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedGuideError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">exceptions.VectorizedMetricError</span></a>
   </div>
@@ -648,7 +642,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1015-L1181" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1012-L1184" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest_vectorized</span>(</span>
@@ -700,11 +694,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Fixed test-window length (<code>&gt;= 1</code>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">guide</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">AutoGuide | Callable[…, None]</span></code></dt>
+<dt><code><span class="doc-parameter-name">guide</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Guide</span></code></dt>
 <dd>
-<p>An <code>AutoGuide</code> instance built on the same model object <code>model_fn</code> returns (hand-written guides are not vmappable, use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> instead):</p>
+<p>Any guide for the model object <code>model_fn</code> returns (see <a href="typing.Guide.html#numpyro_forecast.typing.Guide" class="gdls-link gdls-code">Guide</a>): an autoguide instance built on that same object, sampled through its <code>sample_posterior</code>, or a hand-written guide function with the model’s signature, sampled through <code>numpyro.infer.Predictive(guide, params=...)</code> on each window’s training data. Either way one guide is shared by every window:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> make_model()</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>backtest_vectorized(..., model_fn<span class="op">=</span><span class="kw">lambda</span>: model, guide<span class="op">=</span>AutoNormal(model))</span></code></pre></div>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>backtest_vectorized(..., model_fn<span class="op">=</span><span class="kw">lambda</span>: model, guide<span class="op">=</span>AutoNormal(model))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>backtest_vectorized(..., model_fn<span class="op">=</span><span class="kw">lambda</span>: model, guide<span class="op">=</span>my_guide_fn)</span></code></pre></div>
 </dd>
 <dt><code><span class="doc-parameter-name">optim</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">_NumPyroOptim | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -755,10 +750,6 @@ The stacked per-window losses, metrics, and window indices.
 <dt><code> <span class="doc-parameter-annotation">BacktestWindowError</span></code></dt>
 <dd>
 <p>If <code>train_window</code>, <code>test_window</code>, or <code>stride</code> is <code>&lt; 1</code>, or there is no room for a single window.</p>
-</dd>
-<dt><code> <span class="doc-parameter-annotation">VectorizedGuideError</span></code></dt>
-<dd>
-<p>If <code>guide</code> is not an <code>AutoGuide</code> instance.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">VectorizedMetricError</span></code></dt>
 <dd>

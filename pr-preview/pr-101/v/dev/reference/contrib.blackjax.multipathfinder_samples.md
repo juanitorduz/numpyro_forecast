@@ -66,8 +66,11 @@ Posterior samples of the latent sites, sample axis leading (with `device="host"`
 `ValueError`  
 If `num_samples` or `batch_size` is not positive, or `resample` is not one of `"auto"`, `"psis"`, `"elbo"`.
 
-`RuntimeError`  
+`HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
+
+`DevicePlatformError`  
+If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
 
 
 ## Warns

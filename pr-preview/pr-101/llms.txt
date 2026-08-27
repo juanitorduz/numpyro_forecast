@@ -76,6 +76,7 @@
 
 - [typing.ForecastModel](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ForecastModel.html)
 - [typing.ForecastFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ForecastFn.html)
+- [typing.Guide](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Guide.html)
 - [typing.InSampleFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.InSampleFn.html)
 - [typing.Metric](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Metric.html)
 - [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
@@ -117,9 +118,10 @@
 
 - [exceptions.NumpyroForecastError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.NumpyroForecastError.html)
 - [exceptions.BacktestWindowError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.BacktestWindowError.html)
-- [exceptions.VectorizedGuideError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedGuideError.html)
 - [exceptions.VectorizedMetricError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedMetricError.html)
 - [exceptions.KernelConfigError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelConfigError.html)
 - [exceptions.CovariateDimsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.CovariateDimsError.html)
 - [exceptions.MVNLayoutError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.MVNLayoutError.html)
 - [exceptions.DeviceMemoryError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DeviceMemoryError.html)
+- [exceptions.HostMemoryKindError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.HostMemoryKindError.html)
+- [exceptions.DevicePlatformError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DevicePlatformError.html)
