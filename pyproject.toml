@@ -132,7 +132,7 @@ convention = "numpy"
 max-line-length = 120
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "README.md"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
@@ -146,7 +146,9 @@ addopts = [
     "--no-cov-on-fail",
     "--durations=50",
     "--color=yes",
+    "--doctest-glob=README.md",
 ]
+doctest_optionflags = ["ELLIPSIS", "NORMALIZE_WHITESPACE"]
 
 [tool.coverage.run]
 source = ["numpyro_forecast"]
