@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, refactor3]
+    branches: [main]
     types: [opened, synchronize, reopened, closed]
   # Rebuild after a release is published: this is what flips the stable site
   # root to the new version, because scripts/build_docs.py derives the versioned
