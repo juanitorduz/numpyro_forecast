@@ -1,4 +1,4 @@
-"""Convert fits into ArviZ-schema :class:`xarray.DataTree` objects.
+"""Convert fits into ArviZ-schema `xarray.DataTree` objects.
 
 ArviZ (>= 1.0, the DataTree line) is a hard dependency of this package, so
 ``arviz_base`` and ``xarray`` are imported at module top like any other
@@ -6,10 +6,10 @@ dependency.
 
 The single normative construction rule (enforced by
 ``tests/test_convert.py::test_all_groups_via_dict_to_dataset``) is that **every**
-group is built with :func:`arviz_base.dict_to_dataset`: it owns dim naming,
+group is built with `arviz_base.dict_to_dataset()`: it owns dim naming,
 ``sample_dims`` handling, and schema evolution, so hand-rolling
-:class:`xarray.Dataset` objects would silently drift from the ArviZ schema. The
-groups are then assembled with :meth:`xarray.DataTree.from_dict`.
+`xarray.Dataset` objects would silently drift from the ArviZ schema. The
+groups are then assembled with `xarray.DataTree.from_dict()`.
 """
 
 from collections.abc import Mapping, Sequence
@@ -50,7 +50,7 @@ def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | N
     Returns
     -------
     list[str]
-        The dimension names to hand to :func:`arviz_base.dict_to_dataset`.
+        The dimension names to hand to `arviz_base.dict_to_dataset()`.
 
     Raises
     ------
@@ -75,7 +75,7 @@ def _reconcile_tree_covariate_dims(
 ) -> Sequence[str] | None:
     """Inherit or validate ``covariate_dims`` against the tree's stored covariates.
 
-    :func:`add_forecast_groups` must name the future covariates' axes exactly
+    `add_forecast_groups()` must name the future covariates' axes exactly
     like the in-sample ones already stored on ``constant_data["covariates"]``,
     or the two groups silently disagree on axis names. When the tree carries
     stored covariates, an omitted ``covariate_dims`` inherits their names and an
@@ -197,11 +197,11 @@ def _forecast_group_datasets(
     """Build the ``predictions`` and ``predictions_constant_data`` datasets.
 
     ``forecast_draws`` must already carry the ``(chain, draw, future, obs)``
-    layout; callers own the chain reshape (:func:`to_datatree` applies the fit's
-    real chain structure, :func:`add_forecast_groups` a single pseudo-chain).
+    layout; callers own the chain reshape (`to_datatree()` applies the fit's
+    real chain structure, `add_forecast_groups()` a single pseudo-chain).
 
     ``coords`` are user coordinates to share with the forecast groups, but with
-    the precedence inverted relative to :func:`_merge_coords`: ``future_time``
+    the precedence inverted relative to `_merge_coords()`: ``future_time``
     always wins over a user ``time`` entry, because that entry covers the
     in-sample window (``time_coord`` is the sanctioned route for explicit
     forecast time values). ``covariate_dims`` names the axes of
@@ -241,10 +241,10 @@ def to_datatree(
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
     covariate_dims: Sequence[str] | None = None,
 ) -> "xarray.DataTree":
-    r"""Convert an already-drawn posterior into an ArviZ-schema :class:`xarray.DataTree`.
+    r"""Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
 
     Posterior-first: callers draw their own posterior (``mcmc.get_samples()``
-    for MCMC, :func:`~numpyro_forecast.predictive.draw_posterior` for a
+    for MCMC, `~~numpyro_forecast.predictive.draw_posterior()` for a
     variational fit) and pass it in; ``to_datatree`` never draws a posterior of
     its own. ``rng_key`` is consumed only by the in-sample posterior-predictive
     draws and, when a forecast horizon is present, the forecast draws.
@@ -259,7 +259,7 @@ def to_datatree(
     posterior
         Posterior samples of the latent sites, with a single flattened sample
         axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
-        :func:`~numpyro_forecast.predictive.draw_posterior`).
+        `~~numpyro_forecast.predictive.draw_posterior()`).
         Host-committed leaves (the output of ``draw_posterior(...,
         device="host")``) and NumPy leaves are accepted directly.
     data
@@ -269,7 +269,7 @@ def to_datatree(
         ``data`` along the time axis (the package-wide shape convention for a
         forecast horizon), the trailing rows are treated as future covariates:
         the returned tree additionally carries ``predictions`` (forecast ``obs``
-        draws from :func:`~numpyro_forecast.predictive.forecast`) and
+        draws from `~~numpyro_forecast.predictive.forecast()`) and
         ``predictions_constant_data`` groups.
     num_chains
         Number of chains to split ``posterior``'s flattened sample axis into
@@ -277,7 +277,7 @@ def to_datatree(
         drawn with the same sample count). Defaults to ``1`` (a single
         pseudo-chain, correct for a posterior with no chain structure, e.g.
         SVI or Pathfinder draws). For an MCMC posterior, pass the
-        ``num_chains`` the sampler was run with; see :func:`_reshape_chains`
+        ``num_chains`` the sampler was run with; see `_reshape_chains()`
         for the reshape contract and its divisibility requirement.
     predictive_batch_size
         Optional chunk size that bounds how many draws touch the accelerator
@@ -297,9 +297,9 @@ def to_datatree(
     predictive_device
         Where the predictive draws are moved as they are sampled, forwarded to
         the ``device`` argument of
-        :func:`~numpyro_forecast.predictive.predict_in_sample` and
-        :func:`~numpyro_forecast.predictive.forecast` (the placement contract
-        of :func:`~numpyro_forecast.predictive.draw_posterior`). It is resolved
+        `~~numpyro_forecast.predictive.predict_in_sample()` and
+        `~~numpyro_forecast.predictive.forecast()` (the placement contract
+        of `~~numpyro_forecast.predictive.draw_posterior()`). It is resolved
         once and the same placement is handed to both, so an unmet ``"cpu"``
         warns once per export. The default ``"host"`` keeps the predictive
         draws in pageable host memory (jax Arrays the tree views as NumPy
@@ -358,7 +358,7 @@ def to_datatree(
     RuntimeError
         If ``predictive_device="pinned_host"`` is requested on a device that
         exposes no host memory kind (see
-        :func:`~numpyro_forecast._offload._host_memory_kind`).
+        `~~numpyro_forecast._offload._host_memory_kind()`).
 
     Warns
     -----
@@ -371,7 +371,7 @@ def to_datatree(
     -----
     ``to_datatree`` no longer accepts a fit object or draws a posterior itself
     (no ``num_predictive_samples``, no internal
-    :func:`~numpyro_forecast.predictive.draw_posterior` call): callers
+    `~~numpyro_forecast.predictive.draw_posterior()` call): callers
     draw the posterior first and pass it in. The ``variational``/``is_mcmc``
     attrs previously stamped on the ``posterior`` group are gone too, since a
     fit type is no longer knowable from a plain posterior dict; use
@@ -383,7 +383,7 @@ def to_datatree(
     is the built-in route to memory-bounded predictive sampling; for fully
     manual control over the forecast draws, build the in-sample tree with
     matching-length covariates and attach the horizon with
-    :func:`add_forecast_groups`.
+    `add_forecast_groups()`.
     """
     _require_covariates_cover_data(data, covariates)
     cov_dims = _resolve_covariate_dims(covariates, covariate_dims)
@@ -507,17 +507,17 @@ def add_forecast_groups(
     ``predictions_constant_data`` group (the future covariates). The forecast
     ``time`` coordinate continues the in-sample one: integer continuation by
     default, or explicit values via ``time_coord``. This is the step-by-step
-    route for draws you produced yourself; :func:`to_datatree` attaches the same
+    route for draws you produced yourself; `to_datatree()` attaches the same
     groups automatically when its ``covariates`` extend beyond ``data``.
 
     Parameters
     ----------
     tree
-        A tree from :func:`to_datatree` (its ``observed_data`` time coordinate is
+        A tree from `to_datatree()` (its ``observed_data`` time coordinate is
         continued).
     forecast_samples
         Forecast draws shaped ``(num_samples, future, obs)`` from
-        :func:`~numpyro_forecast.predictive.forecast`.
+        `~~numpyro_forecast.predictive.forecast()`.
     covariates_future
         Future covariates shaped ``(future, covariate_dim)``, or any layout
         with time at axis ``-2`` when ``covariate_dims`` names the axes.
@@ -533,7 +533,7 @@ def add_forecast_groups(
         ``("time", "covariate_dim")`` if the tree carries no stored
         covariates), so the forecast covariates always share the in-sample
         axis names. When given explicitly, the names must match the stored
-        ones. See :func:`to_datatree`.
+        ones. See `to_datatree()`.
 
     Returns
     -------
@@ -599,7 +599,7 @@ def predictions_to_datatree(
 ) -> "xarray.DataTree":
     """Pack prediction draws into a DataTree laid out for per-series ``plot_lm`` faceting.
 
-    The array-level counterpart of :func:`to_datatree`: instead of a fit, it takes
+    The array-level counterpart of `to_datatree()`: instead of a fit, it takes
     prediction draws from **any** predictive group (prior predictive, posterior
     predictive, or forecasts), possibly already transformed (rescaled to original
     units, clipped at zero, subset to a few series). The draws get a single
@@ -621,8 +621,8 @@ def predictions_to_datatree(
         Independent-variable values, shape ``(time,)``. Must be numeric:
         ``plot_lm`` cannot draw ``datetime64`` values (it concatenates ``x`` with
         the float predictions internally), so pass
-        :func:`matplotlib.dates.date2num` floats and re-format the tick labels
-        with :class:`matplotlib.dates.ConciseDateFormatter`.
+        `matplotlib.dates.date2num()` floats and re-format the tick labels
+        with `matplotlib.dates.ConciseDateFormatter`.
     series
         One label per series, defining the ``series`` coordinate.
     group

@@ -34,7 +34,7 @@ def _mcmc_posterior(
     """An MCMC posterior plus the data/covariates it was fit on.
 
     ``nuts_samples`` builds ``data`` internally with the exact deterministic
-    recipe :func:`_series` reproduces, so calling both with the same ``t``
+    recipe `_series()` reproduces, so calling both with the same ``t``
     yields the data the posterior was actually fit on. The model never reads
     covariate *values* (only the time-axis length, via ``Horizon``), so the
     ``covariates`` passed to ``to_datatree``/``forecast`` in a given test may

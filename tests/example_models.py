@@ -1,6 +1,6 @@
 """Validated example forecasting models, kept for end-to-end tests.
 
-Reference models for :mod:`tests.test_examples`: plain functional models (a pure
+Reference models for `tests.test_examples`: plain functional models (a pure
 ``(covariates, data=None)`` callable opening with ``Horizon.from_data``) that
 mirror the example notebooks under ``docs/examples/`` and act as a regression
 target for the full fit-draw-forecast path.
@@ -28,7 +28,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     The mean is ``bias + level_t + weight @ covariates_t`` where ``level`` is a
     Gaussian random walk (``LocScaleReparam`` improves the SVI geometry). The
     regression design ``covariates`` is supplied by the caller (e.g. Fourier
-    features from :func:`numpyro_forecast.features.fourier_features`).
+    features from `numpyro_forecast.features.fourier_features()`).
 
     Parameters
     ----------
@@ -134,13 +134,13 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
 
 
 def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[SSOEResult, Array]:
-    """Gated simple exponential smoothing level channel on :func:`ssoe`.
+    """Gated simple exponential smoothing level channel on `ssoe()`.
 
     Samples the channel priors (``smoothing``, ``init``, ``noise``) and runs the
     where-gated level recursion; the level updates only where ``gate`` is true
     and is frozen over the forecast horizon (``pad_future`` zeroes the gate
     there), so the forecast is the last level plus iid errors. Meant to be
-    called under :func:`numpyro.handlers.scope`, which prefixes the parameter
+    called under `numpyro.handlers.scope()`, which prefixes the parameter
     sites and the block's ``f"{name}_future"`` site per channel.
 
     Parameters
@@ -148,7 +148,7 @@ def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[S
     h
         The train/forecast horizon for the current model call.
     name
-        Error-site name handed to :func:`ssoe` (``"eps"`` under a scope).
+        Error-site name handed to `ssoe()` (``"eps"`` under a scope).
     values
         Driving series ``(t_obs, 1)``; read only where ``gate`` is true.
     gate
@@ -179,7 +179,7 @@ def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[S
 
 
 def croston_model(covariates: Array, data: Array | None = None) -> None:
-    """Croston's method as two scoped level channels composed on :func:`ssoe`.
+    """Croston's method as two scoped level channels composed on `ssoe()`.
 
     The observed demand series doubles as the covariate: ``covariates`` is the
     series over the full horizon with shape ``(duration, 1)`` and only its first

@@ -1,10 +1,10 @@
 """Batched autocorrelation and partial autocorrelation diagnostics.
 
-This module provides the empirical autocorrelation function (:func:`acf`) and
-partial autocorrelation function (:func:`pacf`) used to identify ARMA-style
+This module provides the empirical autocorrelation function (`acf()`) and
+partial autocorrelation function (`pacf()`) used to identify ARMA-style
 dependence structure in time series. The ACF uses the FFT-based algorithm from
-:func:`numpyro.diagnostics.autocorrelation` (itself adapted from Stan), ported
-to :mod:`jax.numpy` so it is jittable and batched; the PACF applies the
+`numpyro.diagnostics.autocorrelation()` (itself adapted from Stan), ported
+to `jax.numpy` so it is jittable and batched; the PACF applies the
 Durbin-Levinson recursion to the ACF.
 
 Unlike the model-data layout used elsewhere in the package (time at axis
@@ -33,7 +33,7 @@ def _acf(
     *,
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
-    """Jitted ACF core; the ``max_lag`` bounds guard lives in :func:`acf`."""
+    """Jitted ACF core; the ``max_lag`` bounds guard lives in `acf()`."""
     m2 = 2 * _fft_next_fast_len(y.shape[-1])
     y_centered = y - y.mean(axis=-1, keepdims=True)
     freq = jnp.fft.rfft(y_centered, n=m2, axis=-1)
@@ -47,7 +47,7 @@ def _pacf(
     *,
     max_lag: int,
 ) -> Float[Array, " *batch lags"]:
-    """Jitted PACF core; the ``max_lag`` bounds guard lives in :func:`pacf`."""
+    """Jitted PACF core; the ``max_lag`` bounds guard lives in `pacf()`."""
     rho = _acf(y, max_lag=max_lag)
     # Durbin-Levinson recursion over lags k = 1..max_lag. ``max_lag`` is static,
     # so the Python loop unrolls at trace time with static slice bounds and every
@@ -82,18 +82,18 @@ def acf(
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical autocorrelation function up to ``max_lag``.
 
-    The lag-:math:`k` autocorrelation of a series :math:`y_1, \ldots, y_T` with
-    sample mean :math:`\bar{y}` is estimated with the biased normalization
+    The lag-$k$ autocorrelation of a series $y_1, \ldots, y_T$ with
+    sample mean $\bar{y}$ is estimated with the biased normalization
 
-    .. math::
-
-        \hat{\rho}_k =
-        \frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
-             {\sum_{t=1}^{T} (y_t - \bar{y})^2},
+    $$
+    \hat{\rho}_k =
+    \frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
+         {\sum_{t=1}^{T} (y_t - \bar{y})^2},
+    $$
 
     computed for all lags at once via the FFT of the centered series (the
-    Wiener-Khinchin identity), so the cost is :math:`O(T \log T)` instead of
-    :math:`O(T \, k_{\max})`. The computation runs along the last axis and
+    Wiener-Khinchin identity), so the cost is $O(T \log T)$ instead of
+    $O(T \, k_{\max})$. The computation runs along the last axis and
     broadcasts over any leading batch axes.
 
     Parameters
@@ -118,12 +118,12 @@ def acf(
     Notes
     -----
     A constant series has zero variance, so the result is meaningless: all NaN
-    in eager execution (a ``0 / 0``), while under :func:`jax.jit` the rounding
+    in eager execution (a ``0 / 0``), while under `jax.jit()` the rounding
     of the mean can instead yield arbitrary finite values.
 
     References
     ----------
-    Adapted from :func:`numpyro.diagnostics.autocorrelation`, itself adapted
+    Adapted from `numpyro.diagnostics.autocorrelation()`, itself adapted
     from the Stan implementation.
     """
     y = jnp.asarray(y)
@@ -137,18 +137,18 @@ def pacf(
 ) -> Float[Array, " *batch lags"]:
     r"""Compute the empirical partial autocorrelation function up to ``max_lag``.
 
-    The lag-:math:`k` partial autocorrelation is the correlation between
-    :math:`y_t` and :math:`y_{t-k}` after removing the linear effect of the
-    intermediate observations :math:`y_{t-1}, \ldots, y_{t-k+1}`; it equals the
-    last coefficient :math:`\phi_{kk}` of the best linear predictor of order
-    :math:`k`. The coefficients are obtained from the empirical
-    autocorrelations (see :func:`acf`) with the Durbin-Levinson recursion
+    The lag-$k$ partial autocorrelation is the correlation between
+    $y_t$ and $y_{t-k}$ after removing the linear effect of the
+    intermediate observations $y_{t-1}, \ldots, y_{t-k+1}$; it equals the
+    last coefficient $\phi_{kk}$ of the best linear predictor of order
+    $k$. The coefficients are obtained from the empirical
+    autocorrelations (see `acf()`) with the Durbin-Levinson recursion
 
-    .. math::
-
-        \phi_{kk} =
-        \frac{\hat{\rho}_k - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_{k-j}}
-             {1 - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_j}.
+    $$
+    \phi_{kk} =
+    \frac{\hat{\rho}_k - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_{k-j}}
+         {1 - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_j}.
+    $$
 
     The recursion runs along the last axis and broadcasts over any leading
     batch axes.
@@ -175,7 +175,7 @@ def pacf(
     Notes
     -----
     A constant series has zero variance, so the result is meaningless (see
-    :func:`acf`); a near-deterministic series can likewise overflow the
+    `acf()`); a near-deterministic series can likewise overflow the
     recursion (the denominator above approaches zero) and produce infinities
     or NaNs.
 

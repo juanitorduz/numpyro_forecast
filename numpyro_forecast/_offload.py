@@ -1,43 +1,43 @@
 """Device-offload helpers shared by the chunked posterior and predictive drivers.
 
-Both the posterior drivers (:func:`~numpyro_forecast.predictive.draw_posterior`,
-:func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`) and the predictive
-drivers in :mod:`~numpyro_forecast.predictive` draw large sample arrays
+Both the posterior drivers (`~~numpyro_forecast.predictive.draw_posterior()`,
+`~~numpyro_forecast.contrib.blackjax.pathfinder_samples()`) and the predictive
+drivers in `~~numpyro_forecast.predictive` draw large sample arrays
 in fixed-size chunks and move each chunk off the accelerator before the next one
 is produced. The helpers here own the device semantics of that loop:
-:func:`_resolve_device` turns the public ``device`` argument into a concrete
-target (a :class:`jax.Device`, the ``"pinned_host"`` fallback sentinel, or
-``None``), :func:`_transfer` moves one chunk there and blocks, and
-:func:`_stitch_chunks` concatenates the transferred chunks without pulling
-them back onto the accelerator. :func:`_draw_chunked` is the shared chunk-and-transfer
+`_resolve_device()` turns the public ``device`` argument into a concrete
+target (a `jax.Device`, the ``"pinned_host"`` fallback sentinel, or
+``None``), `_transfer()` moves one chunk there and blocks, and
+`_stitch_chunks()` concatenates the transferred chunks without pulling
+them back onto the accelerator. `_draw_chunked()` is the shared chunk-and-transfer
 loop itself: it owns batch-size validation, the single-shot passthrough, key
 splitting, and the per-chunk draw/transfer/stitch sequence, so
-:func:`~numpyro_forecast.predictive.draw_posterior` and
-:func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples` differ only in the
+`~~numpyro_forecast.predictive.draw_posterior()` and
+`~~numpyro_forecast.contrib.blackjax.pathfinder_samples()` differ only in the
 ``draw_fn`` they supply.
 
 The ``"host"`` target keeps results in pageable host memory. With the JAX CPU
 backend initialized it commits every chunk to the CPU backend device
-(``jax.devices("cpu")[0]``): a committed :class:`jax.Array` whose
+(``jax.devices("cpu")[0]``): a committed `jax.Array` whose
 ``np.asarray`` is a zero-copy view. Without a CPU backend
 (``numpyro.set_platform("cuda")`` or a ``JAX_PLATFORMS`` preset restricts
 ``jax_platforms``) there is no pageable ``jax.Array`` container at all, since
 a CUDA client offers only device and pinned host memory, so
-:func:`_resolve_device` takes the backend-free path instead: each chunk is
-copied with :func:`jax.device_get` and the results are NumPy arrays (the
+`_resolve_device()` takes the backend-free path instead: each chunk is
+copied with `jax.device_get()` and the results are NumPy arrays (the
 ``"numpy"`` sentinel, also requestable explicitly). Pinned host memory (a
-:class:`jax.sharding.SingleDeviceSharding` carrying a host memory kind on the
-accelerator's own device, :func:`_host_memory_kind`) is used only on an
+`jax.sharding.SingleDeviceSharding` carrying a host memory kind on the
+accelerator's own device, `_host_memory_kind()`) is used only on an
 explicit ``device="pinned_host"``: on CUDA that pool is capped at 64 GB by
 default (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and its allocator fragments,
 which is what ran a 50,000-series posterior (46.8 GiB) out of host memory when
 it was the default. Either way nothing of the stitched result occupies
-accelerator memory. :func:`_is_host_resident` is the one predicate behind the
-consumers: :func:`_leaf_view` exposes a host-resident jax leaf as a NumPy view
+accelerator memory. `_is_host_resident()` is the one predicate behind the
+consumers: `_leaf_view()` exposes a host-resident jax leaf as a NumPy view
 (NumPy leaves pass straight through) so per-chunk gathers run on the host (a
 pinned leaf gathered with a device-resident index raises a memory-space
 mismatch; a CPU-committed leaf would instead drag the gather, and the jitted
-predictive it feeds, onto the CPU), and :func:`_device_view` is its
+predictive it feeds, onto the CPU), and `_device_view()` is its
 counterpart for the unchunked metric entry points, handing the fused kernel an
 accelerator-resident copy.
 
@@ -48,10 +48,10 @@ array committed to an accelerator it raises (``Received incompatible
 devices``); a pinned array raises on any mix (``memory_space of all inputs
 ... must be the same``); a NumPy result simply behaves as NumPy. The
 documented contract is: feed a host result straight into this package's own drivers
-(:func:`~numpyro_forecast.predictive.forecast`,
-:func:`~numpyro_forecast.predictive.predict_in_sample`,
-:func:`~numpyro_forecast.convert.to_datatree`, and every evaluation metric in
-:mod:`~numpyro_forecast.evaluate` and :mod:`~numpyro_forecast.metrics`), which
+(`~~numpyro_forecast.predictive.forecast()`,
+`~~numpyro_forecast.predictive.predict_in_sample()`,
+`~~numpyro_forecast.convert.to_datatree()`, and every evaluation metric in
+`~~numpyro_forecast.evaluate` and `~~numpyro_forecast.metrics`), which
 all accept host-committed leaves in any mix with device-resident ones, or
 convert it explicitly first: ``np.asarray(x)`` stays on host (no device
 traffic), and ``jax.device_put(x, device)`` moves it onto an accelerator.
@@ -84,9 +84,9 @@ _HOST_MEMORY_KINDS: tuple[str, ...] = ("pinned_host", "unpinned_host")
 _ResolvedDevice = jax.Device | Literal["pinned_host", "numpy"] | None
 """A resolved placement: a device, the pinned-memory or NumPy sentinel, or ``None``.
 
-``"numpy"`` is the backend-free path (one :func:`jax.device_get` per chunk,
+``"numpy"`` is the backend-free path (one `jax.device_get()` per chunk,
 NumPy results); ``"pinned_host"`` commits to the host memory kind of the
-array's own device. Both are idempotent under :func:`_resolve_device`.
+array's own device. Both are idempotent under `_resolve_device()`.
 """
 
 _WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
@@ -108,9 +108,9 @@ Python's per-location deduplication of warnings never fires.
 def _available_platforms() -> list[str]:
     """Return every initialized JAX backend, in initialization order.
 
-    :func:`jax.devices` lists only the *default* backend's devices, so it
+    `jax.devices()` lists only the *default* backend's devices, so it
     cannot tell whether the CPU backend exists next to an accelerator;
-    :func:`jax.extend.backend.backends` lists all initialized backends.
+    `jax.extend.backend.backends()` lists all initialized backends.
 
     Returns
     -------
@@ -127,7 +127,7 @@ def _accelerator_platform(platforms: list[str]) -> str:
     Parameters
     ----------
     platforms
-        Initialized platforms (see :func:`_available_platforms`).
+        Initialized platforms (see `_available_platforms()`).
 
     Returns
     -------
@@ -168,7 +168,7 @@ def _oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
 
     Anything whose message does not contain ``RESOURCE_EXHAUSTED`` propagates
     untouched. A device OOM is re-raised as
-    :class:`~numpyro_forecast.exceptions.DeviceMemoryError` (original error
+    `~~numpyro_forecast.exceptions.DeviceMemoryError` (original error
     chained) reporting the stage, the active ``batch_size``, the device memory
     budget, and the actionable knobs.
 
@@ -269,7 +269,7 @@ def _host_memory_kind(device: jax.Device) -> str:
 def _host_sharding(x: Array) -> SingleDeviceSharding:
     """Build the host-memory sharding ``device="pinned_host"`` offloads ``x`` to.
 
-    Derived from ``x`` itself (``x.devices()``) rather than :func:`jax.devices`,
+    Derived from ``x`` itself (``x.devices()``) rather than `jax.devices()`,
     so pinning never needs a backend other than the one ``x`` already lives on
     (``numpyro.set_platform("cuda")`` leaves the CPU backend uninitialized).
 
@@ -282,7 +282,7 @@ def _host_sharding(x: Array) -> SingleDeviceSharding:
     -------
     SingleDeviceSharding
         ``x``'s device with its host memory kind (see
-        :func:`_host_memory_kind`).
+        `_host_memory_kind()`).
     """
     device = next(iter(x.devices()))
     return SingleDeviceSharding(device, memory_kind=_host_memory_kind(device))
@@ -292,7 +292,7 @@ def _is_cpu_committed(leaf: Array) -> bool:
     """Whether ``leaf`` is committed to CPU backend device(s).
 
     This is the placement ``device="host"`` produces when the CPU backend is
-    initialized: pageable host memory, a committed :class:`jax.Array`.
+    initialized: pageable host memory, a committed `jax.Array`.
 
     Parameters
     ----------
@@ -311,8 +311,8 @@ def _is_cpu_committed(leaf: Array) -> bool:
 def _is_host_resident(leaf: Array) -> bool:
     """Whether ``leaf`` must be staged before it meets accelerator-side code.
 
-    The one switch behind :func:`_leaf_view` and :func:`_device_view`. A leaf
-    in a host memory kind (:data:`_HOST_MEMORY_KINDS`, an explicit
+    The one switch behind `_leaf_view()` and `_device_view()`. A leaf
+    in a host memory kind (`_HOST_MEMORY_KINDS`, an explicit
     ``device="pinned_host"`` result) is host-resident on every backend. A CPU-committed leaf
     (the primary ``device="host"`` result) counts only when the default backend
     is an accelerator: staging exists to keep gathers and metric kernels off
@@ -340,8 +340,8 @@ def _is_host_resident(leaf: Array) -> bool:
 def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     """Expose ``leaf`` in the form that keeps downstream gathers off the accelerator.
 
-    A device-resident :class:`jax.Array` is returned unchanged. A host-resident
-    one (:func:`_is_host_resident`: a CPU-committed leaf under an accelerator
+    A device-resident `jax.Array` is returned unchanged. A host-resident
+    one (`_is_host_resident()`: a CPU-committed leaf under an accelerator
     default backend, or a pinned leaf) is wrapped as a zero-copy NumPy view,
     which is the piece that makes chunked prediction work at all on an
     accelerator: indexing a pinned ``jax.Array`` with a device-resident index
@@ -351,15 +351,15 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     predictive onto the CPU, whereas indexing the NumPy view gathers on the host
     and hands only the chunk to the jitted predictive, which places it on the
     default device. Anything else (NumPy arrays, lists, scalars) is normalized
-    with :func:`numpy.asarray`.
+    with `numpy.asarray()`.
 
     A tracer is passed through untouched. Tracers are ``jax.Array`` instances
     but have no ``sharding``, and more importantly nothing about a traced value
     is host-resident, so the host staging is meaningless under ``vmap``/``jit``.
     Passing it through lets the traced computation fail where it always did
     (e.g. at the first host conversion), which is what
-    :func:`~numpyro_forecast.evaluate._vmapped_metrics` translates into
-    :class:`~numpyro_forecast.exceptions.VectorizedMetricError`.
+    `~~numpyro_forecast.evaluate._vmapped_metrics()` translates into
+    `~~numpyro_forecast.exceptions.VectorizedMetricError`.
 
     Parameters
     ----------
@@ -384,17 +384,17 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
 def _device_view(leaf: ArrayLike) -> Array:
     """Move a host-resident leaf onto the accelerator before it feeds a metric kernel.
 
-    The counterpart to :func:`_leaf_view` for the *unchunked* metric entry
-    points in :mod:`~numpyro_forecast.evaluate` and
-    :func:`~numpyro_forecast.metrics.crps_empirical`: those run one fused
+    The counterpart to `_leaf_view()` for the *unchunked* metric entry
+    points in `~~numpyro_forecast.evaluate` and
+    `~~numpyro_forecast.metrics.crps_empirical()`: those run one fused
     ``jnp``/jitted kernel directly on ``pred`` and ``truth``, and a
-    host-resident operand (:func:`_is_host_resident`) would either make that
+    host-resident operand (`_is_host_resident()`) would either make that
     kernel raise (a pinned leaf: ``memory_space of all inputs ... must be the
     same``) or silently run it on the CPU (a CPU-committed leaf mixed with an
     uncommitted one). Calling this on both operands first means a metric
     accepts any mix of host-resident and device-resident inputs. A pinned leaf
     is copied back onto the device it was offloaded from (its own
-    ``.devices()``, not :func:`jax.devices`, so this also works when the CPU
+    ``.devices()``, not `jax.devices()`, so this also works when the CPU
     backend was never initialized) with the ``"device"`` memory kind. A
     CPU-committed leaf becomes an *uncommitted* copy on the default device,
     built from its zero-copy NumPy view: uncommitted on purpose, so it follows
@@ -403,7 +403,7 @@ def _device_view(leaf: ArrayLike) -> Array:
     committed to another accelerator.
 
     A tracer is passed through untouched, for the same reason as
-    :func:`_leaf_view`: it is host-resident by neither fact nor definition
+    `_leaf_view()`: it is host-resident by neither fact nor definition
     under ``vmap``/``jit``, and it has no ``.sharding`` to inspect.
 
     Parameters
@@ -416,7 +416,7 @@ def _device_view(leaf: ArrayLike) -> Array:
     -------
     Array
         ``leaf`` itself when it is a tracer; a device-resident
-        :class:`jax.Array` otherwise (moved there first if it was
+        `jax.Array` otherwise (moved there first if it was
         host-committed).
     """
     if isinstance(leaf, Tracer):
@@ -438,18 +438,18 @@ def _device_view(leaf: ArrayLike) -> Array:
 
 
 def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
-    """Resolve a device spec to a :class:`jax.Device` or a resolved sentinel.
+    """Resolve a device spec to a `jax.Device` or a resolved sentinel.
 
     ``"host"`` resolves to the CPU backend device (pageable host memory,
     committed jax Arrays). When that backend is not initialized (e.g. after
     ``numpyro.set_platform("cuda")`` or a ``JAX_PLATFORMS`` preset restricted
     ``jax_platforms``) it resolves to the ``"numpy"`` sentinel instead, which
-    :func:`_transfer` implements as one :func:`jax.device_get` per chunk and
-    :func:`_stitch_chunks` as :func:`numpy.concatenate`: pageable, backend-free,
+    `_transfer()` implements as one `jax.device_get()` per chunk and
+    `_stitch_chunks()` as `numpy.concatenate()`: pageable, backend-free,
     NumPy results, and no warning since nothing is lost but the container
     type. ``"cpu"`` is the same request made explicitly, so an unmet one warns
-    (a :class:`UserWarning` that skips the package's own frames and the
-    jaxtyping/beartype wrappers, :data:`_WARNING_SKIP_PREFIXES`, so it is
+    (a `UserWarning` that skips the package's own frames and the
+    jaxtyping/beartype wrappers, `_WARNING_SKIP_PREFIXES`, so it is
     attributed to, and deduplicated per, the user's call site) before taking
     the NumPy path. Both sentinels pass through unchanged, so a pre-resolved
     value can be forwarded (``to_datatree`` resolves once for both drivers).
@@ -462,7 +462,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
         ``"numpy"`` (force the backend-free NumPy path); ``"pinned_host"``
         (commit to the host memory kind of the array's own device, a pool
         capped at 64 GB by default on CUDA); another platform name accepted by
-        :func:`jax.devices` (resolved to the platform's first device); or
+        `jax.devices()` (resolved to the platform's first device); or
         ``None``.
 
     Returns
@@ -524,11 +524,11 @@ def _transfer(draws: Array, device: _ResolvedDevice) -> Array | np.ndarray:
     Blocking makes the memory profile deterministic: the source buffer is
     released before the next chunk is drawn, so the accelerator holds at most
     one chunk of draws at a time. ``device`` ``None`` is the identity; a
-    :class:`jax.Device` (the CPU device for ``"host"`` with a CPU backend) is
+    `jax.Device` (the CPU device for ``"host"`` with a CPU backend) is
     one device-to-device copy; ``"numpy"`` copies the chunk to pageable host
-    memory with :func:`jax.device_get` (a NumPy array, no backend needed);
+    memory with `jax.device_get()` (a NumPy array, no backend needed);
     ``"pinned_host"`` commits the chunk to its own device's host memory kind
-    (:func:`_host_sharding`), one device-to-host DMA per chunk.
+    (`_host_sharding()`), one device-to-host DMA per chunk.
 
     Parameters
     ----------
@@ -542,7 +542,7 @@ def _transfer(draws: Array, device: _ResolvedDevice) -> Array | np.ndarray:
     -------
     Array | np.ndarray
         ``draws`` on ``device`` (``draws`` itself when ``None``, a NumPy array
-        when ``"numpy"``, a host-memory-kind :class:`jax.Array` when
+        when ``"numpy"``, a host-memory-kind `jax.Array` when
         ``"pinned_host"``).
     """
     if device is None:
@@ -562,9 +562,9 @@ def _aligned_empty(shape: tuple[int, ...], dtype: np.dtype) -> np.ndarray:
     """Allocate an uninitialized NumPy array whose data pointer is 64-byte aligned.
 
     NumPy only guarantees its allocator's alignment (16 bytes on glibc's mmap'd
-    large blocks and on small malloc blocks), while :func:`jax.device_put`
+    large blocks and on small malloc blocks), while `jax.device_put()`
     aliases a NumPy buffer onto the CPU device only when it is aligned to
-    :data:`_ZERO_COPY_ALIGNMENT`; otherwise it copies silently. Over-allocating
+    `_ZERO_COPY_ALIGNMENT`; otherwise it copies silently. Over-allocating
     a byte buffer and viewing it at the first aligned offset makes the aliasing
     deterministic rather than a property of the platform allocator.
 
@@ -598,16 +598,16 @@ def _stitch_chunks(
     a final slice (skipped when nothing was overdrawn, since slices copy).
 
     NumPy chunks (the ``"numpy"`` path) are stitched with
-    :func:`numpy.concatenate` and stay NumPy. On the two jax host paths
+    `numpy.concatenate()` and stay NumPy. On the two jax host paths
     (``"pinned_host"`` chunks, or chunks committed to CPU devices) the
     concatenation and the slice also run through NumPy: a ``jnp`` op on pinned
     arrays would copy them back into accelerator memory to run, and on
     CPU-committed chunks it would compile one executable per site shape for no
     gain. The chunks are viewed as NumPy (zero-copy, host to host), stitched
-    into a 64-byte-aligned staging buffer (:func:`_aligned_empty`) and sliced
+    into a 64-byte-aligned staging buffer (`_aligned_empty()`) and sliced
     there, and the single result is committed back to the chunks' sharding,
     which for the CPU device is again zero-copy: jax aliases the aligned buffer
-    instead of copying it. Otherwise :func:`jax.numpy.concatenate` runs on the
+    instead of copying it. Otherwise `jax.numpy.concatenate()` runs on the
     chunks' (committed) accelerator.
 
     ``chunks`` is cleared right after the concatenation, so the per-chunk
@@ -668,16 +668,16 @@ def _draw_chunked(
 ) -> dict[str, Array | np.ndarray]:
     """Draw ``num_samples`` samples from ``draw_fn`` in fixed-size, offloaded chunks.
 
-    Shared chunk-and-transfer loop for :func:`~numpyro_forecast.predictive.draw_posterior`
-    and :func:`~numpyro_forecast.contrib.blackjax.pathfinder_samples`. With
+    Shared chunk-and-transfer loop for `~~numpyro_forecast.predictive.draw_posterior()`
+    and `~~numpyro_forecast.contrib.blackjax.pathfinder_samples()`. With
     ``batch_size`` ``None`` (or at least ``num_samples``) ``draw_fn`` is called once
     for the full count with ``rng_key`` itself (the single-shot passthrough).
     Otherwise ``rng_key`` is split into one subkey per chunk, ``draw_fn`` is called
     with each subkey and exactly ``batch_size`` as the sample count (so every chunk
     shares one shape and whatever ``draw_fn`` compiles internally compiles exactly
     once), every leaf of every chunk is moved to ``device`` as soon as it is drawn
-    (:func:`_transfer`), and the final chunk's overdraw is discarded by
-    :func:`_stitch_chunks`. Chunking is a memory knob, not a reproducibility knob:
+    (`_transfer()`), and the final chunk's overdraw is discarded by
+    `_stitch_chunks()`. Chunking is a memory knob, not a reproducibility knob:
     draws are reproducible per ``(rng_key, batch_size)``, but changing ``batch_size``
     changes the PRNG stream layout and therefore the exact draws.
 
@@ -695,9 +695,9 @@ def _draw_chunked(
         ``num_samples`` takes the single-shot passthrough.
     device
         Where each chunk (and the single-shot result) is moved as soon as it is
-        drawn; forwarded to :func:`_resolve_device`.
+        drawn; forwarded to `_resolve_device()`.
     stage
-        Human-readable stage name forwarded to :func:`_oom_advice` for the OOM
+        Human-readable stage name forwarded to `_oom_advice()` for the OOM
         error message (e.g. ``"posterior drawing"``).
 
     Returns
@@ -712,7 +712,7 @@ def _draw_chunked(
     ValueError
         If ``batch_size`` is not positive.
     DeviceMemoryError
-        If ``draw_fn`` fails with a device OOM (see :func:`_oom_advice`).
+        If ``draw_fn`` fails with a device OOM (see `_oom_advice()`).
     """
     resolved = _resolve_device(device)
     if batch_size is not None and batch_size <= 0:

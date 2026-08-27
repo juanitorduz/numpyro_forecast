@@ -1,4 +1,4 @@
-"""Tests for :func:`ssoe`, the single-source-of-error building block."""
+"""Tests for `ssoe()`, the single-source-of-error building block."""
 
 from collections.abc import Callable
 from typing import Any
@@ -34,7 +34,7 @@ def _series(t: int, key: int = 1) -> Array:
 
 
 def _capture(body: Body) -> tuple[ForecastModel, list[SSOEResult]]:
-    """Wrap a body returning an :class:`SSOEResult` as a model that records the result."""
+    """Wrap a body returning an `SSOEResult` as a model that records the result."""
     box: list[SSOEResult] = []
 
     def wrapped(h: Horizon, covariates: Array) -> None:

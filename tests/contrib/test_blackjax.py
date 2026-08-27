@@ -598,7 +598,7 @@ def test_stable_bfgs_patch_covers_multipath_route() -> None:
 
     ``multi_approximate`` calls ``approximate``/``sample`` imported from
     ``blackjax.vi.pathfinder``, so those two functions' ``__globals__`` are the
-    same dict that :func:`fit_pathfinder`'s patch already targets.
+    same dict that `fit_pathfinder()`'s patch already targets.
     """
     import blackjax.vi.multipathfinder as multipathfinder_module
 
@@ -865,7 +865,7 @@ def test_fit_pathfinder_maxcor_gtol_maxls_passthrough(monkeypatch: pytest.Monkey
 def test_fit_multipathfinder_num_paths_one() -> None:
     """A single-path multipath fit runs and yields a pool-sized weight vector.
 
-    No equality with the single-path :func:`fit_pathfinder` API is asserted: the
+    No equality with the single-path `fit_pathfinder()` API is asserted: the
     PRNG streams differ by construction (per-path init keys vs. a single init
     key), so their draws are not expected to match. A single path with only 50
     ELBO samples reliably trips the ``pareto_k > 0.7`` warning, so it is

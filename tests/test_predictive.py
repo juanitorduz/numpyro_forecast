@@ -66,7 +66,7 @@ def test_forecast_accepts_raw_mcmc_get_samples() -> None:
     """Raw ``MCMC(kernel(model)).get_samples()`` forecasts, with no fit-wrapper.
 
     Moved from ``test_kernels.py`` (roadmap §3): proves that plain NumPyro MCMC
-    output flows straight into :func:`forecast`, the compatibility invariant that
+    output flows straight into `forecast()`, the compatibility invariant that
     matters now that there is no fit-wrapper between them.
     """
     data = jnp.zeros((15, 1))

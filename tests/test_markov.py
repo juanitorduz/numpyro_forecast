@@ -1,4 +1,4 @@
-"""Tests for :func:`markov_series` (roadmap §7.5)."""
+"""Tests for `markov_series()` (roadmap §7.5)."""
 
 from collections.abc import Callable
 
@@ -33,7 +33,7 @@ def _ar1_body(h: Horizon, covariates: Array) -> None:
 
 
 def _ar1_model(covariates: Array, data: Array | None = None) -> None:
-    """Plain-function AR(1) model on :func:`_ar1_body`."""
+    """Plain-function AR(1) model on `_ar1_body()`."""
     _ar1_body(Horizon.from_data(covariates, data), covariates)
 
 

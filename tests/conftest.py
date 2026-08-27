@@ -43,7 +43,7 @@ _HARNESS_AVAILABLE = False
 
 
 def _install_compile_listener() -> None:
-    """Register the JAX monitoring listener that feeds :data:`_COMPILE_COUNTER`."""
+    """Register the JAX monitoring listener that feeds `_COMPILE_COUNTER`."""
     global _HARNESS_AVAILABLE
 
     def _listener(event: str, duration_secs: float, **_: object) -> None:
@@ -65,11 +65,13 @@ _install_compile_listener()
 def count_compilations() -> Callable[[], AbstractContextManager[types.SimpleNamespace]]:
     """Return a factory of context managers that count backend compilations.
 
-    Usage::
+    Usage:
 
-        with count_compilations() as tally:
-            jax.block_until_ready(jitted(x))
-        assert tally.count == 1
+    ```python
+    with count_compilations() as tally:
+        jax.block_until_ready(jitted(x))
+    assert tally.count == 1
+    ```
 
     When the monitoring backend is unavailable the block imperatively xfails
     (non-strict), never a silent skip (roadmap §4.5).
@@ -114,9 +116,9 @@ def assert_host_resident(x: object) -> None:
     """Assert every leaf of ``x`` is a jax Array committed to the CPU backend device.
 
     The host-offload contract: ``device="host"`` keeps results jax-native but
-    in pageable host memory, so each leaf must be a :class:`jax.Array` committed
+    in pageable host memory, so each leaf must be a `jax.Array` committed
     to ``jax.devices("cpu")[0]`` with the plain ``"device"`` memory kind (the
-    pinned fallback has its own check, :func:`assert_pinned_host_resident`).
+    pinned fallback has its own check, `assert_pinned_host_resident()`).
 
     On a CPU-only machine ``committed`` is what separates a host result from a
     ``device=None`` one: both live on the CPU device, but only the offloaded
@@ -211,11 +213,11 @@ def rw_body(h: Horizon, covariates: Array) -> None:
 
 
 def rw_model(covariates: Array, data: Array | None = None) -> None:
-    """Plain-function random-walk model on :func:`rw_body` (shared by tests).
+    """Plain-function random-walk model on `rw_body()` (shared by tests).
 
     The functional-only replacement for the former ``RandomWalkModel``
     (a subclass of the former OOP ``ForecastingModel`` base class): derives
-    the :class:`Horizon` from the shapes itself via ``Horizon.from_data``, so
+    the `Horizon` from the shapes itself via ``Horizon.from_data``, so
     every non-legacy test drives it as a plain ``(covariates, data=None)``
     callable.
     """
@@ -223,7 +225,7 @@ def rw_model(covariates: Array, data: Array | None = None) -> None:
 
 
 def rw_model_factory() -> ForecastModel:
-    """A :data:`~numpyro_forecast.typing.ModelFactory` returning a fresh ``rw_model`` wrapper.
+    """A `~~numpyro_forecast.typing.ModelFactory` returning a fresh ``rw_model`` wrapper.
 
     ``rw_model`` itself is a plain module-level function: every ``ModelFactory``
     call would return the exact same object, unlike the former ``RandomWalkModel``
@@ -252,7 +254,7 @@ def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str,
 
     Deliberately built on plain NumPyro rather than a fit-wrapper, so tests that
     only need a guide/params pair for
-    :func:`~numpyro_forecast.predictive.draw_posterior` exercise the
+    `~~numpyro_forecast.predictive.draw_posterior()` exercise the
     guide-based contract directly.
     """
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (t, 1)), axis=-2)
@@ -270,8 +272,8 @@ def nuts_samples(
     Deliberately built on plain NumPyro rather than a fit-wrapper, returning
     ``mcmc.get_samples()`` directly (flattened, ``group_by_chain=False``): this is
     the posterior dict MCMC users pass straight to
-    :func:`~numpyro_forecast.predictive.forecast`/``predict_in_sample``/
-    :func:`~numpyro_forecast.convert.to_datatree`, with no ``draw_posterior`` step
+    `~~numpyro_forecast.predictive.forecast()`/``predict_in_sample``/
+    `~~numpyro_forecast.convert.to_datatree()`, with no ``draw_posterior`` step
     in between. ``chain_method="sequential"`` keeps ``num_chains > 1`` on a single
     CPU device.
     """
@@ -289,10 +291,10 @@ def nuts_samples(
 
 
 def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
-    """Build a ``backtest``-compatible :class:`ForecastFn` closure from plain NumPyro.
+    """Build a ``backtest``-compatible `ForecastFn` closure from plain NumPyro.
 
     Fits ``model`` with ``AutoNormal`` + ``SVI.run`` and forecasts with the
-    package's :func:`~numpyro_forecast.predictive.forecast`. Deliberately built on
+    package's `~~numpyro_forecast.predictive.forecast()`. Deliberately built on
     plain NumPyro rather than a fit-wrapper, so backtest tests exercise the
     closure contract directly.
     """
@@ -323,10 +325,10 @@ def svi_forecast_fn(num_steps: int = 30) -> ForecastFn:
 
 
 def svi_in_sample_fn(num_steps: int = 30) -> InSampleFn:
-    """Build a ``backtest``-compatible :class:`InSampleFn` closure from plain NumPyro.
+    """Build a ``backtest``-compatible `InSampleFn` closure from plain NumPyro.
 
-    Mirrors :func:`svi_forecast_fn` but scores the in-sample fit with the
-    package's :func:`~numpyro_forecast.predictive.predict_in_sample`.
+    Mirrors `svi_forecast_fn()` but scores the in-sample fit with the
+    package's `~~numpyro_forecast.predictive.predict_in_sample()`.
     """
 
     def in_sample_fn(
