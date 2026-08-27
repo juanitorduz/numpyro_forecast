@@ -8,6 +8,8 @@ Guidance for Claude Code when working in this repository.
 
 The model-side API is a small set of **model building blocks** (`Horizon.from_data`, `innovations`, `markov_series`, `ssoe`, `predict`): plain functions that call `numpyro.sample` and `numpyro.deterministic` on your behalf inside a model function `(covariates, data=None)`. Call them "building blocks" in headings and "model functions" in prose, never "primitives" (that word means `numpyro.primitives`: `sample`, `plate`, ...).
 
+Dependencies: `arviz` is a core dependency (the ArviZ export is part of the package contract), while `matplotlib` lives in the `dev` extra only. The extras are `dataframes`, `optax`, `blackjax`, `dev`, `docs`, `cuda`, plus the umbrellas `all` (everything but cuda) and `all_cuda`; there are no dependency groups, so `uv sync --extra all` is the way to build the environment.
+
 ## Conventions
 
 - **Array layout:** time at axis `-2`, observation/event dim at `-1`, batch dims
@@ -38,6 +40,8 @@ The model-side API is a small set of **model building blocks** (`Horizon.from_da
 ## Tests
 
 For the tests, we use `pytest`. `make tests` runs the suite in parallel with pytest-xdist (`-n auto`); a plain `uv run pytest tests/test_foo.py` stays sequential for debugging. CI splits the suite into duration-balanced parallel jobs with [pytest-split](https://pypi.org/project/pytest-split/), driven by the committed `.test_durations` file. Refreshing that file is optional: tests missing from it are assigned the average duration, so staleness only degrades group balance, never correctness. When you add or remove notably slow tests, or CI group times drift apart, refresh it with `make store-durations` (a full sequential run) and commit the result.
+
+`README.md` is a pytest doctest file (`--doctest-glob`): every `>>>` example in it runs in the suite, so keep the examples self-contained, prompt-formatted and under 99 characters per line, and keep the blank line before each closing fence (without it pytest reads the fence as expected output).
 
 ## Docstrings
 
@@ -95,13 +99,13 @@ See the Makefile for the full workflow.
 
 ```bash
 # Install dependencies
-uv sync --all-extras
+uv sync --extra all
 # Run pre-commit hooks
 prek run --all-files
 # Lint and format
 uv run ruff check . && uv run ruff format --check .
 # Type check
-uv run ty check numpyro_forecast/
+uv run ty check
 # Run tests
 uv run pytest
 # Build the documentation site (output in great-docs/_site/)

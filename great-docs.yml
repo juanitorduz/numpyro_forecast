@@ -70,13 +70,6 @@ authors:
 # - Add 'desc:' to sections for descriptions
 
 reference:
-  - title: Typing
-    desc: Public type contracts.
-    contents:
-      - typing.ForecastModel
-      - typing.ForecastFn
-      - typing.InSampleFn
-
   - title: Model building blocks
     desc: Plain model functions that register the train/forecast sites for you.
     contents:
@@ -88,6 +81,14 @@ reference:
       - models.SSOEStep
       - models.SSOEResult
       - models.predict
+
+  - title: Distribution surgery
+    desc: Time-axis operations on observation distributions, extensible via singledispatch.
+    contents:
+      - surgery.shift_loc
+      - surgery.slice_time
+      - surgery.prefix_condition
+      - surgery.register_elementwise
 
   - title: Producing draws
     desc: Drawing posterior samples and generating forecasts and in-sample predictions.
@@ -114,6 +115,33 @@ reference:
       - metrics.eval_interval_score
       - metrics.make_mase
 
+  - title: ArviZ export
+    desc: Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+    contents:
+      - convert.to_datatree
+      - convert.add_forecast_groups
+      - convert.predictions_to_datatree
+
+  - title: Extensions (contrib)
+    desc: Optional backends behind pyproject extras (never imported by default).
+    contents:
+      - contrib.blackjax.BlackjaxNUTSKernel
+      - contrib.blackjax.BlackjaxMCLMCKernel
+      - contrib.blackjax.BlackjaxCustomKernel
+      - contrib.blackjax.PathfinderFit
+      - contrib.blackjax.fit_pathfinder
+      - contrib.blackjax.pathfinder_samples
+      - contrib.blackjax.MultiPathfinderFit
+      - contrib.blackjax.fit_multipathfinder
+      - contrib.blackjax.multipathfinder_samples
+
+  - title: Typing
+    desc: Public type contracts.
+    contents:
+      - typing.ForecastModel
+      - typing.ForecastFn
+      - typing.InSampleFn
+
   - title: Autocorrelation
     desc: Batched autocorrelation and partial autocorrelation diagnostics.
     contents:
@@ -133,13 +161,13 @@ reference:
       - arrays.concat_future
       - arrays.pad_future
 
-  - title: Distribution surgery
-    desc: Time-axis operations on observation distributions, extensible via singledispatch.
+  - title: Datasets
+    desc: Example datasets used in the tutorials.
     contents:
-      - surgery.shift_loc
-      - surgery.slice_time
-      - surgery.prefix_condition
-      - surgery.register_elementwise
+      - datasets.load_bart_weekly
+      - datasets.load_bart_hierarchical
+      - datasets.load_victoria_electricity
+      - datasets.bart_available
 
   - title: Optional dependencies
     desc: Lazy imports behind pyproject extras.
@@ -147,7 +175,7 @@ reference:
       - optional.require
 
   - title: Exceptions
-    desc: Package exception hierarchy raised at resolution and validation boundaries.
+    desc: Package exception hierarchy raised at validation boundaries.
     contents:
       - exceptions.NumpyroForecastError
       - exceptions.BacktestWindowError
@@ -157,34 +185,6 @@ reference:
       - exceptions.CovariateDimsError
       - exceptions.MVNLayoutError
       - exceptions.DeviceMemoryError
-
-  - title: ArviZ export
-    desc: Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
-    contents:
-      - convert.to_datatree
-      - convert.add_forecast_groups
-      - convert.predictions_to_datatree
-
-  - title: Extensions (contrib)
-    desc: Optional backends behind pyproject extras (never imported by default).
-    contents:
-      - contrib.blackjax.BlackjaxNUTSKernel
-      - contrib.blackjax.BlackjaxMCLMCKernel
-      - contrib.blackjax.BlackjaxCustomKernel
-      - contrib.blackjax.PathfinderFit
-      - contrib.blackjax.fit_pathfinder
-      - contrib.blackjax.pathfinder_samples
-      - contrib.blackjax.MultiPathfinderFit
-      - contrib.blackjax.fit_multipathfinder
-      - contrib.blackjax.multipathfinder_samples
-
-  - title: Datasets
-    desc: Example datasets used in the tutorials.
-    contents:
-      - datasets.load_bart_weekly
-      - datasets.load_bart_hierarchical
-      - datasets.load_victoria_electricity
-      - datasets.bart_available
 
 # Example notebooks live in docs/examples/. The .qmd wrapper pages that embed
 # their stored outputs are generated at build time by scripts/build_docs.py

@@ -1,4 +1,4 @@
-"""numpyro_forecast: a JAX/NumPyro port of Pyro's forecasting module."""
+"""numpyro_forecast: a JAX/NumPyro port of the ideas in Pyro's forecasting module."""
 
 from importlib.metadata import PackageNotFoundError, version
 
