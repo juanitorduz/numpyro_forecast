@@ -2305,8 +2305,8 @@ svi_result = svi.run(
 ```
 
 
-    CPU times: user 14.5 s, sys: 732 ms, total: 15.2 s
-    Wall time: 8.83 s
+    CPU times: user 14.7 s, sys: 794 ms, total: 15.5 s
+    Wall time: 9.41 s
 
 
 ``` python
@@ -2319,8 +2319,8 @@ ax.set(yscale="log", xlabel="SVI step", ylabel="loss", title="SVI ELBO loss");
 ```
 
 
-    CPU times: user 9min 30s, sys: 6min 29s, total: 15min 59s
-    Wall time: 3min 21s
+    CPU times: user 9min 40s, sys: 6min 26s, total: 16min 7s
+    Wall time: 3min 8s
 
 
 <figure class="figure">
@@ -2956,7 +2956,7 @@ Group: /
 │           slope             (chain, draw, time, series) float32 304MB -0.0333 ... -...
 │           tau_trend         (chain, draw, series) float32 4MB 0.02123 ... 0.04093
 │       Attributes:
-│           created_at:                 2026-08-21T13:23:42.625853+00:00
+│           created_at:                 2026-08-27T12:37:13.728305+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2969,9 +2969,9 @@ Group: /
 │         * time     (time) datetime64[s] 608B 2024-03-28 2024-03-29 ... 2024-06-11
 │         * obs_dim  (obs_dim) <U8 32kB '0::117' '0::691' '0::70' ... '99::589' '9::4'
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 304MB 0.06866 ... 0.4252
+│           obs      (chain, draw, time, obs_dim) float32 304MB 0.06866 ... 0.6068
 │       Attributes:
-│           created_at:                 2026-08-21T13:23:43.741282+00:00
+│           created_at:                 2026-08-27T12:37:15.167661+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2984,7 +2984,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 304kB 0.06142 0.8523 1.193 ... 1.541 0.3627
 │       Attributes:
-│           created_at:                 2026-08-21T13:23:43.741925+00:00
+│           created_at:                 2026-08-27T12:37:15.168290+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -2998,7 +2998,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 2MB 0.0 0.8421 0.9677 ... 1.0 1.0
 │       Attributes:
-│           created_at:                 2026-08-21T13:23:43.742464+00:00
+│           created_at:                 2026-08-27T12:37:15.168794+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3011,9 +3011,9 @@ Group: /
 │         * time     (time) datetime64[s] 112B 2024-06-12 2024-06-13 ... 2024-06-25
 │         * obs_dim  (obs_dim) <U8 32kB '0::117' '0::691' '0::70' ... '99::589' '9::4'
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 56MB 0.5716 0.3891 ... 2.662
+│           obs      (chain, draw, time, obs_dim) float32 56MB 0.5716 0.3891 ... 2.633
 │       Attributes:
-│           created_at:                 2026-08-21T13:23:45.018843+00:00
+│           created_at:                 2026-08-27T12:37:16.380662+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3027,7 +3027,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 280kB 0.7831 1.0 0.633 ... 1.0 1.0
         Attributes:
-            created_at:                 2026-08-21T13:23:45.019566+00:00
+            created_at:                 2026-08-27T12:37:16.381448+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -3582,7 +3582,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T13:23:42.625853+00:00
+2026-08-27T12:37:13.728305+00:00
 
 creation_library :  
 ArviZ
@@ -3703,7 +3703,7 @@ obs
 float32
 
 
-0.06866 0.8563 ... 1.392 0.4252
+0.06866 0.8563 ... 1.377 0.6068
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -3711,14 +3711,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.06865707,  0.8562886 ,  0.9034085 , ...,  0.36918852,0.65169656,  0.7528771 ],[ 0.9086646 ,  0.9109446 ,  1.394842  , ...,  0.24928167,0.6428833 ,  0.16800538],[ 1.6635078 ,  1.2614503 ,  1.6077211 , ...,  0.17847505,0.60937726,  1.7834977 ],...,[ 1.201245  ,  0.87349564,  1.2235354 , ...,  1.3595258 ,1.3566886 ,  2.0559971 ],[ 0.8215446 ,  0.8515652 ,  1.9608728 , ...,  1.7634014 ,1.6452765 ,  1.9297769 ],[ 0.860581  ,  0.93858504,  1.4964873 , ...,  1.5783353 ,0.93787265,  1.4511259 ]],[[ 0.04560059,  0.95299613,  0.5848917 , ...,  0.20886075,0.4369905 ,  0.3741133 ],[ 1.3344649 ,  0.8543097 ,  0.74852824, ...,  0.08796121,0.42953712,  0.5656793 ],[ 1.6139493 ,  1.476902  ,  0.98485345, ...,  0.24887544,1.0038232 ,  1.589758  ],...1.5358135 ,  1.100871  ],[ 1.3319607 ,  0.82710016,  1.0700843 , ...,  1.5935428 ,1.7914292 ,  2.3866441 ],[ 0.46426448,  0.26552576,  0.72841203, ...,  1.172219  ,1.235152  ,  0.31827047]],[[ 0.07586826,  0.79923296,  0.9676082 , ...,  0.24900106,0.89224315,  0.7313913 ],[ 0.64107037,  1.0393132 ,  0.59486187, ...,  0.20114969,0.8434873 ,  0.949231  ],[ 1.0754628 ,  1.1556814 ,  1.2382253 , ...,  0.23366639,1.2199013 ,  1.2273576 ],...,[ 1.9580493 ,  0.49733096,  1.6689233 , ...,  1.6277031 ,1.2881812 ,  1.745784  ],[ 0.31956613,  0.7597475 ,  1.265048  , ...,  1.7274063 ,1.4266922 ,  1.7721269 ],[ 0.6988068 ,  0.6225877 ,  1.7755313 , ...,  1.2593421 ,1.3915052 ,  0.42524597]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[ 0.06865707,  0.8562886 ,  0.9034085 , ...,  0.36918852,0.65169656,  0.7528771 ],[ 0.9086646 ,  0.9109446 ,  1.394842  , ...,  0.24928167,0.6428833 ,  0.16800538],[ 1.6635078 ,  1.2614503 ,  1.6077211 , ...,  0.17847505,0.60937726,  1.7834977 ],...,[ 1.201245  ,  0.87349564,  1.2235354 , ...,  1.3595258 ,1.3566886 ,  2.0559971 ],[ 0.8215446 ,  0.8515652 ,  1.9608728 , ...,  1.7634014 ,1.6452765 ,  1.9297769 ],[ 0.860581  ,  0.93858504,  1.4964873 , ...,  1.5783353 ,0.93787265,  1.4511259 ]],[[ 0.04560059,  0.95299613,  0.5848917 , ...,  0.20886075,0.4369905 ,  0.17537546],[ 1.3344649 ,  0.8543097 ,  0.74852824, ...,  0.08796121,0.42953712,  0.3608114 ],[ 1.6598704 ,  1.5403934 ,  1.027849  , ...,  0.22597991,0.99385536,  1.2304274 ],...1.5952221 ,  0.9208318 ],[ 1.3069012 ,  0.8059875 ,  0.9465923 , ...,  1.4483203 ,1.8530891 ,  2.2727675 ],[ 0.4515608 ,  0.22717811,  0.72322756, ...,  1.1751523 ,1.2564839 , -0.10584591]],[[ 0.07586826,  0.79923296,  0.9676082 , ...,  0.24900106,0.89224315,  0.9242667 ],[ 0.64107037,  1.0393132 ,  0.59486187, ...,  0.20114969,0.8434873 ,  1.1463547 ],[ 1.034672  ,  1.172239  ,  1.187351  , ...,  0.22209795,1.2061733 ,  1.2836113 ],...,[ 1.962699  ,  0.54537344,  1.6579019 , ...,  1.6014011 ,1.2569418 ,  1.5523391 ],[ 0.32394326,  0.83517635,  1.2544222 , ...,  1.7011042 ,1.39434   ,  1.5898426 ],[ 0.7385977 ,  0.69916236,  1.8153841 , ...,  1.2871977 ,1.3773919 ,  0.6067765 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-21T13:23:43.741282+00:00
+2026-08-27T12:37:15.167661+00:00
 
 creation_library :  
 ArviZ
@@ -3812,7 +3812,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T13:23:43.741925+00:00
+2026-08-27T12:37:15.168290+00:00
 
 creation_library :  
 ArviZ
@@ -3927,7 +3927,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T13:23:43.742464+00:00
+2026-08-27T12:37:15.168794+00:00
 
 creation_library :  
 ArviZ
@@ -4048,7 +4048,7 @@ obs
 float32
 
 
-0.5716 0.3891 ... 1.788 2.662
+0.5716 0.3891 ... 1.774 2.633
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4056,14 +4056,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.5715517 ,  0.38914588,  0.69882804, ...,  1.237357  ,1.2113882 ,  0.8962838 ],[ 0.8005728 ,  0.36595613,  0.32479116, ...,  1.6920846 ,1.1927861 ,  1.6036171 ],[ 0.9052657 ,  0.76412326,  0.9441277 , ...,  1.3331509 ,1.3811595 ,  1.2355216 ],...,[ 1.3139998 ,  0.40608063,  0.87714535, ...,  1.702683  ,1.0828999 ,  0.74779123],[ 1.1129043 ,  0.20477091,  1.1774913 , ...,  1.0831627 ,1.078435  ,  0.13634548],[ 0.6864605 ,  0.43619782,  0.7041385 , ...,  1.5538677 ,1.003445  , -0.45531765]],[[ 0.494299  ,  0.8179805 ,  0.7845148 , ...,  1.506911  ,0.86883837,  1.4070162 ],[ 0.53053486,  0.5582437 ,  0.6995405 , ...,  1.4096559 ,0.7927336 ,  1.4947082 ],[ 0.3835351 ,  1.2325627 ,  0.8051847 , ...,  1.4005529 ,0.7228733 ,  0.9937309 ],...1.3452065 ,  3.6338818 ],[ 0.60328424,  0.8117206 ,  0.9653488 , ...,  1.5591975 ,1.1031393 , -0.12222946],[ 0.48574293,  0.53774476,  1.7122344 , ...,  1.6707933 ,0.8914832 ,  1.3513465 ]],[[ 0.6841991 ,  1.1059093 ,  1.7076572 , ...,  1.5000999 ,1.228028  , -0.48178446],[ 0.5533425 ,  0.818402  ,  1.4749801 , ...,  1.3672256 ,1.0056266 ,  1.0167516 ],[ 0.61521935,  0.87771916,  1.9181889 , ...,  1.3871481 ,1.4177465 , -0.02326046],...,[ 1.6856233 ,  0.9549614 ,  0.8806952 , ...,  1.8787724 ,1.7435433 ,  2.1463006 ],[ 0.5681569 ,  0.71810126,  0.49949464, ...,  1.319974  ,1.3403549 ,  0.8365816 ],[ 0.95353204,  0.92778933,  1.9511901 , ...,  1.8964591 ,1.7876387 ,  2.6617815 ]]]],shape=(1, 1000, 14, 1000), dtype=float32)
+    array([[[[ 0.5715517 ,  0.38914588,  0.69882804, ...,  1.237357  ,1.2113882 ,  0.8962838 ],[ 0.8005728 ,  0.36595613,  0.32479116, ...,  1.6920846 ,1.1927861 ,  1.6036171 ],[ 0.9052657 ,  0.76412326,  0.9441277 , ...,  1.3331509 ,1.3811595 ,  1.2355216 ],...,[ 1.3139998 ,  0.40608063,  0.87714535, ...,  1.702683  ,1.0828999 ,  0.74779123],[ 1.1129043 ,  0.20477091,  1.1774913 , ...,  1.0831627 ,1.078435  ,  0.13634548],[ 0.6864605 ,  0.43619782,  0.7041385 , ...,  1.5538677 ,1.003445  , -0.45531765]],[[ 0.46308973,  1.5043545 ,  0.94356006, ...,  1.430752  ,0.97168845,  1.2203566 ],[ 0.49550432,  1.2429022 ,  0.90728146, ...,  1.3361589 ,0.89961463,  1.2622706 ],[ 0.34969264,  1.9176501 ,  1.0085819 , ...,  1.3317417 ,0.83182985,  0.7613695 ],...1.4031528 ,  3.5558898 ],[ 0.5891545 ,  1.2523981 ,  0.960365  , ...,  1.5620168 ,1.1234335 , -0.3363468 ],[ 0.471488  ,  0.9962735 ,  1.4666684 , ...,  1.6739305 ,0.9117774 ,  1.1430757 ]],[[ 0.72359204,  0.7044981 ,  1.3021482 , ...,  1.5277317 ,1.2148697 , -0.30174577],[ 0.59836745,  0.41806743,  0.91199636, ...,  1.393968  ,0.99193126,  1.1861979 ],[ 0.65844154,  0.47711545,  1.3701155 , ...,  1.4123001 ,1.4037726 ,  0.14616902],...,[ 1.6900508 ,  0.6595662 ,  0.8736334 , ...,  1.8504509 ,1.7130289 ,  1.9700694 ],[ 0.61325103,  0.32237977,  0.5372314 , ...,  1.3467162 ,1.3268882 ,  0.8069167 ],[ 0.9991145 ,  0.5438744 ,  1.3882062 , ...,  1.9263086 ,1.7741721 ,  2.6330779 ]]]],shape=(1, 1000, 14, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-21T13:23:45.018843+00:00
+2026-08-27T12:37:16.380662+00:00
 
 creation_library :  
 ArviZ
@@ -4178,7 +4178,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-21T13:23:45.019566+00:00
+2026-08-27T12:37:16.381448+00:00
 
 creation_library :  
 ArviZ
@@ -4210,7 +4210,7 @@ sample_dims :
 
 We score on the original sales scale (rescaling the draws by each series' training mean and clipping negatives at zero, since sales are non-negative). CRPS is a proper scoring rule for probabilistic forecasts that generalizes the mean absolute error; coverage checks calibration by asking how often the central 94\\ and 50\\ intervals contain the truth. One terminology note to keep the sections consistent: the coverage metrics score *central* (equal-tailed) intervals bounded by fixed quantiles, while the forecast figures further below draw *HDI* bands; for a near-symmetric predictive the two nearly coincide, but on zero-clipped stockout days, where the predictive piles mass at zero, they can differ. As a reference point we use a seasonal-naive ensemble: the weekday-aligned 14-day windows from the training data, stacked as an empirical forecast distribution.
 
-We score with [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) run on the very same `posterior_draws` the DataTree export consumed, so the metrics below and the tree describe one posterior, not two. The 1{,}000 draws are set by the far tails: each 3\\ tail of the central 94\\ interval rests on about 30 of them, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first 500 draws moves both coverages by about a hundredth (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="host"` commits every chunk (and the stitched ensemble) to the CPU backend device as a jax Array in pageable host memory, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU (when the JAX CPU backend is not initialized, for example after `numpyro.set_platform("cuda")` or under a `JAX_PLATFORMS` preset, the same call returns NumPy arrays instead: each chunk is copied with `jax.device_get`, so it needs no CPU backend and no pinned memory; pinned host memory, a pool capped at 64 GB by default on CUDA, is used only when you ask for `device="pinned_host"`). The package's own drivers and every evaluation metric accept these host arrays directly in either form, and `np.asarray` views one as NumPy without a copy for our own rescaling and clipping below. A host-committed jax array is not a drop-in for a device array in your own `jnp` code: mixed with an uncommitted array an op runs on the CPU, mixed with an accelerator-committed array it raises, so convert explicitly at that boundary. The rest of the scoring keeps the ensembles in host memory end to end: the rescaling and zero-clipping run in NumPy, and the metrics evaluate in chunks of `batch_size` data cells ([eval_crps](../../reference/evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) / [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage)), so the accelerator never re-materializes the full ensemble either.
+We score with [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) run on the very same `posterior_draws` the DataTree export consumed, so the metrics below and the tree describe one posterior, not two. The 1{,}000 draws are set by the far tails: each 3\\ tail of the central 94\\ interval rests on about 30 of them, which makes the tail quantiles the noisiest part of the whole evaluation. On this panel the estimate is nevertheless comfortable: rescoring with only the first 500 draws moves both coverages by about a thousandth (printed below the table). The scoring path gets the same memory guard as the DataTree export: `batch_size=250` chunks the predictive sampling, and `device="host"` commits every chunk (and the stitched ensemble) to the CPU backend device as a jax Array in pageable host memory, which is what keeps the full predictive arrays off the accelerator when this notebook runs on a GPU (when the JAX CPU backend is not initialized, for example after `numpyro.set_platform("cuda")` or under a `JAX_PLATFORMS` preset, the same call returns NumPy arrays instead: each chunk is copied with `jax.device_get`, so it needs no CPU backend and no pinned memory; pinned host memory, a pool capped at 64 GB by default on CUDA, is used only when you ask for `device="pinned_host"`). The package's own drivers and every evaluation metric accept these host arrays directly in either form, and `np.asarray` views one as NumPy without a copy for our own rescaling and clipping below. A host-committed jax array is not a drop-in for a device array in your own `jnp` code: mixed with an uncommitted array an op runs on the CPU, mixed with an accelerator-committed array it raises, so convert explicitly at that boundary. The rest of the scoring keeps the ensembles in host memory end to end: the rescaling and zero-clipping run in NumPy, and the metrics evaluate in chunks of `batch_size` data cells ([eval_crps](../../reference/evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) / [eval_coverage](../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage)), so the accelerator never re-materializes the full ensemble either.
 
 
 ``` python
@@ -4326,8 +4326,8 @@ results_df
 
 | split                   | crps     | coverage_94 | coverage_50 |
 |-------------------------|----------|-------------|-------------|
-| "model (train)"         | 0.876129 | 0.981697    | 0.707487    |
-| "model (test)"          | 1.215701 | 0.9365      | 0.5605      |
+| "model (train)"         | 0.7507   | 0.982618    | 0.712671    |
+| "model (test)"          | 1.201854 | 0.943286    | 0.570857    |
 | "seasonal naive (test)" | 2.387181 | null        | null        |
 
 
@@ -4344,11 +4344,11 @@ for alpha, column in ((0.94, "coverage_94"), (0.5, "coverage_50")):
 ```
 
 
-    test coverage at 94% from the first 500 draws: 0.925 (moves by -0.0114)
-    test coverage at 50% from the first 500 draws: 0.554 (moves by -0.0066)
+    test coverage at 94% from the first 500 draws: 0.942 (moves by -0.0011)
+    test coverage at 50% from the first 500 draws: 0.571 (moves by +0.0005)
 
 
-The model beats the seasonal-naive baseline on test CRPS by a wide margin. Calibration is more nuanced: on the holdout the 50\\ interval covers 56\\, a few points above nominal, while the 94\\ interval covers 93.7\\, a slight under-coverage; in-sample, both intervals *over*-cover (0.98 and 0.71). The per-day diagnostics below show that these aggregates hide structure worth dissecting. Before that, two of the modeling choices above earn their place directly in these numbers:
+The model beats the seasonal-naive baseline on test CRPS by a wide margin. Calibration is more nuanced: on the holdout the 50\\ interval covers 57\\, several points above nominal, while the 94\\ interval covers 94.3\\, essentially at nominal; in-sample, both intervals *over*-cover (0.98 and 0.71). The per-day diagnostics below show that these aggregates hide structure worth dissecting. Before that, two of the modeling choices above earn their place directly in these numbers:
 
 - **The damped trend is what keeps the coverage from decaying with the horizon.** Without it (a pure random-walk level), the median forecast percentile of the truth starts near the middle of the fan and climbs steadily through the horizon while the fan itself barely widens: the frozen level cannot extrapolate the panel's upward drift, so the interval misses pile up above the bands. With the slope, test CRPS and both coverages improve together, most visibly on the late-horizon days (the level-dependent noise term \lambda_s \\ \text{softplus}(\ell\_{t,s}) plays the same role for the in-sample spread).
 - **The cleaned discount encoding and the launch indicator remove a spurious optimum.** Without them, the placeholder discount days hand the optimizer a second ELBO optimum in which a launch-aligned discount step absorbs each series' launch jump with coefficients an order of magnitude too large, and which basin a run lands in depends on nothing more than the compilation path of the update loop (the progress-bar path lands badly; the scanned path lands well). With them, no execution path produces runaway coefficients, and the store-hierarchy plot further below hugs the identity line. The optimization as such remains sensitive to the update-loop compilation on a panel this large, which is why the fit above pins the well-behaved `lax.scan` path with `progress_bar=False`.
@@ -4378,11 +4378,11 @@ print(
 
 
     test observations with zero sales: 1.7%
-    50% coverage | zero-sales days: 0.34 | positive days: 0.56
-    94% coverage | zero-sales days: 0.86 | positive days: 0.94
+    50% coverage | zero-sales days: 0.33 | positive days: 0.57
+    94% coverage | zero-sales days: 0.88 | positive days: 0.94
 
 
-The artifact is ruled out. Zero-sales days are rare in this test panel (1.7\\: these are the top sellers, and the test window sits after the launch with mostly high availability), and on them the intervals cover *less* than nominal, since the factor floor and the level often push the whole central band strictly above zero. The positive-sales days (0.56 and 0.94) sit almost exactly at the panel-wide coverages, so the aggregate numbers reflect ordinary days, not zero-day bookkeeping. What the aggregates do hide is a drift over the horizon, which the per-day plots below make visible; the in-sample over-coverage already hints at one half of the story (daily sales fluctuations are heavier-tailed than a Normal, so the fitted noise scale widens the whole bell to accommodate the tail days, and in-sample the central band over-covers at 0.71). The per-day breakdown shows where the CRPS margin comes from:
+The artifact is ruled out. Zero-sales days are rare in this test panel (1.7\\: these are the top sellers, and the test window sits after the launch with mostly high availability), and on them the intervals cover *less* than nominal, since the factor floor and the level often push the whole central band strictly above zero. The positive-sales days (0.57 and 0.94) sit almost exactly at the panel-wide coverages, so the aggregate numbers reflect ordinary days, not zero-day bookkeeping. What the aggregates do hide is a drift over the horizon, which the per-day plots below make visible; the in-sample over-coverage already hints at one half of the story (daily sales fluctuations are heavier-tailed than a Normal, so the fitted noise scale widens the whole bell to accommodate the tail days, and in-sample the central band over-covers at 0.71). The per-day breakdown shows where the CRPS margin comes from:
 
 
 ``` python
@@ -4450,10 +4450,10 @@ ax.set(
 ```
 
 
-    observed coverage by day, 94% interval: [0.994 0.991 0.992 0.966 0.953 0.983 0.973 0.919 0.95  0.899 0.841 0.829
-     0.951 0.87 ]
-    observed coverage by day, 50% interval: [0.755 0.776 0.787 0.482 0.492 0.683 0.631 0.504 0.562 0.498 0.304 0.295
-     0.61  0.468]
+    observed coverage by day, 94% interval: [0.995 0.991 0.996 0.969 0.963 0.986 0.977 0.925 0.959 0.913 0.855 0.839
+     0.957 0.881]
+    observed coverage by day, 50% interval: [0.772 0.795 0.798 0.512 0.519 0.699 0.633 0.507 0.573 0.493 0.309 0.293
+     0.622 0.467]
 
 
 <figure class="figure">
@@ -4507,11 +4507,11 @@ print(f"below-side miss share:      {np.round(below_share.to_numpy(), 3)}")
 ```
 
 
-    median PIT by day:          [0.46 0.44 0.53 0.52 0.56 0.53 0.55 0.7  0.64 0.72 0.74 0.75 0.6  0.75]
-    above-side miss share:      [0.002 0.002 0.006 0.025 0.032 0.01  0.019 0.079 0.046 0.097 0.136 0.147
-     0.047 0.125]
-    below-side miss share:      [0.004 0.007 0.002 0.009 0.015 0.007 0.008 0.002 0.004 0.004 0.023 0.024
-     0.002 0.005]
+    median PIT by day:          [0.46 0.45 0.52 0.53 0.56 0.53 0.55 0.7  0.64 0.72 0.74 0.76 0.6  0.75]
+    above-side miss share:      [0.002 0.002 0.003 0.022 0.024 0.008 0.019 0.072 0.039 0.084 0.127 0.14
+     0.041 0.115]
+    below-side miss share:      [0.003 0.007 0.001 0.009 0.013 0.006 0.004 0.003 0.002 0.003 0.018 0.021
+     0.002 0.004]
 
 
 <figure class="figure">
@@ -4519,7 +4519,7 @@ print(f"below-side miss share:      {np.round(below_share.to_numpy(), 3)}")
 </figure>
 
 
-The two panels pin the story down. The median PIT starts just below 0.5 and drifts upward through the horizon, and the miss directions are sharply asymmetric: below-side misses stay at or near the nominal 3\\ on every day, while above-side misses first touch nominal around day 5 and run well above it from day 8 on, reaching the mid-teens in the second week. That asymmetry says the 94\\ under-coverage is a *directional* miss, not a band that is uniformly too narrow: a merely narrow interval would leak on both sides (mean-field variational inference's tendency toward too-narrow posteriors can contribute to the level, but it cannot explain the one-sidedness). Without the damped trend these curves are far worse (by day 14 the median PIT sits far above 0.5 and the above-side misses run several times the nominal rate); with it much of the drift is gone, but the late days still run hot: the panel's momentum in the test window is at the upper end of what the damped slope extrapolates. The same drift explains the coverage cancellation noted above: early days over-cover with the heavy-tail-widened band, late days under-cover as the truth walks out the top, and the 50\\ aggregate ends up only a few points from nominal by coincidence rather than by calibration, which is exactly why the directional diagnostics are worth plotting next to the averages. A post-hoc interval calibration would target that residual drift directly; we leave it on the next-steps list rather than pursue it in this notebook.
+The two panels pin the story down. The median PIT starts just below 0.5 and drifts upward through the horizon, and the miss directions are sharply asymmetric: below-side misses stay at or near the nominal 3\\ on every day, while above-side misses first touch nominal around day 5 and run well above it from day 8 on, reaching the mid-teens in the second week. That asymmetry says the late-horizon 94\\ under-coverage is a *directional* miss, not a band that is uniformly too narrow: a merely narrow interval would leak on both sides (mean-field variational inference's tendency toward too-narrow posteriors can contribute to the level, but it cannot explain the one-sidedness). Without the damped trend these curves are far worse (by day 14 the median PIT sits far above 0.5 and the above-side misses run several times the nominal rate); with it much of the drift is gone, but the late days still run hot: the panel's momentum in the test window is at the upper end of what the damped slope extrapolates. The same drift explains the coverage cancellation noted above: early days over-cover with the heavy-tail-widened band, late days under-cover as the truth walks out the top (which is also why the 94\\ aggregate lands at nominal), and the 50\\ aggregate ends up only several points from nominal by coincidence rather than by calibration, which is exactly why the directional diagnostics are worth plotting next to the averages. A post-hoc interval calibration would target that residual drift directly; we leave it on the next-steps list rather than pursue it in this notebook.
 
 
 ## Scaling belongs inside the fold
@@ -4791,8 +4791,8 @@ print(
 
 
     expected demand above the sales forecast on the test window: +8.6%
-    series with an uplift above 1%: 81.7% of the panel
-    largest per-series uplift: +168.4% (series 438::300)
+    series with an uplift above 1%: 81.5% of the panel
+    largest per-series uplift: +168.5% (series 438::300)
 
 
 The correction is meaningful in aggregate, about 8.6\\ of the forecast test-window volume, and its anatomy follows the saturating factor: near full availability the factor is almost flat, so a day that loses a few sales-weighted hours contributes nothing visible, while a day that drops to low availability contributes a lot. Deep dips are scattered widely across the panel's two forecast weeks, so the uplift is broad (82\\ of the series gain more than 1\\) but very uneven, running past +150\\ for the most stockout-prone series. The faceted view below shows this series by series, in the same layout as the forecast plot above but with the demand bands in green. One detail changes deliberately: the red availability line now shows the *input these predictions actually consumed*, the observed availability in-sample and a constant one over the forecast window, because a plot of a forecast should represent the features that produced it. To see where availability actually dipped in the test window, compare with the sales-forecast panel above; the single-series comparison further below makes that contrast explicit.
@@ -4950,8 +4950,8 @@ fig.suptitle(
 ```
 
 
-    22::267 | expected test-window sales 313 units | expected demand 336 units (+7.2%)
-    largest daily gap on 2024-06-22 (availability 0.42): expected sales 14.1 vs demand 26.5
+    22::267 | expected test-window sales 308 units | expected demand 330 units (+7.1%)
+    largest daily gap on 2024-06-22 (availability 0.42): expected sales 13.7 vs demand 25.7
 
 
 <figure class="figure">
@@ -4959,7 +4959,7 @@ fig.suptitle(
 </figure>
 
 
-The comparison makes the counterfactual concrete, and the printout puts numbers on it. In the top row the orange bands are pulled down exactly where the availability input dips, most sharply on 2024-06-22: the model expects the stockout to censor sales, and that censored view is precisely what makes the forecast scoreable against the observed black line. In the bottom row the green bands hold the underlying demand level through those same days, because the input that produced them says the shelf never empties; elsewhere the two rows nearly coincide, since availability sits close to one. On the worst day the expected demand (26.5 units) is nearly twice the expected sale (14.1 units), and over the full window the demand forecast carries 7.2\\ more volume for this series. That gap is the demand a planner would silently forfeit by ordering to the censored forecast, and the stockout would then repeat itself by construction. This demand fan, not the sales forecast, is the input a replenishment decision should consume; the sales forecast's job was to be scoreable against what was actually observed.
+The comparison makes the counterfactual concrete, and the printout puts numbers on it. In the top row the orange bands are pulled down exactly where the availability input dips, most sharply on 2024-06-22: the model expects the stockout to censor sales, and that censored view is precisely what makes the forecast scoreable against the observed black line. In the bottom row the green bands hold the underlying demand level through those same days, because the input that produced them says the shelf never empties; elsewhere the two rows nearly coincide, since availability sits close to one. On the worst day the expected demand (25.7 units) is nearly twice the expected sale (13.7 units), and over the full window the demand forecast carries 7.1\\ more volume for this series. That gap is the demand a planner would silently forfeit by ordering to the censored forecast, and the stockout would then repeat itself by construction. This demand fan, not the sales forecast, is the input a replenishment decision should consume; the sales forecast's job was to be scoreable against what was actually observed.
 
 
 # Inspecting the availability factor

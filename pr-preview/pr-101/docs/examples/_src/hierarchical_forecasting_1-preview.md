@@ -283,7 +283,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_67520/757652965.py:78: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_7688/757652965.py:78: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

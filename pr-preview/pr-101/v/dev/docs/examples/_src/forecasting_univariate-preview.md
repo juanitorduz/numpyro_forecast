@@ -782,7 +782,7 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 4.4s (incl. compile)  |  loop 24.8s
+    wall-clock: vectorized 2.8s (incl. compile)  |  loop 20.9s
     vectorized mean out-of-sample CRPS: 0.0434
     loop       mean out-of-sample CRPS: 0.0470
     vectorized mean 50% coverage: 0.50  (nominal 0.50)

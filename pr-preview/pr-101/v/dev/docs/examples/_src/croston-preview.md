@@ -71,9 +71,9 @@ rng_key = random.PRNGKey(seed=42)
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e2/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
       warnings.warn("PyMC not installed. PyMC related functions will not work.")
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e2/.venv/lib/python3.14/site-packages/preliz/ppls/agnostic.py:34: UserWarning: PyMC not installed. PyMC related functions will not work.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/agnostic.py:34: UserWarning: PyMC not installed. PyMC related functions will not work.
       warnings.warn("PyMC not installed. PyMC related functions will not work.")
 
 
@@ -924,9 +924,9 @@ Group: /
 │           z_noise          (chain, draw) float32 16kB 0.431 0.6101 ... 0.5139 0.6101
 │           z_smoothing      (chain, draw) float32 16kB 0.0827 0.04026 ... 0.04315
 │       Attributes:
-│           created_at:                 2026-08-26T17:14:36.650754+00:00
+│           created_at:                 2026-08-27T12:29:48.726862+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -939,9 +939,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 1MB 0.3385 1.062 ... 1.935
 │       Attributes:
-│           created_at:                 2026-08-26T17:14:36.797000+00:00
+│           created_at:                 2026-08-27T12:29:48.906985+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -952,9 +952,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 272B 0.0 0.0 0.0 0.0 ... 1.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-26T17:14:36.797224+00:00
+│           created_at:                 2026-08-27T12:29:48.907279+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -965,9 +965,9 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 272B 0.0 0.0 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-26T17:14:36.797383+00:00
+│           created_at:                 2026-08-27T12:29:48.907475+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -980,9 +980,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 192kB 0.1277 0.4071 ... 0.3087
 │       Attributes:
-│           created_at:                 2026-08-26T17:14:37.344417+00:00
+│           created_at:                 2026-08-27T12:29:49.540496+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -993,9 +993,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 48B 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-08-26T17:14:37.344630+00:00
+            created_at:                 2026-08-27T12:29:49.540742+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.3.0
+            creation_library_version:   1.2.0
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1245,13 +1245,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:14:36.650754+00:00
+2026-08-27T12:29:48.726862+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1381,13 +1381,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:14:36.797000+00:00
+2026-08-27T12:29:48.906985+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1475,13 +1475,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:14:36.797224+00:00
+2026-08-27T12:29:48.907279+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1569,13 +1569,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:14:36.797383+00:00
+2026-08-27T12:29:48.907475+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1705,13 +1705,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:14:37.344417+00:00
+2026-08-27T12:29:49.540496+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1799,13 +1799,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:14:37.344630+00:00
+2026-08-27T12:29:49.540742+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -2017,7 +2017,7 @@ ax.set(title="In-sample Croston rate", xlabel="time", ylabel="y");
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e2/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
 
 
@@ -2074,7 +2074,7 @@ ax.set(
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e2/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
 
 
@@ -2171,7 +2171,7 @@ fig.suptitle("Croston component forecasts", fontsize=16, fontweight="bold", y=1.
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e2/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
 
 
@@ -2271,7 +2271,7 @@ ax.set(title="One-step-ahead cross-validation forecasts", xlabel="time", ylabel=
     assembled one-step-ahead draws: (4000, 12, 1)
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e2/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/arviz_plots/plots/lm_plot.py:360: UserWarning: When multiple credible intervals are plotted, it is recommended to map 'alpha' aesthetic to 'prob' dimension to differentiate between intervals.
       warnings.warn(
 
 

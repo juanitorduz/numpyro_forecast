@@ -643,8 +643,8 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
     mean ELBO loss over the last 100 steps: 56,657
-    CPU times: user 10.3 s, sys: 3.05 s, total: 13.3 s
-    Wall time: 5.97 s
+    CPU times: user 11.7 s, sys: 3.87 s, total: 15.5 s
+    Wall time: 7.15 s
 
 
 <figure class="figure">
@@ -1248,9 +1248,9 @@ Group: /
 │           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.114 ... 1.463
 │           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.1354 .....
 │       Attributes:
-│           created_at:                 2026-08-26T17:17:30.792067+00:00
+│           created_at:                 2026-08-27T12:29:07.410056+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -1263,9 +1263,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 200MB -2.411 2.176 ... 3.494
 │       Attributes:
-│           created_at:                 2026-08-26T17:17:31.246081+00:00
+│           created_at:                 2026-08-27T12:29:08.018053+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -1276,9 +1276,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-26T17:17:31.246325+00:00
+│           created_at:                 2026-08-27T12:29:08.018417+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -1290,9 +1290,9 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-26T17:17:31.246620+00:00
+│           created_at:                 2026-08-27T12:29:08.019885+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -1305,9 +1305,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.284 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-26T17:17:31.518634+00:00
+│           created_at:                 2026-08-27T12:29:08.343136+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -1319,9 +1319,9 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-08-26T17:17:31.518993+00:00
+            created_at:                 2026-08-27T12:29:08.343507+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.3.0
+            creation_library_version:   1.2.0
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1675,13 +1675,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:17:30.792067+00:00
+2026-08-27T12:29:07.410056+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1811,13 +1811,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:17:31.246081+00:00
+2026-08-27T12:29:08.018053+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1905,13 +1905,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:17:31.246325+00:00
+2026-08-27T12:29:08.018417+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -2020,13 +2020,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:17:31.246620+00:00
+2026-08-27T12:29:08.019885+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -2156,13 +2156,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:17:31.518634+00:00
+2026-08-27T12:29:08.343136+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -2271,13 +2271,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T17:17:31.518993+00:00
+2026-08-27T12:29:08.343507+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python

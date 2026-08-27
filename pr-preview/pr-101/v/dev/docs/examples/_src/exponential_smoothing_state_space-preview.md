@@ -58,9 +58,9 @@ rng_key = random.PRNGKey(seed=42)
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e1/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
       warnings.warn("PyMC not installed. PyMC related functions will not work.")
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e1/.venv/lib/python3.14/site-packages/preliz/ppls/agnostic.py:34: UserWarning: PyMC not installed. PyMC related functions will not work.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/agnostic.py:34: UserWarning: PyMC not installed. PyMC related functions will not work.
       warnings.warn("PyMC not installed. PyMC related functions will not work.")
 
 
@@ -899,9 +899,9 @@ Group: /
 │           trend_init              (chain, draw) float32 32kB 0.09367 ... -0.05799
 │           trend_smoothing         (chain, draw) float32 32kB 0.5881 0.5905 ... 0.3572
 │       Attributes:
-│           created_at:                 2026-08-26T16:35:47.762252+00:00
+│           created_at:                 2026-08-27T12:31:44.375000+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -914,9 +914,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 6MB 0.689 1.007 ... 2.481
 │       Attributes:
-│           created_at:                 2026-08-26T16:35:47.907858+00:00
+│           created_at:                 2026-08-27T12:31:44.558858+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -927,9 +927,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 768B 1.121 1.137 0.6104 ... 2.527 2.841
 │       Attributes:
-│           created_at:                 2026-08-26T16:35:47.908092+00:00
+│           created_at:                 2026-08-27T12:31:44.559207+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -940,9 +940,9 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 768B 1.121 1.137 ... 2.841
 │       Attributes:
-│           created_at:                 2026-08-26T16:35:47.908261+00:00
+│           created_at:                 2026-08-27T12:31:44.559518+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -955,9 +955,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB 3.364 3.11 ... 3.689 4.017
 │       Attributes:
-│           created_at:                 2026-08-26T16:35:48.088411+00:00
+│           created_at:                 2026-08-27T12:31:44.758220+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -968,9 +968,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 192B 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-08-26T16:35:48.088629+00:00
+            created_at:                 2026-08-27T12:31:44.758641+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.3.0
+            creation_library_version:   1.2.0
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1281,13 +1281,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T16:35:47.762252+00:00
+2026-08-27T12:31:44.375000+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1417,13 +1417,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T16:35:47.907858+00:00
+2026-08-27T12:31:44.558858+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1511,13 +1511,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T16:35:47.908092+00:00
+2026-08-27T12:31:44.559207+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1605,13 +1605,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T16:35:47.908261+00:00
+2026-08-27T12:31:44.559518+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1741,13 +1741,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T16:35:48.088411+00:00
+2026-08-27T12:31:44.758220+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1835,13 +1835,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T16:35:48.088629+00:00
+2026-08-27T12:31:44.758641+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python

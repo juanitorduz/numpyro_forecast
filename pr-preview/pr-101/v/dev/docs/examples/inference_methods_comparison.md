@@ -193,7 +193,7 @@ print(f"NUTS: 4 chains x 1_000 draws in {nuts_seconds:.1f}s")
 ```
 
 
-    NUTS: 4 chains x 1_000 draws in 36.8s
+    NUTS: 4 chains x 1_000 draws in 35.2s
 
 
 ## SVI
@@ -257,7 +257,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI: 20_000 steps in 4.5s
+    SVI: 20_000 steps in 4.6s
 
 
 <figure class="figure">
@@ -309,7 +309,7 @@ print(f"Pathfinder: {len(pathfinder_fit.elbos)} paths in {pathfinder_seconds:.1f
 
     per-path ELBO: [-1347.7, -518.4, -842.8, -719.9, -572.6, -854.3, -899.2, -389.5]
     pareto_k: 10.26
-    Pathfinder: 8 paths in 71.7s
+    Pathfinder: 8 paths in 99.8s
 
 
 [multipathfinder_samples](../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples) draws fresh samples from every path's fitted approximation on each call, `2_000` per path here, and then combines the `8` paths into the `2_000` returned draws. How it combines them is the `resample` argument. With `resample="psis"` all `8 * 2_000` fresh draws are pooled, scored both under the model and under the approximation that produced them, and importance-resampled with Pareto smoothing, which is the textbook multi-path Pathfinder estimator. With `resample="elbo"` each returned draw instead picks a whole path with probability proportional to `softmax` of the per-path ELBOs and takes one fresh draw from it, so a path that fits several hundred nats better than the rest simply takes over.
@@ -350,7 +350,7 @@ print(f"MCLMC: 1 chain x 10_000 draws in {mclmc_seconds:.1f}s")
 ```
 
 
-    MCLMC: 1 chain x 10_000 draws in 4.8s
+    MCLMC: 1 chain x 10_000 draws in 5.0s
 
 
 # Exporting fits to ArviZ
@@ -953,9 +953,9 @@ Group: /
 │           sigma                   (chain, draw) float32 16kB 0.01851 ... 0.01748
 │           weight                  (chain, draw, weight_dim_0) float32 832kB -0.0008...
 │       Attributes:
-│           created_at:                 2026-08-26T05:04:24.385894+00:00
+│           created_at:                 2026-08-27T12:46:09.236979+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -968,9 +968,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time) float32 7MB 14.39 14.49 14.42 ... 14.69 14.26
 │       Attributes:
-│           created_at:                 2026-08-26T05:04:24.995441+00:00
+│           created_at:                 2026-08-27T12:46:09.964417+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -981,9 +981,9 @@ Group: /
 │       Data variables:
 │           obs      (time) float32 2kB 14.41 14.45 14.42 14.53 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-08-26T05:04:24.995969+00:00
+│           created_at:                 2026-08-27T12:46:09.964702+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -995,9 +995,9 @@ Group: /
 │           covariates     (time, covariate_dim) float32 87kB 0.0 0.0 ... -0.2376
 │           week           (time) float64 3kB 0.0 1.0 2.0 3.0 ... 414.0 415.0 416.0
 │       Attributes:
-│           created_at:                 2026-08-26T05:04:24.996163+00:00
+│           created_at:                 2026-08-27T12:46:09.964882+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -1010,9 +1010,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time) float32 832kB 14.4 14.61 14.55 ... 14.63 14.3
 │       Attributes:
-│           created_at:                 2026-08-26T05:04:25.587384+00:00
+│           created_at:                 2026-08-27T12:46:10.510138+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.0
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -1024,9 +1024,9 @@ Group: /
             covariates     (time, covariate_dim) float32 11kB -0.05158 -0.103 ... 0.3138
             week           (time) float64 416B 417.0 418.0 419.0 ... 466.0 467.0 468.0
         Attributes:
-            created_at:                 2026-08-26T05:04:25.587620+00:00
+            created_at:                 2026-08-27T12:46:10.510382+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.3.0
+            creation_library_version:   1.2.0
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1359,13 +1359,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T05:04:24.385894+00:00
+2026-08-27T12:46:09.236979+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1494,13 +1494,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T05:04:24.995441+00:00
+2026-08-27T12:46:09.964417+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1587,13 +1587,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T05:04:24.995969+00:00
+2026-08-27T12:46:09.964702+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1701,13 +1701,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T05:04:24.996163+00:00
+2026-08-27T12:46:09.964882+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1836,13 +1836,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T05:04:25.587384+00:00
+2026-08-27T12:46:10.510138+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -1950,13 +1950,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-26T05:04:25.587620+00:00
+2026-08-27T12:46:10.510382+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.0
+1.2.0
 
 creation_library_language :  
 Python
@@ -2032,10 +2032,10 @@ comparison.round(4)
 
 |            | train CRPS | test CRPS | walltime (s) |
 |------------|------------|-----------|--------------|
-| NUTS       | 0.0242     | 0.0302    | 36.8004      |
-| SVI        | 0.0270     | 0.0339    | 4.4581       |
-| Pathfinder | 0.0261     | 0.0298    | 71.6819      |
-| MCLMC      | 0.0268     | 0.0336    | 4.8493       |
+| NUTS       | 0.0242     | 0.0302    | 35.2431      |
+| SVI        | 0.0270     | 0.0339    | 4.6095       |
+| Pathfinder | 0.0261     | 0.0298    | 99.7599      |
+| MCLMC      | 0.0268     | 0.0336    | 4.9840       |
 
 
 # Forecast visualization
@@ -2160,11 +2160,11 @@ ax.set(title="CRPS by inference method", xlabel="inference method", ylabel="CRPS
 </figure>
 
 
-NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `33.8`s across its `4` chains. MCLMC (`4.7`s) and SVI (`3.9`s) both track that reference closely at a small fraction of the cost: MCLMC's `0.0268`/`0.0336` train/test CRPS comes from spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0270`/`0.0339` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.
+NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `35.2`s across its `4` chains. MCLMC (`5.0`s) and SVI (`4.6`s) both track that reference closely at a small fraction of the cost: MCLMC's `0.0268`/`0.0336` train/test CRPS comes from spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0270`/`0.0339` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.
 
 Multi-path Pathfinder is the interesting case, because its forecasts and its own diagnostic point in opposite directions. Its scores are as good as anything in the table, `0.0261` train and `0.0298` test CRPS, narrowly the best test score of the four, while its `pareto_k` came out at `10.26`, more than an order of magnitude above the `0.7` reliability threshold. Both readings are correct, because they describe different objects. The `pareto_k` printed by the fit cell measures whether importance weights over the pooled per-path draws can be trusted, and on a `474`-parameter posterior they cannot: the log ratio between the target and the approximation is dominated by a handful of draws. The samples that produced the CRPS above never passed through those weights. Because `pareto_k` exceeded `0.7`, the default `resample="auto"` fell back to weighting whole paths by their ELBO, and the per-path ELBOs range from `-389.5` down to `-1347.7`, gaps of hundreds of nats, so that weighting concentrates on the best-fitting path and draws freshly from its normal approximation. A single well-converged L-BFGS path describes this posterior well; what fails is only the attempt to importance-reweight across paths, and the diagnostic caught that rather than letting it through silently.
 
-The cost side is less flattering. At `88.4`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `33.8`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.
+The cost side is less flattering. At `99.8`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `35.2`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.
 
 
 # Next steps

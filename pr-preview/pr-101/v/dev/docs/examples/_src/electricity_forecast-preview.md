@@ -59,9 +59,9 @@ rng_key = random.PRNGKey(seed=42)
 ```
 
 
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e3/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
       warnings.warn("PyMC not installed. PyMC related functions will not work.")
-    /Users/juanitorduz/Documents/numpyro_forecast/.claude/worktrees/refactor3-pr-e3/.venv/lib/python3.14/site-packages/preliz/ppls/agnostic.py:34: UserWarning: PyMC not installed. PyMC related functions will not work.
+    /Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/agnostic.py:34: UserWarning: PyMC not installed. PyMC related functions will not work.
       warnings.warn("PyMC not installed. PyMC related functions will not work.")
 
 
