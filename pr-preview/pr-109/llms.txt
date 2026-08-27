@@ -1,0 +1,125 @@
+# numpyro_forecast
+
+> A JAX/NumPyro port of the ideas in Pyro's forecasting module.
+
+## Docs
+
+### API Reference
+
+#### Model building blocks
+> Plain model functions that register the train/forecast sites for you.
+
+- [models.Horizon](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html)
+- [models.Transition](https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html)
+- [models.innovations](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html)
+- [models.markov_series](https://juanitorduz.github.io/numpyro_forecast/reference/models.markov_series.html)
+- [models.ssoe](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html)
+- [models.SSOEStep](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEStep.html)
+- [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
+- [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
+
+#### Distribution surgery
+> Time-axis operations on observation distributions, extensible via singledispatch.
+
+- [surgery.shift_loc](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html)
+- [surgery.slice_time](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.slice_time.html)
+- [surgery.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html)
+- [surgery.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html)
+
+#### Producing draws
+> Drawing posterior samples and generating forecasts and in-sample predictions.
+
+- [predictive.draw_posterior](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.draw_posterior.html)
+- [predictive.forecast](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html)
+- [predictive.predict_in_sample](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html)
+
+#### Backtesting & evaluation
+> Rolling-window backtesting and forecast metrics.
+
+- [evaluate.backtest](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html)
+- [evaluate.backtest_vectorized](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html)
+- [evaluate.BacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html)
+- [evaluate.VectorizedBacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html)
+- [evaluate.evaluate_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html)
+- [evaluate.results_to_dataframe](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html)
+- [evaluate.eval_crps](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html)
+- [evaluate.eval_mae](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_mae.html)
+- [evaluate.eval_rmse](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_rmse.html)
+- [evaluate.eval_coverage](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_coverage.html)
+- [metrics.crps_empirical](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.crps_empirical.html)
+- [metrics.eval_pinball](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_pinball.html)
+- [metrics.eval_interval_score](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.eval_interval_score.html)
+- [metrics.make_mase](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.make_mase.html)
+
+#### ArviZ export
+> Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+- [convert.to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html)
+- [convert.add_forecast_groups](https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html)
+- [convert.predictions_to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html)
+
+#### Extensions (contrib)
+> Optional backends behind pyproject extras (never imported by default).
+
+- [contrib.blackjax.BlackjaxNUTSKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxNUTSKernel.html)
+- [contrib.blackjax.BlackjaxMCLMCKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxMCLMCKernel.html)
+- [contrib.blackjax.BlackjaxCustomKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxCustomKernel.html)
+- [contrib.blackjax.PathfinderFit](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.PathfinderFit.html)
+- [contrib.blackjax.fit_pathfinder](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.fit_pathfinder.html)
+- [contrib.blackjax.pathfinder_samples](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.pathfinder_samples.html)
+- [contrib.blackjax.MultiPathfinderFit](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.MultiPathfinderFit.html)
+- [contrib.blackjax.fit_multipathfinder](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.fit_multipathfinder.html)
+- [contrib.blackjax.multipathfinder_samples](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.multipathfinder_samples.html)
+
+#### Typing
+> Public type contracts.
+
+- [typing.ForecastModel](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ForecastModel.html)
+- [typing.ForecastFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ForecastFn.html)
+- [typing.InSampleFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.InSampleFn.html)
+- [typing.Metric](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Metric.html)
+- [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
+
+#### Autocorrelation
+> Batched autocorrelation and partial autocorrelation diagnostics.
+
+- [acf.acf](https://juanitorduz.github.io/numpyro_forecast/reference/acf.acf.html)
+- [acf.pacf](https://juanitorduz.github.io/numpyro_forecast/reference/acf.pacf.html)
+
+#### Seasonal features
+> Fourier design matrices and seasonal tiling.
+
+- [features.fourier_features](https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html)
+- [features.periodic_repeat](https://juanitorduz.github.io/numpyro_forecast/reference/features.periodic_repeat.html)
+
+#### Array helpers
+> Time-axis array shaping for the train/forecast split.
+
+- [arrays.zero_data_like](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.zero_data_like.html)
+- [arrays.concat_future](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.concat_future.html)
+- [arrays.pad_future](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html)
+
+#### Datasets
+> Example datasets used in the tutorials.
+
+- [datasets.load_bart_weekly](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_weekly.html)
+- [datasets.load_bart_hierarchical](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_hierarchical.html)
+- [datasets.load_victoria_electricity](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_victoria_electricity.html)
+- [datasets.bart_available](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.bart_available.html)
+
+#### Optional dependencies
+> Lazy imports behind pyproject extras.
+
+- [optional.require](https://juanitorduz.github.io/numpyro_forecast/reference/optional.require.html)
+
+#### Exceptions
+> Package exception hierarchy raised at validation boundaries.
+
+- [exceptions.NumpyroForecastError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.NumpyroForecastError.html)
+- [exceptions.BacktestWindowError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.BacktestWindowError.html)
+- [exceptions.VectorizedGuideError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedGuideError.html)
+- [exceptions.VectorizedMetricError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.VectorizedMetricError.html)
+- [exceptions.KernelConfigError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.KernelConfigError.html)
+- [exceptions.CovariateDimsError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.CovariateDimsError.html)
+- [exceptions.MVNLayoutError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.MVNLayoutError.html)
+- [exceptions.DeviceMemoryError](https://juanitorduz.github.io/numpyro_forecast/reference/exceptions.DeviceMemoryError.html)
