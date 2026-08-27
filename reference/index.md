@@ -1,6 +1,37 @@
 # API Reference
 
 
+## Model building blocks
+
+
+Plain model functions that register the train/forecast sites for you.
+
+
+[models.Horizon](models.Horizon.md#numpyro_forecast.models.Horizon)  
+The train/forecast split for a single model call.
+
+[models.Transition](models.Transition.md#numpyro_forecast.models.Transition)  
+`(carry, x_t) -> (dist_t, carry_fn)` where `carry_fn(z_t)` builds the next
+
+[models.innovations()](models.innovations.md#numpyro_forecast.models.innovations)  
+Sample conditionally iid per-step innovations over the full horizon.
+
+[models.markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series)  
+Sample a Markov (state-space) latent over the full horizon.
+
+[models.ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe)  
+Run a single-source-of-error recursion over the full horizon.
+
+[models.SSOEStep](models.SSOEStep.md#numpyro_forecast.models.SSOEStep)  
+`(carry, x_t) -> (mu_t, carry_fn)` where `mu_t` is the one-step-ahead mean
+
+[models.SSOEResult](models.SSOEResult.md#numpyro_forecast.models.SSOEResult)  
+The means and sampled future values produced by `ssoe()`.
+
+[models.predict()](models.predict.md#numpyro_forecast.models.predict)  
+Register the observation and forecast sites for the model.
+
+
 ## Distribution surgery
 
 
@@ -18,6 +49,22 @@ Condition a `(t+f)`-length distribution on a `t`-length data prefix.
 
 [surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
 Declare a distribution family elementwise (usable as a decorator).
+
+
+## Producing draws
+
+
+Drawing posterior samples and generating forecasts and in-sample predictions.
+
+
+[predictive.draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)  
+Draw `num_samples` posterior samples of the latent sites from a fitted guide.
+
+[predictive.forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast)  
+Sample forecasts for the steps in `[t, duration)` from a posterior.
+
+[predictive.predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample)  
+Sample the in-sample posterior predictive of the `obs` site.
 
 
 ## Backtesting & evaluation
@@ -106,6 +153,18 @@ The result of fitting a forecasting model with BlackJAX Pathfinder.
 [contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder)  
 Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
+[contrib.blackjax.pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples)  
+Draw `num_samples` posterior samples from a fitted Pathfinder approximation.
+
+[contrib.blackjax.MultiPathfinderFit](contrib.blackjax.MultiPathfinderFit.md#numpyro_forecast.contrib.blackjax.MultiPathfinderFit)  
+The result of fitting a forecasting model with multi-path BlackJAX Pathfinder.
+
+[contrib.blackjax.fit_multipathfinder()](contrib.blackjax.fit_multipathfinder.md#numpyro_forecast.contrib.blackjax.fit_multipathfinder)  
+Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
+
+[contrib.blackjax.multipathfinder_samples()](contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples)  
+Draw `num_samples` posterior samples from a fitted multipath Pathfinder fit.
+
 
 ## Typing
 
@@ -115,6 +174,15 @@ Public type contracts.
 
 [typing.ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel)  
 A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
+
+[typing.ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn)  
+A closure that fits a model on a training window and forecasts its test horizon.
+
+[typing.Guide](typing.Guide.md#numpyro_forecast.typing.Guide)  
+A NumPyro guide for a `ForecastModel`: a callable with the model's signature.
+
+[typing.InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn)  
+A closure that fits a model on a training window and scores its in-sample fit.
 
 [typing.Metric](typing.Metric.md#numpyro_forecast.typing.Metric)  
 A metric maps `(pred, truth)` forecast samples and ground truth to a scalar array.
@@ -160,6 +228,9 @@ Return zeros shaped like `data` but extended to the covariate duration.
 
 [arrays.concat_future()](arrays.concat_future.md#numpyro_forecast.arrays.concat_future)  
 Concatenate in-sample and forecast-horizon arrays along the time axis.
+
+[arrays.pad_future()](arrays.pad_future.md#numpyro_forecast.arrays.pad_future)  
+Append `future` rows filled with `value` along the time axis.
 
 
 ## Datasets
@@ -217,3 +288,9 @@ A `MultivariateNormal` layout is unsupported for time-axis surgery.
 
 [exceptions.DeviceMemoryError](exceptions.DeviceMemoryError.md#numpyro_forecast.exceptions.DeviceMemoryError)  
 A memory pool ran out during posterior or predictive sampling.
+
+[exceptions.HostMemoryKindError](exceptions.HostMemoryKindError.md#numpyro_forecast.exceptions.HostMemoryKindError)  
+A device exposes no host memory kind for `device="pinned_host"`.
+
+[exceptions.DevicePlatformError](exceptions.DevicePlatformError.md#numpyro_forecast.exceptions.DevicePlatformError)  
+A `device` platform name has no initialized JAX backend.

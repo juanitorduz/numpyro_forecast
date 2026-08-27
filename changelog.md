@@ -3,6 +3,41 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.3.0
+
+*2026-08-27* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.3.0)
+
+Major Change: Only Functional API ⚠️
+
+We will now support only the functional API to improve compatibility with NumPyro and the broader JAX ecosystem.
+
+- Functional API Refactor by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/101
+
+
+## What's Changed
+
+- Bump ruff from 0.15.22 to 0.16.0 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/80
+- Bump actions/setup-python from 6 to 7 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/76
+- Bump anthropics/claude-code-action from 1.0.176 to 1.0.181 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/77
+- Bump ty from 0.0.60 to 0.0.63 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/78
+- Add censored demand forecasting example by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/82
+- Bump j178/prek-action from 2 to 2.0.6 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/83
+- Bump anthropics/claude-code-action from 1.0.181 to 1.0.183 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/84
+- Bump ty from 0.0.63 to 0.0.64 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/85
+- Bump anthropics/claude-code-action from 1.0.183 to 1.0.185 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/86
+- Bump ruff from 0.16.0 to 0.16.1 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/87
+- Bump ty from 0.0.64 to 0.0.66 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/89
+- Bump j178/prek-action from 2.0.6 to 3.0.0 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/88
+- Bump anthropics/claude-code-action from 1.0.185 to 1.0.191 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/91
+- Bump ty from 0.0.66 to 0.0.70 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/90
+- Bump ruff from 0.16.1 to 0.16.2 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/92
+- Bump anthropics/claude-code-action from 1.0.191 to 1.0.195 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/93
+- Bump ty from 0.0.70 to 0.0.72 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/94
+- Bump ruff from 0.16.2 to 0.16.3 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/95
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.2.3…0.3.0](https://github.com/juanitorduz/numpyro_forecast/compare/0.2.3...0.3.0)
+
+
 # 0.2.3
 
 *2026-07-21* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.3)

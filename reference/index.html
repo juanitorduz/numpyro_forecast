@@ -85,12 +85,12 @@ ul.task-list li input[type="checkbox"] {
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.3.0&quot;,&quot;label&quot;:&quot;0.3.0&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 
 
   <link rel="alternate" type="text/markdown" href="index.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/">
-  <meta name="description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
+  <meta name="description" content="Plain model functions that register the train/forecast sites for you.">
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -109,12 +109,12 @@ ul.task-list li input[type="checkbox"] {
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="API Reference – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
+  <meta property="og:description" content="Plain model functions that register the train/forecast sites for you.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="API Reference – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
+  <meta name="twitter:description" content="Plain model functions that register the train/forecast sites for you.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-reference doc-reference-index quarto-light">
@@ -125,7 +125,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-07-21">v0.2.3</span></span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-08-27">v0.3.0</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -185,9 +185,65 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Distribution surgery</span></a>
+ <span class="menu-text">Model building blocks</span></a>
 </div>
       <ul id="quarto-sidebar-section-1" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.Horizon.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.Horizon</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.Transition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.Transition</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.innovations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.innovations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.markov_series.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.markov_series</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.ssoe</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEStep</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.predict.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.predict</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Distribution surgery</span></a>
+</div>
+      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
@@ -217,9 +273,35 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Producing draws</span></a>
+</div>
+      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/predictive.draw_posterior.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">predictive.draw_posterior</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/predictive.forecast.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">predictive.forecast</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/predictive.predict_in_sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">predictive.predict_in_sample</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Backtesting &amp; evaluation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
@@ -311,7 +393,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -337,7 +419,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -368,6 +450,30 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">contrib.blackjax.fit_pathfinder</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.pathfinder_samples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.pathfinder_samples</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.MultiPathfinderFit.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.MultiPathfinderFit</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.fit_multipathfinder.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.fit_multipathfinder</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.multipathfinder_samples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.multipathfinder_samples</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -375,11 +481,29 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Typing</span></a>
 </div>
-      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ForecastModel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ForecastFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ForecastFn</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Guide</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.InSampleFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.InSampleFn</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -401,7 +525,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Autocorrelation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
@@ -421,7 +545,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Seasonal features</span></a>
 </div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
@@ -441,7 +565,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Array helpers</span></a>
 </div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
@@ -454,6 +578,12 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">arrays.concat_future</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.pad_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.pad_future</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -461,7 +591,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -493,7 +623,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Optional dependencies</span></a>
 </div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
@@ -507,7 +637,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Exceptions</span></a>
 </div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -550,6 +680,18 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">exceptions.DeviceMemoryError</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.HostMemoryKindError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.HostMemoryKindError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DevicePlatformError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DevicePlatformError</span></a>
+  </div>
+</li>
       </ul>
   </li>
     </ul>
@@ -562,7 +704,9 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul class="collapse">
-  <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link active" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
+  <li><a href="#model-building-blocks" id="toc-model-building-blocks" class="nav-link active" data-scroll-target="#model-building-blocks">Model building blocks</a></li>
+  <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
+  <li><a href="#producing-draws" id="toc-producing-draws" class="nav-link" data-scroll-target="#producing-draws">Producing draws</a></li>
   <li><a href="#backtesting-evaluation" id="toc-backtesting-evaluation" class="nav-link" data-scroll-target="#backtesting-evaluation">Backtesting &amp; evaluation</a></li>
   <li><a href="#arviz-export" id="toc-arviz-export" class="nav-link" data-scroll-target="#arviz-export">ArviZ export</a></li>
   <li><a href="#extensions-contrib" id="toc-extensions-contrib" class="nav-link" data-scroll-target="#extensions-contrib">Extensions (contrib)</a></li>
@@ -598,6 +742,46 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
+<section id="model-building-blocks" class="level2 doc-group">
+<h2 class="doc-group">Model building blocks</h2>
+<div class="doc-description">
+<p>Plain model functions that register the train/forecast sites for you.</p>
+</div>
+<dl>
+<dt><a href="../reference/models.Horizon.html#numpyro_forecast.models.Horizon" class="doc-class doc-label doc-label-dataclass">models.Horizon</a></dt>
+<dd>
+<p>The train/forecast split for a single model call.</p>
+</dd>
+<dt><a href="../reference/models.Transition.html#numpyro_forecast.models.Transition" class="doc-type-alias doc-label doc-label-typealias">models.Transition</a></dt>
+<dd>
+<p><code>(carry, x_t) -&gt; (dist_t, carry_fn)</code> where <code>carry_fn(z_t)</code> builds the next</p>
+</dd>
+<dt><a href="../reference/models.innovations.html#numpyro_forecast.models.innovations" class="doc-function doc-label doc-label-function">models.innovations()</a></dt>
+<dd>
+<p>Sample conditionally iid per-step innovations over the full horizon.</p>
+</dd>
+<dt><a href="../reference/models.markov_series.html#numpyro_forecast.models.markov_series" class="doc-function doc-label doc-label-function">models.markov_series()</a></dt>
+<dd>
+<p>Sample a Markov (state-space) latent over the full horizon.</p>
+</dd>
+<dt><a href="../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="doc-function doc-label doc-label-function">models.ssoe()</a></dt>
+<dd>
+<p>Run a single-source-of-error recursion over the full horizon.</p>
+</dd>
+<dt><a href="../reference/models.SSOEStep.html#numpyro_forecast.models.SSOEStep" class="doc-type-alias doc-label doc-label-typealias">models.SSOEStep</a></dt>
+<dd>
+<p><code>(carry, x_t) -&gt; (mu_t, carry_fn)</code> where <code>mu_t</code> is the one-step-ahead mean</p>
+</dd>
+<dt><a href="../reference/models.SSOEResult.html#numpyro_forecast.models.SSOEResult" class="doc-class doc-label doc-label-dataclass">models.SSOEResult</a></dt>
+<dd>
+<p>The means and sampled future values produced by <code>ssoe()</code>.</p>
+</dd>
+<dt><a href="../reference/models.predict.html#numpyro_forecast.models.predict" class="doc-function doc-label doc-label-function">models.predict()</a></dt>
+<dd>
+<p>Register the observation and forecast sites for the model.</p>
+</dd>
+</dl>
+</section>
 <section id="distribution-surgery" class="level2 doc-group">
 <h2 class="doc-group">Distribution surgery</h2>
 <div class="doc-description">
@@ -619,6 +803,26 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/surgery.register_elementwise.html#numpyro_forecast.surgery.register_elementwise" class="doc-function doc-label doc-label-function">surgery.register_elementwise()</a></dt>
 <dd>
 <p>Declare a distribution family elementwise (usable as a decorator).</p>
+</dd>
+</dl>
+</section>
+<section id="producing-draws" class="level2 doc-group">
+<h2 class="doc-group">Producing draws</h2>
+<div class="doc-description">
+<p>Drawing posterior samples and generating forecasts and in-sample predictions.</p>
+</div>
+<dl>
+<dt><a href="../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="doc-function doc-label doc-label-function">predictive.draw_posterior()</a></dt>
+<dd>
+<p>Draw <code>num_samples</code> posterior samples of the latent sites from a fitted guide.</p>
+</dd>
+<dt><a href="../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="doc-function doc-label doc-label-function">predictive.forecast()</a></dt>
+<dd>
+<p>Sample forecasts for the steps in <code>[t, duration)</code> from a posterior.</p>
+</dd>
+<dt><a href="../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="doc-function doc-label doc-label-function">predictive.predict_in_sample()</a></dt>
+<dd>
+<p>Sample the in-sample posterior predictive of the <code>obs</code> site.</p>
 </dd>
 </dl>
 </section>
@@ -732,6 +936,22 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
 </dd>
+<dt><a href="../reference/contrib.blackjax.pathfinder_samples.html#numpyro_forecast.contrib.blackjax.pathfinder_samples" class="doc-function doc-label doc-label-function">contrib.blackjax.pathfinder_samples()</a></dt>
+<dd>
+<p>Draw <code>num_samples</code> posterior samples from a fitted Pathfinder approximation.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.MultiPathfinderFit.html#numpyro_forecast.contrib.blackjax.MultiPathfinderFit" class="doc-class doc-label doc-label-dataclass">contrib.blackjax.MultiPathfinderFit</a></dt>
+<dd>
+<p>The result of fitting a forecasting model with multi-path BlackJAX Pathfinder.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.fit_multipathfinder.html#numpyro_forecast.contrib.blackjax.fit_multipathfinder" class="doc-function doc-label doc-label-function">contrib.blackjax.fit_multipathfinder()</a></dt>
+<dd>
+<p>Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.multipathfinder_samples.html#numpyro_forecast.contrib.blackjax.multipathfinder_samples" class="doc-function doc-label doc-label-function">contrib.blackjax.multipathfinder_samples()</a></dt>
+<dd>
+<p>Draw <code>num_samples</code> posterior samples from a fitted multipath Pathfinder fit.</p>
+</dd>
 </dl>
 </section>
 <section id="typing" class="level2 doc-group">
@@ -743,6 +963,18 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/typing.ForecastModel.html#numpyro_forecast.typing.ForecastModel" class="doc-class doc-label doc-label-protocol">typing.ForecastModel</a></dt>
 <dd>
 <p>A NumPyro forecasting model: a callable <code>(covariates, data=None) -&gt; None</code>.</p>
+</dd>
+<dt><a href="../reference/typing.ForecastFn.html#numpyro_forecast.typing.ForecastFn" class="doc-class doc-label doc-label-protocol">typing.ForecastFn</a></dt>
+<dd>
+<p>A closure that fits a model on a training window and forecasts its test horizon.</p>
+</dd>
+<dt><a href="../reference/typing.Guide.html#numpyro_forecast.typing.Guide" class="doc-class doc-label doc-label-protocol">typing.Guide</a></dt>
+<dd>
+<p>A NumPyro guide for a <code>ForecastModel</code>: a callable with the model’s signature.</p>
+</dd>
+<dt><a href="../reference/typing.InSampleFn.html#numpyro_forecast.typing.InSampleFn" class="doc-class doc-label doc-label-protocol">typing.InSampleFn</a></dt>
+<dd>
+<p>A closure that fits a model on a training window and scores its in-sample fit.</p>
 </dd>
 <dt><a href="../reference/typing.Metric.html#numpyro_forecast.typing.Metric" class="doc-attribute doc-label doc-label-constant">typing.Metric</a></dt>
 <dd>
@@ -799,6 +1031,10 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/arrays.concat_future.html#numpyro_forecast.arrays.concat_future" class="doc-function doc-label doc-label-function">arrays.concat_future()</a></dt>
 <dd>
 <p>Concatenate in-sample and forecast-horizon arrays along the time axis.</p>
+</dd>
+<dt><a href="../reference/arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="doc-function doc-label doc-label-function">arrays.pad_future()</a></dt>
+<dd>
+<p>Append <code>future</code> rows filled with <code>value</code> along the time axis.</p>
 </dd>
 </dl>
 </section>
@@ -871,6 +1107,14 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/exceptions.DeviceMemoryError.html#numpyro_forecast.exceptions.DeviceMemoryError" class="doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</a></dt>
 <dd>
 <p>A memory pool ran out during posterior or predictive sampling.</p>
+</dd>
+<dt><a href="../reference/exceptions.HostMemoryKindError.html#numpyro_forecast.exceptions.HostMemoryKindError" class="doc-class doc-label doc-label-exception">exceptions.HostMemoryKindError</a></dt>
+<dd>
+<p>A device exposes no host memory kind for <code>device="pinned_host"</code>.</p>
+</dd>
+<dt><a href="../reference/exceptions.DevicePlatformError.html#numpyro_forecast.exceptions.DevicePlatformError" class="doc-class doc-label doc-label-exception">exceptions.DevicePlatformError</a></dt>
+<dd>
+<p>A <code>device</code> platform name has no initialized JAX backend.</p>
 </dd>
 </dl>
 

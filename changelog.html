@@ -85,7 +85,7 @@ ul.task-list li input[type="checkbox"] {
 <script>document.head.appendChild(Object.assign(document.createElement('link'),{rel:'stylesheet',href:(document.querySelector('meta[name="quarto:offset"]')||{content:''}).content+'gd-lightbox-annotate.css'}));</script>
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="theme-init.js"></script>
-<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.2.3&quot;,&quot;label&quot;:&quot;0.2.3&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
+<meta name="gd-version-map" content="{&quot;versions&quot;:[{&quot;tag&quot;:&quot;dev&quot;,&quot;label&quot;:&quot;dev&quot;,&quot;path_prefix&quot;:&quot;v/dev&quot;,&quot;prerelease&quot;:true},{&quot;tag&quot;:&quot;0.3.0&quot;,&quot;label&quot;:&quot;0.3.0&quot;,&quot;latest&quot;:true,&quot;path_prefix&quot;:&quot;&quot;}],&quot;pages&quot;:{}}">
 
 
   <link rel="alternate" type="text/markdown" href="changelog.md">
@@ -109,7 +109,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="./index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-07-21">v0.2.3</span></span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-08-27">v0.3.0</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -153,38 +153,42 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul class="collapse">
-  <li><a href="#section" id="toc-section" class="nav-link active" data-scroll-target="#section">0.2.3</a>
+  <li><a href="#section" id="toc-section" class="nav-link active" data-scroll-target="#section">0.3.0</a>
   <ul class="collapse">
   <li><a href="#whats-changed" id="toc-whats-changed" class="nav-link" data-scroll-target="#whats-changed">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-1" id="toc-section-1" class="nav-link" data-scroll-target="#section-1">0.2.2</a>
+  <li><a href="#section-1" id="toc-section-1" class="nav-link" data-scroll-target="#section-1">0.2.3</a>
   <ul class="collapse">
   <li><a href="#whats-changed-1" id="toc-whats-changed-1" class="nav-link" data-scroll-target="#whats-changed-1">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-2" id="toc-section-2" class="nav-link" data-scroll-target="#section-2">0.2.1</a>
+  <li><a href="#section-2" id="toc-section-2" class="nav-link" data-scroll-target="#section-2">0.2.2</a>
   <ul class="collapse">
   <li><a href="#whats-changed-2" id="toc-whats-changed-2" class="nav-link" data-scroll-target="#whats-changed-2">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-3" id="toc-section-3" class="nav-link" data-scroll-target="#section-3">0.2.0</a>
+  <li><a href="#section-3" id="toc-section-3" class="nav-link" data-scroll-target="#section-3">0.2.1</a>
   <ul class="collapse">
   <li><a href="#whats-changed-3" id="toc-whats-changed-3" class="nav-link" data-scroll-target="#whats-changed-3">What’s Changed</a></li>
-  <li><a href="#new-contributors" id="toc-new-contributors" class="nav-link" data-scroll-target="#new-contributors">New Contributors</a></li>
   </ul></li>
-  <li><a href="#section-4" id="toc-section-4" class="nav-link" data-scroll-target="#section-4">0.1.3</a>
+  <li><a href="#section-4" id="toc-section-4" class="nav-link" data-scroll-target="#section-4">0.2.0</a>
   <ul class="collapse">
   <li><a href="#whats-changed-4" id="toc-whats-changed-4" class="nav-link" data-scroll-target="#whats-changed-4">What’s Changed</a></li>
+  <li><a href="#new-contributors" id="toc-new-contributors" class="nav-link" data-scroll-target="#new-contributors">New Contributors</a></li>
   </ul></li>
-  <li><a href="#section-5" id="toc-section-5" class="nav-link" data-scroll-target="#section-5">0.1.2</a>
+  <li><a href="#section-5" id="toc-section-5" class="nav-link" data-scroll-target="#section-5">0.1.3</a>
   <ul class="collapse">
   <li><a href="#whats-changed-5" id="toc-whats-changed-5" class="nav-link" data-scroll-target="#whats-changed-5">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-6" id="toc-section-6" class="nav-link" data-scroll-target="#section-6">0.1.1</a>
+  <li><a href="#section-6" id="toc-section-6" class="nav-link" data-scroll-target="#section-6">0.1.2</a>
   <ul class="collapse">
   <li><a href="#whats-changed-6" id="toc-whats-changed-6" class="nav-link" data-scroll-target="#whats-changed-6">What’s Changed</a></li>
   </ul></li>
-  <li><a href="#section-7" id="toc-section-7" class="nav-link" data-scroll-target="#section-7">0.1.0</a>
+  <li><a href="#section-7" id="toc-section-7" class="nav-link" data-scroll-target="#section-7">0.1.1</a>
   <ul class="collapse">
   <li><a href="#whats-changed-7" id="toc-whats-changed-7" class="nav-link" data-scroll-target="#whats-changed-7">What’s Changed</a></li>
+  </ul></li>
+  <li><a href="#section-8" id="toc-section-8" class="nav-link" data-scroll-target="#section-8">0.1.0</a>
+  <ul class="collapse">
+  <li><a href="#whats-changed-8" id="toc-whats-changed-8" class="nav-link" data-scroll-target="#whats-changed-8">What’s Changed</a></li>
   <li><a href="#new-contributors-1" id="toc-new-contributors-1" class="nav-link" data-scroll-target="#new-contributors-1">New Contributors</a></li>
   </ul></li>
   </ul>
@@ -214,10 +218,43 @@ ul.task-list li input[type="checkbox"] {
 
 <p>This changelog is generated automatically from <a href="https://github.com/juanitorduz/numpyro_forecast/releases">GitHub Releases</a>.</p>
 <section id="section" class="level1 changelog-version">
-<h1 class="changelog-version">0.2.3</h1>
-<p><em>2026-07-21</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.3">GitHub</a></p>
+<h1 class="changelog-version">0.3.0</h1>
+<p><em>2026-08-27</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.3.0">GitHub</a></p>
+<p>Major Change: Only Functional API ⚠️</p>
+<p>We will now support only the functional API to improve compatibility with NumPyro and the broader JAX ecosystem.</p>
+<ul>
+<li>Functional API Refactor by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/101</li>
+</ul>
 <section id="whats-changed" class="level2">
 <h2 class="anchored" data-anchor-id="whats-changed">What’s Changed</h2>
+<ul>
+<li>Bump ruff from 0.15.22 to 0.16.0 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/80</li>
+<li>Bump actions/setup-python from 6 to 7 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/76</li>
+<li>Bump anthropics/claude-code-action from 1.0.176 to 1.0.181 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/77</li>
+<li>Bump ty from 0.0.60 to 0.0.63 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/78</li>
+<li>Add censored demand forecasting example by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/82</li>
+<li>Bump j178/prek-action from 2 to 2.0.6 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/83</li>
+<li>Bump anthropics/claude-code-action from 1.0.181 to 1.0.183 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/84</li>
+<li>Bump ty from 0.0.63 to 0.0.64 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/85</li>
+<li>Bump anthropics/claude-code-action from 1.0.183 to 1.0.185 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/86</li>
+<li>Bump ruff from 0.16.0 to 0.16.1 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/87</li>
+<li>Bump ty from 0.0.64 to 0.0.66 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/89</li>
+<li>Bump j178/prek-action from 2.0.6 to 3.0.0 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/88</li>
+<li>Bump anthropics/claude-code-action from 1.0.185 to 1.0.191 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/91</li>
+<li>Bump ty from 0.0.66 to 0.0.70 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/90</li>
+<li>Bump ruff from 0.16.1 to 0.16.2 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/92</li>
+<li>Bump anthropics/claude-code-action from 1.0.191 to 1.0.195 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/93</li>
+<li>Bump ty from 0.0.70 to 0.0.72 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/94</li>
+<li>Bump ruff from 0.16.2 to 0.16.3 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/95</li>
+</ul>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.2.3...0.3.0">https://github.com/juanitorduz/numpyro_forecast/compare/0.2.3…0.3.0</a></p>
+</section>
+</section>
+<section id="section-1" class="level1 changelog-version">
+<h1 class="changelog-version">0.2.3</h1>
+<p><em>2026-07-21</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.3">GitHub</a></p>
+<section id="whats-changed-1" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-1">What’s Changed</h2>
 <ul>
 <li>Bump codecov/codecov-action from 5 to 7 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/67</li>
 <li>Bump ty from 0.0.58 to 0.0.60 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/70</li>
@@ -232,11 +269,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.2.2...0.2.3">https://github.com/juanitorduz/numpyro_forecast/compare/0.2.2…0.2.3</a></p>
 </section>
 </section>
-<section id="section-1" class="level1 changelog-version">
+<section id="section-2" class="level1 changelog-version">
 <h1 class="changelog-version">0.2.2</h1>
 <p><em>2026-07-15</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.2">GitHub</a></p>
-<section id="whats-changed-1" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-1">What’s Changed</h2>
+<section id="whats-changed-2" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-2">What’s Changed</h2>
 <ul>
 <li>[Fix] to_datatree OOMs on GPU: in-sample predictive materializes all draws in one allocation by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/65</li>
 <li>Bump version from 0.2.1 to 0.2.2 by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/66</li>
@@ -244,11 +281,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1...0.2.2">https://github.com/juanitorduz/numpyro_forecast/compare/0.2.1…0.2.2</a></p>
 </section>
 </section>
-<section id="section-2" class="level1 changelog-version">
+<section id="section-3" class="level1 changelog-version">
 <h1 class="changelog-version">0.2.1</h1>
 <p><em>2026-07-12</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.1">GitHub</a></p>
-<section id="whats-changed-2" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-2">What’s Changed</h2>
+<section id="whats-changed-3" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-3">What’s Changed</h2>
 <ul>
 <li>Bump ty from 0.0.56 to 0.0.58 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/58</li>
 <li>Bump ruff from 0.15.20 to 0.15.21 by <a href="https://github.com/dependabot"><span class="citation" data-cites="dependabot">@dependabot</span></a>[bot] in https://github.com/juanitorduz/numpyro_forecast/pull/59</li>
@@ -259,11 +296,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0...0.2.1">https://github.com/juanitorduz/numpyro_forecast/compare/0.2.0…0.2.1</a></p>
 </section>
 </section>
-<section id="section-3" class="level1 changelog-version">
+<section id="section-4" class="level1 changelog-version">
 <h1 class="changelog-version">0.2.0</h1>
 <p><em>2026-07-08</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.2.0">GitHub</a></p>
-<section id="whats-changed-3" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-3">What’s Changed</h2>
+<section id="whats-changed-4" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-4">What’s Changed</h2>
 <ul>
 <li>Prune dependencies by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/36</li>
 <li>Update package-ecosystem to ‘uv’ in dependabot config by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/37</li>
@@ -292,11 +329,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.3...0.2.0">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.3…0.2.0</a></p>
 </section>
 </section>
-<section id="section-4" class="level1 changelog-version">
+<section id="section-5" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.3</h1>
 <p><em>2026-07-03</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.3">GitHub</a></p>
-<section id="whats-changed-4" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-4">What’s Changed</h2>
+<section id="whats-changed-5" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-5">What’s Changed</h2>
 <ul>
 <li>Rebuild docs on release so the version badge tracks the latest release by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/30</li>
 <li>Add exponential smoothing example by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/31</li>
@@ -307,11 +344,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2...0.1.3">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.2…0.1.3</a></p>
 </section>
 </section>
-<section id="section-5" class="level1 changelog-version">
+<section id="section-6" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.2</h1>
 <p><em>2026-06-30</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.2">GitHub</a></p>
-<section id="whats-changed-5" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-5">What’s Changed</h2>
+<section id="whats-changed-6" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-6">What’s Changed</h2>
 <ul>
 <li>Improve the univariate forecasting notebook by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/25</li>
 <li>Use better ArviZ functions by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/27</li>
@@ -320,11 +357,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1...0.1.2">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.1…0.1.2</a></p>
 </section>
 </section>
-<section id="section-6" class="level1 changelog-version">
+<section id="section-7" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.1</h1>
 <p><em>2026-06-26</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.1">GitHub</a></p>
-<section id="whats-changed-6" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-6">What’s Changed</h2>
+<section id="whats-changed-7" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-7">What’s Changed</h2>
 <ul>
 <li>Add documentation site with great-docs by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/14</li>
 <li>Fix production docs deploy + prune old deployments by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/15</li>
@@ -339,11 +376,11 @@ ul.task-list li input[type="checkbox"] {
 <p><strong>Full Changelog</strong>: <a href="https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0...0.1.1">https://github.com/juanitorduz/numpyro_forecast/compare/0.1.0…0.1.1</a></p>
 </section>
 </section>
-<section id="section-7" class="level1 changelog-version">
+<section id="section-8" class="level1 changelog-version">
 <h1 class="changelog-version">0.1.0</h1>
 <p><em>2026-06-23</em> · <a href="https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.1.0">GitHub</a></p>
-<section id="whats-changed-7" class="level2">
-<h2 class="anchored" data-anchor-id="whats-changed-7">What’s Changed</h2>
+<section id="whats-changed-8" class="level2">
+<h2 class="anchored" data-anchor-id="whats-changed-8">What’s Changed</h2>
 <ul>
 <li>Initial configuration by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/1</li>
 <li>Add claude GitHub actions 1781548272346 by <a href="https://github.com/juanitorduz"><span class="citation" data-cites="juanitorduz">@juanitorduz</span></a> in https://github.com/juanitorduz/numpyro_forecast/pull/3</li>
