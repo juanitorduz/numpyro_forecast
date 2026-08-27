@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "numpyro_forecast"
-version = "0.2.3"
-description = "A JAX/NumPyro port of Pyro's forecasting module."
+version = "0.3.0"
+description = "A JAX/NumPyro port of the ideas in Pyro's forecasting module."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -33,8 +33,9 @@ classifiers = [
 dependencies = [
     "arviz>=1.2.0",
     "beartype>=0.22",
+    # <0.11.1 until numpyro releases pyro-ppl/numpyro#2245 (render_model provenance on jax 0.11.1)
+    "jax>=0.10.0,<0.11.1",
     "jaxtyping>=0.3.11",
-    "matplotlib>=3.8,<3.11",
     "numpyro>=0.20.0",
 ]
 
@@ -51,6 +52,7 @@ blackjax = [
 ]
 dev = [
     "graphviz>=0.20",
+    "matplotlib>=3.8,<3.11",
     "ipykernel>=6.29",
     "jupytext>=1.16",
     "nbmake>=1.5",
@@ -68,7 +70,7 @@ dev = [
     "scikit-learn>=1.6",
 ]
 docs = [
-    "great-docs>=0.14",
+    "great-docs==0.17.0",
 ]
 cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
@@ -130,7 +132,7 @@ convention = "numpy"
 max-line-length = 120
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "README.md"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
@@ -144,7 +146,9 @@ addopts = [
     "--no-cov-on-fail",
     "--durations=50",
     "--color=yes",
+    "--doctest-glob=README.md",
 ]
+doctest_optionflags = ["ELLIPSIS", "NORMALIZE_WHITESPACE"]
 
 [tool.coverage.run]
 source = ["numpyro_forecast"]

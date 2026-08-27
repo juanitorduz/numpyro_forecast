@@ -1,4 +1,4 @@
-"""numpyro_forecast: a JAX/NumPyro port of Pyro's forecasting module."""
+"""numpyro_forecast: a JAX/NumPyro port of the ideas in Pyro's forecasting module."""
 
 from importlib.metadata import PackageNotFoundError, version
 
@@ -13,10 +13,10 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         evaluate,
         exceptions,
         features,
-        forecaster,
-        functional,
         metrics,
+        models,
         optional,
+        predictive,
         surgery,
     )
 
@@ -37,23 +37,25 @@ from numpyro_forecast.evaluate import (
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     CovariateDimsError,
-    GuideResolutionError,
-    GuideSampleArgsError,
+    DeviceMemoryError,
+    DevicePlatformError,
+    HostMemoryKindError,
     KernelConfigError,
-    KernelResolutionError,
     MVNLayoutError,
     NumpyroForecastError,
-    OptimizerResolutionError,
-    VectorizedGuideError,
     VectorizedMetricError,
 )
-from numpyro_forecast.forecaster import (
-    Forecaster,
-    ForecastingModel,
-    HMCForecaster,
-    PathfinderForecaster,
+from numpyro_forecast.models import (
+    Horizon,
+    SSOEResult,
+    SSOEStep,
+    Transition,
+    innovations,
+    markov_series,
+    predict,
+    ssoe,
 )
-from numpyro_forecast.functional import forecasting_model
+from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.surgery import register_elementwise
 
 try:
@@ -66,32 +68,36 @@ __all__ = [
     "BacktestResult",
     "BacktestWindowError",
     "CovariateDimsError",
-    "Forecaster",
-    "ForecastingModel",
-    "GuideResolutionError",
-    "GuideSampleArgsError",
-    "HMCForecaster",
+    "DeviceMemoryError",
+    "DevicePlatformError",
+    "Horizon",
+    "HostMemoryKindError",
     "KernelConfigError",
-    "KernelResolutionError",
     "MVNLayoutError",
     "NumpyroForecastError",
-    "OptimizerResolutionError",
-    "PathfinderForecaster",
+    "SSOEResult",
+    "SSOEStep",
+    "Transition",
     "VectorizedBacktestResult",
-    "VectorizedGuideError",
     "VectorizedMetricError",
     "__version__",
     "add_forecast_groups",
     "backtest",
     "backtest_vectorized",
+    "draw_posterior",
     "eval_coverage",
     "eval_crps",
     "eval_mae",
     "eval_rmse",
     "evaluate_forecast",
-    "forecasting_model",
+    "forecast",
+    "innovations",
+    "markov_series",
+    "predict",
+    "predict_in_sample",
     "predictions_to_datatree",
     "register_elementwise",
     "results_to_dataframe",
+    "ssoe",
     "to_datatree",
 ]

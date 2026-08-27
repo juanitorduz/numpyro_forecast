@@ -41,16 +41,16 @@ class TestReferenceEntries:
             "reference:\n"
             "  - title: A\n"
             "    contents:\n"
-            "      - forecaster.Forecaster\n"
-            "      - name: evaluate.backtest\n"
+            "      - evaluate.backtest\n"
+            "      - name: evaluate.backtest_vectorized\n"
             "  - title: B\n"
             "    contents:\n"
             "      - metrics.crps_empirical\n",
             encoding="utf-8",
         )
         assert api_snapshot.reference_entries(config) == [
-            "forecaster.Forecaster",
             "evaluate.backtest",
+            "evaluate.backtest_vectorized",
             "metrics.crps_empirical",
         ]
 
@@ -64,22 +64,22 @@ class TestReferenceEntries:
 
 class TestResolveEntry:
     def test_resolves_module_attribute(self, api_snapshot: ModuleType) -> None:
-        from numpyro_forecast.forecaster import Forecaster
+        from numpyro_forecast.evaluate import backtest
 
-        assert api_snapshot.resolve_entry("forecaster.Forecaster") is Forecaster
+        assert api_snapshot.resolve_entry("evaluate.backtest") is backtest
 
     def test_dotless_entry_resolves_against_the_package_root(
         self, api_snapshot: ModuleType
     ) -> None:
         import numpyro_forecast
 
-        assert api_snapshot.resolve_entry("Forecaster") is numpyro_forecast.Forecaster
+        assert api_snapshot.resolve_entry("backtest") is numpyro_forecast.backtest
 
     def test_missing_module_path_is_missing(self, api_snapshot: ModuleType) -> None:
         assert api_snapshot.resolve_entry("nonexistent.thing") is api_snapshot._MISSING
 
     def test_missing_attribute_is_missing(self, api_snapshot: ModuleType) -> None:
-        assert api_snapshot.resolve_entry("forecaster.NotAThing") is api_snapshot._MISSING
+        assert api_snapshot.resolve_entry("evaluate.NotAThing") is api_snapshot._MISSING
 
     def test_foreign_import_error_propagates(
         self, api_snapshot: ModuleType, monkeypatch: pytest.MonkeyPatch
@@ -104,10 +104,10 @@ class TestSymbolKind:
 class TestBuildSnapshot:
     def test_symbols_keyed_by_entry_with_kind_and_bases(self, api_snapshot: ModuleType) -> None:
         entries = [
-            "forecaster.Forecaster",
+            "evaluate.BacktestResult",
             "evaluate.backtest",
             "exceptions.BacktestWindowError",
-            "functional.svi.not_a_symbol",
+            "models.not_a_symbol",
             "gone.module.Thing",
         ]
         snapshot, skipped = api_snapshot.build_snapshot(entries, "9.9.9")
@@ -115,17 +115,17 @@ class TestBuildSnapshot:
         assert snapshot["package_name"] == "numpyro_forecast"
         symbols = snapshot["symbols"]
         assert set(symbols) == {
-            "forecaster.Forecaster",
+            "evaluate.BacktestResult",
             "evaluate.backtest",
             "exceptions.BacktestWindowError",
         }
-        assert symbols["forecaster.Forecaster"]["kind"] == "class"
+        assert symbols["evaluate.BacktestResult"]["kind"] == "class"
         assert symbols["evaluate.backtest"] == {"name": "evaluate.backtest", "kind": "function"}
         assert symbols["exceptions.BacktestWindowError"]["bases"] == [
             "NumpyroForecastError",
             "ValueError",
         ]
-        assert skipped == ["functional.svi.not_a_symbol", "gone.module.Thing"]
+        assert skipped == ["models.not_a_symbol", "gone.module.Thing"]
 
 
 class TestMain:

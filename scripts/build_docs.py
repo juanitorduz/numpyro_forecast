@@ -34,10 +34,12 @@ redirects of the versioned site are rewritten to absolute URLs: great-docs
 writes them with root-relative targets, which on a GitHub Pages project site
 escape the ``/numpyro_forecast/`` prefix.
 
-Usage::
+Usage:
 
-    python scripts/build_docs.py build      # generate, build, clean up
-    python scripts/build_docs.py preview    # same, but serve with live reload
+```bash
+python scripts/build_docs.py build      # generate, build, clean up
+python scripts/build_docs.py preview    # same, but serve with live reload
+```
 """
 
 import base64
@@ -247,7 +249,7 @@ def generate_pages() -> list[Path]:
     -------
     list[pathlib.Path]
         The wrapper files that were created (the ``_src/`` and ``thumbnails/``
-        directories are removed wholesale by :func:`clean_pages`).
+        directories are removed wholesale by `clean_pages()`).
     """
     EMBED_DIR.mkdir(exist_ok=True)
     THUMBNAILS_DIR.mkdir(exist_ok=True)

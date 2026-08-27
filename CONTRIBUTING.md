@@ -5,14 +5,14 @@ Thanks for your interest in `numpyro_forecast`!
 ## Development setup
 
 ```bash
-uv sync --all-extras
+uv sync --extra all
 prek install
 ```
 
 ## Workflow
 
 - **Lint & format:** `uv run ruff check .` and `uv run ruff format .`
-- **Type check:** `uv run ty check numpyro_forecast/`
+- **Type check:** `uv run ty check`
 - **Tests:** `uv run pytest`
 - **Notebooks:** `uv run pytest --nbmake docs/examples/` (executes the example notebooks)
 - **Docs site:** `make docs` (build) or `make docs-preview` (live preview)
@@ -42,7 +42,7 @@ If they are missing, the build falls back to the first sentence of the notebook'
 
 - Every function (public and private) must have complete input and return type
   hints. Type checking is enforced with `ty`.
-- Every public function and class must have a NumPy-style docstring.
+- Every public function and class must have a NumPy-style docstring. Cross references, math and code blocks use the great-docs Markdown dialect described in `AGENTS.md` (Docstring markup); `tests/test_docstring_markup.py` enforces it.
 - Array shapes are annotated with `jaxtyping`, with a leading space in the shape
   string (e.g. `Float[Array, " time obs"]`).
 - Follow the array convention: time at axis `-2`, the observation dim at `-1`,

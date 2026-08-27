@@ -70,45 +70,32 @@ authors:
 # - Add 'desc:' to sections for descriptions
 
 reference:
-  - title: Forecasters
-    desc: High-level interfaces for fitting and forecasting.
+  - title: Model building blocks
+    desc: Plain model functions that register the train/forecast sites for you.
     contents:
-      - forecaster.Forecaster
-      - forecaster.HMCForecaster
-      - forecaster.PathfinderForecaster
+      - models.Horizon
+      - models.Transition
+      - models.innovations
+      - models.markov_series
+      - models.ssoe
+      - models.SSOEStep
+      - models.SSOEResult
+      - models.predict
 
-  - title: Models
-    desc: Building forecasting models (object-oriented and functional).
+  - title: Distribution surgery
+    desc: Time-axis operations on observation distributions, extensible via singledispatch.
     contents:
-      - forecaster.ForecastingModel
-      - functional.models.forecasting_model
+      - surgery.shift_loc
+      - surgery.slice_time
+      - surgery.prefix_condition
+      - surgery.register_elementwise
 
-  - title: "Functional core: model primitives"
-    desc: Pure functional primitives for the train/forecast split.
-    contents:
-      - functional.models.Horizon
-      - functional.models.time_series
-      - functional.models.markov_time_series
-      - functional.models.predict
-      - functional.models.predict_glm
-
-  - title: "Functional core: fitting"
-    desc: Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.
-    contents:
-      - functional.svi.resolve_optimizer
-      - functional.svi.resolve_guide
-      - functional.svi.fit_svi
-      - functional.svi.SVIFit
-      - functional.mcmc.resolve_kernel
-      - functional.mcmc.fit_mcmc
-      - functional.mcmc.MCMCFit
-
-  - title: "Functional core: posterior and prediction"
+  - title: Producing draws
     desc: Drawing posterior samples and generating forecasts and in-sample predictions.
     contents:
-      - functional.posterior.draw_posterior
-      - functional.prediction.forecast
-      - functional.prediction.predict_in_sample
+      - predictive.draw_posterior
+      - predictive.forecast
+      - predictive.predict_in_sample
 
   - title: Backtesting & evaluation
     desc: Rolling-window backtesting and forecast metrics.
@@ -128,6 +115,36 @@ reference:
       - metrics.eval_interval_score
       - metrics.make_mase
 
+  - title: ArviZ export
+    desc: Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+    contents:
+      - convert.to_datatree
+      - convert.add_forecast_groups
+      - convert.predictions_to_datatree
+
+  - title: Extensions (contrib)
+    desc: Optional backends behind pyproject extras (never imported by default).
+    contents:
+      - contrib.blackjax.BlackjaxNUTSKernel
+      - contrib.blackjax.BlackjaxMCLMCKernel
+      - contrib.blackjax.BlackjaxCustomKernel
+      - contrib.blackjax.PathfinderFit
+      - contrib.blackjax.fit_pathfinder
+      - contrib.blackjax.pathfinder_samples
+      - contrib.blackjax.MultiPathfinderFit
+      - contrib.blackjax.fit_multipathfinder
+      - contrib.blackjax.multipathfinder_samples
+
+  - title: Typing
+    desc: Public type contracts.
+    contents:
+      - typing.ForecastModel
+      - typing.ForecastFn
+      - typing.Guide
+      - typing.InSampleFn
+      - typing.Metric
+      - typing.ModelFactory
+
   - title: Autocorrelation
     desc: Batched autocorrelation and partial autocorrelation diagnostics.
     contents:
@@ -145,51 +162,7 @@ reference:
     contents:
       - arrays.zero_data_like
       - arrays.concat_future
-
-  - title: Distribution surgery
-    desc: Time-axis operations on observation distributions, extensible via singledispatch.
-    contents:
-      - surgery.shift_loc
-      - surgery.slice_time
-      - surgery.prefix_condition
-      - surgery.register_elementwise
-
-  - title: Optional dependencies
-    desc: Lazy imports behind pyproject extras.
-    contents:
-      - optional.require
-
-  - title: Exceptions
-    desc: Package exception hierarchy raised at resolution and validation boundaries.
-    contents:
-      - exceptions.NumpyroForecastError
-      - exceptions.BacktestWindowError
-      - exceptions.VectorizedGuideError
-      - exceptions.VectorizedMetricError
-      - exceptions.OptimizerResolutionError
-      - exceptions.GuideResolutionError
-      - exceptions.GuideSampleArgsError
-      - exceptions.KernelResolutionError
-      - exceptions.KernelConfigError
-      - exceptions.CovariateDimsError
-      - exceptions.MVNLayoutError
-      - exceptions.DeviceMemoryError
-
-  - title: ArviZ export
-    desc: Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
-    contents:
-      - convert.to_datatree
-      - convert.add_forecast_groups
-      - convert.predictions_to_datatree
-
-  - title: Extensions (contrib)
-    desc: Optional backends behind pyproject extras (never imported by default).
-    contents:
-      - contrib.blackjax.BlackjaxNUTSKernel
-      - contrib.blackjax.BlackjaxMCLMCKernel
-      - contrib.blackjax.BlackjaxCustomKernel
-      - contrib.blackjax.PathfinderFit
-      - contrib.blackjax.fit_pathfinder
+      - arrays.pad_future
 
   - title: Datasets
     desc: Example datasets used in the tutorials.
@@ -198,6 +171,24 @@ reference:
       - datasets.load_bart_hierarchical
       - datasets.load_victoria_electricity
       - datasets.bart_available
+
+  - title: Optional dependencies
+    desc: Lazy imports behind pyproject extras.
+    contents:
+      - optional.require
+
+  - title: Exceptions
+    desc: Package exception hierarchy raised at validation boundaries.
+    contents:
+      - exceptions.NumpyroForecastError
+      - exceptions.BacktestWindowError
+      - exceptions.VectorizedMetricError
+      - exceptions.KernelConfigError
+      - exceptions.CovariateDimsError
+      - exceptions.MVNLayoutError
+      - exceptions.DeviceMemoryError
+      - exceptions.HostMemoryKindError
+      - exceptions.DevicePlatformError
 
 # Example notebooks live in docs/examples/. The .qmd wrapper pages that embed
 # their stored outputs are generated at build time by scripts/build_docs.py

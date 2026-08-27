@@ -4,10 +4,11 @@ Guidance for Claude Code when working in this repository.
 
 ## What this is
 
-`numpyro_forecast` is a JAX/NumPyro port of Pyro's `pyro.contrib.forecast`
-module. The design context lives in the module docstrings (`forecaster.py`,
-`evaluate.py`, `surgery.py`) and the example notebooks under `docs/examples/` — read
-the relevant ones before making non-trivial changes.
+`numpyro_forecast` is a functional, JAX-native port of the ideas in Pyro's `pyro.contrib.forecast` module (the `_future`-site trick, prefix conditioning, horizon bookkeeping, backtesting), not of its class hierarchy: inference is whatever plain NumPyro you write. The design context lives in the module docstrings (`models.py`, `predictive.py`, `_offload.py`, `evaluate.py`, `surgery.py`) and the example notebooks under `docs/examples/`; read the relevant ones before making non-trivial changes.
+
+The model-side API is a small set of **model building blocks** (`Horizon.from_data`, `innovations`, `markov_series`, `ssoe`, `predict`): plain functions that call `numpyro.sample` and `numpyro.deterministic` on your behalf inside a model function `(covariates, data=None)`. Call them "building blocks" in headings and "model functions" in prose, never "primitives" (that word means `numpyro.primitives`: `sample`, `plate`, ...).
+
+Dependencies: `arviz` is a core dependency (the ArviZ export is part of the package contract), while `matplotlib` lives in the `dev` extra only. The extras are `dataframes`, `optax`, `blackjax`, `dev`, `docs`, `cuda`, plus the umbrellas `all` (everything but cuda) and `all_cuda`; there are no dependency groups, so `uv sync --extra all` is the way to build the environment.
 
 ## Conventions
 
@@ -20,7 +21,8 @@ the relevant ones before making non-trivial changes.
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.
-- **`rng_key` first:** every JAX/NumPyro function that consumes randomness takes `rng_key: Array` as its first parameter (first after `self` for methods), required and positional (not keyword-only). The one exception is `functools.singledispatch` generics, which must dispatch on their type argument: keep the dispatched generic private (dispatching on its type arg) and expose a thin public wrapper with `rng_key` first (see `draw_posterior` / `_draw_posterior_impl` in `functional.py`).
+- **Host offload contract:** `device="host"` on `draw_posterior`, `forecast`, `predict_in_sample` and the pathfinder samplers returns draws as `Array | np.ndarray` (jax Arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized). Any new signature that consumes draws must accept both, and the placement contract is documented once, on `draw_posterior`; other drivers point at it.
+- **`rng_key` first:** every JAX/NumPyro function that consumes randomness takes `rng_key: Array` as its first parameter (first after `self` for methods), required and positional (not keyword-only), always.
 - **Integer literals:** write integers with four or more digits using underscore separators so zeros are easy to count: `1_000`, `10_000`, `1_234_567_890` (not `1000`, `1234567890`).
 
 ## Hard requirements
@@ -39,9 +41,23 @@ the relevant ones before making non-trivial changes.
 
 For the tests, we use `pytest`. `make tests` runs the suite in parallel with pytest-xdist (`-n auto`); a plain `uv run pytest tests/test_foo.py` stays sequential for debugging. CI splits the suite into duration-balanced parallel jobs with [pytest-split](https://pypi.org/project/pytest-split/), driven by the committed `.test_durations` file. Refreshing that file is optional: tests missing from it are assigned the average duration, so staleness only degrades group balance, never correctness. When you add or remove notably slow tests, or CI group times drift apart, refresh it with `make store-durations` (a full sequential run) and commit the result.
 
+`README.md` is a pytest doctest file (`--doctest-glob`): every `>>>` example in it runs in the suite, so keep the examples self-contained, prompt-formatted and under 99 characters per line, and keep the blank line before each closing fence (without it pytest reads the fence as expected output).
+
 ## Docstrings
 
 We use Numpy-like docstrings: https://numpydoc.readthedocs.io/en/latest/format.html
+
+### Docstring markup
+
+The docs site renders docstrings as Quarto Markdown with great-docs (pinned to `great-docs==0.17.0`), which does **not** run any Sphinx/RST conversion for numpy-style docstrings: `:func:`, `:class:`, `:math:`, `.. math::`, `sentence::` literal blocks and `` `text <url>`_ `` links all show up literally or as dead code spans. Write the markup great-docs renders instead:
+
+- Cross references are code spans that great-docs autolinks against the API reference: `` `~~numpyro_forecast.models.ssoe()` `` links to the `ssoe` page and displays `ssoe()` (the `~~` prefix shortens the display; a single `~` breaks the link); a bare `` `backtest()` `` links by suffix match; `` `numpyro_forecast.models.Horizon` `` links and shows the full path. Symbols outside the package (`jax.Array`, `numpyro.infer.autoguide.AutoGuide`, `functools.partial()`) cannot link, so write them as plain full paths. A symbol only links when it is listed under `reference:` in `great-docs.yml`.
+- Math is `$...$` inline and a `$$` block on its own lines (blank line before and after); any docstring containing a backslash must be a raw string (`r"""`).
+- Literal code blocks are fenced (```` ```python ````) after a sentence ending in a single colon, at the docstring's indentation; ruff's `docstring-code-format` reformats what parses as Python.
+- Links are Markdown `[text](url)`. `>>>` doctest lines are fine (great-docs fences them).
+- NumPy `See Also` sections keep bare entry names at column 0 (`name : description`); great-docs links the names itself.
+
+`tests/test_docstring_markup.py` enforces this for every docstring under `numpyro_forecast/`, `tests/` and `scripts/` and for the markdown and code cells of the example notebooks.
 
 ## Documentation
 
@@ -57,7 +73,7 @@ The API reference is a curated list under the `reference:` section of `great-doc
 
 Author notebooks with [jupytext](https://jupytext.readthedocs.io/) as a `py:percent` script rather than editing the `.ipynb` JSON by hand: it keeps clean text diffs and is lintable like any other `.py`. Write `docs/examples/<name>.py` with `# %%` cell markers, then convert and execute it in one step with `uv run jupytext --to notebook --execute docs/examples/<name>.py`, which produces `docs/examples/<name>.ipynb` with all outputs (figures, tables) embedded. Only the `.ipynb` is committed: delete the `.py` afterwards (the two files are intentionally not paired). The committed notebook stores its outputs, so the docs build never re-executes it.
 
-Each notebook also feeds the card grid on the Examples index page: set a short plain-text `description` in the notebook-level metadata (no markdown, LaTeX, or HTML special characters; great-docs injects it into raw HTML), and tag the code cell whose figure should be the card thumbnail with a `thumbnail` cell tag. Both have fallbacks in `scripts/build_docs.py` (the intro paragraph's first sentence and the notebook's first figure, respectively), but set them explicitly so the card copy reads well and the thumbnail is a representative results plot (for example the forecast with HDI bands) rather than the raw-data plot. Both survive re-execution and jupytext round-trips.
+Each notebook also feeds the card grid on the Examples index page: set a short plain-text `description` in the notebook-level metadata (no markdown, LaTeX, or HTML special characters; great-docs injects it into raw HTML), and tag the code cell whose figure should be the card thumbnail with a `thumbnail` cell tag. Both have fallbacks in `scripts/build_docs.py` (the intro paragraph's first sentence and the notebook's first figure, respectively), but set them explicitly so the card copy reads well and the thumbnail is a representative results plot (for example the forecast with HDI bands) rather than the raw-data plot (the exception is a dense multi-panel grid such as the hierarchical BART forecasts, which is unreadable at card size: those two notebooks keep a single-panel figure, the data overview for `hierarchical_forecasting_1` and the prior predictive check for `hierarchical_forecasting_2`, matching the stable site). Both survive re-execution; a jupytext round-trip keeps the `description` only when the notebook metadata carries `jupytext.notebook_metadata_filter: description` (write `description:` into the `.py` header and keep that filter), and keeps cell tags unless `cell_metadata_filter: -all` is set.
 
 - Do not use `plt.show()` in notebooks.
 
@@ -95,13 +111,13 @@ See the Makefile for the full workflow.
 
 ```bash
 # Install dependencies
-uv sync --all-extras
+uv sync --extra all
 # Run pre-commit hooks
 prek run --all-files
 # Lint and format
 uv run ruff check . && uv run ruff format --check .
 # Type check
-uv run ty check numpyro_forecast/
+uv run ty check
 # Run tests
 uv run pytest
 # Build the documentation site (output in great-docs/_site/)

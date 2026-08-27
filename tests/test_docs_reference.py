@@ -40,13 +40,13 @@ def _documented_names() -> set[str]:
 def _public_api() -> set[str]:
     """Return ``module.name`` for every public function/class defined in the package.
 
-    Uses :func:`pkgutil.walk_packages` (recursive) so subpackages such as
+    Uses `pkgutil.walk_packages()` (recursive) so subpackages such as
     ``contrib`` are scanned too, not just top-level modules. This relies on
     ``contrib`` submodules being importable without their optional dependency
     (they pull the extra in lazily via ``require``), so walking them does not
     import ``blackjax``/``optax`` at collection time and invariant I8 (no optional
     imports on the base leg) is preserved. An ``ImportError`` whose failing name
-    is in :data:`_OPTIONAL_DEPS` skips just that module (the extras leg covers
+    is in `_OPTIONAL_DEPS` skips just that module (the extras leg covers
     it); any other import failure propagates so a broken module cannot silently
     shrink the scanned surface.
     """

@@ -1,6 +1,6 @@
 """Seasonal feature builders: Fourier design matrices and periodic tiling.
 
-Both helpers run host-side, outside any trace; :func:`fourier_features`
+Both helpers run host-side, outside any trace; `fourier_features()`
 memoizes its design matrix per argument tuple.
 """
 
@@ -23,7 +23,7 @@ def _fourier_features(
 
     The design matrix is fully determined by ``(duration, period, num_terms)``
     and is built host-side, never inside a trace, so the result is cached per
-    argument tuple rather than recomputed (see :func:`fourier_features`).
+    argument tuple rather than recomputed (see `fourier_features()`).
     """
     time = jnp.arange(duration)[:, None]
     harmonics = jnp.arange(1, num_terms + 1)[None, :]

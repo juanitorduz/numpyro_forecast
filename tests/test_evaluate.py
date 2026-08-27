@@ -3,23 +3,21 @@
 from functools import partial
 from typing import Any, cast
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from conftest import RandomWalkModel
+from conftest import commit_host, rw_model_factory, svi_forecast_fn, svi_in_sample_fn
 from jax import Array, random
 
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     BacktestResult,
-    _block_object,
     _expanding_windows,
     _iter_windows,
-    _resolve_options,
     _resolve_window_type,
     _rolling_windows,
     _run_window,
-    _scalar_params,
     _slice_window,
     _timed,
     backtest,
@@ -30,49 +28,75 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.forecaster import HMCForecaster
-from numpyro_forecast.typing import ForecasterFactory
+from numpyro_forecast.typing import ForecastFn
 
 
-class _SlotShim:
-    """A __slots__ object (no __dict__) to exercise the _block_object no-op."""
+def _canned_forecast_fn(
+    rng_key: Array,
+    model: object,
+    train_data: Array,
+    train_covariates: Array,
+    test_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array:
+    """An rng-sensitive, shape-correct stand-in forecast with no real inference.
 
-    __slots__ = ("value",)
-
-    def __init__(self, value: Array) -> None:
-        self.value = value
-
-
-def test_block_object_handles_frozen_dataclass_and_shim() -> None:
-    # Regular object with __dict__: returned unchanged, arrays materialized.
-    class _Holder:
-        def __init__(self) -> None:
-            self.arr = jnp.ones(4)
-            self.name = "holder"
-
-    holder = _Holder()
-    assert _block_object(holder) is holder
-    assert bool(jnp.all(holder.arr == 1.0))
-
-    # __slots__ object without __dict__: no-op, returned unchanged.
-    shim = _SlotShim(jnp.zeros(2))
-    assert _block_object(shim) is shim
+    Deterministic given ``rng_key`` (so identical keys give identical draws, the
+    property the ``eval_train``/coverage tests below rely on) but does no actual
+    model fitting; used wherever a test only needs a *working* closure, not a
+    faithfully fitted one.
+    """
+    del model  # unused: the canned closure ignores the model entirely
+    horizon = test_covariates.shape[-2] - train_data.shape[-2]
+    return train_data.mean() + random.normal(rng_key, (num_samples, horizon, train_data.shape[-1]))
 
 
-def test_block_object_reaches_nested_arrays() -> None:
-    """Arrays nested inside containers under an attribute are blocked, not just top-level."""
+def _canned_in_sample_fn(
+    rng_key: Array,
+    model: object,
+    train_data: Array,
+    train_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array:
+    """The in-sample counterpart of `_canned_forecast_fn()`."""
+    del model
+    return train_data.mean() + random.normal(rng_key, (num_samples, *train_data.shape))
 
-    class _Nested:
-        def __init__(self) -> None:
-            self.inner = {"samples": [jnp.arange(3.0), jnp.ones(2)]}
-            self.pair = (jnp.zeros(1), {"deep": jnp.full(2, 5.0)})
 
-    obj = _Nested()
-    # block_until_ready recurses the __dict__ pytree; the call succeeds and leaf
-    # values survive the walk unchanged.
-    assert _block_object(obj) is obj
-    assert bool(jnp.all(obj.inner["samples"][0] == jnp.arange(3.0)))
-    assert bool(jnp.all(obj.pair[1]["deep"] == 5.0))
+def _spy_closure(calls: list[dict[str, Any]]) -> ForecastFn:
+    """A closure recording every call's ``batch_size`` kwarg, returning canned draws."""
+
+    def forecast_fn(
+        rng_key: Array,
+        model: object,
+        train_data: Array,
+        train_covariates: Array,
+        test_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        calls.append({"batch_size": batch_size})
+        return _canned_forecast_fn(
+            rng_key,
+            model,
+            train_data,
+            train_covariates,
+            test_covariates,
+            num_samples,
+            batch_size=batch_size,
+        )
+
+    return forecast_fn
+
+
+def _never_called(*_args: object, **_kwargs: object) -> Array:
+    """A closure that fails the test if ``backtest`` ever invokes it."""
+    pytest.fail("this closure should never have been called")
 
 
 def test_timed_returns_result_and_nonnegative_time() -> None:
@@ -85,28 +109,22 @@ def test_timed_returns_result_and_nonnegative_time() -> None:
 def test_walltime_includes_compute() -> None:
     # A blocked forecast timing must exceed a trivially small threshold: it
     # includes real compile+compute, not just async dispatch.
-    from numpyro_forecast.forecaster import Forecaster
-
     t = jnp.linspace(0, 4 * jnp.pi, 60)
     data = (jnp.sin(t) + 0.1 * random.normal(random.PRNGKey(0), (60,)))[:, None]
     covariates = jnp.zeros((60, 0))
-
-    def make(rng_key, model, d, c) -> object:
-        return Forecaster(rng_key, model, d, c, num_steps=100)
 
     results = backtest(
         random.PRNGKey(1),
         data,
         covariates,
-        RandomWalkModel,
-        forecaster_fn=cast("ForecasterFactory", make),
+        rw_model_factory,
+        forecast_fn=svi_forecast_fn(num_steps=100),
         train_window=40,
         test_window=5,
         num_samples=50,
     )
     assert results
-    assert all(r.train_walltime > 0.0 for r in results)
-    assert all(r.test_walltime > 0.0 for r in results)
+    assert all(r.walltime > 0.0 for r in results)
 
 
 def test_eval_mae_uses_median() -> None:
@@ -155,13 +173,109 @@ def test_default_metrics_keys() -> None:
     assert set(DEFAULT_METRICS) == {"mae", "rmse", "crps", "coverage"}
 
 
-# --- Chunked cell evaluation (memory-bounded scoring on wide panels) --------------
-
-
 def _metric_inputs(n_cells: int = 30) -> tuple[Array, Array]:
     pred = random.normal(random.PRNGKey(0), (40, 3, n_cells // 3))
     truth = random.normal(random.PRNGKey(1), (3, n_cells // 3))
     return pred, truth
+
+
+# --- Host-committed inputs (device="host" draws mixed with a device-resident truth,
+# or vice versa) -------------------------------------------------------------------
+
+
+def _host(x: Array) -> Array:
+    """Commit ``x`` to pinned host memory, the ``device="host"`` fallback target."""
+    return commit_host(x, "pinned")
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_unchunked_metrics_accept_host_committed_inputs(
+    commit_pred: bool, commit_truth: bool
+) -> None:
+    """Every unchunked metric must accept any mix of host-committed/device-resident inputs.
+
+    Mixing a pinned ``jax.Array`` (the ``device="host"`` fallback) with a
+    device-resident one inside a fused ``jnp``/jitted kernel used to raise
+    (``memory_space of all inputs ... must be the same``); each metric now
+    moves a host-resident operand to device memory first, so any mix produces
+    the same value as the fully device-resident call.
+    """
+    pred, truth = _metric_inputs()
+    pred_in = _host(pred) if commit_pred else pred
+    truth_in = _host(truth) if commit_truth else truth
+
+    np.testing.assert_allclose(eval_mae(pred_in, truth_in), eval_mae(pred, truth))
+    np.testing.assert_allclose(eval_rmse(pred_in, truth_in), eval_rmse(pred, truth))
+    np.testing.assert_allclose(eval_crps(pred_in, truth_in), eval_crps(pred, truth))
+    np.testing.assert_allclose(eval_coverage(pred_in, truth_in), eval_coverage(pred, truth))
+
+    expected = evaluate_forecast(pred, truth)
+    got = evaluate_forecast(pred_in, truth_in)
+    assert got.keys() == expected.keys()
+    for name in expected:
+        np.testing.assert_allclose(got[name], expected[name])
+
+
+@pytest.mark.parametrize(
+    ("commit_pred", "commit_truth"),
+    [(True, False), (False, True), (True, True)],
+    ids=["host_pred_device_truth", "device_pred_host_truth", "both_host"],
+)
+def test_chunked_metrics_accept_host_committed_inputs(
+    commit_pred: bool, commit_truth: bool
+) -> None:
+    """The chunked (``batch_size``-bounded) path must accept the same input mixes.
+
+    `~~numpyro_forecast.evaluate._chunked_cell_metric()` slices ``pred``
+    and ``truth`` into cell blocks through
+    `~~numpyro_forecast._offload._leaf_view()` rather than the
+    fused kernel used by the unchunked path, so it needs its own coverage: any
+    mix of host-committed/device-resident inputs must reproduce the
+    all-device, unchunked result.
+    """
+    pred, truth = _metric_inputs()
+    pred_in = _host(pred) if commit_pred else pred
+    truth_in = _host(truth) if commit_truth else truth
+
+    # rtol matches test_eval_crps_chunked_matches_single_pass: chunking only
+    # changes the summation order of the final mean (f32 rounding), regardless
+    # of which operand is host-committed.
+    np.testing.assert_allclose(
+        eval_crps(pred_in, truth_in, batch_size=7), eval_crps(pred, truth), rtol=1e-6
+    )
+    np.testing.assert_allclose(
+        eval_coverage(pred_in, truth_in, batch_size=7),
+        eval_coverage(pred, truth),
+        rtol=1e-6,
+    )
+
+
+def test_metrics_accept_cpu_committed_inputs_under_accelerator_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A CPU-committed ``pred`` (the primary ``device="host"`` result) scores unchanged.
+
+    On a CPU-only machine the move in ``_device_view`` is a same-device no-op,
+    so this pins the branch structurally: with the default backend reported as
+    an accelerator, the metric kernels must still accept the operand and
+    reproduce the plain value (both fused and chunked paths).
+    """
+    pred, truth = _metric_inputs()
+    pred_in = commit_host(pred, "cpu")
+    monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
+
+    np.testing.assert_allclose(eval_mae(pred_in, truth), eval_mae(pred, truth))
+    np.testing.assert_allclose(eval_crps(pred_in, truth), eval_crps(pred, truth))
+    np.testing.assert_allclose(
+        eval_crps(pred_in, truth, batch_size=7), eval_crps(pred, truth), rtol=1e-6
+    )
+
+
+# --- Chunked cell evaluation (memory-bounded scoring on wide panels) --------------
 
 
 def test_eval_crps_chunked_matches_single_pass() -> None:
@@ -282,12 +396,12 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
     )
     # Windows at t1 in {12, 16, 20} (stop = 24 - 4 + 1 = 21).
     assert [r.t1 for r in results] == [12, 16, 20]
@@ -295,9 +409,7 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
         assert isinstance(r, BacktestResult)
         assert r.t0 == 0  # expanding window
         assert set(r.metrics) == {"mae", "rmse", "crps", "coverage"}
-        assert r.train_walltime >= 0.0
-        # AutoNormal exposes per-site variational params (e.g. *_auto_loc).
-        assert any("drift_scale" in name for name in r.params)
+        assert r.walltime >= 0.0
 
 
 def test_backtest_rolling_window(rng_key: Array) -> None:
@@ -307,13 +419,13 @@ def test_backtest_rolling_window(rng_key: Array) -> None:
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         window_type="rolling",
         train_window=12,
         test_window=4,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
     )
     # Windows at t1 in {12, 16, 20} (stop = 24 - 4 + 1 = 21), each rolling.
     assert [r.t1 for r in results] == [12, 16, 20]
@@ -333,12 +445,12 @@ def test_backtest_infers_rolling_from_train_window(rng_key: Array) -> None:
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         train_window=12,
         test_window=4,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
     )
     inferred = run()
     explicit = run(window_type="rolling")
@@ -352,7 +464,8 @@ def test_backtest_rolling_requires_train_window(rng_key: Array) -> None:
             rng_key,
             jnp.zeros((24, 1)),
             jnp.zeros((24, 0)),
-            RandomWalkModel,
+            rw_model_factory,
+            forecast_fn=_never_called,
             window_type="rolling",
             test_window=4,
         )
@@ -364,7 +477,8 @@ def test_backtest_expanding_rejects_train_window(rng_key: Array) -> None:
             rng_key,
             jnp.zeros((24, 1)),
             jnp.zeros((24, 0)),
-            RandomWalkModel,
+            rw_model_factory,
+            forecast_fn=_never_called,
             window_type="expanding",
             train_window=12,
             test_window=4,
@@ -384,12 +498,12 @@ def test_backtest_honors_partial_coverage_metric(rng_key: Array) -> None:
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=50,
-        forecaster_options={"num_steps": 30},
     )
     narrow = run(metrics={**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)})
     wide = run()  # default coverage at 0.9
@@ -405,16 +519,13 @@ def test_backtest_result_to_dict() -> None:
         t1=10,
         t2=14,
         num_samples=20,
-        train_walltime=0.5,
-        test_walltime=0.25,
+        walltime=0.5,
         metrics={"mae": 1.0},
-        params={"sigma": 0.3},
     )
     flat = result.to_dict()
     assert flat["t0"] == 0
     assert flat["t1"] == 10
     assert flat["metrics"] == {"mae": 1.0}
-    assert flat["params"] == {"sigma": 0.3}
     assert flat["train_metrics"] == {}
     assert flat["prediction"] is None
     assert set(flat) == {
@@ -422,71 +533,22 @@ def test_backtest_result_to_dict() -> None:
         "t1",
         "t2",
         "num_samples",
-        "train_walltime",
-        "test_walltime",
+        "walltime",
         "metrics",
-        "params",
         "train_metrics",
         "prediction",
     }
 
 
-def test_backtest_hmc_has_no_scalar_params(rng_key: Array) -> None:
-    # HMCForecaster has no ``params`` mapping, so ``_scalar_params`` returns {}.
-    data = jnp.cumsum(0.1 * random.normal(rng_key, (20, 1)), axis=-2)
-    covariates = jnp.zeros((20, 0))
-    results = backtest(
-        rng_key,
-        data,
-        covariates,
-        RandomWalkModel,
-        forecaster_fn=HMCForecaster,
-        test_window=4,
-        min_train_window=12,
-        stride=4,
-        num_samples=10,
-        forecaster_options={"num_warmup": 10, "num_samples": 10},
-    )
-    assert results
-    for r in results:
-        assert r.params == {}
-
-
 def test_backtest_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="share the time axis length"):
-        backtest(random.PRNGKey(0), jnp.zeros((20, 1)), jnp.zeros((18, 0)), RandomWalkModel)
-
-
-def test_backtest_callable_options_and_transform(rng_key: Array) -> None:
-    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
-    covariates = jnp.zeros((24, 0))
-    seen_windows: list[tuple[int, int, int]] = []
-
-    def options_for(t0: int, t1: int, t2: int) -> dict[str, int]:
-        seen_windows.append((t0, t1, t2))
-        return {"num_steps": 30}
-
-    transform_calls = {"count": 0}
-
-    def transform(pred: Array, truth: Array) -> tuple[Array, Array]:
-        transform_calls["count"] += 1
-        return jnp.exp(pred), jnp.exp(truth)
-
-    results = backtest(
-        rng_key,
-        data,
-        covariates,
-        RandomWalkModel,
-        test_window=4,
-        min_train_window=12,
-        stride=4,
-        num_samples=20,
-        forecaster_options=options_for,
-        transform=transform,
-    )
-    assert len(results) == 3
-    assert seen_windows == [(0, 12, 16), (0, 16, 20), (0, 20, 24)]
-    assert transform_calls["count"] == 3
+        backtest(
+            random.PRNGKey(0),
+            jnp.zeros((20, 1)),
+            jnp.zeros((18, 0)),
+            rw_model_factory,
+            forecast_fn=_never_called,
+        )
 
 
 def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Array) -> None:
@@ -497,12 +559,12 @@ def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Arr
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
     )
     assert results
     for r in results:
@@ -524,14 +586,14 @@ def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         metrics={"crps": eval_crps},
         per_window_metrics=cast("Any", per_window),
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
     )
     assert results
     for r in results:
@@ -540,19 +602,21 @@ def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
 
 
 def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
+    # A real (if cheap) SVI fit, to exercise in_sample_fn end to end at least once.
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     results = backtest(
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=svi_forecast_fn(num_steps=20),
+        in_sample_fn=svi_in_sample_fn(num_steps=20),
         metrics={"crps": eval_crps},
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
         eval_train=True,
     )
     assert results
@@ -562,8 +626,10 @@ def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
 
 
 def test_backtest_eval_train_does_not_change_oos_metrics(rng_key: Array) -> None:
-    # Enabling the in-sample diagnostic must not perturb the fit/forecast keys,
-    # so the out-of-sample metrics are identical with eval_train off and on.
+    # Enabling the in-sample diagnostic must not perturb the key passed to
+    # forecast_fn, so the out-of-sample metrics are identical with eval_train
+    # off and on. _canned_forecast_fn is rng-sensitive (its draws depend on the
+    # key it receives), so this only passes if that key is undisturbed.
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
 
@@ -572,13 +638,14 @@ def test_backtest_eval_train_does_not_change_oos_metrics(rng_key: Array) -> None
             rng_key,
             data,
             covariates,
-            RandomWalkModel,
+            rw_model_factory,
+            forecast_fn=_canned_forecast_fn,
+            in_sample_fn=_canned_in_sample_fn,
             metrics={"crps": eval_crps},
             test_window=4,
             min_train_window=12,
             stride=4,
             num_samples=20,
-            forecaster_options={"num_steps": 30},
             eval_train=eval_train,
         )
 
@@ -596,17 +663,48 @@ def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
         keep_predictions=True,
     )
     assert results
     for r in results:
         assert r.prediction is not None
+        assert r.prediction.shape == (20, 4, 1)
+
+
+def test_backtest_keeps_numpy_predictions_from_host_forecast_fn(rng_key: Array) -> None:
+    """A ``forecast_fn`` returning NumPy (the backend-free ``device="host"`` result) is kept as is.
+
+    ``BacktestResult.prediction`` is type-checked at construction by the
+    jaxtyping import hook, so it must admit the NumPy container the host path
+    returns when no CPU backend is initialized.
+    """
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+
+    def numpy_forecast_fn(*args: object, **kwargs: object) -> np.ndarray:
+        return np.asarray(_canned_forecast_fn(*args, **kwargs))  # ty: ignore[invalid-argument-type]
+
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        rw_model_factory,
+        forecast_fn=numpy_forecast_fn,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        keep_predictions=True,
+    )
+    assert results
+    for r in results:
+        assert isinstance(r.prediction, np.ndarray)
         assert r.prediction.shape == (20, 4, 1)
 
 
@@ -625,12 +723,13 @@ def test_backtest_eval_train_applies_transform_twice_per_window(rng_key: Array) 
         rng_key,
         data,
         covariates,
-        RandomWalkModel,
+        rw_model_factory,
+        forecast_fn=_canned_forecast_fn,
+        in_sample_fn=_canned_in_sample_fn,
         test_window=4,
         min_train_window=12,
         stride=4,
         num_samples=20,
-        forecaster_options={"num_steps": 30},
         transform=transform,
         eval_train=True,
     )
@@ -638,23 +737,65 @@ def test_backtest_eval_train_applies_transform_twice_per_window(rng_key: Array) 
     assert transform_calls["count"] == 6
 
 
-def test_backtest_eval_train_requires_predict_in_sample(rng_key: Array) -> None:
-    # A custom forecaster without predict_in_sample cannot be scored in-sample.
+def test_backtest_eval_train_requires_in_sample_fn(rng_key: Array) -> None:
+    # eval_train=True with the default in_sample_fn=None raises before any
+    # window runs, so the forecast_fn spy is never invoked.
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
-    with pytest.raises(TypeError, match="predict_in_sample"):
+    with pytest.raises(ValueError, match="eval_train=True requires in_sample_fn"):
         backtest(
             rng_key,
             data,
             covariates,
-            RandomWalkModel,
-            forecaster_fn=cast("ForecasterFactory", lambda *args, **kwargs: _FakeForecaster()),
+            rw_model_factory,
+            forecast_fn=_never_called,
             test_window=4,
             min_train_window=12,
             stride=4,
             num_samples=10,
             eval_train=True,
         )
+
+
+def test_backtest_forwards_batch_size_into_both_closures(rng_key: Array) -> None:
+    # Spec requirement: batch_size is forwarded unchanged into forecast_fn and
+    # in_sample_fn (spy closures record the kwarg they were called with).
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    forecast_calls: list[dict[str, Any]] = []
+    in_sample_calls: list[dict[str, Any]] = []
+
+    def in_sample_fn(
+        rng_key: Array,
+        model: object,
+        train_data: Array,
+        train_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        in_sample_calls.append({"batch_size": batch_size})
+        return _canned_in_sample_fn(
+            rng_key, model, train_data, train_covariates, num_samples, batch_size=batch_size
+        )
+
+    results = backtest(
+        rng_key,
+        data,
+        covariates,
+        rw_model_factory,
+        forecast_fn=_spy_closure(forecast_calls),
+        in_sample_fn=in_sample_fn,
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=10,
+        batch_size=7,
+        eval_train=True,
+    )
+    assert results
+    assert forecast_calls and all(call["batch_size"] == 7 for call in forecast_calls)
+    assert in_sample_calls and all(call["batch_size"] == 7 for call in in_sample_calls)
 
 
 # --- unit tests for the private backtest sub-components ------------------------
@@ -800,26 +941,6 @@ def test_rolling_windows_test_window_none_forecasts_to_end() -> None:
     assert all(t1 - t0 == 4 for t0, t1, _ in windows)
 
 
-def test_resolve_options_none_is_empty() -> None:
-    assert _resolve_options(None, 0, 1, 2) == {}
-
-
-def test_resolve_options_passes_mapping_through() -> None:
-    opts = {"num_steps": 30}
-    assert _resolve_options(opts, 0, 1, 2) is opts
-
-
-def test_resolve_options_invokes_callable_with_window() -> None:
-    seen: list[tuple[int, int, int]] = []
-
-    def options_for(t0: int, t1: int, t2: int) -> dict[str, int]:
-        seen.append((t0, t1, t2))
-        return {"num_steps": 7}
-
-    assert _resolve_options(options_for, 3, 5, 9) == {"num_steps": 7}
-    assert seen == [(3, 5, 9)]
-
-
 def test_slice_window_returns_train_test_truth() -> None:
     data = jnp.arange(10, dtype=jnp.float32).reshape(10, 1)
     covariates = jnp.arange(20, dtype=jnp.float32).reshape(10, 2)
@@ -837,42 +958,20 @@ def test_timed_returns_result_and_nonnegative_seconds() -> None:
     assert seconds >= 0.0
 
 
-def test_scalar_params_keeps_only_scalars() -> None:
-    class _Fitted:
-        params = {"sigma": jnp.array(0.5), "loc_vec": jnp.arange(3)}
-
-    assert _scalar_params(_Fitted()) == {"sigma": 0.5}
-
-
-def test_scalar_params_without_params_is_empty() -> None:
-    assert _scalar_params(object()) == {}
-
-
-def test_scalar_params_non_mapping_is_empty() -> None:
-    class _Fitted:
-        params = "not a mapping"
-
-    assert _scalar_params(_Fitted()) == {}
-
-
-class _FakeForecaster:
-    """Deterministic stand-in forecaster for ``_run_window`` unit tests."""
-
-    def __init__(self) -> None:
-        self.params = {"sigma": jnp.array(0.3), "level_vec": jnp.arange(4)}
-
-    def __call__(
-        self,
-        rng_key: Array,
-        data: Array,
-        covariates: Array,
-        num_samples: int,
-        *,
-        batch_size: int | None = None,
-    ) -> Array:
-        # Forecast horizon is the suffix of ``covariates`` beyond ``data``.
-        horizon = covariates.shape[-2] - data.shape[-2]
-        return jnp.ones((num_samples, horizon, data.shape[-1]))
+def _fake_forecast_fn(
+    rng_key: Array,
+    model: object,
+    data: Array,
+    covariates: Array,
+    test_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array:
+    """Deterministic stand-in forecast for ``_run_window`` unit tests."""
+    # Forecast horizon is the suffix of ``test_covariates`` beyond ``data``.
+    horizon = test_covariates.shape[-2] - data.shape[-2]
+    return jnp.ones((num_samples, horizon, data.shape[-1]))
 
 
 def test_run_window_builds_result_and_applies_transform() -> None:
@@ -891,10 +990,10 @@ def test_run_window_builds_result_and_applies_transform() -> None:
         8,
         data=data,
         covariates=covariates,
-        model_fn=RandomWalkModel,
+        model_fn=rw_model_factory,
         shared_model=None,
-        forecaster_fn=cast("ForecasterFactory", lambda *args, **kwargs: _FakeForecaster()),
-        options={},
+        forecast_fn=_fake_forecast_fn,
+        in_sample_fn=None,
         num_samples=16,
         batch_size=None,
         metrics=DEFAULT_METRICS,
@@ -907,9 +1006,7 @@ def test_run_window_builds_result_and_applies_transform() -> None:
     assert (result.t0, result.t1, result.t2) == (2, 6, 8)
     assert result.num_samples == 16
     assert set(result.metrics) == {"mae", "rmse", "crps", "coverage"}
-    assert result.params == {"sigma": pytest.approx(0.3)}  # the vector param is dropped
-    assert result.train_walltime >= 0.0
-    assert result.test_walltime >= 0.0
+    assert result.walltime >= 0.0
     assert result.train_metrics == {}
     assert result.prediction is None
     assert transform_calls["count"] == 1
@@ -924,10 +1021,8 @@ def _make_result(t0: int, **kwargs: object) -> BacktestResult:
         "t1": t0 + 10,
         "t2": t0 + 14,
         "num_samples": 20,
-        "train_walltime": 0.5,
-        "test_walltime": 0.25,
+        "walltime": 0.5,
         "metrics": {"crps": 1.0, "mae": 2.0},
-        "params": {"sigma": 0.3},
         "train_metrics": {"crps": 0.8},
     }
     base.update(kwargs)
@@ -945,16 +1040,14 @@ def test_results_to_dataframe_schema_and_row_count() -> None:
         "t1",
         "t2",
         "num_samples",
-        "train_walltime",
-        "test_walltime",
+        "walltime",
         "metric_crps",
         "metric_mae",
         "train_metric_crps",
-        "param_sigma",
     }
     assert list(df["t0"]) == [0, 4]
     assert list(df["metric_crps"]) == [1.0, 1.0]
-    assert list(df["param_sigma"]) == [0.3, 0.3]
+    assert list(df["walltime"]) == [0.5, 0.5]
 
 
 def test_results_to_dataframe_empty_input() -> None:
@@ -978,15 +1071,14 @@ def test_results_to_dataframe_heterogeneous_metrics() -> None:
 def test_results_to_dataframe_no_metrics_or_params() -> None:
     from numpyro_forecast.evaluate import results_to_dataframe
 
-    r = _make_result(0, metrics={}, params={}, train_metrics={})
+    r = _make_result(0, metrics={}, train_metrics={})
     df = results_to_dataframe([r])
     assert set(df.columns) == {
         "t0",
         "t1",
         "t2",
         "num_samples",
-        "train_walltime",
-        "test_walltime",
+        "walltime",
     }
 
 
@@ -1014,7 +1106,7 @@ def test_rolling_backtest_reuse_model_predict_cache(
     """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
     import jax
 
-    from numpyro_forecast.functional.prediction import _predict
+    from numpyro_forecast.predictive import _predict
 
     duration = 80
     train, test, stride = 25, 5, 5
@@ -1029,12 +1121,12 @@ def test_rolling_backtest_reuse_model_predict_cache(
                 rng_key,
                 data,
                 cov,
-                RandomWalkModel,
+                rw_model_factory,
+                forecast_fn=svi_forecast_fn(num_steps=30),
                 train_window=train,
                 test_window=test,
                 stride=stride,
                 num_samples=10,
-                forecaster_options={"num_steps": 30},
                 reuse_model=reuse,
             )
             jax.block_until_ready(data)

@@ -10,13 +10,6 @@ def _require_positive_num_samples(num_samples: int) -> None:
         raise ValueError(msg)
 
 
-def _require_equal_duration(data: Array, covariates: Array) -> None:
-    """Raise ``ValueError`` if ``data`` and ``covariates`` differ in duration."""
-    if data.shape[-2] != covariates.shape[-2]:
-        msg = "fit expects data and covariates of equal duration"
-        raise ValueError(msg)
-
-
 def _require_covariates_extend_data(data: Array, covariates: Array) -> None:
     """Raise ``ValueError`` unless ``covariates`` is longer than ``data`` in time."""
     if data.shape[-2] >= covariates.shape[-2]:

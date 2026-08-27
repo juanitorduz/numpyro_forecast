@@ -235,3 +235,6 @@ uv.lock
 /docs/examples/_src/
 /docs/examples/thumbnails/
 .DS_Store
+
+# Local plan-execution scratch (never committed)
+.superpowers/
