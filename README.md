@@ -66,6 +66,7 @@ Define a model, fit it with SVI, and draw probabilistic forecasts:
 ...     Horizon, draw_posterior, eval_crps, forecast, innovations, predict
 ... )
 >>> from numpyro_forecast.features import fourier_features
+...
 >>> def seasonal_model(covariates, data=None):
 ...     """Local-level random walk + Fourier seasonality, Student-T noise."""
 ...     h = Horizon.from_data(covariates, data)
@@ -86,6 +87,7 @@ Define a model, fit it with SVI, and draw probabilistic forecasts:
 ...     prediction = level + bias + regression
 ...     # Registers "obs" over the training window and "forecast" over the horizon.
 ...     predict(h, dist.StudentT(df=nu, loc=0.0, scale=sigma), prediction)
+...
 >>> # Synthetic weekly-seasonal series: time at axis -2, one observation dim at -1.
 >>> period, t_obs, horizon = 52.0, 156, 26
 >>> duration = t_obs + horizon
