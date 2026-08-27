@@ -141,6 +141,8 @@ reference:
       - typing.ForecastModel
       - typing.ForecastFn
       - typing.InSampleFn
+      - typing.Metric
+      - typing.ModelFactory
 
   - title: Autocorrelation
     desc: Batched autocorrelation and partial autocorrelation diagnostics.

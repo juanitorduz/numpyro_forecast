@@ -70,7 +70,7 @@ dev = [
     "scikit-learn>=1.6",
 ]
 docs = [
-    "great-docs>=0.14",
+    "great-docs==0.17.0",
 ]
 cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]

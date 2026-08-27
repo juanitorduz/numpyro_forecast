@@ -47,6 +47,18 @@ For the tests, we use `pytest`. `make tests` runs the suite in parallel with pyt
 
 We use Numpy-like docstrings: https://numpydoc.readthedocs.io/en/latest/format.html
 
+### Docstring markup
+
+The docs site renders docstrings as Quarto Markdown with great-docs (pinned to `great-docs==0.17.0`), which does **not** run any Sphinx/RST conversion for numpy-style docstrings: `:func:`, `:class:`, `:math:`, `.. math::`, `sentence::` literal blocks and `` `text <url>`_ `` links all show up literally or as dead code spans. Write the markup great-docs renders instead:
+
+- Cross references are code spans that great-docs autolinks against the API reference: `` `~~numpyro_forecast.models.ssoe()` `` links to the `ssoe` page and displays `ssoe()` (the `~~` prefix shortens the display; a single `~` breaks the link); a bare `` `backtest()` `` links by suffix match; `` `numpyro_forecast.models.Horizon` `` links and shows the full path. Symbols outside the package (`jax.Array`, `numpyro.infer.autoguide.AutoGuide`, `functools.partial()`) cannot link, so write them as plain full paths. A symbol only links when it is listed under `reference:` in `great-docs.yml`.
+- Math is `$...$` inline and a `$$` block on its own lines (blank line before and after); any docstring containing a backslash must be a raw string (`r"""`).
+- Literal code blocks are fenced (```` ```python ````) after a sentence ending in a single colon, at the docstring's indentation; ruff's `docstring-code-format` reformats what parses as Python.
+- Links are Markdown `[text](url)`. `>>>` doctest lines are fine (great-docs fences them).
+- NumPy `See Also` sections keep bare entry names at column 0 (`name : description`); great-docs links the names itself.
+
+`tests/test_docstring_markup.py` enforces this for every docstring under `numpyro_forecast/`, `tests/` and `scripts/` and for the markdown and code cells of the example notebooks.
+
 ## Documentation
 
 The docs site is built with [great-docs](https://github.com/posit-dev/great-docs) (config in `great-docs.yml`) and published to https://juanitorduz.github.io/numpyro_forecast/. Build it locally with `make docs` (or `make docs-preview`).
