@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "numpyro_forecast"
 version = "0.2.3"
-description = "A JAX/NumPyro port of Pyro's forecasting module."
+description = "A JAX/NumPyro port of the ideas in Pyro's forecasting module."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
@@ -36,7 +36,6 @@ dependencies = [
     # <0.11.1 until numpyro releases pyro-ppl/numpyro#2245 (render_model provenance on jax 0.11.1)
     "jax>=0.10.0,<0.11.1",
     "jaxtyping>=0.3.11",
-    "matplotlib>=3.8,<3.11",
     "numpyro>=0.20.0",
 ]
 
@@ -53,6 +52,7 @@ blackjax = [
 ]
 dev = [
     "graphviz>=0.20",
+    "matplotlib>=3.8,<3.11",
     "ipykernel>=6.29",
     "jupytext>=1.16",
     "nbmake>=1.5",
