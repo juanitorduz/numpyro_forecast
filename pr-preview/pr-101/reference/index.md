@@ -1,14 +1,23 @@
 # API Reference
 
 
-## Typing
+## Distribution surgery
 
 
-Public type contracts.
+Time-axis operations on observation distributions, extensible via singledispatch.
 
 
-[typing.ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel)  
-A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
+[surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
+Re-center a zero-centered noise distribution at `loc`.
+
+[surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
+Slice an elementwise distribution along the time axis `-2`.
+
+[surgery.prefix_condition()](surgery.prefix_condition.md#numpyro_forecast.surgery.prefix_condition)  
+Condition a `(t+f)`-length distribution on a `t`-length data prefix.
+
+[surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
+Declare a distribution family elementwise (usable as a decorator).
 
 
 ## Backtesting & evaluation
@@ -60,6 +69,54 @@ Mean Winkler interval score for the central `alpha` prediction interval.
 Build a Mean Absolute Scaled Error metric scaled by `train_data`.
 
 
+## ArviZ export
+
+
+Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+
+[convert.to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree)  
+Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
+
+[convert.add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups)  
+Attach out-of-sample forecast groups to a copy of `tree`.
+
+[convert.predictions_to_datatree()](convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree)  
+Pack prediction draws into a DataTree laid out for per-series `plot_lm` faceting.
+
+
+## Extensions (contrib)
+
+
+Optional backends behind pyproject extras (never imported by default).
+
+
+[contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  
+BlackJAX NUTS with Stan-style window adaptation.
+
+[contrib.blackjax.BlackjaxMCLMCKernel](contrib.blackjax.BlackjaxMCLMCKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel)  
+BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
+
+[contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
+Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
+
+[contrib.blackjax.PathfinderFit](contrib.blackjax.PathfinderFit.md#numpyro_forecast.contrib.blackjax.PathfinderFit)  
+The result of fitting a forecasting model with BlackJAX Pathfinder.
+
+[contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder)  
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
+
+## Typing
+
+
+Public type contracts.
+
+
+[typing.ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel)  
+A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
+
+
 ## Autocorrelation
 
 
@@ -99,23 +156,23 @@ Return zeros shaped like `data` but extended to the covariate duration.
 Concatenate in-sample and forecast-horizon arrays along the time axis.
 
 
-## Distribution surgery
+## Datasets
 
 
-Time-axis operations on observation distributions, extensible via singledispatch.
+Example datasets used in the tutorials.
 
 
-[surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
-Re-center a zero-centered noise distribution at `loc`.
+[datasets.load_bart_weekly()](datasets.load_bart_weekly.md#numpyro_forecast.datasets.load_bart_weekly)  
+Load total weekly BART ridership (log scale) for the univariate example.
 
-[surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
-Slice an elementwise distribution along the time axis `-2`.
+[datasets.load_bart_hierarchical()](datasets.load_bart_hierarchical.md#numpyro_forecast.datasets.load_bart_hierarchical)  
+Load the windowed hierarchical BART panel for the hierarchical example.
 
-[surgery.prefix_condition()](surgery.prefix_condition.md#numpyro_forecast.surgery.prefix_condition)  
-Condition a `(t+f)`-length distribution on a `t`-length data prefix.
+[datasets.load_victoria_electricity()](datasets.load_victoria_electricity.md#numpyro_forecast.datasets.load_victoria_electricity)  
+Load hourly Victoria (Australia) electricity demand and temperature.
 
-[surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
-Declare a distribution family elementwise (usable as a decorator).
+[datasets.bart_available()](datasets.bart_available.md#numpyro_forecast.datasets.bart_available)  
+Return whether the BART dataset can be loaded (download succeeds).
 
 
 ## Optional dependencies
@@ -131,7 +188,7 @@ Import an optional dependency, or raise a targeted `ImportError`.
 ## Exceptions
 
 
-Package exception hierarchy raised at resolution and validation boundaries.
+Package exception hierarchy raised at validation boundaries.
 
 
 [exceptions.NumpyroForecastError](exceptions.NumpyroForecastError.md#numpyro_forecast.exceptions.NumpyroForecastError)  
@@ -157,60 +214,3 @@ A `MultivariateNormal` layout is unsupported for time-axis surgery.
 
 [exceptions.DeviceMemoryError](exceptions.DeviceMemoryError.md#numpyro_forecast.exceptions.DeviceMemoryError)  
 A memory pool ran out during posterior or predictive sampling.
-
-
-## ArviZ export
-
-
-Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
-
-
-[convert.to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree)  
-Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
-
-[convert.add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups)  
-Attach out-of-sample forecast groups to a copy of `tree`.
-
-[convert.predictions_to_datatree()](convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree)  
-Pack prediction draws into a DataTree laid out for per-series `plot_lm` faceting.
-
-
-## Extensions (contrib)
-
-
-Optional backends behind pyproject extras (never imported by default).
-
-
-[contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  
-BlackJAX NUTS with Stan-style window adaptation.
-
-[contrib.blackjax.BlackjaxMCLMCKernel](contrib.blackjax.BlackjaxMCLMCKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel)  
-BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
-
-[contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
-Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
-
-[contrib.blackjax.PathfinderFit](contrib.blackjax.PathfinderFit.md#numpyro_forecast.contrib.blackjax.PathfinderFit)  
-The result of fitting a forecasting model with BlackJAX Pathfinder.
-
-[contrib.blackjax.fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder)  
-Fit a forecasting model with BlackJAX Pathfinder variational inference.
-
-
-## Datasets
-
-
-Example datasets used in the tutorials.
-
-
-[datasets.load_bart_weekly()](datasets.load_bart_weekly.md#numpyro_forecast.datasets.load_bart_weekly)  
-Load total weekly BART ridership (log scale) for the univariate example.
-
-[datasets.load_bart_hierarchical()](datasets.load_bart_hierarchical.md#numpyro_forecast.datasets.load_bart_hierarchical)  
-Load the windowed hierarchical BART panel for the hierarchical example.
-
-[datasets.load_victoria_electricity()](datasets.load_victoria_electricity.md#numpyro_forecast.datasets.load_victoria_electricity)  
-Load hourly Victoria (Australia) electricity demand and temperature.
-
-[datasets.bart_available()](datasets.bart_available.md#numpyro_forecast.datasets.bart_available)  
-Return whether the BART dataset can be loaded (download succeeds).

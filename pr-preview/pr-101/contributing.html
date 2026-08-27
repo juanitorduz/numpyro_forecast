@@ -220,14 +220,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Thanks for your interest in <code>numpyro_forecast</code>!</p>
 <section id="development-setup" class="level1">
 <h1>Development setup</h1>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> sync <span class="at">--all-extras</span></span>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> sync <span class="at">--extra</span> all</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">prek</span> install</span></code></pre></div>
 </section>
 <section id="workflow" class="level1">
 <h1>Workflow</h1>
 <ul>
 <li><strong>Lint &amp; format:</strong> <code>uv run ruff check .</code> and <code>uv run ruff format .</code></li>
-<li><strong>Type check:</strong> <code>uv run ty check numpyro_forecast/</code></li>
+<li><strong>Type check:</strong> <code>uv run ty check</code></li>
 <li><strong>Tests:</strong> <code>uv run pytest</code></li>
 <li><strong>Notebooks:</strong> <code>uv run pytest --nbmake docs/examples/</code> (executes the example notebooks)</li>
 <li><strong>Docs site:</strong> <code>make docs</code> (build) or <code>make docs-preview</code> (live preview)</li>

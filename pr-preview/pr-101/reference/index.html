@@ -90,13 +90,13 @@ ul.task-list li input[type="checkbox"] {
 
   <link rel="alternate" type="text/markdown" href="index.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/">
-  <meta name="description" content="A JAX/NumPyro port of Pyro's forecasting module.">
+  <meta name="description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "numpyro_forecast",
-  "description": "A JAX/NumPyro port of Pyro's forecasting module.",
+  "description": "A JAX/NumPyro port of the ideas in Pyro's forecasting module.",
   "codeRepository": "https://github.com/juanitorduz/numpyro_forecast",
   "license": "https://opensource.org/licenses/Apache-2.0",
   "url": "https://juanitorduz.github.io/numpyro_forecast",
@@ -109,12 +109,12 @@ ul.task-list li input[type="checkbox"] {
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="API Reference – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="A JAX/NumPyro port of Pyro's forecasting module.">
+  <meta property="og:description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="API Reference – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="A JAX/NumPyro port of Pyro's forecasting module.">
+  <meta name="twitter:description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-reference doc-reference-index quarto-light">
@@ -185,13 +185,31 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Typing</span></a>
+ <span class="menu-text">Distribution surgery</span></a>
 </div>
       <ul id="quarto-sidebar-section-1" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">typing.ForecastModel</span></a>
+  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.shift_loc</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.slice_time</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.prefix_condition</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.register_elementwise</span></a>
   </div>
 </li>
       </ul>
@@ -291,9 +309,87 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Autocorrelation</span></a>
+ <span class="menu-text">ArviZ export</span></a>
 </div>
       <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">convert.to_datatree</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">convert.add_forecast_groups</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">convert.predictions_to_datatree</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Extensions (contrib)</span></a>
+</div>
+      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.BlackjaxNUTSKernel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.BlackjaxMCLMCKernel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.BlackjaxCustomKernel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.PathfinderFit.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.PathfinderFit</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.fit_pathfinder.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.fit_pathfinder</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Typing</span></a>
+</div>
+      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ForecastModel</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Autocorrelation</span></a>
+</div>
+      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
@@ -313,7 +409,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Seasonal features</span></a>
 </div>
-      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
@@ -333,7 +429,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Array helpers</span></a>
 </div>
-      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
@@ -351,31 +447,31 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Distribution surgery</span></a>
+ <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.shift_loc</span></a>
+  <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">datasets.load_bart_weekly</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.slice_time</span></a>
+  <a href="../reference/datasets.load_bart_hierarchical.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">datasets.load_bart_hierarchical</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.prefix_condition</span></a>
+  <a href="../reference/datasets.load_victoria_electricity.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">datasets.load_victoria_electricity</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.register_elementwise</span></a>
+  <a href="../reference/datasets.bart_available.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">datasets.bart_available</span></a>
   </div>
 </li>
       </ul>
@@ -385,7 +481,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Optional dependencies</span></a>
 </div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
@@ -399,7 +495,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Exceptions</span></a>
 </div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -450,102 +546,6 @@ ul.task-list li input[type="checkbox"] {
 </li>
       </ul>
   </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">ArviZ export</span></a>
-</div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">convert.to_datatree</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">convert.add_forecast_groups</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/convert.predictions_to_datatree.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">convert.predictions_to_datatree</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Extensions (contrib)</span></a>
-</div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">contrib.blackjax.BlackjaxNUTSKernel</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">contrib.blackjax.BlackjaxMCLMCKernel</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">contrib.blackjax.BlackjaxCustomKernel</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/contrib.blackjax.PathfinderFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">contrib.blackjax.PathfinderFit</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/contrib.blackjax.fit_pathfinder.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">contrib.blackjax.fit_pathfinder</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Datasets</span></a>
-</div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">datasets.load_bart_weekly</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/datasets.load_bart_hierarchical.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">datasets.load_bart_hierarchical</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/datasets.load_victoria_electricity.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">datasets.load_victoria_electricity</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/datasets.bart_available.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">datasets.bart_available</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
     </ul>
     </div>
 </nav>
@@ -556,17 +556,17 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul class="collapse">
-  <li><a href="#typing" id="toc-typing" class="nav-link active" data-scroll-target="#typing">Typing</a></li>
+  <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link active" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
   <li><a href="#backtesting-evaluation" id="toc-backtesting-evaluation" class="nav-link" data-scroll-target="#backtesting-evaluation">Backtesting &amp; evaluation</a></li>
+  <li><a href="#arviz-export" id="toc-arviz-export" class="nav-link" data-scroll-target="#arviz-export">ArviZ export</a></li>
+  <li><a href="#extensions-contrib" id="toc-extensions-contrib" class="nav-link" data-scroll-target="#extensions-contrib">Extensions (contrib)</a></li>
+  <li><a href="#typing" id="toc-typing" class="nav-link" data-scroll-target="#typing">Typing</a></li>
   <li><a href="#autocorrelation" id="toc-autocorrelation" class="nav-link" data-scroll-target="#autocorrelation">Autocorrelation</a></li>
   <li><a href="#seasonal-features" id="toc-seasonal-features" class="nav-link" data-scroll-target="#seasonal-features">Seasonal features</a></li>
   <li><a href="#array-helpers" id="toc-array-helpers" class="nav-link" data-scroll-target="#array-helpers">Array helpers</a></li>
-  <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
+  <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets">Datasets</a></li>
   <li><a href="#optional-dependencies" id="toc-optional-dependencies" class="nav-link" data-scroll-target="#optional-dependencies">Optional dependencies</a></li>
   <li><a href="#exceptions" id="toc-exceptions" class="nav-link" data-scroll-target="#exceptions">Exceptions</a></li>
-  <li><a href="#arviz-export" id="toc-arviz-export" class="nav-link" data-scroll-target="#arviz-export">ArviZ export</a></li>
-  <li><a href="#extensions-contrib" id="toc-extensions-contrib" class="nav-link" data-scroll-target="#extensions-contrib">Extensions (contrib)</a></li>
-  <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets">Datasets</a></li>
   </ul>
 </nav>
     </div>
@@ -592,15 +592,27 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="typing" class="level2 doc-group">
-<h2 class="doc-group">Typing</h2>
+<section id="distribution-surgery" class="level2 doc-group">
+<h2 class="doc-group">Distribution surgery</h2>
 <div class="doc-description">
-<p>Public type contracts.</p>
+<p>Time-axis operations on observation distributions, extensible via singledispatch.</p>
 </div>
 <dl>
-<dt><a href="../reference/typing.ForecastModel.html#numpyro_forecast.typing.ForecastModel" class="doc-class doc-label doc-label-protocol">typing.ForecastModel</a></dt>
+<dt><a href="../reference/surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="doc-function doc-label doc-label-function">surgery.shift_loc()</a></dt>
 <dd>
-<p>A NumPyro forecasting model: a callable <code>(covariates, data=None) -&gt; None</code>.</p>
+<p>Re-center a zero-centered noise distribution at <code>loc</code>.</p>
+</dd>
+<dt><a href="../reference/surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="doc-function doc-label doc-label-function">surgery.slice_time()</a></dt>
+<dd>
+<p>Slice an elementwise distribution along the time axis <code>-2</code>.</p>
+</dd>
+<dt><a href="../reference/surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="doc-function doc-label doc-label-function">surgery.prefix_condition()</a></dt>
+<dd>
+<p>Condition a <code>(t+f)</code>-length distribution on a <code>t</code>-length data prefix.</p>
+</dd>
+<dt><a href="../reference/surgery.register_elementwise.html#numpyro_forecast.surgery.register_elementwise" class="doc-function doc-label doc-label-function">surgery.register_elementwise()</a></dt>
+<dd>
+<p>Declare a distribution family elementwise (usable as a decorator).</p>
 </dd>
 </dl>
 </section>
@@ -668,6 +680,66 @@ ul.task-list li input[type="checkbox"] {
 </dd>
 </dl>
 </section>
+<section id="arviz-export" class="level2 doc-group">
+<h2 class="doc-group">ArviZ export</h2>
+<div class="doc-description">
+<p>Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.</p>
+</div>
+<dl>
+<dt><a href="../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="doc-function doc-label doc-label-function">convert.to_datatree()</a></dt>
+<dd>
+<p>Convert an already-drawn posterior into an ArviZ-schema <code>xarray.DataTree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="doc-function doc-label doc-label-function">convert.add_forecast_groups()</a></dt>
+<dd>
+<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="doc-function doc-label doc-label-function">convert.predictions_to_datatree()</a></dt>
+<dd>
+<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
+</dd>
+</dl>
+</section>
+<section id="extensions-contrib" class="level2 doc-group">
+<h2 class="doc-group">Extensions (contrib)</h2>
+<div class="doc-description">
+<p>Optional backends behind pyproject extras (never imported by default).</p>
+</div>
+<dl>
+<dt><a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxNUTSKernel</a></dt>
+<dd>
+<p>BlackJAX NUTS with Stan-style window adaptation.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxMCLMCKernel</a></dt>
+<dd>
+<p>BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</a></dt>
+<dd>
+<p>Adapt an arbitrary BlackJAX sampler via a user-supplied <code>build_fn</code>.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.PathfinderFit.html#numpyro_forecast.contrib.blackjax.PathfinderFit" class="doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</a></dt>
+<dd>
+<p>The result of fitting a forecasting model with BlackJAX Pathfinder.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.fit_pathfinder.html#numpyro_forecast.contrib.blackjax.fit_pathfinder" class="doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</a></dt>
+<dd>
+<p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
+</dd>
+</dl>
+</section>
+<section id="typing" class="level2 doc-group">
+<h2 class="doc-group">Typing</h2>
+<div class="doc-description">
+<p>Public type contracts.</p>
+</div>
+<dl>
+<dt><a href="../reference/typing.ForecastModel.html#numpyro_forecast.typing.ForecastModel" class="doc-class doc-label doc-label-protocol">typing.ForecastModel</a></dt>
+<dd>
+<p>A NumPyro forecasting model: a callable <code>(covariates, data=None) -&gt; None</code>.</p>
+</dd>
+</dl>
+</section>
 <section id="autocorrelation" class="level2 doc-group">
 <h2 class="doc-group">Autocorrelation</h2>
 <div class="doc-description">
@@ -716,27 +788,27 @@ ul.task-list li input[type="checkbox"] {
 </dd>
 </dl>
 </section>
-<section id="distribution-surgery" class="level2 doc-group">
-<h2 class="doc-group">Distribution surgery</h2>
+<section id="datasets" class="level2 doc-group">
+<h2 class="doc-group">Datasets</h2>
 <div class="doc-description">
-<p>Time-axis operations on observation distributions, extensible via singledispatch.</p>
+<p>Example datasets used in the tutorials.</p>
 </div>
 <dl>
-<dt><a href="../reference/surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="doc-function doc-label doc-label-function">surgery.shift_loc()</a></dt>
+<dt><a href="../reference/datasets.load_bart_weekly.html#numpyro_forecast.datasets.load_bart_weekly" class="doc-function doc-label doc-label-function">datasets.load_bart_weekly()</a></dt>
 <dd>
-<p>Re-center a zero-centered noise distribution at <code>loc</code>.</p>
+<p>Load total weekly BART ridership (log scale) for the univariate example.</p>
 </dd>
-<dt><a href="../reference/surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="doc-function doc-label doc-label-function">surgery.slice_time()</a></dt>
+<dt><a href="../reference/datasets.load_bart_hierarchical.html#numpyro_forecast.datasets.load_bart_hierarchical" class="doc-function doc-label doc-label-function">datasets.load_bart_hierarchical()</a></dt>
 <dd>
-<p>Slice an elementwise distribution along the time axis <code>-2</code>.</p>
+<p>Load the windowed hierarchical BART panel for the hierarchical example.</p>
 </dd>
-<dt><a href="../reference/surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="doc-function doc-label doc-label-function">surgery.prefix_condition()</a></dt>
+<dt><a href="../reference/datasets.load_victoria_electricity.html#numpyro_forecast.datasets.load_victoria_electricity" class="doc-function doc-label doc-label-function">datasets.load_victoria_electricity()</a></dt>
 <dd>
-<p>Condition a <code>(t+f)</code>-length distribution on a <code>t</code>-length data prefix.</p>
+<p>Load hourly Victoria (Australia) electricity demand and temperature.</p>
 </dd>
-<dt><a href="../reference/surgery.register_elementwise.html#numpyro_forecast.surgery.register_elementwise" class="doc-function doc-label doc-label-function">surgery.register_elementwise()</a></dt>
+<dt><a href="../reference/datasets.bart_available.html#numpyro_forecast.datasets.bart_available" class="doc-function doc-label doc-label-function">datasets.bart_available()</a></dt>
 <dd>
-<p>Declare a distribution family elementwise (usable as a decorator).</p>
+<p>Return whether the BART dataset can be loaded (download succeeds).</p>
 </dd>
 </dl>
 </section>
@@ -755,7 +827,7 @@ ul.task-list li input[type="checkbox"] {
 <section id="exceptions" class="level2 doc-group">
 <h2 class="doc-group">Exceptions</h2>
 <div class="doc-description">
-<p>Package exception hierarchy raised at resolution and validation boundaries.</p>
+<p>Package exception hierarchy raised at validation boundaries.</p>
 </div>
 <dl>
 <dt><a href="../reference/exceptions.NumpyroForecastError.html#numpyro_forecast.exceptions.NumpyroForecastError" class="doc-class doc-label doc-label-exception">exceptions.NumpyroForecastError</a></dt>
@@ -789,78 +861,6 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/exceptions.DeviceMemoryError.html#numpyro_forecast.exceptions.DeviceMemoryError" class="doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</a></dt>
 <dd>
 <p>A memory pool ran out during posterior or predictive sampling.</p>
-</dd>
-</dl>
-</section>
-<section id="arviz-export" class="level2 doc-group">
-<h2 class="doc-group">ArviZ export</h2>
-<div class="doc-description">
-<p>Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.</p>
-</div>
-<dl>
-<dt><a href="../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="doc-function doc-label doc-label-function">convert.to_datatree()</a></dt>
-<dd>
-<p>Convert an already-drawn posterior into an ArviZ-schema <code>xarray.DataTree</code>.</p>
-</dd>
-<dt><a href="../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="doc-function doc-label doc-label-function">convert.add_forecast_groups()</a></dt>
-<dd>
-<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
-</dd>
-<dt><a href="../reference/convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="doc-function doc-label doc-label-function">convert.predictions_to_datatree()</a></dt>
-<dd>
-<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
-</dd>
-</dl>
-</section>
-<section id="extensions-contrib" class="level2 doc-group">
-<h2 class="doc-group">Extensions (contrib)</h2>
-<div class="doc-description">
-<p>Optional backends behind pyproject extras (never imported by default).</p>
-</div>
-<dl>
-<dt><a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxNUTSKernel</a></dt>
-<dd>
-<p>BlackJAX NUTS with Stan-style window adaptation.</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxMCLMCKernel</a></dt>
-<dd>
-<p>BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</a></dt>
-<dd>
-<p>Adapt an arbitrary BlackJAX sampler via a user-supplied <code>build_fn</code>.</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.PathfinderFit.html#numpyro_forecast.contrib.blackjax.PathfinderFit" class="doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</a></dt>
-<dd>
-<p>The result of fitting a forecasting model with BlackJAX Pathfinder.</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.fit_pathfinder.html#numpyro_forecast.contrib.blackjax.fit_pathfinder" class="doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</a></dt>
-<dd>
-<p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
-</dd>
-</dl>
-</section>
-<section id="datasets" class="level2 doc-group">
-<h2 class="doc-group">Datasets</h2>
-<div class="doc-description">
-<p>Example datasets used in the tutorials.</p>
-</div>
-<dl>
-<dt><a href="../reference/datasets.load_bart_weekly.html#numpyro_forecast.datasets.load_bart_weekly" class="doc-function doc-label doc-label-function">datasets.load_bart_weekly()</a></dt>
-<dd>
-<p>Load total weekly BART ridership (log scale) for the univariate example.</p>
-</dd>
-<dt><a href="../reference/datasets.load_bart_hierarchical.html#numpyro_forecast.datasets.load_bart_hierarchical" class="doc-function doc-label doc-label-function">datasets.load_bart_hierarchical()</a></dt>
-<dd>
-<p>Load the windowed hierarchical BART panel for the hierarchical example.</p>
-</dd>
-<dt><a href="../reference/datasets.load_victoria_electricity.html#numpyro_forecast.datasets.load_victoria_electricity" class="doc-function doc-label doc-label-function">datasets.load_victoria_electricity()</a></dt>
-<dd>
-<p>Load hourly Victoria (Australia) electricity demand and temperature.</p>
-</dd>
-<dt><a href="../reference/datasets.bart_available.html#numpyro_forecast.datasets.bart_available" class="doc-function doc-label doc-label-function">datasets.bart_available()</a></dt>
-<dd>
-<p>Return whether the BART dataset can be loaded (download succeeds).</p>
 </dd>
 </dl>
 

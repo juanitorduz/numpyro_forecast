@@ -1,14 +1,14 @@
 ---
 name: numpyro_forecast
 description: >
-  A JAX/NumPyro port of Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.
+  A JAX/NumPyro port of the ideas in Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.
 license: Apache-2.0
 compatibility: Requires Python >=3.12.
 ---
 
 # numpyro_forecast
 
-A JAX/NumPyro port of Pyro's forecasting module.
+A JAX/NumPyro port of the ideas in Pyro's forecasting module.
 
 ## Installation
 
@@ -17,14 +17,6 @@ pip install numpyro_forecast
 ```
 
 ## API overview
-
-### Typing
-
-Public type contracts.
-
-- `typing.ForecastModel`
-- `typing.ForecastFn`
-- `typing.InSampleFn`
 
 ### Model building blocks
 
@@ -38,6 +30,15 @@ Plain model functions that register the train/forecast sites for you.
 - `models.SSOEStep`
 - `models.SSOEResult`
 - `models.predict`
+
+### Distribution surgery
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+- `surgery.shift_loc`
+- `surgery.slice_time`
+- `surgery.prefix_condition`
+- `surgery.register_elementwise`
 
 ### Producing draws
 
@@ -66,6 +67,36 @@ Rolling-window backtesting and forecast metrics.
 - `metrics.eval_interval_score`
 - `metrics.make_mase`
 
+### ArviZ export
+
+Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+- `convert.to_datatree`
+- `convert.add_forecast_groups`
+- `convert.predictions_to_datatree`
+
+### Extensions (contrib)
+
+Optional backends behind pyproject extras (never imported by default).
+
+- `contrib.blackjax.BlackjaxNUTSKernel`
+- `contrib.blackjax.BlackjaxMCLMCKernel`
+- `contrib.blackjax.BlackjaxCustomKernel`
+- `contrib.blackjax.PathfinderFit`
+- `contrib.blackjax.fit_pathfinder`
+- `contrib.blackjax.pathfinder_samples`
+- `contrib.blackjax.MultiPathfinderFit`
+- `contrib.blackjax.fit_multipathfinder`
+- `contrib.blackjax.multipathfinder_samples`
+
+### Typing
+
+Public type contracts.
+
+- `typing.ForecastModel`
+- `typing.ForecastFn`
+- `typing.InSampleFn`
+
 ### Autocorrelation
 
 Batched autocorrelation and partial autocorrelation diagnostics.
@@ -88,14 +119,14 @@ Time-axis array shaping for the train/forecast split.
 - `arrays.concat_future`
 - `arrays.pad_future`
 
-### Distribution surgery
+### Datasets
 
-Time-axis operations on observation distributions, extensible via singledispatch.
+Example datasets used in the tutorials.
 
-- `surgery.shift_loc`
-- `surgery.slice_time`
-- `surgery.prefix_condition`
-- `surgery.register_elementwise`
+- `datasets.load_bart_weekly`
+- `datasets.load_bart_hierarchical`
+- `datasets.load_victoria_electricity`
+- `datasets.bart_available`
 
 ### Optional dependencies
 
@@ -105,7 +136,7 @@ Lazy imports behind pyproject extras.
 
 ### Exceptions
 
-Package exception hierarchy raised at resolution and validation boundaries.
+Package exception hierarchy raised at validation boundaries.
 
 - `exceptions.NumpyroForecastError`
 - `exceptions.BacktestWindowError`
@@ -115,37 +146,6 @@ Package exception hierarchy raised at resolution and validation boundaries.
 - `exceptions.CovariateDimsError`
 - `exceptions.MVNLayoutError`
 - `exceptions.DeviceMemoryError`
-
-### ArviZ export
-
-Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
-
-- `convert.to_datatree`
-- `convert.add_forecast_groups`
-- `convert.predictions_to_datatree`
-
-### Extensions (contrib)
-
-Optional backends behind pyproject extras (never imported by default).
-
-- `contrib.blackjax.BlackjaxNUTSKernel`
-- `contrib.blackjax.BlackjaxMCLMCKernel`
-- `contrib.blackjax.BlackjaxCustomKernel`
-- `contrib.blackjax.PathfinderFit`
-- `contrib.blackjax.fit_pathfinder`
-- `contrib.blackjax.pathfinder_samples`
-- `contrib.blackjax.MultiPathfinderFit`
-- `contrib.blackjax.fit_multipathfinder`
-- `contrib.blackjax.multipathfinder_samples`
-
-### Datasets
-
-Example datasets used in the tutorials.
-
-- `datasets.load_bart_weekly`
-- `datasets.load_bart_hierarchical`
-- `datasets.load_victoria_electricity`
-- `datasets.bart_available`
 
 ## Resources
 

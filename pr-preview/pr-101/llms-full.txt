@@ -3,64 +3,6 @@ This is the API documentation for the numpyro_forecast library.
 ----------------------------------------------------------------------
 
 
-## Typing
-
-Public type contracts.
-
-
-ForecastModel(*args, **kwargs)
-
-A NumPyro forecasting model: a callable ``(covariates, data=None) -> None``.
-
-Any plain function with this signature satisfies this Protocol structurally
-(for example, one that derives its
-:class:`~numpyro_forecast.models.Horizon` from the shapes via
-``Horizon.from_data`` and calls the model building blocks), so nothing
-needs to subclass it. The parameters are positional-only so a user model's
-own parameter names (``cov``, ``y``, ...) stay free instead of being forced
-to match ``covariates``/``data``.
-
-``ty`` checks call sites against this signature structurally (duck typing),
-which is the main payoff of the Protocol over a bare ``Callable`` alias.
-At runtime, the beartype import hook's ``isinstance`` check on a
-``runtime_checkable`` Protocol only verifies that the named methods exist
-(Python runtime protocols never inspect signatures), so it reduces to
-``callable(model)``: a model missing the ``data=None`` default still
-passes this check and only fails loudly at the first driver call that
-invokes it with ``data=None``.
-
-ForecastFn(*args, **kwargs)
-
-A closure that fits a model on a training window and forecasts its test horizon.
-
-Called by :func:`~numpyro_forecast.evaluate.backtest` positionally, with
-``full_covariates`` spanning the *full* window (train followed by test, i.e.
-``covariates[..., t0:t2, :]``) and ``batch_size`` forwarded unchanged from
-``backtest`` so a chunked closure can bound its own device memory. Returns
-forecast samples with the sample axis first, shape
-``(num_samples, *batch, t2 - t1, obs)``. The draws may stay in host memory
-(e.g. via ``device="host"``): a jax Array committed to the CPU backend
-device or, without a CPU backend, a NumPy array. Every metric in
-:data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred``
-or ``truth`` (or both), in any mix and regardless of ``batch_size``, moving
-a host-resident operand to device memory first where needed; draws already
-on-device avoid that hop for the metrics scored every window. The
-parameters are positional-only so a closure keeps its own parameter names.
-At runtime the beartype hook only checks that the value is callable
-(Python protocols never inspect signatures); ``ty`` checks the signature
-structurally at the ``backtest`` call site.
-
-InSampleFn(*args, **kwargs)
-
-A closure that fits a model on a training window and scores its in-sample fit.
-
-Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
-``eval_train=True``) positionally. Returns in-sample posterior-predictive
-samples with the sample axis first, shape ``(num_samples, *batch, t1 - t0,
-obs)``. The same ``batch_size``/host-offload notes as :class:`ForecastFn`
-apply.
-
-
 ## Model building blocks
 
 Plain model functions that register the train/forecast sites for you.
@@ -408,6 +350,112 @@ RuntimeError
 ValueError
     If the observation distribution has discrete support but ``h.data`` is
     not integer-dtyped (the usual mistake for count models).
+
+
+## Distribution surgery
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+
+shift_loc(noise_dist: numpyro.distributions.distribution.Distribution, loc: jax.Array) -> numpyro.distributions.distribution.Distribution
+
+Re-center a zero-centered noise distribution at ``loc``.
+
+This converts Pyro's ``obs = data - prediction`` idiom into an additive
+shift of the observation distribution's location.
+
+Parameters
+----------
+noise_dist
+    A zero-centered location-family distribution.
+loc
+    The deterministic mean to add to the distribution's location.
+
+Returns
+-------
+dist.Distribution
+    A distribution centered at ``loc``.
+
+Raises
+------
+NotImplementedError
+    If ``noise_dist`` is of an unsupported type.
+
+slice_time(noise_dist: numpyro.distributions.distribution.Distribution, index: slice) -> numpyro.distributions.distribution.Distribution
+
+Slice an elementwise distribution along the time axis ``-2``.
+
+The default implementation handles registered elementwise families (empty
+``event_shape``, ``batch_shape`` ending in ``(time, obs)``; e.g. ``Normal``,
+``StudentT``, ``Poisson``) by slicing each broadcast parameter. Correlated
+families register a dedicated dispatch instead.
+
+Parameters
+----------
+noise_dist
+    The distribution to slice.
+index
+    A ``slice`` applied to the time axis ``-2`` of the batch shape.
+
+Returns
+-------
+dist.Distribution
+    The same distribution family restricted to the selected time steps.
+
+Raises
+------
+NotImplementedError
+    If ``noise_dist`` is not a registered elementwise family (and has no
+    dedicated dispatch).
+
+prefix_condition(noise_dist: numpyro.distributions.distribution.Distribution, data: jax.Array) -> numpyro.distributions.distribution.Distribution
+
+Condition a ``(t+f)``-length distribution on a ``t``-length data prefix.
+
+For independent-over-time noise (the elementwise default) the conditional
+reduces to the forecast-horizon marginal, i.e. a time slice ``[t:]``. Only
+registered elementwise families take this path; correlated families (e.g.
+``MultivariateNormal``) need a dedicated dispatch implementing a genuine
+Gaussian conditional, which is checked here rather than silently reduced to
+a slice (the R1 fix).
+
+Parameters
+----------
+noise_dist
+    The observation distribution over the full horizon ``(*batch, t+f, obs)``.
+data
+    The observed prefix with shape ``(*batch, t, obs)``.
+
+Returns
+-------
+dist.Distribution
+    The forecast-horizon distribution over ``(*batch, f, obs)``.
+
+Raises
+------
+NotImplementedError
+    If ``noise_dist`` is not a registered elementwise family (and has no
+    dedicated dispatch).
+
+register_elementwise(cls: type[numpyro.distributions.distribution.Distribution]) -> type[numpyro.distributions.distribution.Distribution]
+
+Declare a distribution family elementwise (usable as a decorator).
+
+An elementwise family is independent across every batch cell with an empty
+event shape, so :func:`slice_time` may slice its broadcast parameters along
+the time axis and :func:`prefix_condition` may reduce to the horizon
+marginal. Membership is by exact type; register each concrete subclass you
+rely on.
+
+Parameters
+----------
+cls
+    The distribution class to register.
+
+Returns
+-------
+type[dist.Distribution]
+    ``cls`` unchanged, so this can decorate a class definition.
 
 
 ## Producing draws
@@ -1258,463 +1306,9 @@ ValueError
     (a constant series, for which MASE is undefined).
 
 
-## Autocorrelation
-
-Batched autocorrelation and partial autocorrelation diagnostics.
-
-
-acf(y: jaxtyping.Float[Array, '*batch time'] | jaxtyping.Float[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
-
-Compute the empirical autocorrelation function up to ``max_lag``.
-
-The lag-:math:`k` autocorrelation of a series :math:`y_1, \ldots, y_T` with
-sample mean :math:`\bar{y}` is estimated with the biased normalization
-
-.. math::
-
-    \hat{\rho}_k =
-    \frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
-         {\sum_{t=1}^{T} (y_t - \bar{y})^2},
-
-computed for all lags at once via the FFT of the centered series (the
-Wiener-Khinchin identity), so the cost is :math:`O(T \log T)` instead of
-:math:`O(T \, k_{\max})`. The computation runs along the last axis and
-broadcasts over any leading batch axes.
-
-Parameters
-----------
-y
-    Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly.
-max_lag
-    Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
-
-Returns
--------
-Float[Array, "*batch lags"]
-    Autocorrelations for lags ``0, 1, ..., max_lag`` (``max_lag + 1``
-    values; lag ``0`` is identically ``1.0``).
-
-Raises
-------
-ValueError
-    If ``max_lag`` is not in ``[1, time)``.
-
-Notes
------
-A constant series has zero variance, so the result is meaningless: all NaN
-in eager execution (a ``0 / 0``), while under :func:`jax.jit` the rounding
-of the mean can instead yield arbitrary finite values.
-
-References
-----------
-Adapted from :func:`numpyro.diagnostics.autocorrelation`, itself adapted
-from the Stan implementation.
-
-pacf(y: jaxtyping.Float[Array, '*batch time'] | jaxtyping.Float[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
-
-Compute the empirical partial autocorrelation function up to ``max_lag``.
-
-The lag-:math:`k` partial autocorrelation is the correlation between
-:math:`y_t` and :math:`y_{t-k}` after removing the linear effect of the
-intermediate observations :math:`y_{t-1}, \ldots, y_{t-k+1}`; it equals the
-last coefficient :math:`\phi_{kk}` of the best linear predictor of order
-:math:`k`. The coefficients are obtained from the empirical
-autocorrelations (see :func:`acf`) with the Durbin-Levinson recursion
-
-.. math::
-
-    \phi_{kk} =
-    \frac{\hat{\rho}_k - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_{k-j}}
-         {1 - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_j}.
-
-The recursion runs along the last axis and broadcasts over any leading
-batch axes.
-
-Parameters
-----------
-y
-    Time series with time on the last axis, shape ``(*batch, time)``.
-    NumPy arrays are accepted directly.
-max_lag
-    Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
-
-Returns
--------
-Float[Array, "*batch lags"]
-    Partial autocorrelations for lags ``0, 1, ..., max_lag``
-    (``max_lag + 1`` values; lag ``0`` is identically ``1.0``).
-
-Raises
-------
-ValueError
-    If ``max_lag`` is not in ``[1, time)``.
-
-Notes
------
-A constant series has zero variance, so the result is meaningless (see
-:func:`acf`); a near-deterministic series can likewise overflow the
-recursion (the denominator above approaches zero) and produce infinities
-or NaNs.
-
-References
-----------
-James Durbin (1960). "The Fitting of Time-Series Models". *Revue de
-l'Institut International de Statistique*.
-
-
-## Seasonal features
-
-Fourier design matrices and seasonal tiling.
-
-
-fourier_features(duration: int, period: float, num_terms: int) -> jaxtyping.Float[Array, 'duration two_num_terms']
-
-Build a Fourier seasonality design matrix.
-
-Parameters
-----------
-duration
-    Number of time steps.
-period
-    Seasonal period (in time steps).
-num_terms
-    Number of harmonics; the output has ``2 * num_terms`` columns
-    (sine then cosine).
-
-Returns
--------
-Float[Array, "duration two_num_terms"]
-    The design matrix of shape ``(duration, 2 * num_terms)``.
-
-periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int, *, axis: int = -1) -> jax.Array
-
-Tile a seasonal pattern to cover ``duration`` time steps.
-
-Parameters
-----------
-x
-    Seasonal pattern; the repeated axis has length equal to the period.
-    Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
-duration
-    Target length along ``axis``.
-axis
-    Axis to repeat along (defaults to ``-1``).
-
-Returns
--------
-Array
-    ``x`` periodically repeated to length ``duration`` along ``axis``.
-
-
-## Array helpers
-
-Time-axis array shaping for the train/forecast split.
-
-
-zero_data_like(data: jax.Array, covariates: jax.Array) -> jax.Array
-
-Return zeros shaped like ``data`` but extended to the covariate duration.
-
-Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
-full forecast horizon without leaking observed values into the model. The
-functional API exposes the equivalent value as
-:attr:`numpyro_forecast.models.Horizon.zero_data`.
-
-Parameters
-----------
-data
-    Observed data with time at axis ``-2``, shape ``(*batch, t, obs)``.
-covariates
-    Covariates with time at axis ``-2``, shape ``(*batch, duration, cov)``.
-
-Returns
--------
-Array
-    Zeros of shape ``(*batch, duration, obs)``.
-
-concat_future(prefix: jax.Array, suffix: jax.Array, *, axis: int = -2) -> jax.Array
-
-Concatenate in-sample and forecast-horizon arrays along the time axis.
-
-Parameters
-----------
-prefix
-    In-sample array.
-suffix
-    Forecast-horizon array (same shape as ``prefix`` except along ``axis``).
-axis
-    Time axis to concatenate along (defaults to ``-2``).
-
-Returns
--------
-Array
-    The concatenation of ``prefix`` and ``suffix`` along ``axis``.
-
-pad_future(x: jax.Array, future: int, *, value: float = 0.0) -> jax.Array
-
-Append ``future`` rows filled with ``value`` along the time axis.
-
-The frozen-gate recipe of :func:`numpyro_forecast.models.ssoe`: an update
-gate observed in-sample (``(*batch, t_obs, obs)``) becomes a full-horizon
-``xs`` leaf whose forecast rows are ``value`` (``0.0`` freezes the carry,
-``1.0`` keeps an availability mask open). Zero ``future`` returns ``x``
-unchanged in shape.
-
-Parameters
-----------
-x
-    In-sample array with time at axis ``-2``, shape ``(*batch, t_obs, obs)``.
-future
-    Number of forecast rows to append.
-value
-    Fill value of the appended rows, cast to ``x.dtype``.
-
-Returns
--------
-Array
-    ``x`` followed by ``future`` constant rows, shape ``(*batch, t_obs + future, obs)``.
-
-
-## Distribution surgery
-
-Time-axis operations on observation distributions, extensible via singledispatch.
-
-
-shift_loc(noise_dist: numpyro.distributions.distribution.Distribution, loc: jax.Array) -> numpyro.distributions.distribution.Distribution
-
-Re-center a zero-centered noise distribution at ``loc``.
-
-This converts Pyro's ``obs = data - prediction`` idiom into an additive
-shift of the observation distribution's location.
-
-Parameters
-----------
-noise_dist
-    A zero-centered location-family distribution.
-loc
-    The deterministic mean to add to the distribution's location.
-
-Returns
--------
-dist.Distribution
-    A distribution centered at ``loc``.
-
-Raises
-------
-NotImplementedError
-    If ``noise_dist`` is of an unsupported type.
-
-slice_time(noise_dist: numpyro.distributions.distribution.Distribution, index: slice) -> numpyro.distributions.distribution.Distribution
-
-Slice an elementwise distribution along the time axis ``-2``.
-
-The default implementation handles registered elementwise families (empty
-``event_shape``, ``batch_shape`` ending in ``(time, obs)``; e.g. ``Normal``,
-``StudentT``, ``Poisson``) by slicing each broadcast parameter. Correlated
-families register a dedicated dispatch instead.
-
-Parameters
-----------
-noise_dist
-    The distribution to slice.
-index
-    A ``slice`` applied to the time axis ``-2`` of the batch shape.
-
-Returns
--------
-dist.Distribution
-    The same distribution family restricted to the selected time steps.
-
-Raises
-------
-NotImplementedError
-    If ``noise_dist`` is not a registered elementwise family (and has no
-    dedicated dispatch).
-
-prefix_condition(noise_dist: numpyro.distributions.distribution.Distribution, data: jax.Array) -> numpyro.distributions.distribution.Distribution
-
-Condition a ``(t+f)``-length distribution on a ``t``-length data prefix.
-
-For independent-over-time noise (the elementwise default) the conditional
-reduces to the forecast-horizon marginal, i.e. a time slice ``[t:]``. Only
-registered elementwise families take this path; correlated families (e.g.
-``MultivariateNormal``) need a dedicated dispatch implementing a genuine
-Gaussian conditional, which is checked here rather than silently reduced to
-a slice (the R1 fix).
-
-Parameters
-----------
-noise_dist
-    The observation distribution over the full horizon ``(*batch, t+f, obs)``.
-data
-    The observed prefix with shape ``(*batch, t, obs)``.
-
-Returns
--------
-dist.Distribution
-    The forecast-horizon distribution over ``(*batch, f, obs)``.
-
-Raises
-------
-NotImplementedError
-    If ``noise_dist`` is not a registered elementwise family (and has no
-    dedicated dispatch).
-
-register_elementwise(cls: type[numpyro.distributions.distribution.Distribution]) -> type[numpyro.distributions.distribution.Distribution]
-
-Declare a distribution family elementwise (usable as a decorator).
-
-An elementwise family is independent across every batch cell with an empty
-event shape, so :func:`slice_time` may slice its broadcast parameters along
-the time axis and :func:`prefix_condition` may reduce to the horizon
-marginal. Membership is by exact type; register each concrete subclass you
-rely on.
-
-Parameters
-----------
-cls
-    The distribution class to register.
-
-Returns
--------
-type[dist.Distribution]
-    ``cls`` unchanged, so this can decorate a class definition.
-
-
-## Optional dependencies
-
-Lazy imports behind pyproject extras.
-
-
-require(module: str, *, extra: str) -> module
-
-Import an optional dependency, or raise a targeted ``ImportError``.
-
-Optional features (dataframes, blackjax, optax) live behind ``pyproject``
-extras and are never imported at package import time. This helper imports
-the backing module lazily at first use and, when it is missing, raises an
-``ImportError`` naming the exact ``pip install`` invocation that provides it.
-
-Parameters
-----------
-module
-    The importable module name (e.g. ``"pandas"``).
-extra
-    The ``numpyro_forecast`` extra that installs it (e.g. ``"dataframes"``).
-
-Returns
--------
-ModuleType
-    The imported module.
-
-Raises
-------
-ImportError
-    If ``module`` is not importable, with an actionable install hint.
-
-
-## Exceptions
-
-Package exception hierarchy raised at resolution and validation boundaries.
-
-
-NumpyroForecastError(message: str | None = None) -> None
-
-Base class for all deliberate ``numpyro_forecast`` errors.
-
-Subclasses may set :attr:`default_message`; instantiating without arguments
-then carries that message, and a positional message overrides it.
-
-Parameters
-----------
-message
-    Optional explicit message; defaults to the class
-    :attr:`default_message`.
-
-BacktestWindowError(message: str | None = None) -> None
-
-A backtest window configuration is invalid.
-
-Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
-``train_window``, ``test_window``, or ``stride`` is below 1, or when the
-series has no room for a single window.
-
-VectorizedGuideError(message: str | None = None) -> None
-
-The vectorized backtest requires an ``AutoGuide`` instance.
-
-Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
-``guide`` is hand-written: those are not vmappable, use
-:func:`~numpyro_forecast.evaluate.backtest` instead.
-
-VectorizedMetricError(message: str | None = None) -> None
-
-A metric is not vmappable in the vectorized backtest.
-
-Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when a
-metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
-under ``vmap``. Metrics must be pure JAX functions returning a scalar
-array; see :data:`~numpyro_forecast.typing.Metric`.
-
-KernelConfigError(message: str | None = None) -> None
-
-A ``contrib.blackjax`` kernel is run unbound or misconfigured.
-
-Raised by :meth:`~numpyro_forecast.contrib.blackjax._BlackjaxKernel.init`
-when the kernel was constructed with no model bound (e.g.
-``BlackjaxNUTSKernel()`` instead of ``BlackjaxNUTSKernel(model)``); the fix
-is to pass the model as the kernel's first argument at construction time,
-before handing the kernel to :class:`~numpyro.infer.MCMC`. BlackJAX kernels
-also require ``chain_method="sequential"`` and
-``num_warmup=0``; see the "Run configuration" section of
-:class:`~numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel` and its
-sibling kernels for why, and how misconfiguring either surfaces.
-
-CovariateDimsError(message: str | None = None) -> None
-
-Covariate dimension names are inconsistent or malformed.
-
-Raised by :func:`~numpyro_forecast.convert.to_datatree` and
-:func:`~numpyro_forecast.convert.add_forecast_groups` when
-``covariate_dims`` does not name every covariates axis, or when the names
-passed to (or inherited by) :func:`~numpyro_forecast.convert.add_forecast_groups`
-disagree with the dimension names already stored on the tree's
-``constant_data`` covariates.
-
-MVNLayoutError(message: str | None = None) -> None
-
-A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
-
-Raised by :func:`~numpyro_forecast.surgery.shift_loc`,
-:func:`~numpyro_forecast.surgery.slice_time`, and
-:func:`~numpyro_forecast.surgery.prefix_condition` on MVN noise whose
-``loc``/``covariance_matrix`` shapes do not match the supported
-time-leading layout.
-
-DeviceMemoryError(message: str | None = None) -> None
-
-A memory pool ran out during posterior or predictive sampling.
-
-Raised by :func:`~numpyro_forecast.predictive.draw_posterior` and
-the predictive drivers (:func:`~numpyro_forecast.predictive.forecast`,
-:func:`~numpyro_forecast.predictive.predict_in_sample`, and
-everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
-when XLA reports ``RESOURCE_EXHAUSTED``. For an accelerator OOM the message
-embeds the device's memory budget and the lever: the per-chunk footprint
-scales linearly with ``batch_size`` times the panel width, so lower (or
-set) ``batch_size``, free large device arrays still referenced elsewhere,
-and keep results off the accelerator with ``device="host"``. For a pinned
-host pool OOM (``Out of host memory``, reached only through an explicit
-``device="pinned_host"`` or the caller's own pinned arrays) it names the
-pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
-``device="host"``, which lands results in pageable host memory, instead.
-The original XLA error is chained as ``__cause__``.
-
-
 ## ArviZ export
 
-Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
 to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, predictive_batch_size: int | None = None, predictive_device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
@@ -1973,6 +1567,282 @@ Optional backends behind pyproject extras (never imported by default).
 
 
 
+## Typing
+
+Public type contracts.
+
+
+ForecastModel(*args, **kwargs)
+
+A NumPyro forecasting model: a callable ``(covariates, data=None) -> None``.
+
+Any plain function with this signature satisfies this Protocol structurally
+(for example, one that derives its
+:class:`~numpyro_forecast.models.Horizon` from the shapes via
+``Horizon.from_data`` and calls the model building blocks), so nothing
+needs to subclass it. The parameters are positional-only so a user model's
+own parameter names (``cov``, ``y``, ...) stay free instead of being forced
+to match ``covariates``/``data``.
+
+``ty`` checks call sites against this signature structurally (duck typing),
+which is the main payoff of the Protocol over a bare ``Callable`` alias.
+At runtime, the beartype import hook's ``isinstance`` check on a
+``runtime_checkable`` Protocol only verifies that the named methods exist
+(Python runtime protocols never inspect signatures), so it reduces to
+``callable(model)``: a model missing the ``data=None`` default still
+passes this check and only fails loudly at the first driver call that
+invokes it with ``data=None``.
+
+ForecastFn(*args, **kwargs)
+
+A closure that fits a model on a training window and forecasts its test horizon.
+
+Called by :func:`~numpyro_forecast.evaluate.backtest` positionally, with
+``full_covariates`` spanning the *full* window (train followed by test, i.e.
+``covariates[..., t0:t2, :]``) and ``batch_size`` forwarded unchanged from
+``backtest`` so a chunked closure can bound its own device memory. Returns
+forecast samples with the sample axis first, shape
+``(num_samples, *batch, t2 - t1, obs)``. The draws may stay in host memory
+(e.g. via ``device="host"``): a jax Array committed to the CPU backend
+device or, without a CPU backend, a NumPy array. Every metric in
+:data:`~numpyro_forecast.evaluate.DEFAULT_METRICS` accepts such a ``pred``
+or ``truth`` (or both), in any mix and regardless of ``batch_size``, moving
+a host-resident operand to device memory first where needed; draws already
+on-device avoid that hop for the metrics scored every window. The
+parameters are positional-only so a closure keeps its own parameter names.
+At runtime the beartype hook only checks that the value is callable
+(Python protocols never inspect signatures); ``ty`` checks the signature
+structurally at the ``backtest`` call site.
+
+InSampleFn(*args, **kwargs)
+
+A closure that fits a model on a training window and scores its in-sample fit.
+
+Called by :func:`~numpyro_forecast.evaluate.backtest` (only when
+``eval_train=True``) positionally. Returns in-sample posterior-predictive
+samples with the sample axis first, shape ``(num_samples, *batch, t1 - t0,
+obs)``. The same ``batch_size``/host-offload notes as :class:`ForecastFn`
+apply.
+
+
+## Autocorrelation
+
+Batched autocorrelation and partial autocorrelation diagnostics.
+
+
+acf(y: jaxtyping.Float[Array, '*batch time'] | jaxtyping.Float[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
+
+Compute the empirical autocorrelation function up to ``max_lag``.
+
+The lag-:math:`k` autocorrelation of a series :math:`y_1, \ldots, y_T` with
+sample mean :math:`\bar{y}` is estimated with the biased normalization
+
+.. math::
+
+    \hat{\rho}_k =
+    \frac{\sum_{t=k+1}^{T} (y_t - \bar{y})(y_{t-k} - \bar{y})}
+         {\sum_{t=1}^{T} (y_t - \bar{y})^2},
+
+computed for all lags at once via the FFT of the centered series (the
+Wiener-Khinchin identity), so the cost is :math:`O(T \log T)` instead of
+:math:`O(T \, k_{\max})`. The computation runs along the last axis and
+broadcasts over any leading batch axes.
+
+Parameters
+----------
+y
+    Time series with time on the last axis, shape ``(*batch, time)``.
+    NumPy arrays are accepted directly.
+max_lag
+    Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
+
+Returns
+-------
+Float[Array, "*batch lags"]
+    Autocorrelations for lags ``0, 1, ..., max_lag`` (``max_lag + 1``
+    values; lag ``0`` is identically ``1.0``).
+
+Raises
+------
+ValueError
+    If ``max_lag`` is not in ``[1, time)``.
+
+Notes
+-----
+A constant series has zero variance, so the result is meaningless: all NaN
+in eager execution (a ``0 / 0``), while under :func:`jax.jit` the rounding
+of the mean can instead yield arbitrary finite values.
+
+References
+----------
+Adapted from :func:`numpyro.diagnostics.autocorrelation`, itself adapted
+from the Stan implementation.
+
+pacf(y: jaxtyping.Float[Array, '*batch time'] | jaxtyping.Float[ndarray, '*batch time'], max_lag: int) -> jaxtyping.Float[Array, '*batch lags']
+
+Compute the empirical partial autocorrelation function up to ``max_lag``.
+
+The lag-:math:`k` partial autocorrelation is the correlation between
+:math:`y_t` and :math:`y_{t-k}` after removing the linear effect of the
+intermediate observations :math:`y_{t-1}, \ldots, y_{t-k+1}`; it equals the
+last coefficient :math:`\phi_{kk}` of the best linear predictor of order
+:math:`k`. The coefficients are obtained from the empirical
+autocorrelations (see :func:`acf`) with the Durbin-Levinson recursion
+
+.. math::
+
+    \phi_{kk} =
+    \frac{\hat{\rho}_k - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_{k-j}}
+         {1 - \sum_{j=1}^{k-1} \phi_{k-1,j}\, \hat{\rho}_j}.
+
+The recursion runs along the last axis and broadcasts over any leading
+batch axes.
+
+Parameters
+----------
+y
+    Time series with time on the last axis, shape ``(*batch, time)``.
+    NumPy arrays are accepted directly.
+max_lag
+    Largest lag to evaluate; must satisfy ``1 <= max_lag < time``.
+
+Returns
+-------
+Float[Array, "*batch lags"]
+    Partial autocorrelations for lags ``0, 1, ..., max_lag``
+    (``max_lag + 1`` values; lag ``0`` is identically ``1.0``).
+
+Raises
+------
+ValueError
+    If ``max_lag`` is not in ``[1, time)``.
+
+Notes
+-----
+A constant series has zero variance, so the result is meaningless (see
+:func:`acf`); a near-deterministic series can likewise overflow the
+recursion (the denominator above approaches zero) and produce infinities
+or NaNs.
+
+References
+----------
+James Durbin (1960). "The Fitting of Time-Series Models". *Revue de
+l'Institut International de Statistique*.
+
+
+## Seasonal features
+
+Fourier design matrices and seasonal tiling.
+
+
+fourier_features(duration: int, period: float, num_terms: int) -> jaxtyping.Float[Array, 'duration two_num_terms']
+
+Build a Fourier seasonality design matrix.
+
+Parameters
+----------
+duration
+    Number of time steps.
+period
+    Seasonal period (in time steps).
+num_terms
+    Number of harmonics; the output has ``2 * num_terms`` columns
+    (sine then cosine).
+
+Returns
+-------
+Float[Array, "duration two_num_terms"]
+    The design matrix of shape ``(duration, 2 * num_terms)``.
+
+periodic_repeat(x: jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex, duration: int, *, axis: int = -1) -> jax.Array
+
+Tile a seasonal pattern to cover ``duration`` time steps.
+
+Parameters
+----------
+x
+    Seasonal pattern; the repeated axis has length equal to the period.
+    Accepts any array-like (e.g. a raw ``numpyro.sample`` draw).
+duration
+    Target length along ``axis``.
+axis
+    Axis to repeat along (defaults to ``-1``).
+
+Returns
+-------
+Array
+    ``x`` periodically repeated to length ``duration`` along ``axis``.
+
+
+## Array helpers
+
+Time-axis array shaping for the train/forecast split.
+
+
+zero_data_like(data: jax.Array, covariates: jax.Array) -> jax.Array
+
+Return zeros shaped like ``data`` but extended to the covariate duration.
+
+Mirrors Pyro's ``zero_data``: it exposes the shape/dtype of the data over the
+full forecast horizon without leaking observed values into the model. The
+functional API exposes the equivalent value as
+:attr:`numpyro_forecast.models.Horizon.zero_data`.
+
+Parameters
+----------
+data
+    Observed data with time at axis ``-2``, shape ``(*batch, t, obs)``.
+covariates
+    Covariates with time at axis ``-2``, shape ``(*batch, duration, cov)``.
+
+Returns
+-------
+Array
+    Zeros of shape ``(*batch, duration, obs)``.
+
+concat_future(prefix: jax.Array, suffix: jax.Array, *, axis: int = -2) -> jax.Array
+
+Concatenate in-sample and forecast-horizon arrays along the time axis.
+
+Parameters
+----------
+prefix
+    In-sample array.
+suffix
+    Forecast-horizon array (same shape as ``prefix`` except along ``axis``).
+axis
+    Time axis to concatenate along (defaults to ``-2``).
+
+Returns
+-------
+Array
+    The concatenation of ``prefix`` and ``suffix`` along ``axis``.
+
+pad_future(x: jax.Array, future: int, *, value: float = 0.0) -> jax.Array
+
+Append ``future`` rows filled with ``value`` along the time axis.
+
+The frozen-gate recipe of :func:`numpyro_forecast.models.ssoe`: an update
+gate observed in-sample (``(*batch, t_obs, obs)``) becomes a full-horizon
+``xs`` leaf whose forecast rows are ``value`` (``0.0`` freezes the carry,
+``1.0`` keeps an availability mask open). Zero ``future`` returns ``x``
+unchanged in shape.
+
+Parameters
+----------
+x
+    In-sample array with time at axis ``-2``, shape ``(*batch, t_obs, obs)``.
+future
+    Number of forecast rows to append.
+value
+    Fill value of the appended rows, cast to ``x.dtype``.
+
+Returns
+-------
+Array
+    ``x`` followed by ``future`` constant rows, shape ``(*batch, t_obs + future, obs)``.
+
+
 ## Datasets
 
 Example datasets used in the tutorials.
@@ -2047,3 +1917,133 @@ Returns
 -------
 bool
     ``True`` if :func:`load_bart_od` loads without error.
+
+
+## Optional dependencies
+
+Lazy imports behind pyproject extras.
+
+
+require(module: str, *, extra: str) -> module
+
+Import an optional dependency, or raise a targeted ``ImportError``.
+
+Optional features (dataframes, blackjax, optax) live behind ``pyproject``
+extras and are never imported at package import time. This helper imports
+the backing module lazily at first use and, when it is missing, raises an
+``ImportError`` naming the exact ``pip install`` invocation that provides it.
+
+Parameters
+----------
+module
+    The importable module name (e.g. ``"pandas"``).
+extra
+    The ``numpyro_forecast`` extra that installs it (e.g. ``"dataframes"``).
+
+Returns
+-------
+ModuleType
+    The imported module.
+
+Raises
+------
+ImportError
+    If ``module`` is not importable, with an actionable install hint.
+
+
+## Exceptions
+
+Package exception hierarchy raised at validation boundaries.
+
+
+NumpyroForecastError(message: str | None = None) -> None
+
+Base class for all deliberate ``numpyro_forecast`` errors.
+
+Subclasses may set :attr:`default_message`; instantiating without arguments
+then carries that message, and a positional message overrides it.
+
+Parameters
+----------
+message
+    Optional explicit message; defaults to the class
+    :attr:`default_message`.
+
+BacktestWindowError(message: str | None = None) -> None
+
+A backtest window configuration is invalid.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
+``train_window``, ``test_window``, or ``stride`` is below 1, or when the
+series has no room for a single window.
+
+VectorizedGuideError(message: str | None = None) -> None
+
+The vectorized backtest requires an ``AutoGuide`` instance.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when
+``guide`` is hand-written: those are not vmappable, use
+:func:`~numpyro_forecast.evaluate.backtest` instead.
+
+VectorizedMetricError(message: str | None = None) -> None
+
+A metric is not vmappable in the vectorized backtest.
+
+Raised by :func:`~numpyro_forecast.evaluate.backtest_vectorized` when a
+metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
+under ``vmap``. Metrics must be pure JAX functions returning a scalar
+array; see :data:`~numpyro_forecast.typing.Metric`.
+
+KernelConfigError(message: str | None = None) -> None
+
+A ``contrib.blackjax`` kernel is run unbound or misconfigured.
+
+Raised by :meth:`~numpyro_forecast.contrib.blackjax._BlackjaxKernel.init`
+when the kernel was constructed with no model bound (e.g.
+``BlackjaxNUTSKernel()`` instead of ``BlackjaxNUTSKernel(model)``); the fix
+is to pass the model as the kernel's first argument at construction time,
+before handing the kernel to :class:`~numpyro.infer.MCMC`. BlackJAX kernels
+also require ``chain_method="sequential"`` and
+``num_warmup=0``; see the "Run configuration" section of
+:class:`~numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel` and its
+sibling kernels for why, and how misconfiguring either surfaces.
+
+CovariateDimsError(message: str | None = None) -> None
+
+Covariate dimension names are inconsistent or malformed.
+
+Raised by :func:`~numpyro_forecast.convert.to_datatree` and
+:func:`~numpyro_forecast.convert.add_forecast_groups` when
+``covariate_dims`` does not name every covariates axis, or when the names
+passed to (or inherited by) :func:`~numpyro_forecast.convert.add_forecast_groups`
+disagree with the dimension names already stored on the tree's
+``constant_data`` covariates.
+
+MVNLayoutError(message: str | None = None) -> None
+
+A ``MultivariateNormal`` layout is unsupported for time-axis surgery.
+
+Raised by :func:`~numpyro_forecast.surgery.shift_loc`,
+:func:`~numpyro_forecast.surgery.slice_time`, and
+:func:`~numpyro_forecast.surgery.prefix_condition` on MVN noise whose
+``loc``/``covariance_matrix`` shapes do not match the supported
+time-leading layout.
+
+DeviceMemoryError(message: str | None = None) -> None
+
+A memory pool ran out during posterior or predictive sampling.
+
+Raised by :func:`~numpyro_forecast.predictive.draw_posterior` and
+the predictive drivers (:func:`~numpyro_forecast.predictive.forecast`,
+:func:`~numpyro_forecast.predictive.predict_in_sample`, and
+everything built on them, e.g. :func:`~numpyro_forecast.convert.to_datatree`)
+when XLA reports ``RESOURCE_EXHAUSTED``. For an accelerator OOM the message
+embeds the device's memory budget and the lever: the per-chunk footprint
+scales linearly with ``batch_size`` times the panel width, so lower (or
+set) ``batch_size``, free large device arrays still referenced elsewhere,
+and keep results off the accelerator with ``device="host"``. For a pinned
+host pool OOM (``Out of host memory``, reached only through an explicit
+``device="pinned_host"`` or the caller's own pinned arrays) it names the
+pool's cap (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and points at
+``device="host"``, which lands results in pageable host memory, instead.
+The original XLA error is chained as ``__cause__``.

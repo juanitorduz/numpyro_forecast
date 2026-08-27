@@ -6,7 +6,7 @@ Thanks for your interest in `numpyro_forecast`!
 # Development setup
 
 ``` bash
-uv sync --all-extras
+uv sync --extra all
 prek install
 ```
 
@@ -14,7 +14,7 @@ prek install
 # Workflow
 
 - **Lint & format:** `uv run ruff check .` and `uv run ruff format .`
-- **Type check:** `uv run ty check numpyro_forecast/`
+- **Type check:** `uv run ty check`
 - **Tests:** `uv run pytest`
 - **Notebooks:** `uv run pytest --nbmake docs/examples/` (executes the example notebooks)
 - **Docs site:** `make docs` (build) or `make docs-preview` (live preview)

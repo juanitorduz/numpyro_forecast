@@ -1,22 +1,6 @@
 # API Reference
 
 
-## Typing
-
-
-Public type contracts.
-
-
-[typing.ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel)  
-A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
-
-[typing.ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn)  
-A closure that fits a model on a training window and forecasts its test horizon.
-
-[typing.InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn)  
-A closure that fits a model on a training window and scores its in-sample fit.
-
-
 ## Model building blocks
 
 
@@ -46,6 +30,25 @@ The means and sampled future values produced by `ssoe()`.
 
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
+
+
+## Distribution surgery
+
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+
+[surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
+Re-center a zero-centered noise distribution at `loc`.
+
+[surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
+Slice an elementwise distribution along the time axis `-2`.
+
+[surgery.prefix_condition()](surgery.prefix_condition.md#numpyro_forecast.surgery.prefix_condition)  
+Condition a `(t+f)`-length distribution on a `t`-length data prefix.
+
+[surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
+Declare a distribution family elementwise (usable as a decorator).
 
 
 ## Producing draws
@@ -113,112 +116,10 @@ Mean Winkler interval score for the central `alpha` prediction interval.
 Build a Mean Absolute Scaled Error metric scaled by `train_data`.
 
 
-## Autocorrelation
-
-
-Batched autocorrelation and partial autocorrelation diagnostics.
-
-
-[acf.acf()](acf.acf.md#numpyro_forecast.acf.acf)  
-Compute the empirical autocorrelation function up to `max_lag`.
-
-[acf.pacf()](acf.pacf.md#numpyro_forecast.acf.pacf)  
-Compute the empirical partial autocorrelation function up to `max_lag`.
-
-
-## Seasonal features
-
-
-Fourier design matrices and seasonal tiling.
-
-
-[features.fourier_features()](features.fourier_features.md#numpyro_forecast.features.fourier_features)  
-Build a Fourier seasonality design matrix.
-
-[features.periodic_repeat()](features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat)  
-Tile a seasonal pattern to cover `duration` time steps.
-
-
-## Array helpers
-
-
-Time-axis array shaping for the train/forecast split.
-
-
-[arrays.zero_data_like()](arrays.zero_data_like.md#numpyro_forecast.arrays.zero_data_like)  
-Return zeros shaped like `data` but extended to the covariate duration.
-
-[arrays.concat_future()](arrays.concat_future.md#numpyro_forecast.arrays.concat_future)  
-Concatenate in-sample and forecast-horizon arrays along the time axis.
-
-[arrays.pad_future()](arrays.pad_future.md#numpyro_forecast.arrays.pad_future)  
-Append `future` rows filled with `value` along the time axis.
-
-
-## Distribution surgery
-
-
-Time-axis operations on observation distributions, extensible via singledispatch.
-
-
-[surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
-Re-center a zero-centered noise distribution at `loc`.
-
-[surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
-Slice an elementwise distribution along the time axis `-2`.
-
-[surgery.prefix_condition()](surgery.prefix_condition.md#numpyro_forecast.surgery.prefix_condition)  
-Condition a `(t+f)`-length distribution on a `t`-length data prefix.
-
-[surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
-Declare a distribution family elementwise (usable as a decorator).
-
-
-## Optional dependencies
-
-
-Lazy imports behind pyproject extras.
-
-
-[optional.require()](optional.require.md#numpyro_forecast.optional.require)  
-Import an optional dependency, or raise a targeted `ImportError`.
-
-
-## Exceptions
-
-
-Package exception hierarchy raised at resolution and validation boundaries.
-
-
-[exceptions.NumpyroForecastError](exceptions.NumpyroForecastError.md#numpyro_forecast.exceptions.NumpyroForecastError)  
-Base class for all deliberate `numpyro_forecast` errors.
-
-[exceptions.BacktestWindowError](exceptions.BacktestWindowError.md#numpyro_forecast.exceptions.BacktestWindowError)  
-A backtest window configuration is invalid.
-
-[exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
-The vectorized backtest requires an `AutoGuide` instance.
-
-[exceptions.VectorizedMetricError](exceptions.VectorizedMetricError.md#numpyro_forecast.exceptions.VectorizedMetricError)  
-A metric is not vmappable in the vectorized backtest.
-
-[exceptions.KernelConfigError](exceptions.KernelConfigError.md#numpyro_forecast.exceptions.KernelConfigError)  
-A `contrib.blackjax` kernel is run unbound or misconfigured.
-
-[exceptions.CovariateDimsError](exceptions.CovariateDimsError.md#numpyro_forecast.exceptions.CovariateDimsError)  
-Covariate dimension names are inconsistent or malformed.
-
-[exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
-A `MultivariateNormal` layout is unsupported for time-axis surgery.
-
-[exceptions.DeviceMemoryError](exceptions.DeviceMemoryError.md#numpyro_forecast.exceptions.DeviceMemoryError)  
-A memory pool ran out during posterior or predictive sampling.
-
-
 ## ArviZ export
 
 
-Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
 [convert.to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree)  
@@ -265,6 +166,64 @@ Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 Draw `num_samples` posterior samples from a fitted multipath Pathfinder fit.
 
 
+## Typing
+
+
+Public type contracts.
+
+
+[typing.ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel)  
+A NumPyro forecasting model: a callable `(covariates, data=None) -> None`.
+
+[typing.ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn)  
+A closure that fits a model on a training window and forecasts its test horizon.
+
+[typing.InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn)  
+A closure that fits a model on a training window and scores its in-sample fit.
+
+
+## Autocorrelation
+
+
+Batched autocorrelation and partial autocorrelation diagnostics.
+
+
+[acf.acf()](acf.acf.md#numpyro_forecast.acf.acf)  
+Compute the empirical autocorrelation function up to `max_lag`.
+
+[acf.pacf()](acf.pacf.md#numpyro_forecast.acf.pacf)  
+Compute the empirical partial autocorrelation function up to `max_lag`.
+
+
+## Seasonal features
+
+
+Fourier design matrices and seasonal tiling.
+
+
+[features.fourier_features()](features.fourier_features.md#numpyro_forecast.features.fourier_features)  
+Build a Fourier seasonality design matrix.
+
+[features.periodic_repeat()](features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat)  
+Tile a seasonal pattern to cover `duration` time steps.
+
+
+## Array helpers
+
+
+Time-axis array shaping for the train/forecast split.
+
+
+[arrays.zero_data_like()](arrays.zero_data_like.md#numpyro_forecast.arrays.zero_data_like)  
+Return zeros shaped like `data` but extended to the covariate duration.
+
+[arrays.concat_future()](arrays.concat_future.md#numpyro_forecast.arrays.concat_future)  
+Concatenate in-sample and forecast-horizon arrays along the time axis.
+
+[arrays.pad_future()](arrays.pad_future.md#numpyro_forecast.arrays.pad_future)  
+Append `future` rows filled with `value` along the time axis.
+
+
 ## Datasets
 
 
@@ -282,3 +241,44 @@ Load hourly Victoria (Australia) electricity demand and temperature.
 
 [datasets.bart_available()](datasets.bart_available.md#numpyro_forecast.datasets.bart_available)  
 Return whether the BART dataset can be loaded (download succeeds).
+
+
+## Optional dependencies
+
+
+Lazy imports behind pyproject extras.
+
+
+[optional.require()](optional.require.md#numpyro_forecast.optional.require)  
+Import an optional dependency, or raise a targeted `ImportError`.
+
+
+## Exceptions
+
+
+Package exception hierarchy raised at validation boundaries.
+
+
+[exceptions.NumpyroForecastError](exceptions.NumpyroForecastError.md#numpyro_forecast.exceptions.NumpyroForecastError)  
+Base class for all deliberate `numpyro_forecast` errors.
+
+[exceptions.BacktestWindowError](exceptions.BacktestWindowError.md#numpyro_forecast.exceptions.BacktestWindowError)  
+A backtest window configuration is invalid.
+
+[exceptions.VectorizedGuideError](exceptions.VectorizedGuideError.md#numpyro_forecast.exceptions.VectorizedGuideError)  
+The vectorized backtest requires an `AutoGuide` instance.
+
+[exceptions.VectorizedMetricError](exceptions.VectorizedMetricError.md#numpyro_forecast.exceptions.VectorizedMetricError)  
+A metric is not vmappable in the vectorized backtest.
+
+[exceptions.KernelConfigError](exceptions.KernelConfigError.md#numpyro_forecast.exceptions.KernelConfigError)  
+A `contrib.blackjax` kernel is run unbound or misconfigured.
+
+[exceptions.CovariateDimsError](exceptions.CovariateDimsError.md#numpyro_forecast.exceptions.CovariateDimsError)  
+Covariate dimension names are inconsistent or malformed.
+
+[exceptions.MVNLayoutError](exceptions.MVNLayoutError.md#numpyro_forecast.exceptions.MVNLayoutError)  
+A `MultivariateNormal` layout is unsupported for time-axis surgery.
+
+[exceptions.DeviceMemoryError](exceptions.DeviceMemoryError.md#numpyro_forecast.exceptions.DeviceMemoryError)  
+A memory pool ran out during posterior or predictive sampling.
