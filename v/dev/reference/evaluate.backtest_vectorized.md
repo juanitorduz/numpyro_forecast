@@ -15,10 +15,10 @@ evaluate.backtest_vectorized(
     *,
     train_window,
     test_window,
+    guide,
+    optim=None,
     stride=1,
     num_steps=1001,
-    optim=None,
-    guide=None,
     num_samples=100,
     metrics=None,
     keep_predictions=False
@@ -44,7 +44,7 @@ Dataset with time at axis `-2`.
 Covariates with time at axis `-2` (same duration as `data`).
 
 `model_fn: ModelFactory`  
-Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)).
+Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)). Must return the same model object `guide` was built on (see `guide` below).
 
 `train_window: int`  
 Fixed training-window length (`>= 1`).
@@ -52,17 +52,23 @@ Fixed training-window length (`>= 1`).
 `test_window: int`  
 Fixed test-window length (`>= 1`).
 
+`guide: Guide`  
+Any guide for the model object `model_fn` returns (see [Guide](typing.Guide.md#numpyro_forecast.typing.Guide)): an autoguide instance built on that same object, sampled through its `sample_posterior`, or a hand-written guide function with the model's signature, sampled through `numpyro.infer.Predictive(guide, params=...)` on each window's training data. Either way one guide is shared by every window:
+
+``` python
+model = make_model()
+backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
+backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
+```
+
+`optim: _NumPyroOptim | None = None`  
+NumPyro optimizer; `None` uses `numpyro.optim.Adam(0.01)`. For an optax optimizer, wrap it with `numpyro.optim.optax_to_numpyro` first.
+
 `stride: int = ``1`  
 Step between successive windows (`>= 1`).
 
 `num_steps: int = ``1001`  
 Number of SVI steps per window.
-
-`optim: OptimizerLike = None`  
-Optimizer specification resolved by `~numpyro_forecast.functional.svi.resolve_optimizer()`.
-
-`guide: GuideLike = None`  
-Guide specification; must resolve to an `AutoGuide` (hand-written guides are not vmappable, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)).
 
 `num_samples: int = ``100`  
 Number of forecast samples drawn per window.
@@ -89,9 +95,6 @@ If `data` and `covariates` durations differ.
 
 `BacktestWindowError`  
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.
-
-`VectorizedGuideError`  
-If the resolved guide is not an `AutoGuide`.
 
 `VectorizedMetricError`  
 If a metric forces a host conversion under `vmap` (it is not a pure JAX function).

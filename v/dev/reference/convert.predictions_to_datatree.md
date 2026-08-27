@@ -21,10 +21,10 @@ The array-level counterpart of [to_datatree()](convert.to_datatree.md#numpyro_fo
 ## Parameters
 
 
-`predictions: Float[np.ndarray | Array, ``" sample time series"]`  
+`predictions: Float[ArrayLike, ``" sample time series"]`  
 Prediction draws with the sample axis first, shape `(sample, time, series)`.
 
-`x: Num[np.ndarray | Array, ``" time"]`  
+`x: Num[ArrayLike, ``" time"]`  
 Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot draw `datetime64` values (it concatenates `x` with the float predictions internally), so pass `matplotlib.dates.date2num()` floats and re-format the tick labels with `matplotlib.dates.ConciseDateFormatter`.
 
 `series: Sequence[Any]`  
@@ -33,7 +33,7 @@ One label per series, defining the `series` coordinate.
 `group: str = ``"posterior_predictive"`  
 Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`).
 
-`observed: Float[np.ndarray | Array, ``" time series"] | None`` = None`  
+`observed: Float[ArrayLike, ``" time series"] | None`` = None`  
 Optional observations, shape `(time, series)`, stored in `observed_data`; when `None` a zeros placeholder is stored instead.
 
 

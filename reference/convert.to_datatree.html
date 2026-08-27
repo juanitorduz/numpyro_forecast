@@ -125,14 +125,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
   <link rel="alternate" type="text/markdown" href="convert.to_datatree.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html">
-  <meta name="description" content="Convert a fit into an ArviZ-schema xarray.DataTree.">
+  <meta name="description" content="Convert an already-drawn posterior into an ArviZ-schema xarray.DataTree.">
   <script type="application/ld+json">
 [
   {
     "@context": "https://schema.org",
     "@type": "SoftwareSourceCode",
     "name": "numpyro_forecast",
-    "description": "A JAX/NumPyro port of Pyro's forecasting module.",
+    "description": "A JAX/NumPyro port of the ideas in Pyro's forecasting module.",
     "codeRepository": "https://github.com/juanitorduz/numpyro_forecast",
     "license": "https://opensource.org/licenses/Apache-2.0",
     "url": "https://juanitorduz.github.io/numpyro_forecast",
@@ -156,12 +156,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="convert.to_datatree() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Convert a fit into an ArviZ-schema xarray.DataTree.">
+  <meta property="og:description" content="Convert an already-drawn posterior into an ArviZ-schema xarray.DataTree.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="convert.to_datatree() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Convert a fit into an ArviZ-schema xarray.DataTree.">
+  <meta name="twitter:description" content="Convert an already-drawn posterior into an ArviZ-schema xarray.DataTree.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -232,159 +232,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Forecasters</span></a>
+ <span class="menu-text">Distribution surgery</span></a>
 </div>
       <ul id="quarto-sidebar-section-1" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.Forecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.Forecaster</span></a>
+  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.shift_loc</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.HMCForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.HMCForecaster</span></a>
+  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.slice_time</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.PathfinderForecaster</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Models</span></a>
-</div>
-      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.ForecastingModel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.ForecastingModel</span></a>
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.prefix_condition</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.forecasting_model.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.forecasting_model</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: model primitives</span></a>
-</div>
-      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.Horizon.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.Horizon</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.time_series</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.markov_time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.markov_time_series</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.predict.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.predict</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.predict_glm.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.predict_glm</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: fitting</span></a>
-</div>
-      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.resolve_optimizer.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.resolve_optimizer</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.resolve_guide.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.resolve_guide</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.fit_svi.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.fit_svi</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.SVIFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.SVIFit</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.resolve_kernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.resolve_kernel</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.fit_mcmc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.fit_mcmc</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.MCMCFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.MCMCFit</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: posterior and prediction</span></a>
-</div>
-      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.posterior.draw_posterior.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.posterior.draw_posterior</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.prediction.forecast.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.prediction.forecast</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.prediction.predict_in_sample.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.prediction.predict_in_sample</span></a>
+  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.register_elementwise</span></a>
   </div>
 </li>
       </ul>
@@ -394,7 +266,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Backtesting &amp; evaluation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
@@ -484,195 +356,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Autocorrelation</span></a>
-</div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">acf.acf</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">acf.pacf</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Seasonal features</span></a>
-</div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">features.fourier_features</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">features.periodic_repeat</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Array helpers</span></a>
-</div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">arrays.zero_data_like</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">arrays.concat_future</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Distribution surgery</span></a>
-</div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.shift_loc</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.slice_time</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.prefix_condition</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.register_elementwise</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Optional dependencies</span></a>
-</div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">optional.require</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Exceptions</span></a>
-</div>
-      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.NumpyroForecastError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.BacktestWindowError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedGuideError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedMetricError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.OptimizerResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.GuideResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.GuideResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.GuideSampleArgsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.GuideSampleArgsError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.KernelResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.KernelResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.KernelConfigError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.CovariateDimsError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.MVNLayoutError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.DeviceMemoryError</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link active">
@@ -698,7 +384,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -734,9 +420,95 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Typing</span></a>
+</div>
+      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ForecastModel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Autocorrelation</span></a>
+</div>
+      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">acf.acf</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">acf.pacf</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Seasonal features</span></a>
+</div>
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">features.fourier_features</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">features.periodic_repeat</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Array helpers</span></a>
+</div>
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.zero_data_like</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.concat_future</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -763,6 +535,70 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
       </ul>
   </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Optional dependencies</span></a>
+</div>
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">optional.require</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Exceptions</span></a>
+</div>
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.NumpyroForecastError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.BacktestWindowError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.VectorizedMetricError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.KernelConfigError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.CovariateDimsError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.MVNLayoutError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DeviceMemoryError</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
     </ul>
     </div>
 </nav>
@@ -776,6 +612,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
   <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#warns" id="toc-warns" class="nav-link" data-scroll-target="#warns">Warns</a></li>
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul>
 </nav>
@@ -803,21 +640,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Convert a fit into an ArviZ-schema <code>xarray.DataTree</code>.</p>
+<p>Convert an already-drawn posterior into an ArviZ-schema <code>xarray.DataTree</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L224-L476" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L229-L496" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">fit</span>,</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">model</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">model</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior</span>,</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">data</span>,</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_predictive_samples</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_chains</span><span class="op">=</span><span class="dv">1</span>,</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictive_batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictive_device</span><span class="op">=</span><span class="st">"host"</span>,</span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
@@ -827,7 +664,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>PRNG: <code>rng_key</code> is consumed by the in-sample posterior-predictive draws (for a variational fit, also the posterior draws) and, when a forecast horizon is present, the forecast draws.</p>
+<p>Posterior-first: callers draw their own posterior (<code>mcmc.get_samples()</code> for MCMC, <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> for a variational fit) and pass it in; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> never draws a posterior of its own. <code>rng_key</code> is consumed only by the in-sample posterior-predictive draws and, when a forecast horizon is present, the forecast draws.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -835,15 +672,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dl>
 <dt><code><span class="doc-parameter-name">rng_key</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>PRNG key for the predictive (and variational posterior) draws.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">fit</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">object</span></code></dt>
-<dd>
-<p>A fit from <code>~numpyro_forecast.functional.mcmc.fit_mcmc()</code>, <code>~numpyro_forecast.functional.svi.fit_svi()</code>, or <code>~numpyro_forecast.contrib.blackjax.fit_pathfinder()</code>.</p>
+<p>PRNG key for the in-sample predictive draws and, when a horizon is present, the forecast draws.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">model</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ForecastModel</span></code></dt>
 <dd>
-<p>The forecasting model that produced <code>fit</code>.</p>
+<p>The forecasting model that produced <code>posterior</code>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, ArrayLike]</span></code></dt>
+<dd>
+<p>Posterior samples of the latent sites, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -851,19 +688,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>Covariates with time at axis <code>-2</code>. When <code>covariates</code> extends beyond <code>data</code> along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries <code>predictions</code> (forecast <code>obs</code> draws from <code>~numpyro_forecast.functional.prediction.forecast()</code>) and <code>predictions_constant_data</code> groups.</p>
+<p>Covariates with time at axis <code>-2</code>. When <code>covariates</code> extends beyond <code>data</code> along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries <code>predictions</code> (forecast <code>obs</code> draws from <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>) and <code>predictions_constant_data</code> groups.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">num_predictive_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">num_chains</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
 <dd>
-<p>Number of posterior draws for a variational fit (ignored for <code>~numpyro_forecast.functional.mcmc.MCMCFit</code>, which uses its own draws). The same draws drive the in-sample predictive and the forecast. Defaults to <code>1_000</code>.</p>
+<p>Number of chains to split <code>posterior</code>’s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to <code>1</code> (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the <code>num_chains</code> the sampler was run with; see <code>_reshape_chains()</code> for the reshape contract and its divisibility requirement.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">predictive_batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional chunk size that bounds how many draws touch the accelerator at once, across both stages of the export. When set, the posterior drawing itself (for variational fits; on a wide panel it is the largest allocation, since every latent and deterministic site is materialized for all draws) and the in-sample/forecast predictive sampling run in chunks of this many draws, each chunk moved to <code>predictive_device</code> before the next is drawn. The per-chunk accelerator footprint is a handful of <code>(batch_size, time, series)</code> buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of both the posterior and the predictive draws (including the <code>posterior</code> group), so results are reproducible per <code>(rng_key, predictive_batch_size)</code>. <code>None</code> (default) samples everything in one shot (the results are still moved to <code>predictive_device</code>).</p>
+<p>Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to <code>predictive_device</code> before the next is drawn. The per-chunk accelerator footprint is a handful of <code>(batch_size, time, series)</code> buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per <code>(rng_key, predictive_batch_size)</code>. <code>None</code> (default) samples everything in one shot (the results are still moved to <code>predictive_device</code>).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">predictive_device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"host"</span></span></code></dt>
 <dd>
-<p>Where the posterior and predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <code>~numpyro_forecast.functional.posterior.draw_posterior()</code>, <code>~numpyro_forecast.functional.prediction.predict_in_sample()</code>, and <code>~numpyro_forecast.functional.prediction.forecast()</code>. The default <code>"host"</code> copies every chunk to host memory as a NumPy array (where the tree is built anyway); it is what bounds accelerator memory when <code>predictive_batch_size</code> is set, and it needs no CPU backend, so it works even when <code>numpyro.set_platform("cuda")</code> (or <code>jax_platforms</code>) leaves only an accelerator backend initialized. A <code>jax.Device</code> or platform name like <code>"cpu"</code> commits the draws to that device instead; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
+<p>Where the predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> (the placement contract of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). It is resolved once and the same placement is handed to both, so an unmet <code>"cpu"</code> warns once per export. The default <code>"host"</code> keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when <code>predictive_batch_size</code> is set; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -890,7 +727,7 @@ Optional dimension names for the stored covariates, one per axis; defaults to th
 <dl>
 <dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single pseudo-chain plus <code>variational: True</code> attrs for SVI/Pathfinder), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (the forecast keeps an MCMC fit’s real chain structure).
+A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <code>num_chains</code>), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (sharing the same <code>num_chains</code> split).
 </dd>
 </dl>
 </div>
@@ -901,18 +738,37 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>; a single ps
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, or if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon.</p>
+<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, or if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
 <dd>
-If <code>covariate_dims</code> does not name every <code>covariates</code> axis.
+<p>If <code>covariate_dims</code> does not name every <code>covariates</code> axis.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">HostMemoryKindError</span></code></dt>
+<dd>
+<p>If <code>predictive_device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">DevicePlatformError</span></code></dt>
+<dd>
+If <code>predictive_device</code> names a platform whose backend is not initialized (see <code>_resolve_device()</code>).
+</dd>
+</dl>
+</div>
+</section>
+<section id="warns" class="level2 doc-warns">
+<h2 class="doc-warns">Warns</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">UserWarning</span></code></dt>
+<dd>
+If <code>predictive_device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the predictive draws take the NumPy path of <code>"host"</code> instead (once per call).
 </dd>
 </dl>
 </div>
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p><code>rng_key</code> is split internally: one subkey drives the posterior draws (for variational fits), one the in-sample predictive, and, when a horizon is present, a third the forecast. The split is a deterministic derivation applied for every fit type, so passing the same key twice never correlates the sample sets. <code>predictive_batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
+<p><a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> no longer accepts a fit object or draws a posterior itself (no <code>num_predictive_samples</code>, no internal <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> call): callers draw the posterior first and pass it in. The <code>variational</code>/<code>is_mcmc</code> attrs previously stamped on the <code>posterior</code> group are gone too, since a fit type is no longer knowable from a plain posterior dict; use <code>num_chains</code> (<code>1</code> vs.&nbsp;<code>&gt; 1</code>) to tell the two apart if needed. When a forecast horizon is present, <code>rng_key</code> is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, <code>rng_key</code> is used unsplit for the in-sample predictive draw. <code>predictive_batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
 
 
 </section>

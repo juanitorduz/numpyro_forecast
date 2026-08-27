@@ -1,7 +1,7 @@
 ## exceptions.KernelConfigError
 
 
-A kernel is combined with an invalid configuration.
+A `contrib.blackjax` kernel is run unbound or misconfigured.
 
 
 Usage
@@ -11,4 +11,4 @@ exceptions.KernelConfigError(message=None)
 ```
 
 
-Raised by `~numpyro_forecast.functional.mcmc.resolve_kernel()` when `kernel_kwargs` accompany an already-constructed instance, and by `~numpyro_forecast.functional.mcmc.fit_mcmc()` for run-config constraints (ensemble samplers need multiple vectorized chains; BlackJAX kernels need sequential chains).
+Raised by `init()` when the kernel was constructed with no model bound (e.g. [BlackjaxNUTSKernel()](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel) instead of `BlackjaxNUTSKernel(model)`); the fix is to pass the model as the kernel's first argument at construction time, before handing the kernel to `numpyro.infer.MCMC`. BlackJAX kernels also require `chain_method="sequential"` and `num_warmup=0`; see the "Run configuration" section of [BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel) and its sibling kernels for why, and how misconfiguring either surfaces.

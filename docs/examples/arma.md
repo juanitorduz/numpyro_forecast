@@ -3,14 +3,14 @@
 
 ARMA(1,1) Model with `numpyro_forecast`
 
-This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**](https://juanitorduz.github.io/arma_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the (1,1) member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous *observation* back into the mean, and a moving average term that feeds the previous *forecast error* back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through the package's functional [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc).
+This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**](https://juanitorduz.github.io/arma_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the (1,1) member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous *observation* back into the mean, and a moving average term that feeds the previous *forecast error* back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through plain NumPyro.
 
 Two deliberate changes from the blog post are worth calling out:
 
 - Instead of a single train-test split, we evaluate with **expanding-window time-slice cross-validation** via `numpyro_forecast.backtest`, scoring every fold with the continuous ranked probability score (CRPS) and the empirical coverage of the central 50\\ and 94\\ intervals, both in-sample and out-of-sample, exactly as in the [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html).
 - The forecast path is fully **generative**: over the horizon we sample future innovations and feed them back into the ARMA recursion, so the forecast uncertainty compounds correctly step by step. The blog post instead zeroed the future errors inside its prediction loop, which understates the multi-step uncertainty.
 
-A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html): the built-in [time_series](../../reference/functional.models.time_series.md#numpyro_forecast.functional.models.time_series) and [predict](../../reference/functional.models.predict.md#numpyro_forecast.functional.models.predict) primitives assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. We therefore write the model body directly against the functional API's [Horizon](../../reference/functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon) value, registering the framework's `"obs"` and `"forecast"` sites ourselves, while reusing everything downstream: [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: the `covariates` argument is the natural carrier for the history the filter needs, because it spans the full horizon and is available at prediction time. The model only ever reads the first [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast (we simply never look past the training window).
+A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html): the [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) and [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) building blocks assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. The package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block (single source of error) is made for exactly this shape of model: it runs the in-sample error-feedback filter and the generative forecast recursion, and we register the `"obs"` and `"forecast"` sites ourselves while reusing everything downstream: [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series as an argument, and the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`, which spans the full horizon and is available at prediction time. The model only ever reads the first `t_obs` rows (the block checks this), so no future information leaks into a forecast.
 
 
 # Prepare notebook
@@ -29,19 +29,21 @@ import numpyro.distributions as dist
 import pandas as pd
 from jax import random
 from jaxtyping import Float
+from numpyro.infer import MCMC, NUTS
 
 from numpyro_forecast import (
-    HMCForecaster,
+    Horizon,
     backtest,
     eval_coverage,
     eval_crps,
-    forecasting_model,
+    forecast,
+    predict_in_sample,
     predictions_to_datatree,
+    ssoe,
     to_datatree,
 )
 from numpyro_forecast.acf import acf, pacf
-from numpyro_forecast.functional import Horizon, fit_mcmc
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [10, 6]
@@ -67,7 +69,7 @@ The ARMA(1,1) process is defined by the recursion
 
 y_t = \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma),
 
-where \phi is the autoregressive coefficient, \theta the moving average coefficient, and \sigma the innovation scale. We simulate T = 100 observations with \phi = 0.4, \theta = 0.7, and \sigma = 0.5 (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom we also use inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide `Array` type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
+where \phi is the autoregressive coefficient, \theta the moving average coefficient, and \sigma the innovation scale. We simulate T = 100 observations with \phi = 0.4, \theta = 0.7, and \sigma = 0.5 (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) block uses inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide `Array` type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
 
 
 ``` python
@@ -126,7 +128,7 @@ The scan version threads a carry `(y_prev, error_prev)` through the innovations 
 def generate_arma_1_1_data_scan(
     rng_key: Array, n_samples: int, phi: float, theta: float, noise_scale: float
 ) -> Float[Array, " t"]:
-    """Simulate an ARMA(1,1) series with :func:`jax.lax.scan`.
+    """Simulate an ARMA(1,1) series with `jax.lax.scan()`.
 
     Parameters
     ----------
@@ -238,89 +240,86 @@ y_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qq
 
 The key insight (from the blog post, and the same one behind the innovations state space form of exponential smoothing) is that *in sample the errors are deterministic* given the parameters and the observed data: running the recursion forward, the one-step-ahead prediction at time t is \hat{y}\_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} and the error is simply \varepsilon_t = y_t - \hat{y}\_t, initialized with y\_{-1} = \mu and \varepsilon\_{-1} = 0. The whole in-sample likelihood is then a single Gaussian observation site: conditioning y_t \sim \text{Normal}(\hat{y}\_t, \sigma) is exactly the blog post's "condition on the errors" trick, \varepsilon_t \sim \text{Normal}(0, \sigma), since the two differ only by a location shift.
 
-The model body follows the package's two-scan pattern:
+The model is a plain NumPyro function `(covariates, data=None)`: its first line derives the train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), and the recursion is one [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) call. The block takes the driving series `y`, the initial carry (y\_{-1}, \varepsilon\_{-1}), a `step` function, and the innovation distribution; `step(carry, x_t)` returns the one-step-ahead mean and a `carry_fn(y_t, eps_t)` that builds the next carry, here simply the day's value and error. Rows carry the observation axis, so the carry is `(mu[None], zeros((1,)))` and the mean has shape `(1,)`; the block checks these shapes. It then owns the two scans:
 
-1.  **In sample.** A deterministic `jax.lax.scan` filters the observed series into one-step-ahead means \hat{y}\_t (exposed as the deterministic site `"mu_t"`), and the `"obs"` site conditions the data on them.
-2.  **Out of sample.** When `h.future > 0` we draw the horizon innovations from the prior at a separate `"eps_future"` site, then roll the recursion forward feeding the *sampled* observation and innovation back into the carry, and expose the trajectory as the deterministic `"forecast"` site the forecaster reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, so the forecast uncertainty compounds over the horizon exactly as the generative process says it should.
+1.  **In sample.** A deterministic `jax.lax.scan` filters the observed series into one-step-ahead means \hat{y}\_t, returned as `r.mu` (exposed as the deterministic site `"mu_t"`), and the `"obs"` site conditions the data on them.
+2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), then rolls the recursion forward feeding the *sampled* observation and innovation back into the carry, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, so the forecast uncertainty compounds over the horizon exactly as the generative process says it should.
 
-Neither scan body contains a sample site, so plain `jax.lax.scan` is all we need.
+Neither scan body contains a sample site, which is why the block can run plain `jax.lax.scan`.
 
 
 ``` python
-def arma_1_1(h: Horizon, covariates: Array) -> None:
+def arma_1_1(covariates: Array, data: Array | None = None) -> None:
     """ARMA(1,1) model with a deterministic in-sample error-feedback filter.
 
     Parameters
     ----------
-    h
-        The train/forecast horizon for the current model call.
     covariates
         The observed series itself, with time at axis ``-2``; only the first
         ``h.t_obs`` rows are read.
+    data
+        Observed data with time at axis ``-2``, or ``None`` when the drivers
+        sample the observation site.
     """
-    y = covariates[..., : h.t_obs, 0]  # observed history only; never reads beyond t_obs
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :]  # observed history only; never reads beyond t_obs
 
-    mu = numpyro.sample("mu", dist.Normal(loc=0, scale=1))
+    # jnp.asarray only narrows numpyro's union return type for the type checker.
+    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(loc=0, scale=1)))
     phi = numpyro.sample("phi", dist.Uniform(low=-1, high=1))
     theta = numpyro.sample("theta", dist.Uniform(low=-1, high=1))
     sigma = numpyro.sample("sigma", dist.HalfNormal(scale=1))
 
-    def transition_fn(carry, y_t):
+    def step(carry, _):
         y_prev, error_prev = carry
         pred = mu + phi * y_prev + theta * error_prev
-        return (y_t, y_t - pred), pred
+        return pred, lambda y_t, eps_t: (y_t, eps_t)
 
-    init_carry = (mu, jnp.zeros(()))  # y_{-1} = mu and eps_{-1} = 0 seed the recursion
-    (_, error_last), preds = jax.lax.scan(transition_fn, init_carry, y)
+    init_carry = (mu[None], jnp.zeros((1,)))  # y_{-1} = mu and eps_{-1} = 0 seed the recursion
+    r = ssoe(h, "eps", y, init_carry, step, dist.Normal(loc=0, scale=sigma))
 
-    numpyro.deterministic("mu_t", preds[:, None])
-    numpyro.sample("obs", dist.Normal(loc=preds[:, None], scale=sigma), obs=h.data)
-
+    numpyro.deterministic("mu_t", r.mu)
+    numpyro.sample("obs", dist.Normal(loc=r.mu, scale=sigma), obs=h.data)
     if h.future > 0:
-        eps_future = numpyro.sample(
-            "eps_future", dist.Normal(loc=0, scale=sigma).expand([h.future]).to_event(1)
-        )
-
-        def forecast_fn(carry, eps):
-            y_prev, error_prev = carry
-            pred = mu + phi * y_prev + theta * error_prev
-            y_next = pred + eps  # the sampled innovation is fed back into the carry
-            return (y_next, eps), y_next
-
-        _, y_future = jax.lax.scan(forecast_fn, (y[-1], error_last), eps_future)
-        numpyro.deterministic("forecast", y_future[:, None])
-
-
-model = forecasting_model(arma_1_1)
+        numpyro.deterministic("forecast", r.y_future)
 ```
 
 
 # Inference with NUTS
 
-We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \mu, \phi, \theta, and \sigma.
+We fit the model on the **full series** (no train-test split; the held-out evaluation comes from the cross-validation below) with plain NumPyro: the No-U-Turn Sampler through `MCMC`, running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each. The posterior is tiny: because the in-sample errors are deterministic, the only latent parameters are \mu, \phi, \theta, and \sigma. We wrap the call in a small `fit_nuts` helper, because the cross-validation below refits the sampler on every fold with the same settings; `mcmc.get_samples()` returns the draws as a plain dictionary with the chains flattened together, the format every package driver consumes.
 
-We then export the whole fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html): a single call restores the `(chain, draw)` structure of the posterior draws, samples the in-sample one-step-ahead posterior predictive, and stores the observed data and covariates alongside, so everything downstream (diagnostics, trace plots, the in-sample fit) reads from one object. Since `covariates` has the same duration as `data`, there is no forecast horizon and hence no forecast groups here; the out-of-sample story comes from the cross-validation below.
+We then export the whole fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html): a single call restores the `(chain, draw)` structure of the posterior draws (we pass `num_chains=4`), samples the in-sample one-step-ahead posterior predictive from the same draws, and stores the observed data and covariates alongside, so everything downstream (diagnostics, trace plots, the in-sample fit) reads from one object. Since `covariates` has the same duration as `data`, there is no forecast horizon and hence no forecast groups here; the out-of-sample story comes from the cross-validation below.
 
 
 ``` python
+def fit_nuts(
+    rng_key: Array, model: ForecastModel, data: Array, covariates: Array
+) -> dict[str, Array]:
+    """Fit ``model`` with NUTS (4 chains, 1,000 warmup and 1,000 draws each) and return the draws."""
+    mcmc = MCMC(
+        NUTS(model),
+        num_warmup=1_000,
+        num_samples=1_000,
+        num_chains=4,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    mcmc.run(rng_key, covariates, data)
+    return mcmc.get_samples()
+
+
 rng_key, rng_subkey = random.split(rng_key)
-fit = fit_mcmc(
-    rng_subkey,
-    model,
-    data,
-    covariates,
-    num_warmup=1_000,
-    num_samples=1_000,
-    num_chains=4,
-)
+posterior = fit_nuts(rng_subkey, arma_1_1, data, covariates)
 
 rng_key, rng_subkey = random.split(rng_key)
 tree = to_datatree(
     rng_subkey,
-    fit,
-    model,
+    arma_1_1,
+    posterior,
     data,
     covariates,
+    num_chains=4,
     posterior_dims={"mu_t": ["time", "obs_dim"]},
 )
 tree
@@ -877,7 +876,7 @@ Group: /
 │           sigma    (chain, draw) float32 16kB 0.4242 0.4562 0.3988 ... 0.501 0.408
 │           theta    (chain, draw) float32 16kB 0.3627 0.5471 0.3764 ... 0.5953 0.6119
 │       Attributes:
-│           created_at:                 2026-07-17T08:59:11.803187+00:00
+│           created_at:                 2026-08-27T12:28:19.105676+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -890,9 +889,9 @@ Group: /
 │         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB 0.378 0.03782 ... -0.08186
+│           obs      (chain, draw, time, obs_dim) float32 2MB -1.017 0.3373 ... -0.6977
 │       Attributes:
-│           created_at:                 2026-07-17T08:59:11.929615+00:00
+│           created_at:                 2026-08-27T12:28:19.258163+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -905,7 +904,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 400B 0.6115 0.06982 ... -0.1484 -0.1441
 │       Attributes:
-│           created_at:                 2026-07-17T08:59:11.929833+00:00
+│           created_at:                 2026-08-27T12:28:19.258431+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -918,7 +917,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 400B 0.6115 0.06982 ... -0.1441
         Attributes:
-            created_at:                 2026-07-17T08:59:11.929990+00:00
+            created_at:                 2026-08-27T12:28:19.258608+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1130,7 +1129,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T08:59:11.803187+00:00
+2026-08-27T12:28:19.105676+00:00
 
 creation_library :  
 ArviZ
@@ -1251,7 +1250,7 @@ obs
 float32
 
 
-0.378 0.03782 ... 0.436 -0.08186
+-1.017 0.3373 ... 0.3093 -0.6977
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1259,14 +1258,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.37801173],[ 0.03781663],[-1.1094376 ],...,[ 0.05967716],[ 1.1015469 ],[-0.47437602]],[[-0.8436128 ],[ 0.34660274],[ 0.15462576],...,[-0.10218637],[ 0.4468028 ],[-0.62966377]],[[-0.49090743],[ 0.3702586 ],[-0.56688434],...,......,[ 0.45504633],[ 1.1635041 ],[-1.492195  ]],[[ 0.31492084],[ 1.1711082 ],[-0.6340382 ],...,[-0.22004732],[ 0.96339697],[-0.2516304 ]],[[ 0.1017881 ],[ 0.75837314],[-0.2306227 ],...,[-0.329196  ],[ 0.4360241 ],[-0.08185795]]]], shape=(4, 1000, 100, 1), dtype=float32)
+    array([[[[-1.0169957 ],[ 0.33730668],[-1.0464648 ],...,[-0.64169127],[ 0.50451714],[-0.92574334]],[[ 0.02451567],[ 0.31905827],[-0.15904397],...,[-1.1264307 ],[ 0.06864069],[-0.00616606]],[[-0.46010378],[ 0.7067954 ],[-1.003775  ],...,......,[-0.4517897 ],[ 0.7969543 ],[-0.6166142 ]],[[ 0.2246039 ],[ 0.82003504],[ 0.05850028],...,[ 0.87950796],[ 0.82522213],[-0.35609692]],[[ 0.07195892],[ 0.78940415],[ 0.03490523],...,[-0.33626258],[ 0.30929595],[-0.6976971 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-17T08:59:11.929615+00:00
+2026-08-27T12:28:19.258163+00:00
 
 creation_library :  
 ArviZ
@@ -1360,7 +1359,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T08:59:11.929833+00:00
+2026-08-27T12:28:19.258431+00:00
 
 creation_library :  
 ArviZ
@@ -1454,7 +1453,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T08:59:11.929990+00:00
+2026-08-27T12:28:19.258608+00:00
 
 creation_library :  
 ArviZ
@@ -1605,12 +1604,47 @@ ax.set(
 
 # Expanding-window cross-validation
 
-A single split tells us how the model does on one held-out window. A more honest picture comes from *expanding-window* time-slice cross-validation: we repeatedly move the train/test boundary forward, refit from scratch, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop for us, refitting the NUTS sampler on each fold through [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), the OOP counterpart of [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc) that [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) constructs per fold.
+A single split tells us how the model does on one held-out window. A more honest picture comes from *expanding-window* time-slice cross-validation: we repeatedly move the train/test boundary forward, refit from scratch, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop for us; the fitting and forecasting inside each fold are delegated to two closures we write, `forecast_fn` and `in_sample_fn`, so [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) itself has no opinion about the inference engine. Both closures call `fit_nuts` on the fold's training window and then hand the draws to the package's [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) and [`predict_in_sample`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html) drivers. Because `eval_train=True` scores the in-sample fit too, each fold fits the sampler twice (once per closure).
 
-We size the folds at roughly 10\\ of the series: each fold forecasts the next `10` steps (`test_window=10`), stepping forward `10` steps at a time (`stride=10`) so the folds do not overlap, and the first `50` observations (half the series) seed the initial training window (`min_train_window=50`). That yields five folds with split points at t = 50, 60, 70, 80, 90. With `eval_train=True` each fold also scores its in-sample one-step-ahead posterior predictive with the same metrics (this is what the series-as-covariates design buys us), and `keep_predictions=True` retains the out-of-sample forecast samples so we can plot them. Alongside the CRPS we track the empirical **coverage** of the central 50\\ and 94\\ intervals: a well-calibrated forecast covers close to its nominal level.
+We size the folds at roughly 10\\ of the series: each fold forecasts the next `10` steps (`test_window=10`), stepping forward `10` steps at a time (`stride=10`) so the folds do not overlap, and the first `50` observations (half the series) seed the initial training window (`min_train_window=50`). That yields five folds with split points at t = 50, 60, 70, 80, 90. With `eval_train=True` each fold also scores its in-sample one-step-ahead posterior predictive with the same metrics (this is what the series-as-covariates design buys us), and `keep_predictions=True` retains the out-of-sample forecast samples so we can plot them. `num_samples` records the ensemble size the closures return: 4 chains of 1{,}000 draws, so `4_000` forecast paths per fold. Alongside the CRPS we track the empirical **coverage** of the central 50\\ and 94\\ intervals: a well-calibrated forecast covers close to its nominal level.
 
 
 ``` python
+def forecast_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    """Fit ``model`` on the training window with NUTS and forecast the test horizon."""
+    key_fit, key_fc = random.split(rng_key)
+    fold_posterior = fit_nuts(key_fit, model, train_data, train_covariates)
+    return forecast(
+        key_fc, model, fold_posterior, train_data, full_covariates, batch_size=batch_size
+    )
+
+
+def in_sample_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    """Fit ``model`` on the training window with NUTS and score its in-sample fit."""
+    key_fit, key_pred = random.split(rng_key)
+    fold_posterior = fit_nuts(key_fit, model, train_data, train_covariates)
+    return predict_in_sample(
+        key_pred, model, fold_posterior, train_covariates, batch_size=batch_size
+    )
+
+
 metrics = {
     "crps": eval_crps,
     "coverage_50": partial(eval_coverage, alpha=0.5),
@@ -1622,16 +1656,16 @@ results = backtest(
     rng_subkey,
     data,  # full dataset, no train/test split
     covariates,  # the series itself, sliced per fold by backtest
-    lambda: model,
-    forecaster_fn=HMCForecaster,
+    lambda: arma_1_1,
+    forecast_fn=forecast_fn,
+    in_sample_fn=in_sample_fn,
     metrics=metrics,
     test_window=10,  # ~10% of the series per fold
     stride=10,  # non-overlapping folds
     min_train_window=50,  # half the series seeds the first fold
-    num_samples=2_000,
+    num_samples=4_000,  # 4 chains x 1,000 draws, what fit_nuts returns
     eval_train=True,
     keep_predictions=True,
-    forecaster_options={"num_warmup": 1_000, "num_samples": 1_000, "num_chains": 4},
 )
 
 split_points = [r.t1 for r in results]
@@ -1649,8 +1683,8 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
 
     folds: 5 (split points: [50, 60, 70, 80, 90])
-    mean in-sample CRPS:     0.2398
-    mean out-of-sample CRPS: 0.2921
+    mean in-sample CRPS:     0.2399
+    mean out-of-sample CRPS: 0.2914
     mean out-of-sample 50% coverage: 0.58  (nominal 0.50)
     mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
@@ -1739,7 +1773,7 @@ The bands show textbook ARMA behavior. Within each fold the forecast mean decays
 
 ## CRPS per fold
 
-The per-fold CRPS quantifies the picture. The in-sample and out-of-sample scores stay close across folds, and neither trends upward as the training window grows, so the model is neither over- nor under-fitting: with only four parameters and a correctly specified model class, even the first fold's 50 observations pin the predictive distribution down well. The out-of-sample score is a bit noisier, as it is computed from just 10 observations per fold.
+The per-fold CRPS quantifies the picture. The in-sample score is flat across folds, while the out-of-sample score wanders within a narrow band around it, the sampling noise you expect from just 10 observations per fold, with no widening gap between the two lines as the training window grows. That is the signature of a model that is neither over- nor under-fitting: with only four parameters and a correctly specified model class, even the first fold's 50 observations pin the predictive distribution down well.
 
 
 ``` python
@@ -1790,7 +1824,7 @@ ax.set(
 - Hyndman, R. J., & Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/), 3rd edition. Chapter 9: ARIMA models.
 - NumPyro documentation: [Example: AR(2) process](https://num.pyro.ai/en/stable/examples/ar2.html).
 - Pyro forum: [Lax.scan to implement ARMA(1,1)](https://forum.pyro.ai/t/lax-scan-to-implement-arma-1-1/2518).
-- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same functional-model-body pattern for an error-feedback model.
+- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for an error-feedback model.
 - The [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html) in this documentation, which introduces [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
 
-[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#657fe9b4)
+[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#3ed59a64)

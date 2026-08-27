@@ -27,8 +27,8 @@ Adds a `predictions` group (the forecast `obs` draws) and a `predictions_constan
 `tree: xarray.DataTree`  
 A tree from [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) (its `observed_data` time coordinate is continued).
 
-`forecast_samples: Array | np.ndarray`  
-Forecast draws shaped `(num_samples, future, obs)` from `~numpyro_forecast.functional.prediction.forecast()`.
+`forecast_samples: Num[ArrayLike, ``" sample future obs"]`  
+Forecast draws shaped `(num_samples, future, obs)` from [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast).
 
 `covariates_future: Array`  
 Future covariates shaped `(future, covariate_dim)`, or any layout with time at axis `-2` when `covariate_dims` names the axes.

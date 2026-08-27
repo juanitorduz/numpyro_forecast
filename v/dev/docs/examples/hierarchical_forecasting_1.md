@@ -3,7 +3,7 @@
 
 Hierarchical forecasting I with `numpyro_forecast`
 
-This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part I)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itelf a port of the first part of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). It generalizes the [univariate notebook](forecasting_univariate.md) from a single series to many: we forecast hourly **BART arrivals to one destination** (`EMBR`, Embarcadero) from all `50` origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.
+This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part I)**](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. This example is by itself a port of the first part of the original Pyro example: [**Forecasting III: hierarchical models**](https://pyro.ai/examples/forecasting_iii.html). It generalizes the [univariate notebook](forecasting_univariate.md) from a single series to many: we forecast hourly **BART arrivals to one destination** (`EMBR`, Embarcadero) from all `50` origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.
 
 > **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism rather than re-running the guide over the full covariates.
 
@@ -12,8 +12,6 @@ This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part
 
 
 ``` python
-from typing import cast
-
 import arviz as az
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -23,14 +21,23 @@ import numpyro.distributions as dist
 import pandas as pd
 import xarray as xr
 from jax import random
-from numpyro.infer import Predictive
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.reparam import LocScaleReparam
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel, eval_crps
+from numpyro_forecast import (
+    Horizon,
+    draw_posterior,
+    eval_crps,
+    forecast,
+    innovations,
+    predict,
+    predict_in_sample,
+)
 from numpyro_forecast.datasets import load_bart_hierarchical
 from numpyro_forecast.features import periodic_repeat
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -116,19 +123,16 @@ This is the univariate model lifted to a panel. Each series s gets its own rando
 
 \begin{align\*} \mu\_{t,s} & = \ell\_{t,s} + \text{seasonal}\_{(t \bmod \text{period}),\\s} \\ \ell\_{t,s} & = \ell\_{t-1,s} + \delta\_{t,s} \\ \delta\_{t,s} & \sim \text{Normal}(0, \sigma\_\text{drift}) \\ y\_{t,s} & \sim \text{Normal}(\mu\_{t,s}, \sigma). \end{align\*}
 
-The hierarchy is expressed with `numpyro.plate`. We wrap `self.time_series(...)` in an `n_series` plate so the drift (and its forecast `_future` companion) is sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together.
+The hierarchy is expressed with `numpyro.plate`. We call the [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) building block inside an `n_series` plate (it opens its own `time` plate at axis `-2`), so the drift and its forecast companion `drift_future` are sampled per series. The weekly seasonal lives under the `n_series` and `hour_of_week` plates, so it is estimated once per hour-of-week per series, then tiled across the full horizon with [periodic_repeat](../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat). Sharing the global hyperparameters across the plate is what couples the series together. The model is a plain NumPyro model function `(covariates, data=None)`; because the seasonal period is a modeling choice, a small factory closes over it and returns the function.
 
 
 ``` python
-class MultiSeriesForecaster(ForecastingModel):
-    """Per-series local level + weekly seasonality with a shared Normal scale."""
+def make_multi_series_model(period: int = 24 * 7) -> ForecastModel:
+    """Build the per-series local level + weekly seasonality model with a shared Normal scale."""
 
-    def __init__(self, period: int = 24 * 7) -> None:
-        super().__init__()
-        self.period = period
-
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
+    def multi_series_model(covariates: Array, data: Array | None = None) -> None:
         """Define the multi-series forecasting model."""
+        h = Horizon.from_data(covariates, data)
         n_series = covariates.shape[-1]
         duration = covariates.shape[-2]
 
@@ -137,18 +141,22 @@ class MultiSeriesForecaster(ForecastingModel):
         centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
 
         with numpyro.plate("n_series", n_series, dim=-1):
-            drift = self.time_series(
+            drift = innovations(
+                h,
                 "drift",
                 lambda: dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=centered),
             )
-            with numpyro.plate("hour_of_week", self.period, dim=-2):
-                seasonal = cast("Array", numpyro.sample("seasonal", dist.Normal(0.0, 5.0)))
+            with numpyro.plate("hour_of_week", period, dim=-2):
+                # asarray narrows numpyro's union return type for the type checker.
+                seasonal = jnp.asarray(numpyro.sample("seasonal", dist.Normal(0.0, 5.0)))
 
         level = jnp.cumsum(drift, axis=-2)
         prediction = level + periodic_repeat(seasonal, duration, axis=-2)
 
-        self.predict(dist.Normal(0.0, sigma), prediction)
+        predict(h, dist.Normal(0.0, sigma), prediction)
+
+    return multi_series_model
 ```
 
 
@@ -157,9 +165,10 @@ Let's visualize the model:
 
 ``` python
 period = 24 * 7  # weekly seasonality (hours)
+model = make_multi_series_model(period=period)
 
 numpyro.render_model(
-    MultiSeriesForecaster(period=period),
+    model,
     model_args=(covariates_train, y_train),
     render_distributions=True,
 )
@@ -203,9 +212,7 @@ def faceted_idata(
     )
 
 
-prior_predictive = Predictive(
-    MultiSeriesForecaster(period=period), num_samples=2_000, return_sites=["obs"]
-)
+prior_predictive = Predictive(model, num_samples=2_000, return_sites=["obs"])
 rng_key, rng_subkey = random.split(rng_key)
 prior_obs = prior_predictive(rng_subkey, covariates_train)["obs"]
 
@@ -267,23 +274,17 @@ fig.tight_layout();
 
 # Inference with SVI
 
-We fit the model with SVI through [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) (an `AutoNormal` guide with `Adam`). Plotting the ELBO on a log scale makes the convergence easy to read.
+We fit the model with plain NumPyro SVI: an `AutoNormal` guide, `Adam`, and `SVI.run`. Plotting the ELBO on a log scale makes the convergence easy to read.
 
 
 ``` python
 rng_key, rng_subkey = random.split(rng_key)
-model = MultiSeriesForecaster(period=period)
-forecaster = Forecaster(
-    rng_subkey,
-    model,
-    y_train,
-    covariates_train,
-    optim=Adam(step_size=0.05),
-    num_steps=15_000,
-)
+guide = AutoNormal(model)
+svi = SVI(model, guide, Adam(step_size=0.05), Trace_ELBO())
+svi_result = svi.run(rng_subkey, 15_000, covariates_train, y_train, progress_bar=False)
 
 fig, ax = plt.subplots()
-ax.plot(forecaster.losses)
+ax.plot(svi_result.losses)
 ax.set_yscale("log")
 ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
@@ -296,38 +297,33 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 # Posterior predictive check
 
-We draw the in-sample posterior predictive over the train window and the forecast over the test horizon, then score both with CRPS. Since the data live on the `log1p` scale, which is non-negative, we clip the predictions at zero before scoring.
+We draw `1_500` posterior samples from the fitted guide with [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), push them through the model over the train window with [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and over the test horizon with [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), then score both with CRPS. Since the data live on the `log1p` scale, which is non-negative, we clip the predictions at zero before scoring.
 
 
 ``` python
 rng_key, key_post, key_pp, key_fc = random.split(rng_key, 4)
 
-posterior_samples = forecaster.guide.sample_posterior(
-    key_post, forecaster.params, sample_shape=(1_500,)
-)
-train_pp = Predictive(model, posterior_samples=posterior_samples, return_sites=["obs"])(
-    key_pp, covariates_train
-)["obs"]
-
-forecast = forecaster(key_fc, y_train, covariates, num_samples=1_500)
+posterior = draw_posterior(key_post, guide, svi_result.params, 1_500)
+train_pp = predict_in_sample(key_pp, model, posterior, covariates_train)
+forecast_draws = forecast(key_fc, model, posterior, y_train, covariates)
 
 train_pp = jnp.clip(train_pp, min=0.0)
-forecast = jnp.clip(forecast, min=0.0)
+forecast_draws = jnp.clip(forecast_draws, min=0.0)
 
 crps_train = eval_crps(train_pp, y_train)
-crps_test = eval_crps(forecast, y_test)
+crps_test = eval_crps(forecast_draws, y_test)
 print(f"Train CRPS: {crps_train:.4f}")
 print(f"Test CRPS:  {crps_test:.4f}")
 ```
 
 
     Train CRPS: 0.2077
-    Test CRPS:  0.3676
+    Test CRPS:  0.3675
 
 
 # Forecast visualization
 
-Eight origins arriving at `EMBR`: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50% and 94% HDI bands, the train/test split, and the observed series in black. The shaded band marks Christmas day.
+Eight origins arriving at `EMBR`: the in-sample posterior predictive (blue, last three train weeks) and the forecast (orange) with 50\\ and 94\\ HDI bands, the train/test split, and the observed series in black. The shaded band marks Christmas day.
 
 The model does quite well on most of the test window, but it clearly struggles around Christmas: ridership collapses on the holiday and the forecast, which only knows about the weekly cycle, does not see it coming. This is the expected failure mode of a model without holiday information. The fixes are to feed it more history (so it has seen past Christmases) or to add explicit holiday features, for example dummy variables or Gaussian bump functions around special dates.
 
@@ -358,7 +354,7 @@ train_bands = pc.viz["ci_band"]["t"].sel(series=n_plot - 1)
 band_train_94 = train_bands.sel(prob=0.94).item()
 band_train_50 = train_bands.sel(prob=0.5).item()
 az.plot_lm(
-    faceted_idata(forecast[:, :, :n_plot], t_test),
+    faceted_idata(forecast_draws[:, :, :n_plot], t_test),
     y="obs",
     x="t",
     plot_dim="time",
@@ -451,4 +447,4 @@ Here we pooled `50` origins into a single destination. In [part II](hierarchical
 - Orduz, J. [*Hierarchical forecasting with NumPyro (part I)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/).
 - Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
 
-[Source: Hierarchical forecasting I with `numpyro_forecast`](_src/hierarchical_forecasting_1-preview.html#e539289a)
+[Source: Hierarchical forecasting I with `numpyro_forecast`](_src/hierarchical_forecasting_1-preview.html#ab3ec806)

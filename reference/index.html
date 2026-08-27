@@ -90,13 +90,13 @@ ul.task-list li input[type="checkbox"] {
 
   <link rel="alternate" type="text/markdown" href="index.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/">
-  <meta name="description" content="High-level interfaces for fitting and forecasting.">
+  <meta name="description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareSourceCode",
   "name": "numpyro_forecast",
-  "description": "A JAX/NumPyro port of Pyro's forecasting module.",
+  "description": "A JAX/NumPyro port of the ideas in Pyro's forecasting module.",
   "codeRepository": "https://github.com/juanitorduz/numpyro_forecast",
   "license": "https://opensource.org/licenses/Apache-2.0",
   "url": "https://juanitorduz.github.io/numpyro_forecast",
@@ -109,12 +109,12 @@ ul.task-list li input[type="checkbox"] {
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="API Reference – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="High-level interfaces for fitting and forecasting.">
+  <meta property="og:description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="API Reference – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="High-level interfaces for fitting and forecasting.">
+  <meta name="twitter:description" content="Time-axis operations on observation distributions, extensible via singledispatch.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-reference doc-reference-index quarto-light">
@@ -185,159 +185,31 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Forecasters</span></a>
+ <span class="menu-text">Distribution surgery</span></a>
 </div>
       <ul id="quarto-sidebar-section-1" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.Forecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.Forecaster</span></a>
+  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.shift_loc</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.HMCForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.HMCForecaster</span></a>
+  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.slice_time</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.PathfinderForecaster</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Models</span></a>
-</div>
-      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.ForecastingModel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.ForecastingModel</span></a>
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.prefix_condition</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.forecasting_model.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.forecasting_model</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: model primitives</span></a>
-</div>
-      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.Horizon.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.Horizon</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.time_series</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.markov_time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.markov_time_series</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.predict.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.predict</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.predict_glm.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.predict_glm</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: fitting</span></a>
-</div>
-      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.resolve_optimizer.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.resolve_optimizer</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.resolve_guide.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.resolve_guide</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.fit_svi.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.fit_svi</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.SVIFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.SVIFit</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.resolve_kernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.resolve_kernel</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.fit_mcmc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.fit_mcmc</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.MCMCFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.MCMCFit</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: posterior and prediction</span></a>
-</div>
-      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.posterior.draw_posterior.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.posterior.draw_posterior</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.prediction.forecast.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.prediction.forecast</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.prediction.predict_in_sample.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.prediction.predict_in_sample</span></a>
+  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.register_elementwise</span></a>
   </div>
 </li>
       </ul>
@@ -347,7 +219,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Backtesting &amp; evaluation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
@@ -437,195 +309,9 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Autocorrelation</span></a>
-</div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">acf.acf</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">acf.pacf</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Seasonal features</span></a>
-</div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">features.fourier_features</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">features.periodic_repeat</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Array helpers</span></a>
-</div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">arrays.zero_data_like</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">arrays.concat_future</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Distribution surgery</span></a>
-</div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.shift_loc</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.slice_time</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.prefix_condition</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.register_elementwise</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Optional dependencies</span></a>
-</div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">optional.require</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Exceptions</span></a>
-</div>
-      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.NumpyroForecastError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.BacktestWindowError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedGuideError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedMetricError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.OptimizerResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.GuideResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.GuideResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.GuideSampleArgsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.GuideSampleArgsError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.KernelResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.KernelResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.KernelConfigError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.CovariateDimsError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.MVNLayoutError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.DeviceMemoryError</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -651,7 +337,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -687,9 +373,95 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Typing</span></a>
+</div>
+      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ForecastModel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Autocorrelation</span></a>
+</div>
+      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">acf.acf</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">acf.pacf</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Seasonal features</span></a>
+</div>
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">features.fourier_features</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">features.periodic_repeat</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Array helpers</span></a>
+</div>
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.zero_data_like</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.concat_future</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -716,6 +488,70 @@ ul.task-list li input[type="checkbox"] {
 </li>
       </ul>
   </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Optional dependencies</span></a>
+</div>
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">optional.require</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Exceptions</span></a>
+</div>
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.NumpyroForecastError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.BacktestWindowError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.VectorizedMetricError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.KernelConfigError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.CovariateDimsError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.MVNLayoutError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DeviceMemoryError</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
     </ul>
     </div>
 </nav>
@@ -726,21 +562,17 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul class="collapse">
-  <li><a href="#forecasters" id="toc-forecasters" class="nav-link active" data-scroll-target="#forecasters">Forecasters</a></li>
-  <li><a href="#models" id="toc-models" class="nav-link" data-scroll-target="#models">Models</a></li>
-  <li><a href="#functional-core-model-primitives" id="toc-functional-core-model-primitives" class="nav-link" data-scroll-target="#functional-core-model-primitives">Functional core: model primitives</a></li>
-  <li><a href="#functional-core-fitting" id="toc-functional-core-fitting" class="nav-link" data-scroll-target="#functional-core-fitting">Functional core: fitting</a></li>
-  <li><a href="#functional-core-posterior-and-prediction" id="toc-functional-core-posterior-and-prediction" class="nav-link" data-scroll-target="#functional-core-posterior-and-prediction">Functional core: posterior and prediction</a></li>
+  <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link active" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
   <li><a href="#backtesting-evaluation" id="toc-backtesting-evaluation" class="nav-link" data-scroll-target="#backtesting-evaluation">Backtesting &amp; evaluation</a></li>
+  <li><a href="#arviz-export" id="toc-arviz-export" class="nav-link" data-scroll-target="#arviz-export">ArviZ export</a></li>
+  <li><a href="#extensions-contrib" id="toc-extensions-contrib" class="nav-link" data-scroll-target="#extensions-contrib">Extensions (contrib)</a></li>
+  <li><a href="#typing" id="toc-typing" class="nav-link" data-scroll-target="#typing">Typing</a></li>
   <li><a href="#autocorrelation" id="toc-autocorrelation" class="nav-link" data-scroll-target="#autocorrelation">Autocorrelation</a></li>
   <li><a href="#seasonal-features" id="toc-seasonal-features" class="nav-link" data-scroll-target="#seasonal-features">Seasonal features</a></li>
   <li><a href="#array-helpers" id="toc-array-helpers" class="nav-link" data-scroll-target="#array-helpers">Array helpers</a></li>
-  <li><a href="#distribution-surgery" id="toc-distribution-surgery" class="nav-link" data-scroll-target="#distribution-surgery">Distribution surgery</a></li>
+  <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets">Datasets</a></li>
   <li><a href="#optional-dependencies" id="toc-optional-dependencies" class="nav-link" data-scroll-target="#optional-dependencies">Optional dependencies</a></li>
   <li><a href="#exceptions" id="toc-exceptions" class="nav-link" data-scroll-target="#exceptions">Exceptions</a></li>
-  <li><a href="#arviz-export" id="toc-arviz-export" class="nav-link" data-scroll-target="#arviz-export">ArviZ export</a></li>
-  <li><a href="#extensions-contrib" id="toc-extensions-contrib" class="nav-link" data-scroll-target="#extensions-contrib">Extensions (contrib)</a></li>
-  <li><a href="#datasets" id="toc-datasets" class="nav-link" data-scroll-target="#datasets">Datasets</a></li>
   </ul>
 </nav>
     </div>
@@ -766,123 +598,27 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="forecasters" class="level2 doc-group">
-<h2 class="doc-group">Forecasters</h2>
+<section id="distribution-surgery" class="level2 doc-group">
+<h2 class="doc-group">Distribution surgery</h2>
 <div class="doc-description">
-<p>High-level interfaces for fitting and forecasting.</p>
+<p>Time-axis operations on observation distributions, extensible via singledispatch.</p>
 </div>
 <dl>
-<dt><a href="../reference/forecaster.Forecaster.html#numpyro_forecast.forecaster.Forecaster" class="doc-class doc-label doc-label-class">forecaster.Forecaster</a></dt>
+<dt><a href="../reference/surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="doc-function doc-label doc-label-function">surgery.shift_loc()</a></dt>
 <dd>
-<p>Fit a forecasting model with stochastic variational inference.</p>
+<p>Re-center a zero-centered noise distribution at <code>loc</code>.</p>
 </dd>
-<dt><a href="../reference/forecaster.HMCForecaster.html#numpyro_forecast.forecaster.HMCForecaster" class="doc-class doc-label doc-label-class">forecaster.HMCForecaster</a></dt>
+<dt><a href="../reference/surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="doc-function doc-label doc-label-function">surgery.slice_time()</a></dt>
 <dd>
-<p>Fit a forecasting model with MCMC (NUTS by default).</p>
+<p>Slice an elementwise distribution along the time axis <code>-2</code>.</p>
 </dd>
-<dt><a href="../reference/forecaster.PathfinderForecaster.html#numpyro_forecast.forecaster.PathfinderForecaster" class="doc-class doc-label doc-label-class">forecaster.PathfinderForecaster</a></dt>
+<dt><a href="../reference/surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="doc-function doc-label doc-label-function">surgery.prefix_condition()</a></dt>
 <dd>
-<p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
+<p>Condition a <code>(t+f)</code>-length distribution on a <code>t</code>-length data prefix.</p>
 </dd>
-</dl>
-</section>
-<section id="models" class="level2 doc-group">
-<h2 class="doc-group">Models</h2>
-<div class="doc-description">
-<p>Building forecasting models (object-oriented and functional).</p>
-</div>
-<dl>
-<dt><a href="../reference/forecaster.ForecastingModel.html#numpyro_forecast.forecaster.ForecastingModel" class="doc-class doc-label doc-label-abc">forecaster.ForecastingModel</a></dt>
+<dt><a href="../reference/surgery.register_elementwise.html#numpyro_forecast.surgery.register_elementwise" class="doc-function doc-label doc-label-function">surgery.register_elementwise()</a></dt>
 <dd>
-<p>Abstract base class for forecasting models.</p>
-</dd>
-<dt><a href="../reference/functional.models.forecasting_model.html#numpyro_forecast.functional.models.forecasting_model" class="doc-function doc-label doc-label-function">functional.models.forecasting_model()</a></dt>
-<dd>
-<p>Build a NumPyro model from a functional model body.</p>
-</dd>
-</dl>
-</section>
-<section id="functional-core-model-primitives" class="level2 doc-group">
-<h2 class="doc-group">Functional core: model primitives</h2>
-<div class="doc-description">
-<p>Pure functional primitives for the train/forecast split.</p>
-</div>
-<dl>
-<dt><a href="../reference/functional.models.Horizon.html#numpyro_forecast.functional.models.Horizon" class="doc-class doc-label doc-label-dataclass">functional.models.Horizon</a></dt>
-<dd>
-<p>The train/forecast split for a single model call.</p>
-</dd>
-<dt><a href="../reference/functional.models.time_series.html#numpyro_forecast.functional.models.time_series" class="doc-function doc-label doc-label-function">functional.models.time_series()</a></dt>
-<dd>
-<p>Sample a time-varying latent over the full horizon.</p>
-</dd>
-<dt><a href="../reference/functional.models.markov_time_series.html#numpyro_forecast.functional.models.markov_time_series" class="doc-function doc-label doc-label-function">functional.models.markov_time_series()</a></dt>
-<dd>
-<p>Sample a Markov (state-space) latent over the full horizon.</p>
-</dd>
-<dt><a href="../reference/functional.models.predict.html#numpyro_forecast.functional.models.predict" class="doc-function doc-label doc-label-function">functional.models.predict()</a></dt>
-<dd>
-<p>Register the observation/forecast sites for the model.</p>
-</dd>
-<dt><a href="../reference/functional.models.predict_glm.html#numpyro_forecast.functional.models.predict_glm" class="doc-function doc-label doc-label-function">functional.models.predict_glm()</a></dt>
-<dd>
-<p>Register GLM-style observation/forecast sites from a latent predictor.</p>
-</dd>
-</dl>
-</section>
-<section id="functional-core-fitting" class="level2 doc-group">
-<h2 class="doc-group">Functional core: fitting</h2>
-<div class="doc-description">
-<p>Optimizer/guide/kernel resolution and the SVI and MCMC fit entry points.</p>
-</div>
-<dl>
-<dt><a href="../reference/functional.svi.resolve_optimizer.html#numpyro_forecast.functional.svi.resolve_optimizer" class="doc-function doc-label doc-label-function">functional.svi.resolve_optimizer()</a></dt>
-<dd>
-<p>Normalize an optimizer specification into a NumPyro optimizer.</p>
-</dd>
-<dt><a href="../reference/functional.svi.resolve_guide.html#numpyro_forecast.functional.svi.resolve_guide" class="doc-function doc-label doc-label-function">functional.svi.resolve_guide()</a></dt>
-<dd>
-<p>Normalize a guide specification against <code>model</code>.</p>
-</dd>
-<dt><a href="../reference/functional.svi.fit_svi.html#numpyro_forecast.functional.svi.fit_svi" class="doc-function doc-label doc-label-function">functional.svi.fit_svi()</a></dt>
-<dd>
-<p>Fit a forecasting model with stochastic variational inference.</p>
-</dd>
-<dt><a href="../reference/functional.svi.SVIFit.html#numpyro_forecast.functional.svi.SVIFit" class="doc-class doc-label doc-label-dataclass">functional.svi.SVIFit</a></dt>
-<dd>
-<p>The result of fitting a forecasting model with SVI.</p>
-</dd>
-<dt><a href="../reference/functional.mcmc.resolve_kernel.html#numpyro_forecast.functional.mcmc.resolve_kernel" class="doc-function doc-label doc-label-function">functional.mcmc.resolve_kernel()</a></dt>
-<dd>
-<p>Normalize a kernel specification.</p>
-</dd>
-<dt><a href="../reference/functional.mcmc.fit_mcmc.html#numpyro_forecast.functional.mcmc.fit_mcmc" class="doc-function doc-label doc-label-function">functional.mcmc.fit_mcmc()</a></dt>
-<dd>
-<p>Fit a forecasting model with MCMC.</p>
-</dd>
-<dt><a href="../reference/functional.mcmc.MCMCFit.html#numpyro_forecast.functional.mcmc.MCMCFit" class="doc-class doc-label doc-label-dataclass">functional.mcmc.MCMCFit</a></dt>
-<dd>
-<p>The result of fitting a forecasting model with MCMC.</p>
-</dd>
-</dl>
-</section>
-<section id="functional-core-posterior-and-prediction" class="level2 doc-group">
-<h2 class="doc-group">Functional core: posterior and prediction</h2>
-<div class="doc-description">
-<p>Drawing posterior samples and generating forecasts and in-sample predictions.</p>
-</div>
-<dl>
-<dt><a href="../reference/functional.posterior.draw_posterior.html#numpyro_forecast.functional.posterior.draw_posterior" class="doc-function doc-label doc-label-function">functional.posterior.draw_posterior()</a></dt>
-<dd>
-<p>Draw <code>num_samples</code> posterior samples of the latent sites from a fit.</p>
-</dd>
-<dt><a href="../reference/functional.prediction.forecast.html#numpyro_forecast.functional.prediction.forecast" class="doc-function doc-label doc-label-function">functional.prediction.forecast()</a></dt>
-<dd>
-<p>Sample forecasts for the steps in <code>[t, duration)</code> from a posterior.</p>
-</dd>
-<dt><a href="../reference/functional.prediction.predict_in_sample.html#numpyro_forecast.functional.prediction.predict_in_sample" class="doc-function doc-label doc-label-function">functional.prediction.predict_in_sample()</a></dt>
-<dd>
-<p>Sample the in-sample posterior predictive of the <code>obs</code> site.</p>
+<p>Declare a distribution family elementwise (usable as a decorator).</p>
 </dd>
 </dl>
 </section>
@@ -950,6 +686,74 @@ ul.task-list li input[type="checkbox"] {
 </dd>
 </dl>
 </section>
+<section id="arviz-export" class="level2 doc-group">
+<h2 class="doc-group">ArviZ export</h2>
+<div class="doc-description">
+<p>Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.</p>
+</div>
+<dl>
+<dt><a href="../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="doc-function doc-label doc-label-function">convert.to_datatree()</a></dt>
+<dd>
+<p>Convert an already-drawn posterior into an ArviZ-schema <code>xarray.DataTree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="doc-function doc-label doc-label-function">convert.add_forecast_groups()</a></dt>
+<dd>
+<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+</dd>
+<dt><a href="../reference/convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="doc-function doc-label doc-label-function">convert.predictions_to_datatree()</a></dt>
+<dd>
+<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
+</dd>
+</dl>
+</section>
+<section id="extensions-contrib" class="level2 doc-group">
+<h2 class="doc-group">Extensions (contrib)</h2>
+<div class="doc-description">
+<p>Optional backends behind pyproject extras (never imported by default).</p>
+</div>
+<dl>
+<dt><a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxNUTSKernel</a></dt>
+<dd>
+<p>BlackJAX NUTS with Stan-style window adaptation.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxMCLMCKernel</a></dt>
+<dd>
+<p>BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</a></dt>
+<dd>
+<p>Adapt an arbitrary BlackJAX sampler via a user-supplied <code>build_fn</code>.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.PathfinderFit.html#numpyro_forecast.contrib.blackjax.PathfinderFit" class="doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</a></dt>
+<dd>
+<p>The result of fitting a forecasting model with BlackJAX Pathfinder.</p>
+</dd>
+<dt><a href="../reference/contrib.blackjax.fit_pathfinder.html#numpyro_forecast.contrib.blackjax.fit_pathfinder" class="doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</a></dt>
+<dd>
+<p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
+</dd>
+</dl>
+</section>
+<section id="typing" class="level2 doc-group">
+<h2 class="doc-group">Typing</h2>
+<div class="doc-description">
+<p>Public type contracts.</p>
+</div>
+<dl>
+<dt><a href="../reference/typing.ForecastModel.html#numpyro_forecast.typing.ForecastModel" class="doc-class doc-label doc-label-protocol">typing.ForecastModel</a></dt>
+<dd>
+<p>A NumPyro forecasting model: a callable <code>(covariates, data=None) -&gt; None</code>.</p>
+</dd>
+<dt><a href="../reference/typing.Metric.html#numpyro_forecast.typing.Metric" class="doc-attribute doc-label doc-label-constant">typing.Metric</a></dt>
+<dd>
+<p>A metric maps <code>(pred, truth)</code> forecast samples and ground truth to a scalar array.</p>
+</dd>
+<dt><a href="../reference/typing.ModelFactory.html#numpyro_forecast.typing.ModelFactory" class="doc-attribute doc-label doc-label-constant">typing.ModelFactory</a></dt>
+<dd>
+<p>A zero-argument callable returning a fresh <code>ForecastModel</code> instance.</p>
+</dd>
+</dl>
+</section>
 <section id="autocorrelation" class="level2 doc-group">
 <h2 class="doc-group">Autocorrelation</h2>
 <div class="doc-description">
@@ -998,146 +802,6 @@ ul.task-list li input[type="checkbox"] {
 </dd>
 </dl>
 </section>
-<section id="distribution-surgery" class="level2 doc-group">
-<h2 class="doc-group">Distribution surgery</h2>
-<div class="doc-description">
-<p>Time-axis operations on observation distributions, extensible via singledispatch.</p>
-</div>
-<dl>
-<dt><a href="../reference/surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="doc-function doc-label doc-label-function">surgery.shift_loc()</a></dt>
-<dd>
-<p>Re-center a zero-centered noise distribution at <code>loc</code>.</p>
-</dd>
-<dt><a href="../reference/surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="doc-function doc-label doc-label-function">surgery.slice_time()</a></dt>
-<dd>
-<p>Slice an elementwise distribution along the time axis <code>-2</code>.</p>
-</dd>
-<dt><a href="../reference/surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="doc-function doc-label doc-label-function">surgery.prefix_condition()</a></dt>
-<dd>
-<p>Condition a <code>(t+f)</code>-length distribution on a <code>t</code>-length data prefix.</p>
-</dd>
-<dt><a href="../reference/surgery.register_elementwise.html#numpyro_forecast.surgery.register_elementwise" class="doc-function doc-label doc-label-function">surgery.register_elementwise()</a></dt>
-<dd>
-<p>Declare a distribution family elementwise (usable as a decorator).</p>
-</dd>
-</dl>
-</section>
-<section id="optional-dependencies" class="level2 doc-group">
-<h2 class="doc-group">Optional dependencies</h2>
-<div class="doc-description">
-<p>Lazy imports behind pyproject extras.</p>
-</div>
-<dl>
-<dt><a href="../reference/optional.require.html#numpyro_forecast.optional.require" class="doc-function doc-label doc-label-function">optional.require()</a></dt>
-<dd>
-<p>Import an optional dependency, or raise a targeted <code>ImportError</code>.</p>
-</dd>
-</dl>
-</section>
-<section id="exceptions" class="level2 doc-group">
-<h2 class="doc-group">Exceptions</h2>
-<div class="doc-description">
-<p>Package exception hierarchy raised at resolution and validation boundaries.</p>
-</div>
-<dl>
-<dt><a href="../reference/exceptions.NumpyroForecastError.html#numpyro_forecast.exceptions.NumpyroForecastError" class="doc-class doc-label doc-label-exception">exceptions.NumpyroForecastError</a></dt>
-<dd>
-<p>Base class for all deliberate <code>numpyro_forecast</code> errors.</p>
-</dd>
-<dt><a href="../reference/exceptions.BacktestWindowError.html#numpyro_forecast.exceptions.BacktestWindowError" class="doc-class doc-label doc-label-exception">exceptions.BacktestWindowError</a></dt>
-<dd>
-<p>A backtest window configuration is invalid.</p>
-</dd>
-<dt><a href="../reference/exceptions.VectorizedGuideError.html#numpyro_forecast.exceptions.VectorizedGuideError" class="doc-class doc-label doc-label-exception">exceptions.VectorizedGuideError</a></dt>
-<dd>
-<p>The vectorized backtest requires an <code>AutoGuide</code>.</p>
-</dd>
-<dt><a href="../reference/exceptions.VectorizedMetricError.html#numpyro_forecast.exceptions.VectorizedMetricError" class="doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</a></dt>
-<dd>
-<p>A metric is not vmappable in the vectorized backtest.</p>
-</dd>
-<dt><a href="../reference/exceptions.OptimizerResolutionError.html#numpyro_forecast.exceptions.OptimizerResolutionError" class="doc-class doc-label doc-label-exception">exceptions.OptimizerResolutionError</a></dt>
-<dd>
-<p>An optimizer specification could not be resolved.</p>
-</dd>
-<dt><a href="../reference/exceptions.GuideResolutionError.html#numpyro_forecast.exceptions.GuideResolutionError" class="doc-class doc-label doc-label-exception">exceptions.GuideResolutionError</a></dt>
-<dd>
-<p>A guide specification could not be resolved.</p>
-</dd>
-<dt><a href="../reference/exceptions.GuideSampleArgsError.html#numpyro_forecast.exceptions.GuideSampleArgsError" class="doc-class doc-label doc-label-exception">exceptions.GuideSampleArgsError</a></dt>
-<dd>
-<p>Drawing from a hand-written guide needs the in-sample arguments.</p>
-</dd>
-<dt><a href="../reference/exceptions.KernelResolutionError.html#numpyro_forecast.exceptions.KernelResolutionError" class="doc-class doc-label doc-label-exception">exceptions.KernelResolutionError</a></dt>
-<dd>
-<p>A kernel specification could not be resolved.</p>
-</dd>
-<dt><a href="../reference/exceptions.KernelConfigError.html#numpyro_forecast.exceptions.KernelConfigError" class="doc-class doc-label doc-label-exception">exceptions.KernelConfigError</a></dt>
-<dd>
-<p>A kernel is combined with an invalid configuration.</p>
-</dd>
-<dt><a href="../reference/exceptions.CovariateDimsError.html#numpyro_forecast.exceptions.CovariateDimsError" class="doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</a></dt>
-<dd>
-<p>Covariate dimension names are inconsistent or malformed.</p>
-</dd>
-<dt><a href="../reference/exceptions.MVNLayoutError.html#numpyro_forecast.exceptions.MVNLayoutError" class="doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</a></dt>
-<dd>
-<p>A <code>MultivariateNormal</code> layout is unsupported for time-axis surgery.</p>
-</dd>
-<dt><a href="../reference/exceptions.DeviceMemoryError.html#numpyro_forecast.exceptions.DeviceMemoryError" class="doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</a></dt>
-<dd>
-<p>The accelerator ran out of memory during posterior or predictive sampling.</p>
-</dd>
-</dl>
-</section>
-<section id="arviz-export" class="level2 doc-group">
-<h2 class="doc-group">ArviZ export</h2>
-<div class="doc-description">
-<p>Convert fits into ArviZ-schema xarray DataTrees for diagnostics and plotting.</p>
-</div>
-<dl>
-<dt><a href="../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="doc-function doc-label doc-label-function">convert.to_datatree()</a></dt>
-<dd>
-<p>Convert a fit into an ArviZ-schema <code>xarray.DataTree</code>.</p>
-</dd>
-<dt><a href="../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="doc-function doc-label doc-label-function">convert.add_forecast_groups()</a></dt>
-<dd>
-<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
-</dd>
-<dt><a href="../reference/convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="doc-function doc-label doc-label-function">convert.predictions_to_datatree()</a></dt>
-<dd>
-<p>Pack prediction draws into a DataTree laid out for per-series <code>plot_lm</code> faceting.</p>
-</dd>
-</dl>
-</section>
-<section id="extensions-contrib" class="level2 doc-group">
-<h2 class="doc-group">Extensions (contrib)</h2>
-<div class="doc-description">
-<p>Optional backends behind pyproject extras (never imported by default).</p>
-</div>
-<dl>
-<dt><a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxNUTSKernel</a></dt>
-<dd>
-<p>BlackJAX NUTS with Stan-style window adaptation.</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.BlackjaxMCLMCKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxMCLMCKernel</a></dt>
-<dd>
-<p>BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="doc-class doc-label doc-label-class">contrib.blackjax.BlackjaxCustomKernel</a></dt>
-<dd>
-<p>Adapt an arbitrary BlackJAX sampler via a user-supplied <code>build_fn</code>.</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.PathfinderFit.html#numpyro_forecast.contrib.blackjax.PathfinderFit" class="doc-class doc-label doc-label-dataclass">contrib.blackjax.PathfinderFit</a></dt>
-<dd>
-<p>The result of fitting a forecasting model with BlackJAX Pathfinder.</p>
-</dd>
-<dt><a href="../reference/contrib.blackjax.fit_pathfinder.html#numpyro_forecast.contrib.blackjax.fit_pathfinder" class="doc-function doc-label doc-label-function">contrib.blackjax.fit_pathfinder()</a></dt>
-<dd>
-<p>Fit a forecasting model with BlackJAX Pathfinder variational inference.</p>
-</dd>
-</dl>
-</section>
 <section id="datasets" class="level2 doc-group">
 <h2 class="doc-group">Datasets</h2>
 <div class="doc-description">
@@ -1159,6 +823,54 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/datasets.bart_available.html#numpyro_forecast.datasets.bart_available" class="doc-function doc-label doc-label-function">datasets.bart_available()</a></dt>
 <dd>
 <p>Return whether the BART dataset can be loaded (download succeeds).</p>
+</dd>
+</dl>
+</section>
+<section id="optional-dependencies" class="level2 doc-group">
+<h2 class="doc-group">Optional dependencies</h2>
+<div class="doc-description">
+<p>Lazy imports behind pyproject extras.</p>
+</div>
+<dl>
+<dt><a href="../reference/optional.require.html#numpyro_forecast.optional.require" class="doc-function doc-label doc-label-function">optional.require()</a></dt>
+<dd>
+<p>Import an optional dependency, or raise a targeted <code>ImportError</code>.</p>
+</dd>
+</dl>
+</section>
+<section id="exceptions" class="level2 doc-group">
+<h2 class="doc-group">Exceptions</h2>
+<div class="doc-description">
+<p>Package exception hierarchy raised at validation boundaries.</p>
+</div>
+<dl>
+<dt><a href="../reference/exceptions.NumpyroForecastError.html#numpyro_forecast.exceptions.NumpyroForecastError" class="doc-class doc-label doc-label-exception">exceptions.NumpyroForecastError</a></dt>
+<dd>
+<p>Base class for all deliberate <code>numpyro_forecast</code> errors.</p>
+</dd>
+<dt><a href="../reference/exceptions.BacktestWindowError.html#numpyro_forecast.exceptions.BacktestWindowError" class="doc-class doc-label doc-label-exception">exceptions.BacktestWindowError</a></dt>
+<dd>
+<p>A backtest window configuration is invalid.</p>
+</dd>
+<dt><a href="../reference/exceptions.VectorizedMetricError.html#numpyro_forecast.exceptions.VectorizedMetricError" class="doc-class doc-label doc-label-exception">exceptions.VectorizedMetricError</a></dt>
+<dd>
+<p>A metric is not vmappable in the vectorized backtest.</p>
+</dd>
+<dt><a href="../reference/exceptions.KernelConfigError.html#numpyro_forecast.exceptions.KernelConfigError" class="doc-class doc-label doc-label-exception">exceptions.KernelConfigError</a></dt>
+<dd>
+<p>A <code>contrib.blackjax</code> kernel is run unbound or misconfigured.</p>
+</dd>
+<dt><a href="../reference/exceptions.CovariateDimsError.html#numpyro_forecast.exceptions.CovariateDimsError" class="doc-class doc-label doc-label-exception">exceptions.CovariateDimsError</a></dt>
+<dd>
+<p>Covariate dimension names are inconsistent or malformed.</p>
+</dd>
+<dt><a href="../reference/exceptions.MVNLayoutError.html#numpyro_forecast.exceptions.MVNLayoutError" class="doc-class doc-label doc-label-exception">exceptions.MVNLayoutError</a></dt>
+<dd>
+<p>A <code>MultivariateNormal</code> layout is unsupported for time-axis surgery.</p>
+</dd>
+<dt><a href="../reference/exceptions.DeviceMemoryError.html#numpyro_forecast.exceptions.DeviceMemoryError" class="doc-class doc-label doc-label-exception">exceptions.DeviceMemoryError</a></dt>
+<dd>
+<p>A memory pool ran out during posterior or predictive sampling.</p>
 </dd>
 </dl>
 

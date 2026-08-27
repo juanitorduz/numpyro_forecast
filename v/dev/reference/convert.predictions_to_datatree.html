@@ -132,7 +132,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "@context": "https://schema.org",
     "@type": "SoftwareSourceCode",
     "name": "numpyro_forecast",
-    "description": "A JAX/NumPyro port of Pyro's forecasting module.",
+    "description": "A JAX/NumPyro port of the ideas in Pyro's forecasting module.",
     "codeRepository": "https://github.com/juanitorduz/numpyro_forecast",
     "license": "https://opensource.org/licenses/Apache-2.0",
     "url": "https://juanitorduz.github.io/numpyro_forecast",
@@ -232,25 +232,55 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Forecasters</span></a>
+ <span class="menu-text">Model building blocks</span></a>
 </div>
       <ul id="quarto-sidebar-section-1" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.Forecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.Forecaster</span></a>
+  <a href="../reference/models.Horizon.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.Horizon</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.HMCForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.HMCForecaster</span></a>
+  <a href="../reference/models.Transition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.Transition</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.PathfinderForecaster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.PathfinderForecaster</span></a>
+  <a href="../reference/models.innovations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.innovations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.markov_series.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.markov_series</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.ssoe</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEStep</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEResult.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.predict.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.predict</span></a>
   </div>
 </li>
       </ul>
@@ -258,19 +288,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Models</span></a>
+ <span class="menu-text">Distribution surgery</span></a>
 </div>
       <ul id="quarto-sidebar-section-2" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/forecaster.ForecastingModel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">forecaster.ForecastingModel</span></a>
+  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.shift_loc</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.forecasting_model.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.forecasting_model</span></a>
+  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.slice_time</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.prefix_condition</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">surgery.register_elementwise</span></a>
   </div>
 </li>
       </ul>
@@ -278,113 +320,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: model primitives</span></a>
+ <span class="menu-text">Producing draws</span></a>
 </div>
       <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.Horizon.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.Horizon</span></a>
+  <a href="../reference/predictive.draw_posterior.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">predictive.draw_posterior</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.time_series</span></a>
+  <a href="../reference/predictive.forecast.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">predictive.forecast</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.markov_time_series.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.markov_time_series</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.predict.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.predict</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.models.predict_glm.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.models.predict_glm</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: fitting</span></a>
-</div>
-      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.resolve_optimizer.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.resolve_optimizer</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.resolve_guide.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.resolve_guide</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.fit_svi.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.fit_svi</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.svi.SVIFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.svi.SVIFit</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.resolve_kernel.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.resolve_kernel</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.fit_mcmc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.fit_mcmc</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.mcmc.MCMCFit.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.mcmc.MCMCFit</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Functional core: posterior and prediction</span></a>
-</div>
-      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.posterior.draw_posterior.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.posterior.draw_posterior</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.prediction.forecast.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.prediction.forecast</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/functional.prediction.predict_in_sample.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">functional.prediction.predict_in_sample</span></a>
+  <a href="../reference/predictive.predict_in_sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">predictive.predict_in_sample</span></a>
   </div>
 </li>
       </ul>
@@ -394,7 +348,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Backtesting &amp; evaluation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-4" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
@@ -484,195 +438,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Autocorrelation</span></a>
-</div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">acf.acf</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">acf.pacf</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Seasonal features</span></a>
-</div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">features.fourier_features</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">features.periodic_repeat</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Array helpers</span></a>
-</div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">arrays.zero_data_like</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">arrays.concat_future</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Distribution surgery</span></a>
-</div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.shift_loc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.shift_loc</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.slice_time.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.slice_time</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.prefix_condition</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.register_elementwise.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">surgery.register_elementwise</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Optional dependencies</span></a>
-</div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">optional.require</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Exceptions</span></a>
-</div>
-      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.NumpyroForecastError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.BacktestWindowError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedGuideError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedGuideError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.VectorizedMetricError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.OptimizerResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.OptimizerResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.GuideResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.GuideResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.GuideSampleArgsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.GuideSampleArgsError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.KernelResolutionError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.KernelResolutionError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.KernelConfigError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.CovariateDimsError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.MVNLayoutError</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">exceptions.DeviceMemoryError</span></a>
-  </div>
-</li>
-      </ul>
-  </li>
-        <li class="sidebar-item sidebar-item-section">
-      <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -698,7 +466,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -729,6 +497,140 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">contrib.blackjax.fit_pathfinder</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.pathfinder_samples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.pathfinder_samples</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.MultiPathfinderFit.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.MultiPathfinderFit</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.fit_multipathfinder.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.fit_multipathfinder</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/contrib.blackjax.multipathfinder_samples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">contrib.blackjax.multipathfinder_samples</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Typing</span></a>
+</div>
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ForecastModel</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ForecastFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ForecastFn</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Guide</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.InSampleFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.InSampleFn</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Metric.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Metric</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Autocorrelation</span></a>
+</div>
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">acf.acf</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/acf.pacf.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">acf.pacf</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Seasonal features</span></a>
+</div>
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">features.fourier_features</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/features.periodic_repeat.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">features.periodic_repeat</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Array helpers</span></a>
+</div>
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.zero_data_like</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.concat_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.concat_future</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/arrays.pad_future.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">arrays.pad_future</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -736,7 +638,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -759,6 +661,82 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.bart_available.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">datasets.bart_available</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Optional dependencies</span></a>
+</div>
+      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">optional.require</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Exceptions</span></a>
+</div>
+      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.NumpyroForecastError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.BacktestWindowError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.BacktestWindowError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.VectorizedMetricError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.VectorizedMetricError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.KernelConfigError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.KernelConfigError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.CovariateDimsError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.CovariateDimsError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.MVNLayoutError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.MVNLayoutError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DeviceMemoryError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DeviceMemoryError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.HostMemoryKindError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.HostMemoryKindError</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/exceptions.DevicePlatformError.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">exceptions.DevicePlatformError</span></a>
   </div>
 </li>
       </ul>
@@ -806,7 +784,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L574-L659" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L595-L680" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">predictions_to_datatree</span>(</span>
@@ -821,11 +799,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[np.ndarray | Array, <span class="st">" sample time series"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample time series"</span>]</span></code></dt>
 <dd>
 <p>Prediction draws with the sample axis first, shape <code>(sample, time, series)</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">x</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[np.ndarray | Array, <span class="st">" time"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">x</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[ArrayLike, <span class="st">" time"</span>]</span></code></dt>
 <dd>
 <p>Independent-variable values, shape <code>(time,)</code>. Must be numeric: <code>plot_lm</code> cannot draw <code>datetime64</code> values (it concatenates <code>x</code> with the float predictions internally), so pass <code>matplotlib.dates.date2num()</code> floats and re-format the tick labels with <code>matplotlib.dates.ConciseDateFormatter</code>.</p>
 </dd>
@@ -837,7 +815,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Predictive group to store the draws under (e.g.&nbsp;<code>"prior_predictive"</code>, <code>"posterior_predictive"</code>, <code>"predictions"</code>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">observed</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[np.ndarray | Array, <span class="st">" time series"</span>] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">observed</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" time series"</span>] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
 Optional observations, shape <code>(time, series)</code>, stored in <code>observed_data</code>; when <code>None</code> a zeros placeholder is stored instead.
 </dd>

@@ -110,6 +110,10 @@
       "dev",
       "0.2.3"
     ],
+    "reference/arrays.pad_future.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/arrays.zero_data_like.html": [
       "dev",
       "0.2.3"
@@ -126,11 +130,27 @@
       "dev",
       "0.2.3"
     ],
+    "reference/contrib.blackjax.MultiPathfinderFit.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/contrib.blackjax.PathfinderFit.html": [
       "dev",
       "0.2.3"
     ],
+    "reference/contrib.blackjax.fit_multipathfinder.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/contrib.blackjax.fit_pathfinder.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/contrib.blackjax.multipathfinder_samples.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/contrib.blackjax.pathfinder_samples.html": [
       "dev",
       "0.2.3"
     ],
@@ -214,19 +234,15 @@
       "dev",
       "0.2.3"
     ],
-    "reference/exceptions.GuideResolutionError.html": [
+    "reference/exceptions.DevicePlatformError.html": [
       "dev",
       "0.2.3"
     ],
-    "reference/exceptions.GuideSampleArgsError.html": [
+    "reference/exceptions.HostMemoryKindError.html": [
       "dev",
       "0.2.3"
     ],
     "reference/exceptions.KernelConfigError.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/exceptions.KernelResolutionError.html": [
       "dev",
       "0.2.3"
     ],
@@ -235,14 +251,6 @@
       "0.2.3"
     ],
     "reference/exceptions.NumpyroForecastError.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/exceptions.OptimizerResolutionError.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/exceptions.VectorizedGuideError.html": [
       "dev",
       "0.2.3"
     ],
@@ -255,86 +263,6 @@
       "0.2.3"
     ],
     "reference/features.periodic_repeat.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/forecaster.Forecaster.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/forecaster.ForecastingModel.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/forecaster.HMCForecaster.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/forecaster.PathfinderForecaster.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.mcmc.MCMCFit.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.mcmc.fit_mcmc.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.mcmc.resolve_kernel.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.models.Horizon.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.models.forecasting_model.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.models.markov_time_series.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.models.predict.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.models.predict_glm.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.models.time_series.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.posterior.draw_posterior.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.prediction.forecast.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.prediction.predict_in_sample.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.svi.SVIFit.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.svi.fit_svi.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.svi.resolve_guide.html": [
-      "dev",
-      "0.2.3"
-    ],
-    "reference/functional.svi.resolve_optimizer.html": [
       "dev",
       "0.2.3"
     ],
@@ -358,7 +286,51 @@
       "dev",
       "0.2.3"
     ],
+    "reference/models.Horizon.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.SSOEResult.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.SSOEStep.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.Transition.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.innovations.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.markov_series.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.predict.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/models.ssoe.html": [
+      "dev",
+      "0.2.3"
+    ],
     "reference/optional.require.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/predictive.draw_posterior.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/predictive.forecast.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/predictive.predict_in_sample.html": [
       "dev",
       "0.2.3"
     ],
@@ -375,6 +347,30 @@
       "0.2.3"
     ],
     "reference/surgery.slice_time.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.ForecastFn.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.ForecastModel.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.Guide.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.InSampleFn.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.Metric.html": [
+      "dev",
+      "0.2.3"
+    ],
+    "reference/typing.ModelFactory.html": [
       "dev",
       "0.2.3"
     ],

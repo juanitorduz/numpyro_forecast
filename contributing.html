@@ -220,14 +220,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Thanks for your interest in <code>numpyro_forecast</code>!</p>
 <section id="development-setup" class="level1">
 <h1>Development setup</h1>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> sync <span class="at">--all-extras</span></span>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> sync <span class="at">--extra</span> all</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">prek</span> install</span></code></pre></div>
 </section>
 <section id="workflow" class="level1">
 <h1>Workflow</h1>
 <ul>
 <li><strong>Lint &amp; format:</strong> <code>uv run ruff check .</code> and <code>uv run ruff format .</code></li>
-<li><strong>Type check:</strong> <code>uv run ty check numpyro_forecast/</code></li>
+<li><strong>Type check:</strong> <code>uv run ty check</code></li>
 <li><strong>Tests:</strong> <code>uv run pytest</code></li>
 <li><strong>Notebooks:</strong> <code>uv run pytest --nbmake docs/examples/</code> (executes the example notebooks)</li>
 <li><strong>Docs site:</strong> <code>make docs</code> (build) or <code>make docs-preview</code> (live preview)</li>
@@ -254,7 +254,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h1>Guidelines</h1>
 <ul>
 <li>Every function (public and private) must have complete input and return type hints. Type checking is enforced with <code>ty</code>.</li>
-<li>Every public function and class must have a NumPy-style docstring.</li>
+<li>Every public function and class must have a NumPy-style docstring. Cross references, math and code blocks use the great-docs Markdown dialect described in <code>AGENTS.md</code> (Docstring markup); <code>tests/test_docstring_markup.py</code> enforces it.</li>
 <li>Array shapes are annotated with <code>jaxtyping</code>, with a leading space in the shape string (e.g.&nbsp;<code>Float[Array, " time obs"]</code>).</li>
 <li>Follow the array convention: time at axis <code>-2</code>, the observation dim at <code>-1</code>, batch dims to the left.</li>
 <li>Add tests for new functionality. Keep one logical change per pull request.</li>

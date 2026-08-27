@@ -16,20 +16,18 @@ metrics.crps_empirical(
 
 The CRPS generalises the mean absolute error to probabilistic forecasts and is computed elementwise as
 
-.. math::
+ \mathrm{CRPS}(F, y) = \mathbb{E}\|X - y\| - \tfrac{1}{2}\\\mathbb{E}\|X - X'\|, 
 
-    \mathrm{CRPS}(F, y) = \mathbb{E}|X - y| - \tfrac{1}{2}\,\mathbb{E}|X - X'|,
-
-where :math:`X, X'` are independent draws from the forecast distribution :math:`F`. The expectations are estimated from the forecast `sample` axis using the sorted-sample :math:`O(n \log n)` identity.
+where X, X' are independent draws from the forecast distribution F. The expectations are estimated from the forecast `sample` axis using the sorted-sample O(n \log n) identity.
 
 
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"] | Float[np.ndarray, `<span class="st">`" sample *batch"``]`</span>  
-Forecast samples with the sample axis first, shape `(sample, *batch)`.
+`pred: Float[ArrayLike, ``" sample *batch"]`  
+Forecast samples with the sample axis first, shape `(sample, *batch)`. May be host-committed (e.g. draws sampled with `device="host"`), regardless of whether `truth` is: either operand is moved to device memory first (`_device_view()`).
 
-`truth: Float[Array, ``" *batch"] | Float[np.ndarray, `<span class="st">`" *batch"``]`</span>  
+`truth: Float[ArrayLike, ``" *batch"]`  
 Ground-truth values with shape `(*batch)` (broadcastable to `pred`).
 
 

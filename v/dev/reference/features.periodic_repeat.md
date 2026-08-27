@@ -1,7 +1,7 @@
 ## features.periodic_repeat()
 
 
-Tile a seasonal pattern to cover [duration](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.duration) time steps.
+Tile a seasonal pattern to cover `duration` time steps.
 
 
 Usage
@@ -33,4 +33,4 @@ Axis to repeat along (defaults to `-1`).
 
 
 `Array`  
-`x` periodically repeated to length [duration](forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.duration) along `axis`.
+`x` periodically repeated to length `duration` along `axis`.

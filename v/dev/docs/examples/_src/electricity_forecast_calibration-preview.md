@@ -1,7 +1,7 @@
 # Electricity demand forecasting: prior calibration with `numpyro_forecast`
 
 
-This notebook ports the blog post [**Electricity Demand Forecast: Prior Calibration**](https://juanitorduz.github.io/electricity_forecast_with_priors/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It is a direct continuation of the [electricity demand forecasting example](electricity_forecast.ipynb): we keep the exact same model (a varying-coefficient temperature effect via a Hilbert Space Gaussian Process, plus hour-of-day and day-of-week seasonality and a Student-t likelihood) and add a single new ingredient, a *calibration likelihood*.
+This notebook ports the blog post [**Electricity Demand Forecast: Prior Calibration**](https://juanitorduz.github.io/electricity_forecast_with_priors/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It is a direct continuation of the [electricity demand forecasting example](electricity_forecast.md): we keep the exact same model (a varying-coefficient temperature effect via a Hilbert Space Gaussian Process, plus hour-of-day and day-of-week seasonality and a Student-t likelihood) and add a single new ingredient, a *calibration likelihood*.
 
 The idea of calibration is to inject domain knowledge into the model as an extra likelihood term. Suppose that, from experimental or observational data, we believe the effect of temperature on demand stabilizes at a known value once it gets hot enough, say around `0.13` for temperatures above `32 °C`. Instead of only encoding this through priors, we observe the latent temperature effect directly in that regime. The `obs=` argument turns a `sample` statement into a likelihood, so the posterior now has to explain both the demand data *and* this belief about the temperature effect at extreme values.
 
@@ -35,11 +35,18 @@ import pandas as pd
 import preliz as pz
 from jax import random
 from numpyro.contrib.hsgp.approximation import hsgp_matern
-from numpyro.infer import Predictive, init_to_feasible
+from numpyro.infer import SVI, Predictive, Trace_ELBO, init_to_feasible
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.optim import Adam
 
-from numpyro_forecast import Forecaster, ForecastingModel, evaluate_forecast
+from numpyro_forecast import (
+    Horizon,
+    draw_posterior,
+    evaluate_forecast,
+    forecast,
+    predict,
+    predict_in_sample,
+)
 from numpyro_forecast.datasets import load_victoria_electricity
 from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.typing import Array
@@ -172,7 +179,7 @@ print("covariates shape:", covariates.shape)
 
 # Model specification
 
-The model is the same [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) as in the baseline example:
+The model is the same plain NumPyro model function as in the baseline example, built with the `numpyro_forecast` [predict](../../../reference/models.predict.md#numpyro_forecast.models.predict) building block:
 
 - A linear-in-features model predicts demand from temperature and two seasonal effects, hour of day and day of week, both modeled with Zero-Sum Normal distributions.
 - A Matérn 5/2 kernel models the temperature effect on demand through the Hilbert Space Gaussian Process (HSGP) approximation from NumPyro.
@@ -196,7 +203,7 @@ numpyro.sample(
 
 In `numpyro_forecast` a single model handles both training and forecasting, so `covariates` (and therefore `beta_temperature`) change length between the two regimes and a fixed integer index does not translate cleanly. The idiomatic, jit-safe equivalent is a *masked* likelihood: we build a boolean mask from the temperature covariate and apply it with `numpyro.handlers.mask`.
 
-These two formulations are mathematically identical at training time. `numpyro.handlers.mask` multiplies each element's `log_prob` by the `0/1` mask, so the calibration factor is the sum of `Normal(0.13, 0.01).log_prob(beta_temperature[t])` over exactly the timesteps where `temperature[t] > 32 °C`, the same terms the index version sums. The mask form has static shapes, works for both the in-sample fit and the forecast horizon, and during forecasting is harmless because `beta_temperature` is deterministic given the posterior and the forecast only reads the [forecast](../../../reference/functional.prediction.forecast.md#numpyro_forecast.functional.prediction.forecast) site.
+These two formulations are mathematically identical at training time. `numpyro.handlers.mask` multiplies each element's `log_prob` by the `0/1` mask, so the calibration factor is the sum of `Normal(0.13, 0.01).log_prob(beta_temperature[t])` over exactly the timesteps where `temperature[t] > 32 °C`, the same terms the index version sums. The mask form has static shapes, works for both the in-sample fit and the forecast horizon, and during forecasting is harmless because `beta_temperature` is deterministic given the posterior and the forecast only reads the [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) site.
 
 
 ## GP prior parameters
@@ -235,123 +242,95 @@ _ = pz.maxent(pz.InverseGamma(), lower=3, upper=10)
 </figure>
 
 
-These two `maxent` calls return the Inverse-Gamma parameters we plug into the model below. The model is identical to the baseline, with the masked calibration likelihood added just after the `beta_temperature` deterministic site.
+These two `maxent` calls return the Inverse-Gamma parameters we plug into the model below. The model is identical to the baseline, with the masked calibration likelihood added just after the `beta_temperature` deterministic site. The HSGP settings and the three calibration numbers (threshold, target mean, target scale) are module constants, so the plots below can read them back.
 
 
     In [8]:
 
 
 ``` python
-class CalibratedElectricityForecaster(ForecastingModel):
+ELL = 55.0  # HSGP boundary factor
+M = 25  # number of HSGP basis functions
+TEMP_THRESHOLD = 32.0  # temperature (°C) above which the calibration likelihood applies
+PRIOR_MEAN = 0.13  # domain-knowledge mean of the temperature effect above the threshold
+PRIOR_SCALE = 0.01  # scale (uncertainty) of the calibration likelihood
+
+
+def calibrated_electricity_model(covariates: Array, data: Array | None = None) -> None:
     """HSGP temperature effect with hour/day seasonality and a calibration likelihood.
 
-    Same model as ``ElectricityForecaster`` in the baseline example, plus a
-    masked Normal likelihood on the latent temperature effect that anchors it to
-    a domain-knowledge value in the high-temperature regime.
-
-    Parameters
-    ----------
-    ell
-        Boundary factor for the HSGP approximation.
-    m
-        Number of basis functions for the HSGP approximation.
-    temp_threshold
-        Temperature (°C) above which the calibration likelihood is applied.
-    prior_mean
-        Domain-knowledge mean of the temperature effect above the threshold.
-    prior_scale
-        Scale (uncertainty) of the calibration likelihood.
+    Same model as ``electricity_model`` in the baseline example, plus a masked
+    Normal likelihood on the latent temperature effect that anchors it to a
+    domain-knowledge value in the high-temperature regime.
     """
+    h = Horizon.from_data(covariates, data)
+    duration = covariates.shape[-2]
+    temperature = covariates[..., 0]
+    day_of_week = covariates[..., 1].astype("int32")
 
-    def __init__(
-        self,
-        ell: float = 55.0,
-        m: int = 25,
-        temp_threshold: float = 32.0,
-        prior_mean: float = 0.13,
-        prior_scale: float = 0.01,
-    ) -> None:
-        super().__init__()
-        self.ell = ell
-        self.m = m
-        self.temp_threshold = temp_threshold
-        self.prior_mean = prior_mean
-        self.prior_scale = prior_scale
+    # Intercept.
+    intercept = numpyro.sample("intercept", dist.Normal(loc=0.0, scale=2.0))
 
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        """Define the calibrated electricity-demand forecasting model."""
-        duration = covariates.shape[-2]
-        temperature = covariates[..., 0]
-        day_of_week = covariates[..., 1].astype("int32")
+    # GP parameters (amplitude and length-scale priors are the preliz maxent fits).
+    alpha = numpyro.sample("alpha", dist.InverseGamma(concentration=6.66, rate=1.57))
+    length_scale = numpyro.sample("length_scale", dist.InverseGamma(concentration=11.0, rate=62.2))
+    scale_factor = numpyro.sample("scale", dist.HalfNormal(scale=0.5))
+    # Degrees of freedom for the Student-t likelihood.
+    nu = numpyro.sample("nu", dist.Gamma(concentration=8.0, rate=3.0))
 
-        # Intercept.
-        intercept = numpyro.sample("intercept", dist.Normal(loc=0.0, scale=2.0))
+    # Non-linear temperature effect as a Matérn 5/2 HSGP. ``hsgp_matern`` is
+    # annotated for float hyperparameters, so we cast the sampled scalars.
+    beta_temperature = hsgp_matern(
+        x=temperature,
+        nu=5 / 2,
+        alpha=cast("float", alpha),
+        length=cast("float", length_scale),
+        ell=ELL,
+        m=M,
+    )
+    numpyro.deterministic("beta_temperature", beta_temperature)
 
-        # GP parameters (amplitude and length-scale priors are the preliz maxent fits).
-        alpha = numpyro.sample("alpha", dist.InverseGamma(concentration=6.66, rate=1.57))
-        length_scale = numpyro.sample(
-            "length_scale", dist.InverseGamma(concentration=11.0, rate=62.2)
-        )
-        scale_factor = numpyro.sample("scale", dist.HalfNormal(scale=0.5))
-        # Degrees of freedom for the Student-t likelihood.
-        nu = numpyro.sample("nu", dist.Gamma(concentration=8.0, rate=3.0))
-
-        # Non-linear temperature effect as a Matérn 5/2 HSGP. ``hsgp_matern`` is
-        # annotated for float hyperparameters, so we cast the sampled scalars.
-        beta_temperature = hsgp_matern(
-            x=temperature,
-            nu=5 / 2,
-            alpha=cast("float", alpha),
-            length=cast("float", length_scale),
-            ell=self.ell,
-            m=self.m,
-        )
-        numpyro.deterministic("beta_temperature", beta_temperature)
-
-        # Calibration likelihood: anchor the latent temperature effect to the
-        # domain-knowledge value where temperature exceeds the threshold. The mask
-        # keeps only the high-temperature contributions, matching the blog's
-        # ``beta_temperature[temperature_prior_idx]`` indexing.
-        high_temp_mask = temperature > self.temp_threshold
-        with numpyro.handlers.mask(mask=high_temp_mask):
-            numpyro.sample(
-                "temperature_prior",
-                dist.Normal(loc=self.prior_mean, scale=self.prior_scale),
-                obs=beta_temperature,
-            )
-
-        # Hour-of-day effect, tiled over the horizon with periodic_repeat.
-        scale_hour_of_day = numpyro.sample("scale_hour_of_day", dist.HalfNormal(scale=0.5))
-        hour_of_day_effect = numpyro.sample(
-            "hour_of_day_effect",
-            dist.ZeroSumNormal(scale=scale_hour_of_day, event_shape=(24,)),
-        )
-        hour_of_day_effect = periodic_repeat(hour_of_day_effect, duration, axis=-1)
-
-        # Day-of-week effect, indexed by the calendar covariate.
-        scale_day_of_week = numpyro.sample("scale_day_of_week", dist.HalfNormal(scale=0.5))
-        day_of_week_effect = numpyro.sample(
-            "day_of_week_effect",
-            dist.ZeroSumNormal(scale=scale_day_of_week, event_shape=(7,)),
+    # Calibration likelihood: anchor the latent temperature effect to the
+    # domain-knowledge value where temperature exceeds the threshold. The mask
+    # keeps only the high-temperature contributions, matching the blog's
+    # ``beta_temperature[temperature_prior_idx]`` indexing.
+    high_temp_mask = temperature > TEMP_THRESHOLD
+    with numpyro.handlers.mask(mask=high_temp_mask):
+        numpyro.sample(
+            "temperature_prior",
+            dist.Normal(loc=PRIOR_MEAN, scale=PRIOR_SCALE),
+            obs=beta_temperature,
         )
 
-        # Expected demand and a temperature-dependent Student-t noise scale.
-        mu = (
-            beta_temperature * temperature
-            + intercept
-            + hour_of_day_effect
-            + jnp.take(day_of_week_effect, day_of_week)
-        )
-        scale = scale_factor * jnp.sqrt(temperature)
+    # Hour-of-day effect, tiled over the horizon with periodic_repeat.
+    scale_hour_of_day = numpyro.sample("scale_hour_of_day", dist.HalfNormal(scale=0.5))
+    hour_of_day_effect = numpyro.sample(
+        "hour_of_day_effect",
+        dist.ZeroSumNormal(scale=scale_hour_of_day, event_shape=(24,)),
+    )
+    hour_of_day_effect = periodic_repeat(hour_of_day_effect, duration, axis=-1)
 
-        self.predict(dist.StudentT(df=nu, loc=0.0, scale=scale[..., None]), mu[..., None])
+    # Day-of-week effect, indexed by the calendar covariate.
+    scale_day_of_week = numpyro.sample("scale_day_of_week", dist.HalfNormal(scale=0.5))
+    day_of_week_effect = numpyro.sample(
+        "day_of_week_effect",
+        dist.ZeroSumNormal(scale=scale_day_of_week, event_shape=(7,)),
+    )
 
+    # Expected demand and a temperature-dependent Student-t noise scale.
+    mu = (
+        beta_temperature * temperature
+        + intercept
+        + hour_of_day_effect
+        + jnp.take(day_of_week_effect, day_of_week)
+    )
+    scale = scale_factor * jnp.sqrt(temperature)
 
-model = CalibratedElectricityForecaster()
+    predict(h, dist.StudentT(df=nu, loc=0.0, scale=scale[..., None]), mu[..., None])
 ```
 
 
-A [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) instance is itself the NumPyro model callable `(covariates, data=None)`, so we can render its structure directly. The rendered graph shows the new observed `temperature_prior` node next to the demand `obs` node.
+The model function is a plain NumPyro model callable `(covariates, data=None)`, so we can render its structure directly. The rendered graph shows the new observed `temperature_prior` node next to the demand `obs` node.
 
 
     In [9]:
@@ -359,7 +338,7 @@ A [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_f
 
 ``` python
 numpyro.render_model(
-    model,
+    calibrated_electricity_model,
     model_args=(covariates_train, data_train),
     render_distributions=True,
     render_params=True,
@@ -374,14 +353,16 @@ numpyro.render_model(
 
 # Prior predictive checks
 
-Before we fit the model, let's visualize the prior predictive distribution. A [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) instance is a plain NumPyro model callable, so we can hand it to `Predictive` directly. We draw the bands with ArviZ's `plot_lm`, which computes the 50\\ and 94\\ HDI internally; since the time axis is a `datetime64` array we pass it as matplotlib date numbers (`mdates.date2num`) and restore the date formatter on the returned axis.
+Before we fit the model, let's visualize the prior predictive distribution. The model function is a plain NumPyro model, so we hand it to `Predictive` directly. We draw the bands with ArviZ's `plot_lm`, which computes the 50\\ and 94\\ HDI internally; since the time axis is a `datetime64` array we pass it as matplotlib date numbers (`mdates.date2num`) and restore the date formatter on the returned axis.
 
 
     In [10]:
 
 
 ``` python
-prior_predictive = Predictive(model, num_samples=2_000, return_sites=["obs"])
+prior_predictive = Predictive(
+    calibrated_electricity_model, num_samples=2_000, return_sites=["obs"]
+)
 rng_key, rng_subkey = random.split(rng_key)
 prior_obs = prior_predictive(rng_subkey, covariates_train)["obs"][..., 0]
 
@@ -429,7 +410,7 @@ ax.set(title="Prior Predictive Checks", ylabel="Demand (GW)", xlabel="Time");
 
 # Inference with SVI
 
-We fit the model with stochastic variational inference through the [Forecaster](../../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) class, which wraps the SVI fit and exposes the fitted `guide`, `params` and the ELBO `losses`. As in the baseline example, the posterior is multimodal: the multiplicative `beta_temperature * temperature` term trades off against the overall level, so a plain `AutoNormal` can settle on a monotonic temperature effect. We pass a custom guide initialized at a feasible point (`init_to_feasible`), which reliably recovers the heating-and-cooling (U-shaped) effect. We keep the same optimizer (`Adam(step_size=0.005)`) and number of steps (`50_000`) as the blog post.
+We fit the model with plain NumPyro stochastic variational inference: an `AutoNormal` guide, `Adam`, and `SVI.run`, which returns the fitted `params` and the ELBO `losses`. As in the baseline example, the posterior is multimodal: the multiplicative `beta_temperature * temperature` term trades off against the overall level, so a guide initialized at random can settle on a monotonic temperature effect. We initialize the guide at a feasible point (`init_to_feasible`), which reliably recovers the heating-and-cooling (U-shaped) effect. We keep the same optimizer (`Adam(step_size=0.005)`) and number of steps (`50_000`) as the blog post.
 
 
     In [11]:
@@ -437,19 +418,12 @@ We fit the model with stochastic variational inference through the [Forecaster](
 
 ``` python
 rng_key, rng_subkey = random.split(rng_key)
-guide = AutoNormal(model, init_loc_fn=init_to_feasible)
-forecaster = Forecaster(
-    rng_subkey,
-    model,
-    data_train,
-    covariates_train,
-    guide=guide,
-    optim=Adam(step_size=0.005),
-    num_steps=50_000,
-)
+guide = AutoNormal(calibrated_electricity_model, init_loc_fn=init_to_feasible)
+svi = SVI(calibrated_electricity_model, guide, Adam(step_size=0.005), Trace_ELBO())
+svi_result = svi.run(rng_subkey, 50_000, covariates_train, data_train, progress_bar=False)
 
 fig, ax = plt.subplots(figsize=(9, 6))
-ax.plot(forecaster.losses)
+ax.plot(svi_result.losses)
 ax.set_yscale("log")
 ax.set_title("ELBO loss", fontsize=18, fontweight="bold");
 ```
@@ -465,7 +439,7 @@ The ELBO loss is decreasing as expected.
 
 # Posterior predictive checks
 
-We now generate in-sample posterior predictive samples (drawing posterior latents from the fitted guide and pushing them through the model) and forecast the held-out two weeks by calling the forecaster with the full-horizon covariates. We keep the deterministic `beta_temperature` site to inspect the calibrated temperature effect later.
+We now draw posterior latents from the fitted guide with [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), push them through the model over the training window with [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), and forecast the held-out two weeks with [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) and the full-horizon covariates. [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) returns the deterministic sites along with the latents, so the posterior dictionary already carries `beta_temperature` for the calibrated temperature-effect plot later.
 
 
     In [12]:
@@ -474,32 +448,24 @@ We now generate in-sample posterior predictive samples (drawing posterior latent
 ``` python
 num_posterior_samples = 5_000
 
-rng_key, rng_subkey = random.split(rng_key)
-posterior_samples = forecaster.guide.sample_posterior(
-    rng_subkey, forecaster.params, sample_shape=(num_posterior_samples,)
-)
-
-rng_key, rng_subkey = random.split(rng_key)
-train_posterior = Predictive(
-    model, posterior_samples=posterior_samples, return_sites=["obs", "beta_temperature"]
-)(rng_subkey, covariates_train)
-
-rng_key, rng_subkey = random.split(rng_key)
-forecast = forecaster(rng_subkey, data_train, covariates, num_samples=num_posterior_samples)
+rng_key, key_post, key_pp, key_fc = random.split(rng_key, 4)
+posterior = draw_posterior(key_post, guide, svi_result.params, num_posterior_samples)
+train_pp = predict_in_sample(key_pp, calibrated_electricity_model, posterior, covariates_train)
+forecast_draws = forecast(key_fc, calibrated_electricity_model, posterior, data_train, covariates)
 ```
 
 
 ## Forecast evaluation
 
-We score the train and test forecasts with [evaluate_forecast](../../../reference/evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast), which reports several metrics at once: CRPS (the [Continuous Ranked Probability Score](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score)), mean absolute error, root mean squared error, and the empirical coverage of the central 90% prediction interval. The scores should land close to the uncalibrated baseline: the calibration term refines the temperature effect in the high-temperature regime without hurting overall forecast accuracy.
+We score the train and test forecasts with [evaluate_forecast](../../../reference/evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast), which reports several metrics at once: CRPS (the [Continuous Ranked Probability Score](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score)), mean absolute error, root mean squared error, and the empirical coverage of the central 90\\ prediction interval. The scores should land close to the uncalibrated baseline: the calibration term refines the temperature effect in the high-temperature regime without hurting overall forecast accuracy.
 
 
     In [13]:
 
 
 ``` python
-train_metrics = evaluate_forecast(train_posterior["obs"], data_train)
-test_metrics = evaluate_forecast(forecast, data_test)
+train_metrics = evaluate_forecast(train_pp, data_train)
+test_metrics = evaluate_forecast(forecast_draws, data_test)
 
 metrics_table = pd.DataFrame({"train": train_metrics, "test": test_metrics})
 metrics_table
@@ -508,18 +474,18 @@ metrics_table
 
 |          | train    | test     |
 |----------|----------|----------|
-| mae      | 0.389226 | 0.264660 |
-| rmse     | 0.520257 | 0.334297 |
-| crps     | 0.280324 | 0.192259 |
-| coverage | 0.916667 | 0.994048 |
+| mae      | 0.389393 | 0.263976 |
+| rmse     | 0.520497 | 0.334185 |
+| crps     | 0.280632 | 0.192164 |
+| coverage | 0.917659 | 0.994048 |
 
 
     In [14]:
 
 
 ``` python
-train_obs = train_posterior["obs"][..., 0]
-forecast_obs = forecast[..., 0]
+train_obs = train_pp[..., 0]
+forecast_obs = forecast_draws[..., 0]
 
 xnum_test = mdates.date2num(dates_test)
 
@@ -611,11 +577,11 @@ This is where the calibration shows up. We plot the posterior distribution of th
 ``` python
 temperature_train = np.asarray(temperature[:t_train])
 order = np.argsort(temperature_train)
-beta_temperature = train_posterior["beta_temperature"]
+beta_temperature = posterior["beta_temperature"]
 
-prior_mean = model.prior_mean
-prior_scale = model.prior_scale
-threshold = model.temp_threshold
+prior_mean = PRIOR_MEAN
+prior_scale = PRIOR_SCALE
+threshold = TEMP_THRESHOLD
 
 idata_beta = az.from_dict(
     {
@@ -669,9 +635,9 @@ ax.set(
 </figure>
 
 
-The overall shape of the curve resembles the one in the baseline uncalibrated [electricity demand example](electricity_forecast.ipynb): the temperature effect increases at both extremes of the common temperature range, reflecting the heating and cooling effects noted by Hyndman and Athanasopoulos. The difference is at the high end: the calibration likelihood pulls the estimate for temperatures over `32 °C` toward the expected value of `0.13`, with noticeably tighter credible bands than in the uncalibrated model.
+The overall shape of the curve resembles the one in the baseline uncalibrated [electricity demand example](electricity_forecast.md): the temperature effect increases at both extremes of the common temperature range, reflecting the heating and cooling effects noted by Hyndman and Athanasopoulos. The difference is at the high end: the calibration likelihood pulls the estimate for temperatures over `32 °C` toward the expected value of `0.13`, with somewhat tighter credible bands than in the uncalibrated model.
 
-This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a [ForecastingModel](../../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) can be anchored with an extra observed `numpyro.sample` site, optionally masked to the region where the domain knowledge applies.
+This opens up nice opportunities to calibrate forecasting models with domain knowledge, possibly extracted from experimental or observational data. The mechanism is general: any latent quantity in a model function can be anchored with an extra observed `numpyro.sample` site, optionally masked to the region where the domain knowledge applies.
 
 
 # References

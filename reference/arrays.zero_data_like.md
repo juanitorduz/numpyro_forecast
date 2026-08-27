@@ -14,7 +14,7 @@ arrays.zero_data_like(
 ```
 
 
-Mirrors Pyro's [zero_data](functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon.zero_data): it exposes the shape/dtype of the data over the full forecast horizon without leaking observed values into the model. The functional API exposes the equivalent value as [numpyro_forecast.functional.models.Horizon.zero_data](functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon.zero_data).
+Mirrors Pyro's [zero_data](models.Horizon.md#numpyro_forecast.models.Horizon.zero_data): it exposes the shape/dtype of the data over the full forecast horizon without leaking observed values into the model. The functional API exposes the equivalent value as [numpyro_forecast.models.Horizon.zero_data](models.Horizon.md#numpyro_forecast.models.Horizon.zero_data).
 
 
 ## Parameters

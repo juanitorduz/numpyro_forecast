@@ -5,7 +5,7 @@ Univariate forecasting with `numpyro_forecast`
 
 Here we present an introduction to the `numpyro_forecast` package. This notebook ports the blog post [**Univariate time series forecasting with NumPyro**](https://juanitorduz.github.io/numpyro_forecasting-univariate/) (itself a port of Pyro's [forecasting tutorial](https://pyro.ai/examples/forecasting_i.html)) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. We forecast **weekly BART ridership** with a random-walk local level, Fourier seasonality and a Student-T likelihood, fit with stochastic variational inference (SVI), and evaluate with the continuous ranked probability score (CRPS).
 
-Instead of hand-writing the NumPyro model and a bespoke prediction loop, we subclass [numpyro_forecast.forecaster.ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) and let [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) handle the *fit-once / forecast-any-horizon* mechanics (the forecast horizon is drawn from separate `_future` latent sites, so the variational guide is never resized).
+Instead of hand-writing a bespoke prediction loop, we write a single plain model function and let [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) and [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) handle the *fit-once / forecast-any-horizon* mechanics (the forecast horizon is drawn from separate `_future` latent sites, so the variational guide is never resized).
 
 > **Note on reproducibility.** We match the blog's data, seed, optimizer and step counts. Results reproduce the blog's behavior and CRPS magnitude but are not bit-for-bit identical: the forecast horizon uses the package's separate-`_future`-site mechanism (rather than re-running the guide over the full covariates), and the seasonal design uses [fourier_features](../../reference/features.fourier_features.md#numpyro_forecast.features.fourier_features), an equivalent Fourier basis.
 
@@ -24,22 +24,26 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jax import random
-from numpyro.infer import Predictive
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.reparam import LocScaleReparam
 from numpyro.optim import Adam
 
 from numpyro_forecast import (
-    Forecaster,
-    ForecastingModel,
+    Horizon,
     backtest,
     backtest_vectorized,
+    draw_posterior,
     eval_coverage,
     eval_crps,
+    forecast,
+    innovations,
+    predict,
+    predict_in_sample,
 )
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.features import fourier_features
-from numpyro_forecast.functional import Horizon, forecasting_model, predict, time_series
-from numpyro_forecast.typing import Array
+from numpyro_forecast.typing import Array, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [10, 6]
@@ -154,34 +158,33 @@ The idea is a *local level model with seasonality*. The mean has three parts: a 
 
 \begin{align\*} \mu_t & = \text{bias} + \ell_t + w^\top x_t, \\ \ell_t & = \ell\_{t-1} + \delta_t, \\ \delta_t & \sim \text{Normal}(0, \sigma\_\text{drift}), \\ y_t & \sim \text{StudentT}(\nu, \mu_t, \sigma). \end{align\*}
 
-We subclass [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel) and write the generative story in [model](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.model). The level is the cumulative sum of `drift`, which we sample with `self.time_series(...)` (the package's equivalent of the blog's `scan` over time). The single call to `self.predict(...)` registers the zero-centered Student-T noise around the predicted mean, and it is also what wires up the train-vs-forecast machinery: in-sample steps are observed, while the forecast horizon is drawn from separate `_future` latent sites so the variational guide never changes shape. Finally, a `LocScaleReparam` on the drift switches between centered and non-centered parameterizations, which helps the SVI geometry quite a lot.
+We write the generative story as a single plain function `univariate_model(covariates, data=None)`. Its first line, `h = Horizon.from_data(covariates, data)`, derives the train/forecast split from the shapes. The level is the cumulative sum of `drift`, which we sample with `innovations(h, ...)` (the package's equivalent of the blog's `scan` over time). The single call to `predict(h, ...)` registers the zero-centered Student-T noise around the predicted mean, and it is also what wires up the train-vs-forecast machinery: in-sample steps are observed, while the forecast horizon is drawn from separate `_future` latent sites so the variational guide never changes shape. Finally, a `LocScaleReparam` on the drift switches between centered and non-centered parameterizations, which helps the SVI geometry quite a lot.
 
 
 ``` python
-class UnivariateForecaster(ForecastingModel):
+def univariate_model(covariates: Array, data: Array | None = None) -> None:
     """Local level + Fourier regression with Student-T observations."""
+    h = Horizon.from_data(covariates, data)
+    num_features = covariates.shape[-1]
 
-    def model(self, zero_data: Array | None, covariates: Array) -> None:
-        """Define the univariate forecasting model."""
-        num_features = covariates.shape[-1]
+    bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
+    weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-20.0, 5.0))
+    nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
+    centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
 
-        bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-        weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
-        drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-20.0, 5.0))
-        nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
-        sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
-        centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
+    drift = innovations(
+        h,
+        "drift",
+        lambda: dist.Normal(0.0, drift_scale),
+        reparam=LocScaleReparam(centered=centered),
+    )
+    level = jnp.cumsum(drift, axis=-2)
+    regression = (weight * covariates).sum(axis=-1, keepdims=True)
+    prediction = level + bias + regression
 
-        drift = self.time_series(
-            "drift",
-            lambda: dist.Normal(0.0, drift_scale),
-            reparam=LocScaleReparam(centered=centered),
-        )
-        level = jnp.cumsum(drift, axis=-2)
-        regression = (weight * covariates).sum(axis=-1, keepdims=True)
-        prediction = level + bias + regression
-
-        self.predict(dist.StudentT(df=nu, loc=0.0, scale=sigma), prediction)
+    predict(h, dist.StudentT(df=nu, loc=0.0, scale=sigma), prediction)
 ```
 
 
@@ -190,7 +193,7 @@ Let's visualize the model:
 
 ``` python
 numpyro.render_model(
-    UnivariateForecaster(),
+    univariate_model,
     model_args=(covariates_train, y_train),
     render_distributions=True,
 )
@@ -208,7 +211,7 @@ As usual (highly recommended!), we look at the prior predictive before fitting a
 
 
 ``` python
-prior_predictive = Predictive(UnivariateForecaster(), num_samples=2_000, return_sites=["obs"])
+prior_predictive = Predictive(univariate_model, num_samples=2_000, return_sites=["obs"])
 rng_key, rng_subkey = random.split(rng_key)
 prior_obs = prior_predictive(rng_subkey, covariates_train)["obs"][..., 0]
 
@@ -254,23 +257,17 @@ ax.set(title="Prior predictive check", ylabel="log(# rides)");
 
 # Inference with SVI
 
-We fit the model with stochastic variational inference. Passing the model and data to [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster) runs SVI under the hood (an `AutoNormal` guide with `Adam`) and stores the fitted `guide`, `params` and the ELBO `losses`. The loss curve should decrease and flatten out, a quick sanity check that the optimization converged.
+We fit the model with stochastic variational inference: an `AutoNormal` guide optimized with `Adam` via an explicit `SVI.run` call, which returns the learned `params` and the ELBO `losses`. The loss curve should decrease and flatten out, a quick sanity check that the optimization converged.
 
 
 ``` python
-rng_key, rng_subkey = random.split(rng_key)
-model = UnivariateForecaster()
-forecaster = Forecaster(
-    rng_subkey,
-    model,
-    y_train,
-    covariates_train,
-    optim=Adam(step_size=0.005),
-    num_steps=50_000,
-)
+rng_key, key_fit = random.split(rng_key)
+guide = AutoNormal(univariate_model)
+svi = SVI(univariate_model, guide, Adam(step_size=0.005), Trace_ELBO())
+svi_result = svi.run(key_fit, 50_000, covariates_train, y_train, progress_bar=False)
 
 fig, ax = plt.subplots()
-ax.plot(forecaster.losses)
+ax.plot(svi_result.losses)
 ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
@@ -282,31 +279,35 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 # Posterior predictive check
 
-We now look at two things. First the **in-sample** posterior predictive over the training window: here the horizon is zero, so the guide is not resized and we just sample the `obs` site. Then the **forecast** over the test horizon with `forecaster(...)`, which continues the level from its inferred endpoint and draws the future random-walk increments from the prior.
+We now look at two things. First the **in-sample** posterior predictive over the training window: here the horizon is zero, so the guide is not resized and we just sample the `obs` site. Then the **forecast** over the test horizon: [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) draws latent samples from the fitted guide, and [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) continues the level from its inferred endpoint and draws the future random-walk increments from the prior.
 
 To score both we use the **continuous ranked probability score** (CRPS), a proper scoring rule that compares a single ground-truth value to the whole forecast distribution rather than just a point estimate. It rewards forecasts that are both sharp and calibrated, and lower is better.
 
 
 ``` python
-rng_key, key_pp, key_fc = random.split(rng_key, 3)
+rng_key, key_post, key_pp, key_fc = random.split(rng_key, 4)
+
+posterior = draw_posterior(key_post, guide, svi_result.params, 5_000)
 
 # In-sample posterior predictive over the training window.
-train_pp = forecaster.predict_in_sample(key_pp, covariates_train, num_samples=5_000)
+train_pp = predict_in_sample(key_pp, univariate_model, posterior, covariates_train)
 
 # Forecast over the test horizon.
-forecast = forecaster(key_fc, y_train, covariates, num_samples=5_000)
+forecast_draws = forecast(key_fc, univariate_model, posterior, y_train, covariates)
 
 crps_train = eval_crps(train_pp, y_train)
-crps_test = eval_crps(forecast, y_test)
+crps_test = eval_crps(forecast_draws, y_test)
 print(f"Train CRPS: {crps_train:.4f}")
 print(f"Test CRPS:  {crps_test:.4f}")
-print(f"Test 50% coverage: {eval_coverage(forecast, y_test, alpha=0.5):.2f}  (nominal 0.50)")
-print(f"Test 94% coverage: {eval_coverage(forecast, y_test, alpha=0.94):.2f}  (nominal 0.94)")
+print(f"Test 50% coverage: {eval_coverage(forecast_draws, y_test, alpha=0.5):.2f}  (nominal 0.50)")
+print(
+    f"Test 94% coverage: {eval_coverage(forecast_draws, y_test, alpha=0.94):.2f}  (nominal 0.94)"
+)
 ```
 
 
-    Train CRPS: 0.0284
-    Test CRPS:  0.0347
+    Train CRPS: 0.0283
+    Test CRPS:  0.0350
     Test 50% coverage: 0.63  (nominal 0.50)
     Test 94% coverage: 0.92  (nominal 0.94)
 
@@ -318,7 +319,7 @@ The combined view puts everything together: the in-sample posterior predictive (
 
 ``` python
 train_obs = train_pp[..., 0]
-forecast_obs = forecast[..., 0]
+forecast_obs = forecast_draws[..., 0]
 
 idata_train = az.from_dict(
     {
@@ -392,13 +393,60 @@ ax.set(
 
 # Rolling-origin backtesting
 
-A single train/test split tells us how the model did on one held-out year. A more honest picture of generalization comes from *rolling-origin* backtesting: we repeatedly move the train/test boundary forward, refit, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop on the full series for us, refitting a fresh `UnivariateForecaster` per fold.
+A single train/test split tells us how the model did on one held-out year. A more honest picture of generalization comes from *rolling-origin* backtesting: we repeatedly move the train/test boundary forward, refit, and forecast the next window, so every later part of the series is scored out-of-sample exactly once. `numpyro_forecast.backtest` runs this loop on the full series for us, refitting `univariate_model` per fold through a small `forecast_fn`/`in_sample_fn` closure pair: each one fits with SVI and then draws with [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), exactly as we did for the single train/test split above.
 
 [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) offers two windowing strategies through its `window_type` argument. An **expanding** window (the default) trains each fold on all history up to its split point, so the training set grows fold by fold. A **rolling** window instead holds the training length fixed at `train_window` and slides it forward, so every fold sees the same number of most-recent observations while older data drops off the back. We walk through the expanding window first, then contrast the two directly at the end of this section.
 
-We use an expanding window: each fold trains on everything up to its split point and forecasts the next `52` weeks (`test_window=52`), stepping forward a full year at a time (`stride=52`) so the folds do not overlap and the forecast overlay stays readable. The first `min_train_window=104` weeks (two years) seed the initial training window, matching Pyro's tutorial. With `eval_train=True` we also score the in-sample posterior predictive of each fold with the same CRPS metric, and `keep_predictions=True` retains each fold's out-of-sample forecast samples so we can plot them. Both options default to off, keeping the default [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) API faithful to Pyro.
+We use an expanding window: each fold trains on everything up to its split point and forecasts the next `52` weeks (`test_window=52`), stepping forward a full year at a time (`stride=52`) so the folds do not overlap and the forecast overlay stays readable. The first `min_train_window=104` weeks (two years) seed the initial training window, matching Pyro's tutorial. With `eval_train=True` we also score the in-sample posterior predictive of each fold with the same CRPS metric (this is why `in_sample_fn` is required below), and `keep_predictions=True` retains each fold's out-of-sample forecast samples so we can plot them. Both options default to off, keeping the default [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) API faithful to Pyro.
 
 One practical point: because every fold is refit from scratch, each one needs enough optimization to converge. We give SVI `num_steps=50_000` per fold (the same budget as the main fit) so that the larger expanding windows are fit just as well as the small early ones, which keeps the inferred drift volatility stable and the per-fold scores comparable. With too small a budget the later windows would be under-fit, inflating `drift_scale` so that both the forecast bands and the in-sample CRPS grow spuriously with window length.
+
+
+``` python
+def forecast_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    """Fit ``model`` on the training window with SVI and forecast the test horizon."""
+    key_fit, key_post, key_fc = random.split(rng_key, 3)
+    fold_guide = AutoNormal(model)
+    fold_svi = SVI(model, fold_guide, Adam(step_size=0.005), Trace_ELBO())
+    result = fold_svi.run(key_fit, 50_000, train_covariates, train_data, progress_bar=False)
+    fold_posterior = draw_posterior(
+        key_post, fold_guide, result.params, num_samples, batch_size=batch_size
+    )
+    return forecast(
+        key_fc, model, fold_posterior, train_data, full_covariates, batch_size=batch_size
+    )
+
+
+def in_sample_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    """Fit ``model`` on the training window with SVI and score its in-sample fit."""
+    key_fit, key_post, key_pred = random.split(rng_key, 3)
+    fold_guide = AutoNormal(model)
+    fold_svi = SVI(model, fold_guide, Adam(step_size=0.005), Trace_ELBO())
+    result = fold_svi.run(key_fit, 50_000, train_covariates, train_data, progress_bar=False)
+    fold_posterior = draw_posterior(
+        key_post, fold_guide, result.params, num_samples, batch_size=batch_size
+    )
+    return predict_in_sample(
+        key_pred, model, fold_posterior, train_covariates, batch_size=batch_size
+    )
+```
 
 
 ``` python
@@ -415,7 +463,9 @@ results = backtest(
     rng_subkey,
     data,  # full dataset, no train/test split
     covariates,  # full covariates
-    UnivariateForecaster,
+    lambda: univariate_model,
+    forecast_fn=forecast_fn,
+    in_sample_fn=in_sample_fn,
     metrics=metrics,
     test_window=52,  # 1-year horizon per fold
     stride=52,  # non-overlapping folds for a clean plot_lm panel
@@ -423,7 +473,6 @@ results = backtest(
     num_samples=num_backtest_samples,
     eval_train=True,
     keep_predictions=True,
-    forecaster_options={"optim": Adam(step_size=0.005), "num_steps": 50_000},
 )
 
 split_weeks = [r.t1 for r in results]
@@ -441,10 +490,10 @@ print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.9
 
 
     folds: 7
-    mean in-sample CRPS:     0.0287
-    mean out-of-sample CRPS: 0.0375
-    mean out-of-sample 50% coverage: 0.57  (nominal 0.50)
-    mean out-of-sample 94% coverage: 0.95  (nominal 0.94)
+    mean in-sample CRPS:     0.0300
+    mean out-of-sample CRPS: 0.0376
+    mean out-of-sample 50% coverage: 0.59  (nominal 0.50)
+    mean out-of-sample 94% coverage: 0.96  (nominal 0.94)
 
 
 ## Rolling forecasts
@@ -509,7 +558,7 @@ ax.legend(handles=[band_94, band_50, obs_line, split_lines[0]], loc="lower left"
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-13-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-14-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -517,7 +566,7 @@ Within each fold the band fans out gently from its train/test split toward the r
 
 Across folds the bands reset at each dashed split, where the model is refit and re-conditioned on all data up to that point, and their width stays stable from fold to fold. Each fold is fit with `num_steps=50_000` (the same budget as the main fit), so every expanding window converges and the inferred drift volatility is consistent. The bands therefore do not balloon as the series lengthens; under-training would leave the larger windows under-fit, inflate `drift_scale`, and widen the later folds spuriously.
 
-The fit looks well calibrated, and the coverage plot further below makes that claim precise: the observed series stays inside the 94% band almost everywhere and inside the 50% band roughly half the time, close to the nominal levels. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.
+The fit looks well calibrated, and the coverage plot further below makes that claim precise: the observed series stays inside the 94\\ band almost everywhere and inside the 50\\ band roughly half the time, close to the nominal levels. The sharp downward holiday spikes occasionally pierce the lower band, and that is by design: the heavy-tailed Student-T likelihood treats them as outliers rather than widening the whole band to swallow them.
 
 
 ## CRPS per fold
@@ -537,7 +586,7 @@ ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest f
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-14-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-15-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -564,7 +613,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-15-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-16-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -579,14 +628,14 @@ rolling_results = backtest(
     rng_subkey,
     data,
     covariates,
-    UnivariateForecaster,
+    lambda: univariate_model,
+    forecast_fn=forecast_fn,
     metrics=metrics,
     window_type="rolling",  # fixed-size training window instead of expanding
     train_window=104,  # 2 years, matching the expanding seed so the split points line up
     test_window=52,  # 1-year horizon per fold, as before
     stride=52,  # same non-overlapping folds
     num_samples=num_backtest_samples,
-    forecaster_options={"optim": Adam(step_size=0.005), "num_steps": 50_000},
 )
 
 rolling_oos_crps = [r.metrics["crps"] for r in rolling_results]
@@ -600,15 +649,15 @@ for wk, exp_c, roll_c in zip(split_weeks, oos_crps, rolling_oos_crps, strict=Tru
 
 
     expanding folds: 7  |  rolling folds: 7
-    expanding mean out-of-sample CRPS: 0.0375
-    rolling   mean out-of-sample CRPS: 0.0473
-      split week 104: expanding 0.0706  rolling 0.0733
-      split week 156: expanding 0.0437  rolling 0.0472
-      split week 208: expanding 0.0313  rolling 0.0524
-      split week 260: expanding 0.0250  rolling 0.0344
+    expanding mean out-of-sample CRPS: 0.0376
+    rolling   mean out-of-sample CRPS: 0.0470
+      split week 104: expanding 0.0708  rolling 0.0726
+      split week 156: expanding 0.0437  rolling 0.0469
+      split week 208: expanding 0.0314  rolling 0.0523
+      split week 260: expanding 0.0250  rolling 0.0343
       split week 312: expanding 0.0289  rolling 0.0375
-      split week 364: expanding 0.0307  rolling 0.0431
-      split week 416: expanding 0.0324  rolling 0.0430
+      split week 364: expanding 0.0308  rolling 0.0429
+      split week 416: expanding 0.0326  rolling 0.0428
 
 
 Both strategies train each fold on the same fixed `104`-week window at the first split, then diverge: the expanding window keeps every additional year while the rolling window always discards all but the most recent two.
@@ -628,13 +677,13 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-17-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-18-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
 The mechanism behind the two curves is the random-walk level. Each forecast is anchored at the last observed level and fans out at a rate set by the inferred drift volatility `drift_scale`, which every fold estimates from its own training window. The expanding window estimates that volatility from all history and keeps sharpening it as data accumulates, so its out-of-sample CRPS falls steeply after the data-starved first fold and then settles near the in-sample floor. The rolling window only ever sees the most recent two years, so after its own early improvement it plateaus at a higher, noisier level: it keeps discarding the extra history that the expanding window compounds.
 
-Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0375` versus `0.0473`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
+Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0376` versus `0.0470`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
 
 
 ## Vectorized rolling backtest
@@ -651,17 +700,18 @@ vectorized_results = backtest_vectorized(
     rng_subkey,
     data,
     covariates,
-    UnivariateForecaster,
+    lambda: univariate_model,
     train_window=104,  # same rolling configuration as the loop run above
     test_window=52,
     stride=52,
     num_steps=50_000,
+    guide=AutoNormal(univariate_model),
     optim=Adam(step_size=0.005),
     num_samples=num_backtest_samples,
     metrics=metrics,  # same custom mapping, including both partial-bound coverage levels
 )
 vectorized_seconds = perf_counter() - start_seconds
-loop_seconds = sum(r.train_walltime + r.test_walltime for r in rolling_results)
+loop_seconds = sum(r.walltime for r in rolling_results)
 
 vectorized_oos_crps = np.asarray(vectorized_results.metrics["crps"])
 vectorized_cov_50 = float(vectorized_results.metrics["coverage_50"].mean())
@@ -680,9 +730,9 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 2.0s (incl. compile)  |  loop 19.2s
+    wall-clock: vectorized 2.8s (incl. compile)  |  loop 20.9s
     vectorized mean out-of-sample CRPS: 0.0434
-    loop       mean out-of-sample CRPS: 0.0473
+    loop       mean out-of-sample CRPS: 0.0470
     vectorized mean 50% coverage: 0.50  (nominal 0.50)
     vectorized mean 94% coverage: 0.95  (nominal 0.94)
 
@@ -701,72 +751,11 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-19-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/_src-forecasting_univariate-cell-20-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
-Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, an `AutoGuide`, and pure JAX metrics, which the coverage partials above already are.
-
-
-# Functional API
-
-Everything so far went through the object-oriented [ForecastingModel](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel), but that class is only a thin shim over a functional core in `numpyro_forecast.functional`. The same model can be written as a plain function `(Horizon, covariates) -> None` that calls the free functions [time_series](../../reference/functional.models.time_series.md#numpyro_forecast.functional.models.time_series) and [predict](../../reference/functional.models.predict.md#numpyro_forecast.functional.models.predict) (the exact counterparts of the `self.time_series(...)` and `self.predict(...)` methods used above). The [Horizon](../../reference/functional.models.Horizon.md#numpyro_forecast.functional.models.Horizon) carries the train/forecast split that the class otherwise tracks as mutable state.
-
-`forecasting_model(...)` then wraps that body into the standard `(covariates, data=None)` NumPyro model, so the result is a drop-in replacement for a `UnivariateForecaster()` instance: it works with [Forecaster](../../reference/forecaster.Forecaster.md#numpyro_forecast.forecaster.Forecaster), `Predictive`, and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) just the same. We rewrite the model below and confirm the two are interchangeable.
-
-
-``` python
-def univariate_model(h: Horizon, covariates: Array) -> None:
-    """Functional twin of ``UnivariateForecaster.model``."""
-    num_features = covariates.shape[-1]
-
-    bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-    weight = numpyro.sample("weight", dist.Normal(0.0, 0.1).expand([num_features]).to_event(1))
-    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-20.0, 5.0))
-    nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
-    sigma = numpyro.sample("sigma", dist.LogNormal(-5.0, 5.0))
-    centered = numpyro.sample("centered", dist.Uniform(0.0, 1.0))
-
-    drift = time_series(
-        h,
-        "drift",
-        lambda: dist.Normal(0.0, drift_scale),
-        reparam=LocScaleReparam(centered=centered),
-    )
-    level = jnp.cumsum(drift, axis=-2)
-    regression = (weight * covariates).sum(axis=-1, keepdims=True)
-    prediction = level + bias + regression
-
-    predict(h, dist.StudentT(df=nu, loc=0.0, scale=sigma), prediction)
-
-
-functional_model = forecasting_model(univariate_model)
-```
-
-
-To check the two are the same model, we draw a prior forward sample from each with the **same** `rng_subkey` and compare the `obs` site. Since `obs` sits downstream of every latent, matching `obs` draws imply the whole forward computation matched.
-
-
-``` python
-rng_key, rng_subkey = random.split(rng_key)
-
-oop_obs = Predictive(UnivariateForecaster(), num_samples=100, return_sites=["obs"])(
-    rng_subkey, covariates_train
-)["obs"]
-func_obs = Predictive(functional_model, num_samples=100, return_sites=["obs"])(
-    rng_subkey, covariates_train
-)["obs"]
-
-print("identical forward samples:", bool(jnp.array_equal(oop_obs, func_obs)))
-print("max abs difference:", float(jnp.max(jnp.abs(oop_obs - func_obs))))
-```
-
-
-    identical forward samples: True
-    max abs difference: 0.0
-
-
-The forward samples are bit-identical (maximum difference `0.0`): both models issue the same sample statements in the same order, so the random-number stream lines up exactly. The object-oriented class and the functional model are fully interchangeable, and you can reach for whichever style fits the problem.
+Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, a single guide shared by every window (an autoguide or a hand-written guide function), and pure JAX metrics, which the coverage partials above already are.
 
 
 # Next steps
@@ -779,4 +768,4 @@ This local level model with seasonality is a solid baseline. From here a few dir
 - Orduz, J. [*Univariate time series forecasting with NumPyro*](https://juanitorduz.github.io/numpyro_forecasting-univariate/).
 - Pyro. [*Forecasting I: Univariate, Heavy Tailed*](https://pyro.ai/examples/forecasting_i.html).
 
-[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#c90cd179)
+[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#ea6cce06)

@@ -13,8 +13,8 @@ which reads as the expected demand *per period*: how much arrives, divided by ho
 
 Two practical notes on the port, in the same spirit as the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html):
 
-- The blog post models the two *derived* series directly, each with the level model from [its exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/) (the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation treats the richer state space variant of the same idea). Here we implement the *same* likelihood on the **raw calendar timeline**: one `jax.lax.scan` runs both level recursions, frozen outside demand events by `jnp.where`, and the likelihood terms are **masked** so that only demand events contribute. The two formulations are mathematically identical, but the calendar-time version plugs straight into the package's machinery: [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and, crucially, [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which slices calendar time when it moves the train/test split forward.
-- As in the ARMA example, the observed series itself plays the role of the covariates, because the model needs the demand history (values *and* timing) to run its recursions, and the `covariates` argument is the carrier that spans the full horizon at prediction time. The model only ever reads the first [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs) rows, so no future information leaks into a forecast.
+- The blog post models the two *derived* series directly, each with the level model from [its exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/) (the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation treats the richer state space variant of the same idea). Here we implement the *same* likelihood on the **raw calendar timeline**: each level recursion is one call to the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, frozen outside demand events by a gate, and the likelihood terms are **masked** so that only demand events contribute. The two formulations are mathematically identical, but the calendar-time version plugs straight into the package's machinery: plain NumPyro NUTS, [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and, crucially, [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which slices calendar time when it moves the train/test split forward.
+- As in the ARMA example, the observed series itself plays the role of the covariates: [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series (values *and* timing) as an argument, and the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`, which spans the full horizon at prediction time. The model only ever reads the first `t_obs` rows (the block checks this), so no future information leaks into a forecast.
 
 
 # Prepare notebook
@@ -36,19 +36,21 @@ from jax import random
 from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from numpyro.handlers import scope
-from numpyro.infer import Predictive
+from numpyro.infer import MCMC, NUTS, Predictive
 
 from numpyro_forecast import (
-    HMCForecaster,
+    Horizon,
+    SSOEResult,
     backtest,
     eval_coverage,
     eval_crps,
-    forecasting_model,
+    forecast,
     predictions_to_datatree,
+    ssoe,
     to_datatree,
 )
-from numpyro_forecast.functional import Horizon, fit_mcmc
-from numpyro_forecast.typing import Array
+from numpyro_forecast.arrays import pad_future
+from numpyro_forecast.typing import Array, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [10, 6]
@@ -95,7 +97,7 @@ print(f"share of zero periods: {float(jnp.mean(y == 0)):.2f}")
     share of zero periods: 0.73
 
 
-Throughout the package, time lives at axis `-2` and the observation dimension at axis `-1`. Following the design note above, the training series also serves as the covariates; for the fixed-origin forecast we extend the covariates over the horizon with zeros, which is leak-free because the model never reads past [t_obs](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.t_obs).
+Throughout the package, time lives at axis `-2` and the observation dimension at axis `-1`. Following the design note above, the training series also serves as the covariates; for the fixed-origin forecast we extend the covariates over the horizon with zeros, which is leak-free because the model never reads past `t_obs`.
 
 
 ``` python
@@ -203,139 +205,142 @@ Each component gets its own priors,
 
 One transparency note on the priors: \text{Normal}(0, 1) on the initial levels allows negative values for two quantities that are strictly positive (a demand size and an inverse interval). We keep the blog post's choice for comparability; centering the inits on the data or switching to positive priors is the natural refinement, in the same spirit as the truncated or log-normal component likelihoods mentioned in the forecast section.
 
-Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis. The reusable `level_model` samples the three component priors (sites `smoothing`, `init`, and `noise`), runs the where-gated level recursion with a `jax.lax.scan` that emits the *pre-update* levels (the one-step-ahead means), and, when forecasting, draws the component's flat predictive at a site named [future](../../reference/forecaster.ForecastingModel.md#numpyro_forecast.forecaster.ForecastingModel.future) from \text{Normal}(\ell_T, \sigma), the level model's forecast distribution given the final level. Calling it under `scope(level_model, "z", divider="_")` and `scope(level_model, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, `p_inv_future`.
+Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis with the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, whose job is precisely a recursion driven by the observed series: it takes the driving series, an initial carry, a `step` function returning the one-step-ahead mean and the carry update, and the innovation distribution, and it owns both the in-sample filter and the forecast scan. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, and `noise`) and hands [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) a `step` that emits the *pre-update* level (the one-step-ahead mean) and a `carry_fn` that applies the gated update above. The gate travels as an `xs` input, padded with zeros over the forecast horizon by [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html): with the gate off, the level is frozen there, so the forecast is the final level plus the component's iid innovation noise at every horizon step, which is exactly the level model's flat forecast distribution \text{Normal}(\ell_T, \sigma). Padding the gate ourselves also matters for the cross-validation below, where [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows of the series that must not update the levels. Rows carry the observation axis, so the scalar level is `init[None]`. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_inv_eps_future` that the block registers only when forecasting.
 
-The `croston` body then only does what is specific to Croston's method, following the package's conventions for a custom model (see the ARMA example for the pattern):
+The `croston` body then only does what is specific to Croston's method:
 
 1.  **Bookkeeping.** From the observed prefix of the covariates it computes the demand indicator and, with a cumulative maximum over the last-seen demand index, the interval since the previous demand at every period. Both are fixed-shape computations, so they compile under `jax.lax.scan` and NUTS.
-2.  **In sample.** The likelihood is registered as two **masked** observation sites built from the level models' one-step-ahead means, so only demand events contribute (masked periods add exactly zero log-density and zero gradient): the site `"obs"` carries the demand-size likelihood against the raw series, and `"obs_intervals"` the inverse-interval likelihood. The deterministic site `"rate"` exposes the running Croston fitted rate \ell^z\_{t-1} \cdot \ell^{1/p}\_{t-1} for the in-sample plot.
-3.  **Out of sample.** When `h.future > 0` the two scoped level models draw their predictives at the `"z_future"` and `"p_inv_future"` sites, and the body exposes their product as the `"forecast"` site the forecaster reads. Because these sites do not exist while training, `Predictive` draws them from the prior at forecast time, the package's standard `_future` pattern. Croston's forecast is *flat* by construction: without new observations the levels never move, so every horizon step has the same predictive distribution.
+2.  **In sample.** The likelihood is registered as two **masked** observation sites built from the channels' one-step-ahead means (`r.mu`), so only demand events contribute (masked periods add exactly zero log-density and zero gradient): the site `"obs"` carries the demand-size likelihood against the raw series, and `"obs_intervals"` the inverse-interval likelihood. The deterministic site `"rate"` exposes the running Croston fitted rate \ell^z\_{t-1} \cdot \ell^{1/p}\_{t-1} for the in-sample plot.
+3.  **Out of sample.** When `h.future > 0` each channel's block draws its innovations at the `z_eps_future` and `p_inv_eps_future` sites and rolls its (frozen) level forward, returning the sampled future values as `r.y_future`; the body exposes them as `"z_forecast"` and `"p_inv_forecast"`, their product as the `"forecast"` site the package's [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads, and the product of the frozen levels as `"rate_future"`. Because the innovation sites do not exist while training, `Predictive` draws them from the prior at forecast time, the package's standard `_future` pattern. Croston's forecast is *flat* by construction: without new observations the levels never move, so every horizon step has the same predictive distribution, and `"rate_future"` makes that checkable.
 
 
 ``` python
-def level_model(values: Array, is_event: Array, future: int) -> tuple[Array, Array, Array | None]:
-    """Masked simple exponential smoothing level model on the calendar axis.
+def level_channel(h: Horizon, values: Array, gate: Array) -> tuple[SSOEResult, Array]:
+    """Masked simple exponential smoothing level channel on the calendar axis.
 
-    Samples the component priors (sites ``smoothing``, ``init``, ``noise``), runs
-    the where-gated level recursion, and, when ``future > 0``, draws the flat
-    forecast predictive at the site ``future``. Meant to be called under
-    :func:`numpyro.handlers.scope`, which prefixes the site names per component.
-
-    Parameters
-    ----------
-    values
-        Observed component values on the calendar axis; read only where
-        ``is_event`` is true.
-    is_event
-        Boolean demand indicator on the calendar axis; the level only updates
-        where it is true.
-    future
-        Number of forecast steps (``0`` while training).
-
-    Returns
-    -------
-    tuple[Array, Array, Array | None]
-        The one-step-ahead means (the pre-update levels), the observation noise
-        scale, and the forecast predictive draws (``None`` when ``future == 0``).
-    """
-    smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
-    init = numpyro.sample("init", dist.Normal(loc=0, scale=1))
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
-
-    def transition_fn(carry, inputs):
-        x_t, event_t = inputs
-        level = jnp.where(event_t, smoothing * x_t + (1 - smoothing) * carry, carry)
-        # Emit the pre-update level: the one-step-ahead mean.
-        return level, carry
-
-    last_level, mu = jax.lax.scan(transition_fn, init, (values, is_event))
-
-    future_draws = None
-    if future > 0:
-        # jnp.asarray only narrows numpyro's union return type for the type checker.
-        future_draws = jnp.asarray(
-            numpyro.sample(
-                "future", dist.Normal(loc=last_level, scale=noise).expand([future]).to_event(1)
-            )
-        )
-    return mu, noise, future_draws
-
-
-def croston(h: Horizon, covariates: Array) -> None:
-    """Croston's method as two scoped masked exponential smoothing level models.
+    Samples the component priors (sites ``smoothing``, ``init``, ``noise``) and
+    runs the gated level recursion through `ssoe()`, whose ``eps_future``
+    innovation site provides the flat forecast predictive. Meant to be called
+    under `numpyro.handlers.scope()`, which prefixes the site names per
+    component.
 
     Parameters
     ----------
     h
         The train/forecast horizon for the current model call.
+    values
+        Observed component values on the calendar axis, shape ``(t_obs, 1)``;
+        read only where ``gate`` is true.
+    gate
+        Boolean demand indicator on the calendar axis, shape ``(t_obs, 1)``; the
+        level only updates where it is true, and never over the horizon.
+
+    Returns
+    -------
+    tuple[SSOEResult, Array]
+        The block result (one-step-ahead means, frozen forecast means, and the
+        sampled future values) and the observation noise scale.
+    """
+    smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
+    # jnp.asarray only narrows numpyro's union return type for the type checker.
+    init = jnp.asarray(numpyro.sample("init", dist.Normal(loc=0, scale=1)))
+    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
+
+    def step(level, gate_t):
+        # Emit the pre-update level (the one-step-ahead mean); update only at events.
+        return level, lambda y_t, _: jnp.where(
+            gate_t, smoothing * y_t + (1 - smoothing) * level, level
+        )
+
+    result = ssoe(
+        h,
+        "eps",
+        values,
+        init[None],
+        step,
+        dist.Normal(loc=0, scale=noise),
+        xs=pad_future(gate, h.future),
+    )
+    return result, noise
+
+
+def croston(covariates: Array, data: Array | None = None) -> None:
+    """Croston's method as two scoped masked exponential smoothing level channels.
+
+    Parameters
+    ----------
     covariates
         The observed demand series itself, with time at axis ``-2``; only the
         first ``h.t_obs`` rows are read.
+    data
+        Observed demand with time at axis ``-2``, or ``None`` when the drivers
+        sample the observation sites.
     """
-    y_obs = covariates[..., : h.t_obs, 0]  # observed history only; never reads beyond t_obs
-    is_demand = y_obs > 0
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :]  # observed history only; never reads beyond t_obs
+    is_demand = y > 0
 
     # Interval since the previous demand at every period: cumulative max of the
     # last-seen demand index, shifted one step so it is strictly "before t".
-    idx = jnp.arange(h.t_obs)
+    idx = jnp.arange(h.t_obs)[:, None]
     last_at_or_before = jax.lax.cummax(jnp.where(is_demand, idx, -1), axis=0)
-    last_before = jnp.concatenate([jnp.array([-1]), last_at_or_before[:-1]])
-    p_inv_obs = 1.0 / (idx - last_before).astype(y_obs.dtype)
+    last_before = jnp.concatenate([jnp.full((1, 1), -1), last_at_or_before[:-1]])
+    p_inv_obs = 1.0 / (idx - last_before).astype(y.dtype)
 
-    z_mu, z_noise, z_future = scope(level_model, "z", divider="_")(y_obs, is_demand, h.future)
-    p_inv_mu, p_inv_noise, p_inv_future = scope(level_model, "p_inv", divider="_")(
-        p_inv_obs, is_demand, h.future
-    )
+    z, z_noise = scope(level_channel, "z", divider="_")(h, y, is_demand)
+    p_inv, p_inv_noise = scope(level_channel, "p_inv", divider="_")(h, p_inv_obs, is_demand)
 
-    numpyro.deterministic("rate", (z_mu * p_inv_mu)[:, None])
-    numpyro.sample(
-        "obs",
-        dist.Normal(loc=z_mu[:, None], scale=z_noise).mask(is_demand[:, None]),
-        obs=h.data,
-    )
+    numpyro.deterministic("rate", z.mu * p_inv.mu)
+    numpyro.sample("obs", dist.Normal(loc=z.mu, scale=z_noise).mask(is_demand), obs=h.data)
     numpyro.sample(
         "obs_intervals",
-        dist.Normal(loc=p_inv_mu[:, None], scale=p_inv_noise).mask(is_demand[:, None]),
-        obs=p_inv_obs[:, None],
+        dist.Normal(loc=p_inv.mu, scale=p_inv_noise).mask(is_demand),
+        obs=p_inv_obs,
     )
 
-    if z_future is not None and p_inv_future is not None:  # exactly when h.future > 0
-        numpyro.deterministic("z_forecast", z_future[:, None])
-        numpyro.deterministic("p_inv_forecast", p_inv_future[:, None])
-        numpyro.deterministic("forecast", (z_future * p_inv_future)[:, None])
-
-
-model = forecasting_model(croston)
+    if h.future > 0:
+        numpyro.deterministic("rate_future", z.mu_future * p_inv.mu_future)
+        numpyro.deterministic("z_forecast", z.y_future)
+        numpyro.deterministic("p_inv_forecast", p_inv.y_future)
+        numpyro.deterministic("forecast", z.y_future * p_inv.y_future)
 ```
 
 
 # Inference with NUTS
 
-We fit the model on the training window with the No-U-Turn Sampler through the functional [`fit_mcmc`](https://juanitorduz.github.io/numpyro_forecast/reference/functional.mcmc.fit_mcmc.html), running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each. The posterior has just six scalar parameters, three per component.
+We fit the model on the training window with plain NumPyro: the No-U-Turn Sampler through `MCMC`, running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each. The posterior has just six scalar parameters, three per component. The small `fit_nuts` helper wraps the call, because the cross-validation below refits the sampler on every fold with the same settings; `mcmc.get_samples()` returns the draws as a plain dictionary with the chains flattened together, the format every package driver consumes.
 
-We then export the fit into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html). Because we pass the *extended* covariates, which reach `n_test` steps past the data, the tree automatically carries `predictions` groups with the out-of-sample forecast draws next to the posterior, the in-sample posterior predictive, and the observed data.
+We then export the draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html), which restores the `(chain, draw)` structure (we pass `num_chains=4`). Because we pass the *extended* covariates, which reach `n_test` steps past the data, the tree automatically carries `predictions` groups with the out-of-sample forecast draws next to the posterior, the in-sample posterior predictive, and the observed data.
 
 
 ``` python
+def fit_nuts(
+    rng_key: Array, model: ForecastModel, data: Array, covariates: Array
+) -> dict[str, Array]:
+    """Fit ``model`` with NUTS (4 chains, 1,000 warmup and 1,000 draws each) and return the draws."""
+    mcmc = MCMC(
+        NUTS(model),
+        num_warmup=1_000,
+        num_samples=1_000,
+        num_chains=4,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    mcmc.run(rng_key, covariates, data)
+    return mcmc.get_samples()
+
+
 rng_key, rng_subkey = random.split(rng_key)
-fit = fit_mcmc(
-    rng_subkey,
-    model,
-    train_data,
-    covariates_train,
-    num_warmup=1_000,
-    num_samples=1_000,
-    num_chains=4,
-)
+posterior = fit_nuts(rng_subkey, croston, train_data, covariates_train)
 
 rng_key, rng_subkey = random.split(rng_key)
 tree = to_datatree(
     rng_subkey,
-    fit,
-    model,
+    croston,
+    posterior,
     train_data,
     covariates_full,
+    num_chains=4,
     posterior_dims={"rate": ["time", "obs_dim"]},
 )
 tree
@@ -894,7 +899,7 @@ Group: /
 │           z_noise          (chain, draw) float32 16kB 0.431 0.6101 ... 0.5139 0.6101
 │           z_smoothing      (chain, draw) float32 16kB 0.0827 0.04026 ... 0.04315
 │       Attributes:
-│           created_at:                 2026-07-17T12:37:45.285863+00:00
+│           created_at:                 2026-08-27T12:29:48.726862+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -907,9 +912,9 @@ Group: /
 │         * time     (time) int64 544B 0 1 2 3 4 5 6 7 8 ... 59 60 61 62 63 64 65 66 67
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 1MB 1.412 0.3509 ... -0.1541
+│           obs      (chain, draw, time, obs_dim) float32 1MB 0.3385 1.062 ... 1.935
 │       Attributes:
-│           created_at:                 2026-07-17T12:37:45.476929+00:00
+│           created_at:                 2026-08-27T12:29:48.906985+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -922,7 +927,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 272B 0.0 0.0 0.0 0.0 ... 1.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-17T12:37:45.477184+00:00
+│           created_at:                 2026-08-27T12:29:48.907279+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -935,7 +940,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 272B 0.0 0.0 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-07-17T12:37:45.477359+00:00
+│           created_at:                 2026-08-27T12:29:48.907475+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -948,9 +953,9 @@ Group: /
 │         * time     (time) int64 96B 68 69 70 71 72 73 74 75 76 77 78 79
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 192kB 0.6731 ... -0.5101
+│           obs      (chain, draw, time, obs_dim) float32 192kB 0.1277 0.4071 ... 0.3087
 │       Attributes:
-│           created_at:                 2026-07-17T12:37:46.027046+00:00
+│           created_at:                 2026-08-27T12:29:49.540496+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -963,7 +968,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 48B 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-07-17T12:37:46.027284+00:00
+            created_at:                 2026-08-27T12:29:49.540742+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1215,7 +1220,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:37:45.285863+00:00
+2026-08-27T12:29:48.726862+00:00
 
 creation_library :  
 ArviZ
@@ -1336,7 +1341,7 @@ obs
 float32
 
 
-1.412 0.3509 ... 1.534 -0.1541
+0.3385 1.062 0.7683 ... 2.018 1.935
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1344,14 +1349,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 1.412045  ],[ 0.35088602],[-0.02418012],...,[ 0.6345603 ],[ 0.4985733 ],[ 1.2508363 ]],[[ 0.113711  ],[ 0.89119345],[ 1.7717623 ],...,[ 1.6662372 ],[ 1.6017458 ],[ 0.647196  ]],[[ 0.45013747],[ 0.75254464],[ 0.46457803],...,......,[ 0.6574229 ],[ 0.4276314 ],[ 0.86478955]],[[ 1.4026188 ],[ 1.7176813 ],[ 0.7354315 ],...,[ 0.6454268 ],[ 2.179327  ],[ 1.4373044 ]],[[ 1.3434893 ],[ 1.6738536 ],[ 1.2242937 ],...,[ 1.3538065 ],[ 1.5337332 ],[-0.1540557 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
+    array([[[[ 0.33850092],[ 1.0621904 ],[ 0.7683196 ],...,[ 0.99580103],[ 1.0891179 ],[ 0.8175309 ]],[[ 0.5748841 ],[ 1.6346726 ],[ 1.5742061 ],...,[ 0.51255316],[ 0.17686263],[ 1.3185672 ]],[[ 0.8430811 ],[ 0.4630199 ],[ 1.1885171 ],...,......,[ 1.5836004 ],[ 1.2724812 ],[ 0.72360283]],[[ 0.32956636],[ 1.1658125 ],[ 2.0226429 ],...,[ 0.80747837],[ 0.81200546],[ 0.7073547 ]],[[ 1.4159282 ],[ 1.7379392 ],[ 1.1507263 ],...,[ 1.5715965 ],[ 2.017602  ],[ 1.9347404 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:37:45.476929+00:00
+2026-08-27T12:29:48.906985+00:00
 
 creation_library :  
 ArviZ
@@ -1445,7 +1450,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:37:45.477184+00:00
+2026-08-27T12:29:48.907279+00:00
 
 creation_library :  
 ArviZ
@@ -1539,7 +1544,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:37:45.477359+00:00
+2026-08-27T12:29:48.907475+00:00
 
 creation_library :  
 ArviZ
@@ -1660,7 +1665,7 @@ obs
 float32
 
 
-0.6731 0.7944 ... -0.03552 -0.5101
+0.1277 0.4071 ... 0.7325 0.3087
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1668,14 +1673,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.67311007],[ 0.79440516],[-0.27405268],...,[ 0.92869204],[ 0.22718753],[ 1.0792432 ]],[[ 1.0983304 ],[ 1.1954576 ],[ 0.87918353],...,[ 0.47743446],[ 0.19634333],[ 0.30176815]],[[ 0.76594174],[ 0.9978594 ],[ 0.99946004],...,......,[ 1.5914116 ],[ 0.26892188],[ 0.42314965]],[[ 1.2158185 ],[ 1.1116271 ],[-0.0375893 ],...,[-0.24428618],[ 0.954998  ],[ 1.2630944 ]],[[ 2.2380595 ],[ 0.02428423],[ 0.159317  ],...,[-0.58573353],[-0.03551889],[-0.51006263]]]], shape=(4, 1000, 12, 1), dtype=float32)
+    array([[[[ 0.12767878],[ 0.4071138 ],[-0.0329942 ],...,[ 0.30218592],[ 0.38212195],[ 0.6327927 ]],[[ 0.0747042 ],[ 0.89378333],[ 1.1241379 ],...,[ 0.31796184],[ 0.46663618],[ 0.5858309 ]],[[-0.0424359 ],[ 0.4770053 ],[ 0.24551892],...,......,[ 0.5644004 ],[ 0.857647  ],[ 1.129244  ]],[[ 2.2049959 ],[ 0.8973079 ],[ 0.55362725],...,[ 0.3509267 ],[ 0.56247175],[ 0.9309611 ]],[[ 1.378028  ],[ 1.0172944 ],[ 0.23216878],...,[ 0.37439618],[ 0.73248935],[ 0.30873507]]]], shape=(4, 1000, 12, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:37:46.027046+00:00
+2026-08-27T12:29:49.540496+00:00
 
 creation_library :  
 ArviZ
@@ -1769,7 +1774,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-07-17T12:37:46.027284+00:00
+2026-08-27T12:29:49.540742+00:00
 
 creation_library :  
 ArviZ
@@ -2048,21 +2053,21 @@ print(f"train-window mean demand per period: {float(jnp.mean(y_train)):.3f}")
 ```
 
 
-    posterior mean forecast rate:        0.699
-    SBA-corrected mean forecast rate:    0.663
+    posterior mean forecast rate:        0.702
+    SBA-corrected mean forecast rate:    0.666
     train-window mean demand per period: 0.338
 
 
 ## Component forecasts
 
-To see where the combined forecast comes from, we sample the two component predictives directly with `Predictive`, requesting the `"z_forecast"` and `"p_inv_forecast"` deterministic sites, and plot them side by side with a single faceted `plot_lm` call (the package's [predictions_to_datatree](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree) lays the draws out so that `plot_lm` facets one panel per series). The demand-size component predicts the size of the next demand; the inverse-interval component predicts how much of a demand event arrives per period. Their product is the forecast above.
+To see where the combined forecast comes from, we sample the two component predictives directly with `Predictive`, handing it the posterior draws and requesting the `"z_forecast"` and `"p_inv_forecast"` deterministic sites, and plot them side by side with a single faceted `plot_lm` call (the package's [predictions_to_datatree](../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree) lays the draws out so that `plot_lm` facets one panel per series). The demand-size component predicts the size of the next demand; the inverse-interval component predicts how much of a demand event arrives per period. Their product is the forecast above.
 
 
 ``` python
 rng_key, rng_subkey = random.split(rng_key)
 predictive = Predictive(
-    model,
-    posterior_samples=dict(fit.samples),
+    croston,
+    posterior_samples=posterior,
     return_sites=["z_forecast", "p_inv_forecast"],
 )
 component_draws = predictive(rng_subkey, covariates_full, train_data)
@@ -2122,10 +2127,28 @@ fig.suptitle("Croston component forecasts", fontsize=16, fontweight="bold", y=1.
 
 # One-step-ahead cross-validation
 
-A fixed-origin forecast tells us how the model does from one training window. The blog post's more interesting experiment is a **rolling-origin, one-step-ahead** evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) runs this loop for us with `test_window=1` and `stride=1`, refitting the NUTS sampler on each fold through [HMCForecaster](../../reference/forecaster.HMCForecaster.md#numpyro_forecast.forecaster.HMCForecaster), the OOP counterpart of [fit_mcmc](../../reference/functional.mcmc.fit_mcmc.md#numpyro_forecast.functional.mcmc.fit_mcmc) that [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) constructs per fold. With `min_train_window=n_train` the folds tile the test span exactly, one fold per held-out period, and `keep_predictions=True` retains each fold's forecast samples so we can assemble and plot them. Alongside the CRPS we track the empirical coverage of the central 50\\ and 94\\ intervals as per-fold indicators (with a single test point per fold, each is 0 or 1; we aggregate them across folds below).
+A fixed-origin forecast tells us how the model does from one training window. The blog post's more interesting experiment is a **rolling-origin, one-step-ahead** evaluation: refit the model on an expanding training window and forecast a single step, repeatedly, across the whole test span. [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) runs this loop for us with `test_window=1` and `stride=1`; the fitting and forecasting inside each fold are delegated to a `forecast_fn` closure we write, which calls `fit_nuts` on the fold's training window and hands the draws to the package's [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) driver, so [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) itself has no opinion about the inference engine. With `min_train_window=n_train` the folds tile the test span exactly, one fold per held-out period, and `keep_predictions=True` retains each fold's forecast samples so we can assemble and plot them; `num_samples` records the ensemble size the closure returns, 4 chains of 1{,}000 draws. One subtlety worth knowing: [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the closure the covariates over the *full* window, training rows followed by the held-out row, so the real future value is present in the array; the model reads only the first `t_obs` rows and freezes its gates over the horizon, which is what keeps every fold leak-free. Alongside the CRPS we track the empirical coverage of the central 50\\ and 94\\ intervals as per-fold indicators (with a single test point per fold, each is 0 or 1; we aggregate them across folds below).
 
 
 ``` python
+def forecast_fn(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> Array | np.ndarray:
+    """Fit ``model`` on the training window with NUTS and forecast the test horizon."""
+    key_fit, key_fc = random.split(rng_key)
+    fold_posterior = fit_nuts(key_fit, model, train_data, train_covariates)
+    return forecast(
+        key_fc, model, fold_posterior, train_data, full_covariates, batch_size=batch_size
+    )
+
+
 metrics = {
     "crps": eval_crps,
     "coverage_50": partial(eval_coverage, alpha=0.5),
@@ -2137,16 +2160,15 @@ results = backtest(
     rng_subkey,
     data_full,
     data_full,  # the series doubles as the covariates, sliced per fold by backtest
-    lambda: model,
-    forecaster_fn=HMCForecaster,
+    lambda: croston,
+    forecast_fn=forecast_fn,
     metrics=metrics,
     test_window=1,  # one-step-ahead forecasts
     stride=1,  # one fold per held-out period
     min_train_window=n_train,  # folds tile the test span exactly
-    num_samples=2_000,
+    num_samples=4_000,  # 4 chains x 1,000 draws, what fit_nuts returns
     eval_train=False,  # in-sample "obs" scoring is not meaningful here (see above)
     keep_predictions=True,
-    forecaster_options={"num_warmup": 1_000, "num_samples": 1_000, "num_chains": 4},
 )
 
 split_points = [r.t1 for r in results]
@@ -2185,7 +2207,7 @@ ax.set(title="One-step-ahead cross-validation forecasts", xlabel="time", ylabel=
 ```
 
 
-    assembled one-step-ahead draws: (2000, 12, 1)
+    assembled one-step-ahead draws: (4000, 12, 1)
 
 
 <figure class="figure">
@@ -2237,8 +2259,8 @@ print(f"empirical 94% coverage: {cov_94:.2f}  (nominal 0.94)")
 ```
 
 
-    one-step-ahead CRPS over the test span: 0.3484
-    fixed-origin CRPS over the test span:   0.3734
+    one-step-ahead CRPS over the test span: 0.3427
+    fixed-origin CRPS over the test span:   0.3761
     empirical 50% coverage: 0.08  (nominal 0.50)
     empirical 94% coverage: 1.00  (nominal 0.94)
 
@@ -2255,7 +2277,7 @@ The numbers complete the picture, and they are instructive rather than flatterin
 - Syntetos, A. A., & Boylan, J. E. (2005). *The accuracy of intermittent demand estimates*. International Journal of Forecasting, 21(2), 303-314. The bias analysis behind the (1 - \alpha/2) correction quantified above.
 - Morgan, P. [*Croston's Method*](https://www.pmorgan.com.au/tutorials/crostons-method/). A succinct tutorial on the classical method.
 - statsforecast documentation: [`CrostonOptimized`](https://nixtlaverse.nixtla.io/statsforecast/src/core/models.html#crostonoptimized), the classical baseline the blog post compares against.
-- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same custom model-body pattern for the damped Holt-Winters state space model.
+- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for the damped Holt-Winters state space model.
 - The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
 
-[Source: Croston's Method for Intermittent Demand with `numpyro_forecast`](_src/croston-preview.html#1fd2b9b8)
+[Source: Croston's Method for Intermittent Demand with `numpyro_forecast`](_src/croston-preview.html#bc1b95c6)

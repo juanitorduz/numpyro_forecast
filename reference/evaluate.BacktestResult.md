@@ -12,10 +12,8 @@ evaluate.BacktestResult(
     t1,
     t2,
     num_samples,
-    train_walltime,
-    test_walltime,
+    walltime,
     metrics,
-    params=dict(),
     train_metrics=dict(),
     prediction=None
 )
@@ -31,19 +29,16 @@ Train-begin, train/test split, and test-end time indices.
 `num_samples: int`  
 Number of forecast samples drawn.
 
-`train_walltime, test_walltime`  
-Wall-clock seconds for fitting and forecasting.
+`walltime: float`  
+Wall-clock seconds for the window's timed `forecast_fn` call.
 
 `metrics: dict[str, float]`  
 Mapping of metric name to value for the window.
 
-`params: dict[str, float]`  
-Mapping of scalar parameter name to value (when available).
-
 `train_metrics: dict[str, float]`  
 Mapping of metric name to in-sample value for the window. Empty unless [backtest](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) was called with `eval_train=True`.
 
-`prediction: Array | None`  
+`prediction: Array | np.ndarray | None`  
 Out-of-sample forecast samples for the window (sample axis leading), or `None` unless [backtest](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) was called with `keep_predictions=True`.
 
 

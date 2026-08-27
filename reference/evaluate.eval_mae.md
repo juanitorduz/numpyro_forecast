@@ -14,16 +14,16 @@ evaluate.eval_mae(
 ```
 
 
-A pure JAX scalar kernel (see `~numpyro_forecast.typing.Metric`).
+A pure JAX scalar kernel (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)). `pred` and `truth` are moved to device memory first (`_device_view()`), so either (or both) may be host-committed, e.g. draws sampled with `device="host"`.
 
 
 ## Parameters
 
 
-`pred: Float[Array, ``" sample *batch"]`  
+`pred: Float[ArrayLike, ``" sample *batch"]`  
 Forecast samples with the sample axis first.
 
-`truth: Float[Array, ``" *batch"]`  
+`truth: Float[ArrayLike, ``" *batch"]`  
 Ground-truth values (matching `pred` without the sample axis).
 
 

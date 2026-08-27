@@ -17,7 +17,7 @@ contrib.blackjax.PathfinderFit(
 ```
 
 
-A plain-data (picklable) container: it holds the raw blackjax `PathfinderState`, the model and its data/covariates (needed to rebuild the unconstrained-to-constrained transform when drawing), and the fitted ELBO. Draws are produced lazily by `~numpyro_forecast.functional.posterior.draw_posterior()`.
+A plain-data (picklable) container: it holds the raw blackjax `PathfinderState`, the model and its data/covariates (needed to rebuild the unconstrained-to-constrained transform when drawing), and the fitted ELBO. Draws are produced lazily by [pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples).
 
 
 ## Attributes

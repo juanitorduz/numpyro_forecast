@@ -90,15 +90,15 @@ ul.task-list li input[type="checkbox"] {
 
   <link rel="alternate" type="text/markdown" href="package-info.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/package-info.html">
-  <meta name="description" content="A JAX/NumPyro port of Pyro's forecasting module.">
+  <meta name="description" content="A JAX/NumPyro port of the ideas in Pyro's forecasting module.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Package Info – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="A JAX/NumPyro port of Pyro's forecasting module.">
+  <meta property="og:description" content="A JAX/NumPyro port of the ideas in Pyro's forecasting module.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/package-info.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Package Info – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="A JAX/NumPyro port of Pyro's forecasting module.">
+  <meta name="twitter:description" content="A JAX/NumPyro port of the ideas in Pyro's forecasting module.">
 </head>
 
 <body class="nav-fixed gd-package-info-page quarto-light">
@@ -216,16 +216,16 @@ ul.task-list li input[type="checkbox"] {
 <td><a href="https://pypi.org/project/beartype/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
 <tr class="odd">
+<td><code class="gd-no-link">jax</code></td>
+<td><code>&lt;0.11.1,&gt;=0.10.0</code></td>
+<td>2026-08-17</td>
+<td><a href="https://pypi.org/project/jax/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
+</tr>
+<tr class="even">
 <td><code class="gd-no-link">jaxtyping</code></td>
 <td><code>&gt;=0.3.11</code></td>
 <td>2026-06-13</td>
 <td><a href="https://pypi.org/project/jaxtyping/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
-</tr>
-<tr class="even">
-<td><code class="gd-no-link">matplotlib</code></td>
-<td><code>&lt;3.11,&gt;=3.8</code></td>
-<td>2026-07-18</td>
-<td><a href="https://pypi.org/project/matplotlib/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
 <tr class="odd">
 <td><code class="gd-no-link">numpyro</code></td>
@@ -343,7 +343,7 @@ ul.task-list li input[type="checkbox"] {
 <tr class="even">
 <td><code class="gd-no-link">polars</code></td>
 <td><code>&gt;=1.0</code></td>
-<td>2026-08-01</td>
+<td>2026-08-26</td>
 <td><a href="https://pypi.org/project/polars/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
 </tbody>
@@ -368,90 +368,96 @@ ul.task-list li input[type="checkbox"] {
 <td><a href="https://pypi.org/project/graphviz/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
 <tr class="even">
+<td><code class="gd-no-link">matplotlib</code></td>
+<td><code>&lt;3.11,&gt;=3.8</code></td>
+<td>2026-07-18</td>
+<td><a href="https://pypi.org/project/matplotlib/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
+</tr>
+<tr class="odd">
 <td><code class="gd-no-link">ipykernel</code></td>
 <td><code>&gt;=6.29</code></td>
 <td>2026-06-10</td>
 <td><a href="https://pypi.org/project/ipykernel/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">jupytext</code></td>
 <td><code>&gt;=1.16</code></td>
 <td>2026-07-21</td>
 <td><a href="https://pypi.org/project/jupytext/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">nbmake</code></td>
 <td><code>&gt;=1.5</code></td>
 <td>2024-12-23</td>
 <td><a href="https://pypi.org/project/nbmake/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">prek</code></td>
 <td><code>&gt;=0.4.5</code></td>
-<td>2026-08-17</td>
+<td>2026-08-27</td>
 <td><a href="https://pypi.org/project/prek/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">preliz</code></td>
 <td><code>&gt;=0.16</code></td>
 <td>2026-07-07</td>
 <td><a href="https://pypi.org/project/preliz/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">pytest-cov</code></td>
 <td><code>&gt;=5.0</code></td>
 <td>2026-03-21</td>
 <td><a href="https://pypi.org/project/pytest-cov/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">pytest-split</code></td>
 <td><code>&gt;=0.10</code></td>
 <td>2026-02-03</td>
 <td><a href="https://pypi.org/project/pytest-split/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">pytest-xdist</code></td>
 <td>—</td>
 <td>2025-07-01</td>
 <td><a href="https://pypi.org/project/pytest-xdist/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">pytest</code></td>
 <td><code>&gt;=8.0</code></td>
 <td>2026-06-19</td>
 <td><a href="https://pypi.org/project/pytest/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">ruff</code></td>
 <td><code>==0.16.3</code></td>
-<td>2026-08-20</td>
+<td>2026-08-27</td>
 <td><a href="https://pypi.org/project/ruff/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">ty</code></td>
 <td><code>==0.0.72</code></td>
-<td>2026-08-19</td>
+<td>2026-08-26</td>
 <td><a href="https://pypi.org/project/ty/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">optax</code></td>
 <td><code>&gt;=0.2</code></td>
 <td>2026-03-20</td>
 <td><a href="https://pypi.org/project/optax/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">blackjax</code></td>
 <td><code>&lt;2,&gt;=1.6</code></td>
 <td>2026-07-16</td>
 <td><a href="https://pypi.org/project/blackjax/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code class="gd-no-link">huggingface-hub</code></td>
 <td><code>&gt;=1.22.0</code></td>
-<td>2026-08-18</td>
+<td>2026-08-27</td>
 <td><a href="https://pypi.org/project/huggingface-hub/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code class="gd-no-link">scikit-learn</code></td>
 <td><code>&gt;=1.6</code></td>
 <td>2026-06-02</td>
@@ -474,7 +480,7 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td><code class="gd-no-link">great-docs</code></td>
-<td><code>&gt;=0.14</code></td>
+<td><code>==0.17.0</code></td>
 <td>2026-08-13</td>
 <td><a href="https://pypi.org/project/great-docs/" class="gd-pypi-link"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg></a></td>
 </tr>
@@ -508,7 +514,7 @@ ul.task-list li input[type="checkbox"] {
 <ul>
 <li><strong>Requires:</strong> Python <code>&gt;=3.12</code></li>
 <li><strong>Runtime Dependencies:</strong> 5</li>
-<li><strong>Optional Dependencies:</strong> 8 groups (21 unique packages)</li>
+<li><strong>Optional Dependencies:</strong> 8 groups (22 unique packages)</li>
 <li><strong>Total unique dependencies:</strong> 26</li>
 </ul>
 
