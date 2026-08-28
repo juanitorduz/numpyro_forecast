@@ -1,0 +1,386 @@
+{
+  "versions": [
+    {
+      "tag": "dev",
+      "label": "dev",
+      "path_prefix": "v/dev",
+      "prerelease": true
+    },
+    {
+      "tag": "0.3.0",
+      "label": "0.3.0",
+      "latest": true,
+      "path_prefix": ""
+    }
+  ],
+  "pages": {
+    ".well-known/agent-skills/numpyro_forecast/SKILL.html": [
+      "dev",
+      "0.3.0"
+    ],
+    ".well-known/skills/default/SKILL.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "changelog.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "contributing.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/arma.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/availability_tsb.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/censored_demand.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/croston.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/electricity_forecast.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/electricity_forecast_calibration.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/exponential_smoothing_state_space.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/forecasting_univariate.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/fresh_retail_stockout.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/hierarchical_forecasting_1.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/hierarchical_forecasting_2.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/index.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/inference_methods_comparison.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "docs/examples/tsb.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "index.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "license.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "package-info.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/acf.acf.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/acf.pacf.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/arrays.concat_future.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/arrays.pad_future.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/arrays.zero_data_like.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.BlackjaxCustomKernel.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.BlackjaxMCLMCKernel.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.BlackjaxNUTSKernel.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.MultiPathfinderFit.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.PathfinderFit.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.fit_multipathfinder.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.fit_pathfinder.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.multipathfinder_samples.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/contrib.blackjax.pathfinder_samples.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/convert.add_forecast_groups.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/convert.predictions_to_datatree.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/convert.to_datatree.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/datasets.bart_available.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/datasets.load_bart_hierarchical.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/datasets.load_bart_weekly.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/datasets.load_victoria_electricity.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.BacktestResult.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.VectorizedBacktestResult.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.backtest.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.backtest_vectorized.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.eval_coverage.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.eval_crps.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.eval_mae.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.eval_rmse.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.evaluate_forecast.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.results_to_dataframe.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.BacktestWindowError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.CovariateDimsError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.DeviceMemoryError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.DevicePlatformError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.HostMemoryKindError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.KernelConfigError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.MVNLayoutError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.NumpyroForecastError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/exceptions.VectorizedMetricError.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/features.fourier_features.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/features.periodic_repeat.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/index.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/metrics.crps_empirical.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/metrics.eval_interval_score.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/metrics.eval_pinball.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/metrics.make_mase.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.Horizon.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.SSOEResult.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.SSOEStep.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.Transition.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.innovations.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.markov_series.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.predict.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.ssoe.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/optional.require.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/predictive.draw_posterior.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/predictive.forecast.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/predictive.predict_in_sample.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/surgery.prefix_condition.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/surgery.register_elementwise.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/surgery.shift_loc.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/surgery.slice_time.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.ForecastFn.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.ForecastModel.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.Guide.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.InSampleFn.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.Metric.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.ModelFactory.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "skill.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "skills.html": [
+      "dev",
+      "0.3.0"
+    ]
+  }
+}
