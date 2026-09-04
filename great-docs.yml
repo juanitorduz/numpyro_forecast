@@ -82,6 +82,19 @@ reference:
       - models.SSOEResult
       - models.predict
 
+  - title: Vector autoregression
+    desc: "VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses."
+    contents:
+      - var.var_mean
+      - var.var_step
+      - var.companion_matrix
+      - var.impulse_response
+
+  - title: Priors
+    desc: Shrinkage prior moments for coefficient arrays.
+    contents:
+      - priors.minnesota_prior
+
   - title: Distribution surgery
     desc: Time-axis operations on observation distributions, extensible via singledispatch.
     contents:

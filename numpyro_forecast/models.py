@@ -438,15 +438,48 @@ def _validate_ssoe_carry[Carry](carry: Carry, new_carry: Carry) -> Carry:
     return new_carry
 
 
+def _future_plate_dim(noise_dist: dist.Distribution) -> int:
+    """Return the ``time_future`` plate dim for ``noise_dist`` (``-2``, or ``-1`` for a row event).
+
+    An elementwise family (event rank 0) is batched over ``(*batch, obs)``, so the
+    time plate goes at ``dim=-2``; a multivariate family over the observation
+    axis (event rank 1, e.g. `numpyro.distributions.MultivariateNormal`) already
+    owns the trailing ``obs`` axis as its event, so the plate goes at ``dim=-1``.
+    Either way the draw is ``(*batch, future, obs)``.
+    """
+    event_rank = len(noise_dist.event_shape)
+    if event_rank > 1:
+        msg = (
+            f"noise_dist has event shape {tuple(noise_dist.event_shape)}, event rank "
+            f"{event_rank}; ssoe accepts event rank 0 (an elementwise family with batch shape "
+            "(obs,)) or 1 (a multivariate family over the observation axis with event shape "
+            "(obs,), e.g. MultivariateNormal). Use .to_event(1) on a (*batch, obs)-batched "
+            "family, not .to_event(2)."
+        )
+        raise ValueError(msg)
+    if event_rank == 1:
+        for handler in _PYRO_STACK:
+            if isinstance(handler, numpyro.plate) and handler.dim == -1:
+                msg = (
+                    "ssoe with a multivariate noise_dist opens time_future at dim=-1, which "
+                    f"collides with the enclosing plate {handler.name!r} at dim=-1; batch the "
+                    "series to the left (noise batch (B, 1), series (B, t_obs, obs)) instead "
+                    "of an enclosing plate at dim=-1."
+                )
+                raise ValueError(msg)
+    return -2 + event_rank
+
+
 def _validate_future_errors(eps: Array, mu: Array, future: int) -> None:
     """Require the drawn errors to line up exactly with the in-sample means."""
     expected = (*mu.shape[:-2], future, mu.shape[-1])
     if eps.shape != expected:
         msg = (
             f"ssoe expects noise_dist to draw errors of shape {expected} under the time_future "
-            f"plate, got {eps.shape}: the batch shape of noise_dist must be (obs,) for a "
-            "(t_obs, obs) series (or () when obs == 1) and (B, 1, obs) for a batched "
-            "(B, t_obs, obs) series; event-shaped distributions are not supported."
+            f"plate, got {eps.shape}: for a (t_obs, obs) series noise_dist needs batch shape "
+            "(obs,) (or () when obs == 1) for an elementwise family, or batch shape () with "
+            "event shape (obs,) for a multivariate family such as MultivariateNormal; a "
+            "batched (B, t_obs, obs) series needs (B, 1, obs) or (B, 1) respectively."
         )
         raise ValueError(msg)
     if eps.dtype != mu.dtype:
@@ -475,7 +508,7 @@ def ssoe[Carry](
     ``eps_t = y_t - mu_t``. In-sample it runs ``step`` in a raw ``jax.lax.scan``
     over the observed series ``y`` (no sample sites inside); when forecasting it
     draws iid future errors at the site ``f"{name}_future"`` from ``noise_dist``
-    under ``plate("time_future", h.future, dim=-2)`` and runs a second scan from
+    under a ``plate("time_future", h.future)`` and runs a second scan from
     the final in-sample carry with ``y_t = mu_t + eps_t`` fed back through
     ``carry_fn``. The guide never sees the future site, because fitting always
     happens with ``future == 0``. Linear-Gaussian members (ARMA, additive
@@ -512,7 +545,10 @@ def ssoe[Carry](
     ``(t_obs, series)``, the carry ``(series,)``, and a ``noise`` sampled under
     ``plate("series")`` has exactly the batch shape ``(series,)`` the block
     needs. Batch dims to the left of time (``(B, t_obs, obs)``) take a
-    ``(B, obs)`` carry and a ``(B, 1, obs)`` noise batch. Inputs are jax
+    ``(B, obs)`` carry and a ``(B, 1, obs)`` noise batch. Errors correlated
+    across the observation axis are a multivariate ``noise_dist`` with event
+    shape ``(obs,)``, which is how a vector autoregression enters the block
+    (see `~~numpyro_forecast.var.var_step()`). Inputs are jax
     Arrays (the import hook rejects NumPy). With ``obs == 1`` a noise batch
     shape ``(future, 1)`` is indistinguishable from time and is consumed as
     such: per-step error scales, if that is what you meant.
@@ -549,12 +585,17 @@ def ssoe[Carry](
         recomputed ``y_t - mu_t``, which can differ by an ulp), so close over
         ``mu_t`` when the update needs it.
     noise_dist
-        Zero-centered per-step error distribution. Its batch shape must be
-        ``(obs,)`` for a ``(t_obs, obs)`` series (``()`` is fine when
-        ``obs == 1``) and ``(B, 1, obs)`` for a batched ``(B, t_obs, obs)``
-        series, so the draw under the time plate is exactly
-        ``(*batch, future, obs)`` with the dtype of the means; event-shaped
-        distributions are rejected.
+        Zero-centered per-step error distribution, either an elementwise family
+        (event rank 0) or a multivariate family over the observation axis (event
+        rank 1, e.g. ``dist.MultivariateNormal(jnp.zeros(obs), scale_tril=L)``
+        for shocks correlated across series, the VAR case). For a
+        ``(t_obs, obs)`` series the batch shape is ``(obs,)`` (``()`` is fine
+        when ``obs == 1``) for the elementwise form and ``()`` for the
+        multivariate form; a batched ``(B, t_obs, obs)`` series takes
+        ``(B, 1, obs)`` and ``(B, 1)`` respectively. Either way the draw under
+        the time plate (``dim=-2`` for event rank 0, ``dim=-1`` for event rank 1)
+        is exactly ``(*batch, future, obs)`` with the dtype of the means; event
+        rank 2 or higher is rejected.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays with
         time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
@@ -574,8 +615,9 @@ def ssoe[Carry](
         cover exactly ``h.t_obs`` rows; if an ``xs`` leaf lacks the axes or does
         not span ``h.duration`` rows; if ``step`` returns a mean without the
         observation axis or a carry with a different tree structure, shape or
-        dtype; if ``step`` calls ``numpyro.sample``; or if ``noise_dist`` draws
-        errors of the wrong shape or dtype.
+        dtype; if ``step`` calls ``numpyro.sample``; if ``noise_dist`` has event
+        rank 2 or higher, or has event rank 1 inside an enclosing plate at
+        ``dim=-1``; or if it draws errors of the wrong shape or dtype.
 
     Examples
     --------
@@ -630,7 +672,7 @@ def ssoe[Carry](
         empty = jnp.zeros((*mu.shape[:-2], 0, mu.shape[-1]), mu.dtype)
         return SSOEResult(mu=mu, mu_future=empty, y_future=empty)
 
-    with numpyro.plate("time_future", h.future, dim=-2):
+    with numpyro.plate("time_future", h.future, dim=_future_plate_dim(noise_dist)):
         eps = cast(Array, numpyro.sample(f"{name}_future", noise_dist))
     _validate_future_errors(eps, mu, h.future)
     eps_scan = jnp.moveaxis(eps, -2, 0)
