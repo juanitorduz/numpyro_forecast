@@ -18,8 +18,9 @@ prek:
 # generated from docstrings; notebooks render from their stored outputs, so
 # MCMC does not re-run at build time). The per-notebook .qmd wrappers are
 # generated on the fly and removed afterwards (see scripts/build_docs.py).
+# ARGS is forwarded so CI can pass --unversioned for PR-preview builds.
 docs:
-	uv run python scripts/build_docs.py build
+	uv run python scripts/build_docs.py build $(ARGS)
 
 # Build and serve the site locally with live reload.
 docs-preview:

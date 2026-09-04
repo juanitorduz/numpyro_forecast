@@ -17,7 +17,9 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         models,
         optional,
         predictive,
+        priors,
         surgery,
+        var,
     )
 
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree

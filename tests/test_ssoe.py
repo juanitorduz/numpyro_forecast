@@ -8,10 +8,20 @@ import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import as_model, empty_covariates, svi_forecast_fn, svi_in_sample_fn
+from conftest import (
+    CarryFn,
+    as_model,
+    empty_covariates,
+    get_trace,
+    identity_step,
+    plate_frames,
+    run_horizon_body,
+    svi_forecast_fn,
+    svi_in_sample_fn,
+)
 from example_models import croston_model
 from jax import Array, random
-from numpyro.handlers import seed, substitute, trace
+from numpyro.handlers import substitute
 from numpyro.infer import MCMC, NUTS, SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
@@ -22,10 +32,7 @@ from numpyro_forecast.models import Horizon, SSOEResult, ssoe
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastModel
 
-CarryFn = Callable[[Array, Array], Any]
 Body = Callable[[Horizon, Array], SSOEResult]
-
-# --- helpers -----------------------------------------------------------------
 
 
 def _series(t: int, key: int = 1) -> Array:
@@ -41,23 +48,6 @@ def _capture(body: Body) -> tuple[ForecastModel, list[SSOEResult]]:
         box[:] = [body(h, covariates)]
 
     return as_model(wrapped), box
-
-
-def _get_trace(
-    model: ForecastModel,
-    covariates: Array,
-    data: Array | None,
-    *,
-    substitutions: dict[str, Array] | None = None,
-) -> dict[str, Any]:
-    fn = seed(model, random.PRNGKey(0))
-    if substitutions:
-        fn = substitute(fn, data=substitutions)
-    return trace(fn).get_trace(covariates, data)
-
-
-def _plate_frames(site: dict[str, Any]) -> list[tuple[str, int, int]]:
-    return [(f.name, f.dim, f.size) for f in site["cond_indep_stack"]]
 
 
 def _sites(tr: dict[str, Any]) -> set[str]:
@@ -170,11 +160,11 @@ def test_sites_training_vs_forecast(body: Body, future: int) -> None:
     covariates = _series(t_obs + future)
     data = covariates[:t_obs]
     model, box = _capture(body)
-    tr = _get_trace(model, covariates, data)
+    tr = get_trace(model, covariates, data)
     r = box[-1]
 
     model_train, box_train = _capture(body)
-    _get_trace(model_train, covariates[:t_obs], data)
+    get_trace(model_train, covariates[:t_obs], data)
     assert jnp.array_equal(box_train[-1].mu, r.mu)
     assert r.mu.shape == (t_obs, 1)
 
@@ -188,7 +178,7 @@ def test_sites_training_vs_forecast(body: Body, future: int) -> None:
     else:
         site = tr["eps_future"]
         assert site["value"].shape == (future, 1)
-        assert _plate_frames(site) == [("time_future", -2, future)]
+        assert plate_frames(site) == [("time_future", -2, future)]
         assert r.mu_future.shape == (future, 1)
         assert r.y_future.shape == (future, 1)
         assert jnp.array_equal(tr["forecast"]["value"], r.y_future)
@@ -209,8 +199,8 @@ def test_arma_matches_hand_rolled_reference(future: int) -> None:
         "sigma": jnp.asarray(0.4),
     }
     eps = 0.4 * random.normal(random.PRNGKey(3), (future,))
-    ref = _get_trace(ARMA_REFERENCE, covariates, data, substitutions={**params, "eps_future": eps})
-    new = _get_trace(
+    ref = get_trace(ARMA_REFERENCE, covariates, data, substitutions={**params, "eps_future": eps})
+    new = get_trace(
         ARMA_SSOE, covariates, data, substitutions={**params, "eps_future": eps[:, None]}
     )
     assert _sites(ref) == _sites(new)
@@ -247,7 +237,7 @@ def test_frozen_gate_forecast_is_flat(layout: str) -> None:
         return ssoe(h, "eps", y, init, step, noise, xs=pad_future(gate, h.future))
 
     model, box = _capture(body)
-    tr = _get_trace(model, empty_covariates(t_obs + future), y)
+    tr = get_trace(model, empty_covariates(t_obs + future), y)
     r = box[-1]
     eps = tr["eps_future"]["value"]
     assert eps.shape == expected
@@ -280,9 +270,9 @@ def test_two_channels_compose(rng_key: Array, fast_mcmc: dict[str, int]) -> None
         "p_inv_init",
         "p_inv_noise",
     }
-    tr_train = _get_trace(croston_model, series[:t_obs], data)
+    tr_train = get_trace(croston_model, series[:t_obs], data)
     assert _sites(tr_train) == params | {"rate", "obs", "obs_intervals"}
-    tr_fc = _get_trace(croston_model, series, data)
+    tr_fc = get_trace(croston_model, series, data)
     assert _sites(tr_fc) == params | {
         "rate",
         "obs",
@@ -292,8 +282,8 @@ def test_two_channels_compose(rng_key: Array, fast_mcmc: dict[str, int]) -> None
         "rate_future",
         "forecast",
     }
-    assert _plate_frames(tr_fc["z_eps_future"]) == [("z_time_future", -2, future)]
-    assert _plate_frames(tr_fc["p_inv_eps_future"]) == [("p_inv_time_future", -2, future)]
+    assert plate_frames(tr_fc["z_eps_future"]) == [("z_time_future", -2, future)]
+    assert plate_frames(tr_fc["p_inv_eps_future"]) == [("p_inv_time_future", -2, future)]
     assert tr_fc["forecast"]["value"].shape == (future, 1)
 
     num_samples = 5
@@ -338,7 +328,7 @@ def test_forecast_scan_feeds_drawn_errors_and_clips_carry() -> None:
         return ssoe(h, "eps", y, jnp.zeros((1,)), step, dist.Normal(0.0, 1.0))
 
     model, box = _capture(identity_body)
-    _get_trace(model, covariates, y, substitutions={"eps_future": eps})
+    get_trace(model, covariates, y, substitutions={"eps_future": eps})
     r = box[-1]
     assert jnp.array_equal(r.mu[1:], y[:-1] - r.mu[:-1])
     assert jnp.array_equal(r.mu_future[0], y[-1] - r.mu[-1])
@@ -351,7 +341,7 @@ def test_forecast_scan_feeds_drawn_errors_and_clips_carry() -> None:
         return ssoe(h, "eps", y, jnp.zeros((1,)), step, dist.Normal(0.0, 1.0))
 
     model, box = _capture(clipping_body)
-    _get_trace(model, covariates, y, substitutions={"eps_future": eps})
+    get_trace(model, covariates, y, substitutions={"eps_future": eps})
     r = box[-1]
     assert bool(jnp.any(r.y_future < 0.0))
     assert jnp.array_equal(r.mu_future[1:], jnp.clip(r.y_future[:-1], 0.0))
@@ -404,7 +394,7 @@ def test_xs_pytree_reaches_step_and_censored_obs_samples_under_data_none() -> No
         return r
 
     model, box = _capture(censored_body)
-    tr = _get_trace(model, covariates, data)
+    tr = get_trace(model, covariates, data)
     r = box[-1]
     assert jnp.allclose(r.mu[0], 0.7 * sales[0] + seasonal[0])
     assert tr["forecast"]["value"].shape == (future, 1)
@@ -419,42 +409,31 @@ def test_xs_pytree_reaches_step_and_censored_obs_samples_under_data_none() -> No
 # --- 6. validation messages ------------------------------------------------------------
 
 
-def _run_body(body: Callable[[Horizon], Any], t_obs: int = 6, future: int = 2) -> None:
-    def model(covariates: Array, data: Array | None = None) -> None:
-        body(Horizon.from_data(covariates, data))
-
-    _get_trace(model, empty_covariates(t_obs + future), jnp.zeros((t_obs, 1)))
-
-
-def _identity_step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-    return carry, lambda y_t, eps_t: carry
-
-
 T_OBS, FUTURE = 6, 2
 _ONE = jnp.zeros((1,))
 
 
 def _y_none(h: Horizon) -> None:
-    ssoe(h, "eps", None, _ONE, _identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", None, _ONE, identity_step, dist.Normal(0.0, 1.0))
 
 
 def _y_1d(h: Horizon) -> None:
-    ssoe(h, "eps", jnp.zeros((h.t_obs,)), _ONE, _identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs,)), _ONE, identity_step, dist.Normal(0.0, 1.0))
 
 
 def _y_long(h: Horizon) -> None:
-    ssoe(h, "eps", jnp.zeros((h.t_obs + 1, 1)), _ONE, _identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs + 1, 1)), _ONE, identity_step, dist.Normal(0.0, 1.0))
 
 
 def _xs_short(h: Horizon) -> None:
     y = jnp.zeros((h.t_obs, 1))
-    ssoe(h, "eps", y, _ONE, _identity_step, dist.Normal(0.0, 1.0), xs={"gate": y})
+    ssoe(h, "eps", y, _ONE, identity_step, dist.Normal(0.0, 1.0), xs={"gate": y})
 
 
 def _xs_1d(h: Horizon) -> None:
     y = jnp.zeros((h.t_obs, 1))
     xs = jnp.zeros((h.duration,))
-    ssoe(h, "eps", y, _ONE, _identity_step, dist.Normal(0.0, 1.0), xs=xs)
+    ssoe(h, "eps", y, _ONE, identity_step, dist.Normal(0.0, 1.0), xs=xs)
 
 
 def _mu_scalar(h: Horizon) -> None:
@@ -480,7 +459,7 @@ def _carry_shape(h: Horizon) -> None:
 
 def _mu_wide(h: Horizon) -> None:
     init = jnp.zeros((2, 1))
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, _identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, identity_step, dist.Normal(0.0, 1.0))
 
 
 def _mu_float(h: Horizon) -> None:
@@ -492,7 +471,7 @@ def _mu_float(h: Horizon) -> None:
 
 def _mu_int(h: Horizon) -> None:
     init = jnp.zeros((1,), dtype=jnp.int32)
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, _identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, identity_step, dist.Normal(0.0, 1.0))
 
 
 def _carry_dtype(h: Horizon) -> None:
@@ -536,7 +515,7 @@ def _carry_dtype(h: Horizon) -> None:
 )
 def test_validation_messages(body: Callable[[Horizon], None], match: str) -> None:
     with pytest.raises(ValueError, match=match):
-        _run_body(body, T_OBS, FUTURE)
+        run_horizon_body(body, T_OBS, FUTURE)
 
 
 # --- 7. the future-error shape is enforced; step must not sample -----------------------
@@ -548,9 +527,8 @@ def test_validation_messages(body: Callable[[Horizon], None], match: str) -> Non
         (lambda future: dist.Normal(0.0, 1.0), (T_OBS, 3), (3,)),
         (lambda future: dist.Normal(0.0, jnp.ones((future, 1))), (T_OBS, 3), (3,)),
         (lambda future: dist.Normal(0.0, jnp.ones((1,))), (2, T_OBS, 1), (2, 1)),
-        (lambda future: dist.Normal(0.0, 1.0).expand([3]).to_event(1), (T_OBS, 3), (3,)),
     ],
-    ids=["scalar-vs-obs3", "future-as-batch", "obs-vs-panel", "event-shaped"],
+    ids=["scalar-vs-obs3", "future-as-batch", "obs-vs-panel"],
 )
 def test_noise_shape_is_enforced(
     noise_fn: Callable[[int], dist.Distribution],
@@ -560,11 +538,76 @@ def test_noise_shape_is_enforced(
     y = jnp.zeros(y_shape)
 
     def body(h: Horizon) -> None:
-        ssoe(h, "eps", y, jnp.zeros(init_shape), _identity_step, noise_fn(h.future))
+        ssoe(h, "eps", y, jnp.zeros(init_shape), identity_step, noise_fn(h.future))
 
-    _run_body(body, T_OBS, 0)
+    run_horizon_body(body, T_OBS, 0)
     with pytest.raises(ValueError, match="time_future plate"):
-        _run_body(body, T_OBS, FUTURE)
+        run_horizon_body(body, T_OBS, FUTURE)
+
+
+def _lower_tril(k: int) -> Array:
+    """A fixed lower-triangular scale factor with a positive diagonal."""
+    return jnp.tril(0.3 * jnp.ones((k, k))) + 0.7 * jnp.eye(k)
+
+
+@pytest.mark.parametrize(
+    "noise_fn",
+    [
+        lambda: dist.Normal(0.0, 1.0).expand([3]).to_event(1),
+        lambda: dist.MultivariateNormal(jnp.zeros(3), scale_tril=_lower_tril(3)),
+    ],
+    ids=["to_event", "mvn"],
+)
+def test_event_shaped_noise_draws_rows(noise_fn: Callable[[], dist.Distribution]) -> None:
+    """A rank-1 event over ``obs`` opens ``time_future`` at ``dim=-1`` and draws ``(future, obs)``."""
+    box: list[SSOEResult] = []
+
+    def body(h: Horizon) -> None:
+        y = jnp.zeros((h.t_obs, 3))
+        box[:] = [ssoe(h, "eps", y, jnp.zeros((3,)), identity_step, noise_fn())]
+
+    tr = run_horizon_body(body, T_OBS, FUTURE, obs=3)
+    site = tr["eps_future"]
+    assert site["value"].shape == (FUTURE, 3)
+    assert plate_frames(site) == [("time_future", -1, FUTURE)]
+    r = box[-1]
+    assert r.y_future.shape == (FUTURE, 3)
+    assert jnp.allclose(r.y_future, r.mu_future + site["value"])
+
+
+def test_event_shaped_noise_batched_panel() -> None:
+    """A ``(B, t_obs, obs)`` panel takes an MVN with batch ``(B, 1)`` and draws ``(B, future, obs)``."""
+    b, k = 2, 3
+    box: list[SSOEResult] = []
+
+    def body(h: Horizon) -> None:
+        y = jnp.zeros((b, h.t_obs, k))
+        noise = dist.MultivariateNormal(jnp.zeros((b, 1, k)), scale_tril=_lower_tril(k))
+        box[:] = [ssoe(h, "eps", y, jnp.zeros((b, k)), identity_step, noise)]
+
+    tr = run_horizon_body(body, T_OBS, FUTURE)
+    assert tr["eps_future"]["value"].shape == (b, FUTURE, k)
+    assert box[-1].y_future.shape == (b, FUTURE, k)
+
+
+def test_event_rank_two_is_rejected() -> None:
+    def body(h: Horizon) -> None:
+        noise = dist.Normal(0.0, 1.0).expand([1, 3]).to_event(2)
+        ssoe(h, "eps", jnp.zeros((h.t_obs, 3)), jnp.zeros((3,)), identity_step, noise)
+
+    run_horizon_body(body, T_OBS, 0, obs=3)
+    with pytest.raises(ValueError, match=r"event rank.*to_event\(1\)"):
+        run_horizon_body(body, T_OBS, FUTURE, obs=3)
+
+
+def test_event_shaped_noise_rejects_enclosing_plate_at_dim_minus_one() -> None:
+    def body(h: Horizon) -> None:
+        noise = dist.MultivariateNormal(jnp.zeros(3), scale_tril=_lower_tril(3))
+        with numpyro.plate("series", 3, dim=-1):
+            ssoe(h, "eps", jnp.zeros((h.t_obs, 3)), jnp.zeros((3,)), identity_step, noise)
+
+    with pytest.raises(ValueError, match=r"dim=-1.*batch the series to the left"):
+        run_horizon_body(body, T_OBS, FUTURE, obs=3)
 
 
 def test_noise_dtype_is_enforced() -> None:
@@ -572,11 +615,11 @@ def test_noise_dtype_is_enforced() -> None:
 
     def body(h: Horizon) -> None:
         init = jnp.zeros((1,), dtype=jnp.float16)
-        ssoe(h, "eps", y, init, _identity_step, dist.Normal(0.0, 1.0))
+        ssoe(h, "eps", y, init, identity_step, dist.Normal(0.0, 1.0))
 
-    _run_body(body, T_OBS, 0)
+    run_horizon_body(body, T_OBS, 0)
     with pytest.raises(ValueError, match="dtype of the means"):
-        _run_body(body, T_OBS, FUTURE)
+        run_horizon_body(body, T_OBS, FUTURE)
 
 
 def test_step_must_not_sample() -> None:
@@ -588,7 +631,7 @@ def test_step_must_not_sample() -> None:
         ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
 
     with pytest.raises(ValueError, match=r"shock.*markov_series"):
-        _run_body(body, T_OBS, 0)
+        run_horizon_body(body, T_OBS, 0)
 
 
 # --- 8. backtest with the series as covariate; the frozen gate survives real rows --------
@@ -621,7 +664,7 @@ def test_backtest_with_series_as_covariate(rng_key: Array) -> None:
     full = _intermittent(t_obs + future)
     assert bool(jnp.any(full[t_obs:] > 0))  # real future rows carry demand
     data = full[:t_obs]
-    tr = _get_trace(croston_model, full[:t_obs], data)
+    tr = get_trace(croston_model, full[:t_obs], data)
     posterior = {
         name: jnp.broadcast_to(tr[name]["value"], (4,))
         for name in ("z_smoothing", "z_init", "z_noise", "p_inv_smoothing", "p_inv_init")

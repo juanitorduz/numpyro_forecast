@@ -8,6 +8,8 @@ Guidance for Claude Code when working in this repository.
 
 The model-side API is a small set of **model building blocks** (`Horizon.from_data`, `innovations`, `markov_series`, `ssoe`, `predict`): plain functions that call `numpyro.sample` and `numpyro.deterministic` on your behalf inside a model function `(covariates, data=None)`. Call them "building blocks" in headings and "model functions" in prose, never "primitives" (that word means `numpyro.primitives`: `sample`, `plate`, ...).
 
+Vector autoregression components (`var_mean`, `var_step`, `companion_matrix`, `impulse_response`) live in `var.py` and prior helpers (`minnesota_prior`) in `priors.py`; the two modules are decoupled by design (neither imports the other, they share only the `(lags, obs, obs)` coefficient layout) so a prior is always the caller's `numpyro.sample` and never baked into a recursion.
+
 Dependencies: `arviz` is a core dependency (the ArviZ export is part of the package contract), while `matplotlib` lives in the `dev` extra only. The extras are `dataframes`, `optax`, `blackjax`, `dev`, `docs`, `cuda`, plus the umbrellas `all` (everything but cuda) and `all_cuda`; there are no dependency groups, so `uv sync --extra all` is the way to build the environment.
 
 ## Conventions
@@ -104,6 +106,10 @@ Use explicit name distributions like $\text{Normal}(\mu, \sigma)$ instead of $\m
 ### American English spelling
 
 Use American English spelling. Do not use British English spelling.
+
+### Technical Writing
+
+Work on using Language ASD-STE100 simplified technical english.
 
 ## Commands
 

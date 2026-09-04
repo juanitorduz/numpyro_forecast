@@ -3,7 +3,7 @@
 import types
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
-from typing import cast
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +12,7 @@ import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import Array, random
+from numpyro.handlers import seed, substitute, trace
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
@@ -247,6 +248,45 @@ def as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
         body(Horizon.from_data(covariates, data), covariates)
 
     return model
+
+
+CarryFn = Callable[[Array, Array], Any]
+"""The ``carry_fn(y_t, eps_t)`` callable an ``ssoe`` step returns (test alias)."""
+
+
+def get_trace(
+    model: ForecastModel,
+    covariates: Array,
+    data: Array | None,
+    *,
+    substitutions: dict[str, Array] | None = None,
+) -> dict[str, Any]:
+    """Run ``model`` under a fixed seed (and optional substitutions) and return its trace."""
+    fn = seed(model, random.PRNGKey(0))
+    if substitutions:
+        fn = substitute(fn, data=substitutions)
+    return trace(fn).get_trace(covariates, data)
+
+
+def plate_frames(site: dict[str, Any]) -> list[tuple[str, int, int]]:
+    """The ``(name, dim, size)`` plate frames a traced site was sampled under."""
+    return [(f.name, f.dim, f.size) for f in site["cond_indep_stack"]]
+
+
+def identity_step(carry: Array, _: object) -> tuple[Array, CarryFn]:
+    """An ``ssoe`` step whose mean is the carry and whose carry never changes."""
+    return carry, lambda y_t, eps_t: carry
+
+
+def run_horizon_body(
+    body: Callable[[Horizon], Any], t_obs: int = 6, future: int = 2, obs: int = 1
+) -> dict[str, Any]:
+    """Trace a ``(Horizon) -> None`` body on zero data of shape ``(t_obs, obs)``."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        body(Horizon.from_data(covariates, data))
+
+    return get_trace(model, empty_covariates(t_obs + future), jnp.zeros((t_obs, obs)))
 
 
 def svi_guide_params(t: int, num_steps: int = 40) -> tuple[AutoNormal, dict[str, Array]]:
