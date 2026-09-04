@@ -18,6 +18,19 @@
 - [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
 - [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
 
+#### Vector autoregression
+> VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
+
+- [var.var_mean](https://juanitorduz.github.io/numpyro_forecast/reference/var.var_mean.html)
+- [var.var_step](https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html)
+- [var.companion_matrix](https://juanitorduz.github.io/numpyro_forecast/reference/var.companion_matrix.html)
+- [var.impulse_response](https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html)
+
+#### Priors
+> Shrinkage prior moments for coefficient arrays.
+
+- [priors.minnesota_prior](https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html)
+
 #### Distribution surgery
 > Time-axis operations on observation distributions, extensible via singledispatch.
 

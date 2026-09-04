@@ -31,6 +31,21 @@ Plain model functions that register the train/forecast sites for you.
 - `models.SSOEResult`
 - `models.predict`
 
+### Vector autoregression
+
+VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
+
+- `var.var_mean`
+- `var.var_step`
+- `var.companion_matrix`
+- `var.impulse_response`
+
+### Priors
+
+Shrinkage prior moments for coefficient arrays.
+
+- `priors.minnesota_prior`
+
 ### Distribution surgery
 
 Time-axis operations on observation distributions, extensible via singledispatch.

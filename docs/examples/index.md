@@ -116,3 +116,12 @@ TSB Method for Intermittent Demand
 
 
 Bayesian TSB method for intermittent demand: masked exponential smoothing of demand sizes and a per-period demand probability, so the forecast decays during zero-runs where Croston's stays frozen. NUTS inference and one-step-ahead cross-validation.
+
+
+<a href="../../docs/examples/var.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/var.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+Vector Autoregression (VAR)
+
+
+Fit a Bayesian VAR(2) to US macroeconomic growth rates with NUTS, forecast 30 quarters ahead, compute impulse response functions, and compare a weakly informative prior with Minnesota shrinkage.

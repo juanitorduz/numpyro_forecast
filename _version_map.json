@@ -86,6 +86,10 @@
       "dev",
       "0.3.0"
     ],
+    "docs/examples/var.html": [
+      "dev",
+      "0.3.0"
+    ],
     "index.html": [
       "dev",
       "0.3.0"
@@ -334,6 +338,10 @@
       "dev",
       "0.3.0"
     ],
+    "reference/priors.minnesota_prior.html": [
+      "dev",
+      "0.3.0"
+    ],
     "reference/surgery.prefix_condition.html": [
       "dev",
       "0.3.0"
@@ -371,6 +379,22 @@
       "0.3.0"
     ],
     "reference/typing.ModelFactory.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/var.companion_matrix.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/var.impulse_response.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/var.var_mean.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/var.var_step.html": [
       "dev",
       "0.3.0"
     ],
