@@ -32,6 +32,35 @@ The means and sampled future values produced by `ssoe()`.
 Register the observation and forecast sites for the model.
 
 
+## Vector autoregression
+
+
+VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
+
+
+[var.var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean)  
+Compute the VAR conditional mean of the next row from a lag window.
+
+[var.var_step()](var.var_step.md#numpyro_forecast.var.var_step)  
+Build the `~~numpyro_forecast.models.ssoe()` step of a VAR from its coefficients.
+
+[var.companion_matrix()](var.companion_matrix.md#numpyro_forecast.var.companion_matrix)  
+Stack the VAR coefficients into the companion form of a VAR(1).
+
+[var.impulse_response()](var.impulse_response.md#numpyro_forecast.var.impulse_response)  
+Compute the impulse responses (moving-average coefficients) of a VAR.
+
+
+## Priors
+
+
+Shrinkage prior moments for coefficient arrays.
+
+
+[priors.minnesota_prior()](priors.minnesota_prior.md#numpyro_forecast.priors.minnesota_prior)  
+Return the Minnesota (Litterman) prior moments for VAR coefficients.
+
+
 ## Distribution surgery
 
 

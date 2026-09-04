@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>convert.add_forecast_groups() – numpyro_forecast | numpyro_forecast</title>
+<title>priors.minnesota_prior() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -121,10 +121,53 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
 
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
 
-  <link rel="alternate" type="text/markdown" href="convert.add_forecast_groups.md">
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html">
-  <meta name="description" content="Attach out-of-sample forecast groups to a copy of tree.">
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+  <link rel="alternate" type="text/markdown" href="priors.minnesota_prior.md">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html">
+  <meta name="description" content="Return the Minnesota (Litterman) prior moments for VAR coefficients.">
   <script type="application/ld+json">
 [
   {
@@ -144,23 +187,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "convert.add_forecast_groups - numpyro_forecast",
+    "name": "priors.minnesota_prior - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="convert.add_forecast_groups() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Attach out-of-sample forecast groups to a copy of tree.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html">
+  <meta property="og:title" content="priors.minnesota_prior() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Return the Minnesota (Litterman) prior moments for VAR coefficients.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="convert.add_forecast_groups() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Attach out-of-sample forecast groups to a copy of tree.">
+  <meta name="twitter:title" content="priors.minnesota_prior() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Return the Minnesota (Litterman) prior moments for VAR coefficients.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -210,7 +253,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">convert.add_forecast_groups()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">priors.minnesota_prior()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -324,7 +367,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <ul id="quarto-sidebar-section-3" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/priors.minnesota_prior.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/priors.minnesota_prior.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">priors.minnesota_prior</span></a>
   </div>
 </li>
@@ -494,7 +537,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">convert.add_forecast_groups</span></a>
   </div>
 </li>
@@ -799,6 +842,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
   <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#examples" id="toc-examples" class="nav-link" data-scroll-target="#examples">Examples</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
     </div>
@@ -807,7 +852,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">priors.minnesota_prior()</span></h2>
 </div>
 
 
@@ -825,48 +870,59 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+<p>Return the Minnesota (Litterman) prior moments for VAR coefficients.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L499-L592" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/priors.py#L20-L125" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast_groups</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tree</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecast_samples</span>,</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates_future</span>,</span>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">priors</span><span class="op">.</span><span class="sig-name">minnesota_prior</span>(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">n_lags</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">n_obs</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">tightness</span>,</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">cross_shrinkage</span><span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">decay</span><span class="op">=</span><span class="st">"harmonic"</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">own_lag_mean</span><span class="op">=</span><span class="fl">1.0</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>. This is the step-by-step route for draws you produced yourself; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> attaches the same groups automatically when its <code>covariates</code> extend beyond <code>data</code>.</p>
+<p>The prior shrinks the coefficient of variable <span class="math inline">j</span> at lag <span class="math inline">l</span> in the equation of variable <span class="math inline">i</span> toward a mean that is nonzero only for the first own lag, with a standard deviation that tightens on longer lags and on cross-variable lags:</p>
+<p><span class="math display">
+m_{l, ij} = \begin{cases} m_{\text{own}} &amp; l = 1,\ i = j \\ 0 &amp; \text{otherwise} \end{cases},
+\qquad
+s_{l, ij} = \lambda \, d(l) \, \begin{cases} 1 &amp; i = j \\ \kappa &amp; i \neq j \end{cases},
+</span></p>
+<p>with <span class="math inline">d(l) = 1/l</span> (<code>decay="harmonic"</code>) or <span class="math inline">d(l) = 1/l^2</span> (<code>decay="geometric"</code>, the label Impulso uses; in Doan, Litterman and Sims it is the harmonic decay with exponent two). <span class="math inline">m_{\text{own}} = 1</span> is the random-walk belief for series in levels; use <code>own_lag_mean=0.0</code> for differenced or otherwise stationary series. The parameterization follows Impulso’s <code>MinnesotaPrior</code> (fixed tightness rather than an estimated one, no residual-scale ratios), with <code>own_lag_mean</code> as the one addition. The classic Litterman scale ratio for the coefficient of variable <span class="math inline">j</span> in equation <span class="math inline">i</span> is <span class="math inline">\sigma_i / \sigma_j</span>; apply it, when the series are on different scales, as <code>scale * (sigma[:, None] / sigma[None, :])</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">tree</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
+<dt><code><span class="doc-parameter-name">n_lags</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
-<p>A tree from <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> (its <code>observed_data</code> time coordinate is continued).</p>
+<p>Number of lags <span class="math inline">p \ge 1</span>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">forecast_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[ArrayLike, <span class="st">" sample future obs"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">n_obs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
-<p>Forecast draws shaped <code>(num_samples, future, obs)</code> from <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>.</p>
+<p>Number of series <span class="math inline">k \ge 1</span>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">covariates_future</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">tightness</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ArrayLike</span></code></dt>
 <dd>
-<p>Future covariates shaped <code>(future, covariate_dim)</code>, or any layout with time at axis <code>-2</code> when <code>covariate_dims</code> names the axes.</p>
+<p>Overall shrinkage <span class="math inline">\lambda &gt; 0</span> (the standard deviation of the first own lag). A modeling choice, so it has no default; a jax scalar is accepted, which lets a model sample it.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">cross_shrinkage</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ArrayLike</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="fl">0.5</span></span></code></dt>
 <dd>
-<p>Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g.&nbsp;datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.</p>
+<p>Relative shrinkage <span class="math inline">\kappa \in [0, 1]</span> of cross-variable lags versus own lags (<code>1.0</code> treats them alike, <code>0.0</code> pins them to the mean).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">decay</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Literal[<span class="st">"harmonic"</span>, <span class="st">"geometric"</span>]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"harmonic"</span></span></code></dt>
 <dd>
-Optional dimension names for <code>covariates_future</code>, one per axis. When omitted, the names are inherited from the tree’s <code>constant_data["covariates"]</code> variable (falling back to <code>("time", "covariate_dim")</code> if the tree carries no stored covariates), so the forecast covariates always share the in-sample axis names. When given explicitly, the names must match the stored ones. See <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>.
+<p>Lag decay <span class="math inline">d(l)</span>: <code>"harmonic"</code> for <span class="math inline">1/l</span>, <code>"geometric"</code> for <span class="math inline">1/l^2</span>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">own_lag_mean</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ArrayLike</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="fl">1.0</span></span></code></dt>
+<dd>
+Prior mean <span class="math inline">m_{\text{own}}</span> of the first own lag.
 </dd>
 </dl>
 </div>
@@ -875,9 +931,13 @@ Optional dimension names for <code>covariates_future</code>, one per axis. When 
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
+<dt><code><span class="doc-parameter-name">loc</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">"lags obs obs"</span>]</span></code></dt>
 <dd>
-A new tree with the <code>predictions</code> and <code>predictions_constant_data</code> groups added.
+<p>Prior means in the <code>phi</code> layout of <a href="var.var_step.html#numpyro_forecast.var.var_step" class="gdls-link gdls-code">var_step()</a>.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">scale</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">"lags obs obs"</span>]</span></code></dt>
+<dd>
+Prior standard deviations in the same layout.
 </dd>
 </dl>
 </div>
@@ -888,14 +948,21 @@ A new tree with the <code>predictions</code> and <code>predictions_constant_data
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.</p>
-</dd>
-<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
-<dd>
-If the resolved <code>covariate_dims</code> (explicit or inherited) do not name every <code>covariates_future</code> axis, or if explicit names disagree with the dimension names already stored on the tree’s <code>constant_data["covariates"]</code>.
+If <code>n_lags</code> or <code>n_obs</code> is below one, or a Python-number <code>tightness</code> is not positive or <code>cross_shrinkage</code> is outside <code>[0, 1]</code> (an unknown <code>decay</code> is a type error under the package’s runtime type checking).
 </dd>
 </dl>
 </div>
+</section>
+<section id="examples" class="level2 doc-examples">
+<h2 class="doc-examples">Examples</h2>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>loc, scale <span class="op">=</span> minnesota_prior(n_lags<span class="op">=</span><span class="dv">2</span>, n_obs<span class="op">=</span><span class="dv">3</span>, tightness<span class="op">=</span><span class="fl">0.5</span>, own_lag_mean<span class="op">=</span><span class="fl">0.0</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>phi <span class="op">=</span> numpyro.sample(<span class="st">"phi"</span>, dist.Normal(loc, scale).to_event(<span class="dv">3</span>))</span></code></pre></div>
+</section>
+<section id="references" class="level2 doc-references">
+<h2 class="doc-references">References</h2>
+<p>Litterman, R. B. (1986). Forecasting with Bayesian vector autoregressions: five years of experience. <em>Journal of Business &amp; Economic Statistics</em>, 4(1).</p>
+<p>Doan, T., Litterman, R. B. and Sims, C. A. (1984). Forecasting and conditional projection using realistic prior distributions. <em>Econometric Reviews</em>, 3(1).</p>
+<p>Pinder, T. <em>Impulso</em>, <code>MinnesotaPrior</code> (<a href="https://thomaspinder.github.io/Impulso/reference/generated/impulso.priors.MinnesotaPrior.html">documentation</a>, <a href="https://github.com/thomaspinder/impulso">repository</a>).</p>
 
 
 </section>

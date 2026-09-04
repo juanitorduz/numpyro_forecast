@@ -12,14 +12,6 @@ The package provides the VAR pieces as reusable components. You do not write the
 - [`companion_matrix`](https://juanitorduz.github.io/numpyro_forecast/reference/var.companion_matrix.html) gives the stability check.
 - [`minnesota_prior`](https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html) returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own `numpyro.sample` call.
 
-Some deliberate changes from the blog post:
-
-- We model the growth rates in **percent** (`100 * diff(log)`), so the `Normal(0, 1)` and `HalfNormal(1)` priors are on a sensible scale.
-- The in-sample recursion and the forecast run through [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) and [var_step](../../reference/var.var_step.md#numpyro_forecast.var.var_step) instead of a hand-written `scan`. The likelihood still conditions on the first two observations, as in the blog post.
-- The IRF section adds **orthogonalized** and **cumulative** responses.
-- A final section refits the model with a **Minnesota prior** and compares the two fits.
-- We drop the comparison with `statsmodels`, which is not a dependency of the package.
-
 The components are deliberately minimal. If you need a complete Bayesian VAR toolkit (identification schemes, variance decompositions, lag selection), see [Impulso](https://github.com/thomaspinder/impulso) by Thomas Pinder. Its `MinnesotaPrior` parameterization and its batched moving-average recursion inspired the two helpers used here.
 
 
@@ -27,6 +19,8 @@ The components are deliberately minimal. If you need a complete Bayesian VAR too
 
 
 ``` python
+import datetime as dt
+import itertools
 import warnings
 
 import arviz as az
@@ -36,7 +30,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pandas as pd
+import polars as pl
 import xarray as xr
 from jax import random
 from jaxtyping import Float
@@ -75,30 +69,40 @@ The levels trend upward and are not stationary. We take log differences, which t
 
 
 ``` python
+def quarter_label(d: dt.date) -> str:
+    """Format a date as e.g. ``1959Q2``."""
+    return f"{d.year}Q{(d.month - 1) // 3 + 1}"
+
+
 url = (
     "https://raw.githubusercontent.com/statsmodels/statsmodels/main/"
     "statsmodels/datasets/macrodata/macrodata.csv"
 )
-macro_df = pd.read_csv(url)
-dates_all = pd.PeriodIndex.from_fields(
-    year=macro_df["year"], quarter=macro_df["quarter"], freq="Q"
-).to_timestamp()
+macro_df = pl.read_csv(url)
+
 names = ["realgdp", "realcons", "realinv"]
-levels = macro_df[names].set_index(dates_all)
-y_pct = (100 * np.log(levels).diff().dropna()).rename_axis("date")
+
+y_pct = macro_df.select(
+    pl.date(pl.col("year"), (pl.col("quarter") - 1) * 3 + 1, 1).alias("date"),
+    *[(pl.col(name).log().diff() * 100).alias(name) for name in names],
+).drop_nulls()
+
 print(
-    f"shape: {y_pct.shape}, from {y_pct.index[0].to_period('Q')} to {y_pct.index[-1].to_period('Q')}"
+    f"shape: {y_pct.shape}, "
+    f"from {quarter_label(y_pct['date'][0])} to {quarter_label(y_pct['date'][-1])}"
 )
 y_pct.head()
 ```
 
 
-    shape: (202, 3), from 1959Q2 to 2009Q3
+    shape: (202, 4), from 1959Q2 to 2009Q3
 
 
-|            | realgdp   | realcons | realinv    |
+shape: (5, 4)
+
+| date       | realgdp   | realcons | realinv    |
 |------------|-----------|----------|------------|
-| date       |           |          |            |
+| date       | f64       | f64      | f64        |
 | 1959-04-01 | 2.494213  | 1.528611 | 8.021268   |
 | 1959-07-01 | -0.119295 | 1.038598 | -7.213104  |
 | 1959-10-01 | 0.349453  | 0.108401 | 3.442511   |
@@ -107,15 +111,22 @@ y_pct.head()
 
 
 ``` python
-y_pct.describe().T[["mean", "std", "min", "max"]].round(3)
+stats = ["mean", "std", "min", "max"]
+y_pct.select(names).describe().filter(pl.col("statistic").is_in(stats)).with_columns(
+    pl.col(names).round(3)
+)
 ```
 
 
-|          | mean  | std   | min     | max    |
-|----------|-------|-------|---------|--------|
-| realgdp  | 0.776 | 0.880 | -2.071  | 3.859  |
-| realcons | 0.837 | 0.694 | -2.296  | 2.773  |
-| realinv  | 0.814 | 4.685 | -19.316 | 12.209 |
+shape: (4, 4)
+
+| statistic | realgdp | realcons | realinv |
+|-----------|---------|----------|---------|
+| str       | f64     | f64      | f64     |
+| "mean"    | 0.776   | 0.837    | 0.814   |
+| "std"     | 0.88    | 0.694    | 4.685   |
+| "min"     | -2.071  | -2.296   | -19.316 |
+| "max"     | 3.859   | 2.773    | 12.209  |
 
 
 Investment growth is about five times more volatile than GDP or consumption growth. Keep this in mind for the Minnesota prior section: the three series are not on a common scale.
@@ -123,11 +134,13 @@ Investment growth is about five times more volatile than GDP or consumption grow
 
 ``` python
 fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=(12, 8), layout="constrained")
+
 for ax, name, color in zip(axes, names, ("C0", "C1", "C2"), strict=True):
-    ax.plot(y_pct.index, y_pct[name], color=color, lw=1.2, label=name)
+    ax.plot(y_pct["date"], y_pct[name], color=color, lw=1.2, label=name)
     ax.axhline(0.0, color="gray", lw=0.8, ls="--")
     ax.set(ylabel="percent")
     ax.legend(loc="upper right")
+
 axes[-1].set(xlabel="date")
 fig.suptitle("Quarterly growth rates (100 x log difference)", fontsize=16, fontweight="bold");
 ```
@@ -169,18 +182,26 @@ We write the model as a **factory** that takes the prior on \Phi as an argument.
 
 
 ``` python
+def add_quarters(d: dt.date, n: int) -> dt.date:
+    """Advance a date by ``n`` quarters (calendar-quarter arithmetic, handles year rollover)."""
+    month0 = d.month - 1 + 3 * n
+    return dt.date(d.year + month0 // 12, month0 % 12 + 1, d.day)
+
+
 p = 2
-y_all = jnp.asarray(y_pct.to_numpy())  # (202, 3), float32
+y_all = y_pct.select(names).to_jax()  # (202, 3), float32
 y_init = y_all[:p]  # the two rows that seed the lag window
 data = y_all[p:]  # the 200 rows in the likelihood
 future = 30
 covariates_train = data  # fitting: no horizon
 covariates_full = pad_future(data, future)  # forecasting: 30 unread rows fix the horizon
-dates = y_pct.index[p:]
-future_dates = pd.date_range(dates[-1], periods=future + 1, freq="QS")[1:]
-time_coord = list(dates.append(future_dates))
+
+dates = y_pct["date"][p:].to_list()
+future_dates = [add_quarters(dates[-1], h) for h in range(1, future + 1)]
+time_coord = dates + future_dates
+
 print(f"y_init: {y_init.shape}, data: {data.shape}, covariates_full: {covariates_full.shape}")
-print(f"forecast window: {future_dates[0].to_period('Q')} to {future_dates[-1].to_period('Q')}")
+print(f"forecast window: {quarter_label(future_dates[0])} to {quarter_label(future_dates[-1])}")
 ```
 
 
@@ -239,7 +260,7 @@ var_model = make_var_model(weak_prior, y_init)
 
 # Inference with NUTS
 
-We fit with four sequential NUTS chains of 1,000 warmup and 1,000 draws each. Fitting uses `covariates_train`, which has the same length as `data`, so the posterior holds only the parameters and the in-sample means. We pass the padded `covariates_full` to [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), which runs the posterior predictive for the 200 in-sample rows and the 30 forecast rows in one call and names every dimension.
+We fit with four NUTS chains of 1,000 warmup and 1,000 draws each. Fitting uses `covariates_train`, which has the same length as `data`, so the posterior holds only the parameters and the in-sample means. We pass the padded `covariates_full` to [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), which runs the posterior predictive for the 200 in-sample rows and the 30 forecast rows in one call and names every dimension.
 
 
 ``` python
@@ -250,7 +271,6 @@ def fit_nuts(rng_key: Array, model: ForecastModel, data: Array, covariates: Arra
         num_warmup=1_000,
         num_samples=1_000,
         num_chains=4,
-        chain_method="sequential",
         progress_bar=False,
     )
     mcmc.run(rng_key, covariates, data, extra_fields=("diverging",))
@@ -856,19 +876,19 @@ Group: /
 │         * series         (series) <U8 96B 'realgdp' 'realcons' 'realinv'
 │         * l_omega_dim_0  (l_omega_dim_0) int64 24B 0 1 2
 │         * l_omega_dim_1  (l_omega_dim_1) int64 24B 0 1 2
-│         * time           (time) datetime64[us] 2kB 1959-10-01 ... 2009-07-01
+│         * time           (time) object 2kB 1959-10-01 1960-01-01 ... 2009-07-01
 │         * obs_dim        (obs_dim) <U8 96B 'realgdp' 'realcons' 'realinv'
 │         * lag            (lag) int64 16B 1 2
 │         * equation       (equation) <U8 96B 'realgdp' 'realcons' 'realinv'
 │         * lagged_series  (lagged_series) <U8 96B 'realgdp' 'realcons' 'realinv'
 │       Data variables:
-│           intercept      (chain, draw, series) float32 48kB 0.1031 0.4838 ... -1.274
+│           intercept      (chain, draw, series) float32 48kB 0.1826 0.4247 ... -1.274
 │           l_omega        (chain, draw, l_omega_dim_0, l_omega_dim_1) float32 144kB ...
-│           mu_t           (chain, draw, time, obs_dim) float32 10MB 1.23 ... -0.5934
+│           mu_t           (chain, draw, time, obs_dim) float32 10MB 1.075 ... -0.5934
 │           phi            (chain, draw, lag, equation, lagged_series) float32 288kB ...
-│           sigma          (chain, draw, series) float32 48kB 0.7407 0.6767 ... 3.953
+│           sigma          (chain, draw, series) float32 48kB 0.7399 0.6636 ... 3.953
 │       Attributes:
-│           created_at:                 2026-09-04T06:35:23.810579+00:00
+│           created_at:                 2026-09-04T08:38:51.164265+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -878,12 +898,12 @@ Group: /
 │       Coordinates:
 │         * chain    (chain) int64 32B 0 1 2 3
 │         * draw     (draw) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
-│         * time     (time) datetime64[us] 2kB 1959-10-01 1960-01-01 ... 2009-07-01
+│         * time     (time) object 2kB 1959-10-01 1960-01-01 ... 2009-04-01 2009-07-01
 │         * obs_dim  (obs_dim) <U8 96B 'realgdp' 'realcons' 'realinv'
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 10MB 2.553 1.829 ... -2.806
+│           obs      (chain, draw, time, obs_dim) float32 10MB 2.397 1.841 ... -2.806
 │       Attributes:
-│           created_at:                 2026-09-04T06:35:24.034747+00:00
+│           created_at:                 2026-09-04T08:38:51.443220+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -891,12 +911,12 @@ Group: /
 ├── Group: /observed_data
 │       Dimensions:  (time: 200, obs_dim: 3)
 │       Coordinates:
-│         * time     (time) datetime64[us] 2kB 1959-10-01 1960-01-01 ... 2009-07-01
+│         * time     (time) object 2kB 1959-10-01 1960-01-01 ... 2009-04-01 2009-07-01
 │         * obs_dim  (obs_dim) <U8 96B 'realgdp' 'realcons' 'realinv'
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 0.3495 0.1084 3.443 ... 0.7265 2.02
 │       Attributes:
-│           created_at:                 2026-09-04T06:35:24.035308+00:00
+│           created_at:                 2026-09-04T08:38:51.443862+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -904,12 +924,12 @@ Group: /
 ├── Group: /constant_data
 │       Dimensions:        (time: 200, covariate_dim: 3)
 │       Coordinates:
-│         * time           (time) datetime64[us] 2kB 1959-10-01 ... 2009-07-01
+│         * time           (time) object 2kB 1959-10-01 1960-01-01 ... 2009-07-01
 │         * covariate_dim  (covariate_dim) int64 24B 0 1 2
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 2kB 0.3495 0.1084 ... 2.02
 │       Attributes:
-│           created_at:                 2026-09-04T06:35:24.035800+00:00
+│           created_at:                 2026-09-04T08:38:51.444395+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -919,12 +939,12 @@ Group: /
 │       Coordinates:
 │         * chain    (chain) int64 32B 0 1 2 3
 │         * draw     (draw) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
-│         * time     (time) datetime64[us] 240B 2009-10-01 2010-01-01 ... 2017-01-01
+│         * time     (time) object 240B 2009-10-01 2010-01-01 ... 2016-10-01 2017-01-01
 │         * obs_dim  (obs_dim) <U8 96B 'realgdp' 'realcons' 'realinv'
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 1MB 1.018 1.055 ... -2.136
+│           obs      (chain, draw, time, obs_dim) float32 1MB 1.231 1.315 ... -2.136
 │       Attributes:
-│           created_at:                 2026-09-04T06:35:24.296777+00:00
+│           created_at:                 2026-09-04T08:38:51.756720+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -932,12 +952,12 @@ Group: /
 └── Group: /predictions_constant_data
         Dimensions:        (time: 30, covariate_dim: 3)
         Coordinates:
-          * time           (time) datetime64[us] 240B 2009-10-01 ... 2017-01-01
+          * time           (time) object 240B 2009-10-01 2010-01-01 ... 2017-01-01
           * covariate_dim  (covariate_dim) int64 24B 0 1 2
         Data variables:
             covariates     (time, covariate_dim) float32 360B 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-09-04T06:35:24.297133+00:00
+            created_at:                 2026-09-04T08:38:51.757232+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1074,7 +1094,7 @@ time
 (time)
 
 
-datetime64\[us\]
+object
 
 
 1959-10-01 ... 2009-07-01
@@ -1085,7 +1105,7 @@ datetime64\[us\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['1959-10-01T00:00:00.000000', '1960-01-01T00:00:00.000000','1960-04-01T00:00:00.000000', '1960-07-01T00:00:00.000000','1960-10-01T00:00:00.000000', '1961-01-01T00:00:00.000000','1961-04-01T00:00:00.000000', '1961-07-01T00:00:00.000000','1961-10-01T00:00:00.000000', '1962-01-01T00:00:00.000000','1962-04-01T00:00:00.000000', '1962-07-01T00:00:00.000000','1962-10-01T00:00:00.000000', '1963-01-01T00:00:00.000000','1963-04-01T00:00:00.000000', '1963-07-01T00:00:00.000000','1963-10-01T00:00:00.000000', '1964-01-01T00:00:00.000000','1964-04-01T00:00:00.000000', '1964-07-01T00:00:00.000000','1964-10-01T00:00:00.000000', '1965-01-01T00:00:00.000000','1965-04-01T00:00:00.000000', '1965-07-01T00:00:00.000000','1965-10-01T00:00:00.000000', '1966-01-01T00:00:00.000000','1966-04-01T00:00:00.000000', '1966-07-01T00:00:00.000000','1966-10-01T00:00:00.000000', '1967-01-01T00:00:00.000000','1967-04-01T00:00:00.000000', '1967-07-01T00:00:00.000000','1967-10-01T00:00:00.000000', '1968-01-01T00:00:00.000000','1968-04-01T00:00:00.000000', '1968-07-01T00:00:00.000000','1968-10-01T00:00:00.000000', '1969-01-01T00:00:00.000000','1969-04-01T00:00:00.000000', '1969-07-01T00:00:00.000000','1969-10-01T00:00:00.000000', '1970-01-01T00:00:00.000000','1970-04-01T00:00:00.000000', '1970-07-01T00:00:00.000000','1970-10-01T00:00:00.000000', '1971-01-01T00:00:00.000000','1971-04-01T00:00:00.000000', '1971-07-01T00:00:00.000000','1971-10-01T00:00:00.000000', '1972-01-01T00:00:00.000000','1972-04-01T00:00:00.000000', '1972-07-01T00:00:00.000000','1972-10-01T00:00:00.000000', '1973-01-01T00:00:00.000000','1973-04-01T00:00:00.000000', '1973-07-01T00:00:00.000000','1973-10-01T00:00:00.000000', '1974-01-01T00:00:00.000000','1974-04-01T00:00:00.000000', '1974-07-01T00:00:00.000000','1974-10-01T00:00:00.000000', '1975-01-01T00:00:00.000000','1975-04-01T00:00:00.000000', '1975-07-01T00:00:00.000000','1975-10-01T00:00:00.000000', '1976-01-01T00:00:00.000000','1976-04-01T00:00:00.000000', '1976-07-01T00:00:00.000000','1976-10-01T00:00:00.000000', '1977-01-01T00:00:00.000000','1977-04-01T00:00:00.000000', '1977-07-01T00:00:00.000000','1977-10-01T00:00:00.000000', '1978-01-01T00:00:00.000000','1978-04-01T00:00:00.000000', '1978-07-01T00:00:00.000000','1978-10-01T00:00:00.000000', '1979-01-01T00:00:00.000000','1979-04-01T00:00:00.000000', '1979-07-01T00:00:00.000000','1979-10-01T00:00:00.000000', '1980-01-01T00:00:00.000000','1980-04-01T00:00:00.000000', '1980-07-01T00:00:00.000000','1980-10-01T00:00:00.000000', '1981-01-01T00:00:00.000000','1981-04-01T00:00:00.000000', '1981-07-01T00:00:00.000000','1981-10-01T00:00:00.000000', '1982-01-01T00:00:00.000000','1982-04-01T00:00:00.000000', '1982-07-01T00:00:00.000000','1982-10-01T00:00:00.000000', '1983-01-01T00:00:00.000000','1983-04-01T00:00:00.000000', '1983-07-01T00:00:00.000000','1983-10-01T00:00:00.000000', '1984-01-01T00:00:00.000000','1984-04-01T00:00:00.000000', '1984-07-01T00:00:00.000000','1984-10-01T00:00:00.000000', '1985-01-01T00:00:00.000000','1985-04-01T00:00:00.000000', '1985-07-01T00:00:00.000000','1985-10-01T00:00:00.000000', '1986-01-01T00:00:00.000000','1986-04-01T00:00:00.000000', '1986-07-01T00:00:00.000000','1986-10-01T00:00:00.000000', '1987-01-01T00:00:00.000000','1987-04-01T00:00:00.000000', '1987-07-01T00:00:00.000000','1987-10-01T00:00:00.000000', '1988-01-01T00:00:00.000000','1988-04-01T00:00:00.000000', '1988-07-01T00:00:00.000000','1988-10-01T00:00:00.000000', '1989-01-01T00:00:00.000000','1989-04-01T00:00:00.000000', '1989-07-01T00:00:00.000000','1989-10-01T00:00:00.000000', '1990-01-01T00:00:00.000000','1990-04-01T00:00:00.000000', '1990-07-01T00:00:00.000000','1990-10-01T00:00:00.000000', '1991-01-01T00:00:00.000000','1991-04-01T00:00:00.000000', '1991-07-01T00:00:00.000000','1991-10-01T00:00:00.000000', '1992-01-01T00:00:00.000000','1992-04-01T00:00:00.000000', '1992-07-01T00:00:00.000000','1992-10-01T00:00:00.000000', '1993-01-01T00:00:00.000000','1993-04-01T00:00:00.000000', '1993-07-01T00:00:00.000000','1993-10-01T00:00:00.000000', '1994-01-01T00:00:00.000000','1994-04-01T00:00:00.000000', '1994-07-01T00:00:00.000000','1994-10-01T00:00:00.000000', '1995-01-01T00:00:00.000000','1995-04-01T00:00:00.000000', '1995-07-01T00:00:00.000000','1995-10-01T00:00:00.000000', '1996-01-01T00:00:00.000000','1996-04-01T00:00:00.000000', '1996-07-01T00:00:00.000000','1996-10-01T00:00:00.000000', '1997-01-01T00:00:00.000000','1997-04-01T00:00:00.000000', '1997-07-01T00:00:00.000000','1997-10-01T00:00:00.000000', '1998-01-01T00:00:00.000000','1998-04-01T00:00:00.000000', '1998-07-01T00:00:00.000000','1998-10-01T00:00:00.000000', '1999-01-01T00:00:00.000000','1999-04-01T00:00:00.000000', '1999-07-01T00:00:00.000000','1999-10-01T00:00:00.000000', '2000-01-01T00:00:00.000000','2000-04-01T00:00:00.000000', '2000-07-01T00:00:00.000000','2000-10-01T00:00:00.000000', '2001-01-01T00:00:00.000000','2001-04-01T00:00:00.000000', '2001-07-01T00:00:00.000000','2001-10-01T00:00:00.000000', '2002-01-01T00:00:00.000000','2002-04-01T00:00:00.000000', '2002-07-01T00:00:00.000000','2002-10-01T00:00:00.000000', '2003-01-01T00:00:00.000000','2003-04-01T00:00:00.000000', '2003-07-01T00:00:00.000000','2003-10-01T00:00:00.000000', '2004-01-01T00:00:00.000000','2004-04-01T00:00:00.000000', '2004-07-01T00:00:00.000000','2004-10-01T00:00:00.000000', '2005-01-01T00:00:00.000000','2005-04-01T00:00:00.000000', '2005-07-01T00:00:00.000000','2005-10-01T00:00:00.000000', '2006-01-01T00:00:00.000000','2006-04-01T00:00:00.000000', '2006-07-01T00:00:00.000000','2006-10-01T00:00:00.000000', '2007-01-01T00:00:00.000000','2007-04-01T00:00:00.000000', '2007-07-01T00:00:00.000000','2007-10-01T00:00:00.000000', '2008-01-01T00:00:00.000000','2008-04-01T00:00:00.000000', '2008-07-01T00:00:00.000000','2008-10-01T00:00:00.000000', '2009-01-01T00:00:00.000000','2009-04-01T00:00:00.000000', '2009-07-01T00:00:00.000000'],dtype='datetime64[us]')
+    array([datetime.date(1959, 10, 1), datetime.date(1960, 1, 1),datetime.date(1960, 4, 1), datetime.date(1960, 7, 1),datetime.date(1960, 10, 1), datetime.date(1961, 1, 1),datetime.date(1961, 4, 1), datetime.date(1961, 7, 1),datetime.date(1961, 10, 1), datetime.date(1962, 1, 1),datetime.date(1962, 4, 1), datetime.date(1962, 7, 1),datetime.date(1962, 10, 1), datetime.date(1963, 1, 1),datetime.date(1963, 4, 1), datetime.date(1963, 7, 1),datetime.date(1963, 10, 1), datetime.date(1964, 1, 1),datetime.date(1964, 4, 1), datetime.date(1964, 7, 1),datetime.date(1964, 10, 1), datetime.date(1965, 1, 1),datetime.date(1965, 4, 1), datetime.date(1965, 7, 1),datetime.date(1965, 10, 1), datetime.date(1966, 1, 1),datetime.date(1966, 4, 1), datetime.date(1966, 7, 1),datetime.date(1966, 10, 1), datetime.date(1967, 1, 1),datetime.date(1967, 4, 1), datetime.date(1967, 7, 1),datetime.date(1967, 10, 1), datetime.date(1968, 1, 1),datetime.date(1968, 4, 1), datetime.date(1968, 7, 1),datetime.date(1968, 10, 1), datetime.date(1969, 1, 1),datetime.date(1969, 4, 1), datetime.date(1969, 7, 1),datetime.date(1969, 10, 1), datetime.date(1970, 1, 1),datetime.date(1970, 4, 1), datetime.date(1970, 7, 1),datetime.date(1970, 10, 1), datetime.date(1971, 1, 1),datetime.date(1971, 4, 1), datetime.date(1971, 7, 1),datetime.date(1971, 10, 1), datetime.date(1972, 1, 1),datetime.date(1972, 4, 1), datetime.date(1972, 7, 1),datetime.date(1972, 10, 1), datetime.date(1973, 1, 1),datetime.date(1973, 4, 1), datetime.date(1973, 7, 1),datetime.date(1973, 10, 1), datetime.date(1974, 1, 1),datetime.date(1974, 4, 1), datetime.date(1974, 7, 1),datetime.date(1974, 10, 1), datetime.date(1975, 1, 1),datetime.date(1975, 4, 1), datetime.date(1975, 7, 1),datetime.date(1975, 10, 1), datetime.date(1976, 1, 1),datetime.date(1976, 4, 1), datetime.date(1976, 7, 1),datetime.date(1976, 10, 1), datetime.date(1977, 1, 1),datetime.date(1977, 4, 1), datetime.date(1977, 7, 1),datetime.date(1977, 10, 1), datetime.date(1978, 1, 1),datetime.date(1978, 4, 1), datetime.date(1978, 7, 1),datetime.date(1978, 10, 1), datetime.date(1979, 1, 1),datetime.date(1979, 4, 1), datetime.date(1979, 7, 1),datetime.date(1979, 10, 1), datetime.date(1980, 1, 1),datetime.date(1980, 4, 1), datetime.date(1980, 7, 1),datetime.date(1980, 10, 1), datetime.date(1981, 1, 1),datetime.date(1981, 4, 1), datetime.date(1981, 7, 1),datetime.date(1981, 10, 1), datetime.date(1982, 1, 1),datetime.date(1982, 4, 1), datetime.date(1982, 7, 1),datetime.date(1982, 10, 1), datetime.date(1983, 1, 1),datetime.date(1983, 4, 1), datetime.date(1983, 7, 1),datetime.date(1983, 10, 1), datetime.date(1984, 1, 1),datetime.date(1984, 4, 1), datetime.date(1984, 7, 1),datetime.date(1984, 10, 1), datetime.date(1985, 1, 1),datetime.date(1985, 4, 1), datetime.date(1985, 7, 1),datetime.date(1985, 10, 1), datetime.date(1986, 1, 1),datetime.date(1986, 4, 1), datetime.date(1986, 7, 1),datetime.date(1986, 10, 1), datetime.date(1987, 1, 1),datetime.date(1987, 4, 1), datetime.date(1987, 7, 1),datetime.date(1987, 10, 1), datetime.date(1988, 1, 1),datetime.date(1988, 4, 1), datetime.date(1988, 7, 1),datetime.date(1988, 10, 1), datetime.date(1989, 1, 1),datetime.date(1989, 4, 1), datetime.date(1989, 7, 1),datetime.date(1989, 10, 1), datetime.date(1990, 1, 1),datetime.date(1990, 4, 1), datetime.date(1990, 7, 1),datetime.date(1990, 10, 1), datetime.date(1991, 1, 1),datetime.date(1991, 4, 1), datetime.date(1991, 7, 1),datetime.date(1991, 10, 1), datetime.date(1992, 1, 1),datetime.date(1992, 4, 1), datetime.date(1992, 7, 1),datetime.date(1992, 10, 1), datetime.date(1993, 1, 1),datetime.date(1993, 4, 1), datetime.date(1993, 7, 1),datetime.date(1993, 10, 1), datetime.date(1994, 1, 1),datetime.date(1994, 4, 1), datetime.date(1994, 7, 1),datetime.date(1994, 10, 1), datetime.date(1995, 1, 1),datetime.date(1995, 4, 1), datetime.date(1995, 7, 1),datetime.date(1995, 10, 1), datetime.date(1996, 1, 1),datetime.date(1996, 4, 1), datetime.date(1996, 7, 1),datetime.date(1996, 10, 1), datetime.date(1997, 1, 1),datetime.date(1997, 4, 1), datetime.date(1997, 7, 1),datetime.date(1997, 10, 1), datetime.date(1998, 1, 1),datetime.date(1998, 4, 1), datetime.date(1998, 7, 1),datetime.date(1998, 10, 1), datetime.date(1999, 1, 1),datetime.date(1999, 4, 1), datetime.date(1999, 7, 1),datetime.date(1999, 10, 1), datetime.date(2000, 1, 1),datetime.date(2000, 4, 1), datetime.date(2000, 7, 1),datetime.date(2000, 10, 1), datetime.date(2001, 1, 1),datetime.date(2001, 4, 1), datetime.date(2001, 7, 1),datetime.date(2001, 10, 1), datetime.date(2002, 1, 1),datetime.date(2002, 4, 1), datetime.date(2002, 7, 1),datetime.date(2002, 10, 1), datetime.date(2003, 1, 1),datetime.date(2003, 4, 1), datetime.date(2003, 7, 1),datetime.date(2003, 10, 1), datetime.date(2004, 1, 1),datetime.date(2004, 4, 1), datetime.date(2004, 7, 1),datetime.date(2004, 10, 1), datetime.date(2005, 1, 1),datetime.date(2005, 4, 1), datetime.date(2005, 7, 1),datetime.date(2005, 10, 1), datetime.date(2006, 1, 1),datetime.date(2006, 4, 1), datetime.date(2006, 7, 1),datetime.date(2006, 10, 1), datetime.date(2007, 1, 1),datetime.date(2007, 4, 1), datetime.date(2007, 7, 1),datetime.date(2007, 10, 1), datetime.date(2008, 1, 1),datetime.date(2008, 4, 1), datetime.date(2008, 7, 1),datetime.date(2008, 10, 1), datetime.date(2009, 1, 1),datetime.date(2009, 4, 1), datetime.date(2009, 7, 1)], dtype=object)
 
 
 obs_dim
@@ -1180,7 +1200,7 @@ intercept
 float32
 
 
-0.1031 0.4838 ... 0.5024 -1.274
+0.1826 0.4247 ... 0.5024 -1.274
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1188,7 +1208,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[ 0.10312091,  0.48383945, -2.5184457 ],[ 0.08537946,  0.41749915, -2.0667188 ],[ 0.3015044 ,  0.5285377 , -1.1337879 ],...,[ 0.22957109,  0.53891104, -1.15649   ],[ 0.20048736,  0.58098143, -1.8298321 ],[ 0.11979293,  0.4759067 , -2.026041  ]],[[ 0.387278  ,  0.63216156, -1.1776836 ],[ 0.34054992,  0.5441619 , -0.9577487 ],[ 0.15526173,  0.5583605 , -2.132862  ],...,[ 0.14866434,  0.45134223, -2.133964  ],[ 0.25439677,  0.5560107 , -1.618279  ],[ 0.34654117,  0.6562711 , -1.7046548 ]],[[ 0.35008496,  0.58374935, -1.5304705 ],[ 0.26071352,  0.5124433 , -2.0216498 ],[ 0.33600745,  0.62275714, -1.4704986 ],...,[ 0.01731343,  0.38538572, -2.4541547 ],[ 0.0379752 ,  0.42113495, -2.724741  ],[ 0.420493  ,  0.6779011 , -0.8690811 ]],[[ 0.20681006,  0.491232  , -1.6401768 ],[ 0.25413808,  0.5938929 , -2.0477955 ],[ 0.12585647,  0.5517798 , -2.1647048 ],...,[ 0.0847002 ,  0.36319292, -2.5300589 ],[ 0.4411324 ,  0.6868283 , -0.98628974],[ 0.27970895,  0.5024341 , -1.2744097 ]]],shape=(4, 1000, 3), dtype=float32)
+    array([[[ 0.18262418,  0.42467725, -1.3757132 ],[ 0.00995991,  0.47337285, -2.8731654 ],[ 0.36494485,  0.5364451 , -0.7612963 ],...,[ 0.26283634,  0.6368028 , -1.2074226 ],[ 0.17468914,  0.49328035, -2.1077285 ],[ 0.13499013,  0.4935203 , -1.8131164 ]],[[ 0.387278  ,  0.63216156, -1.1776836 ],[ 0.34054992,  0.5441619 , -0.9577487 ],[ 0.15526173,  0.5583605 , -2.132862  ],...,[ 0.14866434,  0.45134223, -2.133964  ],[ 0.25439677,  0.5560107 , -1.618279  ],[ 0.34654117,  0.6562711 , -1.7046548 ]],[[ 0.15503307,  0.561739  , -1.9879895 ],[ 0.31279776,  0.55984163, -1.4918717 ],[ 0.38439605,  0.68564695, -1.4616492 ],...,[-0.00988665,  0.49295676, -3.6588619 ],[ 0.03792755,  0.48151165, -2.41989   ],[ 0.42723405,  0.6597408 , -1.1022807 ]],[[ 0.20681006,  0.491232  , -1.6401768 ],[ 0.25413808,  0.5938929 , -2.0477955 ],[ 0.12585647,  0.5517798 , -2.1647048 ],...,[ 0.0847002 ,  0.36319292, -2.5300589 ],[ 0.4411324 ,  0.6868283 , -0.98628974],[ 0.27970895,  0.5024341 , -1.2744097 ]]],shape=(4, 1000, 3), dtype=float32)
 
 
 l_omega
@@ -1208,7 +1228,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 1.        ,  0.        ,  0.        ],[ 0.6417907 ,  0.76687986,  0.        ],[ 0.75763804, -0.40630215,  0.51078683]],[[ 1.        ,  0.        ,  0.        ],[ 0.53907204,  0.84225965,  0.        ],[ 0.774807  , -0.38447943,  0.5018463 ]],[[ 1.        ,  0.        ,  0.        ],[ 0.61685836,  0.78707415,  0.        ],[ 0.70640534, -0.46272662,  0.53560764]],...,[[ 1.        ,  0.        ,  0.        ],[ 0.5747251 ,  0.81834656,  0.        ],[ 0.7569417 , -0.35954192,  0.5456821 ]],[[ 1.        ,  0.        ,  0.        ],[ 0.6026404 ,  0.79801285,  0.        ],...[ 0.7224597 , -0.3626164 ,  0.58869463]],[[ 1.        ,  0.        ,  0.        ],[ 0.5924085 ,  0.8056378 ,  0.        ],[ 0.73225075, -0.39898995,  0.5519202 ]],...,[[ 1.        ,  0.        ,  0.        ],[ 0.5700733 ,  0.8215938 ,  0.        ],[ 0.680265  , -0.45527256,  0.574427  ]],[[ 1.        ,  0.        ,  0.        ],[ 0.5168506 ,  0.8560756 ,  0.        ],[ 0.7579728 , -0.43410873,  0.48685405]],[[ 1.        ,  0.        ,  0.        ],[ 0.5734395 ,  0.8192479 ,  0.        ],[ 0.7096048 , -0.47015053,  0.5248043 ]]]],shape=(4, 1000, 3, 3), dtype=float32)
+    array([[[[ 1.        ,  0.        ,  0.        ],[ 0.6138584 ,  0.7894162 ,  0.        ],[ 0.6829468 , -0.41667795,  0.59996927]],[[ 1.        ,  0.        ,  0.        ],[ 0.5683172 ,  0.8228096 ,  0.        ],[ 0.74024135, -0.38309976,  0.552519  ]],[[ 1.        ,  0.        ,  0.        ],[ 0.6064197 ,  0.79514474,  0.        ],[ 0.75550437, -0.43479455,  0.49006823]],...,[[ 1.        ,  0.        ,  0.        ],[ 0.5604336 ,  0.8281993 ,  0.        ],[ 0.7599967 , -0.37500888,  0.53082323]],[[ 1.        ,  0.        ,  0.        ],[ 0.6055008 ,  0.7958447 ,  0.        ],...[ 0.7224597 , -0.3626164 ,  0.58869463]],[[ 1.        ,  0.        ,  0.        ],[ 0.5924085 ,  0.8056378 ,  0.        ],[ 0.73225075, -0.39898995,  0.5519202 ]],...,[[ 1.        ,  0.        ,  0.        ],[ 0.5700733 ,  0.8215938 ,  0.        ],[ 0.680265  , -0.45527256,  0.574427  ]],[[ 1.        ,  0.        ,  0.        ],[ 0.5168506 ,  0.8560756 ,  0.        ],[ 0.7579728 , -0.43410873,  0.48685405]],[[ 1.        ,  0.        ,  0.        ],[ 0.5734395 ,  0.8192479 ,  0.        ],[ 0.7096048 , -0.47015053,  0.5248043 ]]]],shape=(4, 1000, 3, 3), dtype=float32)
 
 
 mu_t
@@ -1220,7 +1240,7 @@ mu_t
 float32
 
 
-1.23 0.937 2.923 ... 0.2422 -0.5934
+1.075 0.9959 ... 0.2422 -0.5934
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1228,7 +1248,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 1.22957206e+00,  9.36951041e-01,  2.92324996e+00],[ 4.09523547e-01,  5.84592879e-01, -1.49780476e+00],[ 6.80289149e-01,  9.14911807e-01,  5.82918644e-01],...,[-5.63477278e-01,  6.59755468e-02, -5.77602768e+00],[-2.15152189e-01,  8.62606764e-02, -3.74728346e+00],[ 1.07512325e-02,  1.71357602e-01, -3.92661452e+00]],[[ 1.15002215e+00,  1.02036440e+00,  2.25750756e+00],[ 4.17224407e-01,  6.66727960e-01, -8.49488258e-01],[ 6.09809577e-01,  8.04276705e-01,  6.65876389e-01],...,[-6.06445909e-01, -7.09824860e-02, -5.24986076e+00],[-3.88945013e-01, -1.59536630e-01, -3.38467455e+00],[-2.54566520e-01,  4.28846180e-02, -3.57793760e+00]],[[ 9.26127553e-01,  8.57550144e-01,  9.52251911e-01],[ 8.25535417e-01,  8.25240314e-01,  1.14423037e+00],[ 8.07917237e-01,  9.57043290e-01,  1.81004906e+00],...,...[-6.71539724e-01, -1.72713101e-01, -6.04820919e+00],[-2.49773532e-01,  3.52184176e-02, -2.92290854e+00],[-1.99985653e-01,  1.19639874e-01, -2.49314642e+00]],[[ 1.03318667e+00,  1.03149843e+00,  1.57637000e+00],[ 6.17027521e-01,  8.11185420e-01, -2.11775422e-01],[ 8.29617202e-01,  9.59127665e-01,  1.45605183e+00],...,[-6.51000440e-02,  2.87214845e-01, -3.69212294e+00],[ 2.73332238e-01,  1.63424850e-01, -1.77464402e+00],[ 6.36986792e-02, -7.55756497e-02, -2.90524244e+00]],[[ 1.00546420e+00,  9.81077909e-01,  1.61773241e+00],[ 6.31943345e-01,  5.92866421e-01,  3.05088401e-01],[ 8.25121164e-01,  8.24242294e-01,  1.58839142e+00],...,[-2.75592357e-01,  1.65059656e-01, -3.90044546e+00],[-1.05553180e-01,  1.50159180e-01, -2.42465210e+00],[ 4.24223453e-01,  2.42201090e-01, -5.93417764e-01]]]],shape=(4, 1000, 200, 3), dtype=float32)
+    array([[[[ 1.0751643 ,  0.995881  ,  1.2796315 ],[ 0.56156063,  0.70370865,  0.22177398],[ 0.45057875,  0.72062945,  0.13556886],...,[-0.24046992,  0.0612393 , -3.1102767 ],[ 0.59253764,  0.4359541 ,  0.84510577],[ 0.7644043 ,  0.69747823,  1.5910126 ]],[[ 0.81934077,  0.72139037,  0.7007842 ],[ 0.48236033,  0.68252045, -1.0817552 ],[ 0.6076685 ,  1.0580446 ,  0.3264134 ],...,[-0.7308303 , -0.02314478, -6.3484583 ],[-0.4686542 , -0.16294715, -4.343491  ],[-0.09091302,  0.19854322, -3.5265293 ]],[[ 1.1488541 ,  0.9242704 ,  2.2713404 ],[ 0.7181258 ,  0.815659  ,  0.5351925 ],[ 0.34526864,  0.7202967 , -0.7897938 ],...,...[-0.6715397 , -0.1727131 , -6.048209  ],[-0.24977353,  0.03521842, -2.9229085 ],[-0.19998565,  0.11963987, -2.4931464 ]],[[ 1.0331867 ,  1.0314984 ,  1.57637   ],[ 0.6170275 ,  0.8111854 , -0.21177542],[ 0.8296172 ,  0.95912766,  1.4560518 ],...,[-0.06510004,  0.28721485, -3.692123  ],[ 0.27333224,  0.16342485, -1.774644  ],[ 0.06369868, -0.07557565, -2.9052424 ]],[[ 1.0054642 ,  0.9810779 ,  1.6177324 ],[ 0.63194335,  0.5928664 ,  0.3050884 ],[ 0.82512116,  0.8242423 ,  1.5883914 ],...,[-0.27559236,  0.16505966, -3.9004455 ],[-0.10555318,  0.15015918, -2.424652  ],[ 0.42422345,  0.24220109, -0.59341776]]]],shape=(4, 1000, 200, 3), dtype=float32)
 
 
 phi
@@ -1240,7 +1260,7 @@ phi
 float32
 
 
-0.1593 0.3327 ... -0.4188 -0.2306
+0.1481 0.3919 ... -0.4188 -0.2306
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1248,7 +1268,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[[ 1.59264028e-01,  3.32699150e-01, -1.34624327e-02],[ 1.07292481e-01,  1.18322954e-01,  3.79041128e-04],[ 3.95922083e-03,  2.82214737e+00,  1.98339317e-02]],[[ 2.26703167e-01,  1.70558125e-01, -1.53789883e-02],[-4.01742682e-02,  1.84553012e-01,  2.04267744e-02],[ 1.05739319e+00,  3.25832337e-01, -6.00002594e-02]]],[[[-1.41351623e-02,  3.96661490e-01,  9.47317760e-03],[-8.28321874e-02,  2.50918269e-01,  2.69565582e-02],[-3.09514701e-02,  2.30549884e+00,  2.28634123e-02]],[[ 9.32457894e-02,  2.94214964e-01,  4.61282488e-03],[ 1.17474094e-01,  1.58482254e-01, -1.05245854e-03],[-4.26157206e-01,  1.52689993e+00,  1.02210209e-01]]],[[[-9.30558071e-02,  4.89522547e-01,  2.60236524e-02],[-8.86477083e-02,  2.97262341e-01,  3.36582996e-02],...[ 1.90733954e-01,  1.05727708e+00, -5.76436855e-02]]],[[[-9.54011306e-02,  4.19936031e-01,  1.01843560e-02],[-4.06555235e-01,  4.81446862e-01,  6.07424416e-02],[-3.60088348e-01,  2.33947492e+00,  5.48449531e-02]],[[-3.15289855e-01,  4.11998808e-01,  4.67013195e-02],[-1.68386012e-01,  2.37609491e-01,  3.62860560e-02],[-1.85074055e+00,  1.99934947e+00,  2.55002826e-01]]],[[[ 1.99789032e-01,  1.93346709e-01, -5.50857233e-03],[ 8.34673047e-02,  8.26116949e-02, -4.42230783e-04],[ 2.26533547e-01,  2.18620157e+00,  5.98717704e-02]],[[ 3.20655614e-01,  2.37151906e-02, -4.07652408e-02],[ 6.42801300e-02,  1.14650473e-01,  7.98210874e-03],[ 1.43132532e+00, -4.18848872e-01, -2.30553299e-01]]]]],shape=(4, 1000, 2, 3, 3), dtype=float32)
+    array([[[[[ 1.48138195e-01,  3.91892105e-01, -3.62785012e-02],[ 1.26874357e-01,  2.10654721e-01, -1.52236158e-02],[ 4.54887390e-01,  2.24483585e+00, -1.11218452e-01]],[[ 9.77616161e-02,  1.73690140e-01, -3.33899260e-02],[ 1.17880382e-01,  1.01819150e-01, -2.39259526e-02],[ 1.79820955e-01,  3.37647617e-01, -1.73132822e-01]]],[[[ 1.36614824e-02,  4.01900053e-01,  1.50700705e-02],[ 4.10341918e-02,  2.04905167e-01,  2.75664870e-02],[-7.88825825e-02,  2.64867234e+00,  7.33065382e-02]],[[-3.73294135e-03,  3.44688177e-01, -1.90533767e-03],[ 8.74409825e-02,  4.42863442e-02, -5.84128173e-03],[-3.55236918e-01,  1.34304726e+00,  2.18720902e-02]]],[[[-3.32524538e-01,  5.54724872e-01,  2.15893853e-02],[-1.30414441e-01,  2.79323071e-01,  1.92454420e-02],...[ 1.90733954e-01,  1.05727708e+00, -5.76436855e-02]]],[[[-9.54011306e-02,  4.19936031e-01,  1.01843560e-02],[-4.06555235e-01,  4.81446862e-01,  6.07424416e-02],[-3.60088348e-01,  2.33947492e+00,  5.48449531e-02]],[[-3.15289855e-01,  4.11998808e-01,  4.67013195e-02],[-1.68386012e-01,  2.37609491e-01,  3.62860560e-02],[-1.85074055e+00,  1.99934947e+00,  2.55002826e-01]]],[[[ 1.99789032e-01,  1.93346709e-01, -5.50857233e-03],[ 8.34673047e-02,  8.26116949e-02, -4.42230783e-04],[ 2.26533547e-01,  2.18620157e+00,  5.98717704e-02]],[[ 3.20655614e-01,  2.37151906e-02, -4.07652408e-02],[ 6.42801300e-02,  1.14650473e-01,  7.98210874e-03],[ 1.43132532e+00, -4.18848872e-01, -2.30553299e-01]]]]],shape=(4, 1000, 2, 3, 3), dtype=float32)
 
 
 sigma
@@ -1260,7 +1280,7 @@ sigma
 float32
 
 
-0.7407 0.6767 ... 0.6743 3.953
+0.7399 0.6636 3.86 ... 0.6743 3.953
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1268,14 +1288,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[0.7406692 , 0.67667633, 3.6273296 ],[0.7374479 , 0.6556411 , 3.9118762 ],[0.7568117 , 0.6377874 , 4.032502  ],...,[0.768365  , 0.65113413, 4.11802   ],[0.71377975, 0.6631159 , 3.5993726 ],[0.7242116 , 0.67774135, 3.7518559 ]],[[0.7694906 , 0.6708486 , 4.0801773 ],[0.72124636, 0.63928235, 4.02017   ],[0.77961993, 0.66288424, 3.9700599 ],...,[0.6961043 , 0.60509014, 3.7456017 ],[0.73252666, 0.6553079 , 3.8596523 ],[0.7212443 , 0.5878971 , 3.9361038 ]],[[0.77223045, 0.6382302 , 4.0157895 ],[0.6717635 , 0.6186336 , 3.761094  ],[0.72607267, 0.6460416 , 3.670212  ],...,[0.7017207 , 0.64243066, 3.6822202 ],[0.7222378 , 0.6235499 , 3.6844697 ],[0.7777623 , 0.6508724 , 4.0989356 ]],[[0.7354738 , 0.6551204 , 3.7963169 ],[0.77205557, 0.6512871 , 3.9435248 ],[0.70560795, 0.6392633 , 3.6499646 ],...,[0.73183626, 0.6721806 , 4.0497727 ],[0.7197319 , 0.62728393, 3.8620677 ],[0.7030298 , 0.67425275, 3.95273   ]]],shape=(4, 1000, 3), dtype=float32)
+    array([[[0.7399372 , 0.6636431 , 3.8603978 ],[0.77365357, 0.6616881 , 4.1457577 ],[0.7619016 , 0.6690334 , 3.7084103 ],...,[0.7923949 , 0.65217704, 4.042516  ],[0.69106686, 0.6599183 , 3.772103  ],[0.7315267 , 0.68191546, 3.8117237 ]],[[0.7694906 , 0.6708486 , 4.0801773 ],[0.72124636, 0.63928235, 4.02017   ],[0.77961993, 0.66288424, 3.9700599 ],...,[0.6961043 , 0.60509014, 3.7456017 ],[0.73252666, 0.6553079 , 3.8596523 ],[0.7212443 , 0.5878971 , 3.9361038 ]],[[0.75638425, 0.6800382 , 3.7402072 ],[0.7612609 , 0.64987725, 3.845205  ],[0.7033571 , 0.6093092 , 3.6634045 ],...,[0.8033195 , 0.668959  , 4.10603   ],[0.75730485, 0.6533364 , 3.9772904 ],[0.75211847, 0.62383014, 3.8470867 ]],[[0.7354738 , 0.6551204 , 3.7963169 ],[0.77205557, 0.6512871 , 3.9435248 ],[0.70560795, 0.6392633 , 3.6499646 ],...,[0.73183626, 0.6721806 , 4.0497727 ],[0.7197319 , 0.62728393, 3.8620677 ],[0.7030298 , 0.67425275, 3.95273   ]]],shape=(4, 1000, 3), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-04T06:35:23.810579+00:00
+2026-09-04T08:38:51.164265+00:00
 
 creation_library :  
 ArviZ
@@ -1350,7 +1370,7 @@ time
 (time)
 
 
-datetime64\[us\]
+object
 
 
 1959-10-01 ... 2009-07-01
@@ -1361,7 +1381,7 @@ datetime64\[us\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['1959-10-01T00:00:00.000000', '1960-01-01T00:00:00.000000','1960-04-01T00:00:00.000000', '1960-07-01T00:00:00.000000','1960-10-01T00:00:00.000000', '1961-01-01T00:00:00.000000','1961-04-01T00:00:00.000000', '1961-07-01T00:00:00.000000','1961-10-01T00:00:00.000000', '1962-01-01T00:00:00.000000','1962-04-01T00:00:00.000000', '1962-07-01T00:00:00.000000','1962-10-01T00:00:00.000000', '1963-01-01T00:00:00.000000','1963-04-01T00:00:00.000000', '1963-07-01T00:00:00.000000','1963-10-01T00:00:00.000000', '1964-01-01T00:00:00.000000','1964-04-01T00:00:00.000000', '1964-07-01T00:00:00.000000','1964-10-01T00:00:00.000000', '1965-01-01T00:00:00.000000','1965-04-01T00:00:00.000000', '1965-07-01T00:00:00.000000','1965-10-01T00:00:00.000000', '1966-01-01T00:00:00.000000','1966-04-01T00:00:00.000000', '1966-07-01T00:00:00.000000','1966-10-01T00:00:00.000000', '1967-01-01T00:00:00.000000','1967-04-01T00:00:00.000000', '1967-07-01T00:00:00.000000','1967-10-01T00:00:00.000000', '1968-01-01T00:00:00.000000','1968-04-01T00:00:00.000000', '1968-07-01T00:00:00.000000','1968-10-01T00:00:00.000000', '1969-01-01T00:00:00.000000','1969-04-01T00:00:00.000000', '1969-07-01T00:00:00.000000','1969-10-01T00:00:00.000000', '1970-01-01T00:00:00.000000','1970-04-01T00:00:00.000000', '1970-07-01T00:00:00.000000','1970-10-01T00:00:00.000000', '1971-01-01T00:00:00.000000','1971-04-01T00:00:00.000000', '1971-07-01T00:00:00.000000','1971-10-01T00:00:00.000000', '1972-01-01T00:00:00.000000','1972-04-01T00:00:00.000000', '1972-07-01T00:00:00.000000','1972-10-01T00:00:00.000000', '1973-01-01T00:00:00.000000','1973-04-01T00:00:00.000000', '1973-07-01T00:00:00.000000','1973-10-01T00:00:00.000000', '1974-01-01T00:00:00.000000','1974-04-01T00:00:00.000000', '1974-07-01T00:00:00.000000','1974-10-01T00:00:00.000000', '1975-01-01T00:00:00.000000','1975-04-01T00:00:00.000000', '1975-07-01T00:00:00.000000','1975-10-01T00:00:00.000000', '1976-01-01T00:00:00.000000','1976-04-01T00:00:00.000000', '1976-07-01T00:00:00.000000','1976-10-01T00:00:00.000000', '1977-01-01T00:00:00.000000','1977-04-01T00:00:00.000000', '1977-07-01T00:00:00.000000','1977-10-01T00:00:00.000000', '1978-01-01T00:00:00.000000','1978-04-01T00:00:00.000000', '1978-07-01T00:00:00.000000','1978-10-01T00:00:00.000000', '1979-01-01T00:00:00.000000','1979-04-01T00:00:00.000000', '1979-07-01T00:00:00.000000','1979-10-01T00:00:00.000000', '1980-01-01T00:00:00.000000','1980-04-01T00:00:00.000000', '1980-07-01T00:00:00.000000','1980-10-01T00:00:00.000000', '1981-01-01T00:00:00.000000','1981-04-01T00:00:00.000000', '1981-07-01T00:00:00.000000','1981-10-01T00:00:00.000000', '1982-01-01T00:00:00.000000','1982-04-01T00:00:00.000000', '1982-07-01T00:00:00.000000','1982-10-01T00:00:00.000000', '1983-01-01T00:00:00.000000','1983-04-01T00:00:00.000000', '1983-07-01T00:00:00.000000','1983-10-01T00:00:00.000000', '1984-01-01T00:00:00.000000','1984-04-01T00:00:00.000000', '1984-07-01T00:00:00.000000','1984-10-01T00:00:00.000000', '1985-01-01T00:00:00.000000','1985-04-01T00:00:00.000000', '1985-07-01T00:00:00.000000','1985-10-01T00:00:00.000000', '1986-01-01T00:00:00.000000','1986-04-01T00:00:00.000000', '1986-07-01T00:00:00.000000','1986-10-01T00:00:00.000000', '1987-01-01T00:00:00.000000','1987-04-01T00:00:00.000000', '1987-07-01T00:00:00.000000','1987-10-01T00:00:00.000000', '1988-01-01T00:00:00.000000','1988-04-01T00:00:00.000000', '1988-07-01T00:00:00.000000','1988-10-01T00:00:00.000000', '1989-01-01T00:00:00.000000','1989-04-01T00:00:00.000000', '1989-07-01T00:00:00.000000','1989-10-01T00:00:00.000000', '1990-01-01T00:00:00.000000','1990-04-01T00:00:00.000000', '1990-07-01T00:00:00.000000','1990-10-01T00:00:00.000000', '1991-01-01T00:00:00.000000','1991-04-01T00:00:00.000000', '1991-07-01T00:00:00.000000','1991-10-01T00:00:00.000000', '1992-01-01T00:00:00.000000','1992-04-01T00:00:00.000000', '1992-07-01T00:00:00.000000','1992-10-01T00:00:00.000000', '1993-01-01T00:00:00.000000','1993-04-01T00:00:00.000000', '1993-07-01T00:00:00.000000','1993-10-01T00:00:00.000000', '1994-01-01T00:00:00.000000','1994-04-01T00:00:00.000000', '1994-07-01T00:00:00.000000','1994-10-01T00:00:00.000000', '1995-01-01T00:00:00.000000','1995-04-01T00:00:00.000000', '1995-07-01T00:00:00.000000','1995-10-01T00:00:00.000000', '1996-01-01T00:00:00.000000','1996-04-01T00:00:00.000000', '1996-07-01T00:00:00.000000','1996-10-01T00:00:00.000000', '1997-01-01T00:00:00.000000','1997-04-01T00:00:00.000000', '1997-07-01T00:00:00.000000','1997-10-01T00:00:00.000000', '1998-01-01T00:00:00.000000','1998-04-01T00:00:00.000000', '1998-07-01T00:00:00.000000','1998-10-01T00:00:00.000000', '1999-01-01T00:00:00.000000','1999-04-01T00:00:00.000000', '1999-07-01T00:00:00.000000','1999-10-01T00:00:00.000000', '2000-01-01T00:00:00.000000','2000-04-01T00:00:00.000000', '2000-07-01T00:00:00.000000','2000-10-01T00:00:00.000000', '2001-01-01T00:00:00.000000','2001-04-01T00:00:00.000000', '2001-07-01T00:00:00.000000','2001-10-01T00:00:00.000000', '2002-01-01T00:00:00.000000','2002-04-01T00:00:00.000000', '2002-07-01T00:00:00.000000','2002-10-01T00:00:00.000000', '2003-01-01T00:00:00.000000','2003-04-01T00:00:00.000000', '2003-07-01T00:00:00.000000','2003-10-01T00:00:00.000000', '2004-01-01T00:00:00.000000','2004-04-01T00:00:00.000000', '2004-07-01T00:00:00.000000','2004-10-01T00:00:00.000000', '2005-01-01T00:00:00.000000','2005-04-01T00:00:00.000000', '2005-07-01T00:00:00.000000','2005-10-01T00:00:00.000000', '2006-01-01T00:00:00.000000','2006-04-01T00:00:00.000000', '2006-07-01T00:00:00.000000','2006-10-01T00:00:00.000000', '2007-01-01T00:00:00.000000','2007-04-01T00:00:00.000000', '2007-07-01T00:00:00.000000','2007-10-01T00:00:00.000000', '2008-01-01T00:00:00.000000','2008-04-01T00:00:00.000000', '2008-07-01T00:00:00.000000','2008-10-01T00:00:00.000000', '2009-01-01T00:00:00.000000','2009-04-01T00:00:00.000000', '2009-07-01T00:00:00.000000'],dtype='datetime64[us]')
+e(1974, 10, 1), datetime.date(1975, 1, 1),datetime.date(1975, 4, 1), datetime.date(1975, 7, 1),datetime.date(1975, 10, 1), datetime.date(1976, 1, 1),datetime.date(1976, 4, 1), datetime.date(1976, 7, 1),datetime.date(1976, 10, 1), datetime.date(1977, 1, 1),datetime.date(1977, 4, 1), datetime.date(1977, 7, 1),datetime.date(1977, 10, 1), datetime.date(1978, 1, 1),datetime.date(1978, 4, 1), datetime.date(1978, 7, 1),datetime.date(1978, 10, 1), datetime.date(1979, 1, 1),datetime.date(1979, 4, 1), datetime.date(1979, 7, 1),datetime.date(1979, 10, 1), datetime.date(1980, 1, 1),datetime.date(1980, 4, 1), datetime.date(1980, 7, 1),datetime.date(1980, 10, 1), datetime.date(1981, 1, 1),datetime.date(1981, 4, 1), datetime.date(1981, 7, 1),datetime.date(1981, 10, 1), datetime.date(1982, 1, 1),datetime.date(1982, 4, 1), datetime.date(1982, 7, 1),datetime.date(1982, 10, 1), datetime.date(1983, 1, 1),datetime.date(1983, 4, 1), datetime.date(1983, 7, 1),datetime.date(1983, 10, 1), datetime.date(1984, 1, 1),datetime.date(1984, 4, 1), datetime.date(1984, 7, 1),datetime.date(1984, 10, 1), datetime.date(1985, 1, 1),datetime.date(1985, 4, 1), datetime.date(1985, 7, 1),datetime.date(1985, 10, 1), datetime.date(1986, 1, 1),datetime.date(1986, 4, 1), datetime.date(1986, 7, 1),datetime.date(1986, 10, 1), datetime.date(1987, 1, 1),datetime.date(1987, 4, 1), datetime.date(1987, 7, 1),datetime.date(1987, 10, 1), datetime.date(1988, 1, 1),datetime.date(1988, 4, 1), datetime.date(1988, 7, 1),datetime.date(1988, 10, 1), datetime.date(1989, 1, 1),datetime.date(1989, 4, 1), datetime.date(1989, 7, 1),datetime.date(1989, 10, 1), datetime.date(1990, 1, 1),datetime.date(1990, 4, 1), datetime.date(1990, 7, 1),datetime.date(1990, 10, 1), datetime.date(1991, 1, 1),datetime.date(1991, 4, 1), datetime.date(1991, 7, 1),datetime.date(1991, 10, 1), datetime.date(1992, 1, 1),datetime.date(1992, 4, 1), datetime.date(1992, 7, 1),datetime.date(1992, 10, 1), datetime.date(1993, 1, 1),datetime.date(1993, 4, 1), datetime.date(1993, 7, 1),datetime.date(1993, 10, 1), datetime.date(1994, 1, 1),datetime.date(1994, 4, 1), datetime.date(1994, 7, 1),datetime.date(1994, 10, 1), datetime.date(1995, 1, 1),datetime.date(1995, 4, 1), datetime.date(1995, 7, 1),datetime.date(1995, 10, 1), datetime.date(1996, 1, 1),datetime.date(1996, 4, 1), datetime.date(1996, 7, 1),datetime.date(1996, 10, 1), datetime.date(1997, 1, 1),datetime.date(1997, 4, 1), datetime.date(1997, 7, 1),datetime.date(1997, 10, 1), datetime.date(1998, 1, 1),datetime.date(1998, 4, 1), datetime.date(1998, 7, 1),datetime.date(1998, 10, 1), datetime.date(1999, 1, 1),datetime.date(1999, 4, 1), datetime.date(1999, 7, 1),datetime.date(1999, 10, 1), datetime.date(2000, 1, 1),datetime.date(2000, 4, 1), datetime.date(2000, 7, 1),datetime.date(2000, 10, 1), datetime.date(2001, 1, 1),datetime.date(2001, 4, 1), datetime.date(2001, 7, 1),datetime.date(2001, 10, 1), datetime.date(2002, 1, 1),datetime.date(2002, 4, 1), datetime.date(2002, 7, 1),datetime.date(2002, 10, 1), datetime.date(2003, 1, 1),datetime.date(2003, 4, 1), datetime.date(2003, 7, 1),datetime.date(2003, 10, 1), datetime.date(2004, 1, 1),datetime.date(2004, 4, 1), datetime.date(2004, 7, 1),datetime.date(2004, 10, 1), datetime.date(2005, 1, 1),datetime.date(2005, 4, 1), datetime.date(2005, 7, 1),datetime.date(2005, 10, 1), datetime.date(2006, 1, 1),datetime.date(2006, 4, 1), datetime.date(2006, 7, 1),datetime.date(2006, 10, 1), datetime.date(2007, 1, 1),datetime.date(2007, 4, 1), datetime.date(2007, 7, 1),datetime.date(2007, 10, 1), datetime.date(2008, 1, 1),datetime.date(2008, 4, 1), datetime.date(2008, 7, 1),datetime.date(2008, 10, 1), datetime.date(2009, 1, 1),datetime.date(2009, 4, 1), datetime.date(2009, 7, 1)], dtype=object)
 
 
 obs_dim
@@ -1396,7 +1416,7 @@ obs
 float32
 
 
-2.553 1.829 4.206 ... 0.1912 -2.806
+2.397 1.841 1.509 ... 0.1912 -2.806
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1404,14 +1424,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 2.55257416e+00,  1.82891822e+00,  4.20636845e+00],[ 8.53146672e-01,  2.60665327e-01,  1.82302225e+00],[ 6.20439112e-01,  9.39159095e-01, -8.61024976e-01],...,[-3.10105145e-01,  1.90878034e-01,  3.18040848e-02],[ 8.75406444e-01,  3.71257335e-01,  4.11027431e-01],[ 2.72654414e-01,  8.46521497e-01, -4.98561192e+00]],[[-4.46777344e-02, -1.34004831e-01, -2.79577494e-01],[ 1.06404674e+00,  1.16493189e+00,  3.95359325e+00],[ 9.20493066e-01,  1.55999768e+00,  3.00515151e+00],...,[-1.77613413e+00,  2.61677474e-01, -1.04782982e+01],[ 3.94291431e-01,  3.14649373e-01, -1.15585995e+00],[ 1.73926353e-04,  3.44963968e-01,  4.24232006e-01]],[[ 9.77861881e-02, -9.16321874e-02, -2.01237440e+00],[-2.95656919e-03,  3.80850524e-01, -3.88230276e+00],[ 1.12679172e+00,  1.19775343e+00, -4.63624239e-01],...,...[-7.85625279e-01,  7.17735946e-01, -8.73674393e+00],[-3.05579066e-01,  2.19690353e-01, -5.61023712e+00],[-1.03030455e+00,  8.42356741e-01, -1.04273682e+01]],[[ 1.13297510e+00,  1.16376901e+00,  9.57052588e-01],[ 1.25400400e+00,  1.60922110e-01,  6.12456274e+00],[ 7.14956641e-01,  1.22657061e+00,  1.54611742e+00],...,[ 3.97115946e-03,  4.28220212e-01, -5.45101929e+00],[-2.11458504e-02,  5.01457676e-02, -6.76644802e-01],[ 6.92328691e-01,  8.06323707e-01, -5.01065493e-01]],[[ 2.60350943e+00,  2.61257887e+00,  3.84846926e+00],[ 6.75936937e-02,  7.36723423e-01, -6.39577675e+00],[ 1.91653252e-01,  7.21629381e-01, -3.08792830e+00],...,[ 1.43772638e+00,  1.20329142e+00,  7.97855377e-01],[ 1.28967571e+00,  1.81867361e+00,  2.63391066e+00],[ 8.78272951e-02,  1.91163883e-01, -2.80562782e+00]]]],shape=(4, 1000, 200, 3), dtype=float32)
+    array([[[[ 2.39685869e+00,  1.84090698e+00,  1.50879526e+00],[ 1.00474524e+00,  3.58084679e-01,  3.63134432e+00],[ 3.90787870e-01,  7.47617841e-01, -1.57816327e+00],...,[ 1.26518160e-02,  1.76712930e-01,  3.86593437e+00],[ 1.68201852e+00,  6.77952230e-01,  4.70714951e+00],[ 1.02604866e+00,  1.36811638e+00,  2.19665885e-01]],[[-4.34013903e-01, -4.61416483e-01, -1.67746758e+00],[ 1.16093898e+00,  1.19790626e+00,  4.16909504e+00],[ 9.33605313e-01,  1.81474578e+00,  3.04200220e+00],...,[-1.95794547e+00,  2.61071831e-01, -1.14376488e+01],[ 3.53035957e-01,  3.33862275e-01, -2.20977378e+00],[ 1.76334113e-01,  5.05898476e-01,  1.03597307e+00]],[[ 3.14941764e-01, -6.93475604e-02, -6.22571230e-01],[-1.15938246e-01,  3.56995881e-01, -4.13632870e+00],[ 6.66287720e-01,  9.70663011e-01, -2.53870726e+00],...,...[-7.85625279e-01,  7.17735946e-01, -8.73674393e+00],[-3.05579066e-01,  2.19690353e-01, -5.61023712e+00],[-1.03030455e+00,  8.42356741e-01, -1.04273682e+01]],[[ 1.13297510e+00,  1.16376901e+00,  9.57052588e-01],[ 1.25400400e+00,  1.60922110e-01,  6.12456274e+00],[ 7.14956641e-01,  1.22657061e+00,  1.54611742e+00],...,[ 3.97115946e-03,  4.28220212e-01, -5.45101929e+00],[-2.11458504e-02,  5.01457676e-02, -6.76644802e-01],[ 6.92328691e-01,  8.06323707e-01, -5.01065493e-01]],[[ 2.60350943e+00,  2.61257887e+00,  3.84846926e+00],[ 6.75936937e-02,  7.36723423e-01, -6.39577675e+00],[ 1.91653252e-01,  7.21629381e-01, -3.08792830e+00],...,[ 1.43772638e+00,  1.20329142e+00,  7.97855377e-01],[ 1.28967571e+00,  1.81867361e+00,  2.63391066e+00],[ 8.78272951e-02,  1.91163883e-01, -2.80562782e+00]]]],shape=(4, 1000, 200, 3), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-04T06:35:24.034747+00:00
+2026-09-04T08:38:51.443220+00:00
 
 creation_library :  
 ArviZ
@@ -1444,7 +1464,7 @@ time
 (time)
 
 
-datetime64\[us\]
+object
 
 
 1959-10-01 ... 2009-07-01
@@ -1455,7 +1475,7 @@ datetime64\[us\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['1959-10-01T00:00:00.000000', '1960-01-01T00:00:00.000000','1960-04-01T00:00:00.000000', '1960-07-01T00:00:00.000000','1960-10-01T00:00:00.000000', '1961-01-01T00:00:00.000000','1961-04-01T00:00:00.000000', '1961-07-01T00:00:00.000000','1961-10-01T00:00:00.000000', '1962-01-01T00:00:00.000000','1962-04-01T00:00:00.000000', '1962-07-01T00:00:00.000000','1962-10-01T00:00:00.000000', '1963-01-01T00:00:00.000000','1963-04-01T00:00:00.000000', '1963-07-01T00:00:00.000000','1963-10-01T00:00:00.000000', '1964-01-01T00:00:00.000000','1964-04-01T00:00:00.000000', '1964-07-01T00:00:00.000000','1964-10-01T00:00:00.000000', '1965-01-01T00:00:00.000000','1965-04-01T00:00:00.000000', '1965-07-01T00:00:00.000000','1965-10-01T00:00:00.000000', '1966-01-01T00:00:00.000000','1966-04-01T00:00:00.000000', '1966-07-01T00:00:00.000000','1966-10-01T00:00:00.000000', '1967-01-01T00:00:00.000000','1967-04-01T00:00:00.000000', '1967-07-01T00:00:00.000000','1967-10-01T00:00:00.000000', '1968-01-01T00:00:00.000000','1968-04-01T00:00:00.000000', '1968-07-01T00:00:00.000000','1968-10-01T00:00:00.000000', '1969-01-01T00:00:00.000000','1969-04-01T00:00:00.000000', '1969-07-01T00:00:00.000000','1969-10-01T00:00:00.000000', '1970-01-01T00:00:00.000000','1970-04-01T00:00:00.000000', '1970-07-01T00:00:00.000000','1970-10-01T00:00:00.000000', '1971-01-01T00:00:00.000000','1971-04-01T00:00:00.000000', '1971-07-01T00:00:00.000000','1971-10-01T00:00:00.000000', '1972-01-01T00:00:00.000000','1972-04-01T00:00:00.000000', '1972-07-01T00:00:00.000000','1972-10-01T00:00:00.000000', '1973-01-01T00:00:00.000000','1973-04-01T00:00:00.000000', '1973-07-01T00:00:00.000000','1973-10-01T00:00:00.000000', '1974-01-01T00:00:00.000000','1974-04-01T00:00:00.000000', '1974-07-01T00:00:00.000000','1974-10-01T00:00:00.000000', '1975-01-01T00:00:00.000000','1975-04-01T00:00:00.000000', '1975-07-01T00:00:00.000000','1975-10-01T00:00:00.000000', '1976-01-01T00:00:00.000000','1976-04-01T00:00:00.000000', '1976-07-01T00:00:00.000000','1976-10-01T00:00:00.000000', '1977-01-01T00:00:00.000000','1977-04-01T00:00:00.000000', '1977-07-01T00:00:00.000000','1977-10-01T00:00:00.000000', '1978-01-01T00:00:00.000000','1978-04-01T00:00:00.000000', '1978-07-01T00:00:00.000000','1978-10-01T00:00:00.000000', '1979-01-01T00:00:00.000000','1979-04-01T00:00:00.000000', '1979-07-01T00:00:00.000000','1979-10-01T00:00:00.000000', '1980-01-01T00:00:00.000000','1980-04-01T00:00:00.000000', '1980-07-01T00:00:00.000000','1980-10-01T00:00:00.000000', '1981-01-01T00:00:00.000000','1981-04-01T00:00:00.000000', '1981-07-01T00:00:00.000000','1981-10-01T00:00:00.000000', '1982-01-01T00:00:00.000000','1982-04-01T00:00:00.000000', '1982-07-01T00:00:00.000000','1982-10-01T00:00:00.000000', '1983-01-01T00:00:00.000000','1983-04-01T00:00:00.000000', '1983-07-01T00:00:00.000000','1983-10-01T00:00:00.000000', '1984-01-01T00:00:00.000000','1984-04-01T00:00:00.000000', '1984-07-01T00:00:00.000000','1984-10-01T00:00:00.000000', '1985-01-01T00:00:00.000000','1985-04-01T00:00:00.000000', '1985-07-01T00:00:00.000000','1985-10-01T00:00:00.000000', '1986-01-01T00:00:00.000000','1986-04-01T00:00:00.000000', '1986-07-01T00:00:00.000000','1986-10-01T00:00:00.000000', '1987-01-01T00:00:00.000000','1987-04-01T00:00:00.000000', '1987-07-01T00:00:00.000000','1987-10-01T00:00:00.000000', '1988-01-01T00:00:00.000000','1988-04-01T00:00:00.000000', '1988-07-01T00:00:00.000000','1988-10-01T00:00:00.000000', '1989-01-01T00:00:00.000000','1989-04-01T00:00:00.000000', '1989-07-01T00:00:00.000000','1989-10-01T00:00:00.000000', '1990-01-01T00:00:00.000000','1990-04-01T00:00:00.000000', '1990-07-01T00:00:00.000000','1990-10-01T00:00:00.000000', '1991-01-01T00:00:00.000000','1991-04-01T00:00:00.000000', '1991-07-01T00:00:00.000000','1991-10-01T00:00:00.000000', '1992-01-01T00:00:00.000000','1992-04-01T00:00:00.000000', '1992-07-01T00:00:00.000000','1992-10-01T00:00:00.000000', '1993-01-01T00:00:00.000000','1993-04-01T00:00:00.000000', '1993-07-01T00:00:00.000000','1993-10-01T00:00:00.000000', '1994-01-01T00:00:00.000000','1994-04-01T00:00:00.000000', '1994-07-01T00:00:00.000000','1994-10-01T00:00:00.000000', '1995-01-01T00:00:00.000000','1995-04-01T00:00:00.000000', '1995-07-01T00:00:00.000000','1995-10-01T00:00:00.000000', '1996-01-01T00:00:00.000000','1996-04-01T00:00:00.000000', '1996-07-01T00:00:00.000000','1996-10-01T00:00:00.000000', '1997-01-01T00:00:00.000000','1997-04-01T00:00:00.000000', '1997-07-01T00:00:00.000000','1997-10-01T00:00:00.000000', '1998-01-01T00:00:00.000000','1998-04-01T00:00:00.000000', '1998-07-01T00:00:00.000000','1998-10-01T00:00:00.000000', '1999-01-01T00:00:00.000000','1999-04-01T00:00:00.000000', '1999-07-01T00:00:00.000000','1999-10-01T00:00:00.000000', '2000-01-01T00:00:00.000000','2000-04-01T00:00:00.000000', '2000-07-01T00:00:00.000000','2000-10-01T00:00:00.000000', '2001-01-01T00:00:00.000000','2001-04-01T00:00:00.000000', '2001-07-01T00:00:00.000000','2001-10-01T00:00:00.000000', '2002-01-01T00:00:00.000000','2002-04-01T00:00:00.000000', '2002-07-01T00:00:00.000000','2002-10-01T00:00:00.000000', '2003-01-01T00:00:00.000000','2003-04-01T00:00:00.000000', '2003-07-01T00:00:00.000000','2003-10-01T00:00:00.000000', '2004-01-01T00:00:00.000000','2004-04-01T00:00:00.000000', '2004-07-01T00:00:00.000000','2004-10-01T00:00:00.000000', '2005-01-01T00:00:00.000000','2005-04-01T00:00:00.000000', '2005-07-01T00:00:00.000000','2005-10-01T00:00:00.000000', '2006-01-01T00:00:00.000000','2006-04-01T00:00:00.000000', '2006-07-01T00:00:00.000000','2006-10-01T00:00:00.000000', '2007-01-01T00:00:00.000000','2007-04-01T00:00:00.000000', '2007-07-01T00:00:00.000000','2007-10-01T00:00:00.000000', '2008-01-01T00:00:00.000000','2008-04-01T00:00:00.000000', '2008-07-01T00:00:00.000000','2008-10-01T00:00:00.000000', '2009-01-01T00:00:00.000000','2009-04-01T00:00:00.000000', '2009-07-01T00:00:00.000000'],dtype='datetime64[us]')
+    array([datetime.date(1959, 10, 1), datetime.date(1960, 1, 1),datetime.date(1960, 4, 1), datetime.date(1960, 7, 1),datetime.date(1960, 10, 1), datetime.date(1961, 1, 1),datetime.date(1961, 4, 1), datetime.date(1961, 7, 1),datetime.date(1961, 10, 1), datetime.date(1962, 1, 1),datetime.date(1962, 4, 1), datetime.date(1962, 7, 1),datetime.date(1962, 10, 1), datetime.date(1963, 1, 1),datetime.date(1963, 4, 1), datetime.date(1963, 7, 1),datetime.date(1963, 10, 1), datetime.date(1964, 1, 1),datetime.date(1964, 4, 1), datetime.date(1964, 7, 1),datetime.date(1964, 10, 1), datetime.date(1965, 1, 1),datetime.date(1965, 4, 1), datetime.date(1965, 7, 1),datetime.date(1965, 10, 1), datetime.date(1966, 1, 1),datetime.date(1966, 4, 1), datetime.date(1966, 7, 1),datetime.date(1966, 10, 1), datetime.date(1967, 1, 1),datetime.date(1967, 4, 1), datetime.date(1967, 7, 1),datetime.date(1967, 10, 1), datetime.date(1968, 1, 1),datetime.date(1968, 4, 1), datetime.date(1968, 7, 1),datetime.date(1968, 10, 1), datetime.date(1969, 1, 1),datetime.date(1969, 4, 1), datetime.date(1969, 7, 1),datetime.date(1969, 10, 1), datetime.date(1970, 1, 1),datetime.date(1970, 4, 1), datetime.date(1970, 7, 1),datetime.date(1970, 10, 1), datetime.date(1971, 1, 1),datetime.date(1971, 4, 1), datetime.date(1971, 7, 1),datetime.date(1971, 10, 1), datetime.date(1972, 1, 1),datetime.date(1972, 4, 1), datetime.date(1972, 7, 1),datetime.date(1972, 10, 1), datetime.date(1973, 1, 1),datetime.date(1973, 4, 1), datetime.date(1973, 7, 1),datetime.date(1973, 10, 1), datetime.date(1974, 1, 1),datetime.date(1974, 4, 1), datetime.date(1974, 7, 1),datetime.date(1974, 10, 1), datetime.date(1975, 1, 1),datetime.date(1975, 4, 1), datetime.date(1975, 7, 1),datetime.date(1975, 10, 1), datetime.date(1976, 1, 1),datetime.date(1976, 4, 1), datetime.date(1976, 7, 1),datetime.date(1976, 10, 1), datetime.date(1977, 1, 1),datetime.date(1977, 4, 1), datetime.date(1977, 7, 1),datetime.date(1977, 10, 1), datetime.date(1978, 1, 1),datetime.date(1978, 4, 1), datetime.date(1978, 7, 1),datetime.date(1978, 10, 1), datetime.date(1979, 1, 1),datetime.date(1979, 4, 1), datetime.date(1979, 7, 1),datetime.date(1979, 10, 1), datetime.date(1980, 1, 1),datetime.date(1980, 4, 1), datetime.date(1980, 7, 1),datetime.date(1980, 10, 1), datetime.date(1981, 1, 1),datetime.date(1981, 4, 1), datetime.date(1981, 7, 1),datetime.date(1981, 10, 1), datetime.date(1982, 1, 1),datetime.date(1982, 4, 1), datetime.date(1982, 7, 1),datetime.date(1982, 10, 1), datetime.date(1983, 1, 1),datetime.date(1983, 4, 1), datetime.date(1983, 7, 1),datetime.date(1983, 10, 1), datetime.date(1984, 1, 1),datetime.date(1984, 4, 1), datetime.date(1984, 7, 1),datetime.date(1984, 10, 1), datetime.date(1985, 1, 1),datetime.date(1985, 4, 1), datetime.date(1985, 7, 1),datetime.date(1985, 10, 1), datetime.date(1986, 1, 1),datetime.date(1986, 4, 1), datetime.date(1986, 7, 1),datetime.date(1986, 10, 1), datetime.date(1987, 1, 1),datetime.date(1987, 4, 1), datetime.date(1987, 7, 1),datetime.date(1987, 10, 1), datetime.date(1988, 1, 1),datetime.date(1988, 4, 1), datetime.date(1988, 7, 1),datetime.date(1988, 10, 1), datetime.date(1989, 1, 1),datetime.date(1989, 4, 1), datetime.date(1989, 7, 1),datetime.date(1989, 10, 1), datetime.date(1990, 1, 1),datetime.date(1990, 4, 1), datetime.date(1990, 7, 1),datetime.date(1990, 10, 1), datetime.date(1991, 1, 1),datetime.date(1991, 4, 1), datetime.date(1991, 7, 1),datetime.date(1991, 10, 1), datetime.date(1992, 1, 1),datetime.date(1992, 4, 1), datetime.date(1992, 7, 1),datetime.date(1992, 10, 1), datetime.date(1993, 1, 1),datetime.date(1993, 4, 1), datetime.date(1993, 7, 1),datetime.date(1993, 10, 1), datetime.date(1994, 1, 1),datetime.date(1994, 4, 1), datetime.date(1994, 7, 1),datetime.date(1994, 10, 1), datetime.date(1995, 1, 1),datetime.date(1995, 4, 1), datetime.date(1995, 7, 1),datetime.date(1995, 10, 1), datetime.date(1996, 1, 1),datetime.date(1996, 4, 1), datetime.date(1996, 7, 1),datetime.date(1996, 10, 1), datetime.date(1997, 1, 1),datetime.date(1997, 4, 1), datetime.date(1997, 7, 1),datetime.date(1997, 10, 1), datetime.date(1998, 1, 1),datetime.date(1998, 4, 1), datetime.date(1998, 7, 1),datetime.date(1998, 10, 1), datetime.date(1999, 1, 1),datetime.date(1999, 4, 1), datetime.date(1999, 7, 1),datetime.date(1999, 10, 1), datetime.date(2000, 1, 1),datetime.date(2000, 4, 1), datetime.date(2000, 7, 1),datetime.date(2000, 10, 1), datetime.date(2001, 1, 1),datetime.date(2001, 4, 1), datetime.date(2001, 7, 1),datetime.date(2001, 10, 1), datetime.date(2002, 1, 1),datetime.date(2002, 4, 1), datetime.date(2002, 7, 1),datetime.date(2002, 10, 1), datetime.date(2003, 1, 1),datetime.date(2003, 4, 1), datetime.date(2003, 7, 1),datetime.date(2003, 10, 1), datetime.date(2004, 1, 1),datetime.date(2004, 4, 1), datetime.date(2004, 7, 1),datetime.date(2004, 10, 1), datetime.date(2005, 1, 1),datetime.date(2005, 4, 1), datetime.date(2005, 7, 1),datetime.date(2005, 10, 1), datetime.date(2006, 1, 1),datetime.date(2006, 4, 1), datetime.date(2006, 7, 1),datetime.date(2006, 10, 1), datetime.date(2007, 1, 1),datetime.date(2007, 4, 1), datetime.date(2007, 7, 1),datetime.date(2007, 10, 1), datetime.date(2008, 1, 1),datetime.date(2008, 4, 1), datetime.date(2008, 7, 1),datetime.date(2008, 10, 1), datetime.date(2009, 1, 1),datetime.date(2009, 4, 1), datetime.date(2009, 7, 1)], dtype=object)
 
 
 obs_dim
@@ -1505,7 +1525,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-04T06:35:24.035308+00:00
+2026-09-04T08:38:51.443862+00:00
 
 creation_library :  
 ArviZ
@@ -1538,7 +1558,7 @@ time
 (time)
 
 
-datetime64\[us\]
+object
 
 
 1959-10-01 ... 2009-07-01
@@ -1549,7 +1569,7 @@ datetime64\[us\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['1959-10-01T00:00:00.000000', '1960-01-01T00:00:00.000000','1960-04-01T00:00:00.000000', '1960-07-01T00:00:00.000000','1960-10-01T00:00:00.000000', '1961-01-01T00:00:00.000000','1961-04-01T00:00:00.000000', '1961-07-01T00:00:00.000000','1961-10-01T00:00:00.000000', '1962-01-01T00:00:00.000000','1962-04-01T00:00:00.000000', '1962-07-01T00:00:00.000000','1962-10-01T00:00:00.000000', '1963-01-01T00:00:00.000000','1963-04-01T00:00:00.000000', '1963-07-01T00:00:00.000000','1963-10-01T00:00:00.000000', '1964-01-01T00:00:00.000000','1964-04-01T00:00:00.000000', '1964-07-01T00:00:00.000000','1964-10-01T00:00:00.000000', '1965-01-01T00:00:00.000000','1965-04-01T00:00:00.000000', '1965-07-01T00:00:00.000000','1965-10-01T00:00:00.000000', '1966-01-01T00:00:00.000000','1966-04-01T00:00:00.000000', '1966-07-01T00:00:00.000000','1966-10-01T00:00:00.000000', '1967-01-01T00:00:00.000000','1967-04-01T00:00:00.000000', '1967-07-01T00:00:00.000000','1967-10-01T00:00:00.000000', '1968-01-01T00:00:00.000000','1968-04-01T00:00:00.000000', '1968-07-01T00:00:00.000000','1968-10-01T00:00:00.000000', '1969-01-01T00:00:00.000000','1969-04-01T00:00:00.000000', '1969-07-01T00:00:00.000000','1969-10-01T00:00:00.000000', '1970-01-01T00:00:00.000000','1970-04-01T00:00:00.000000', '1970-07-01T00:00:00.000000','1970-10-01T00:00:00.000000', '1971-01-01T00:00:00.000000','1971-04-01T00:00:00.000000', '1971-07-01T00:00:00.000000','1971-10-01T00:00:00.000000', '1972-01-01T00:00:00.000000','1972-04-01T00:00:00.000000', '1972-07-01T00:00:00.000000','1972-10-01T00:00:00.000000', '1973-01-01T00:00:00.000000','1973-04-01T00:00:00.000000', '1973-07-01T00:00:00.000000','1973-10-01T00:00:00.000000', '1974-01-01T00:00:00.000000','1974-04-01T00:00:00.000000', '1974-07-01T00:00:00.000000','1974-10-01T00:00:00.000000', '1975-01-01T00:00:00.000000','1975-04-01T00:00:00.000000', '1975-07-01T00:00:00.000000','1975-10-01T00:00:00.000000', '1976-01-01T00:00:00.000000','1976-04-01T00:00:00.000000', '1976-07-01T00:00:00.000000','1976-10-01T00:00:00.000000', '1977-01-01T00:00:00.000000','1977-04-01T00:00:00.000000', '1977-07-01T00:00:00.000000','1977-10-01T00:00:00.000000', '1978-01-01T00:00:00.000000','1978-04-01T00:00:00.000000', '1978-07-01T00:00:00.000000','1978-10-01T00:00:00.000000', '1979-01-01T00:00:00.000000','1979-04-01T00:00:00.000000', '1979-07-01T00:00:00.000000','1979-10-01T00:00:00.000000', '1980-01-01T00:00:00.000000','1980-04-01T00:00:00.000000', '1980-07-01T00:00:00.000000','1980-10-01T00:00:00.000000', '1981-01-01T00:00:00.000000','1981-04-01T00:00:00.000000', '1981-07-01T00:00:00.000000','1981-10-01T00:00:00.000000', '1982-01-01T00:00:00.000000','1982-04-01T00:00:00.000000', '1982-07-01T00:00:00.000000','1982-10-01T00:00:00.000000', '1983-01-01T00:00:00.000000','1983-04-01T00:00:00.000000', '1983-07-01T00:00:00.000000','1983-10-01T00:00:00.000000', '1984-01-01T00:00:00.000000','1984-04-01T00:00:00.000000', '1984-07-01T00:00:00.000000','1984-10-01T00:00:00.000000', '1985-01-01T00:00:00.000000','1985-04-01T00:00:00.000000', '1985-07-01T00:00:00.000000','1985-10-01T00:00:00.000000', '1986-01-01T00:00:00.000000','1986-04-01T00:00:00.000000', '1986-07-01T00:00:00.000000','1986-10-01T00:00:00.000000', '1987-01-01T00:00:00.000000','1987-04-01T00:00:00.000000', '1987-07-01T00:00:00.000000','1987-10-01T00:00:00.000000', '1988-01-01T00:00:00.000000','1988-04-01T00:00:00.000000', '1988-07-01T00:00:00.000000','1988-10-01T00:00:00.000000', '1989-01-01T00:00:00.000000','1989-04-01T00:00:00.000000', '1989-07-01T00:00:00.000000','1989-10-01T00:00:00.000000', '1990-01-01T00:00:00.000000','1990-04-01T00:00:00.000000', '1990-07-01T00:00:00.000000','1990-10-01T00:00:00.000000', '1991-01-01T00:00:00.000000','1991-04-01T00:00:00.000000', '1991-07-01T00:00:00.000000','1991-10-01T00:00:00.000000', '1992-01-01T00:00:00.000000','1992-04-01T00:00:00.000000', '1992-07-01T00:00:00.000000','1992-10-01T00:00:00.000000', '1993-01-01T00:00:00.000000','1993-04-01T00:00:00.000000', '1993-07-01T00:00:00.000000','1993-10-01T00:00:00.000000', '1994-01-01T00:00:00.000000','1994-04-01T00:00:00.000000', '1994-07-01T00:00:00.000000','1994-10-01T00:00:00.000000', '1995-01-01T00:00:00.000000','1995-04-01T00:00:00.000000', '1995-07-01T00:00:00.000000','1995-10-01T00:00:00.000000', '1996-01-01T00:00:00.000000','1996-04-01T00:00:00.000000', '1996-07-01T00:00:00.000000','1996-10-01T00:00:00.000000', '1997-01-01T00:00:00.000000','1997-04-01T00:00:00.000000', '1997-07-01T00:00:00.000000','1997-10-01T00:00:00.000000', '1998-01-01T00:00:00.000000','1998-04-01T00:00:00.000000', '1998-07-01T00:00:00.000000','1998-10-01T00:00:00.000000', '1999-01-01T00:00:00.000000','1999-04-01T00:00:00.000000', '1999-07-01T00:00:00.000000','1999-10-01T00:00:00.000000', '2000-01-01T00:00:00.000000','2000-04-01T00:00:00.000000', '2000-07-01T00:00:00.000000','2000-10-01T00:00:00.000000', '2001-01-01T00:00:00.000000','2001-04-01T00:00:00.000000', '2001-07-01T00:00:00.000000','2001-10-01T00:00:00.000000', '2002-01-01T00:00:00.000000','2002-04-01T00:00:00.000000', '2002-07-01T00:00:00.000000','2002-10-01T00:00:00.000000', '2003-01-01T00:00:00.000000','2003-04-01T00:00:00.000000', '2003-07-01T00:00:00.000000','2003-10-01T00:00:00.000000', '2004-01-01T00:00:00.000000','2004-04-01T00:00:00.000000', '2004-07-01T00:00:00.000000','2004-10-01T00:00:00.000000', '2005-01-01T00:00:00.000000','2005-04-01T00:00:00.000000', '2005-07-01T00:00:00.000000','2005-10-01T00:00:00.000000', '2006-01-01T00:00:00.000000','2006-04-01T00:00:00.000000', '2006-07-01T00:00:00.000000','2006-10-01T00:00:00.000000', '2007-01-01T00:00:00.000000','2007-04-01T00:00:00.000000', '2007-07-01T00:00:00.000000','2007-10-01T00:00:00.000000', '2008-01-01T00:00:00.000000','2008-04-01T00:00:00.000000', '2008-07-01T00:00:00.000000','2008-10-01T00:00:00.000000', '2009-01-01T00:00:00.000000','2009-04-01T00:00:00.000000', '2009-07-01T00:00:00.000000'],dtype='datetime64[us]')
+    array([datetime.date(1959, 10, 1), datetime.date(1960, 1, 1),datetime.date(1960, 4, 1), datetime.date(1960, 7, 1),datetime.date(1960, 10, 1), datetime.date(1961, 1, 1),datetime.date(1961, 4, 1), datetime.date(1961, 7, 1),datetime.date(1961, 10, 1), datetime.date(1962, 1, 1),datetime.date(1962, 4, 1), datetime.date(1962, 7, 1),datetime.date(1962, 10, 1), datetime.date(1963, 1, 1),datetime.date(1963, 4, 1), datetime.date(1963, 7, 1),datetime.date(1963, 10, 1), datetime.date(1964, 1, 1),datetime.date(1964, 4, 1), datetime.date(1964, 7, 1),datetime.date(1964, 10, 1), datetime.date(1965, 1, 1),datetime.date(1965, 4, 1), datetime.date(1965, 7, 1),datetime.date(1965, 10, 1), datetime.date(1966, 1, 1),datetime.date(1966, 4, 1), datetime.date(1966, 7, 1),datetime.date(1966, 10, 1), datetime.date(1967, 1, 1),datetime.date(1967, 4, 1), datetime.date(1967, 7, 1),datetime.date(1967, 10, 1), datetime.date(1968, 1, 1),datetime.date(1968, 4, 1), datetime.date(1968, 7, 1),datetime.date(1968, 10, 1), datetime.date(1969, 1, 1),datetime.date(1969, 4, 1), datetime.date(1969, 7, 1),datetime.date(1969, 10, 1), datetime.date(1970, 1, 1),datetime.date(1970, 4, 1), datetime.date(1970, 7, 1),datetime.date(1970, 10, 1), datetime.date(1971, 1, 1),datetime.date(1971, 4, 1), datetime.date(1971, 7, 1),datetime.date(1971, 10, 1), datetime.date(1972, 1, 1),datetime.date(1972, 4, 1), datetime.date(1972, 7, 1),datetime.date(1972, 10, 1), datetime.date(1973, 1, 1),datetime.date(1973, 4, 1), datetime.date(1973, 7, 1),datetime.date(1973, 10, 1), datetime.date(1974, 1, 1),datetime.date(1974, 4, 1), datetime.date(1974, 7, 1),datetime.date(1974, 10, 1), datetime.date(1975, 1, 1),datetime.date(1975, 4, 1), datetime.date(1975, 7, 1),datetime.date(1975, 10, 1), datetime.date(1976, 1, 1),datetime.date(1976, 4, 1), datetime.date(1976, 7, 1),datetime.date(1976, 10, 1), datetime.date(1977, 1, 1),datetime.date(1977, 4, 1), datetime.date(1977, 7, 1),datetime.date(1977, 10, 1), datetime.date(1978, 1, 1),datetime.date(1978, 4, 1), datetime.date(1978, 7, 1),datetime.date(1978, 10, 1), datetime.date(1979, 1, 1),datetime.date(1979, 4, 1), datetime.date(1979, 7, 1),datetime.date(1979, 10, 1), datetime.date(1980, 1, 1),datetime.date(1980, 4, 1), datetime.date(1980, 7, 1),datetime.date(1980, 10, 1), datetime.date(1981, 1, 1),datetime.date(1981, 4, 1), datetime.date(1981, 7, 1),datetime.date(1981, 10, 1), datetime.date(1982, 1, 1),datetime.date(1982, 4, 1), datetime.date(1982, 7, 1),datetime.date(1982, 10, 1), datetime.date(1983, 1, 1),datetime.date(1983, 4, 1), datetime.date(1983, 7, 1),datetime.date(1983, 10, 1), datetime.date(1984, 1, 1),datetime.date(1984, 4, 1), datetime.date(1984, 7, 1),datetime.date(1984, 10, 1), datetime.date(1985, 1, 1),datetime.date(1985, 4, 1), datetime.date(1985, 7, 1),datetime.date(1985, 10, 1), datetime.date(1986, 1, 1),datetime.date(1986, 4, 1), datetime.date(1986, 7, 1),datetime.date(1986, 10, 1), datetime.date(1987, 1, 1),datetime.date(1987, 4, 1), datetime.date(1987, 7, 1),datetime.date(1987, 10, 1), datetime.date(1988, 1, 1),datetime.date(1988, 4, 1), datetime.date(1988, 7, 1),datetime.date(1988, 10, 1), datetime.date(1989, 1, 1),datetime.date(1989, 4, 1), datetime.date(1989, 7, 1),datetime.date(1989, 10, 1), datetime.date(1990, 1, 1),datetime.date(1990, 4, 1), datetime.date(1990, 7, 1),datetime.date(1990, 10, 1), datetime.date(1991, 1, 1),datetime.date(1991, 4, 1), datetime.date(1991, 7, 1),datetime.date(1991, 10, 1), datetime.date(1992, 1, 1),datetime.date(1992, 4, 1), datetime.date(1992, 7, 1),datetime.date(1992, 10, 1), datetime.date(1993, 1, 1),datetime.date(1993, 4, 1), datetime.date(1993, 7, 1),datetime.date(1993, 10, 1), datetime.date(1994, 1, 1),datetime.date(1994, 4, 1), datetime.date(1994, 7, 1),datetime.date(1994, 10, 1), datetime.date(1995, 1, 1),datetime.date(1995, 4, 1), datetime.date(1995, 7, 1),datetime.date(1995, 10, 1), datetime.date(1996, 1, 1),datetime.date(1996, 4, 1), datetime.date(1996, 7, 1),datetime.date(1996, 10, 1), datetime.date(1997, 1, 1),datetime.date(1997, 4, 1), datetime.date(1997, 7, 1),datetime.date(1997, 10, 1), datetime.date(1998, 1, 1),datetime.date(1998, 4, 1), datetime.date(1998, 7, 1),datetime.date(1998, 10, 1), datetime.date(1999, 1, 1),datetime.date(1999, 4, 1), datetime.date(1999, 7, 1),datetime.date(1999, 10, 1), datetime.date(2000, 1, 1),datetime.date(2000, 4, 1), datetime.date(2000, 7, 1),datetime.date(2000, 10, 1), datetime.date(2001, 1, 1),datetime.date(2001, 4, 1), datetime.date(2001, 7, 1),datetime.date(2001, 10, 1), datetime.date(2002, 1, 1),datetime.date(2002, 4, 1), datetime.date(2002, 7, 1),datetime.date(2002, 10, 1), datetime.date(2003, 1, 1),datetime.date(2003, 4, 1), datetime.date(2003, 7, 1),datetime.date(2003, 10, 1), datetime.date(2004, 1, 1),datetime.date(2004, 4, 1), datetime.date(2004, 7, 1),datetime.date(2004, 10, 1), datetime.date(2005, 1, 1),datetime.date(2005, 4, 1), datetime.date(2005, 7, 1),datetime.date(2005, 10, 1), datetime.date(2006, 1, 1),datetime.date(2006, 4, 1), datetime.date(2006, 7, 1),datetime.date(2006, 10, 1), datetime.date(2007, 1, 1),datetime.date(2007, 4, 1), datetime.date(2007, 7, 1),datetime.date(2007, 10, 1), datetime.date(2008, 1, 1),datetime.date(2008, 4, 1), datetime.date(2008, 7, 1),datetime.date(2008, 10, 1), datetime.date(2009, 1, 1),datetime.date(2009, 4, 1), datetime.date(2009, 7, 1)], dtype=object)
 
 
 covariate_dim
@@ -1599,7 +1619,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-04T06:35:24.035800+00:00
+2026-09-04T08:38:51.444395+00:00
 
 creation_library :  
 ArviZ
@@ -1674,7 +1694,7 @@ time
 (time)
 
 
-datetime64\[us\]
+object
 
 
 2009-10-01 ... 2017-01-01
@@ -1685,7 +1705,7 @@ datetime64\[us\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['2009-10-01T00:00:00.000000', '2010-01-01T00:00:00.000000','2010-04-01T00:00:00.000000', '2010-07-01T00:00:00.000000','2010-10-01T00:00:00.000000', '2011-01-01T00:00:00.000000','2011-04-01T00:00:00.000000', '2011-07-01T00:00:00.000000','2011-10-01T00:00:00.000000', '2012-01-01T00:00:00.000000','2012-04-01T00:00:00.000000', '2012-07-01T00:00:00.000000','2012-10-01T00:00:00.000000', '2013-01-01T00:00:00.000000','2013-04-01T00:00:00.000000', '2013-07-01T00:00:00.000000','2013-10-01T00:00:00.000000', '2014-01-01T00:00:00.000000','2014-04-01T00:00:00.000000', '2014-07-01T00:00:00.000000','2014-10-01T00:00:00.000000', '2015-01-01T00:00:00.000000','2015-04-01T00:00:00.000000', '2015-07-01T00:00:00.000000','2015-10-01T00:00:00.000000', '2016-01-01T00:00:00.000000','2016-04-01T00:00:00.000000', '2016-07-01T00:00:00.000000','2016-10-01T00:00:00.000000', '2017-01-01T00:00:00.000000'],dtype='datetime64[us]')
+    array([datetime.date(2009, 10, 1), datetime.date(2010, 1, 1),datetime.date(2010, 4, 1), datetime.date(2010, 7, 1),datetime.date(2010, 10, 1), datetime.date(2011, 1, 1),datetime.date(2011, 4, 1), datetime.date(2011, 7, 1),datetime.date(2011, 10, 1), datetime.date(2012, 1, 1),datetime.date(2012, 4, 1), datetime.date(2012, 7, 1),datetime.date(2012, 10, 1), datetime.date(2013, 1, 1),datetime.date(2013, 4, 1), datetime.date(2013, 7, 1),datetime.date(2013, 10, 1), datetime.date(2014, 1, 1),datetime.date(2014, 4, 1), datetime.date(2014, 7, 1),datetime.date(2014, 10, 1), datetime.date(2015, 1, 1),datetime.date(2015, 4, 1), datetime.date(2015, 7, 1),datetime.date(2015, 10, 1), datetime.date(2016, 1, 1),datetime.date(2016, 4, 1), datetime.date(2016, 7, 1),datetime.date(2016, 10, 1), datetime.date(2017, 1, 1)], dtype=object)
 
 
 obs_dim
@@ -1720,7 +1740,7 @@ obs
 float32
 
 
-1.018 1.055 0.833 ... 2.243 -2.136
+1.231 1.315 2.307 ... 2.243 -2.136
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1728,14 +1748,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 1.0180240e+00,  1.0551972e+00,  8.3303893e-01],[ 9.1139895e-01,  6.0690790e-01,  4.4680514e+00],[ 1.1280961e+00,  8.1243813e-01,  4.8446312e+00],...,[-1.2080957e+00, -6.5898126e-01, -1.0096832e+01],[-8.2774937e-02, -3.5957053e-01, -3.9933252e-01],[-1.0580705e+00, -4.7295451e-01, -5.4817877e+00]],[[ 8.3543730e-01,  8.3375609e-01,  1.2770636e+00],[ 6.5235347e-01,  5.6475532e-01,  5.4316339e+00],[-7.9993016e-01,  1.2189984e-02, -7.4347386e+00],...,[ 6.7232966e-01,  1.5714887e+00, -4.3597574e+00],[ 2.2152956e+00,  1.6034210e-01,  1.1773451e+01],[ 1.4017229e+00,  5.9148210e-01,  3.6501551e+00]],[[ 4.8091698e-01,  1.1788422e+00, -2.4966376e+00],[ 1.1629092e+00,  4.5376706e-01,  4.3294649e+00],[-3.5069132e-01, -3.8488686e-02, -1.7349412e+00],...,...[ 7.0160317e-01,  2.3713350e-01,  2.0843704e+00],[ 3.5343063e-01,  7.3891044e-01, -3.4922953e+00],[ 3.7721527e-01,  5.7609951e-01, -5.4384098e+00]],[[-7.4494177e-01, -1.3857440e+00, -4.1040821e+00],[-9.7574532e-01, -5.1348805e-01, -6.5439034e+00],[-1.4341778e+00,  7.2461677e-01, -1.5955865e+01],...,[ 6.7337042e-01,  1.1177440e+00,  8.8544309e-01],[ 2.3839116e-02,  7.7607942e-01, -3.3321176e+00],[ 2.0783362e+00,  1.1009558e+00,  5.7282581e+00]],[[ 7.4984151e-01, -2.6356649e-01,  4.8683777e+00],[-8.5763830e-01, -6.8324542e-01, -4.2654014e+00],[-8.1557572e-01, -3.0947536e-02, -3.3929849e+00],...,[ 1.1299040e+00,  1.6817294e+00,  4.3380919e+00],[ 1.1613892e+00,  1.4201896e+00,  4.4219656e+00],[ 1.7786182e+00,  2.2427478e+00, -2.1358867e+00]]]],shape=(4, 1000, 30, 3), dtype=float32)
+    array([[[[ 1.2311203e+00,  1.3154070e+00,  2.3068211e+00],[ 9.8046356e-01,  6.6539669e-01,  5.6390052e+00],[ 9.9563104e-01,  7.9932255e-01,  4.9751482e+00],...,[-1.1789633e+00, -4.8977244e-01, -1.0178500e+01],[ 1.6657013e-01, -1.5221035e-01,  2.1085837e+00],[-5.9128082e-01, -1.6188243e-01, -1.0127937e+00]],[[ 8.7287295e-01,  1.0225533e+00,  1.4369516e+00],[ 6.4491689e-01,  6.1911124e-01,  5.9293432e+00],[-8.4993684e-01, -8.1330538e-03, -7.9900713e+00],...,[ 4.0474135e-01,  1.4574713e+00, -6.0473919e+00],[ 1.9391749e+00, -8.7293804e-02,  1.0428045e+01],[ 1.3712672e+00,  6.5469855e-01,  2.6277082e+00]],[[ 5.1640552e-01,  1.0494291e+00, -2.2500315e+00],[ 1.0861408e+00,  4.1991833e-01,  3.8893633e+00],[-6.6325414e-01, -1.7456025e-01, -3.3793764e+00],...,...[ 7.0160317e-01,  2.3713350e-01,  2.0843704e+00],[ 3.5343063e-01,  7.3891044e-01, -3.4922953e+00],[ 3.7721527e-01,  5.7609951e-01, -5.4384098e+00]],[[-7.4494177e-01, -1.3857440e+00, -4.1040821e+00],[-9.7574532e-01, -5.1348805e-01, -6.5439034e+00],[-1.4341778e+00,  7.2461677e-01, -1.5955865e+01],...,[ 6.7337042e-01,  1.1177440e+00,  8.8544309e-01],[ 2.3839116e-02,  7.7607942e-01, -3.3321176e+00],[ 2.0783362e+00,  1.1009558e+00,  5.7282581e+00]],[[ 7.4984151e-01, -2.6356649e-01,  4.8683777e+00],[-8.5763830e-01, -6.8324542e-01, -4.2654014e+00],[-8.1557572e-01, -3.0947536e-02, -3.3929849e+00],...,[ 1.1299040e+00,  1.6817294e+00,  4.3380919e+00],[ 1.1613892e+00,  1.4201896e+00,  4.4219656e+00],[ 1.7786182e+00,  2.2427478e+00, -2.1358867e+00]]]],shape=(4, 1000, 30, 3), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-04T06:35:24.296777+00:00
+2026-09-04T08:38:51.756720+00:00
 
 creation_library :  
 ArviZ
@@ -1768,7 +1788,7 @@ time
 (time)
 
 
-datetime64\[us\]
+object
 
 
 2009-10-01 ... 2017-01-01
@@ -1779,7 +1799,7 @@ datetime64\[us\]
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['2009-10-01T00:00:00.000000', '2010-01-01T00:00:00.000000','2010-04-01T00:00:00.000000', '2010-07-01T00:00:00.000000','2010-10-01T00:00:00.000000', '2011-01-01T00:00:00.000000','2011-04-01T00:00:00.000000', '2011-07-01T00:00:00.000000','2011-10-01T00:00:00.000000', '2012-01-01T00:00:00.000000','2012-04-01T00:00:00.000000', '2012-07-01T00:00:00.000000','2012-10-01T00:00:00.000000', '2013-01-01T00:00:00.000000','2013-04-01T00:00:00.000000', '2013-07-01T00:00:00.000000','2013-10-01T00:00:00.000000', '2014-01-01T00:00:00.000000','2014-04-01T00:00:00.000000', '2014-07-01T00:00:00.000000','2014-10-01T00:00:00.000000', '2015-01-01T00:00:00.000000','2015-04-01T00:00:00.000000', '2015-07-01T00:00:00.000000','2015-10-01T00:00:00.000000', '2016-01-01T00:00:00.000000','2016-04-01T00:00:00.000000', '2016-07-01T00:00:00.000000','2016-10-01T00:00:00.000000', '2017-01-01T00:00:00.000000'],dtype='datetime64[us]')
+    array([datetime.date(2009, 10, 1), datetime.date(2010, 1, 1),datetime.date(2010, 4, 1), datetime.date(2010, 7, 1),datetime.date(2010, 10, 1), datetime.date(2011, 1, 1),datetime.date(2011, 4, 1), datetime.date(2011, 7, 1),datetime.date(2011, 10, 1), datetime.date(2012, 1, 1),datetime.date(2012, 4, 1), datetime.date(2012, 7, 1),datetime.date(2012, 10, 1), datetime.date(2013, 1, 1),datetime.date(2013, 4, 1), datetime.date(2013, 7, 1),datetime.date(2013, 10, 1), datetime.date(2014, 1, 1),datetime.date(2014, 4, 1), datetime.date(2014, 7, 1),datetime.date(2014, 10, 1), datetime.date(2015, 1, 1),datetime.date(2015, 4, 1), datetime.date(2015, 7, 1),datetime.date(2015, 10, 1), datetime.date(2016, 1, 1),datetime.date(2016, 4, 1), datetime.date(2016, 7, 1),datetime.date(2016, 10, 1), datetime.date(2017, 1, 1)], dtype=object)
 
 
 covariate_dim
@@ -1829,7 +1849,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-04T06:35:24.297133+00:00
+2026-09-04T08:38:51.757232+00:00
 
 creation_library :  
 ArviZ
@@ -1864,49 +1884,36 @@ The summary table reports the posterior mean, standard deviation, 94\\ HDI, effe
 
 ``` python
 summary = az.summary(tree, var_names=["intercept", "sigma", "phi"], ci_kind="hdi", ci_prob=0.94)
-
-
-def convergence_line(summary_: pd.DataFrame) -> str:
-    """Worst r_hat and smallest bulk ESS of a summary table (its cells are formatted strings)."""
-    r_hat = pd.to_numeric(summary_["r_hat"]).max()
-    ess_bulk = int(pd.to_numeric(summary_["ess_bulk"]).min())
-    return f"max r_hat: {r_hat:.3f}, min ess_bulk: {ess_bulk}"
-
-
-print(convergence_line(summary))
 summary
 ```
 
 
-    max r_hat: 1.000, min ess_bulk: 1856
-
-
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| intercept\[realgdp\] | 0.24 | 0.102 | 0.051 | 0.43 | 2501 | 2405 | 1.00 | 0.002 | 0.0014 |
-| intercept\[realcons\] | 0.554 | 0.099 | 0.37 | 0.74 | 3479 | 3006 | 1.00 | 0.0017 | 0.0012 |
-| intercept\[realinv\] | -1.74 | 0.49 | -2.7 | -0.84 | 2894 | 3068 | 1.00 | 0.009 | 0.0064 |
-| sigma\[realgdp\] | 0.747 | 0.0362 | 0.68 | 0.82 | 2865 | 2450 | 1.00 | 0.00068 | 0.00047 |
-| sigma\[realcons\] | 0.658 | 0.0334 | 0.6 | 0.72 | 4167 | 3304 | 1.00 | 0.00052 | 0.00037 |
-| sigma\[realinv\] | 3.884 | 0.186 | 3.6 | 4.3 | 3641 | 3008 | 1.00 | 0.0031 | 0.0023 |
-| phi\[1, realgdp, realgdp\] | -0.059 | 0.14 | -0.32 | 0.21 | 1922 | 2387 | 1.00 | 0.0032 | 0.0023 |
-| phi\[1, realgdp, realcons\] | 0.443 | 0.114 | 0.23 | 0.65 | 2293 | 2217 | 1.00 | 0.0024 | 0.0016 |
-| phi\[1, realgdp, realinv\] | 0.01 | 0.0227 | -0.032 | 0.054 | 1878 | 2259 | 1.00 | 0.00052 | 0.00037 |
-| phi\[1, realcons, realgdp\] | -0.056 | 0.144 | -0.32 | 0.21 | 2295 | 2142 | 1.00 | 0.003 | 0.0021 |
-| phi\[1, realcons, realcons\] | 0.228 | 0.113 | 0.015 | 0.44 | 2549 | 2649 | 1.00 | 0.0022 | 0.0016 |
-| phi\[1, realcons, realinv\] | 0.0207 | 0.0223 | -0.021 | 0.063 | 2324 | 2309 | 1.00 | 0.00047 | 0.00032 |
-| phi\[1, realinv, realgdp\] | -0.49 | 0.61 | -1.6 | 0.68 | 2268 | 2696 | 1.00 | 0.013 | 0.0091 |
-| phi\[1, realinv, realcons\] | 2.82 | 0.5 | 1.9 | 3.7 | 3010 | 2855 | 1.00 | 0.0091 | 0.0064 |
-| phi\[1, realinv, realinv\] | 0.071 | 0.104 | -0.13 | 0.26 | 2316 | 2712 | 1.00 | 0.0022 | 0.0015 |
-| phi\[2, realgdp, realgdp\] | -0.008 | 0.141 | -0.27 | 0.26 | 1856 | 2344 | 1.00 | 0.0033 | 0.0023 |
-| phi\[2, realgdp, realcons\] | 0.265 | 0.123 | 0.029 | 0.49 | 2125 | 2210 | 1.00 | 0.0027 | 0.0019 |
-| phi\[2, realgdp, realinv\] | -0.001 | 0.0219 | -0.042 | 0.039 | 2026 | 2589 | 1.00 | 0.00049 | 0.00034 |
-| phi\[2, realcons, realgdp\] | -0.117 | 0.144 | -0.39 | 0.15 | 2092 | 2427 | 1.00 | 0.0032 | 0.0021 |
-| phi\[2, realcons, realcons\] | 0.224 | 0.123 | -0.013 | 0.46 | 2327 | 2562 | 1.00 | 0.0026 | 0.0018 |
-| phi\[2, realcons, realinv\] | 0.0235 | 0.0216 | -0.018 | 0.063 | 2251 | 2365 | 1.00 | 0.00046 | 0.00031 |
-| phi\[2, realinv, realgdp\] | 0.23 | 0.62 | -0.91 | 1.4 | 2223 | 2465 | 1.00 | 0.013 | 0.0092 |
-| phi\[2, realinv, realcons\] | 0.64 | 0.54 | -0.37 | 1.7 | 2581 | 2361 | 1.00 | 0.011 | 0.0077 |
-| phi\[2, realinv, realinv\] | -0.075 | 0.101 | -0.26 | 0.12 | 2659 | 2549 | 1.00 | 0.002 | 0.0014 |
+| intercept\[realgdp\] | 0.241 | 0.102 | 0.047 | 0.44 | 2466 | 2555 | 1.00 | 0.0021 | 0.0014 |
+| intercept\[realcons\] | 0.554 | 0.099 | 0.37 | 0.74 | 3181 | 3075 | 1.00 | 0.0018 | 0.0012 |
+| intercept\[realinv\] | -1.74 | 0.49 | -2.6 | -0.83 | 3134 | 3121 | 1.00 | 0.0087 | 0.0062 |
+| sigma\[realgdp\] | 0.747 | 0.036 | 0.68 | 0.82 | 2471 | 2351 | 1.00 | 0.00073 | 0.00051 |
+| sigma\[realcons\] | 0.659 | 0.0335 | 0.6 | 0.73 | 4315 | 3253 | 1.00 | 0.00051 | 0.00038 |
+| sigma\[realinv\] | 3.883 | 0.185 | 3.6 | 4.3 | 4092 | 3059 | 1.00 | 0.0029 | 0.0022 |
+| phi\[1, realgdp, realgdp\] | -0.06 | 0.141 | -0.32 | 0.21 | 1751 | 2246 | 1.00 | 0.0034 | 0.0025 |
+| phi\[1, realgdp, realcons\] | 0.443 | 0.114 | 0.23 | 0.66 | 2073 | 2159 | 1.00 | 0.0025 | 0.0017 |
+| phi\[1, realgdp, realinv\] | 0.01 | 0.0227 | -0.032 | 0.053 | 1728 | 2293 | 1.00 | 0.00055 | 0.0004 |
+| phi\[1, realcons, realgdp\] | -0.057 | 0.146 | -0.33 | 0.22 | 2171 | 1979 | 1.00 | 0.0031 | 0.0022 |
+| phi\[1, realcons, realcons\] | 0.228 | 0.115 | 0.017 | 0.44 | 2373 | 2242 | 1.00 | 0.0024 | 0.0018 |
+| phi\[1, realcons, realinv\] | 0.021 | 0.0225 | -0.022 | 0.064 | 2266 | 2193 | 1.00 | 0.00047 | 0.00033 |
+| phi\[1, realinv, realgdp\] | -0.5 | 0.6 | -1.6 | 0.65 | 2403 | 2715 | 1.00 | 0.012 | 0.0089 |
+| phi\[1, realinv, realcons\] | 2.83 | 0.5 | 1.9 | 3.7 | 2992 | 2925 | 1.00 | 0.0091 | 0.0065 |
+| phi\[1, realinv, realinv\] | 0.072 | 0.104 | -0.12 | 0.26 | 2285 | 2675 | 1.00 | 0.0022 | 0.0015 |
+| phi\[2, realgdp, realgdp\] | -0.007 | 0.144 | -0.28 | 0.26 | 1718 | 2099 | 1.00 | 0.0035 | 0.0024 |
+| phi\[2, realgdp, realcons\] | 0.264 | 0.124 | 0.034 | 0.5 | 1995 | 2105 | 1.00 | 0.0028 | 0.002 |
+| phi\[2, realgdp, realinv\] | -0.001 | 0.0223 | -0.042 | 0.041 | 1897 | 2479 | 1.00 | 0.00051 | 0.00035 |
+| phi\[2, realcons, realgdp\] | -0.114 | 0.145 | -0.38 | 0.16 | 2061 | 2239 | 1.00 | 0.0032 | 0.0021 |
+| phi\[2, realcons, realcons\] | 0.222 | 0.123 | -0.014 | 0.45 | 2301 | 2647 | 1.00 | 0.0026 | 0.0018 |
+| phi\[2, realcons, realinv\] | 0.0231 | 0.0218 | -0.018 | 0.063 | 2183 | 2347 | 1.00 | 0.00047 | 0.00031 |
+| phi\[2, realinv, realgdp\] | 0.22 | 0.62 | -0.95 | 1.4 | 1993 | 2446 | 1.00 | 0.014 | 0.0097 |
+| phi\[2, realinv, realcons\] | 0.64 | 0.54 | -0.36 | 1.7 | 2469 | 2334 | 1.00 | 0.011 | 0.0077 |
+| phi\[2, realinv, realinv\] | -0.073 | 0.103 | -0.26 | 0.12 | 2619 | 2591 | 1.00 | 0.002 | 0.0014 |
 
 
 ``` python
@@ -1940,7 +1947,7 @@ print(
 ```
 
 
-    stable draws: 1.000, median spectral radius: 0.597, max: 0.819
+    stable draws: 1.000, median spectral radius: 0.597, max: 0.827
 
 
 # In-sample fit
@@ -1963,8 +1970,8 @@ def stack_draws(group: str, tree_: xr.DataTree) -> Float[np.ndarray, " sample ti
 
 hdi_probs = (0.5, 0.94)
 hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
-dates_num = mdates.date2num(dates.to_pydatetime())
-future_dates_num = mdates.date2num(future_dates.to_pydatetime())
+dates_num = mdates.date2num(dates)
+future_dates_num = mdates.date2num(future_dates)
 
 
 def plot_fit_and_forecast(
@@ -2045,11 +2052,13 @@ def plot_fit_and_forecast(
         ax.xaxis.set_major_locator(locator)
         ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
     handles.append(obs_line)
-    pc.get_target("t", {"series": names[0]}).legend(handles=handles, loc="upper left", fontsize=9)
+    pc.get_target("t", {"series": names[0]}).legend(
+        handles=handles, loc="center left", bbox_to_anchor=(1, 0.5), fontsize=9
+    )
     fig = pc.viz["figure"].item()
     fig.supxlabel("date")
     fig.supylabel("growth rate (percent)")
-    fig.suptitle(title, fontsize=16, fontweight="bold", y=1.02)
+    fig.suptitle(title, fontsize=18, fontweight="bold", y=1.02)
 
 
 train_pp = stack_draws("posterior_predictive", tree)
@@ -2102,42 +2111,50 @@ def hdi_width(draws: Float[np.ndarray, " sample time series"], prob: float) -> n
 
 width_94 = hdi_width(forecast_draws, 0.94)
 horizons = [1, 5, 10, 20, 30]
-pd.DataFrame(
-    width_94[[h - 1 for h in horizons]], index=pd.Index(horizons, name="h"), columns=names
-).round(3)
+width_94_h = width_94[[h - 1 for h in horizons]]
+
+pl.DataFrame({"h": horizons} | dict(zip(names, width_94_h.T, strict=True))).with_columns(
+    pl.col(names).round(3)
+)
 ```
 
 
-|     | realgdp | realcons | realinv |
+shape: (5, 4)
+
+| h   | realgdp | realcons | realinv |
 |-----|---------|----------|---------|
-| h   |         |          |         |
-| 1   | 2.880   | 2.512    | 14.786  |
-| 5   | 3.172   | 2.730    | 16.646  |
-| 10  | 3.222   | 2.671    | 16.764  |
-| 20  | 3.165   | 2.728    | 16.068  |
-| 30  | 3.126   | 2.760    | 16.045  |
+| i64 | f64     | f64      | f64     |
+| 1   | 2.897   | 2.499    | 14.846  |
+| 5   | 3.219   | 2.735    | 16.676  |
+| 10  | 3.249   | 2.697    | 16.686  |
+| 20  | 3.14    | 2.717    | 15.905  |
+| 30  | 3.094   | 2.735    | 15.976  |
 
 
 ``` python
 phi_mean = np.asarray(posterior["phi"]).mean(axis=0)
 c_mean = np.asarray(posterior["intercept"]).mean(axis=0)
 unconditional_mean = np.linalg.solve(np.eye(k) - phi_mean.sum(axis=0), c_mean)
-pd.DataFrame(
+
+pl.DataFrame(
     {
+        "series": names,
         "unconditional mean": unconditional_mean,
         "sample mean": np.asarray(data).mean(axis=0),
         "mean forecast at h=30": forecast_draws.mean(axis=0)[-1],
-    },
-    index=names,
-).round(3)
+    }
+).with_columns(pl.exclude("series").round(3))
 ```
 
 
-|          | unconditional mean | sample mean | mean forecast at h=30 |
-|----------|--------------------|-------------|-----------------------|
-| realgdp  | 0.789              | 0.772       | 0.790                 |
-| realcons | 0.838              | 0.832       | 0.826                 |
-| realinv  | 0.950              | 0.818       | 1.018                 |
+shape: (3, 4)
+
+| series     | unconditional mean | sample mean | mean forecast at h=30 |
+|------------|--------------------|-------------|-----------------------|
+| str        | f64                | f32         | f32                   |
+| "realgdp"  | 0.789              | 0.772       | 0.79                  |
+| "realcons" | 0.837              | 0.832       | 0.824                 |
+| "realinv"  | 0.947              | 0.818       | 1.02                  |
 
 
 # Impulse response functions
@@ -2153,6 +2170,12 @@ exists, and the coefficient matrices follow the recursion
 The entry \Psi_h\[i, j\] is the response of series i, h quarters after a unit shock to the reduced-form residual \varepsilon\_{t, j}, with the other residuals held at zero. `impulse_response(phi, horizon)` runs this recursion for all posterior draws at once (the draws pass through the leading batch axis; no `vmap` is needed) and returns an array of shape `(draws, horizon + 1, series, series)`, indexed as `[draw, h, response, shock]`.
 
 The recursion exists for any coefficients, but the representation and the decay \Psi_h \to 0 need stability, which we checked above. If some draws were unstable we would mask them here; the mask below is the identity when all draws are stable.
+
+Writing out the recursion for our VAR(2) (p = 2) makes it concrete. The sum only ever has one or two terms, because \min(h, p) \leq 2:
+
+ \Psi_0 = I, \qquad \Psi_1 = \Phi_1 \\ \Psi_0 = \Phi_1, \qquad \Psi_2 = \Phi_1 \\ \Psi_1 + \Phi_2 \\ \Psi_0 = \Phi_1^2 + \Phi_2, \qquad \Psi_3 = \Phi_1 \\ \Psi_2 + \Phi_2 \\ \Psi_1. 
+
+Each \Psi_h only ever combines the two lag matrices \Phi_1, \Phi_2 (sampled once per posterior draw) with the previously computed \Psi\_{h-1}, \Psi\_{h-2}: this is exactly what [impulse_response](../../reference/var.impulse_response.md#numpyro_forecast.var.impulse_response) scans over, and it is also what [companion_matrix](../../reference/var.companion_matrix.md#numpyro_forecast.var.companion_matrix) block-multiplies in one shot when we only need the stability check rather than every intermediate \Psi_h.
 
 
 ``` python
@@ -2171,13 +2194,16 @@ print(np.round(np.asarray(irf_draws.mean(axis=0)[:3]), 3))
       [ 0.     1.     0.   ]
       [ 0.     0.     1.   ]]
 
-     [[-0.059  0.443  0.01 ]
-      [-0.056  0.228  0.021]
-      [-0.49   2.821  0.071]]
+     [[-0.06   0.443  0.01 ]
+      [-0.057  0.228  0.021]
+      [-0.498  2.827  0.072]]
 
-     [[-0.029  0.368  0.008]
-      [-0.137  0.315  0.029]
-      [ 0.066  1.271 -0.012]]]
+     [[-0.028  0.367  0.008]
+      [-0.134  0.314  0.029]
+      [ 0.055  1.27  -0.009]]]
+
+
+\Psi_0 is the identity, as expected: at h = 0 every series responds only to its own shock, one for one. \Psi_1 and \Psi_2 show how the shock starts to spread to the other two series through the estimated \Phi_1, \Phi_2 coefficients; the full grid below plots this spread out to h = 10 with posterior uncertainty.
 
 
 ``` python
@@ -2187,6 +2213,7 @@ def plot_irf_grid(
     ylabel: str,
     overlay: Float[Array, " sample steps series series"] | None = None,
     overlay_label: str = "",
+    legend_loc: str = "upper right",
 ) -> None:
     """Plot a ``series x series`` grid of impulse responses with HDI bands.
 
@@ -2202,6 +2229,8 @@ def plot_irf_grid(
         Optional second set of draws whose posterior mean is overlaid as a line.
     overlay_label
         Legend label of the overlaid mean.
+    legend_loc
+        Legend location, forwarded to `matplotlib.axes.Axes.legend`.
     """
     n_draws, n_steps = irf.shape[:2]
     steps = np.arange(n_steps, dtype=float)
@@ -2264,12 +2293,12 @@ def plot_irf_grid(
         ax.axhline(0.0, color="gray", lw=0.8, ls="--")
         ax.set_title(label, fontsize=10)
     pc.get_target("t", {"series": irf_labels[0]}).legend(
-        handles=handles, loc="upper right", fontsize=8
+        handles=handles, loc=legend_loc, fontsize=8
     )
     fig = pc.viz["figure"].item()
     fig.supxlabel("quarters after the shock")
     fig.supylabel(ylabel)
-    fig.suptitle(title, fontsize=16, fontweight="bold", y=1.02)
+    fig.suptitle(title, fontsize=18, fontweight="bold", y=1.02)
 
 
 plot_irf_grid(
@@ -2285,6 +2314,9 @@ plot_irf_grid(
 </figure>
 
 
+The `realinv response to realcons shock` panel dominates the grid: its y-axis runs past 3, while every other off-diagonal panel stays within about \pm 0.6. The printed h = 0, 1, 2 snapshot above puts a number on it: a one-unit consumption-growth shock moves investment growth by 2.827 percentage points at h = 1 and 1.27 at h = 2, six to ten times larger than any other off-diagonal entry at the same horizons, consistent with investment's well-known sensitivity to demand shocks. Every panel decays toward zero by h \approx 8-10, as stability requires; the own-shock (diagonal) panels start at exactly 1 by construction and decay the fastest, some dipping briefly negative (e.g. `realgdp response to realgdp shock` around h = 1-2) before settling.
+
+
 ## Orthogonalized and cumulative responses
 
 A unit shock to one reduced-form residual with the others held at zero is not an experiment we can observe when \Sigma is not diagonal: the residuals move together. The standard fix is to rewrite the shocks as \varepsilon_t = L \\ u_t with u_t \sim \text{MultivariateNormal}(0, I) and L the Cholesky factor of \Sigma, and to report the responses to the *orthogonalized* shocks u_t:
@@ -2297,12 +2329,19 @@ Our series are growth rates in percent, g_t = 100 \\ \Delta \log Y_t, so the run
 
 
 ``` python
+# Reassemble the Cholesky factor L = diag(sigma) @ L_Omega per draw, the same construction
+# the model uses for the likelihood's scale_tril, so the orthogonalized shocks are one
+# posterior-consistent standard deviation of the fitted shock covariance.
 sigma_draws = jnp.asarray(posterior["sigma"])[stable]
 l_omega_draws = jnp.asarray(posterior["l_omega"])[stable]
 scale_tril_draws = sigma_draws[..., :, None] * l_omega_draws  # (draws, 3, 3)
+
+# cumulative=True sums Theta_h = Psi_h @ L over h, turning the growth-rate response into a
+# level response; horizon 20 is long enough for the stable draws to approach that long-run sum.
 irf_level_draws = impulse_response(
     phi_draws[stable], 20, scale_tril=scale_tril_draws, cumulative=True
 )
+
 print(f"irf_level_draws: {irf_level_draws.shape}")
 print("posterior mean cumulative response at h = 20 (rows: response, columns: shock):")
 print(np.round(np.asarray(irf_level_draws.mean(axis=0)[-1]), 3))
@@ -2311,9 +2350,9 @@ print(np.round(np.asarray(irf_level_draws.mean(axis=0)[-1]), 3))
 
     irf_level_draws: (4000, 21, 3, 3)
     posterior mean cumulative response at h = 20 (rows: response, columns: shock):
-    [[1.259 0.613 0.139]
-     [0.759 0.898 0.175]
-     [5.186 1.382 2.667]]
+    [[1.26  0.612 0.139]
+     [0.762 0.897 0.174]
+     [5.187 1.377 2.671]]
 
 
 ``` python
@@ -2321,6 +2360,7 @@ plot_irf_grid(
     irf_level_draws,
     title="Cumulative responses to a one standard deviation orthogonalized shock",
     ylabel="level response (percent)",
+    legend_loc="lower right",
 )
 ```
 
@@ -2353,17 +2393,23 @@ The classic Litterman formulation multiplies the standard deviation of the cross
 
 
 ``` python
-sample_sd = y_pct.std().to_numpy()
+sample_sd = y_pct.select(names).std().to_numpy()[0]
 scale_ratio = sample_sd[:, None] / sample_sd[None, :]
-pd.DataFrame(scale_ratio, index=names, columns=names).round(2)
+
+pl.DataFrame({"equation": names} | dict(zip(names, scale_ratio.T, strict=True))).with_columns(
+    pl.col(names).round(2)
+)
 ```
 
 
-|          | realgdp | realcons | realinv |
-|----------|---------|----------|---------|
-| realgdp  | 1.00    | 1.27     | 0.19    |
-| realcons | 0.79    | 1.00     | 0.15    |
-| realinv  | 5.33    | 6.75     | 1.00    |
+shape: (3, 4)
+
+| equation   | realgdp | realcons | realinv |
+|------------|---------|----------|---------|
+| str        | f64     | f64      | f64     |
+| "realgdp"  | 1.0     | 1.27     | 0.19    |
+| "realcons" | 0.79    | 1.0      | 0.15    |
+| "realinv"  | 5.33    | 6.75     | 1.0     |
 
 
 With \lambda = 0.5 and \kappa = 0.5 the prior standard deviation of a first-lag cross coefficient is 0.25 before scaling. The printout compares, for the investment equation at lag one, the unscaled (Impulso-style) prior standard deviations, the scaled ones we use, and the posterior under the weak prior: the coefficient on lagged consumption growth has a posterior mean near 2.8 with a standard deviation near 0.5, so an unscaled prior with standard deviation 0.25 sits more than ten prior standard deviations away from what the data say and would dominate the posterior, while the scaled prior is compatible with it.
@@ -2379,24 +2425,27 @@ minnesota = dist.Normal(loc_mn, scale_mn).to_event(3)
 
 phi_weak_mean = np.asarray(posterior["phi"]).mean(axis=0)
 phi_weak_sd = np.asarray(posterior["phi"]).std(axis=0)
-pd.DataFrame(
+
+pl.DataFrame(
     {
+        "lagged series": names,
         "unscaled prior sd": np.asarray(scale_unscaled[0, 2]),
         "scaled prior sd": np.asarray(scale_mn[0, 2]),
         "weak prior posterior mean": phi_weak_mean[0, 2],
         "weak prior posterior sd": phi_weak_sd[0, 2],
-    },
-    index=pd.Index(names, name="lagged series (realinv equation, lag 1)"),
-).round(3)
+    }
+).with_columns(pl.exclude("lagged series").round(3))
 ```
 
 
-|  | unscaled prior sd | scaled prior sd | weak prior posterior mean | weak prior posterior sd |
+shape: (3, 5)
+
+| lagged series | unscaled prior sd | scaled prior sd | weak prior posterior mean | weak prior posterior sd |
 |----|----|----|----|----|
-| lagged series (realinv equation, lag 1) |  |  |  |  |
-| realgdp | 0.25 | 1.331 | -0.490 | 0.608 |
-| realcons | 0.25 | 1.687 | 2.821 | 0.498 |
-| realinv | 0.50 | 0.500 | 0.071 | 0.104 |
+| str | f32 | f32 | f32 | f32 |
+| "realgdp" | 0.25 | 1.331 | -0.498 | 0.605 |
+| "realcons" | 0.25 | 1.687 | 2.827 | 0.498 |
+| "realinv" | 0.5 | 0.5 | 0.072 | 0.104 |
 
 
 ``` python
@@ -2412,12 +2461,39 @@ tree_mn = export(rng_subkey, var_model_mn, posterior_mn)
 summary_mn = az.summary(
     tree_mn, var_names=["intercept", "sigma", "phi"], ci_kind="hdi", ci_prob=0.94
 )
-print(convergence_line(summary_mn))
+summary_mn
 ```
 
 
     divergences: 0
-    max r_hat: 1.000, min ess_bulk: 2020
+
+
+|  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
+|----|----|----|----|----|----|----|----|----|----|
+| intercept\[realgdp\] | 0.25 | 0.092 | 0.079 | 0.43 | 2494 | 2731 | 1.00 | 0.0018 | 0.0013 |
+| intercept\[realcons\] | 0.548 | 0.088 | 0.38 | 0.71 | 3226 | 3077 | 1.00 | 0.0015 | 0.0011 |
+| intercept\[realinv\] | -1.69 | 0.46 | -2.6 | -0.81 | 3052 | 2944 | 1.00 | 0.0084 | 0.0061 |
+| sigma\[realgdp\] | 0.746 | 0.0353 | 0.68 | 0.82 | 3335 | 2824 | 1.00 | 0.00062 | 0.00044 |
+| sigma\[realcons\] | 0.658 | 0.0331 | 0.6 | 0.72 | 4268 | 3306 | 1.00 | 0.00051 | 0.00038 |
+| sigma\[realinv\] | 3.867 | 0.183 | 3.5 | 4.2 | 3918 | 2927 | 1.00 | 0.0029 | 0.0021 |
+| phi\[1, realgdp, realgdp\] | -0.056 | 0.119 | -0.28 | 0.17 | 2048 | 2568 | 1.00 | 0.0026 | 0.0019 |
+| phi\[1, realgdp, realcons\] | 0.467 | 0.102 | 0.28 | 0.66 | 2304 | 2662 | 1.00 | 0.0021 | 0.0015 |
+| phi\[1, realgdp, realinv\] | 0.0117 | 0.0183 | -0.023 | 0.045 | 2207 | 2590 | 1.00 | 0.00039 | 0.00028 |
+| phi\[1, realcons, realgdp\] | 0.001 | 0.104 | -0.2 | 0.19 | 2800 | 2672 | 1.00 | 0.002 | 0.0015 |
+| phi\[1, realcons, realcons\] | 0.195 | 0.094 | 0.017 | 0.37 | 3085 | 2960 | 1.00 | 0.0017 | 0.0012 |
+| phi\[1, realcons, realinv\] | 0.0155 | 0.0162 | -0.015 | 0.046 | 2764 | 2955 | 1.00 | 0.00031 | 0.00023 |
+| phi\[1, realinv, realgdp\] | -0.86 | 0.65 | -2.1 | 0.4 | 2067 | 2401 | 1.00 | 0.014 | 0.011 |
+| phi\[1, realinv, realcons\] | 3.27 | 0.56 | 2.2 | 4.3 | 2496 | 2707 | 1.00 | 0.011 | 0.0078 |
+| phi\[1, realinv, realinv\] | 0.119 | 0.101 | -0.077 | 0.31 | 2228 | 2297 | 1.00 | 0.0021 | 0.0016 |
+| phi\[2, realgdp, realgdp\] | 0.06 | 0.084 | -0.096 | 0.22 | 2956 | 3155 | 1.00 | 0.0015 | 0.0011 |
+| phi\[2, realgdp, realcons\] | 0.168 | 0.083 | 0.0083 | 0.32 | 2534 | 2936 | 1.00 | 0.0017 | 0.0011 |
+| phi\[2, realgdp, realinv\] | -0.0078 | 0.0134 | -0.033 | 0.018 | 3293 | 2976 | 1.00 | 0.00023 | 0.00017 |
+| phi\[2, realcons, realgdp\] | -0.004 | 0.07 | -0.13 | 0.13 | 3726 | 3191 | 1.00 | 0.0011 | 0.00083 |
+| phi\[2, realcons, realcons\] | 0.126 | 0.085 | -0.028 | 0.29 | 3347 | 2830 | 1.00 | 0.0015 | 0.001 |
+| phi\[2, realcons, realinv\] | 0.0083 | 0.0114 | -0.014 | 0.03 | 4401 | 2756 | 1.00 | 0.00017 | 0.00013 |
+| phi\[2, realinv, realgdp\] | 0.19 | 0.44 | -0.64 | 1 | 2776 | 2965 | 1.00 | 0.0084 | 0.0059 |
+| phi\[2, realinv, realcons\] | 0.44 | 0.44 | -0.36 | 1.3 | 3003 | 2792 | 1.00 | 0.0081 | 0.0057 |
+| phi\[2, realinv, realinv\] | -0.06 | 0.079 | -0.21 | 0.088 | 3063 | 3013 | 1.00 | 0.0014 | 0.001 |
 
 
 ## Shrinkage of the coefficients
@@ -2426,167 +2502,46 @@ The table compares the posterior standard deviation of every coefficient under t
 
 
 ``` python
-phi_index = pd.MultiIndex.from_product(
-    [list(range(1, p + 1)), names, names], names=["lag", "equation", "lagged series"]
+lag_labels, equation_labels, lagged_labels = zip(
+    *itertools.product(range(1, p + 1), names, names), strict=True
 )
-phi_sd = pd.DataFrame(
+
+phi_sd = pl.DataFrame(
     {
+        "lag": lag_labels,
+        "equation": equation_labels,
+        "lagged series": lagged_labels,
         "weak prior": phi_weak_sd.reshape(-1),
         "minnesota prior": np.asarray(posterior_mn["phi"]).std(axis=0).reshape(-1),
-    },
-    index=phi_index,
-)
-phi_sd["ratio"] = phi_sd["minnesota prior"] / phi_sd["weak prior"]
-own = phi_sd.index.get_level_values("equation") == phi_sd.index.get_level_values("lagged series")
-print(
-    f"mean ratio on own lags: {phi_sd.loc[own, 'ratio'].mean():.2f}, "
-    f"on cross lags: {phi_sd.loc[~own, 'ratio'].mean():.2f}"
-)
-phi_sd.round(3)
+    }
+).with_columns((pl.col("minnesota prior") / pl.col("weak prior")).alias("ratio"))
+
+own_mean = phi_sd.filter(pl.col("equation") == pl.col("lagged series"))["ratio"].mean()
+cross_mean = phi_sd.filter(pl.col("equation") != pl.col("lagged series"))["ratio"].mean()
+print(f"mean ratio on own lags: {own_mean:.2f}, on cross lags: {cross_mean:.2f}")
+phi_sd.with_columns(pl.exclude("lag", "equation", "lagged series").round(3))
 ```
 
 
-    mean ratio on own lags: 0.79, on cross lags: 0.76
+    mean ratio on own lags: 0.78, on cross lags: 0.76
 
 
-<table class="dataframe table table-sm table-striped small">
-<thead>
-<tr>
-<th></th>
-<th></th>
-<th></th>
-<th>weak prior</th>
-<th>minnesota prior</th>
-<th>ratio</th>
-</tr>
-<tr>
-<th>lag</th>
-<th>equation</th>
-<th>lagged series</th>
-<th></th>
-<th></th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<th rowspan="9" data-valign="top">1</th>
-<th rowspan="3" data-valign="top">realgdp</th>
-<th>realgdp</th>
-<td>0.140</td>
-<td>0.119</td>
-<td>0.846</td>
-</tr>
-<tr>
-<th>realcons</th>
-<td>0.114</td>
-<td>0.101</td>
-<td>0.889</td>
-</tr>
-<tr>
-<th>realinv</th>
-<td>0.023</td>
-<td>0.018</td>
-<td>0.803</td>
-</tr>
-<tr>
-<th rowspan="3" data-valign="top">realcons</th>
-<th>realgdp</th>
-<td>0.144</td>
-<td>0.105</td>
-<td>0.730</td>
-</tr>
-<tr>
-<th>realcons</th>
-<td>0.113</td>
-<td>0.094</td>
-<td>0.831</td>
-</tr>
-<tr>
-<th>realinv</th>
-<td>0.022</td>
-<td>0.016</td>
-<td>0.727</td>
-</tr>
-<tr>
-<th rowspan="3" data-valign="top">realinv</th>
-<th>realgdp</th>
-<td>0.608</td>
-<td>0.650</td>
-<td>1.069</td>
-</tr>
-<tr>
-<th>realcons</th>
-<td>0.498</td>
-<td>0.542</td>
-<td>1.088</td>
-</tr>
-<tr>
-<th>realinv</th>
-<td>0.104</td>
-<td>0.101</td>
-<td>0.971</td>
-</tr>
-<tr>
-<th rowspan="9" data-valign="top">2</th>
-<th rowspan="3" data-valign="top">realgdp</th>
-<th>realgdp</th>
-<td>0.141</td>
-<td>0.085</td>
-<td>0.600</td>
-</tr>
-<tr>
-<th>realcons</th>
-<td>0.123</td>
-<td>0.083</td>
-<td>0.673</td>
-</tr>
-<tr>
-<th>realinv</th>
-<td>0.022</td>
-<td>0.014</td>
-<td>0.617</td>
-</tr>
-<tr>
-<th rowspan="3" data-valign="top">realcons</th>
-<th>realgdp</th>
-<td>0.144</td>
-<td>0.070</td>
-<td>0.488</td>
-</tr>
-<tr>
-<th>realcons</th>
-<td>0.123</td>
-<td>0.086</td>
-<td>0.696</td>
-</tr>
-<tr>
-<th>realinv</th>
-<td>0.022</td>
-<td>0.011</td>
-<td>0.532</td>
-</tr>
-<tr>
-<th rowspan="3" data-valign="top">realinv</th>
-<th>realgdp</th>
-<td>0.616</td>
-<td>0.445</td>
-<td>0.722</td>
-</tr>
-<tr>
-<th>realcons</th>
-<td>0.543</td>
-<td>0.433</td>
-<td>0.798</td>
-</tr>
-<tr>
-<th>realinv</th>
-<td>0.101</td>
-<td>0.079</td>
-<td>0.780</td>
-</tr>
-</tbody>
-</table>
+shape: (18, 6)
+
+| lag | equation   | lagged series | weak prior | minnesota prior | ratio |
+|-----|------------|---------------|------------|-----------------|-------|
+| i64 | str        | str           | f32        | f32             | f32   |
+| 1   | "realgdp"  | "realgdp"     | 0.141      | 0.119           | 0.843 |
+| 1   | "realgdp"  | "realcons"    | 0.114      | 0.102           | 0.894 |
+| 1   | "realgdp"  | "realinv"     | 0.023      | 0.018           | 0.804 |
+| 1   | "realcons" | "realgdp"     | 0.146      | 0.104           | 0.713 |
+| 1   | "realcons" | "realcons"    | 0.115      | 0.094           | 0.818 |
+| …   | …          | …             | …          | …               | …     |
+| 2   | "realcons" | "realcons"    | 0.123      | 0.085           | 0.69  |
+| 2   | "realcons" | "realinv"     | 0.022      | 0.011           | 0.525 |
+| 2   | "realinv"  | "realgdp"     | 0.621      | 0.442           | 0.712 |
+| 2   | "realinv"  | "realcons"    | 0.541      | 0.442           | 0.818 |
+| 2   | "realinv"  | "realinv"     | 0.103      | 0.079           | 0.765 |
 
 
 ## Forecast bands
@@ -2596,21 +2551,25 @@ Tighter coefficients mean less parameter uncertainty in the forecast. The table 
 
 ``` python
 forecast_draws_mn = stack_draws("predictions", tree_mn)
-pd.DataFrame(
+
+pl.DataFrame(
     {
+        "series": names,
         "weak prior": width_94.mean(axis=0),
         "minnesota prior": hdi_width(forecast_draws_mn, 0.94).mean(axis=0),
-    },
-    index=names,
-).round(3)
+    }
+).with_columns(pl.exclude("series").round(3))
 ```
 
 
-|          | weak prior | minnesota prior |
-|----------|------------|-----------------|
-| realgdp  | 3.205      | 3.161           |
-| realcons | 2.700      | 2.626           |
-| realinv  | 16.513     | 16.557          |
+shape: (3, 3)
+
+| series     | weak prior | minnesota prior |
+|------------|------------|-----------------|
+| str        | f64        | f64             |
+| "realgdp"  | 3.21       | 3.168           |
+| "realcons" | 2.705      | 2.63            |
+| "realinv"  | 16.489     | 16.536          |
 
 
 ## Impulse responses
@@ -2654,4 +2613,4 @@ The tightness \lambda is a modeling choice, not an estimate: there is no closed-
 - Pinder, T. [Impulso](https://github.com/thomaspinder/impulso): a Bayesian VAR package for Python ([documentation](https://thomaspinder.github.io/Impulso/), [`MinnesotaPrior` reference](https://thomaspinder.github.io/Impulso/reference/generated/impulso.priors.MinnesotaPrior.html)). The Minnesota prior parameterization and the batched moving-average recursion used here follow its design.
 - statsmodels. [macrodata](https://www.statsmodels.org/stable/datasets/generated/macrodata.html): United States macroeconomic data, 1959Q1 to 2009Q3, public domain.
 
-[Source: Vector Autoregression (VAR) with `numpyro_forecast`](_src/var-preview.html#3c3b9b77)
+[Source: Vector Autoregression (VAR) with `numpyro_forecast`](_src/var-preview.html#50138624)

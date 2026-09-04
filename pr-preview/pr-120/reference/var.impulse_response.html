@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>convert.add_forecast_groups() – numpyro_forecast | numpyro_forecast</title>
+<title>var.impulse_response() – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -121,10 +121,53 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script>(function(){var s=document.createElement('script');var m=document.querySelector('meta[name="quarto:offset"]');s.src=(m?m.content:'')+'gd-lightbox-annotate.js';s.defer=true;document.head.appendChild(s);})();</script>
 <script src="../theme-init.js"></script>
 
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", function () {
+ var mathElements = document.getElementsByClassName("math");
+ var macros = [];
+ for (var i = 0; i < mathElements.length; i++) {
+  var texText = mathElements[i].firstChild;
+  if (mathElements[i].tagName == "SPAN") {
+   katex.render(texText.data, mathElements[i], {
+    displayMode: mathElements[i].classList.contains('display'),
+    throwOnError: false,
+    macros: macros,
+    fleqn: false
+   });
+}}});
+  </script>
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
 
-  <link rel="alternate" type="text/markdown" href="convert.add_forecast_groups.md">
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html">
-  <meta name="description" content="Attach out-of-sample forecast groups to a copy of tree.">
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+  <link rel="alternate" type="text/markdown" href="var.impulse_response.md">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html">
+  <meta name="description" content="Compute the impulse responses (moving-average coefficients) of a VAR.">
   <script type="application/ld+json">
 [
   {
@@ -144,23 +187,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "convert.add_forecast_groups - numpyro_forecast",
+    "name": "var.impulse_response - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="convert.add_forecast_groups() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Attach out-of-sample forecast groups to a copy of tree.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html">
+  <meta property="og:title" content="var.impulse_response() – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Compute the impulse responses (moving-average coefficients) of a VAR.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="convert.add_forecast_groups() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Attach out-of-sample forecast groups to a copy of tree.">
+  <meta name="twitter:title" content="var.impulse_response() – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Compute the impulse responses (moving-average coefficients) of a VAR.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -210,7 +253,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">convert.add_forecast_groups()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">var.impulse_response()</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -310,7 +353,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/var.impulse_response.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/var.impulse_response.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">var.impulse_response</span></a>
   </div>
 </li>
@@ -494,7 +537,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/convert.add_forecast_groups.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">convert.add_forecast_groups</span></a>
   </div>
 </li>
@@ -799,6 +842,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
   <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
+  <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
     </div>
@@ -807,7 +852,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">convert.add_forecast_groups()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">var.impulse_response()</span></h2>
 </div>
 
 
@@ -825,48 +870,50 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Attach out-of-sample forecast groups to a copy of <code>tree</code>.</p>
+<p>Compute the impulse responses (moving-average coefficients) of a VAR.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L499-L592" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/var.py#L235-L344" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">add_forecast_groups</span>(</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tree</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">forecast_samples</span>,</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates_future</span>,</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">var</span><span class="op">.</span><span class="sig-name">impulse_response</span>(
+    <span class="va">phi</span>,
+    <span class="va">horizon</span>,
+    <span class="op">*</span>,
+    <span class="va">scale_tril</span><span class="op">=</span><span class="cn-none">None</span>,
+    <span class="va">cumulative</span><span class="op">=</span><span class="cn-bool">False</span>,
+)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Adds a <code>predictions</code> group (the forecast <code>obs</code> draws) and a <code>predictions_constant_data</code> group (the future covariates). The forecast <code>time</code> coordinate continues the in-sample one: integer continuation by default, or explicit values via <code>time_coord</code>. This is the step-by-step route for draws you produced yourself; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> attaches the same groups automatically when its <code>covariates</code> extend beyond <code>data</code>.</p>
+<p>Inverting the lag polynomial of <span class="math inline">y_t = c + \sum_{l=1}^{p} \Phi_l y_{t-l} +
+\varepsilon_t</span> gives the moving-average representation <span class="math inline">y_t = \mu +
+\sum_{h \ge 0} \Psi_h \varepsilon_{t-h}</span> whose coefficients follow the recursion</p>
+<p><span class="math display">
+\Psi_0 = I, \qquad
+\Psi_h = \sum_{j=1}^{\min(h, p)} \Phi_j \Psi_{h-j} \quad (h \ge 1).
+</span></p>
+<p><code>out[..., h, i, j]</code> is the response of variable <code>i</code>, <code>h</code> steps after a unit shock to variable <code>j</code> at step <code>0</code> (a unit increase of the reduced-form residual <span class="math inline">\varepsilon_{t, j}</span> with the other residuals held at zero). With <code>scale_tril</code> the responses are to <em>orthogonalized</em> shocks: for a factor <span class="math inline">B</span> with <span class="math inline">\Sigma = B B^\top</span> (the Cholesky factor <span class="math inline">L</span> of the shock covariance, so <span class="math inline">\varepsilon_t = L u_t</span> with <span class="math inline">u_t</span> standard normal) the function returns <span class="math inline">\Theta_h = \Psi_h B</span>, the response to a one-standard- deviation shock <span class="math inline">u_{t, j}</span>. With the Cholesky factor this is the recursive identification: the first series in the ordering responds to its own shock only at <span class="math inline">h = 0</span>, the second to the first two, and so on, so the ordering of the series is part of the model. The recursion is defined for any <code>phi</code>; the moving-average representation, and <span class="math inline">\Psi_h \to 0</span>, need a stable VAR (see <a href="var.companion_matrix.html#numpyro_forecast.var.companion_matrix" class="gdls-link gdls-code">companion_matrix()</a>). The left recursion above and the right recursion <span class="math inline">\Psi_h = \sum_j \Psi_{h-j} \Phi_j</span> agree, because both are the two-sided inverse of the lag polynomial.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code><span class="doc-parameter-name">tree</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
+<dt><code><span class="doc-parameter-name">phi</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *#batch lags obs obs"</span>]</span></code></dt>
 <dd>
-<p>A tree from <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> (its <code>observed_data</code> time coordinate is continued).</p>
+<p>Coefficient tensor <code>(*batch, lags, obs, obs)</code>. Posterior draws pass through the leading batch axis unchanged; no <code>vmap</code> is needed.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">forecast_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Num[ArrayLike, <span class="st">" sample future obs"</span>]</span></code></dt>
+<dt><code><span class="doc-parameter-name">horizon</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
-<p>Forecast draws shaped <code>(num_samples, future, obs)</code> from <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>.</p>
+<p>Largest step <span class="math inline">H \ge 0</span> to compute; the result holds <code>horizon + 1</code> steps including step <code>0</code> (like <a href="acf.acf.html#numpyro_forecast.acf.acf" class="gdls-link gdls-code">acf()</a>, which includes lag <code>0</code>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">covariates_future</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
+<dt><code><span class="doc-parameter-name">scale_tril</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[Array, <span class="st">" *#batch obs obs"</span>] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Future covariates shaped <code>(future, covariate_dim)</code>, or any layout with time at axis <code>-2</code> when <code>covariate_dims</code> names the axes.</p>
+<p>Optional square factor <code>(*batch, obs, obs)</code> of the shock covariance (typically the Cholesky factor, <code>sigma[..., :, None] * l_omega</code> for an LKJ correlation factor). Its batch axes broadcast against those of <code>phi</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">time_coord</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[Any] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">cumulative</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
 <dd>
-<p>Optional explicit forecast time coordinate; defaults to integer continuation of the in-sample time. Required when the in-sample time coordinate is non-integer (e.g.&nbsp;datetime64): auto-continuing would have to guess the frequency, so explicit values are demanded instead.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
-<dd>
-Optional dimension names for <code>covariates_future</code>, one per axis. When omitted, the names are inherited from the tree’s <code>constant_data["covariates"]</code> variable (falling back to <code>("time", "covariate_dim")</code> if the tree carries no stored covariates), so the forecast covariates always share the in-sample axis names. When given explicitly, the names must match the stored ones. See <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a>.
+If <code>True</code>, return the running sum over steps, the response of the <em>level</em> when the modeled series are differences.
 </dd>
 </dl>
 </div>
@@ -875,9 +922,9 @@ Optional dimension names for <code>covariates_future</code>, one per axis. When 
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch steps obs obs"</span>]</span></code></dt>
 <dd>
-A new tree with the <code>predictions</code> and <code>predictions_constant_data</code> groups added.
+<span class="math inline">\Psi_0, \ldots, \Psi_H</span> (or <span class="math inline">\Theta_h</span>, or their running sums) with the step axis at <code>-3</code>: the package’s “time at <code>-2</code>” convention counts from the trailing event dims, and the event here is an <code>(obs, obs)</code> matrix. Reshape to <code>(*batch, steps, obs * obs)</code> to plot the grid with <a href="convert.predictions_to_datatree.html#numpyro_forecast.convert.predictions_to_datatree" class="gdls-link gdls-code">predictions_to_datatree()</a>.
 </dd>
 </dl>
 </div>
@@ -888,14 +935,20 @@ A new tree with the <code>predictions</code> and <code>predictions_constant_data
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>time_coord</code> is given but its length differs from the forecast horizon, or if it is omitted while the in-sample time coordinate is non-integer.</p>
-</dd>
-<dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
-<dd>
-If the resolved <code>covariate_dims</code> (explicit or inherited) do not name every <code>covariates_future</code> axis, or if explicit names disagree with the dimension names already stored on the tree’s <code>constant_data["covariates"]</code>.
+If <code>horizon</code> is negative.
 </dd>
 </dl>
 </div>
+</section>
+<section id="notes" class="level2 doc-notes">
+<h2 class="doc-notes">Notes</h2>
+<p>The posterior mean of the impulse responses is not the impulse response at the posterior mean of <code>phi</code>: the recursion is nonlinear in <code>phi</code>, and a single explosive draw dominates the mean at long horizons, so summarize draws with quantiles and check stability first.</p>
+</section>
+<section id="references" class="level2 doc-references">
+<h2 class="doc-references">References</h2>
+<p>Lütkepohl, H. (2005). <em>New Introduction to Multiple Time Series Analysis</em>, chapter 2. Springer.</p>
+<p>Orduz, J. <em>Bayesian VAR in NumPyro</em>, <a href="https://juanitorduz.github.io/var_numpyro/">juanitorduz.github.io/var_numpyro</a>, whose <code>compute_irf</code> this function generalizes.</p>
+<p>Pinder, T. <em>Impulso</em>, <a href="https://github.com/thomaspinder/impulso">github.com/thomaspinder/impulso</a>: the broadcast-over-draws recursion of its <code>compute_ma_phi</code> is the shape of this implementation, ported to a JAX scan.</p>
 
 
 </section>
