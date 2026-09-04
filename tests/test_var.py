@@ -41,9 +41,6 @@ def _lower_tril(k: int) -> Array:
     return jnp.tril(0.3 * jnp.ones((k, k))) + 0.7 * jnp.eye(k)
 
 
-# --- var_mean ----------------------------------------------------------------------------
-
-
 def test_var_mean_matches_hand_computed_var2() -> None:
     phi, lags, c = _phi(), _lags(), jnp.array([0.5, -0.5])
     # lags[-1] is y_{t-1} and pairs with Phi_1 = phi[0]; lags[-2] is y_{t-2} and pairs with phi[1].
@@ -75,9 +72,6 @@ def test_var_mean_broadcasts_batched_phi_over_a_single_window() -> None:
 def test_var_mean_rejects_mismatched_lag_count() -> None:
     with pytest.raises(TypeCheckError):
         var_mean(_phi(), jnp.zeros((P + 1, K)))
-
-
-# --- var_step ----------------------------------------------------------------------------
 
 
 def test_var_step_mean_and_window_shift() -> None:
@@ -116,9 +110,6 @@ def test_var_step_varx_by_wrapping() -> None:
 def test_var_step_rejects_wrong_lag_count_with_guidance() -> None:
     with pytest.raises(ValueError, match=r"lags=2.*init_carry=y\[\.\.\., :2, :\]"):
         var_step(_phi())(jnp.zeros((P + 1, K)), None)
-
-
-# --- ssoe integration --------------------------------------------------------------------
 
 
 def _var_series(t: int, phi: Array, c: Array, scale_tril: Array, key: int = 3) -> Array:
@@ -240,9 +231,6 @@ def test_ssoe_var_to_datatree_dims() -> None:
     assert tree["posterior"]["mu_t"].dims == ("chain", "draw", "time", "obs_dim")
 
 
-# --- companion_matrix ----------------------------------------------------------------------
-
-
 def test_companion_matrix_p1_is_phi() -> None:
     phi = _phi()[:1]
     assert jnp.array_equal(companion_matrix(phi), phi[0])
@@ -269,9 +257,6 @@ def test_companion_matrix_batched() -> None:
     f = companion_matrix(phi)
     assert f.shape == (5, P * K, P * K)
     assert jnp.array_equal(f[2], companion_matrix(phi[2]))
-
-
-# --- impulse_response ------------------------------------------------------------------------
 
 
 def test_impulse_response_equals_companion_powers() -> None:

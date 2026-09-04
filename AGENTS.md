@@ -107,6 +107,10 @@ Use explicit name distributions like $\text{Normal}(\mu, \sigma)$ instead of $\m
 
 Use American English spelling. Do not use British English spelling.
 
+### Technical Writing
+
+Work on using Language ASD-STE100 simplified technical english.
+
 ## Commands
 
 See the Makefile for the full workflow.
