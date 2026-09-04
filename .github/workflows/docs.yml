@@ -45,8 +45,11 @@ jobs:
       # reference can import numpyro_forecast.
       - run: make setup
       # Notebooks render from their stored outputs, so MCMC does not run here.
+      # PR previews build unversioned: a preview's root reference should show
+      # exactly what the PR's checkout contains (including not-yet-released
+      # API), not the pruned reference of the last release.
       - name: Build docs
-        run: make docs
+        run: make docs ARGS=${{ github.event_name == 'pull_request' && '--unversioned' || '' }}
       - uses: actions/upload-artifact@v7
         with:
           name: docs-site

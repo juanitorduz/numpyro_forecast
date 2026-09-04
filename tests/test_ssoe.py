@@ -34,8 +34,6 @@ from numpyro_forecast.typing import ForecastModel
 
 Body = Callable[[Horizon, Array], SSOEResult]
 
-# --- helpers -----------------------------------------------------------------
-
 
 def _series(t: int, key: int = 1) -> Array:
     """A ``(t, 1)`` random-walk series."""
@@ -545,9 +543,6 @@ def test_noise_shape_is_enforced(
     run_horizon_body(body, T_OBS, 0)
     with pytest.raises(ValueError, match="time_future plate"):
         run_horizon_body(body, T_OBS, FUTURE)
-
-
-# --- 7b. multivariate (event-shaped) noise: correlated errors across the observation axis
 
 
 def _lower_tril(k: int) -> Array:

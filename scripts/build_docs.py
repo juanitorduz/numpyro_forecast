@@ -29,6 +29,11 @@ duration of the build (great-docs has no config override mechanism) and
 restored afterwards, even on failure. Only a hard kill can leave the file
 patched; ``git restore great-docs.yml`` fixes that.
 
+PR-preview builds pass ``--unversioned`` (see ``.github/workflows/docs.yml``)
+to skip this split entirely: a preview's root reference should show exactly
+what the PR's checkout contains, including any not-yet-released API, rather
+than the pruned reference of the last release.
+
 After a successful ``build``, the ``/v/latest/`` and ``/v/stable/`` alias
 redirects of the versioned site are rewritten to absolute URLs: great-docs
 writes them with root-relative targets, which on a GitHub Pages project site
@@ -454,14 +459,17 @@ def main() -> int:
     int
         The exit code of the great-docs command.
     """
-    command = sys.argv[1] if len(sys.argv) > 1 else "build"
+    args = [arg for arg in sys.argv[1:] if arg != "--unversioned"]
+    unversioned = len(args) != len(sys.argv) - 1
+    command = args[0] if args else "build"
     wrappers = generate_pages()
     original_config = CONFIG_PATH.read_text(encoding="utf-8")
     patched = False
     try:
-        tag = latest_release_tag()
+        tag = None if unversioned else latest_release_tag()
         if tag is None:
-            print("No release tag found; building an unversioned site.")
+            reason = "--unversioned requested" if unversioned else "no release tag found"
+            print(f"{reason}; building an unversioned site.")
         else:
             snapshot = ensure_release_snapshot(tag)
             relpath = snapshot.relative_to(REPO_ROOT).as_posix()

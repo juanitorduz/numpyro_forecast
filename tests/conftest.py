@@ -250,10 +250,6 @@ def as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
     return model
 
 
-# ---------------------------------------------------------------------------
-# Trace helpers shared by the building-block tests (ssoe, var, ...).
-# ---------------------------------------------------------------------------
-
 CarryFn = Callable[[Array, Array], Any]
 """The ``carry_fn(y_t, eps_t)`` callable an ``ssoe`` step returns (test alias)."""
 
