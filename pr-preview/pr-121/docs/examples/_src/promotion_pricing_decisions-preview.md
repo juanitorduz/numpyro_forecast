@@ -13,7 +13,7 @@ The model uses the package's model building blocks:
 - [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) samples the weekly level innovations for every store-product series, with a separate site for the forecast horizon.
 - [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) attaches the negative binomial likelihood to the observed weeks and samples the horizon.
 
-The prediction drivers and evaluation helpers do the rest: [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) and [`predict_in_sample`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html) draw the holdout and in-sample predictives, [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html) and [`predictions_to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html) export draws to ArviZ, [`fourier_features`](https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html) builds the annual seasonality basis, and [`eval_crps`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html), [`eval_coverage`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_coverage.html) and [`make_mase`](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.make_mase.html) score the forecasts.
+The prediction drivers and evaluation helpers do the rest: [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) and [`predict_in_sample`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html) draw the holdout and in-sample predictives, [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html) and [`predictions_to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html) export draws to ArviZ, [`fourier_features`](https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html) builds the annual seasonality basis, and [`eval_crps`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html), [`eval_coverage`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_coverage.html) and [`make_mase`](https://juanitorduz.github.io/numpyro_forecast/reference/metrics.make_mase.html) score the forecasts, and [`load_breakfast_at_the_frat`](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_breakfast_at_the_frat.html) fetches the panel.
 
 Two things this notebook does not claim. Prices were never randomized, so every elasticity rests on a selection-on-observables assumption that we state explicitly and cannot test. And the holdout validates the forecasting engine under the realized promotion calendar, not the counterfactual calendars, which nobody observed.
 
@@ -25,11 +25,8 @@ Two things this notebook does not claim. Prices were never randomized, so every 
 
 
 ``` python
-import hashlib
-import urllib.request
 import warnings
 from dataclasses import dataclass
-from pathlib import Path
 from typing import cast
 
 # preliz warns at import time that PyMC is absent; the example does not need it.
@@ -71,6 +68,7 @@ from numpyro_forecast import (
     predictions_to_datatree,
     to_datatree,
 )
+from numpyro_forecast.datasets import load_breakfast_at_the_frat
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.metrics import crps_empirical, make_mase
 from numpyro_forecast.typing import Array, ForecastModel
@@ -105,40 +103,24 @@ rng_key = random.PRNGKey(seed=42)
 
 # Read data
 
-dunnhumby publishes the workbook on its source-files page behind a form. We download the copy that [Ghaedrahmati (2025)](https://doi.org/10.6084/m9.figshare.30121060) deposited on figshare, whose record declares a CC BY 4.0 license for the copy; dunnhumby's own terms govern the data. The download is cached under the home directory and verified against its SHA-256 digest, so the notebook reads the same bytes on every run. Every data sheet carries a title row above the header, which is why the reader skips one row.
+dunnhumby publishes the workbook on its source-files page behind a form. The package loader [`load_breakfast_at_the_frat`](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_breakfast_at_the_frat.html) downloads the copy that [Ghaedrahmati (2025)](https://doi.org/10.6084/m9.figshare.30121060) deposited on figshare, whose record declares a CC BY 4.0 license for the copy; dunnhumby's own terms govern the data. The download is cached under the home directory and verified against its SHA-256 digest on every call, so the notebook reads the same bytes on every run. Every data sheet carries a title row above the header, which the loader skips, and the loader lowercases every column name and every string value, so the whole notebook works with one case. Two conventions for the polars code that follows: every operation is written as an expression method with `pl.lit` for literals (`pl.col("units").gt(pl.lit(0))` rather than an operator), and long pipelines are split into small named helpers, either expression builders or frame-to-frame steps composed with `pipe`. Column names that mirror a math symbol in the decision tables (`RP`, `VSS`, `Q_paths`) keep their case.
 
 
     In [2]:
 
 
 ``` python
-DATA_SHA256 = "61b1d77dd6d9298fed204cc231f2b853a4c7f79376cfc30231646e1e51d0daba"
-cache_dir = Path.home() / ".cache" / "numpyro_forecast"
-cache_dir.mkdir(parents=True, exist_ok=True)
-workbook_path = cache_dir / "breakfast_at_the_frat.xlsx"
-if not workbook_path.exists():
-    urllib.request.urlretrieve("https://ndownloader.figshare.com/files/57937129", workbook_path)
-digest = hashlib.sha256(workbook_path.read_bytes()).hexdigest()
-if digest != DATA_SHA256:
-    msg = f"unexpected workbook digest {digest}"
-    raise ValueError(msg)
-
-sheets = pl.read_excel(
-    workbook_path,
-    sheet_name=["dh Transaction Data", "dh Products Lookup", "dh Store Lookup"],
-    engine="calamine",
-    read_options={"header_row": 1},
-)
-transactions_raw = sheets["dh Transaction Data"]
-products_df = sheets["dh Products Lookup"]
-stores_raw = sheets["dh Store Lookup"]
+frat = load_breakfast_at_the_frat()
+transactions_raw = frat.transactions
+products_df = frat.products
+stores_raw = frat.stores
 
 print(
     f"transactions: {transactions_raw.height:,} rows | "
-    f"{transactions_raw['STORE_NUM'].n_unique()} stores | "
-    f"{transactions_raw['UPC'].n_unique()} UPCs | "
-    f"{transactions_raw['WEEK_END_DATE'].n_unique()} weeks from "
-    f"{transactions_raw['WEEK_END_DATE'].min()} to {transactions_raw['WEEK_END_DATE'].max()}"
+    f"{transactions_raw['store_num'].n_unique()} stores | "
+    f"{transactions_raw['upc'].n_unique()} UPCs | "
+    f"{transactions_raw['week_end_date'].n_unique()} weeks from "
+    f"{transactions_raw['week_end_date'].min()} to {transactions_raw['week_end_date'].max()}"
 )
 print(f"products lookup: {products_df.height} rows | store lookup: {stores_raw.height} rows")
 transactions_raw.head(3)
@@ -149,7 +131,7 @@ transactions_raw.head(3)
     products lookup: 58 rows | store lookup: 79 rows
 
 
-| WEEK_END_DATE | STORE_NUM | UPC | UNITS | VISITS | HHS | SPEND | PRICE | BASE_PRICE | FEATURE | DISPLAY | TPR_ONLY |
+| week_end_date | store_num | upc | units | visits | hhs | spend | price | base_price | feature | display | tpr_only |
 |----|----|----|----|----|----|----|----|----|----|----|----|
 | 2009-01-14 | 367 | 1111009477 | 13 | 13 | 13 | 18.07 | 1.39 | 1.57 | 0 | 0 | 1 |
 | 2009-01-14 | 367 | 1111009497 | 20 | 18 | 18 | 27.8 | 1.39 | 1.39 | 0 | 0 | 0 |
@@ -163,44 +145,42 @@ Three quirks of the workbook matter for what follows. A few rows have a missing 
 
 
 ``` python
-price_ratio_raw = transactions_raw["PRICE"] / transactions_raw["BASE_PRICE"]
-quirks = pl.DataFrame(
-    {
-        "quirk": [
-            "missing BASE_PRICE",
-            "missing PRICE",
-            "UNITS <= 0",
-            "PRICE > BASE_PRICE",
-        ],
-        "rows": [
-            transactions_raw["BASE_PRICE"].null_count(),
-            transactions_raw["PRICE"].null_count(),
-            int((transactions_raw["UNITS"] <= 0).sum()),
-            int((price_ratio_raw > 1.0).sum()),
-        ],
-    }
-).with_columns(share=(pl.col("rows") / transactions_raw.height))
+def price_ratio() -> pl.Expr:
+    """Divide the shelf price by the base price."""
+    return pl.col("price").truediv(pl.col("base_price"))
+
+
+quirks = (
+    transactions_raw.select(
+        pl.col("base_price").null_count().alias("missing base_price"),
+        pl.col("price").null_count().alias("missing price"),
+        pl.col("units").le(pl.lit(0)).sum().alias("units <= 0"),
+        price_ratio().gt(pl.lit(1.0)).sum().alias("price > base_price"),
+    )
+    .unpivot(variable_name="quirk", value_name="rows")
+    .with_columns(share=pl.col("rows").truediv(pl.lit(transactions_raw.height)))
+)
 quirks
 ```
 
 
 | quirk                 | rows | share    |
 |-----------------------|------|----------|
-| "missing BASE_PRICE"  | 185  | 0.000352 |
-| "missing PRICE"       | 23   | 0.000044 |
-| "UNITS \<= 0"         | 5    | 0.00001  |
-| "PRICE \> BASE_PRICE" | 6047 | 0.011519 |
+| "missing base_price"  | 185  | 0.000352 |
+| "missing price"       | 23   | 0.000044 |
+| "units \<= 0"         | 5    | 0.00001  |
+| "price \> base_price" | 6047 | 0.011519 |
 
 
     In [4]:
 
 
 ``` python
-duplicated_stores = stores_raw.filter(pl.col("STORE_ID").is_duplicated())
-stores_df = stores_raw.unique(subset="STORE_ID", keep="first", maintain_order=True)
-print(f"duplicated store ids: {duplicated_stores['STORE_ID'].n_unique()} (rows kept: first)")
-print(duplicated_stores.select("STORE_ID", "STORE_NAME", "SEG_VALUE_NAME"))
-segment_counts = stores_df.group_by("SEG_VALUE_NAME").len().sort("SEG_VALUE_NAME")
+duplicated_stores = stores_raw.filter(pl.col("store_id").is_duplicated())
+stores_df = stores_raw.unique(subset="store_id", keep="first", maintain_order=True)
+print(f"duplicated store ids: {duplicated_stores['store_id'].n_unique()} (rows kept: first)")
+print(duplicated_stores.select("store_id", "store_name", "seg_value_name"))
+segment_counts = stores_df.group_by("seg_value_name").len().sort("seg_value_name")
 print(f"stores after the dedupe: {stores_df.height}")
 segment_counts
 ```
@@ -208,21 +188,21 @@ segment_counts
 
     duplicated store ids: 2 (rows kept: first)
     ┌──────────┬──────────────┬────────────────┐
-    │ STORE_ID ┆ STORE_NAME   ┆ SEG_VALUE_NAME │
+    │ store_id ┆ store_name   ┆ seg_value_name │
     ╞══════════╪══════════════╪════════════════╡
-    │ 4503     ┆ ROCKWALL     ┆ MAINSTREAM     │
-    │ 17627    ┆ FLOWER MOUND ┆ MAINSTREAM     │
-    │ 17627    ┆ FLOWER MOUND ┆ UPSCALE        │
-    │ 4503     ┆ ROCKWALL     ┆ UPSCALE        │
+    │ 4503     ┆ rockwall     ┆ mainstream     │
+    │ 17627    ┆ flower mound ┆ mainstream     │
+    │ 17627    ┆ flower mound ┆ upscale        │
+    │ 4503     ┆ rockwall     ┆ upscale        │
     └──────────┴──────────────┴────────────────┘
     stores after the dedupe: 77
 
 
-| SEG_VALUE_NAME | len |
+| seg_value_name | len |
 |----------------|-----|
-| "MAINSTREAM"   | 43  |
-| "UPSCALE"      | 15  |
-| "VALUE"        | 19  |
+| "mainstream"   | 43  |
+| "upscale"      | 15  |
+| "value"        | 19  |
 
 
 # A first look at prices and promotions
@@ -230,39 +210,39 @@ segment_counts
 
 ## Why these six products
 
-Missing store-product-weeks are absent rows, never recorded zeros, so a product that a store stops carrying simply disappears for a while. The table below counts, for every cold cereal, the stores that carry it and the stores that carry it in all weeks. The Post and Quaker products have delisting gaps in every store, so we keep the six products of the `ALL FAMILY CEREAL` sub-category from General Mills, Kellogg and the private label: one substitution group, complete in dozens of stores, with a private-label twin of the focal product. The six are carried in all 77 stores and complete in 62 to 75 of them.
+Missing store-product-weeks are absent rows, never recorded zeros, so a product that a store stops carrying simply disappears for a while. The table below counts, for every cold cereal, the stores that carry it and the stores that carry it in all weeks. The Post and Quaker products have delisting gaps in every store, so we keep the six products of the `all family cereal` sub-category from General Mills, Kellogg and the private label: one substitution group, complete in dozens of stores, with a private-label twin of the focal product. The six are carried in all 77 stores and complete in 62 to 75 of them.
 
 
     In [5]:
 
 
 ``` python
-N_WEEKS = transactions_raw["WEEK_END_DATE"].n_unique()
-cereal_all = transactions_raw.join(products_df, on="UPC").filter(
-    pl.col("CATEGORY") == "COLD CEREAL"
+N_WEEKS = transactions_raw["week_end_date"].n_unique()
+cereal_all = transactions_raw.join(products_df, on="upc").filter(
+    pl.col("category").eq(pl.lit("cold cereal"))
 )
 
 
 def weeks_per_series(df: pl.DataFrame, keys: list[str]) -> pl.DataFrame:
     """Count the distinct weeks of every series keyed by ``keys``."""
-    return df.group_by(keys).agg(weeks=pl.col("WEEK_END_DATE").n_unique())
+    return df.group_by(keys).agg(weeks=pl.col("week_end_date").n_unique())
 
 
 completeness = (
-    cereal_all.pipe(weeks_per_series, ["UPC", "STORE_NUM"])
-    .group_by("UPC")
+    cereal_all.pipe(weeks_per_series, ["upc", "store_num"])
+    .group_by("upc")
     .agg(
         stores_carrying=pl.len(),
-        stores_complete=(pl.col("weeks") == N_WEEKS).sum(),
+        stores_complete=pl.col("weeks").eq(pl.lit(N_WEEKS)).sum(),
         min_weeks=pl.col("weeks").min(),
     )
-    .join(products_df.select("UPC", "DESCRIPTION", "MANUFACTURER", "SUB_CATEGORY"), on="UPC")
-    .sort("stores_complete", "UPC", descending=[True, False])
+    .join(products_df.select("upc", "description", "manufacturer", "sub_category"), on="upc")
+    .sort("stores_complete", "upc", descending=[True, False])
     .select(
-        "UPC",
-        "DESCRIPTION",
-        "MANUFACTURER",
-        "SUB_CATEGORY",
+        "upc",
+        "description",
+        "manufacturer",
+        "sub_category",
         "stores_carrying",
         "stores_complete",
         "min_weeks",
@@ -272,23 +252,23 @@ completeness
 ```
 
 
-| UPC | DESCRIPTION | MANUFACTURER | SUB_CATEGORY | stores_carrying | stores_complete | min_weeks |
+| upc | description | manufacturer | sub_category | stores_carrying | stores_complete | min_weeks |
 |----|----|----|----|----|----|----|
-| 1600027527 | "GM HONEY NUT CHEERIOS" | "GENERAL MI" | "ALL FAMILY CEREAL" | 77 | 75 | 131 |
-| 1600027528 | "GM CHEERIOS" | "GENERAL MI" | "ALL FAMILY CEREAL" | 77 | 73 | 131 |
-| 3800031838 | "KELL FROSTED FLAKES" | "KELLOGG" | "KIDS CEREAL" | 77 | 73 | 131 |
-| 1111085345 | "PL RAISIN BRAN" | "PRIVATE LABEL" | "ADULT CEREAL" | 77 | 71 | 131 |
-| 1600027564 | "GM CHEERIOS" | "GENERAL MI" | "ALL FAMILY CEREAL" | 77 | 71 | 131 |
-| 3800031829 | "KELL BITE SIZE MINI WHEAT" | "KELLOGG" | "ALL FAMILY CEREAL" | 77 | 69 | 83 |
-| 1111085350 | "PL BT SZ FRSTD SHRD WHT" | "PRIVATE LABEL" | "ALL FAMILY CEREAL" | 77 | 66 | 131 |
-| 1111085319 | "PL HONEY NUT TOASTD OATS" | "PRIVATE LABEL" | "ALL FAMILY CEREAL" | 77 | 62 | 131 |
-| 3800039118 | "KELL FROOT LOOPS" | "KELLOGG" | "KIDS CEREAL" | 77 | 58 | 120 |
-| 3000006340 | "QKER LIFE ORIGINAL" | "QUAKER" | "ALL FAMILY CEREAL" | 77 | 0 | 41 |
-| 3000006560 | "QKER CAP N CRUNCH BERRIES" | "QUAKER" | "KIDS CEREAL" | 77 | 0 | 102 |
-| 3000006610 | "QKER CAP N CRUNCH" | "QUAKER" | "KIDS CEREAL" | 77 | 0 | 107 |
-| 88491201426 | "POST HNY BN OTS HNY RSTD" | "POST FOODS" | "ADULT CEREAL" | 77 | 0 | 94 |
-| 88491201427 | "POST FM SZ HNYBNCH OT ALM" | "POST FOODS" | "ADULT CEREAL" | 77 | 0 | 63 |
-| 88491212971 | "POST FRUITY PEBBLES" | "POST FOODS" | "KIDS CEREAL" | 77 | 0 | 126 |
+| 1600027527 | "gm honey nut cheerios" | "general mi" | "all family cereal" | 77 | 75 | 131 |
+| 1600027528 | "gm cheerios" | "general mi" | "all family cereal" | 77 | 73 | 131 |
+| 3800031838 | "kell frosted flakes" | "kellogg" | "kids cereal" | 77 | 73 | 131 |
+| 1111085345 | "pl raisin bran" | "private label" | "adult cereal" | 77 | 71 | 131 |
+| 1600027564 | "gm cheerios" | "general mi" | "all family cereal" | 77 | 71 | 131 |
+| 3800031829 | "kell bite size mini wheat" | "kellogg" | "all family cereal" | 77 | 69 | 83 |
+| 1111085350 | "pl bt sz frstd shrd wht" | "private label" | "all family cereal" | 77 | 66 | 131 |
+| 1111085319 | "pl honey nut toastd oats" | "private label" | "all family cereal" | 77 | 62 | 131 |
+| 3800039118 | "kell froot loops" | "kellogg" | "kids cereal" | 77 | 58 | 120 |
+| 3000006340 | "qker life original" | "quaker" | "all family cereal" | 77 | 0 | 41 |
+| 3000006560 | "qker cap n crunch berries" | "quaker" | "kids cereal" | 77 | 0 | 102 |
+| 3000006610 | "qker cap n crunch" | "quaker" | "kids cereal" | 77 | 0 | 107 |
+| 88491201426 | "post hny bn ots hny rstd" | "post foods" | "adult cereal" | 77 | 0 | 94 |
+| 88491201427 | "post fm sz hnybnch ot alm" | "post foods" | "adult cereal" | 77 | 0 | 63 |
+| 88491212971 | "post fruity pebbles" | "post foods" | "kids cereal" | 77 | 0 | 126 |
 
 
     In [6]:
@@ -296,56 +276,56 @@ completeness
 
 ``` python
 PRODUCT_LABELS = {
-    1600027527: "HNC",
-    1600027564: "Cheerios 12oz",
-    1600027528: "Cheerios 18oz",
-    3800031829: "Mini Wheats",
-    1111085319: "PL Honey Nut Oats",
-    1111085350: "PL Frosted Wheat",
+    1600027527: "hnc",
+    1600027564: "cheerios 12oz",
+    1600027528: "cheerios 18oz",
+    3800031829: "mini wheats",
+    1111085319: "pl honey nut oats",
+    1111085350: "pl frosted wheat",
 }
 product_order: list[str] = list(PRODUCT_LABELS.values())
 n_products = len(product_order)
-FOCAL = "HNC"
+FOCAL = "hnc"
 FOCAL_INDEX = product_order.index(FOCAL)
 
 
 def keep_panel_products(df: pl.DataFrame, labels: dict[int, str]) -> pl.DataFrame:
     """Keep the labeled UPCs and add their short product label."""
-    return df.filter(pl.col("UPC").is_in(list(labels))).with_columns(
-        product=pl.col("UPC").replace_strict(labels, return_dtype=pl.String)
+    return df.filter(pl.col("upc").is_in(list(labels))).with_columns(
+        product=pl.col("upc").replace_strict(labels, return_dtype=pl.String)
     )
 
 
 def join_lookups(df: pl.DataFrame, products: pl.DataFrame, stores: pl.DataFrame) -> pl.DataFrame:
     """Join the product lookup on the UPC and the deduplicated store lookup on the store id."""
-    return df.join(products, on="UPC").join(stores, left_on="STORE_NUM", right_on="STORE_ID")
+    return df.join(products, on="upc").join(stores, left_on="store_num", right_on="store_id")
 
 
 def log_price_ratio() -> pl.Expr:
     """Take the log of shelf over base price, capped at one so a lagged base price is no cut."""
-    return (pl.col("PRICE") / pl.col("BASE_PRICE")).clip(upper_bound=1.0).log()
+    return price_ratio().clip(upper_bound=1.0).log()
 
 
 def add_price_columns(df: pl.DataFrame) -> pl.DataFrame:
     """Add the discount, the log price ratio ``x`` and the log depth ``lam``."""
     return df.with_columns(
-        discount=1.0 - pl.col("PRICE") / pl.col("BASE_PRICE"), x=log_price_ratio()
-    ).with_columns(lam=-pl.col("x"))
+        discount=pl.lit(1.0).sub(price_ratio()), x=log_price_ratio()
+    ).with_columns(lam=pl.col("x").neg())
 
 
 def mechanics_label() -> pl.Expr:
     """Label a store-week by its mechanics from the feature, display and shelf-tag flags."""
-    feature = pl.col("FEATURE") == 1
-    display = pl.col("DISPLAY") == 1
+    feature = pl.col("feature").eq(pl.lit(1))
+    display = pl.col("display").eq(pl.lit(1))
     return (
-        pl.when(feature & display)
+        pl.when(feature.and_(display))
         .then(pl.lit("feature + display"))
         .when(feature)
         .then(pl.lit("feature"))
         .when(display)
         .then(pl.lit("display"))
-        .when(pl.col("TPR_ONLY") == 1)
-        .then(pl.lit("TPR-only"))
+        .when(pl.col("tpr_only").eq(pl.lit(1)))
+        .then(pl.lit("tpr-only"))
         .otherwise(pl.lit("none"))
     )
 
@@ -353,43 +333,46 @@ def mechanics_label() -> pl.Expr:
 def add_promotion_columns(df: pl.DataFrame) -> pl.DataFrame:
     """Add the series id, cut flag, mechanics label, feature-display interaction and log units."""
     return df.with_columns(
-        series=pl.concat_str([pl.col("STORE_NUM"), pl.col("product")], separator="::"),
-        cut=(pl.col("discount") > 0.02).cast(pl.Int64),
+        series=pl.concat_str([pl.col("store_num"), pl.col("product")], separator="::"),
+        cut=pl.col("discount").gt(pl.lit(0.02)).cast(pl.Int64),
         mechanics=mechanics_label(),
-        feature_display=pl.col("FEATURE") * pl.col("DISPLAY"),
-        log_units=pl.col("UNITS").cast(pl.Float64).log(),
+        feature_display=pl.col("feature").mul(pl.col("display")),
+        log_units=pl.col("units").cast(pl.Float64).log(),
     )
 
 
 cereal_df = (
     transactions_raw.pipe(keep_panel_products, PRODUCT_LABELS)
     .pipe(join_lookups, products_df, stores_df)
-    .drop_nulls(["PRICE", "BASE_PRICE"])
-    .filter(pl.col("UNITS") > 0)
+    .drop_nulls(["price", "base_price"])
+    .filter(pl.col("units").gt(pl.lit(0)))
     .pipe(add_price_columns)
     .pipe(add_promotion_columns)
-    .sort("STORE_NUM", "product", "WEEK_END_DATE")
+    .sort("store_num", "product", "week_end_date")
 )
 n_before = transactions_raw.pipe(keep_panel_products, PRODUCT_LABELS).height
-tpr_definition = (cereal_df["TPR_ONLY"] == 1) == (
-    (cereal_df["cut"] == 1) & (cereal_df["FEATURE"] == 0) & (cereal_df["DISPLAY"] == 0)
+shelf_tag_only = (
+    pl.col("cut")
+    .eq(pl.lit(1))
+    .and_(pl.col("feature").eq(pl.lit(0)))
+    .and_(pl.col("display").eq(pl.lit(0)))
 )
+tpr_matches = cereal_df.select(pl.col("tpr_only").eq(pl.lit(1)).eq(shelf_tag_only).all()).item()
+negative_discount_share = cereal_df.select(pl.col("discount").lt(pl.lit(0)).mean()).item()
 print(f"six-product rows: {cereal_df.height:,} of {n_before:,} before dropping missing prices")
-print(f"TPR_ONLY == 1 exactly when discount > 2% and no mechanics: {bool(tpr_definition.all())}")
-print(
-    f"rows with PRICE > BASE_PRICE (read as no discount): {(cereal_df['discount'] < 0).to_numpy().mean():.1%}"
-)
+print(f"tpr_only == 1 exactly when discount > 2% and no mechanics: {bool(tpr_matches)}")
+print(f"rows with price > base_price (read as no discount): {negative_discount_share:.1%}")
 ```
 
 
     six-product rows: 71,774 of 71,774 before dropping missing prices
-    TPR_ONLY == 1 exactly when discount > 2% and no mechanics: True
-    rows with PRICE > BASE_PRICE (read as no discount): 0.5%
+    tpr_only == 1 exactly when discount > 2% and no mechanics: True
+    rows with price > base_price (read as no discount): 0.5%
 
 
 ## Promotions work through mechanics far more than through price
 
-The flags mean the following. `FEATURE` marks a week in which the product appeared in the store circular, `DISPLAY` a week with an in-store display, and `TPR_ONLY` a temporary price reduction with a shelf tag and nothing else. Almost every feature week also carries a price cut; the mechanics table shows that the cut alone moves units far less than a feature or a display does, the empirical regularity that [Blattberg, Briesch and Fox (1995)](https://doi.org/10.1287/mksc.14.3.G122) list among the generalizations about how promotions work. It also shows the identification problem: because cuts and mechanics arrive together, a regression of units on price alone credits the mechanics' uplift to the price. The printed table over all 77 stores: store-weeks without mechanics average 31 units, shelf-tag cuts 40, displays 73, features 74, and feature with display 135, at mean depths of 18\\ to 26\\; 97\\ of the feature-with-display weeks carry a cut, the shelf-tag flag is exactly a cut of more than 2\\ without mechanics in every row, and 0.5\\ of the six-product rows have a shelf price above the base price.
+The flags mean the following. `feature` marks a week in which the product appeared in the store circular, `display` a week with an in-store display, and `tpr_only` a temporary price reduction with a shelf tag and nothing else. Almost every feature week also carries a price cut; the mechanics table shows that the cut alone moves units far less than a feature or a display does, the empirical regularity that [Blattberg, Briesch and Fox (1995)](https://doi.org/10.1287/mksc.14.3.G122) list among the generalizations about how promotions work. It also shows the identification problem: because cuts and mechanics arrive together, a regression of units on price alone credits the mechanics' uplift to the price. The printed table over all 77 stores: store-weeks without mechanics average 31 units, shelf-tag cuts 40, displays 73, features 74, and feature with display 135, at mean depths of 18\\ to 26\\. Of the feature-with-display weeks, 97\\ carry a cut. The shelf-tag flag is exactly a cut of more than 2\\ without mechanics in every row, and 0.5\\ of the six-product rows have a shelf price above the base price.
 
 
     In [7]:
@@ -409,14 +392,14 @@ def sort_by_order(df: pl.DataFrame, column: str, order: list[str]) -> pl.DataFra
     )
 
 
-mechanics_order = ["none", "TPR-only", "display", "feature", "feature + display"]
+mechanics_order = ["none", "tpr-only", "display", "feature", "feature + display"]
 mechanics_table = (
     cereal_df.group_by("mechanics")
     .agg(
         store_weeks=pl.len(),
         share_with_cut=pl.col("cut").mean(),
         mean_depth=cut_depth().mean(),
-        mean_units=pl.col("UNITS").mean(),
+        mean_units=pl.col("units").mean(),
     )
     .pipe(sort_by_order, "mechanics", mechanics_order)
 )
@@ -427,7 +410,7 @@ mechanics_table
 | mechanics           | store_weeks | share_with_cut | mean_depth | mean_units |
 |---------------------|-------------|----------------|------------|------------|
 | "none"              | 53777       | 0.0            | 0.0        | 30.776689  |
-| "TPR-only"          | 10584       | 1.0            | 0.191906   | 39.888983  |
+| "tpr-only"          | 10584       | 1.0            | 0.191906   | 39.888983  |
 | "display"           | 1542        | 0.80415        | 0.188167   | 73.227626  |
 | "feature"           | 2750        | 0.858909       | 0.176457   | 74.496727  |
 | "feature + display" | 3121        | 0.9686         | 0.260721   | 134.880167 |
@@ -440,7 +423,7 @@ mechanics_table
 def within_ols(
     frame: pl.DataFrame, columns: list[str], target: str = "log_units", by: str = "series"
 ) -> pl.DataFrame:
-    """Within-group least squares (every column demeaned by ``by``) with classical standard errors.
+    """Fit within-group least squares (every column demeaned by ``by``) with classical standard errors.
 
     Parameters
     ----------
@@ -459,7 +442,7 @@ def within_ols(
         One row per regressor with its coefficient and standard error.
     """
     demeaned = frame.select(
-        [(pl.col(c) - pl.col(c).mean().over(by)).alias(c) for c in [target, *columns]]
+        [pl.col(c).sub(pl.col(c).mean().over(by)).alias(c) for c in [target, *columns]]
     )
     design = demeaned.select(columns).to_numpy().astype(np.float64)
     response = demeaned[target].to_numpy().astype(np.float64)
@@ -475,22 +458,29 @@ def annual_fourier(week: str, period: float = 52.18) -> list[pl.Expr]:
     """Build the annual Fourier terms sin1, cos1, sin2, cos2 of a week-index column."""
     terms = []
     for harmonic in (1, 2):
-        angle = 2.0 * harmonic * np.pi * pl.col(week) / period
+        angle = pl.col(week).mul(pl.lit(2.0 * harmonic * np.pi)).truediv(pl.lit(period))
         terms += [angle.sin().alias(f"sin{harmonic}"), angle.cos().alias(f"cos{harmonic}")]
     return terms
 
 
 def any_promotion() -> pl.Expr:
     """Flag a store-week with a feature, a display or a cut, as a float."""
-    promoted = (pl.col("FEATURE") == 1) | (pl.col("DISPLAY") == 1) | (pl.col("cut") == 1)
+    promoted = (
+        pl.col("feature")
+        .eq(pl.lit(1))
+        .or_(pl.col("display").eq(pl.lit(1)))
+        .or_(pl.col("cut").eq(pl.lit(1)))
+    )
     return promoted.cast(pl.Float64)
 
 
-first_week = cereal_df["WEEK_END_DATE"].min()
+first_week = cereal_df["week_end_date"].min()
 cereal_df = cereal_df.with_columns(
-    week_index=((pl.col("WEEK_END_DATE") - pl.lit(first_week)).dt.total_days() / 7.0)
+    week_index=pl.col("week_end_date").sub(pl.lit(first_week)).dt.total_days().truediv(pl.lit(7.0))
 ).with_columns(
-    *annual_fourier("week_index"), trend=pl.col("week_index") / N_WEEKS, promo=any_promotion()
+    *annual_fourier("week_index"),
+    trend=pl.col("week_index").truediv(pl.lit(N_WEEKS)),
+    promo=any_promotion(),
 )
 seasonal_terms = ["sin1", "cos1", "sin2", "cos2", "trend"]
 ```
@@ -510,10 +500,10 @@ dip_df = cereal_df.with_columns(
     post2=pl.col("promo").shift(2).over("series").fill_null(0.0),
 )
 dip_ols = within_ols(
-    dip_df, ["x", "FEATURE", "DISPLAY", "feature_display", "post1", "post2", *seasonal_terms]
+    dip_df, ["x", "feature", "display", "feature_display", "post1", "post2", *seasonal_terms]
 )
 dip_ols.filter(
-    pl.col("term").is_in(["x", "FEATURE", "DISPLAY", "feature_display", "post1", "post2"])
+    pl.col("term").is_in(["x", "feature", "display", "feature_display", "post1", "post2"])
 )
 ```
 
@@ -521,8 +511,8 @@ dip_ols.filter(
 | term              | coef      | se       |
 |-------------------|-----------|----------|
 | "x"               | -0.891461 | 0.015639 |
-| "FEATURE"         | 0.507507  | 0.008564 |
-| "DISPLAY"         | 0.457711  | 0.011262 |
+| "feature"         | 0.507507  | 0.008564 |
+| "display"         | 0.457711  | 0.011262 |
 | "feature_display" | 0.075924  | 0.015563 |
 | "post1"           | 0.008233  | 0.004645 |
 | "post2"           | -0.016333 | 0.00434  |
@@ -530,36 +520,38 @@ dip_ols.filter(
 
 ## The realized calendar of the holdout quarter
 
-The last 13 weeks of the panel (October 2011 to the first week of January 2012) are the holdout and, later, the horizon on which we evaluate counterfactual promotions. The table shows, for the focal product, the share of stores with a feature, a display or a shelf-tag-only cut in every horizon week, and the mean discount depth. The realized calendar ran a feature with display at about a 15\\ cut in the two Thanksgiving weeks and a deeper cut around Christmas. In horizon weeks 7 and 8 every store featured the product, 84\\ and 69\\ of the stores displayed it, and the mean depth was 14\\; weeks 11 to 13 carried a 31\\ cut with a feature in every store.
+The last 13 weeks of the panel (October 2011 to the first week of January 2012) are the holdout and, later, the horizon on which we evaluate counterfactual promotions. The table shows, for the focal product, the share of stores with a feature, a display or a shelf-tag-only cut in every horizon week, and the mean discount depth. The realized calendar ran a feature with display at about a 15\\ cut in the two Thanksgiving weeks and a deeper cut around Christmas. In horizon weeks 7 and 8 every store featured the product, 84\\ and 69\\ of the stores displayed it, and the mean depth was 14\\. Weeks 11 and 12 carried a 31\\ cut with a feature in every store, and week 13 kept the cut with a feature in 47\\ of the stores.
 
 
     In [10]:
 
 
 ``` python
-all_weeks = cereal_df["WEEK_END_DATE"].unique().sort()
+all_weeks = cereal_df["week_end_date"].unique().sort()
 HORIZON = 13
 t_train = N_WEEKS - HORIZON
 holdout_weeks = all_weeks[t_train:]
 realized_calendar = (
     cereal_df.filter(
-        (pl.col("product") == FOCAL) & pl.col("WEEK_END_DATE").is_in(holdout_weeks.to_list())
+        pl.col("product")
+        .eq(pl.lit(FOCAL))
+        .and_(pl.col("week_end_date").is_in(holdout_weeks.to_list()))
     )
-    .group_by("WEEK_END_DATE")
+    .group_by("week_end_date")
     .agg(
-        feature=pl.col("FEATURE").mean(),
-        display=pl.col("DISPLAY").mean(),
-        tpr_only=pl.col("TPR_ONLY").mean(),
+        feature=pl.col("feature").mean(),
+        display=pl.col("display").mean(),
+        tpr_only=pl.col("tpr_only").mean(),
         depth=cut_depth().mean(),
     )
-    .sort("WEEK_END_DATE")
+    .sort("week_end_date")
     .with_row_index("horizon_week", offset=1)
 )
 realized_calendar
 ```
 
 
-| horizon_week | WEEK_END_DATE | feature  | display  | tpr_only | depth    |
+| horizon_week | week_end_date | feature  | display  | tpr_only | depth    |
 |--------------|---------------|----------|----------|----------|----------|
 | 1            | 2011-10-12    | 0.0      | 0.0      | 0.0      | 0.0      |
 | 2            | 2011-10-19    | 0.0      | 0.0      | 0.142857 | 0.025053 |
@@ -578,7 +570,7 @@ realized_calendar
 
 # Build the modeling panel
 
-The panel keeps the stores in which all six series are complete over the 156 weeks and takes six stores per price segment (the segments are the retailer's `MAINSTREAM`, `UPSCALE` and `VALUE` labels), the largest by average weekly baskets. Six products in 18 stores give 108 series. The knob `n_stores_per_segment` scales the panel; the whole complete set costs about three times the fit. Every series is identified as `store::product`. The store index never enters the model: it drives the cross-price block, the sibling flags, the policy builder, the per-store base prices and the per-store decisions. All six series are complete in 52 stores: 32 mainstream, 11 upscale and 9 value.
+The panel keeps the stores in which all six series are complete over the 156 weeks and takes six stores per price segment (the segments are the retailer's `mainstream`, `upscale` and `value` labels), the largest by average weekly baskets. Six products in 18 stores give 108 series. The knob `n_stores_per_segment` scales the panel; the whole complete set costs about three times the fit. Every series is identified as `store::product`. The store index never enters the model: it drives the cross-price block, the sibling flags, the policy builder, the per-store base prices and the per-store decisions. All six series are complete in 52 stores: 32 mainstream, 11 upscale and 9 value.
 
 
     In [11]:
@@ -590,80 +582,85 @@ def complete_stores_by_segment(
 ) -> pl.DataFrame:
     """Keep the stores whose series all span every week, sorted by segment and basket size."""
     return (
-        df.pipe(weeks_per_series, ["STORE_NUM", "product"])
-        .group_by("STORE_NUM")
-        .agg(all_complete=((pl.col("weeks") == n_weeks).all()) & (pl.len() == n_products))
+        df.pipe(weeks_per_series, ["store_num", "product"])
+        .group_by("store_num")
+        .agg(
+            all_complete=pl.col("weeks")
+            .eq(pl.lit(n_weeks))
+            .all()
+            .and_(pl.len().eq(pl.lit(n_products)))
+        )
         .filter(pl.col("all_complete"))
         .join(
-            stores.select("STORE_ID", "SEG_VALUE_NAME", "AVG_WEEKLY_BASKETS"),
-            left_on="STORE_NUM",
-            right_on="STORE_ID",
+            stores.select("store_id", "seg_value_name", "avg_weekly_baskets"),
+            left_on="store_num",
+            right_on="store_id",
         )
         .sort(
-            ["SEG_VALUE_NAME", "AVG_WEEKLY_BASKETS", "STORE_NUM"], descending=[False, True, False]
+            ["seg_value_name", "avg_weekly_baskets", "store_num"], descending=[False, True, False]
         )
     )
 
 
 complete_stores = cereal_df.pipe(complete_stores_by_segment, stores_df, N_WEEKS, n_products)
 print(f"stores with all six series complete: {complete_stores.height}")
-print(complete_stores.group_by("SEG_VALUE_NAME").len().sort("SEG_VALUE_NAME"))
+print(complete_stores.group_by("seg_value_name").len().sort("seg_value_name"))
 
 n_stores_per_segment = 6
-selected = complete_stores.group_by("SEG_VALUE_NAME", maintain_order=True).head(
+selected = complete_stores.group_by("seg_value_name", maintain_order=True).head(
     n_stores_per_segment
 )
-selected_stores: list[int] = selected["STORE_NUM"].to_list()
+selected_stores: list[int] = selected["store_num"].to_list()
 n_stores = len(selected_stores)
 store_segment: dict[int, str] = dict(
-    zip(selected["STORE_NUM"].to_list(), selected["SEG_VALUE_NAME"].to_list(), strict=True)
+    zip(selected["store_num"].to_list(), selected["seg_value_name"].to_list(), strict=True)
 )
-selected.select("STORE_NUM", "SEG_VALUE_NAME", "AVG_WEEKLY_BASKETS")
+selected.select("store_num", "seg_value_name", "avg_weekly_baskets")
 ```
 
 
     stores with all six series complete: 52
     ┌────────────────┬─────┐
-    │ SEG_VALUE_NAME ┆ len │
+    │ seg_value_name ┆ len │
     ╞════════════════╪═════╡
-    │ MAINSTREAM     ┆ 32  │
-    │ UPSCALE        ┆ 11  │
-    │ VALUE          ┆ 9   │
+    │ mainstream     ┆ 32  │
+    │ upscale        ┆ 11  │
+    │ value          ┆ 9   │
     └────────────────┴─────┘
 
 
-| STORE_NUM | SEG_VALUE_NAME | AVG_WEEKLY_BASKETS |
+| store_num | seg_value_name | avg_weekly_baskets |
 |-----------|----------------|--------------------|
-| 25027     | "MAINSTREAM"   | 43892.923077       |
-| 21237     | "MAINSTREAM"   | 38465.128205       |
-| 25229     | "MAINSTREAM"   | 34977.435897       |
-| 19265     | "MAINSTREAM"   | 31578.134615       |
-| 9825      | "MAINSTREAM"   | 29915.903846       |
-| 613       | "MAINSTREAM"   | 29386.416667       |
-| 2277      | "UPSCALE"      | 54052.519231       |
-| 24991     | "UPSCALE"      | 50618.99359        |
-| 6179      | "UPSCALE"      | 35287.974359       |
-| 2513      | "UPSCALE"      | 32422.99359        |
-| 2281      | "UPSCALE"      | 32297.288462       |
-| 11993     | "UPSCALE"      | 26100.711538       |
-| 25021     | "VALUE"        | 34191.00641        |
-| 4259      | "VALUE"        | 31177.333333       |
-| 21479     | "VALUE"        | 29435.628205       |
-| 23349     | "VALUE"        | 27822.608974       |
-| 19523     | "VALUE"        | 24567.75           |
-| 6431      | "VALUE"        | 24321.942308       |
+| 25027     | "mainstream"   | 43892.923077       |
+| 21237     | "mainstream"   | 38465.128205       |
+| 25229     | "mainstream"   | 34977.435897       |
+| 19265     | "mainstream"   | 31578.134615       |
+| 9825      | "mainstream"   | 29915.903846       |
+| 613       | "mainstream"   | 29386.416667       |
+| 2277      | "upscale"      | 54052.519231       |
+| 24991     | "upscale"      | 50618.99359        |
+| 6179      | "upscale"      | 35287.974359       |
+| 2513      | "upscale"      | 32422.99359        |
+| 2281      | "upscale"      | 32297.288462       |
+| 11993     | "upscale"      | 26100.711538       |
+| 25021     | "value"        | 34191.00641        |
+| 4259      | "value"        | 31177.333333       |
+| 21479     | "value"        | 29435.628205       |
+| 23349     | "value"        | 27822.608974       |
+| 19523     | "value"        | 24567.75           |
+| 6431      | "value"        | 24321.942308       |
 
 
     In [12]:
 
 
 ``` python
-panel_df = cereal_df.filter(pl.col("STORE_NUM").is_in(selected_stores))
+panel_df = cereal_df.filter(pl.col("store_num").is_in(selected_stores))
 series_ids: list[str] = [
     f"{store}::{product}" for store in selected_stores for product in product_order
 ]
 n_series = len(series_ids)
-dates_series = panel_df["WEEK_END_DATE"].unique().sort()
+dates_series = panel_df["week_end_date"].unique().sort()
 dates = dates_series.to_numpy()
 dates_num = np.asarray(mdates.date2num(dates))
 split_x = float(dates_num[t_train])
@@ -675,8 +672,8 @@ def make_pivot(value: str) -> Float[np.ndarray, " duration n_series"]:
     Columns follow ``series_ids`` order (store-major, then the product order) so every
     pivot shares the same series axis; a missing cell is an error, not a zero.
     """
-    pivot_df = panel_df.pivot(on="series", index="WEEK_END_DATE", values=value).sort(
-        "WEEK_END_DATE"
+    pivot_df = panel_df.pivot(on="series", index="week_end_date", values=value).sort(
+        "week_end_date"
     )
     matrix = pivot_df.select(series_ids).to_numpy().astype(np.float64)
     if matrix.shape != (len(dates), n_series) or np.isnan(matrix).any():
@@ -687,15 +684,8 @@ def make_pivot(value: str) -> Float[np.ndarray, " duration n_series"]:
 
 panel_ds = xr.Dataset(
     {
-        name: (("time", "series"), make_pivot(column))
-        for name, column in {
-            "units": "UNITS",
-            "x": "x",
-            "feature": "FEATURE",
-            "display": "DISPLAY",
-            "discount": "discount",
-            "base_price": "BASE_PRICE",
-        }.items()
+        column: (("time", "series"), make_pivot(column))
+        for column in ["units", "x", "feature", "display", "discount", "base_price"]
     },
     coords={"time": dates, "series": series_ids},
 )
@@ -1252,7 +1242,7 @@ dl.xr-attrs {
 Dimensions:     (time: 156, series: 108)
 Coordinates:
   * time        (time) datetime64[s] 1kB 2009-01-14 2009-01-21 ... 2012-01-04
-  * series      (series) <U24 10kB '25027::HNC' ... '6431::PL Frosted Wheat'
+  * series      (series) <U24 10kB '25027::hnc' ... '6431::pl frosted wheat'
 Data variables:
     units       (time, series) float64 135kB 70.0 181.0 69.0 ... 13.0 6.0 11.0
     x           (time, series) float64 135kB 0.0 -0.2239 0.0 0.0 ... 0.0 0.0 0.0
@@ -1357,7 +1347,7 @@ series
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1365,43 +1355,43 @@ series
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['25027::HNC', '25027::Cheerios 12oz', '25027::Cheerios 18oz',
-           '25027::Mini Wheats', '25027::PL Honey Nut Oats',
-           '25027::PL Frosted Wheat', '21237::HNC', '21237::Cheerios 12oz',
-           '21237::Cheerios 18oz', '21237::Mini Wheats',
-           '21237::PL Honey Nut Oats', '21237::PL Frosted Wheat', '25229::HNC',
-           '25229::Cheerios 12oz', '25229::Cheerios 18oz', '25229::Mini Wheats',
-           '25229::PL Honey Nut Oats', '25229::PL Frosted Wheat', '19265::HNC',
-           '19265::Cheerios 12oz', '19265::Cheerios 18oz', '19265::Mini Wheats',
-           '19265::PL Honey Nut Oats', '19265::PL Frosted Wheat', '9825::HNC',
-           '9825::Cheerios 12oz', '9825::Cheerios 18oz', '9825::Mini Wheats',
-           '9825::PL Honey Nut Oats', '9825::PL Frosted Wheat', '613::HNC',
-           '613::Cheerios 12oz', '613::Cheerios 18oz', '613::Mini Wheats',
-           '613::PL Honey Nut Oats', '613::PL Frosted Wheat', '2277::HNC',
-           '2277::Cheerios 12oz', '2277::Cheerios 18oz', '2277::Mini Wheats',
-           '2277::PL Honey Nut Oats', '2277::PL Frosted Wheat', '24991::HNC',
-           '24991::Cheerios 12oz', '24991::Cheerios 18oz', '24991::Mini Wheats',
-           '24991::PL Honey Nut Oats', '24991::PL Frosted Wheat', '6179::HNC',
-           '6179::Cheerios 12oz', '6179::Cheerios 18oz', '6179::Mini Wheats',
-           '6179::PL Honey Nut Oats', '6179::PL Frosted Wheat', '2513::HNC',
-           '2513::Cheerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats',
-           '2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC',
-           '2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats',
-           '2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC',
-           '11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats',
-           '11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC',
-           '25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats',
-           '25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC',
-           '4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats',
-           '4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC',
-           '21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats',
-           '21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC',
-           '23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats',
-           '23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC',
-           '19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats',
-           '19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC',
-           '6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats',
-           '6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz',
+           '25027::mini wheats', '25027::pl honey nut oats',
+           '25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz',
+           '21237::cheerios 18oz', '21237::mini wheats',
+           '21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc',
+           '25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats',
+           '25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc',
+           '19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats',
+           '19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc',
+           '9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats',
+           '9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc',
+           '613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats',
+           '613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc',
+           '2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats',
+           '2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc',
+           '24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats',
+           '24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc',
+           '6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats',
+           '6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc',
+           '2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats',
+           '2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc',
+           '2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats',
+           '2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc',
+           '11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats',
+           '11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc',
+           '25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats',
+           '25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc',
+           '4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats',
+           '4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc',
+           '21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats',
+           '21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc',
+           '23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats',
+           '23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc',
+           '19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats',
+           '19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc',
+           '6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats',
+           '6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 Data variables: (6)
@@ -1575,7 +1565,7 @@ float64
            [3.07, 3.02, 4.79, ..., 3.36, 1.56, 2.2 ]], shape=(156, 108))
 
 
-The inputs tensor keeps time at axis -2, the package-wide convention, with the stacked inputs as a leading axis: the own log price ratio x = \log(\text{PRICE} / \text{BASE\\PRICE}) \le 0, the feature and display flags, two sibling flags (any other product of the panel featured or displayed at the same store-week), and the cross-price block, the log price ratios of all six products at the series' own store. A promotion of the focal product therefore reaches its siblings through their covariates: their cross-price input and their sibling flags change. The counts are kept as `int32`, which the negative binomial likelihood requires; the scoring later casts them to floats. The tensor has shape (11, 156, 108). At the last training week the focal product's base price ranges from 2.61 to 3.07 across the 18 stores, with 11 distinct values, and the private-label twin's from 1.56 to 1.99; the currency numbers below use each store's own prices.
+The inputs tensor keeps time at axis -2, the package-wide convention, with the stacked inputs as a leading axis. The inputs are the own log price ratio x = \log(\text{price} / \text{base\\price}) \le 0, the feature and display flags, two sibling flags (any other product of the panel featured or displayed at the same store-week), and the cross-price block, the log price ratios of all six products at the series' own store. A promotion of the focal product therefore reaches its siblings through their covariates: their cross-price input and their sibling flags change. The counts are kept as `int32`, which the negative binomial likelihood requires; the scoring later casts them to floats. The tensor has shape (11, 156, 108). At the last training week the focal product's base price ranges from 2.61 to 3.07 across the 18 stores, with 11 distinct values, and the private-label twin's from 1.56 to 1.99; the currency numbers below use each store's own prices.
 
 
     In [13]:
@@ -1605,7 +1595,6 @@ input_names: list[str] = [
     "sib_display",
     *[f"price {product}" for product in product_order],
 ]
-n_inputs = len(input_names)
 PRICE_BLOCK = 5  # first channel of the cross-price block
 covariates = jnp.asarray(
     np.concatenate(
@@ -1657,12 +1646,12 @@ base_price_table
 
 | product             | min  | median | max  | distinct |
 |---------------------|------|--------|------|----------|
-| "HNC"               | 2.61 | 3.02   | 3.07 | 11       |
-| "Cheerios 12oz"     | 2.88 | 3.055  | 3.25 | 15       |
-| "Cheerios 18oz"     | 4.35 | 4.79   | 4.79 | 3        |
-| "Mini Wheats"       | 3.36 | 3.89   | 3.89 | 2        |
-| "PL Honey Nut Oats" | 1.56 | 1.895  | 1.99 | 12       |
-| "PL Frosted Wheat"  | 2.13 | 2.41   | 2.48 | 15       |
+| "hnc"               | 2.61 | 3.02   | 3.07 | 11       |
+| "cheerios 12oz"     | 2.88 | 3.055  | 3.25 | 15       |
+| "cheerios 18oz"     | 4.35 | 4.79   | 4.79 | 3        |
+| "mini wheats"       | 3.36 | 3.89   | 3.89 | 2        |
+| "pl honey nut oats" | 1.56 | 1.895  | 1.99 | 12       |
+| "pl frosted wheat"  | 2.13 | 2.41   | 2.48 | 15       |
 
 
     In [14]:
@@ -1670,8 +1659,8 @@ base_price_table
 
 ``` python
 focus_stores = [
-    int(selected.filter(pl.col("SEG_VALUE_NAME") == segment)["STORE_NUM"][0])
-    for segment in ["MAINSTREAM", "UPSCALE", "VALUE"]
+    int(selected.filter(pl.col("seg_value_name").eq(pl.lit(segment)))["store_num"][0])
+    for segment in ["mainstream", "upscale", "value"]
 ]
 focus_labels = [f"{store}::{FOCAL}" for store in focus_stores]
 
@@ -1748,7 +1737,7 @@ fig.suptitle(
 
 # Identification: the estimand, the promotion calendar and the naive elasticity
 
-The quantity we want is the expected weekly units of the focal product under a discount d and a mechanics m, with the other covariates at their factual values. This is a promotional elasticity: the response to a temporary cut below the base price, not the response to a change in the base price itself, which the level of each series absorbs. The regular-price elasticity would need a different design (Bijmolt, van Heerde and Pieters (2005) document that promotional elasticities exceed regular-price ones), and this notebook cannot answer regular-price questions.
+The quantity we want is the expected weekly units of the focal product under a discount d and a mechanics m, with the other covariates at their factual values. This is a promotional elasticity: the response to a temporary cut below the base price, not the response to a change in the base price itself, which the level of each series absorbs. The regular-price elasticity would need a different design, and this notebook cannot answer regular-price questions. [Bijmolt, van Heerde and Pieters (2005)](https://doi.org/10.1509/jmkr.42.2.141.62296) document that promotional elasticities exceed regular-price ones.
 
 Prices were not randomized. The retailer and the manufacturers set the promotion calendar through trade deals, and the same deal sets the cut, the feature and the display together. The causal graph below draws the identifying assumption: conditional on the mechanics flags, the sibling flags, the competitor prices and the seasonal and level terms, the depth of the cut is as good as random with respect to the unobserved demand shocks. The right-hand cluster shows what would break it: a demand shock (a coupon drop, a competitor's promotion in another retailer) that moves both the deal calendar and the units. We cannot test the assumption with these data; the holdout below validates the forecasting engine under the realized calendar, not the counterfactual ones.
 
@@ -1830,18 +1819,18 @@ long_df = pl.DataFrame(
     }
 ).with_columns(
     *annual_fourier("time"),
-    feature_display=pl.col("feature") * pl.col("display"),
-    feature_lam=pl.col("feature") * pl.col("lam"),
-    display_lam=pl.col("display") * pl.col("lam"),
-    trend=pl.col("time") / N_WEEKS,
+    feature_display=pl.col("feature").mul(pl.col("display")),
+    feature_lam=pl.col("feature").mul(pl.col("lam")),
+    display_lam=pl.col("display").mul(pl.col("lam")),
+    trend=pl.col("time").truediv(pl.lit(N_WEEKS)),
 )
-train_long = long_df.filter(pl.col("time") < t_train)
+train_long = long_df.filter(pl.col("time").lt(pl.lit(t_train)))
 mechanics_terms = ["feature", "display", "feature_display", "sib_feature", "sib_display"]
 depth_terms = ["feature_lam", "display_lam"]
 
 
 def own_elasticity_row(frame: pl.DataFrame, label: str) -> dict[str, float | str]:
-    """Own price coefficient under the three specifications, for one product or the pooled panel."""
+    """Fit the own price coefficient under the three specifications for one product or the pool."""
     naive = within_ols(frame, ["x", *seasonal_terms])
     flags = within_ols(frame, ["x", *mechanics_terms, *seasonal_terms])
     slopes = within_ols(frame, ["x", *mechanics_terms, *depth_terms, *seasonal_terms])
@@ -1857,7 +1846,10 @@ def own_elasticity_row(frame: pl.DataFrame, label: str) -> dict[str, float | str
 
 
 own_elasticity_ols = pl.DataFrame(
-    [own_elasticity_row(train_long.filter(pl.col("product") == p), p) for p in product_order]
+    [
+        own_elasticity_row(train_long.filter(pl.col("product").eq(pl.lit(p))), p)
+        for p in product_order
+    ]
     + [own_elasticity_row(train_long, "pooled")]
 )
 own_elasticity_ols
@@ -1866,12 +1858,12 @@ own_elasticity_ols
 
 | product | naive | naive_se | with_flags | with_flags_se | with_depth_slopes | with_depth_slopes_se |
 |----|----|----|----|----|----|----|
-| "HNC" | -2.601798 | 0.05715 | -1.326977 | 0.07021 | -1.084921 | 0.099629 |
-| "Cheerios 12oz" | -0.666798 | 0.051086 | -0.3183 | 0.038673 | -0.31104 | 0.039819 |
-| "Cheerios 18oz" | -2.748362 | 0.046263 | -1.961065 | 0.104096 | -1.511146 | 0.160804 |
-| "Mini Wheats" | -2.619433 | 0.077762 | -1.558958 | 0.10673 | -1.626816 | 0.128205 |
-| "PL Honey Nut Oats" | -1.837123 | 0.160595 | -1.446412 | 0.173565 | -1.468914 | 0.181495 |
-| "PL Frosted Wheat" | -1.129432 | 0.081269 | -0.8505 | 0.08354 | -0.886696 | 0.087231 |
+| "hnc" | -2.601798 | 0.05715 | -1.326977 | 0.07021 | -1.084921 | 0.099629 |
+| "cheerios 12oz" | -0.666798 | 0.051086 | -0.3183 | 0.038673 | -0.31104 | 0.039819 |
+| "cheerios 18oz" | -2.748362 | 0.046263 | -1.961065 | 0.104096 | -1.511146 | 0.160804 |
+| "mini wheats" | -2.619433 | 0.077762 | -1.558958 | 0.10673 | -1.626816 | 0.128205 |
+| "pl honey nut oats" | -1.837123 | 0.160595 | -1.446412 | 0.173565 | -1.468914 | 0.181495 |
+| "pl frosted wheat" | -1.129432 | 0.081269 | -0.8505 | 0.08354 | -0.886696 | 0.087231 |
 | "pooled" | -1.86253 | 0.026677 | -0.948401 | 0.028264 | -0.674752 | 0.033019 |
 
 
@@ -1879,7 +1871,7 @@ own_elasticity_ols
 
 
 ``` python
-hnc_long = train_long.filter(pl.col("product") == FOCAL)
+hnc_long = train_long.filter(pl.col("product").eq(pl.lit(FOCAL)))
 cross_terms = [f"price {product}" for product in product_order if product != FOCAL]
 hnc_full_ols = within_ols(
     hnc_long, ["x", *mechanics_terms, *depth_terms, *cross_terms, *seasonal_terms]
@@ -1888,7 +1880,7 @@ hnc_full_ols = within_ols(
     .then(pl.col("coef").exp())
     .otherwise(None)
 )
-hnc_full_ols.filter(~pl.col("term").is_in(seasonal_terms))
+hnc_full_ols.filter(pl.col("term").is_in(seasonal_terms).not_())
 ```
 
 
@@ -1902,11 +1894,11 @@ hnc_full_ols.filter(~pl.col("term").is_in(seasonal_terms))
 | "sib_display"             | -0.030933 | 0.017986 | 0.969541   |
 | "feature_lam"             | 0.36053   | 0.144082 | null       |
 | "display_lam"             | 0.126645  | 0.143309 | null       |
-| "price Cheerios 12oz"     | -0.232351 | 0.043367 | null       |
-| "price Cheerios 18oz"     | -0.301489 | 0.052951 | null       |
-| "price Mini Wheats"       | -0.128686 | 0.076184 | null       |
-| "price PL Honey Nut Oats" | 0.11818   | 0.135306 | null       |
-| "price PL Frosted Wheat"  | 0.167267  | 0.085503 | null       |
+| "price cheerios 12oz"     | -0.232351 | 0.043367 | null       |
+| "price cheerios 18oz"     | -0.301489 | 0.052951 | null       |
+| "price mini wheats"       | -0.128686 | 0.076184 | null       |
+| "price pl honey nut oats" | 0.11818   | 0.135306 | null       |
+| "price pl frosted wheat"  | 0.167267  | 0.085503 | null       |
 
 
     In [18]:
@@ -1917,7 +1909,7 @@ cross_rows = []
 for product in product_order:
     others = [f"price {other}" for other in product_order if other != product]
     fit = within_ols(
-        train_long.filter(pl.col("product") == product),
+        train_long.filter(pl.col("product").eq(pl.lit(product))),
         ["x", *mechanics_terms, *others, *seasonal_terms],
     )
     coefs = dict(zip(fit["term"].to_list(), fit["coef"].to_list(), strict=True))
@@ -1936,14 +1928,14 @@ cross_ols
     OLS cross terms: min -0.62 | max 0.65
 
 
-| units of | price of HNC | price of Cheerios 12oz | price of Cheerios 18oz | price of Mini Wheats | price of PL Honey Nut Oats | price of PL Frosted Wheat |
+| units of | price of hnc | price of cheerios 12oz | price of cheerios 18oz | price of mini wheats | price of pl honey nut oats | price of pl frosted wheat |
 |----|----|----|----|----|----|----|
-| "HNC" | -1.145766 | -0.224495 | -0.316926 | -0.130353 | 0.162423 | 0.177489 |
-| "Cheerios 12oz" | 0.07092 | -0.34379 | 0.277201 | -0.057408 | -0.62447 | 0.349092 |
-| "Cheerios 18oz" | -0.047858 | 0.198809 | -1.988508 | 0.184071 | 0.119586 | 0.179472 |
-| "Mini Wheats" | 0.024222 | -0.010586 | 0.010404 | -1.557781 | 0.385047 | 0.145947 |
-| "PL Honey Nut Oats" | 0.654352 | 0.010516 | 0.069029 | -0.030701 | -1.495217 | 0.500309 |
-| "PL Frosted Wheat" | 0.011771 | 0.020995 | 0.127626 | 0.499231 | 0.255877 | -0.815959 |
+| "hnc" | -1.145766 | -0.224495 | -0.316926 | -0.130353 | 0.162423 | 0.177489 |
+| "cheerios 12oz" | 0.07092 | -0.34379 | 0.277201 | -0.057408 | -0.62447 | 0.349092 |
+| "cheerios 18oz" | -0.047858 | 0.198809 | -1.988508 | 0.184071 | 0.119586 | 0.179472 |
+| "mini wheats" | 0.024222 | -0.010586 | 0.010404 | -1.557781 | 0.385047 | 0.145947 |
+| "pl honey nut oats" | 0.654352 | 0.010516 | 0.069029 | -0.030701 | -1.495217 | 0.500309 |
+| "pl frosted wheat" | 0.011771 | 0.020995 | 0.127626 | 0.499231 | 0.255877 | -0.815959 |
 
 
     In [19]:
@@ -1953,7 +1945,11 @@ cross_ols
 def depth_bins(labels: list[str], edges: list[float]) -> list[pl.Expr]:
     """Build one 0/1 column per discount bin (lo, hi], in the order of ``labels``."""
     return [
-        ((pl.col("discount") > lo) & (pl.col("discount") <= hi)).cast(pl.Float64).alias(label)
+        pl.col("discount")
+        .gt(pl.lit(lo))
+        .and_(pl.col("discount").le(pl.lit(hi)))
+        .cast(pl.Float64)
+        .alias(label)
         for label, lo, hi in zip(labels, edges[:-1], edges[1:], strict=True)
     ]
 
@@ -1964,7 +1960,7 @@ binned = hnc_long.with_columns(depth_bins(bin_labels, bin_edges))
 binned_ols = within_ols(binned, [*bin_labels, *mechanics_terms, *seasonal_terms]).filter(
     pl.col("term").is_in(bin_labels)
 )
-hnc_slope = float(own_elasticity_ols.filter(pl.col("product") == FOCAL)["with_flags"][0])
+hnc_slope = float(own_elasticity_ols.filter(pl.col("product").eq(pl.lit(FOCAL)))["with_flags"][0])
 bin_mids = np.array([0.06, 0.15, 0.25, 0.38])
 binned_ols = binned_ols.with_columns(
     log_linear_at_bin_center=pl.Series(hnc_slope * np.log1p(-bin_mids)),
@@ -1983,7 +1979,7 @@ binned_ols
 
 ## The weeks that identify the elasticity
 
-The own elasticity of a product is identified by the weeks in which its price moved without a feature or a display, the `TPR_ONLY` weeks, plus the variation of the cut inside feature and display weeks. The first table counts them per product and per series; a product with a few dozen identifying store-weeks leans on the prior and on the partial pooling across stores. The second table gives the support of the focal product's discount depth under each mechanics over all 77 stores, which decides the grid of counterfactual policies: the shaded cells in the later figures are the depths with fewer than 20 observed store-weeks within \pm 2.5 points. The third block shows how the six log price ratios move together within a store-week, and how often a sibling is featured when the focal product is.
+The own elasticity of a product is identified by the weeks in which its price moved without a feature or a display, the `tpr_only` weeks, plus the variation of the cut inside feature and display weeks. The first table counts them per product and per series; a product with a few dozen identifying store-weeks leans on the prior and on the partial pooling across stores. The second table gives the support of the focal product's discount depth under each mechanics over all 77 stores, which decides the grid of counterfactual policies: the shaded cells in the later figures are the depths with fewer than 20 observed store-weeks within \pm 2.5 points. The third block shows how the six log price ratios move together within a store-week, and how often a sibling is featured when the focal product is.
 
 The focal product has 212 shelf-tag-only store-weeks in the training panel, between 6 and 22 per store; Cheerios 18 oz has 23, at most 4 per store, so its own elasticity leans on the depth variation inside its feature and display weeks and on the prior. Over all 77 stores the focal product's cut depth has a median of 14\\ under a shelf tag, 20\\ under a feature and 27\\ under feature with display; 17\\ of the display weeks and 18\\ of the feature weeks carry no cut. The thin cells are a display at 10\\, 15\\, 35\\ and 40\\, a feature at 5\\, and a shelf-tag cut at 5\\ or 40\\. The within-store correlations of the log price ratios stay below 0.30, and a sibling is featured in 27\\ of the store-weeks in which the focal product is featured, against 37\\ otherwise.
 
@@ -1996,7 +1992,7 @@ def tpr_weeks_spread(df: pl.DataFrame) -> pl.DataFrame:
     """Summarize the shelf-tag-only weeks per series as a min, median and max per product."""
     return (
         df.group_by("series", "product")
-        .agg(tpr_weeks=pl.col("TPR_ONLY").sum())
+        .agg(tpr_weeks=pl.col("tpr_only").sum())
         .group_by("product")
         .agg(
             tpr_per_series_min=pl.col("tpr_weeks").min(),
@@ -2006,13 +2002,13 @@ def tpr_weeks_spread(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-train_panel_df = panel_df.filter(pl.col("WEEK_END_DATE").is_in(all_weeks[:t_train].to_list()))
+train_panel_df = panel_df.filter(pl.col("week_end_date").is_in(all_weeks[:t_train].to_list()))
 identification = (
     train_panel_df.group_by("product", maintain_order=True)
     .agg(
-        tpr_only=pl.col("TPR_ONLY").sum(),
-        feature=pl.col("FEATURE").sum(),
-        display=pl.col("DISPLAY").sum(),
+        tpr_only=pl.col("tpr_only").sum(),
+        feature=pl.col("feature").sum(),
+        display=pl.col("display").sum(),
     )
     .join(train_panel_df.pipe(tpr_weeks_spread), on="product")
     .pipe(sort_by_order, "product", product_order)
@@ -2023,12 +2019,12 @@ identification
 
 | product | tpr_only | feature | display | tpr_per_series_min | tpr_per_series_median | tpr_per_series_max |
 |----|----|----|----|----|----|----|
-| "HNC" | 212 | 230 | 199 | 6 | 10.5 | 22 |
-| "Cheerios 12oz" | 894 | 263 | 272 | 31 | 53.0 | 62 |
-| "Cheerios 18oz" | 23 | 224 | 227 | 0 | 1.0 | 4 |
-| "Mini Wheats" | 168 | 287 | 141 | 4 | 9.0 | 13 |
-| "PL Honey Nut Oats" | 394 | 94 | 104 | 5 | 18.5 | 39 |
-| "PL Frosted Wheat" | 604 | 137 | 103 | 22 | 35.5 | 44 |
+| "hnc" | 212 | 230 | 199 | 6 | 10.5 | 22 |
+| "cheerios 12oz" | 894 | 263 | 272 | 31 | 53.0 | 62 |
+| "cheerios 18oz" | 23 | 224 | 227 | 0 | 1.0 | 4 |
+| "mini wheats" | 168 | 287 | 141 | 4 | 9.0 | 13 |
+| "pl honey nut oats" | 394 | 94 | 104 | 5 | 18.5 | 39 |
+| "pl frosted wheat" | 604 | 137 | 103 | 22 | 35.5 | 44 |
 
 
     In [21]:
@@ -2037,16 +2033,18 @@ identification
 ``` python
 DEPTH_GRID = np.round(np.arange(0.0, 0.401, 0.05), 2)
 MECHANICS: dict[str, tuple[float, float]] = {
-    "TPR-only": (0.0, 0.0),
+    "tpr-only": (0.0, 0.0),
     "display": (0.0, 1.0),
     "feature": (1.0, 0.0),
     "feature + display": (1.0, 1.0),
 }
-hnc_all_stores = cereal_df.filter(pl.col("product") == FOCAL).with_columns(depth=cut_depth())
+hnc_all_stores = cereal_df.filter(pl.col("product").eq(pl.lit(FOCAL))).with_columns(
+    depth=cut_depth()
+)
 support_rows = []
 support_counts: dict[str, np.ndarray] = {}
 for mechanics_name in MECHANICS:
-    subset = hnc_all_stores.filter(pl.col("mechanics") == mechanics_name)
+    subset = hnc_all_stores.filter(pl.col("mechanics").eq(pl.lit(mechanics_name)))
     depth = subset["depth"].to_numpy()
     counts = np.array([int(np.sum(np.abs(depth - d) <= 0.025)) for d in DEPTH_GRID])
     support_counts[mechanics_name] = counts
@@ -2068,7 +2066,7 @@ support_table
 
 | mechanics | store_weeks | share_without_cut | p05 | p50 | p95 | n@0.00 | n@0.05 | n@0.10 | n@0.15 | n@0.20 | n@0.25 | n@0.30 | n@0.35 | n@0.40 |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| "TPR-only" | 1088 | 0.0 | 0.102894 | 0.144591 | 0.336067 | 0 | 0 | 336 | 398 | 169 | 67 | 58 | 36 | 6 |
+| "tpr-only" | 1088 | 0.0 | 0.102894 | 0.144591 | 0.336067 | 0 | 0 | 336 | 398 | 169 | 67 | 58 | 36 | 6 |
 | "display" | 334 | 0.170659 | 0.0 | 0.28031 | 0.492163 | 57 | 24 | 9 | 9 | 30 | 34 | 20 | 14 | 3 |
 | "feature" | 456 | 0.177632 | 0.0 | 0.198613 | 0.451561 | 83 | 18 | 39 | 67 | 34 | 37 | 22 | 88 | 28 |
 | "feature + display" | 863 | 0.077636 | 0.0 | 0.266423 | 0.482759 | 68 | 37 | 65 | 95 | 81 | 100 | 54 | 156 | 38 |
@@ -2088,29 +2086,40 @@ price_correlation = pl.DataFrame(
 feature_store_week = feature_np[:t_train].reshape(t_train, n_stores, n_products)
 hnc_featured = feature_store_week[:, :, FOCAL_INDEX] == 1
 sibling_featured = np.delete(feature_store_week, FOCAL_INDEX, axis=2).max(axis=2) == 1
-print(f"P(sibling featured | HNC featured): {sibling_featured[hnc_featured].mean():.2f}")
-print(f"P(sibling featured | HNC not featured): {sibling_featured[~hnc_featured].mean():.2f}")
+print(f"P(sibling featured | {FOCAL} featured): {sibling_featured[hnc_featured].mean():.2f}")
+print(f"P(sibling featured | {FOCAL} not featured): {sibling_featured[~hnc_featured].mean():.2f}")
 price_correlation
 ```
 
 
-    P(sibling featured | HNC featured): 0.27
-    P(sibling featured | HNC not featured): 0.37
+    P(sibling featured | hnc featured): 0.27
+    P(sibling featured | hnc not featured): 0.37
 
 
-| x of | HNC | Cheerios 12oz | Cheerios 18oz | Mini Wheats | PL Honey Nut Oats | PL Frosted Wheat |
+| x of | hnc | cheerios 12oz | cheerios 18oz | mini wheats | pl honey nut oats | pl frosted wheat |
 |----|----|----|----|----|----|----|
-| "HNC" | 1.0 | 0.297353 | 0.123075 | -0.078147 | 0.103915 | -0.050287 |
-| "Cheerios 12oz" | 0.297353 | 1.0 | 0.278749 | -0.013253 | 0.093249 | -0.189566 |
-| "Cheerios 18oz" | 0.123075 | 0.278749 | 1.0 | 0.001388 | -0.024091 | -0.102736 |
-| "Mini Wheats" | -0.078147 | -0.013253 | 0.001388 | 1.0 | -0.016099 | -0.051092 |
-| "PL Honey Nut Oats" | 0.103915 | 0.093249 | -0.024091 | -0.016099 | 1.0 | -0.103449 |
-| "PL Frosted Wheat" | -0.050287 | -0.189566 | -0.102736 | -0.051092 | -0.103449 | 1.0 |
+| "hnc" | 1.0 | 0.297353 | 0.123075 | -0.078147 | 0.103915 | -0.050287 |
+| "cheerios 12oz" | 0.297353 | 1.0 | 0.278749 | -0.013253 | 0.093249 | -0.189566 |
+| "cheerios 18oz" | 0.123075 | 0.278749 | 1.0 | 0.001388 | -0.024091 | -0.102736 |
+| "mini wheats" | -0.078147 | -0.013253 | 0.001388 | 1.0 | -0.016099 | -0.051092 |
+| "pl honey nut oats" | 0.103915 | 0.093249 | -0.024091 | -0.016099 | 1.0 | -0.103449 |
+| "pl frosted wheat" | -0.050287 | -0.189566 | -0.102736 | -0.051092 | -0.103449 | 1.0 |
 
 
 # Model specification
 
-For series i let \text{prod}(i) be its product and s(i) its store; t indexes weeks and u \le t the past weeks; y\_{t,i} is the unit count and \mu\_{t,i} its conditional mean. The observed inputs at week t are the log price ratio x\_{t,i} = \log(\text{PRICE}\_{t,i} / \text{BASE\\PRICE}\_{t,i}) \le 0, the log depth \lambda\_{t,i} = -x\_{t,i}, the flags F\_{t,i} (feature) and D\_{t,i} (display), the sibling flags F^{\text{sib}}\_{t,i} and D^{\text{sib}}\_{t,i}, and the log price ratios x\_{k,t,s} of every product k at store s. The latent quantities are the initial level \ell\_{0,i} and the weekly level innovations \delta\_{u,i} (a random walk on the log scale); the annual Fourier basis f(t) with two harmonics and product coefficients \beta_p; the own promotional elasticity \varepsilon_i of each series, partially pooled around a product mean; the cross elasticities \gamma\_{k,p}, the response of product p's units to product k's price, zero on the diagonal; the mechanics effects b^{\text{feat}}\_p, b^{\text{disp}}\_p and their interaction b^{\text{fd}}\_p; the depth slopes under mechanics b^{\text{feat},\lambda}\_p and b^{\text{disp},\lambda}\_p; the sibling-mechanics effects b^{\text{sib,feat}}\_p and b^{\text{sib,disp}}\_p; and the negative binomial concentration \phi_p. With p = \text{prod}(i) and s = s(i):
+For series i let \text{prod}(i) be its product and s(i) its store; t indexes weeks and u \le t the past weeks; y\_{t,i} is the unit count and \mu\_{t,i} its conditional mean. The observed inputs at week t are the log price ratio x\_{t,i} = \log(\text{price}\_{t,i} / \text{base\\price}\_{t,i}) \le 0, the log depth \lambda\_{t,i} = -x\_{t,i}, the flags F\_{t,i} (feature) and D\_{t,i} (display), the sibling flags F^{\text{sib}}\_{t,i} and D^{\text{sib}}\_{t,i}, and the log price ratios x\_{k,t,s} of every product k at store s. The latent quantities are:
+
+- the initial level \ell\_{0,i} and the weekly level innovations \delta\_{u,i}, a random walk on the log scale;
+- the annual Fourier basis f(t) with two harmonics and product coefficients \beta_p;
+- the own promotional elasticity \varepsilon_i of each series, partially pooled around a product mean;
+- the cross elasticities \gamma\_{k,p}, the response of product p's units to product k's price, zero on the diagonal;
+- the mechanics effects b^{\text{feat}}\_p, b^{\text{disp}}\_p and their interaction b^{\text{fd}}\_p;
+- the depth slopes under mechanics b^{\text{feat},\lambda}\_p and b^{\text{disp},\lambda}\_p;
+- the sibling-mechanics effects b^{\text{sib,feat}}\_p and b^{\text{sib,disp}}\_p;
+- the negative binomial concentration \phi_p.
+
+With p = \text{prod}(i) and s = s(i):
 
  \log \mu\_{t,i} = \ell\_{0,i} + \sum\_{u \le t} \delta\_{u,i} + f(t)^\top \beta_p + \varepsilon_i\\ x\_{t,i} + \sum\_{k \ne p} \gamma\_{k,p}\\ x\_{k,t,s} + b^{\text{feat}}\_p F\_{t,i} + b^{\text{disp}}\_p D\_{t,i} + b^{\text{fd}}\_p F\_{t,i} D\_{t,i} + b^{\text{feat},\lambda}\_p F\_{t,i} \lambda\_{t,i} + b^{\text{disp},\lambda}\_p D\_{t,i} \lambda\_{t,i} + b^{\text{sib,feat}}\_p F^{\text{sib}}\_{t,i} + b^{\text{sib,disp}}\_p D^{\text{sib}}\_{t,i} 
 
@@ -2154,7 +2163,7 @@ def local_level(
     centered_drift: Float[Array, ""],
     priors: CerealPriors,
 ) -> Float[Array, " duration n_series"]:
-    """Random-walk level per series: initial level plus the cumulative sum of the innovations."""
+    """Build the random-walk level per series: the initial level plus the summed innovations."""
     with series_plate:
         level0 = cast(
             "Array", numpyro.sample("level0", dist.Normal(priors.level_loc, priors.level_sd))
@@ -2182,7 +2191,7 @@ def annual_seasonality(
     series_to_product: Int[Array, " n_series"],
     priors: CerealPriors,
 ) -> Float[Array, " duration n_series"]:
-    """Annual Fourier seasonality with one coefficient vector per product."""
+    """Sample the annual Fourier seasonality with one coefficient vector per product."""
     with fourier_plate, product_plate:
         beta_s = cast("Array", numpyro.sample("beta_s", dist.Normal(0.0, priors.seasonal_sd)))
     return (fourier @ beta_s)[:, series_to_product]
@@ -2196,7 +2205,7 @@ def own_price_effect(
     centered_eps: Float[Array, ""],
     priors: CerealPriors,
 ) -> Float[Array, " duration n_series"]:
-    """Own promotional elasticity per series, partially pooled around its product mean."""
+    """Sample the own promotional elasticity per series, partially pooled around its product mean."""
     with product_plate:
         eps_prod = cast(
             "Array", numpyro.sample("eps_prod", dist.Normal(priors.eps_loc, priors.eps_sd))
@@ -2219,7 +2228,7 @@ def cross_price_effect(
     priors: CerealPriors,
     n_products: int,
 ) -> Float[Array, " duration n_series"]:
-    """Cross-price contribution from the 30 off-diagonal elasticities, shrunk toward zero."""
+    """Sample the 30 off-diagonal cross elasticities, shrunk toward zero, and apply them to the prices."""
     cross_scale = cast("Array", numpyro.sample("cross_scale", dist.HalfNormal(priors.cross_sd)))
     with (
         pair_plate,
@@ -2252,7 +2261,7 @@ def mechanics_effect(
     series_to_product: Int[Array, " n_series"],
     priors: CerealPriors,
 ) -> Float[Array, " duration n_series"]:
-    """Feature and display uplifts, their interaction, the depth slopes and the sibling effects."""
+    """Sample the mechanics uplifts, their interaction, the depth slopes and the sibling effects."""
     with product_plate:
         b_feat = cast(
             "Array", numpyro.sample("b_feat", dist.Normal(priors.mech_loc, priors.mech_sd))
@@ -2284,7 +2293,7 @@ def mechanics_effect(
 def dispersion(
     product_plate: numpyro.plate, series_to_product: Int[Array, " n_series"], priors: CerealPriors
 ) -> Float[Array, " n_series"]:
-    """Negative binomial concentration per product, gathered to the series axis."""
+    """Sample the negative binomial concentration per product and gather it to the series axis."""
     with product_plate:
         conc = cast(
             "Array", numpyro.sample("conc", dist.LogNormal(priors.conc_mu, priors.conc_sigma))
@@ -2525,13 +2534,13 @@ numpyro.render_model(model, model_args=(covariates_train, y_train), render_distr
 
 ``` python
 def hdi_label(prob: float, prefix: str = "") -> str:
-    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
+    r"""Build the legend label of an HDI band, e.g. ``$94\%$ HDI``."""
     percent = f"{prob:.0%}".replace("%", r"\%")
     return f"{prefix}${percent}$ HDI"
 
 
 def hdi_bounds(draws: Float[np.ndarray, " sample"], prob: float) -> tuple[float, float]:
-    """Highest density interval of one-dimensional draws (the shortest interval with mass ``prob``)."""
+    """Compute the shortest interval that holds a mass ``prob`` of one-dimensional draws."""
     ordered = np.sort(np.asarray(draws, dtype=np.float64))
     n_draws = ordered.size
     width = int(np.floor(prob * n_draws))
@@ -2624,7 +2633,6 @@ fig.suptitle(
 
 ``` python
 depth_check = 0.35
-lam_check = float(-np.log1p(-depth_check))
 eps_prior = np.asarray(prior_draws["eps_prod"])[:, FOCAL_INDEX]
 uplift_prior = np.exp(
     np.asarray(prior_draws["b_feat"])[:, FOCAL_INDEX]
@@ -2639,13 +2647,13 @@ eps_m_prior = (
 multiplier_prior = uplift_prior * (1.0 - depth_check) ** eps_m_prior
 lower_m, upper_m = hdi_bounds(multiplier_prior, 0.94)
 print(
-    f"prior implied HNC multiplier at a {depth_check:.0%} cut with feature + display: "
+    f"prior implied {FOCAL} multiplier at a {depth_check:.0%} cut with feature + display: "
     f"median {np.median(multiplier_prior):.1f}x, 94% HDI {lower_m:.1f}x to {upper_m:.1f}x"
 )
 ```
 
 
-    prior implied HNC multiplier at a 35% cut with feature + display: median 4.5x, 94% HDI 0.3x to 27.5x
+    prior implied hnc multiplier at a 35% cut with feature + display: median 4.5x, 94% HDI 0.3x to 27.5x
 
 
 # Inference
@@ -2653,7 +2661,7 @@ print(
 
 ## The parameterization, learned with SVI
 
-The three centering values decide how the sampler sees the hierarchy. At 0 a site is drawn as a standard normal and shifted and scaled afterwards; at 1 it is drawn on its own scale. A reparameterization leaves the posterior unchanged, so NUTS cannot choose between them. A mean-field variational approximation can: the ELBO of an `AutoNormal` guide depends on the parameterization, because a diagonal Gaussian fits one geometry better than the other. So we run a short SVI pass first, read the fitted centering values from the guide, and hand them to NUTS through `handlers.condition`, which fixes the three sites at those values. The guide's draws are used for nothing else. The ELBO curve is the convergence check of the pass. How to read the learned values: near 0 the non-centered form fits a mean-field Gaussian best, near 1 the centered form, and small innovation scales push the drift value toward 0. The pass takes 13 seconds of wall time for 5{,}000 Adam steps, and the negative ELBO is flat over the second half of the run: the mean of the last 500 steps is 63{,}502 against 63{,}543 for steps 3{,}000 to 3{,}500. The learned values are 0.34 for the level innovations, 0.68 for the store elasticities and 0.40 for the cross terms, with 90\\ intervals of the guide from 0.33 to 0.34, from 0.66 to 0.70 and from 0.36 to 0.45: the innovations and the cross terms lean toward the non-centered form, the store elasticities toward the centered one.
+The three centering values decide how the sampler sees the hierarchy. At 0 a site is drawn as a standard normal and shifted and scaled afterwards; at 1 it is drawn on its own scale. A reparameterization leaves the posterior unchanged, so NUTS cannot choose between them. A mean-field variational approximation can: the ELBO of an `AutoNormal` guide depends on the parameterization, because a diagonal Gaussian fits one geometry better than the other. So we run a short SVI pass first, read the fitted centering values from the guide, and hand them to NUTS through `handlers.condition`, which fixes the three sites at those values. The guide's draws are used for nothing else. The ELBO curve is the convergence check of the pass. How to read the learned values: near 0 the non-centered form fits a mean-field Gaussian best, near 1 the centered form, and small innovation scales push the drift value toward 0. The pass takes 12 seconds of wall time for 5{,}000 Adam steps, and the negative ELBO is flat over the second half of the run: the mean of the last 500 steps is 63{,}502 against 63{,}543 for steps 3{,}000 to 3{,}500. The learned values are 0.34 for the level innovations, 0.68 for the store elasticities and 0.40 for the cross terms, with 90\\ intervals of the guide from 0.33 to 0.34, from 0.66 to 0.70 and from 0.36 to 0.45: the innovations and the cross terms lean toward the non-centered form, the store elasticities toward the centered one.
 
 
     In [29]:
@@ -2670,8 +2678,8 @@ svi_losses = np.asarray(jax.block_until_ready(svi_result.losses))
 ```
 
 
-    CPU times: user 26.1 s, sys: 15.6 s, total: 41.7 s
-    Wall time: 12.6 s
+    CPU times: user 25.7 s, sys: 14.2 s, total: 39.9 s
+    Wall time: 12.3 s
 
 
     In [30]:
@@ -2762,7 +2770,7 @@ n_draws = int(posterior["eps_prod"].shape[0])
 ```
 
 
-    CPU times: user 56min 16s, sys: 16min 26s, total: 1h 12min 42s
+    CPU times: user 56min 35s, sys: 16min 20s, total: 1h 12min 56s
     Wall time: 8min 20s
 
 
@@ -2776,7 +2784,7 @@ depth_values, depth_counts = np.unique(tree_depth, return_counts=True)
 print(
     f"posterior draws: {n_draws} | divergences: {int(np.asarray(mcmc.get_extra_fields()['diverging']).sum())}"
 )
-print(f"share of iterations at the depth-10 cap: {np.mean(num_steps == 1023):.1%}")
+print(f"share of iterations at the depth-10 cap: {np.mean(num_steps == 1_023):.1%}")
 pl.DataFrame({"tree_depth": depth_values, "share": depth_counts / depth_counts.sum()})
 ```
 
@@ -3391,12 +3399,12 @@ Group: /
 │       Coordinates:
 │         * chain                     (chain) int64 32B 0 1 2 3
 │         * draw                      (draw) int64 8kB 0 1 2 3 4 ... 995 996 997 998 999
-│         * product                   (product) <U17 408B 'HNC' ... 'PL Frosted Wheat'
+│         * product                   (product) <U17 408B 'hnc' ... 'pl frosted wheat'
 │         * fourier                   (fourier) <U4 64B 'sin1' 'sin2' 'cos1' 'cos2'
 │         * time                      (time) datetime64[s] 1kB 2009-01-14 ... 2011-10-05
-│         * series                    (series) <U24 10kB '25027::HNC' ... '6431::PL F...
-│         * competitor                (competitor) <U17 408B 'HNC' ... 'PL Frosted Wh...
-│         * pair                      (pair) <U37 4kB 'HNC -> Cheerios 12oz' ... 'PL ...
+│         * series                    (series) <U24 10kB '25027::hnc' ... '6431::pl f...
+│         * competitor                (competitor) <U17 408B 'hnc' ... 'pl frosted wh...
+│         * pair                      (pair) <U37 4kB 'hnc -> cheerios 12oz' ... 'pl ...
 │       Data variables: (12/21)
 │           b_disp                    (chain, draw, product) float32 96kB 0.3411 ... ...
 │           b_disp_depth              (chain, draw, product) float32 96kB -0.02473 .....
@@ -3412,7 +3420,7 @@ Group: /
 │           gamma_offdiag_decentered  (chain, draw, pair) float32 480kB 0.1501 ... 0....
 │           level0                    (chain, draw, series) float32 2MB 4.558 ... 2.814
 │       Attributes:
-│           created_at:                 2026-09-07T13:25:52.911307+00:00
+│           created_at:                 2026-09-07T14:54:44.163734+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3423,11 +3431,11 @@ Group: /
 │         * chain    (chain) int64 32B 0 1 2 3
 │         * draw     (draw) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
 │         * time     (time) datetime64[s] 1kB 2009-01-14 2009-01-21 ... 2011-10-05
-│         * obs_dim  (obs_dim) <U24 10kB '25027::HNC' ... '6431::PL Frosted Wheat'
+│         * obs_dim  (obs_dim) <U24 10kB '25027::hnc' ... '6431::pl frosted wheat'
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) int32 247MB 89 146 49 37 ... 16 5 32
 │       Attributes:
-│           created_at:                 2026-09-07T13:26:10.486057+00:00
+│           created_at:                 2026-09-07T14:55:04.811719+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3436,11 +3444,11 @@ Group: /
 │       Dimensions:  (time: 143, obs_dim: 108)
 │       Coordinates:
 │         * time     (time) datetime64[s] 1kB 2009-01-14 2009-01-21 ... 2011-10-05
-│         * obs_dim  (obs_dim) <U24 10kB '25027::HNC' ... '6431::PL Frosted Wheat'
+│         * obs_dim  (obs_dim) <U24 10kB '25027::hnc' ... '6431::pl frosted wheat'
 │       Data variables:
 │           obs      (time, obs_dim) int32 62kB 70 181 69 46 50 100 ... 19 20 18 14 18
 │       Attributes:
-│           created_at:                 2026-09-07T13:26:10.488747+00:00
+│           created_at:                 2026-09-07T14:55:04.813801+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3448,13 +3456,13 @@ Group: /
 ├── Group: /constant_data
 │       Dimensions:     (input: 11, time: 143, series: 108)
 │       Coordinates:
-│         * input       (input) <U23 1kB 'x' 'feature' ... 'price PL Frosted Wheat'
+│         * input       (input) <U23 1kB 'x' 'feature' ... 'price pl frosted wheat'
 │         * time        (time) datetime64[s] 1kB 2009-01-14 2009-01-21 ... 2011-10-05
-│         * series      (series) <U24 10kB '25027::HNC' ... '6431::PL Frosted Wheat'
+│         * series      (series) <U24 10kB '25027::hnc' ... '6431::pl frosted wheat'
 │       Data variables:
 │           covariates  (input, time, series) float32 680kB 0.0 -0.2239 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-09-07T13:26:10.489640+00:00
+│           created_at:                 2026-09-07T14:55:04.814367+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3465,11 +3473,11 @@ Group: /
 │         * chain    (chain) int64 32B 0 1 2 3
 │         * draw     (draw) int64 8kB 0 1 2 3 4 5 6 7 ... 993 994 995 996 997 998 999
 │         * time     (time) datetime64[s] 104B 2011-10-12 2011-10-19 ... 2012-01-04
-│         * obs_dim  (obs_dim) <U24 10kB '25027::HNC' ... '6431::PL Frosted Wheat'
+│         * obs_dim  (obs_dim) <U24 10kB '25027::hnc' ... '6431::pl frosted wheat'
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) int32 22MB 146 62 78 66 ... 13 11 4 29
 │       Attributes:
-│           created_at:                 2026-09-07T13:26:13.021705+00:00
+│           created_at:                 2026-09-07T14:55:06.589071+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3477,13 +3485,13 @@ Group: /
 └── Group: /predictions_constant_data
         Dimensions:     (input: 11, time: 13, series: 108)
         Coordinates:
-          * input       (input) <U23 1kB 'x' 'feature' ... 'price PL Frosted Wheat'
+          * input       (input) <U23 1kB 'x' 'feature' ... 'price pl frosted wheat'
           * time        (time) datetime64[s] 104B 2011-10-12 2011-10-19 ... 2012-01-04
-          * series      (series) <U24 10kB '25027::HNC' ... '6431::PL Frosted Wheat'
+          * series      (series) <U24 10kB '25027::hnc' ... '6431::pl frosted wheat'
         Data variables:
             covariates  (input, time, series) float32 62kB 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-09-07T13:26:13.022100+00:00
+            created_at:                 2026-09-07T14:55:06.589516+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -3561,7 +3569,7 @@ product
 \<U17
 
 
-'HNC' ... 'PL Frosted Wheat'
+'hnc' ... 'pl frosted wheat'
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -3569,7 +3577,7 @@ product
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['HNC', 'Cheerios 12oz', 'Cheerios 18oz', 'Mini Wheats','PL Honey Nut Oats', 'PL Frosted Wheat'], dtype='<U17')
+    array(['hnc', 'cheerios 12oz', 'cheerios 18oz', 'mini wheats','pl honey nut oats', 'pl frosted wheat'], dtype='<U17')
 
 
 fourier
@@ -3621,7 +3629,7 @@ series
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -3629,7 +3637,7 @@ series
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['25027::HNC', '25027::Cheerios 12oz', '25027::Cheerios 18oz','25027::Mini Wheats', '25027::PL Honey Nut Oats','25027::PL Frosted Wheat', '21237::HNC', '21237::Cheerios 12oz','21237::Cheerios 18oz', '21237::Mini Wheats','21237::PL Honey Nut Oats', '21237::PL Frosted Wheat', '25229::HNC','25229::Cheerios 12oz', '25229::Cheerios 18oz', '25229::Mini Wheats','25229::PL Honey Nut Oats', '25229::PL Frosted Wheat', '19265::HNC','19265::Cheerios 12oz', '19265::Cheerios 18oz', '19265::Mini Wheats','19265::PL Honey Nut Oats', '19265::PL Frosted Wheat', '9825::HNC','9825::Cheerios 12oz', '9825::Cheerios 18oz', '9825::Mini Wheats','9825::PL Honey Nut Oats', '9825::PL Frosted Wheat', '613::HNC','613::Cheerios 12oz', '613::Cheerios 18oz', '613::Mini Wheats','613::PL Honey Nut Oats', '613::PL Frosted Wheat', '2277::HNC','2277::Cheerios 12oz', '2277::Cheerios 18oz', '2277::Mini Wheats','2277::PL Honey Nut Oats', '2277::PL Frosted Wheat', '24991::HNC','24991::Cheerios 12oz', '24991::Cheerios 18oz', '24991::Mini Wheats','24991::PL Honey Nut Oats', '24991::PL Frosted Wheat', '6179::HNC','6179::Cheerios 12oz', '6179::Cheerios 18oz', '6179::Mini Wheats','6179::PL Honey Nut Oats', '6179::PL Frosted Wheat', '2513::HNC','2513::Cheerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats','2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC','2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats','2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC','11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats','11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC','25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats','25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC','4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats','4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC','21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats','21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC','23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats','23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC','19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats','19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC','6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats','6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz','25027::mini wheats', '25027::pl honey nut oats','25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz','21237::cheerios 18oz', '21237::mini wheats','21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc','25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats','25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc','19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats','19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc','9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats','9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc','613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats','613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc','2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats','2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc','24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats','24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc','6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats','6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc','2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats','2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc','2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats','2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc','11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats','11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc','25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats','25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc','4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats','4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc','21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats','21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc','23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats','23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc','19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats','19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc','6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats','6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 competitor
@@ -3641,7 +3649,7 @@ competitor
 \<U17
 
 
-'HNC' ... 'PL Frosted Wheat'
+'hnc' ... 'pl frosted wheat'
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -3649,7 +3657,7 @@ competitor
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['HNC', 'Cheerios 12oz', 'Cheerios 18oz', 'Mini Wheats','PL Honey Nut Oats', 'PL Frosted Wheat'], dtype='<U17')
+    array(['hnc', 'cheerios 12oz', 'cheerios 18oz', 'mini wheats','pl honey nut oats', 'pl frosted wheat'], dtype='<U17')
 
 
 pair
@@ -3661,7 +3669,7 @@ pair
 \<U37
 
 
-'HNC -\> Cheerios 12oz' ... 'PL F...
+'hnc -\> cheerios 12oz' ... 'pl f...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -3669,7 +3677,7 @@ pair
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['HNC -> Cheerios 12oz', 'HNC -> Cheerios 18oz', 'HNC -> Mini Wheats','HNC -> PL Honey Nut Oats', 'HNC -> PL Frosted Wheat','Cheerios 12oz -> HNC', 'Cheerios 12oz -> Cheerios 18oz','Cheerios 12oz -> Mini Wheats', 'Cheerios 12oz -> PL Honey Nut Oats','Cheerios 12oz -> PL Frosted Wheat', 'Cheerios 18oz -> HNC','Cheerios 18oz -> Cheerios 12oz', 'Cheerios 18oz -> Mini Wheats','Cheerios 18oz -> PL Honey Nut Oats','Cheerios 18oz -> PL Frosted Wheat', 'Mini Wheats -> HNC','Mini Wheats -> Cheerios 12oz', 'Mini Wheats -> Cheerios 18oz','Mini Wheats -> PL Honey Nut Oats', 'Mini Wheats -> PL Frosted Wheat','PL Honey Nut Oats -> HNC', 'PL Honey Nut Oats -> Cheerios 12oz','PL Honey Nut Oats -> Cheerios 18oz','PL Honey Nut Oats -> Mini Wheats','PL Honey Nut Oats -> PL Frosted Wheat', 'PL Frosted Wheat -> HNC','PL Frosted Wheat -> Cheerios 12oz','PL Frosted Wheat -> Cheerios 18oz', 'PL Frosted Wheat -> Mini Wheats','PL Frosted Wheat -> PL Honey Nut Oats'], dtype='<U37')
+    array(['hnc -> cheerios 12oz', 'hnc -> cheerios 18oz', 'hnc -> mini wheats','hnc -> pl honey nut oats', 'hnc -> pl frosted wheat','cheerios 12oz -> hnc', 'cheerios 12oz -> cheerios 18oz','cheerios 12oz -> mini wheats', 'cheerios 12oz -> pl honey nut oats','cheerios 12oz -> pl frosted wheat', 'cheerios 18oz -> hnc','cheerios 18oz -> cheerios 12oz', 'cheerios 18oz -> mini wheats','cheerios 18oz -> pl honey nut oats','cheerios 18oz -> pl frosted wheat', 'mini wheats -> hnc','mini wheats -> cheerios 12oz', 'mini wheats -> cheerios 18oz','mini wheats -> pl honey nut oats', 'mini wheats -> pl frosted wheat','pl honey nut oats -> hnc', 'pl honey nut oats -> cheerios 12oz','pl honey nut oats -> cheerios 18oz','pl honey nut oats -> mini wheats','pl honey nut oats -> pl frosted wheat', 'pl frosted wheat -> hnc','pl frosted wheat -> cheerios 12oz','pl frosted wheat -> cheerios 18oz', 'pl frosted wheat -> mini wheats','pl frosted wheat -> pl honey nut oats'], dtype='<U37')
 
 
 Data variables: (21)
@@ -4099,7 +4107,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T13:25:52.911307+00:00
+2026-09-07T14:54:44.163734+00:00
 
 creation_library :  
 ArviZ
@@ -4197,7 +4205,7 @@ obs_dim
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4205,7 +4213,7 @@ obs_dim
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['25027::HNC', '25027::Cheerios 12oz', '25027::Cheerios 18oz','25027::Mini Wheats', '25027::PL Honey Nut Oats','25027::PL Frosted Wheat', '21237::HNC', '21237::Cheerios 12oz','21237::Cheerios 18oz', '21237::Mini Wheats','21237::PL Honey Nut Oats', '21237::PL Frosted Wheat', '25229::HNC','25229::Cheerios 12oz', '25229::Cheerios 18oz', '25229::Mini Wheats','25229::PL Honey Nut Oats', '25229::PL Frosted Wheat', '19265::HNC','19265::Cheerios 12oz', '19265::Cheerios 18oz', '19265::Mini Wheats','19265::PL Honey Nut Oats', '19265::PL Frosted Wheat', '9825::HNC','9825::Cheerios 12oz', '9825::Cheerios 18oz', '9825::Mini Wheats','9825::PL Honey Nut Oats', '9825::PL Frosted Wheat', '613::HNC','613::Cheerios 12oz', '613::Cheerios 18oz', '613::Mini Wheats','613::PL Honey Nut Oats', '613::PL Frosted Wheat', '2277::HNC','2277::Cheerios 12oz', '2277::Cheerios 18oz', '2277::Mini Wheats','2277::PL Honey Nut Oats', '2277::PL Frosted Wheat', '24991::HNC','24991::Cheerios 12oz', '24991::Cheerios 18oz', '24991::Mini Wheats','24991::PL Honey Nut Oats', '24991::PL Frosted Wheat', '6179::HNC','6179::Cheerios 12oz', '6179::Cheerios 18oz', '6179::Mini Wheats','6179::PL Honey Nut Oats', '6179::PL Frosted Wheat', '2513::HNC','2513::Cheerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats','2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC','2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats','2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC','11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats','11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC','25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats','25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC','4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats','4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC','21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats','21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC','23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats','23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC','19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats','19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC','6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats','6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz','25027::mini wheats', '25027::pl honey nut oats','25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz','21237::cheerios 18oz', '21237::mini wheats','21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc','25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats','25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc','19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats','19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc','9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats','9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc','613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats','613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc','2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats','2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc','24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats','24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc','6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats','6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc','2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats','2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc','2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats','2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc','11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats','11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc','25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats','25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc','4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats','4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc','21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats','21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc','23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats','23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc','19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats','19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc','6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats','6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 Data variables: (1)
@@ -4235,7 +4243,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T13:26:10.486057+00:00
+2026-09-07T14:55:04.811719+00:00
 
 creation_library :  
 ArviZ
@@ -4291,7 +4299,7 @@ obs_dim
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4299,7 +4307,7 @@ obs_dim
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['25027::HNC', '25027::Cheerios 12oz', '25027::Cheerios 18oz','25027::Mini Wheats', '25027::PL Honey Nut Oats','25027::PL Frosted Wheat', '21237::HNC', '21237::Cheerios 12oz','21237::Cheerios 18oz', '21237::Mini Wheats','21237::PL Honey Nut Oats', '21237::PL Frosted Wheat', '25229::HNC','25229::Cheerios 12oz', '25229::Cheerios 18oz', '25229::Mini Wheats','25229::PL Honey Nut Oats', '25229::PL Frosted Wheat', '19265::HNC','19265::Cheerios 12oz', '19265::Cheerios 18oz', '19265::Mini Wheats','19265::PL Honey Nut Oats', '19265::PL Frosted Wheat', '9825::HNC','9825::Cheerios 12oz', '9825::Cheerios 18oz', '9825::Mini Wheats','9825::PL Honey Nut Oats', '9825::PL Frosted Wheat', '613::HNC','613::Cheerios 12oz', '613::Cheerios 18oz', '613::Mini Wheats','613::PL Honey Nut Oats', '613::PL Frosted Wheat', '2277::HNC','2277::Cheerios 12oz', '2277::Cheerios 18oz', '2277::Mini Wheats','2277::PL Honey Nut Oats', '2277::PL Frosted Wheat', '24991::HNC','24991::Cheerios 12oz', '24991::Cheerios 18oz', '24991::Mini Wheats','24991::PL Honey Nut Oats', '24991::PL Frosted Wheat', '6179::HNC','6179::Cheerios 12oz', '6179::Cheerios 18oz', '6179::Mini Wheats','6179::PL Honey Nut Oats', '6179::PL Frosted Wheat', '2513::HNC','2513::Cheerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats','2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC','2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats','2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC','11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats','11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC','25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats','25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC','4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats','4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC','21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats','21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC','23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats','23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC','19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats','19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC','6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats','6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz','25027::mini wheats', '25027::pl honey nut oats','25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz','21237::cheerios 18oz', '21237::mini wheats','21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc','25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats','25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc','19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats','19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc','9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats','9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc','613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats','613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc','2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats','2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc','24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats','24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc','6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats','6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc','2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats','2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc','2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats','2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc','11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats','11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc','25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats','25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc','4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats','4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc','21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats','21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc','23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats','23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc','19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats','19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc','6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats','6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 Data variables: (1)
@@ -4329,7 +4337,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T13:26:10.488747+00:00
+2026-09-07T14:55:04.813801+00:00
 
 creation_library :  
 ArviZ
@@ -4366,7 +4374,7 @@ input
 \<U23
 
 
-'x' ... 'price PL Frosted Wheat'
+'x' ... 'price pl frosted wheat'
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4374,7 +4382,7 @@ input
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['x', 'feature', 'display', 'sib_feature', 'sib_display', 'price HNC','price Cheerios 12oz', 'price Cheerios 18oz', 'price Mini Wheats','price PL Honey Nut Oats', 'price PL Frosted Wheat'], dtype='<U23')
+    array(['x', 'feature', 'display', 'sib_feature', 'sib_display', 'price hnc','price cheerios 12oz', 'price cheerios 18oz', 'price mini wheats','price pl honey nut oats', 'price pl frosted wheat'], dtype='<U23')
 
 
 time
@@ -4406,7 +4414,7 @@ series
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4414,7 +4422,7 @@ series
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['25027::HNC', '25027::Cheerios 12oz', '25027::Cheerios 18oz','25027::Mini Wheats', '25027::PL Honey Nut Oats','25027::PL Frosted Wheat', '21237::HNC', '21237::Cheerios 12oz','21237::Cheerios 18oz', '21237::Mini Wheats','21237::PL Honey Nut Oats', '21237::PL Frosted Wheat', '25229::HNC','25229::Cheerios 12oz', '25229::Cheerios 18oz', '25229::Mini Wheats','25229::PL Honey Nut Oats', '25229::PL Frosted Wheat', '19265::HNC','19265::Cheerios 12oz', '19265::Cheerios 18oz', '19265::Mini Wheats','19265::PL Honey Nut Oats', '19265::PL Frosted Wheat', '9825::HNC','9825::Cheerios 12oz', '9825::Cheerios 18oz', '9825::Mini Wheats','9825::PL Honey Nut Oats', '9825::PL Frosted Wheat', '613::HNC','613::Cheerios 12oz', '613::Cheerios 18oz', '613::Mini Wheats','613::PL Honey Nut Oats', '613::PL Frosted Wheat', '2277::HNC','2277::Cheerios 12oz', '2277::Cheerios 18oz', '2277::Mini Wheats','2277::PL Honey Nut Oats', '2277::PL Frosted Wheat', '24991::HNC','24991::Cheerios 12oz', '24991::Cheerios 18oz', '24991::Mini Wheats','24991::PL Honey Nut Oats', '24991::PL Frosted Wheat', '6179::HNC','6179::Cheerios 12oz', '6179::Cheerios 18oz', '6179::Mini Wheats','6179::PL Honey Nut Oats', '6179::PL Frosted Wheat', '2513::HNC','2513::Cheerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats','2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC','2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats','2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC','11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats','11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC','25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats','25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC','4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats','4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC','21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats','21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC','23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats','23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC','19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats','19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC','6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats','6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz','25027::mini wheats', '25027::pl honey nut oats','25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz','21237::cheerios 18oz', '21237::mini wheats','21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc','25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats','25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc','19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats','19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc','9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats','9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc','613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats','613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc','2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats','2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc','24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats','24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc','6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats','6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc','2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats','2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc','2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats','2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc','11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats','11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc','25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats','25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc','4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats','4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc','21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats','21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc','23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats','23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc','19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats','19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc','6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats','6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 Data variables: (1)
@@ -4444,7 +4452,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T13:26:10.489640+00:00
+2026-09-07T14:55:04.814367+00:00
 
 creation_library :  
 ArviZ
@@ -4542,7 +4550,7 @@ obs_dim
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4550,7 +4558,7 @@ obs_dim
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-heerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats','2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC','2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats','2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC','11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats','11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC','25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats','25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC','4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats','4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC','21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats','21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC','23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats','23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC','19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats','19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC','6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats','6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz','25027::mini wheats', '25027::pl honey nut oats','25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz','21237::cheerios 18oz', '21237::mini wheats','21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc','25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats','25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc','19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats','19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc','9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats','9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc','613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats','613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc','2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats','2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc','24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats','24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc','6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats','6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc','2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats','2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc','2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats','2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc','11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats','11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc','25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats','25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc','4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats','4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc','21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats','21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc','23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats','23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc','19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats','19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc','6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats','6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 Data variables: (1)
@@ -4580,7 +4588,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T13:26:13.021705+00:00
+2026-09-07T14:55:06.589071+00:00
 
 creation_library :  
 ArviZ
@@ -4617,7 +4625,7 @@ input
 \<U23
 
 
-'x' ... 'price PL Frosted Wheat'
+'x' ... 'price pl frosted wheat'
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4625,7 +4633,7 @@ input
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['x', 'feature', 'display', 'sib_feature', 'sib_display', 'price HNC','price Cheerios 12oz', 'price Cheerios 18oz', 'price Mini Wheats','price PL Honey Nut Oats', 'price PL Frosted Wheat'], dtype='<U23')
+    array(['x', 'feature', 'display', 'sib_feature', 'sib_display', 'price hnc','price cheerios 12oz', 'price cheerios 18oz', 'price mini wheats','price pl honey nut oats', 'price pl frosted wheat'], dtype='<U23')
 
 
 time
@@ -4657,7 +4665,7 @@ series
 \<U24
 
 
-'25027::HNC' ... '6431::PL Frost...
+'25027::hnc' ... '6431::pl frost...
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -4665,7 +4673,7 @@ series
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array(['25027::HNC', '25027::Cheerios 12oz', '25027::Cheerios 18oz','25027::Mini Wheats', '25027::PL Honey Nut Oats','25027::PL Frosted Wheat', '21237::HNC', '21237::Cheerios 12oz','21237::Cheerios 18oz', '21237::Mini Wheats','21237::PL Honey Nut Oats', '21237::PL Frosted Wheat', '25229::HNC','25229::Cheerios 12oz', '25229::Cheerios 18oz', '25229::Mini Wheats','25229::PL Honey Nut Oats', '25229::PL Frosted Wheat', '19265::HNC','19265::Cheerios 12oz', '19265::Cheerios 18oz', '19265::Mini Wheats','19265::PL Honey Nut Oats', '19265::PL Frosted Wheat', '9825::HNC','9825::Cheerios 12oz', '9825::Cheerios 18oz', '9825::Mini Wheats','9825::PL Honey Nut Oats', '9825::PL Frosted Wheat', '613::HNC','613::Cheerios 12oz', '613::Cheerios 18oz', '613::Mini Wheats','613::PL Honey Nut Oats', '613::PL Frosted Wheat', '2277::HNC','2277::Cheerios 12oz', '2277::Cheerios 18oz', '2277::Mini Wheats','2277::PL Honey Nut Oats', '2277::PL Frosted Wheat', '24991::HNC','24991::Cheerios 12oz', '24991::Cheerios 18oz', '24991::Mini Wheats','24991::PL Honey Nut Oats', '24991::PL Frosted Wheat', '6179::HNC','6179::Cheerios 12oz', '6179::Cheerios 18oz', '6179::Mini Wheats','6179::PL Honey Nut Oats', '6179::PL Frosted Wheat', '2513::HNC','2513::Cheerios 12oz', '2513::Cheerios 18oz', '2513::Mini Wheats','2513::PL Honey Nut Oats', '2513::PL Frosted Wheat', '2281::HNC','2281::Cheerios 12oz', '2281::Cheerios 18oz', '2281::Mini Wheats','2281::PL Honey Nut Oats', '2281::PL Frosted Wheat', '11993::HNC','11993::Cheerios 12oz', '11993::Cheerios 18oz', '11993::Mini Wheats','11993::PL Honey Nut Oats', '11993::PL Frosted Wheat', '25021::HNC','25021::Cheerios 12oz', '25021::Cheerios 18oz', '25021::Mini Wheats','25021::PL Honey Nut Oats', '25021::PL Frosted Wheat', '4259::HNC','4259::Cheerios 12oz', '4259::Cheerios 18oz', '4259::Mini Wheats','4259::PL Honey Nut Oats', '4259::PL Frosted Wheat', '21479::HNC','21479::Cheerios 12oz', '21479::Cheerios 18oz', '21479::Mini Wheats','21479::PL Honey Nut Oats', '21479::PL Frosted Wheat', '23349::HNC','23349::Cheerios 12oz', '23349::Cheerios 18oz', '23349::Mini Wheats','23349::PL Honey Nut Oats', '23349::PL Frosted Wheat', '19523::HNC','19523::Cheerios 12oz', '19523::Cheerios 18oz', '19523::Mini Wheats','19523::PL Honey Nut Oats', '19523::PL Frosted Wheat', '6431::HNC','6431::Cheerios 12oz', '6431::Cheerios 18oz', '6431::Mini Wheats','6431::PL Honey Nut Oats', '6431::PL Frosted Wheat'], dtype='<U24')
+    array(['25027::hnc', '25027::cheerios 12oz', '25027::cheerios 18oz','25027::mini wheats', '25027::pl honey nut oats','25027::pl frosted wheat', '21237::hnc', '21237::cheerios 12oz','21237::cheerios 18oz', '21237::mini wheats','21237::pl honey nut oats', '21237::pl frosted wheat', '25229::hnc','25229::cheerios 12oz', '25229::cheerios 18oz', '25229::mini wheats','25229::pl honey nut oats', '25229::pl frosted wheat', '19265::hnc','19265::cheerios 12oz', '19265::cheerios 18oz', '19265::mini wheats','19265::pl honey nut oats', '19265::pl frosted wheat', '9825::hnc','9825::cheerios 12oz', '9825::cheerios 18oz', '9825::mini wheats','9825::pl honey nut oats', '9825::pl frosted wheat', '613::hnc','613::cheerios 12oz', '613::cheerios 18oz', '613::mini wheats','613::pl honey nut oats', '613::pl frosted wheat', '2277::hnc','2277::cheerios 12oz', '2277::cheerios 18oz', '2277::mini wheats','2277::pl honey nut oats', '2277::pl frosted wheat', '24991::hnc','24991::cheerios 12oz', '24991::cheerios 18oz', '24991::mini wheats','24991::pl honey nut oats', '24991::pl frosted wheat', '6179::hnc','6179::cheerios 12oz', '6179::cheerios 18oz', '6179::mini wheats','6179::pl honey nut oats', '6179::pl frosted wheat', '2513::hnc','2513::cheerios 12oz', '2513::cheerios 18oz', '2513::mini wheats','2513::pl honey nut oats', '2513::pl frosted wheat', '2281::hnc','2281::cheerios 12oz', '2281::cheerios 18oz', '2281::mini wheats','2281::pl honey nut oats', '2281::pl frosted wheat', '11993::hnc','11993::cheerios 12oz', '11993::cheerios 18oz', '11993::mini wheats','11993::pl honey nut oats', '11993::pl frosted wheat', '25021::hnc','25021::cheerios 12oz', '25021::cheerios 18oz', '25021::mini wheats','25021::pl honey nut oats', '25021::pl frosted wheat', '4259::hnc','4259::cheerios 12oz', '4259::cheerios 18oz', '4259::mini wheats','4259::pl honey nut oats', '4259::pl frosted wheat', '21479::hnc','21479::cheerios 12oz', '21479::cheerios 18oz', '21479::mini wheats','21479::pl honey nut oats', '21479::pl frosted wheat', '23349::hnc','23349::cheerios 12oz', '23349::cheerios 18oz', '23349::mini wheats','23349::pl honey nut oats', '23349::pl frosted wheat', '19523::hnc','19523::cheerios 12oz', '19523::cheerios 18oz', '19523::mini wheats','19523::pl honey nut oats', '19523::pl frosted wheat', '6431::hnc','6431::cheerios 12oz', '6431::cheerios 18oz', '6431::mini wheats','6431::pl honey nut oats', '6431::pl frosted wheat'], dtype='<U24')
 
 
 Data variables: (1)
@@ -4695,7 +4703,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T13:26:13.022100+00:00
+2026-09-07T14:55:06.589516+00:00
 
 creation_library :  
 ArviZ
@@ -4742,60 +4750,60 @@ summary
 
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| eps_prod\[HNC\] | -1.083 | 0.11 | -1.3 | -0.88 | 2491 | 2882 | 1.00 | 0.0022 | 0.0016 |
-| eps_prod\[Cheerios 12oz\] | -0.381 | 0.081 | -0.53 | -0.23 | 2609 | 2527 | 1.00 | 0.0016 | 0.0011 |
-| eps_prod\[Cheerios 18oz\] | -1.912 | 0.151 | -2.2 | -1.6 | 1492 | 2075 | 1.00 | 0.0039 | 0.0028 |
-| eps_prod\[Mini Wheats\] | -1.946 | 0.126 | -2.2 | -1.7 | 3161 | 2903 | 1.00 | 0.0022 | 0.0016 |
-| eps_prod\[PL Honey Nut Oats\] | -1.927 | 0.157 | -2.2 | -1.6 | 2908 | 3202 | 1.00 | 0.0029 | 0.0021 |
-| eps_prod\[PL Frosted Wheat\] | -1.034 | 0.106 | -1.2 | -0.84 | 4621 | 3130 | 1.00 | 0.0016 | 0.0011 |
-| conc\[HNC\] | 17.19 | 0.79 | 16 | 19 | 693 | 1865 | 1.00 | 0.03 | 0.021 |
-| conc\[Cheerios 12oz\] | 19.18 | 0.83 | 18 | 21 | 2424 | 2505 | 1.00 | 0.017 | 0.012 |
-| conc\[Cheerios 18oz\] | 21.95 | 1.04 | 20 | 24 | 4087 | 2338 | 1.00 | 0.016 | 0.012 |
-| conc\[Mini Wheats\] | 18.85 | 0.87 | 17 | 21 | 3125 | 2535 | 1.00 | 0.016 | 0.011 |
-| conc\[PL Honey Nut Oats\] | 19.6 | 1.23 | 17 | 22 | 608 | 1352 | 1.00 | 0.05 | 0.038 |
-| conc\[PL Frosted Wheat\] | 21.13 | 0.99 | 19 | 23 | 2822 | 2625 | 1.00 | 0.019 | 0.013 |
-| b_feat\[HNC\] | 0.757 | 0.042 | 0.68 | 0.84 | 2525 | 2938 | 1.00 | 0.00084 | 0.0006 |
-| b_feat\[Cheerios 12oz\] | 0.799 | 0.062 | 0.69 | 0.92 | 1815 | 1948 | 1.00 | 0.0014 | 0.001 |
-| b_feat\[Cheerios 18oz\] | 0.099 | 0.086 | -0.057 | 0.26 | 2090 | 2695 | 1.01 | 0.0019 | 0.0014 |
-| b_feat\[Mini Wheats\] | 0.299 | 0.038 | 0.23 | 0.37 | 2610 | 2704 | 1.00 | 0.00074 | 0.00051 |
-| b_feat\[PL Honey Nut Oats\] | 0.12 | 0.055 | 0.016 | 0.23 | 3296 | 2993 | 1.00 | 0.00096 | 0.00067 |
-| b_feat\[PL Frosted Wheat\] | 0.238 | 0.042 | 0.16 | 0.32 | 3031 | 2801 | 1.00 | 0.00077 | 0.00055 |
-| b_disp\[HNC\] | 0.342 | 0.053 | 0.24 | 0.44 | 2156 | 2567 | 1.00 | 0.0012 | 0.00083 |
-| b_disp\[Cheerios 12oz\] | 0.469 | 0.054 | 0.37 | 0.57 | 2089 | 2506 | 1.00 | 0.0012 | 0.00082 |
-| b_disp\[Cheerios 18oz\] | 0.265 | 0.05 | 0.17 | 0.36 | 3475 | 2987 | 1.00 | 0.00085 | 0.00061 |
-| b_disp\[Mini Wheats\] | 0.282 | 0.065 | 0.16 | 0.41 | 2374 | 2508 | 1.00 | 0.0013 | 0.00095 |
-| b_disp\[PL Honey Nut Oats\] | 0.268 | 0.054 | 0.16 | 0.37 | 3124 | 2957 | 1.00 | 0.00097 | 0.0007 |
-| b_disp\[PL Frosted Wheat\] | 0.164 | 0.057 | 0.057 | 0.27 | 2889 | 2822 | 1.00 | 0.0011 | 0.00075 |
-| b_fd\[HNC\] | -0.024 | 0.058 | -0.13 | 0.084 | 1729 | 2268 | 1.00 | 0.0014 | 0.00098 |
-| b_fd\[Cheerios 12oz\] | -0.065 | 0.055 | -0.17 | 0.04 | 3422 | 3022 | 1.00 | 0.00095 | 0.00069 |
-| b_fd\[Cheerios 18oz\] | -0.244 | 0.079 | -0.39 | -0.099 | 1296 | 1696 | 1.01 | 0.0022 | 0.0015 |
-| b_fd\[Mini Wheats\] | 0.004 | 0.061 | -0.11 | 0.12 | 3125 | 2540 | 1.00 | 0.0011 | 0.00076 |
-| b_fd\[PL Honey Nut Oats\] | -0.062 | 0.077 | -0.21 | 0.081 | 4237 | 3232 | 1.00 | 0.0012 | 0.00086 |
-| b_fd\[PL Frosted Wheat\] | -0.011 | 0.062 | -0.13 | 0.1 | 4518 | 3155 | 1.00 | 0.00092 | 0.00067 |
-| b_feat_depth\[HNC\] | 0.038 | 0.11 | -0.17 | 0.24 | 2119 | 2805 | 1.00 | 0.0024 | 0.0017 |
-| b_feat_depth\[Cheerios 12oz\] | -0.462 | 0.211 | -0.87 | -0.065 | 1915 | 1926 | 1.00 | 0.0048 | 0.0034 |
-| b_feat_depth\[Cheerios 18oz\] | 0.88 | 0.173 | 0.56 | 1.2 | 1824 | 2157 | 1.00 | 0.0041 | 0.003 |
-| b_feat_depth\[Mini Wheats\] | -0.384 | 0.174 | -0.71 | -0.061 | 2016 | 2430 | 1.00 | 0.0039 | 0.0028 |
-| b_feat_depth\[PL Honey Nut Oats\] | 0.15 | 0.398 | -0.62 | 0.88 | 3812 | 3309 | 1.00 | 0.0064 | 0.0046 |
-| b_feat_depth\[PL Frosted Wheat\] | -0.301 | 0.238 | -0.75 | 0.15 | 3096 | 2849 | 1.00 | 0.0043 | 0.003 |
-| b_disp_depth\[HNC\] | 0.037 | 0.118 | -0.19 | 0.26 | 2232 | 2689 | 1.00 | 0.0025 | 0.0017 |
-| b_disp_depth\[Cheerios 12oz\] | -0.028 | 0.185 | -0.37 | 0.33 | 1904 | 2325 | 1.00 | 0.0043 | 0.003 |
-| b_disp_depth\[Cheerios 18oz\] | -0.045 | 0.164 | -0.36 | 0.25 | 1278 | 1900 | 1.01 | 0.0046 | 0.0033 |
-| b_disp_depth\[Mini Wheats\] | 0.438 | 0.222 | 0.022 | 0.86 | 2542 | 2826 | 1.00 | 0.0044 | 0.0031 |
-| b_disp_depth\[PL Honey Nut Oats\] | -1.15 | 0.356 | -1.8 | -0.5 | 2599 | 2643 | 1.00 | 0.007 | 0.0049 |
-| b_disp_depth\[PL Frosted Wheat\] | 0.45 | 0.324 | -0.16 | 1.1 | 2610 | 2905 | 1.00 | 0.0063 | 0.0045 |
-| b_sib_feat\[HNC\] | -0.0706 | 0.0155 | -0.1 | -0.042 | 3517 | 3269 | 1.00 | 0.00026 | 0.00018 |
-| b_sib_feat\[Cheerios 12oz\] | -0.0197 | 0.0146 | -0.048 | 0.0079 | 3658 | 3170 | 1.00 | 0.00024 | 0.00018 |
-| b_sib_feat\[Cheerios 18oz\] | 0.035 | 0.0146 | 0.007 | 0.063 | 4401 | 3154 | 1.00 | 0.00022 | 0.00015 |
-| b_sib_feat\[Mini Wheats\] | 0.0079 | 0.0165 | -0.024 | 0.039 | 3941 | 2985 | 1.00 | 0.00026 | 0.00018 |
-| b_sib_feat\[PL Honey Nut Oats\] | 0.0245 | 0.0173 | -0.0084 | 0.057 | 3545 | 2901 | 1.00 | 0.00029 | 0.00021 |
-| b_sib_feat\[PL Frosted Wheat\] | 0.0217 | 0.0151 | -0.0071 | 0.05 | 3907 | 3007 | 1.00 | 0.00024 | 0.00017 |
-| b_sib_disp\[HNC\] | -0.0536 | 0.0156 | -0.083 | -0.024 | 4313 | 2949 | 1.00 | 0.00024 | 0.00017 |
-| b_sib_disp\[Cheerios 12oz\] | 0.0077 | 0.0157 | -0.022 | 0.037 | 3946 | 3020 | 1.00 | 0.00025 | 0.00018 |
-| b_sib_disp\[Cheerios 18oz\] | -0.0234 | 0.0147 | -0.051 | 0.0051 | 4000 | 3000 | 1.00 | 0.00023 | 0.00017 |
-| b_sib_disp\[Mini Wheats\] | -0.0236 | 0.0161 | -0.054 | 0.0073 | 4948 | 3121 | 1.00 | 0.00023 | 0.00016 |
-| b_sib_disp\[PL Honey Nut Oats\] | -0.0189 | 0.0168 | -0.051 | 0.013 | 4047 | 3222 | 1.00 | 0.00026 | 0.00019 |
-| b_sib_disp\[PL Frosted Wheat\] | 0.016 | 0.0151 | -0.013 | 0.044 | 4020 | 2976 | 1.00 | 0.00024 | 0.00017 |
+| eps_prod\[hnc\] | -1.083 | 0.11 | -1.3 | -0.88 | 2491 | 2882 | 1.00 | 0.0022 | 0.0016 |
+| eps_prod\[cheerios 12oz\] | -0.381 | 0.081 | -0.53 | -0.23 | 2609 | 2527 | 1.00 | 0.0016 | 0.0011 |
+| eps_prod\[cheerios 18oz\] | -1.912 | 0.151 | -2.2 | -1.6 | 1492 | 2075 | 1.00 | 0.0039 | 0.0028 |
+| eps_prod\[mini wheats\] | -1.946 | 0.126 | -2.2 | -1.7 | 3161 | 2903 | 1.00 | 0.0022 | 0.0016 |
+| eps_prod\[pl honey nut oats\] | -1.927 | 0.157 | -2.2 | -1.6 | 2908 | 3202 | 1.00 | 0.0029 | 0.0021 |
+| eps_prod\[pl frosted wheat\] | -1.034 | 0.106 | -1.2 | -0.84 | 4621 | 3130 | 1.00 | 0.0016 | 0.0011 |
+| conc\[hnc\] | 17.19 | 0.79 | 16 | 19 | 693 | 1865 | 1.00 | 0.03 | 0.021 |
+| conc\[cheerios 12oz\] | 19.18 | 0.83 | 18 | 21 | 2424 | 2505 | 1.00 | 0.017 | 0.012 |
+| conc\[cheerios 18oz\] | 21.95 | 1.04 | 20 | 24 | 4087 | 2338 | 1.00 | 0.016 | 0.012 |
+| conc\[mini wheats\] | 18.85 | 0.87 | 17 | 21 | 3125 | 2535 | 1.00 | 0.016 | 0.011 |
+| conc\[pl honey nut oats\] | 19.6 | 1.23 | 17 | 22 | 608 | 1352 | 1.00 | 0.05 | 0.038 |
+| conc\[pl frosted wheat\] | 21.13 | 0.99 | 19 | 23 | 2822 | 2625 | 1.00 | 0.019 | 0.013 |
+| b_feat\[hnc\] | 0.757 | 0.042 | 0.68 | 0.84 | 2525 | 2938 | 1.00 | 0.00084 | 0.0006 |
+| b_feat\[cheerios 12oz\] | 0.799 | 0.062 | 0.69 | 0.92 | 1815 | 1948 | 1.00 | 0.0014 | 0.001 |
+| b_feat\[cheerios 18oz\] | 0.099 | 0.086 | -0.057 | 0.26 | 2090 | 2695 | 1.01 | 0.0019 | 0.0014 |
+| b_feat\[mini wheats\] | 0.299 | 0.038 | 0.23 | 0.37 | 2610 | 2704 | 1.00 | 0.00074 | 0.00051 |
+| b_feat\[pl honey nut oats\] | 0.12 | 0.055 | 0.016 | 0.23 | 3296 | 2993 | 1.00 | 0.00096 | 0.00067 |
+| b_feat\[pl frosted wheat\] | 0.238 | 0.042 | 0.16 | 0.32 | 3031 | 2801 | 1.00 | 0.00077 | 0.00055 |
+| b_disp\[hnc\] | 0.342 | 0.053 | 0.24 | 0.44 | 2156 | 2567 | 1.00 | 0.0012 | 0.00083 |
+| b_disp\[cheerios 12oz\] | 0.469 | 0.054 | 0.37 | 0.57 | 2089 | 2506 | 1.00 | 0.0012 | 0.00082 |
+| b_disp\[cheerios 18oz\] | 0.265 | 0.05 | 0.17 | 0.36 | 3475 | 2987 | 1.00 | 0.00085 | 0.00061 |
+| b_disp\[mini wheats\] | 0.282 | 0.065 | 0.16 | 0.41 | 2374 | 2508 | 1.00 | 0.0013 | 0.00095 |
+| b_disp\[pl honey nut oats\] | 0.268 | 0.054 | 0.16 | 0.37 | 3124 | 2957 | 1.00 | 0.00097 | 0.0007 |
+| b_disp\[pl frosted wheat\] | 0.164 | 0.057 | 0.057 | 0.27 | 2889 | 2822 | 1.00 | 0.0011 | 0.00075 |
+| b_fd\[hnc\] | -0.024 | 0.058 | -0.13 | 0.084 | 1729 | 2268 | 1.00 | 0.0014 | 0.00098 |
+| b_fd\[cheerios 12oz\] | -0.065 | 0.055 | -0.17 | 0.04 | 3422 | 3022 | 1.00 | 0.00095 | 0.00069 |
+| b_fd\[cheerios 18oz\] | -0.244 | 0.079 | -0.39 | -0.099 | 1296 | 1696 | 1.01 | 0.0022 | 0.0015 |
+| b_fd\[mini wheats\] | 0.004 | 0.061 | -0.11 | 0.12 | 3125 | 2540 | 1.00 | 0.0011 | 0.00076 |
+| b_fd\[pl honey nut oats\] | -0.062 | 0.077 | -0.21 | 0.081 | 4237 | 3232 | 1.00 | 0.0012 | 0.00086 |
+| b_fd\[pl frosted wheat\] | -0.011 | 0.062 | -0.13 | 0.1 | 4518 | 3155 | 1.00 | 0.00092 | 0.00067 |
+| b_feat_depth\[hnc\] | 0.038 | 0.11 | -0.17 | 0.24 | 2119 | 2805 | 1.00 | 0.0024 | 0.0017 |
+| b_feat_depth\[cheerios 12oz\] | -0.462 | 0.211 | -0.87 | -0.065 | 1915 | 1926 | 1.00 | 0.0048 | 0.0034 |
+| b_feat_depth\[cheerios 18oz\] | 0.88 | 0.173 | 0.56 | 1.2 | 1824 | 2157 | 1.00 | 0.0041 | 0.003 |
+| b_feat_depth\[mini wheats\] | -0.384 | 0.174 | -0.71 | -0.061 | 2016 | 2430 | 1.00 | 0.0039 | 0.0028 |
+| b_feat_depth\[pl honey nut oats\] | 0.15 | 0.398 | -0.62 | 0.88 | 3812 | 3309 | 1.00 | 0.0064 | 0.0046 |
+| b_feat_depth\[pl frosted wheat\] | -0.301 | 0.238 | -0.75 | 0.15 | 3096 | 2849 | 1.00 | 0.0043 | 0.003 |
+| b_disp_depth\[hnc\] | 0.037 | 0.118 | -0.19 | 0.26 | 2232 | 2689 | 1.00 | 0.0025 | 0.0017 |
+| b_disp_depth\[cheerios 12oz\] | -0.028 | 0.185 | -0.37 | 0.33 | 1904 | 2325 | 1.00 | 0.0043 | 0.003 |
+| b_disp_depth\[cheerios 18oz\] | -0.045 | 0.164 | -0.36 | 0.25 | 1278 | 1900 | 1.01 | 0.0046 | 0.0033 |
+| b_disp_depth\[mini wheats\] | 0.438 | 0.222 | 0.022 | 0.86 | 2542 | 2826 | 1.00 | 0.0044 | 0.0031 |
+| b_disp_depth\[pl honey nut oats\] | -1.15 | 0.356 | -1.8 | -0.5 | 2599 | 2643 | 1.00 | 0.007 | 0.0049 |
+| b_disp_depth\[pl frosted wheat\] | 0.45 | 0.324 | -0.16 | 1.1 | 2610 | 2905 | 1.00 | 0.0063 | 0.0045 |
+| b_sib_feat\[hnc\] | -0.0706 | 0.0155 | -0.1 | -0.042 | 3517 | 3269 | 1.00 | 0.00026 | 0.00018 |
+| b_sib_feat\[cheerios 12oz\] | -0.0197 | 0.0146 | -0.048 | 0.0079 | 3658 | 3170 | 1.00 | 0.00024 | 0.00018 |
+| b_sib_feat\[cheerios 18oz\] | 0.035 | 0.0146 | 0.007 | 0.063 | 4401 | 3154 | 1.00 | 0.00022 | 0.00015 |
+| b_sib_feat\[mini wheats\] | 0.0079 | 0.0165 | -0.024 | 0.039 | 3941 | 2985 | 1.00 | 0.00026 | 0.00018 |
+| b_sib_feat\[pl honey nut oats\] | 0.0245 | 0.0173 | -0.0084 | 0.057 | 3545 | 2901 | 1.00 | 0.00029 | 0.00021 |
+| b_sib_feat\[pl frosted wheat\] | 0.0217 | 0.0151 | -0.0071 | 0.05 | 3907 | 3007 | 1.00 | 0.00024 | 0.00017 |
+| b_sib_disp\[hnc\] | -0.0536 | 0.0156 | -0.083 | -0.024 | 4313 | 2949 | 1.00 | 0.00024 | 0.00017 |
+| b_sib_disp\[cheerios 12oz\] | 0.0077 | 0.0157 | -0.022 | 0.037 | 3946 | 3020 | 1.00 | 0.00025 | 0.00018 |
+| b_sib_disp\[cheerios 18oz\] | -0.0234 | 0.0147 | -0.051 | 0.0051 | 4000 | 3000 | 1.00 | 0.00023 | 0.00017 |
+| b_sib_disp\[mini wheats\] | -0.0236 | 0.0161 | -0.054 | 0.0073 | 4948 | 3121 | 1.00 | 0.00023 | 0.00016 |
+| b_sib_disp\[pl honey nut oats\] | -0.0189 | 0.0168 | -0.051 | 0.013 | 4047 | 3222 | 1.00 | 0.00026 | 0.00019 |
+| b_sib_disp\[pl frosted wheat\] | 0.016 | 0.0151 | -0.013 | 0.044 | 4020 | 2976 | 1.00 | 0.00024 | 0.00017 |
 | eps_scale | 0.294 | 0.0328 | 0.24 | 0.36 | 2914 | 2914 | 1.00 | 0.00061 | 0.00043 |
 | cross_scale | 0.273 | 0.04 | 0.21 | 0.36 | 1328 | 1942 | 1.00 | 0.0011 | 0.00088 |
 
@@ -4810,36 +4818,36 @@ az.summary(tree, var_names=["gamma_offdiag"], ci_kind="hdi", ci_prob=0.94)
 
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| gamma_offdiag\[HNC -\> Cheerios 12oz\] | 0.11 | 0.048 | 0.019 | 0.2 | 3393 | 2868 | 1.00 | 0.00083 | 0.00057 |
-| gamma_offdiag\[HNC -\> Cheerios 18oz\] | 0.017 | 0.047 | -0.073 | 0.1 | 3511 | 2855 | 1.00 | 0.00079 | 0.00057 |
-| gamma_offdiag\[HNC -\> Mini Wheats\] | -0.025 | 0.048 | -0.12 | 0.063 | 4237 | 3108 | 1.00 | 0.00074 | 0.00053 |
-| gamma_offdiag\[HNC -\> PL Honey Nut Oats\] | 0.695 | 0.053 | 0.59 | 0.79 | 5078 | 3882 | 1.00 | 0.00075 | 0.00054 |
-| gamma_offdiag\[HNC -\> PL Frosted Wheat\] | 0.079 | 0.0453 | -0.0059 | 0.16 | 4401 | 3288 | 1.00 | 0.00068 | 0.00045 |
-| gamma_offdiag\[Cheerios 12oz -\> HNC\] | -0.25 | 0.0393 | -0.32 | -0.18 | 4343 | 3033 | 1.00 | 0.0006 | 0.00042 |
-| gamma_offdiag\[Cheerios 12oz -\> Cheerios 18oz\] | 0.15 | 0.0353 | 0.084 | 0.22 | 4075 | 2895 | 1.00 | 0.00055 | 0.0004 |
-| gamma_offdiag\[Cheerios 12oz -\> Mini Wheats\] | 0.032 | 0.0379 | -0.04 | 0.1 | 4121 | 3014 | 1.00 | 0.00059 | 0.00044 |
-| gamma_offdiag\[Cheerios 12oz -\> PL Honey Nut Oats\] | -0.056 | 0.0411 | -0.14 | 0.02 | 3980 | 3025 | 1.00 | 0.00065 | 0.00046 |
-| gamma_offdiag\[Cheerios 12oz -\> PL Frosted Wheat\] | -0.008 | 0.0348 | -0.074 | 0.058 | 4059 | 3129 | 1.00 | 0.00055 | 0.00039 |
-| gamma_offdiag\[Cheerios 18oz -\> HNC\] | -0.309 | 0.0454 | -0.39 | -0.23 | 5040 | 2907 | 1.00 | 0.00064 | 0.00046 |
-| gamma_offdiag\[Cheerios 18oz -\> Cheerios 12oz\] | 0.217 | 0.0453 | 0.13 | 0.3 | 4624 | 3392 | 1.00 | 0.00067 | 0.00048 |
-| gamma_offdiag\[Cheerios 18oz -\> Mini Wheats\] | 0.008 | 0.046 | -0.078 | 0.097 | 3938 | 3032 | 1.00 | 0.00074 | 0.00052 |
-| gamma_offdiag\[Cheerios 18oz -\> PL Honey Nut Oats\] | 0.039 | 0.047 | -0.046 | 0.13 | 3403 | 2590 | 1.00 | 0.00081 | 0.00057 |
-| gamma_offdiag\[Cheerios 18oz -\> PL Frosted Wheat\] | 0.127 | 0.0427 | 0.046 | 0.21 | 3854 | 2985 | 1.00 | 0.00069 | 0.00049 |
-| gamma_offdiag\[Mini Wheats -\> HNC\] | -0.104 | 0.063 | -0.23 | 0.015 | 4504 | 3023 | 1.00 | 0.00094 | 0.00065 |
-| gamma_offdiag\[Mini Wheats -\> Cheerios 12oz\] | -0.198 | 0.06 | -0.31 | -0.085 | 4504 | 3368 | 1.00 | 0.0009 | 0.00063 |
-| gamma_offdiag\[Mini Wheats -\> Cheerios 18oz\] | 0.179 | 0.062 | 0.063 | 0.29 | 4029 | 2812 | 1.00 | 0.00097 | 0.0007 |
-| gamma_offdiag\[Mini Wheats -\> PL Honey Nut Oats\] | -0.064 | 0.066 | -0.19 | 0.058 | 4012 | 2689 | 1.00 | 0.001 | 0.00072 |
-| gamma_offdiag\[Mini Wheats -\> PL Frosted Wheat\] | 0.535 | 0.06 | 0.42 | 0.65 | 4882 | 3361 | 1.00 | 0.00086 | 0.0006 |
-| gamma_offdiag\[PL Honey Nut Oats -\> HNC\] | -0.075 | 0.111 | -0.28 | 0.13 | 4084 | 3211 | 1.00 | 0.0017 | 0.0012 |
-| gamma_offdiag\[PL Honey Nut Oats -\> Cheerios 12oz\] | -0.697 | 0.114 | -0.91 | -0.49 | 4184 | 3204 | 1.00 | 0.0018 | 0.0012 |
-| gamma_offdiag\[PL Honey Nut Oats -\> Cheerios 18oz\] | -0.146 | 0.105 | -0.34 | 0.05 | 4293 | 3058 | 1.00 | 0.0016 | 0.0011 |
-| gamma_offdiag\[PL Honey Nut Oats -\> Mini Wheats\] | 0.145 | 0.111 | -0.065 | 0.35 | 4105 | 3211 | 1.00 | 0.0017 | 0.0012 |
-| gamma_offdiag\[PL Honey Nut Oats -\> PL Frosted Wheat\] | 0.279 | 0.104 | 0.079 | 0.48 | 4372 | 3101 | 1.00 | 0.0016 | 0.0011 |
-| gamma_offdiag\[PL Frosted Wheat -\> HNC\] | 0.093 | 0.076 | -0.052 | 0.24 | 3040 | 2676 | 1.00 | 0.0014 | 0.00096 |
-| gamma_offdiag\[PL Frosted Wheat -\> Cheerios 12oz\] | 0.236 | 0.073 | 0.099 | 0.37 | 4161 | 3129 | 1.00 | 0.0011 | 0.0008 |
-| gamma_offdiag\[PL Frosted Wheat -\> Cheerios 18oz\] | -0.043 | 0.072 | -0.18 | 0.09 | 4096 | 3145 | 1.00 | 0.0011 | 0.00081 |
-| gamma_offdiag\[PL Frosted Wheat -\> Mini Wheats\] | 0.087 | 0.075 | -0.051 | 0.23 | 4081 | 3163 | 1.00 | 0.0012 | 0.0008 |
-| gamma_offdiag\[PL Frosted Wheat -\> PL Honey Nut Oats\] | 0.366 | 0.079 | 0.22 | 0.52 | 3550 | 3271 | 1.00 | 0.0013 | 0.00092 |
+| gamma_offdiag\[hnc -\> cheerios 12oz\] | 0.11 | 0.048 | 0.019 | 0.2 | 3393 | 2868 | 1.00 | 0.00083 | 0.00057 |
+| gamma_offdiag\[hnc -\> cheerios 18oz\] | 0.017 | 0.047 | -0.073 | 0.1 | 3511 | 2855 | 1.00 | 0.00079 | 0.00057 |
+| gamma_offdiag\[hnc -\> mini wheats\] | -0.025 | 0.048 | -0.12 | 0.063 | 4237 | 3108 | 1.00 | 0.00074 | 0.00053 |
+| gamma_offdiag\[hnc -\> pl honey nut oats\] | 0.695 | 0.053 | 0.59 | 0.79 | 5078 | 3882 | 1.00 | 0.00075 | 0.00054 |
+| gamma_offdiag\[hnc -\> pl frosted wheat\] | 0.079 | 0.0453 | -0.0059 | 0.16 | 4401 | 3288 | 1.00 | 0.00068 | 0.00045 |
+| gamma_offdiag\[cheerios 12oz -\> hnc\] | -0.25 | 0.0393 | -0.32 | -0.18 | 4343 | 3033 | 1.00 | 0.0006 | 0.00042 |
+| gamma_offdiag\[cheerios 12oz -\> cheerios 18oz\] | 0.15 | 0.0353 | 0.084 | 0.22 | 4075 | 2895 | 1.00 | 0.00055 | 0.0004 |
+| gamma_offdiag\[cheerios 12oz -\> mini wheats\] | 0.032 | 0.0379 | -0.04 | 0.1 | 4121 | 3014 | 1.00 | 0.00059 | 0.00044 |
+| gamma_offdiag\[cheerios 12oz -\> pl honey nut oats\] | -0.056 | 0.0411 | -0.14 | 0.02 | 3980 | 3025 | 1.00 | 0.00065 | 0.00046 |
+| gamma_offdiag\[cheerios 12oz -\> pl frosted wheat\] | -0.008 | 0.0348 | -0.074 | 0.058 | 4059 | 3129 | 1.00 | 0.00055 | 0.00039 |
+| gamma_offdiag\[cheerios 18oz -\> hnc\] | -0.309 | 0.0454 | -0.39 | -0.23 | 5040 | 2907 | 1.00 | 0.00064 | 0.00046 |
+| gamma_offdiag\[cheerios 18oz -\> cheerios 12oz\] | 0.217 | 0.0453 | 0.13 | 0.3 | 4624 | 3392 | 1.00 | 0.00067 | 0.00048 |
+| gamma_offdiag\[cheerios 18oz -\> mini wheats\] | 0.008 | 0.046 | -0.078 | 0.097 | 3938 | 3032 | 1.00 | 0.00074 | 0.00052 |
+| gamma_offdiag\[cheerios 18oz -\> pl honey nut oats\] | 0.039 | 0.047 | -0.046 | 0.13 | 3403 | 2590 | 1.00 | 0.00081 | 0.00057 |
+| gamma_offdiag\[cheerios 18oz -\> pl frosted wheat\] | 0.127 | 0.0427 | 0.046 | 0.21 | 3854 | 2985 | 1.00 | 0.00069 | 0.00049 |
+| gamma_offdiag\[mini wheats -\> hnc\] | -0.104 | 0.063 | -0.23 | 0.015 | 4504 | 3023 | 1.00 | 0.00094 | 0.00065 |
+| gamma_offdiag\[mini wheats -\> cheerios 12oz\] | -0.198 | 0.06 | -0.31 | -0.085 | 4504 | 3368 | 1.00 | 0.0009 | 0.00063 |
+| gamma_offdiag\[mini wheats -\> cheerios 18oz\] | 0.179 | 0.062 | 0.063 | 0.29 | 4029 | 2812 | 1.00 | 0.00097 | 0.0007 |
+| gamma_offdiag\[mini wheats -\> pl honey nut oats\] | -0.064 | 0.066 | -0.19 | 0.058 | 4012 | 2689 | 1.00 | 0.001 | 0.00072 |
+| gamma_offdiag\[mini wheats -\> pl frosted wheat\] | 0.535 | 0.06 | 0.42 | 0.65 | 4882 | 3361 | 1.00 | 0.00086 | 0.0006 |
+| gamma_offdiag\[pl honey nut oats -\> hnc\] | -0.075 | 0.111 | -0.28 | 0.13 | 4084 | 3211 | 1.00 | 0.0017 | 0.0012 |
+| gamma_offdiag\[pl honey nut oats -\> cheerios 12oz\] | -0.697 | 0.114 | -0.91 | -0.49 | 4184 | 3204 | 1.00 | 0.0018 | 0.0012 |
+| gamma_offdiag\[pl honey nut oats -\> cheerios 18oz\] | -0.146 | 0.105 | -0.34 | 0.05 | 4293 | 3058 | 1.00 | 0.0016 | 0.0011 |
+| gamma_offdiag\[pl honey nut oats -\> mini wheats\] | 0.145 | 0.111 | -0.065 | 0.35 | 4105 | 3211 | 1.00 | 0.0017 | 0.0012 |
+| gamma_offdiag\[pl honey nut oats -\> pl frosted wheat\] | 0.279 | 0.104 | 0.079 | 0.48 | 4372 | 3101 | 1.00 | 0.0016 | 0.0011 |
+| gamma_offdiag\[pl frosted wheat -\> hnc\] | 0.093 | 0.076 | -0.052 | 0.24 | 3040 | 2676 | 1.00 | 0.0014 | 0.00096 |
+| gamma_offdiag\[pl frosted wheat -\> cheerios 12oz\] | 0.236 | 0.073 | 0.099 | 0.37 | 4161 | 3129 | 1.00 | 0.0011 | 0.0008 |
+| gamma_offdiag\[pl frosted wheat -\> cheerios 18oz\] | -0.043 | 0.072 | -0.18 | 0.09 | 4096 | 3145 | 1.00 | 0.0011 | 0.00081 |
+| gamma_offdiag\[pl frosted wheat -\> mini wheats\] | 0.087 | 0.075 | -0.051 | 0.23 | 4081 | 3163 | 1.00 | 0.0012 | 0.0008 |
+| gamma_offdiag\[pl frosted wheat -\> pl honey nut oats\] | 0.366 | 0.079 | 0.22 | 0.52 | 3550 | 3271 | 1.00 | 0.0013 | 0.00092 |
 
 
     In [37]:
@@ -4876,7 +4884,7 @@ eps_prod_draws = np.asarray(posterior["eps_prod"])
 
 
 def interval_row(draws: Float[np.ndarray, " sample"]) -> dict[str, float]:
-    r"""Posterior median with the $50\%$ and $94\%$ HDI bounds of one-dimensional draws."""
+    r"""Summarize one-dimensional draws by the posterior median and the $50\%$ and $94\%$ HDI bounds."""
     lower_50, upper_50 = hdi_bounds(draws, 0.5)
     lower_94, upper_94 = hdi_bounds(draws, 0.94)
     return {
@@ -4893,10 +4901,12 @@ elasticity_table = pl.DataFrame(
         {
             "product": product,
             "ols_with_flags": float(
-                own_elasticity_ols.filter(pl.col("product") == product)["with_flags"][0]
+                own_elasticity_ols.filter(pl.col("product").eq(pl.lit(product)))["with_flags"][0]
             ),
             "ols_with_depth_slopes": float(
-                own_elasticity_ols.filter(pl.col("product") == product)["with_depth_slopes"][0]
+                own_elasticity_ols.filter(pl.col("product").eq(pl.lit(product)))[
+                    "with_depth_slopes"
+                ][0]
             ),
             **interval_row(eps_prod_draws[:, k]),
         }
@@ -4909,12 +4919,12 @@ elasticity_table
 
 | product | ols_with_flags | ols_with_depth_slopes | median | hdi50_lower | hdi50_upper | hdi94_lower | hdi94_upper |
 |----|----|----|----|----|----|----|----|
-| "HNC" | -1.326977 | -1.084921 | -1.082029 | -1.139235 | -0.994873 | -1.289832 | -0.875182 |
-| "Cheerios 12oz" | -0.3183 | -0.31104 | -0.382625 | -0.429511 | -0.323211 | -0.537446 | -0.232483 |
-| "Cheerios 18oz" | -1.961065 | -1.511146 | -1.905879 | -1.998456 | -1.794018 | -2.209666 | -1.642067 |
-| "Mini Wheats" | -1.558958 | -1.626816 | -1.94702 | -2.027605 | -1.857185 | -2.186641 | -1.711004 |
-| "PL Honey Nut Oats" | -1.446412 | -1.468914 | -1.927437 | -2.046492 | -1.83645 | -2.222483 | -1.633524 |
-| "PL Frosted Wheat" | -0.8505 | -0.886696 | -1.032909 | -1.094682 | -0.956179 | -1.218427 | -0.823438 |
+| "hnc" | -1.326977 | -1.084921 | -1.082029 | -1.139235 | -0.994873 | -1.289832 | -0.875182 |
+| "cheerios 12oz" | -0.3183 | -0.31104 | -0.382625 | -0.429511 | -0.323211 | -0.537446 | -0.232483 |
+| "cheerios 18oz" | -1.961065 | -1.511146 | -1.905879 | -1.998456 | -1.794018 | -2.209666 | -1.642067 |
+| "mini wheats" | -1.558958 | -1.626816 | -1.94702 | -2.027605 | -1.857185 | -2.186641 | -1.711004 |
+| "pl honey nut oats" | -1.446412 | -1.468914 | -1.927437 | -2.046492 | -1.83645 | -2.222483 | -1.633524 |
+| "pl frosted wheat" | -0.8505 | -0.886696 | -1.032909 | -1.094682 | -0.956179 | -1.218427 | -0.823438 |
 
 
     In [39]:
@@ -4949,18 +4959,18 @@ multiplier_table.filter(pl.col("effect").is_in(["feature", "display"]))
 
 | effect | product | ols_pooled_multiplier | median | hdi50_lower | hdi50_upper | hdi94_lower | hdi94_upper |
 |----|----|----|----|----|----|----|----|
-| "feature" | "HNC" | 1.654384 | 2.131905 | 2.06832 | 2.187409 | 1.956841 | 2.291173 |
-| "feature" | "Cheerios 12oz" | 1.654384 | 2.219052 | 2.126567 | 2.310077 | 1.980169 | 2.486434 |
-| "feature" | "Cheerios 18oz" | 1.654384 | 1.102757 | 1.036413 | 1.163704 | 0.94592 | 1.291129 |
-| "feature" | "Mini Wheats" | 1.654384 | 1.348858 | 1.318365 | 1.387212 | 1.257218 | 1.445063 |
-| "feature" | "PL Honey Nut Oats" | 1.654384 | 1.127978 | 1.079181 | 1.16256 | 1.009625 | 1.245206 |
-| "feature" | "PL Frosted Wheat" | 1.654384 | 1.269117 | 1.227314 | 1.298753 | 1.173447 | 1.37554 |
-| "display" | "HNC" | 1.494406 | 1.408505 | 1.356387 | 1.455645 | 1.266144 | 1.546968 |
-| "display" | "Cheerios 12oz" | 1.494406 | 1.599538 | 1.540608 | 1.657762 | 1.447606 | 1.768491 |
-| "display" | "Cheerios 18oz" | 1.494406 | 1.303566 | 1.257622 | 1.343683 | 1.18035 | 1.426616 |
-| "display" | "Mini Wheats" | 1.494406 | 1.325217 | 1.25908 | 1.37297 | 1.16014 | 1.487416 |
-| "display" | "PL Honey Nut Oats" | 1.494406 | 1.306934 | 1.260018 | 1.353727 | 1.175031 | 1.442661 |
-| "display" | "PL Frosted Wheat" | 1.494406 | 1.177952 | 1.133142 | 1.222175 | 1.054195 | 1.302381 |
+| "feature" | "hnc" | 1.654384 | 2.131905 | 2.06832 | 2.187409 | 1.956841 | 2.291173 |
+| "feature" | "cheerios 12oz" | 1.654384 | 2.219052 | 2.126567 | 2.310077 | 1.980169 | 2.486434 |
+| "feature" | "cheerios 18oz" | 1.654384 | 1.102757 | 1.036413 | 1.163704 | 0.94592 | 1.291129 |
+| "feature" | "mini wheats" | 1.654384 | 1.348858 | 1.318365 | 1.387212 | 1.257218 | 1.445063 |
+| "feature" | "pl honey nut oats" | 1.654384 | 1.127978 | 1.079181 | 1.16256 | 1.009625 | 1.245206 |
+| "feature" | "pl frosted wheat" | 1.654384 | 1.269117 | 1.227314 | 1.298753 | 1.173447 | 1.37554 |
+| "display" | "hnc" | 1.494406 | 1.408505 | 1.356387 | 1.455645 | 1.266144 | 1.546968 |
+| "display" | "cheerios 12oz" | 1.494406 | 1.599538 | 1.540608 | 1.657762 | 1.447606 | 1.768491 |
+| "display" | "cheerios 18oz" | 1.494406 | 1.303566 | 1.257622 | 1.343683 | 1.18035 | 1.426616 |
+| "display" | "mini wheats" | 1.494406 | 1.325217 | 1.25908 | 1.37297 | 1.16014 | 1.487416 |
+| "display" | "pl honey nut oats" | 1.494406 | 1.306934 | 1.260018 | 1.353727 | 1.175031 | 1.442661 |
+| "display" | "pl frosted wheat" | 1.494406 | 1.177952 | 1.133142 | 1.222175 | 1.054195 | 1.302381 |
 
 
     In [40]:
@@ -5011,9 +5021,11 @@ identifying_weeks = dict(
 fig, axes = plt.subplots(ncols=2, figsize=(15, 6), layout="constrained")
 plot_intervals(
     axes[0],
-    [f"{p} ({identifying_weeks[p]} TPR-only store-weeks)" for p in product_order],
+    [f"{p} ({identifying_weeks[p]} tpr-only store-weeks)" for p in product_order],
     eps_prod_draws,
-    reference=own_elasticity_ols.filter(pl.col("product") != "pooled")["with_flags"].to_numpy(),
+    reference=own_elasticity_ols.filter(pl.col("product").ne(pl.lit("pooled")))[
+        "with_flags"
+    ].to_numpy(),
 )
 axes[0].set(
     title="Own promotional elasticity by product",
@@ -5054,14 +5066,16 @@ plot_intervals(
         ]
     ),
 )
-axes[1].set(title=f"Mechanics effects of {FOCAL}", xlabel="effect on log units")
+axes[1].set(
+    title=f"Mechanics effects of the focal product ({FOCAL})", xlabel="effect on log units"
+)
 axes[1].legend(handles=interval_handles, loc="lower right", fontsize=9)
 fig.suptitle("Posterior elasticities and mechanics effects", fontsize=16, fontweight="bold");
 ```
 
 
 <figure class="figure">
-<p><img src="promotion_pricing_decisions_files/figure-html/cell-41-output-1.png" class="figure-img" width="1511" height="611" /></p>
+<p><img src="promotion_pricing_decisions_files/figure-html/cell-41-output-1.png" class="figure-img" width="1530" height="611" /></p>
 </figure>
 
 
@@ -5095,7 +5109,7 @@ fig.colorbar(image, ax=ax, label="cross elasticity (posterior mean)");
 
 
 <figure class="figure">
-<p><img src="promotion_pricing_decisions_files/figure-html/cell-42-output-1.png" class="figure-img" width="909" height="711" /></p>
+<p><img src="promotion_pricing_decisions_files/figure-html/cell-42-output-1.png" class="figure-img" width="904" height="711" /></p>
 </figure>
 
 
@@ -5103,12 +5117,13 @@ fig.colorbar(image, ax=ax, label="cross elasticity (posterior mean)");
 
 
 ``` python
-twin_index = product_order.index("PL Honey Nut Oats")
+TWIN = "pl honey nut oats"
+twin_index = product_order.index(TWIN)
 twin_cell = gamma_draws[:, FOCAL_INDEX, twin_index]
 reverse_cell = gamma_draws[:, twin_index, FOCAL_INDEX]
 for name, draws_cell in [
-    ("HNC price on PL Honey Nut Oats units", twin_cell),
-    ("PL Honey Nut Oats price on HNC units", reverse_cell),
+    (f"{FOCAL} price on {TWIN} units", twin_cell),
+    (f"{TWIN} price on {FOCAL} units", reverse_cell),
 ]:
     lower_c, upper_c = hdi_bounds(draws_cell, 0.94)
     print(
@@ -5118,8 +5133,8 @@ for name, draws_cell in [
 ```
 
 
-    HNC price on PL Honey Nut Oats units: median +0.69, 94% HDI +0.59 to +0.79, P(> 0) 1.00
-    PL Honey Nut Oats price on HNC units: median -0.08, 94% HDI -0.28 to +0.13, P(> 0) 0.25
+    hnc price on pl honey nut oats units: median +0.69, 94% HDI +0.59 to +0.79, P(> 0) 1.00
+    pl honey nut oats price on hnc units: median -0.08, 94% HDI -0.28 to +0.13, P(> 0) 0.25
 
 
     In [43]:
@@ -5133,7 +5148,7 @@ store_ols = np.array(
     [
         float(
             within_ols(
-                hnc_long.filter(pl.col("series") == f"{store}::{FOCAL}"),
+                hnc_long.filter(pl.col("series").eq(pl.lit(f"{store}::{FOCAL}"))),
                 ["x", *mechanics_terms, *seasonal_terms],
             )["coef"][0]
         )
@@ -5142,7 +5157,11 @@ store_ols = np.array(
 )
 store_tpr_weeks = np.array(
     [
-        int(train_panel_df.filter(pl.col("series") == f"{store}::{FOCAL}")["TPR_ONLY"].sum())
+        int(
+            train_panel_df.filter(pl.col("series").eq(pl.lit(f"{store}::{FOCAL}")))[
+                "tpr_only"
+            ].sum()
+        )
         for store in hnc_store_ids
     ]
 )
@@ -5151,7 +5170,7 @@ fig, ax = plt.subplots(figsize=(10, 7), layout="constrained")
 plot_intervals(
     ax,
     [
-        f"store {hnc_store_ids[j]} ({store_segment[hnc_store_ids[j]]}, {store_tpr_weeks[j]} TPR-only weeks)"
+        f"store {hnc_store_ids[j]} ({store_segment[hnc_store_ids[j]]}, {store_tpr_weeks[j]} tpr-only weeks)"
         for j in store_order
     ],
     eps_store_draws[:, store_order],
@@ -5173,7 +5192,7 @@ ax.legend(
     fontsize=9,
 )
 ax.set(
-    title=f"Store-level elasticity of {FOCAL}: partial pooling vs within-store least squares",
+    title=f"Store-level elasticity of the focal product ({FOCAL}): partial pooling vs least squares",
     xlabel="elasticity",
 )
 print(
@@ -5187,7 +5206,7 @@ print(
 
 
 <figure class="figure">
-<p><img src="promotion_pricing_decisions_files/figure-html/cell-44-output-2.png" class="figure-img" width="1150" height="711" /></p>
+<p><img src="promotion_pricing_decisions_files/figure-html/cell-44-output-2.png" class="figure-img" width="1168" height="711" /></p>
 </figure>
 
 
@@ -5209,13 +5228,13 @@ print(
 ```
 
 
-    posterior-mean seasonal component of HNC peaks in horizon week 12 (2011-12-28)
+    posterior-mean seasonal component of hnc peaks in horizon week 12 (2011-12-28)
     drift scale posterior medians across series: 0.019 to 0.218
 
 
 # In-sample fit and holdout forecast
 
-We draw the in-sample posterior predictive and the holdout forecast with the realized covariates and score them with the continuous ranked probability score (CRPS), the mean absolute error, and the coverage of the central 50\\ and 94\\ intervals (central intervals, while the figures draw HDI bands). The seasonal naive comparator is the two-member ensemble of the units 52 and 104 weeks earlier, and the MASE scale is computed per product on its training block, because a pooled scale would be dominated by the high-volume products. Calibration is read the way [Gneiting and Katzfuss (2014)](https://doi.org/10.1146/annurev-statistics-062713-085831) frame it, sharpness subject to calibration, with the randomized probability integral transform (PIT) for counts of [Czado, Gneiting and Held (2009)](https://doi.org/10.1111/j.1541-0420.2009.01191.x): for a count y with predictive CDF G, u = G(y - 1) + v\\(G(y) - G(y - 1)) with v \sim \text{Uniform}(0, 1) is uniform for a calibrated forecast, U-shaped for an under-dispersed one and hump-shaped for an over-dispersed one. Two cautions: the holdout is the holiday quarter, with only two earlier Decembers in the training window; and the holdout cells of one series share a level path, so the effective sample size behind the histogram is well below the number of cells.
+We draw the in-sample posterior predictive and the holdout forecast with the realized covariates and score them with the continuous ranked probability score (CRPS), the mean absolute error, and the coverage of the central 50\\ and 94\\ intervals (central intervals, while the figures draw HDI bands). The seasonal naive comparator is the two-member ensemble of the units 52 and 104 weeks earlier, and the MASE scale is computed per product on its training block, because a pooled scale would be dominated by the high-volume products. Calibration is read the way [Gneiting and Katzfuss (2014)](https://doi.org/10.1146/annurev-statistics-062713-085831) frame it: sharpness subject to calibration. The check is the randomized probability integral transform (PIT) for counts of [Czado, Gneiting and Held (2009)](https://doi.org/10.1111/j.1541-0420.2009.01191.x). For a count y with predictive CDF G, u = G(y - 1) + v\\(G(y) - G(y - 1)) with v \sim \text{Uniform}(0, 1) is uniform for a calibrated forecast, U-shaped for an under-dispersed one and hump-shaped for an over-dispersed one. Two cautions: the holdout is the holiday quarter, with only two earlier Decembers in the training window; and the holdout cells of one series share a level path, so the effective sample size behind the histogram is well below the number of cells.
 
 The holdout CRPS is 12.98 against 22.13 for the seasonal naive ensemble and the mean absolute error 17.65 against 26.57; the central 50\\ and 94\\ intervals cover 56\\ and 92\\ of the 1{,}404 holdout cells (in sample, 62\\ and 96\\). Per product the model's MASE is below the naive one and below one everywhere, with the focal product the hardest at 0.95 against 1.56 and a 94\\ coverage of 0.84 in its promotion-heavy quarter. The model beats the naive forecast in every horizon week except week 12, the week of the deepest realized cut. The PIT histogram slopes downward, with 16\\ of the cells in the lowest decile and 4\\ in the highest: the holdout forecasts run high on average, so the calibration is good but not perfect, and the effective sample size behind the histogram is far below 1{,}404.
 
@@ -5244,7 +5263,7 @@ print(
 def score(
     pred: Float[np.ndarray, " sample time n_series"], truth: Float[np.ndarray, " time n_series"]
 ) -> dict[str, float]:
-    """CRPS, MAE and central-interval coverage of an ensemble against the truth."""
+    """Score an ensemble against the truth with CRPS, MAE and central-interval coverage."""
     return {
         "crps": float(eval_crps(pred, truth)),
         "mae": float(eval_mae(pred, truth)),
@@ -5305,12 +5324,12 @@ per_product_table
 
 | product             | crps_model | crps_naive | mase_model | mase_naive | coverage_94 |
 |---------------------|------------|------------|------------|------------|-------------|
-| "HNC"               | 37.492382  | 69.972229  | 0.952045   | 1.555362   | 0.837607    |
-| "Cheerios 12oz"     | 11.245326  | 21.534189  | 0.550353   | 0.976913   | 0.965812    |
-| "Cheerios 18oz"     | 4.746489   | 6.376069   | 0.255705   | 0.293871   | 0.965812    |
-| "Mini Wheats"       | 6.565374   | 10.685898  | 0.412274   | 0.560507   | 0.978633    |
-| "PL Honey Nut Oats" | 7.784356   | 10.254274  | 0.809331   | 0.926579   | 0.893162    |
-| "PL Frosted Wheat"  | 10.016487  | 13.942308  | 0.647122   | 0.811573   | 0.876068    |
+| "hnc"               | 37.492382  | 69.972229  | 0.952045   | 1.555362   | 0.837607    |
+| "cheerios 12oz"     | 11.245326  | 21.534189  | 0.550353   | 0.976913   | 0.965812    |
+| "cheerios 18oz"     | 4.746489   | 6.376069   | 0.255705   | 0.293871   | 0.965812    |
+| "mini wheats"       | 6.565374   | 10.685898  | 0.412274   | 0.560507   | 0.978633    |
+| "pl honey nut oats" | 7.784356   | 10.254274  | 0.809331   | 0.926579   | 0.893162    |
+| "pl frosted wheat"  | 10.016487  | 13.942308  | 0.647122   | 0.811573   | 0.876068    |
 
 
     In [47]:
@@ -5476,7 +5495,7 @@ def plot_forecast_panel(
 plot_labels = [
     f"{store}::{product}"
     for store in (focus_stores[0], focus_stores[2])
-    for product in (FOCAL, "PL Honey Nut Oats")
+    for product in (FOCAL, TWIN)
 ]
 plot_forecast_panel(
     pred_test,
@@ -5496,7 +5515,7 @@ plot_forecast_panel(
 
 # Counterfactual promotions
 
-A counterfactual promotion is a change of the horizon covariates, nothing else: the posterior draws stay fixed, the same PRNG key is reused, and the model is run again through NumPyro's `Predictive`. Nothing is refit. The library's [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) returns the sampled units; the decision layer also needs the conditional mean \mu over the horizon and the future level innovations, so we wrap `Predictive` ourselves with the model as a static argument, the same pattern the library uses, and ask for three sites. The first thing to do with the wrapper is to check that it reproduces the [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) draws of the previous section bit for bit under the same key: that validates the engine and the key discipline, not any causal claim.
+A counterfactual promotion is a change of the horizon covariates, nothing else: the posterior draws stay fixed, the same PRNG key is reused, and the model is run again through NumPyro's `Predictive`. Nothing is refit. This is the covariate-swap pattern of the [fresh retail stockout example](fresh_retail_stockout.md) and the scenario covariates of the [availability TSB example](availability_tsb.md). The library's [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) returns the sampled units; the decision layer also needs the conditional mean \mu over the horizon and the future level innovations, so we wrap `Predictive` ourselves with the model as a static argument, the same pattern the library uses, and ask for three sites. The first thing to do with the wrapper is to check that it reproduces the [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) draws of the previous section bit for bit under the same key: that validates the engine and the key discipline, not any causal claim.
 
 A policy is a discount depth d and a mechanics m for the focal product in every panel store during one contiguous two-week event, horizon weeks 7 and 8, the realized Thanksgiving slot. Every other product sits at its base price with no promotion over the whole horizon, and the grid below is a response surface for the break-even and risk analyses, not a search space. The calendar is not a lever here for two reasons printed earlier: the post-promotion dip is economically negligible, and under a multiplicative model the timing question reduces to the seasonal peak, whose posterior-mean week was printed above. The grid runs from no cut to a 40\\ cut in steps of five points for each of the four mechanics; for the shelf-tag-only mechanics the zero-depth cell is the no-promotion baseline itself. Cells with fewer than 20 observed store-weeks within \pm 2.5 points of the depth are shaded in the figures as thin support. Under one key the future level innovations are bit-identical across policies and the conditional means agree wherever the covariates agree, while the sampled units are coupled but not identical (common random numbers), which the cells below print.
 
@@ -5543,11 +5562,11 @@ print(
 ``` python
 EVENT_OFFSETS = [6, 7]  # horizon weeks 7 and 8, one-based
 event_rows = [t_train + offset for offset in EVENT_OFFSETS]
-BASELINE = ("TPR-only", 0.0)
+BASELINE = ("tpr-only", 0.0)
 
 
 def policy_covariates(depth: float, feature_flag: float, display_flag: float) -> Array:
-    """Horizon covariates of one policy: base prices and no promotion everywhere except the event.
+    """Build the horizon covariates of one policy: base prices and no promotion outside the event.
 
     During the event weeks the focal product carries the cut and the mechanics, every series of
     the same store sees the focal product's price in its cross-price block, and the siblings carry
@@ -5569,7 +5588,7 @@ def policy_covariates(depth: float, feature_flag: float, display_flag: float) ->
 
 
 policy_a = policy_covariates(0.15, *MECHANICS["feature + display"])
-policy_b = policy_covariates(0.30, *MECHANICS["TPR-only"])
+policy_b = policy_covariates(0.30, *MECHANICS["tpr-only"])
 assert np.array_equal(np.asarray(policy_a)[:, :t_train], np.asarray(covariates)[:, :t_train])
 first_store_series = list(range(n_products))
 print(
@@ -5591,29 +5610,29 @@ print(
 
     event row of a feature + display policy at 15% off, first store (rows: inputs, columns: products):
     ┌──────────────┬───────────┬──────────────┬──────────────┬─────────────┬─────────────┬─────────────┐
-    │ input        ┆ HNC       ┆ Cheerios     ┆ Cheerios     ┆ Mini Wheats ┆ PL Honey    ┆ PL Frosted  │
-    │              ┆           ┆ 12oz         ┆ 18oz         ┆             ┆ Nut Oats    ┆ Wheat       │
+    │ input        ┆ hnc       ┆ cheerios     ┆ cheerios     ┆ mini wheats ┆ pl honey    ┆ pl frosted  │
+    │              ┆           ┆ 12oz         ┆ 18oz         ┆             ┆ nut oats    ┆ wheat       │
     ╞══════════════╪═══════════╪══════════════╪══════════════╪═════════════╪═════════════╪═════════════╡
     │ x            ┆ -0.162519 ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
     │ feature      ┆ 1.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
     │ display      ┆ 1.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
     │ sib_feature  ┆ 0.0       ┆ 1.0          ┆ 1.0          ┆ 1.0         ┆ 1.0         ┆ 1.0         │
     │ sib_display  ┆ 0.0       ┆ 1.0          ┆ 1.0          ┆ 1.0         ┆ 1.0         ┆ 1.0         │
-    │ price HNC    ┆ -0.162519 ┆ -0.162519    ┆ -0.162519    ┆ -0.162519   ┆ -0.162519   ┆ -0.162519   │
+    │ price hnc    ┆ -0.162519 ┆ -0.162519    ┆ -0.162519    ┆ -0.162519   ┆ -0.162519   ┆ -0.162519   │
     │ price        ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
-    │ Cheerios     ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ cheerios     ┆           ┆              ┆              ┆             ┆             ┆             │
     │ 12oz         ┆           ┆              ┆              ┆             ┆             ┆             │
     │ price        ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
-    │ Cheerios     ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ cheerios     ┆           ┆              ┆              ┆             ┆             ┆             │
     │ 18oz         ┆           ┆              ┆              ┆             ┆             ┆             │
-    │ price Mini   ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
-    │ Wheats       ┆           ┆              ┆              ┆             ┆             ┆             │
-    │ price PL     ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
-    │ Honey Nut    ┆           ┆              ┆              ┆             ┆             ┆             │
-    │ Oats         ┆           ┆              ┆              ┆             ┆             ┆             │
-    │ price PL     ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
-    │ Frosted      ┆           ┆              ┆              ┆             ┆             ┆             │
-    │ Wheat        ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ price mini   ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
+    │ wheats       ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ price pl     ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
+    │ honey nut    ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ oats         ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ price pl     ┆ 0.0       ┆ 0.0          ┆ 0.0          ┆ 0.0         ┆ 0.0         ┆ 0.0         │
+    │ frosted      ┆           ┆              ┆              ┆             ┆             ┆             │
+    │ wheat        ┆           ┆              ┆              ┆             ┆             ┆             │
     └──────────────┴───────────┴──────────────┴──────────────┴─────────────┴─────────────┴─────────────┘
 
 
@@ -5684,8 +5703,8 @@ print(f"{len(policies)} policies evaluated on {n_draws} posterior draws each")
 
 
     36 policies evaluated on 4000 posterior draws each
-    CPU times: user 4min 40s, sys: 5.78 s, total: 4min 46s
-    Wall time: 26.9 s
+    CPU times: user 4min 49s, sys: 4.76 s, total: 4min 54s
+    Wall time: 27 s
 
 
     In [53]:
@@ -5695,7 +5714,7 @@ print(f"{len(policies)} policies evaluated on {n_draws} posterior draws each")
 def plot_zone_policies(
     policy_list: list[tuple[str, float]], products: list[str], figsize: tuple[float, float]
 ) -> None:
-    """Zone-level weekly units over the horizon: the baseline vs each policy, one facet per product and policy."""
+    """Plot zone-level weekly units, baseline vs policy, one facet per product and policy."""
     labels = [
         f"{product}: {mechanics_name} at {depth:.0%}"
         for product in products
@@ -5789,9 +5808,7 @@ def plot_zone_policies(
 
 
 ``` python
-plot_zone_policies(
-    [("feature + display", 0.15)], [FOCAL, "PL Honey Nut Oats"], figsize=(14.0, 5.0)
-)
+plot_zone_policies([("feature + display", 0.15)], [FOCAL, TWIN], figsize=(14.0, 5.0))
 ```
 
 
@@ -5805,8 +5822,8 @@ plot_zone_policies(
 
 ``` python
 plot_zone_policies(
-    [("TPR-only", 0.15), ("feature", 0.15), ("feature + display", 0.15)],
-    [FOCAL, "PL Honey Nut Oats"],
+    [("tpr-only", 0.15), ("feature", 0.15), ("feature + display", 0.15)],
+    [FOCAL, TWIN],
     figsize=(16.0, 8.0),
 )
 ```
@@ -5846,7 +5863,7 @@ A feature or a display also uses a slot. Its cost S_m per store-week is one numb
 
 ``` python
 is_private_label = np.array(
-    [series_ids[n].split("::")[1].startswith("PL") for n in range(n_series)]
+    [series_ids[n].split("::")[1].startswith("pl") for n in range(n_series)]
 )
 gross_margin = np.where(is_private_label, 0.38, 0.28)
 unit_cost = (1.0 - gross_margin) * base_price
@@ -5856,7 +5873,7 @@ N_EVENT_WEEKS = len(EVENT_OFFSETS)
 economics_table = pl.DataFrame(
     {
         "product": product_order,
-        "gross_margin": [0.38 if p.startswith("PL") else 0.28 for p in product_order],
+        "gross_margin": [0.38 if p.startswith("pl") else 0.28 for p in product_order],
         "base_price_median": [
             float(np.median(base_price[series_to_product_np == k])) for k in range(n_products)
         ],
@@ -5871,12 +5888,12 @@ economics_table
 
 | product             | gross_margin | base_price_median | unit_cost_median |
 |---------------------|--------------|-------------------|------------------|
-| "HNC"               | 0.28         | 3.02              | 2.1744           |
-| "Cheerios 12oz"     | 0.28         | 3.055             | 2.1996           |
-| "Cheerios 18oz"     | 0.28         | 4.79              | 3.4488           |
-| "Mini Wheats"       | 0.28         | 3.89              | 2.8008           |
-| "PL Honey Nut Oats" | 0.38         | 1.895             | 1.1749           |
-| "PL Frosted Wheat"  | 0.38         | 2.41              | 1.4942           |
+| "hnc"               | 0.28         | 3.02              | 2.1744           |
+| "cheerios 12oz"     | 0.28         | 3.055             | 2.1996           |
+| "cheerios 18oz"     | 0.28         | 4.79              | 3.4488           |
+| "mini wheats"       | 0.28         | 3.89              | 2.8008           |
+| "pl honey nut oats" | 0.38         | 1.895             | 1.1749           |
+| "pl frosted wheat"  | 0.38         | 2.41              | 1.4942           |
 
 
     In [57]:
@@ -5956,7 +5973,7 @@ The bands of \Pi^\mu in the next section still carry the sampled level path. The
 def profit_parts(
     units: Float[np.ndarray, " sample n_series"], depth: float, brand_only: bool = False
 ) -> tuple[Float[np.ndarray, " sample"], Float[np.ndarray, " sample"]]:
-    """Event profit as ``A + alpha * B`` per draw: the part at zero funding and the funding coefficient."""
+    """Split the event profit into ``A + alpha * B`` per draw; ``brand_only`` drops the sibling margins."""
     margin_at_zero = np.where(
         is_focal,
         base_price * (gross_margin - depth),
@@ -5970,7 +5987,7 @@ def profit_parts(
 def profit_parts_by_store(
     units: Float[np.ndarray, " sample n_series"], depth: float, brand_only: bool = False
 ) -> tuple[Float[np.ndarray, " sample n_stores"], Float[np.ndarray, " sample n_stores"]]:
-    """Decompose the event profit as ``A + alpha * B`` with one column per store."""
+    """Split the event profit into ``A + alpha * B`` per store; ``brand_only`` drops the sibling margins."""
     margin_at_zero = np.where(
         is_focal,
         base_price * (gross_margin - depth),
@@ -5987,7 +6004,7 @@ def event_profit(
     alpha: float,
     brand_only: bool = False,
 ) -> Float[np.ndarray, " sample"]:
-    """Event profit per draw at a funding share ``alpha`` and zero slot cost."""
+    """Compute the event profit per draw at a funding share ``alpha`` and zero slot cost."""
     part_a, part_b = profit_parts(units, depth, brand_only=brand_only)
     return part_a + alpha * part_b
 
@@ -6059,7 +6076,7 @@ The posterior median of the category break-even share of feature with display is
 
 - At the nominal share every curve falls with depth. The probability that no promotion or the shallowest cell is optimal is 1.00 for all four mechanics, and the expected profit lost between the shallowest and the deepest cell is 17\\ of the baseline event profit for a shelf-tag cut and 40\\ for feature with display.
 - At \tilde\alpha the curves are flat. The range of expected profit across the grid is 1.5\\ of the baseline for feature with display and 3.2\\ for a shelf-tag cut, the deepest cell is optimal in 63\\ of the draws for feature with display, and the value of perfect information about the parameters and the level path is at most 1.1\\ of the baseline.
-- The threshold table: at \alpha = 0.5 the threshold elasticity is -1.79 and the posterior probability of exceeding it is 0.00 under every mechanics; at \tilde\alpha the probability is 0.85 for feature with display from the brand-only tangent but 0.50 from the category secant, the difference being the cannibalization of the siblings; at \alpha = 0.9 every probability is 1.00.
+- The threshold table: at \alpha = 0.5 the threshold elasticity \varepsilon^\star is 1.79, so a cut pays only if \varepsilon_m \< -1.79, and the posterior probability of that is 0.00 under every mechanics. At \tilde\alpha the probability is 0.85 for feature with display from the brand-only tangent but 0.50 from the category secant; the difference is the cannibalization of the siblings. At \alpha = 0.9 every probability is 1.00.
 - The break-even shares: the brand-only shares sit between 0.68 and 0.70 for the four mechanics with 94\\ HDIs about 0.1 wide, and cannibalization adds 0.03 under feature with display and 0.09 under a shelf-tag cut.
 - What a 15\\ cut needs: under feature with display the event pays unfunded, with an event-level share of -0.32, under a feature alone -0.12; the same cut under a shelf tag needs a share of 0.79, and a 30\\ cut under feature with display needs 0.30.
 
@@ -6074,7 +6091,7 @@ eps_focal_draws = eps_prod_draws[:, FOCAL_INDEX]
 
 
 def eps_m_draws(mechanics_name: str) -> Float[np.ndarray, " sample"]:
-    """Zone-level mechanics-specific elasticity draws of the focal product."""
+    """Return the zone-level mechanics-specific elasticity draws of the focal product."""
     feature_flag, display_flag = MECHANICS[mechanics_name]
     return (
         eps_focal_draws - feature_depth_draws * feature_flag - display_depth_draws * display_flag
@@ -6082,9 +6099,9 @@ def eps_m_draws(mechanics_name: str) -> Float[np.ndarray, " sample"]:
 
 
 def marginal_secant(mechanics_name: str, brand_only: bool) -> Float[np.ndarray, " sample"]:
-    """Per-draw funding share at which the two shallowest cells of a mechanics break even."""
-    if mechanics_name == "TPR-only":
-        shallow, deeper = BASELINE, ("TPR-only", 0.10)
+    """Solve, per draw, for the funding share at which the two shallowest cells of a mechanics tie."""
+    if mechanics_name == "tpr-only":
+        shallow, deeper = BASELINE, ("tpr-only", 0.10)
     else:
         shallow, deeper = (mechanics_name, 0.0), (mechanics_name, 0.05)
     a_shallow, b_shallow = profit_parts(event_units_mu[shallow], shallow[1], brand_only=brand_only)
@@ -6129,10 +6146,10 @@ break_even_table
 
 | mechanics | share | median | hdi50_lower | hdi50_upper | hdi94_lower | hdi94_upper |
 |----|----|----|----|----|----|----|
-| "TPR-only" | "brand-only secant" | 0.697013 | 0.683315 | 0.714202 | 0.654446 | 0.741138 |
-| "TPR-only" | "category secant" | 0.790207 | 0.773714 | 0.812475 | 0.73587 | 0.847788 |
-| "TPR-only" | "brand-only tangent" | 0.697032 | 0.681014 | 0.721436 | 0.638847 | 0.754949 |
-| "TPR-only" | "cannibalization (category - brand)" | 0.092827 | 0.080796 | 0.104642 | 0.061416 | 0.126411 |
+| "tpr-only" | "brand-only secant" | 0.697013 | 0.683315 | 0.714202 | 0.654446 | 0.741138 |
+| "tpr-only" | "category secant" | 0.790207 | 0.773714 | 0.812475 | 0.73587 | 0.847788 |
+| "tpr-only" | "brand-only tangent" | 0.697032 | 0.681014 | 0.721436 | 0.638847 | 0.754949 |
+| "tpr-only" | "cannibalization (category - brand)" | 0.092827 | 0.080796 | 0.104642 | 0.061416 | 0.126411 |
 | "display" | "brand-only secant" | 0.687541 | 0.669759 | 0.710609 | 0.631388 | 0.745311 |
 | "display" | "category secant" | 0.756083 | 0.734172 | 0.776233 | 0.696231 | 0.814705 |
 | "display" | "brand-only tangent" | 0.686353 | 0.662039 | 0.711423 | 0.622384 | 0.757348 |
@@ -6169,7 +6186,7 @@ threshold_table
 ```
 
 
-| alpha | eps_star | P(eps_m \< -eps\*) TPR-only | P(alpha\*\_cat \< alpha) TPR-only | P(eps_m \< -eps\*) display | P(alpha\*\_cat \< alpha) display | P(eps_m \< -eps\*) feature | P(alpha\*\_cat \< alpha) feature | P(eps_m \< -eps\*) feature + display | P(alpha\*\_cat \< alpha) feature + display |
+| alpha | eps_star | P(eps_m \< -eps\*) tpr-only | P(alpha\*\_cat \< alpha) tpr-only | P(eps_m \< -eps\*) display | P(alpha\*\_cat \< alpha) display | P(eps_m \< -eps\*) feature | P(alpha\*\_cat \< alpha) feature | P(eps_m \< -eps\*) feature + display | P(alpha\*\_cat \< alpha) feature + display |
 |----|----|----|----|----|----|----|----|----|----|
 | 0.0 | 3.571429 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
 | 0.25 | 2.678571 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
@@ -6187,7 +6204,7 @@ threshold_table
 def profit_curve(
     mechanics_name: str, alpha_value: float, kind: str = "mu"
 ) -> Float[np.ndarray, " sample n_depth"]:
-    """Event profit draws of one mechanics across the depth grid at a funding share."""
+    """Stack the event profit draws of one mechanics across the depth grid at a funding share."""
     source = event_units_mu if kind == "mu" else event_units_paths
     return np.stack(
         [
@@ -6319,8 +6336,8 @@ optimal_table
 
 | mechanics | alpha | P(no promotion or shallowest optimal) | P(deepest optimal) | expected profit range over the grid / baseline | max expected regret / baseline | min expected regret (value of perfect information) / baseline |
 |----|----|----|----|----|----|----|
-| "TPR-only" | 0.5 | 1.0 | 0.0 | 0.168363 | 0.168363 | 0.0 |
-| "TPR-only" | 0.710882 | 0.98775 | 0.01225 | 0.032303 | 0.032384 | 0.000082 |
+| "tpr-only" | 0.5 | 1.0 | 0.0 | 0.168363 | 0.168363 | 0.0 |
+| "tpr-only" | 0.710882 | 0.98775 | 0.01225 | 0.032303 | 0.032384 | 0.000082 |
 | "display" | 0.5 | 1.0 | 0.0 | 0.216845 | 0.216845 | 0.0 |
 | "display" | 0.710882 | 0.834 | 0.166 | 0.021611 | 0.102136 | 0.002087 |
 | "feature" | 0.5 | 1.0 | 0.0 | 0.307424 | 0.307424 | 0.0 |
@@ -6370,9 +6387,9 @@ event_share_table.filter(pl.col("depth").is_in([0.0, 0.15, 0.30]))
 
 | mechanics | depth | P(pays unfunded) | median | hdi50_lower | hdi50_upper | hdi94_lower | hdi94_upper |
 |----|----|----|----|----|----|----|----|
-| "TPR-only" | 0.0 | 0.0 | NaN | NaN | NaN | NaN | NaN |
-| "TPR-only" | 0.15 | 0.0 | 0.7855 | 0.766753 | 0.804573 | 0.733981 | 0.843155 |
-| "TPR-only" | 0.3 | 0.0 | 0.771285 | 0.754647 | 0.7894 | 0.72233 | 0.821388 |
+| "tpr-only" | 0.0 | 0.0 | NaN | NaN | NaN | NaN | NaN |
+| "tpr-only" | 0.15 | 0.0 | 0.7855 | 0.766753 | 0.804573 | 0.733981 | 0.843155 |
+| "tpr-only" | 0.3 | 0.0 | 0.771285 | 0.754647 | 0.7894 | 0.72233 | 0.821388 |
 | "display" | 0.0 | 1.0 | NaN | NaN | NaN | NaN | NaN |
 | "display" | 0.15 | 0.0 | 0.320007 | 0.275784 | 0.352053 | 0.219066 | 0.432905 |
 | "display" | 0.3 | 0.0 | 0.568122 | 0.548148 | 0.579725 | 0.526168 | 0.615842 |
@@ -6410,7 +6427,7 @@ for mechanics_name in ["display", "feature", "feature + display"]:
             reference = (
                 baseline_mu
                 if d == 0.0
-                else event_profit(event_units_mu[("TPR-only", d)], d, alpha_value)
+                else event_profit(event_units_mu[("tpr-only", d)], d, alpha_value)
             )
             slot_cost_draws = (with_mechanics - reference) / (N_EVENT_WEEKS * n_stores)
             slot_draws[(mechanics_name, d, alpha_value)] = slot_cost_draws
@@ -6488,7 +6505,7 @@ ax.set(
 
 ``` python
 SLOT_LADDER = [0.0, 25.0, 50.0, 75.0, 100.0, 150.0]
-slots_used = {"TPR-only": 0.0, "display": 1.0, "feature": 1.0, "feature + display": 2.0}
+slots_used = {"tpr-only": 0.0, "display": 1.0, "feature": 1.0, "feature + display": 2.0}
 choice_rows = []
 for alpha_value in (0.5, alpha_tilde):
     for slot_cost in SLOT_LADDER:
@@ -6510,7 +6527,7 @@ pl.DataFrame(choice_rows)
 ```
 
 
-| alpha | cost per slot | P(no promotion optimal) | P(TPR-only optimal) | P(display optimal) | P(feature optimal) | P(feature + display optimal) |
+| alpha | cost per slot | P(no promotion optimal) | P(tpr-only optimal) | P(display optimal) | P(feature optimal) | P(feature + display optimal) |
 |----|----|----|----|----|----|----|
 | 0.5 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
 | 0.5 | 25.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
@@ -6575,24 +6592,24 @@ store_table
 
 | store | segment | tpr_only_weeks | P(cut pays \| alpha=0.50) | P(cut pays \| alpha=0.71) | alpha\*\_category_median | alpha\*\_brand_median |
 |----|----|----|----|----|----|----|
-| 9825 | "MAINSTREAM" | 22 | 0.0025 | 0.9575 | 0.666967 | 0.632392 |
-| 19265 | "MAINSTREAM" | 20 | 0.34775 | 1.0 | 0.573566 | 0.528595 |
-| 2281 | "UPSCALE" | 19 | 0.0 | 0.61425 | 0.751862 | 0.697736 |
-| 25027 | "MAINSTREAM" | 17 | 0.1705 | 0.99975 | 0.586479 | 0.553858 |
-| 25021 | "VALUE" | 15 | 0.10075 | 0.99125 | 0.648283 | 0.577343 |
-| 2513 | "UPSCALE" | 14 | 0.0 | 0.0175 | 0.839245 | 0.814681 |
-| 23349 | "VALUE" | 13 | 0.0045 | 0.92275 | 0.675589 | 0.640883 |
-| 21479 | "VALUE" | 12 | 0.00025 | 0.7605 | 0.693553 | 0.6784 |
-| 4259 | "VALUE" | 11 | 0.0105 | 0.86725 | 0.708092 | 0.644411 |
-| 21237 | "MAINSTREAM" | 10 | 0.004 | 0.954 | 0.676426 | 0.632472 |
-| 6431 | "VALUE" | 10 | 0.0 | 0.27875 | 0.760733 | 0.738274 |
-| 11993 | "UPSCALE" | 9 | 0.0 | 0.0015 | 0.88791 | 0.866336 |
-| 613 | "MAINSTREAM" | 7 | 0.0 | 0.5665 | 0.727709 | 0.703582 |
-| 2277 | "UPSCALE" | 7 | 0.0 | 0.0265 | 0.831554 | 0.798355 |
-| 24991 | "UPSCALE" | 7 | 0.00075 | 0.68225 | 0.720257 | 0.68798 |
-| 19523 | "VALUE" | 7 | 0.0165 | 0.89925 | 0.658284 | 0.633994 |
-| 25229 | "MAINSTREAM" | 6 | 0.0 | 0.65275 | 0.715752 | 0.692349 |
-| 6179 | "UPSCALE" | 6 | 0.00025 | 0.74125 | 0.720045 | 0.681805 |
+| 9825 | "mainstream" | 22 | 0.0025 | 0.9575 | 0.666967 | 0.632392 |
+| 19265 | "mainstream" | 20 | 0.34775 | 1.0 | 0.573566 | 0.528595 |
+| 2281 | "upscale" | 19 | 0.0 | 0.61425 | 0.751862 | 0.697736 |
+| 25027 | "mainstream" | 17 | 0.1705 | 0.99975 | 0.586479 | 0.553858 |
+| 25021 | "value" | 15 | 0.10075 | 0.99125 | 0.648283 | 0.577343 |
+| 2513 | "upscale" | 14 | 0.0 | 0.0175 | 0.839245 | 0.814681 |
+| 23349 | "value" | 13 | 0.0045 | 0.92275 | 0.675589 | 0.640883 |
+| 21479 | "value" | 12 | 0.00025 | 0.7605 | 0.693553 | 0.6784 |
+| 4259 | "value" | 11 | 0.0105 | 0.86725 | 0.708092 | 0.644411 |
+| 21237 | "mainstream" | 10 | 0.004 | 0.954 | 0.676426 | 0.632472 |
+| 6431 | "value" | 10 | 0.0 | 0.27875 | 0.760733 | 0.738274 |
+| 11993 | "upscale" | 9 | 0.0 | 0.0015 | 0.88791 | 0.866336 |
+| 613 | "mainstream" | 7 | 0.0 | 0.5665 | 0.727709 | 0.703582 |
+| 2277 | "upscale" | 7 | 0.0 | 0.0265 | 0.831554 | 0.798355 |
+| 24991 | "upscale" | 7 | 0.00075 | 0.68225 | 0.720257 | 0.68798 |
+| 19523 | "value" | 7 | 0.0165 | 0.89925 | 0.658284 | 0.633994 |
+| 25229 | "mainstream" | 6 | 0.0 | 0.65275 | 0.715752 | 0.692349 |
+| 6179 | "upscale" | 6 | 0.00025 | 0.74125 | 0.720045 | 0.681805 |
 
 
     In [68]:
@@ -6601,7 +6618,7 @@ store_table
 ``` python
 fig, axes = plt.subplots(ncols=2, figsize=(15, 7), sharey=True, layout="constrained")
 store_labels_ordered = [
-    f"store {hnc_store_ids[j]} ({store_segment[hnc_store_ids[j]]}, {store_tpr_weeks[j]} TPR-only weeks)"
+    f"store {hnc_store_ids[j]} ({store_segment[hnc_store_ids[j]]}, {store_tpr_weeks[j]} tpr-only weeks)"
     for j in store_order
 ]
 plot_intervals(axes[0], store_labels_ordered, store_share_brand[:, store_order])
@@ -6628,8 +6645,8 @@ Expected profit is not the whole decision. The incremental profit of a policy ag
 
 The risk table, the sensitivity and the go/no-go ladder say the following:
 
-- At a zero slot cost every policy with a feature or a display has a positive \text{CVaR}\_{0.10} and a probability of loss of 0.00, so the go/no-go is a go at the break-even share for all of them; the shelf-tag cuts are the only policies with a negative downside.
-- The three deepest feature-with-display cells have \text{CVaR}\_{0.10} values of 4{,}392, 4{,}403 and 4{,}400, with bootstrap standard errors of 12 to 13 and between-chain standard errors of 6 to 8, so the risk measure does not separate them either; the deepest cell has the highest expected increment, 5{,}263, and the earlier table gave it a 63\\ chance of being the best cell.
+- At a zero slot cost every policy with a feature or a display has a positive \text{CVaR}\_{0.10} and a probability of loss of 0.00, so the go/no-go is a go at the break-even share for all of them. The scatter shows the shelf-tag cuts as the only policies with a negative downside.
+- The three deepest feature-with-display cells have \text{CVaR}\_{0.10} values of 4{,}392, 4{,}403 and 4{,}400, with bootstrap standard errors of 12 to 13 and between-chain standard errors of 6 to 8, so the risk measure does not separate them either. The deepest cell has the highest expected increment, 5{,}263, and the earlier table gave it a 63\\ chance of being the best cell.
 - The coupling matters for the downside number: the committed policy has a \text{CVaR}\_{0.10} of 4{,}339 under common random numbers and 3{,}952 with a redrawn baseline, a difference the data cannot arbitrate.
 - The slot-cost ladder turns the histogram into a decision: with slots at 25 per store-week the committed event still has a probability of loss of 0.00 at both shares; at 50 the probability is 0.11 at the nominal share and 0.00 at the break-even share; at 75 it is 1.00 and 0.73.
 
@@ -6644,31 +6661,33 @@ n_chains = 4
 def incremental_paths(
     policy: tuple[str, float], alpha_value: float
 ) -> Float[np.ndarray, " sample"]:
-    """Incremental event profit of a policy over no promotion, per draw, on the sampled paths."""
+    """Compute the incremental event profit of a policy over no promotion on the sampled paths."""
     return event_profit(event_units_paths[policy], policy[1], alpha_value) - event_profit(
         event_units_paths[BASELINE], 0.0, alpha_value
     )
 
 
 def cvar(draws: Float[np.ndarray, " sample"], level: float = 0.10) -> float:
-    """Mean of the lowest ``level`` share of the draws."""
+    """Average the lowest ``level`` share of the draws."""
     ordered = np.sort(draws)
     return float(ordered[: max(1, int(np.floor(level * ordered.size)))].mean())
 
 
-def cvar_bootstrap_se(draws: Float[np.ndarray, " sample"], n_boot: int = 2_000) -> float:
+def cvar_bootstrap_se(
+    draws: Float[np.ndarray, " sample"], level: float = 0.10, n_boot: int = 2_000
+) -> float:
     """Estimate the standard error of the CVaR with an iid bootstrap over the draws."""
     boot_rng = np.random.default_rng(seed=0)
     resampled = boot_rng.choice(draws, size=(n_boot, draws.size), replace=True)
-    lowest = np.sort(resampled, axis=1)[:, : int(np.floor(0.10 * draws.size))]
+    lowest = np.sort(resampled, axis=1)[:, : max(1, int(np.floor(level * draws.size)))]
     return float(lowest.mean(axis=1).std(ddof=1))
 
 
-def cvar_chain_se(draws: Float[np.ndarray, " sample"]) -> float:
+def cvar_chain_se(draws: Float[np.ndarray, " sample"], level: float = 0.10) -> float:
     """Estimate the standard error of the CVaR from the spread of the per-chain values."""
     if n_chains < 2:
         return float("nan")
-    per_chain = np.array([cvar(chain) for chain in draws.reshape(n_chains, -1)])
+    per_chain = np.array([cvar(chain, level) for chain in draws.reshape(n_chains, -1)])
     return float(per_chain.std(ddof=1) / np.sqrt(n_chains))
 
 
@@ -6726,7 +6745,7 @@ risk_table.head(10)
 committed = ("feature + display", 0.15)
 rng_key, key_alt = random.split(rng_key)
 out_alt = scenario_draws(
-    key_alt, nuts_model, posterior, y_train, policy_covariates(0.0, *MECHANICS["TPR-only"])
+    key_alt, nuts_model, posterior, y_train, policy_covariates(0.0, *MECHANICS["tpr-only"])
 )
 baseline_alt_units = np.asarray(out_alt["forecast"], dtype=np.float32)[:, EVENT_OFFSETS, :].sum(
     axis=1
@@ -6810,7 +6829,7 @@ for row in risk_table.iter_rows(named=True):
         s=30 + 200 * row["depth"],
         alpha=0.8,
     )
-feasible = risk_table.filter(pl.col("cvar_10") >= 0)
+feasible = risk_table.filter(pl.col("cvar_10").ge(pl.lit(0)))
 best_unconstrained = risk_table.row(0, named=True)
 best_feasible = (
     feasible.sort("expected_increment", descending=True).row(0, named=True)
@@ -6903,7 +6922,7 @@ The planner table and the scatter show where shrinkage matters:
 - The Jensen ratio is at most 1.002 across the grid, so the posterior-mean plug-in and the posterior planner agree.
 - For the decision to run the event, both planners choose all 18 stores at both shares; the least-squares planner's disappointment is negative (-718 and -696), because its own mechanics multipliers under-predict the uplift the posterior expects.
 - For the decision to add the cut at the nominal share, the posterior planner adds it in no store and the least-squares planner in 3; that plan is worth -110 under the posterior, a disappointment of 222.
-- At the break-even share the least-squares planner adds the cut in all 18 stores and the posterior planner in 9; the least-squares plan is worth 11 under the posterior against 162 for the posterior plan, and the disappointment is 865: the stores with the most extreme least-squares elasticities are the ones whose predicted gains evaporate under the posterior, the optimizer's curse in a table.
+- At the break-even share the least-squares planner adds the cut in all 18 stores and the posterior planner in 9. The least-squares plan is worth 11 under the posterior against 162 for the posterior plan, and the disappointment is 865. The stores with the most extreme least-squares elasticities are the ones whose predicted gains evaporate under the posterior: the optimizer's curse in a table.
 - The scatter shows it: at the break-even share nearly every store sits on or below the identity line, and the store with the largest predicted gain keeps a small part of it.
 
 
@@ -6958,7 +6977,7 @@ committed_depth = committed[1]
 def least_squares_units(
     reference_units: Float[np.ndarray, " n_series"], add_mechanics: bool
 ) -> Float[np.ndarray, " n_series"]:
-    """Event units the store least-squares planner predicts for the committed policy from ``reference_units``."""
+    """Predict the event units of the committed policy with the store least-squares planner."""
     units = np.empty(n_series)
     for n in range(n_series):
         store, product = series_ids[n].split("::")
@@ -7115,7 +7134,7 @@ The sweep over \eta then shows the value of the stochastic solution as a functio
 - Why the marginal rule loses little: its per-week quantiles add up to an order above the joint quantile in 17 of the 18 stores, by 5 to 41 units (the remaining store orders 2 units less), and over-ordering is cheap at a fractile of 0.74.
 - Service of the paths rule: a fill rate of 0.94 and an expected leftover of 2{,}206 units over the 18 stores.
 - Information ceilings: perfect information about the demand itself would be worth 14.5\\ of RP; about the parameters and the level path 5.5\\, from 300 inner draws.
-- The sweep: the value of the stochastic solution is smallest, 0.1\\ of RP, at a holding share of 0.2, where the critical fractile of 0.59 sits nearest the probability that demand falls below its mean, 0.54 in the median store; it grows to 7.0\\ at a fractile of 0.93 and to 15.0\\ at 0.26, and the marginal-rule loss stays below 0.8\\ of RP everywhere.
+- The sweep: the value of the stochastic solution is smallest, 0.1\\ of RP, at a holding share of 0.2, where the critical fractile of 0.59 sits nearest the probability that demand falls below its mean, 0.54 in the median store. It grows to 7.0\\ at a fractile of 0.93 and to 15.0\\ at 0.26. The marginal-rule loss stays below 0.8\\ of RP everywhere.
 
 
     In [76]:
@@ -7143,19 +7162,26 @@ print(
 def integer_quantile(
     draws: Float[np.ndarray, " sample k"], kappa: float
 ) -> Float[np.ndarray, " k"]:
-    """Smallest integer order with ``P(W <= Q) >= kappa`` under the empirical distribution of the draws."""
+    """Return the smallest integer order with ``P(W <= Q) >= kappa`` under the empirical draws."""
     return np.quantile(draws, kappa, axis=0, method="inverted_cdf")
 
 
 def newsvendor_profit(
-    order: np.ndarray, demand: np.ndarray, underage: np.ndarray, overage: np.ndarray
-) -> np.ndarray:
-    """Newsvendor profit of an order against demand draws (broadcast over leading axes)."""
+    order: Float[np.ndarray, " ... k"],
+    demand: Float[np.ndarray, " ... k"],
+    underage: Float[np.ndarray, " k"],
+    overage: Float[np.ndarray, " k"],
+) -> Float[np.ndarray, " ... k"]:
+    """Compute the newsvendor profit of an order against demand draws (broadcast over leading axes)."""
     return underage * np.minimum(demand, order) - overage * np.maximum(order - demand, 0.0)
 
 
 def order_rules(eta: float) -> dict[str, float | np.ndarray]:
-    """Orders, expected profits, VSS and the demand-information ceiling at a holding share ``eta``."""
+    """Evaluate the three order rules at a holding share ``eta``.
+
+    Returns the orders, RP, EEV, VSS (full and split-half), the marginal-rule loss,
+    the wait-and-see ceiling, the fill rate and the expected leftover.
+    """
     c_o = eta * cost_focal
     kappa = float((c_u / (c_u + c_o))[0])
     q_paths = integer_quantile(event_demand, kappa)
@@ -7205,7 +7231,7 @@ store_orders = pl.DataFrame(
         "Q_marginal": nominal["q_marginal"],
         "Q_mean": nominal["q_mean"],
     }
-).with_columns(marginal_minus_paths=pl.col("Q_marginal") - pl.col("Q_paths"))
+).with_columns(marginal_minus_paths=pl.col("Q_marginal").sub(pl.col("Q_paths")))
 print(
     f"eta {nominal_eta}: kappa {nominal['kappa']:.3f} | RP {nominal['RP']:,.0f} | EEV {nominal['EEV']:,.0f} | "
     f"VSS {nominal['VSS']:,.0f} ({nominal['VSS'] / nominal['RP']:.1%} "
@@ -7272,7 +7298,7 @@ n_inner = inner_demand.shape[1]
 
 
 def theta_information_value(eta: float) -> float:
-    """Value of perfect information about the parameters and the level path (inner draws), as a share of RP."""
+    """Estimate the value of perfect information about the parameters and level path, as a share of RP."""
     c_o = eta * cost_focal
     kappa = float((c_u / (c_u + c_o))[0])
     q_theta = np.quantile(inner_demand, kappa, axis=1, method="inverted_cdf")  # (draws, stores)
@@ -7413,7 +7439,7 @@ The four promises of the introduction, each backed by a table above.
 - The right expectation. The store-level elasticities are partially pooled (a posterior-median spread of 0.31 across stores against 0.37 for within-store least squares). The store least-squares planner, which is not pooled, adds the cut in 3 stores at the nominal share where the posterior adds it in none, and in all 18 at the break-even share where the posterior adds it in 9; its predicted gains exceed the posterior-evaluated ones by 222 and 865, the postdecision disappointment of the planner table.
 - A reservation share with an interval instead of an argmax. At the nominal share the posterior puts probability 1.00 on a falling profit curve for every mechanics, so the depth decision is a corner. What the posterior adds is the break-even funding share, 0.71 for feature with display including cannibalization, with a 94\\ HDI about 0.1 wide at zone level and about twice that per store, and the event-level share of every cell, negative for a 15\\ cut under a feature.
 - A downside, and a tie-breaker where the objective is flat. Near the break-even share the expected profit moves by 1.5\\ of the baseline across the whole depth grid, every featured policy has a positive \text{CVaR}\_{0.10}, and the three deepest cells have downside values within their standard errors of each other; the risk table with slot costs is where the go turns into a no-go, between 50 and 75 per slot and store-week.
-- An order from joint paths rather than from summed quantiles. The value of the stochastic solution is 1.9\\ of the recourse value at the nominal holding share, smallest (0.1\\) where the critical fractile meets the probability that demand falls below its mean, and up to 15\\ at low fractiles; the marginal-quantile rule over-orders in 17 of the 18 stores but loses below 1\\ everywhere, because the two event weeks are only weakly correlated (0.27) and over-ordering is cheap at high fractiles.
+- An order from joint paths rather than from summed quantiles. The value of the stochastic solution is 1.9\\ of the recourse value at the nominal holding share, smallest (0.1\\) where the critical fractile meets the probability that demand falls below its mean, and up to 15\\ at low fractiles. The marginal-quantile rule over-orders in 17 of the 18 stores but loses below 1\\ everywhere, because the two event weeks are only weakly correlated (0.27) and over-ordering is cheap at high fractiles.
 
 
 # Limitations
@@ -7426,7 +7452,10 @@ The four promises of the introduction, each backed by a table above.
 - The elasticity is promotional, not regular-price; base-price changes are absorbed by the level.
 - The economics are assumptions: gross margins, a per-unit allowance, base prices frozen at the last training week (the brand-only break-even share is price-free; the category version depends on price ratios only), a holding-cost overage.
 - The holdout is the holiday quarter with two earlier Decembers to learn from, and the holdout forecasts run high on average: the PIT histogram slopes downward, with 16\\ of the cells in the lowest decile.
-- Post, Quaker, the products of other sub-categories and other retailers are omitted competitors; the manufacturer's side of the deal is outside the model (General Mills also owns two of the siblings, so part of the cannibalization is internal to it); the sibling-mechanics effects are averages over any featured sibling; part of the stockout demand of the focal product spills to the private-label twin.
+- Post, Quaker, the products of other sub-categories and other retailers are omitted competitors.
+- The manufacturer's side of the deal is outside the model. General Mills also owns two of the siblings, so part of the cannibalization is internal to it.
+- The sibling-mechanics effects are averages over any featured sibling.
+- Part of the stockout demand of the focal product spills to the private-label twin.
 
 
 # Next steps
@@ -7435,7 +7464,7 @@ The four promises of the introduction, each backed by a table above.
 - Replace the average sibling-mechanics effects by per-pair terms, and give the mechanics effects a store level.
 - Add the censored likelihood of the [censored demand example](censored_demand.md) for the weeks at shelf capacity.
 - Run a rolling backtest with [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) over several promotion quarters.
-- Use `VISITS` and `HHS` to separate traffic from basket effects.
+- Use `visits` and `hhs` to separate traffic from basket effects.
 - Pool the orders at the distribution center and compare with the per-store orders.
 - Promote the decision helpers (profit contraction, CVaR, newsvendor rules, VSS) into a package module, and let [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) return extra sites such as the conditional mean.
 

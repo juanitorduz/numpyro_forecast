@@ -280,6 +280,12 @@ Load hourly Victoria (Australia) electricity demand and temperature.
 [datasets.bart_available()](datasets.bart_available.md#numpyro_forecast.datasets.bart_available)  
 Return whether the BART dataset can be loaded (download succeeds).
 
+[datasets.load_breakfast_at_the_frat()](datasets.load_breakfast_at_the_frat.md#numpyro_forecast.datasets.load_breakfast_at_the_frat)  
+Load the dunnhumby *Breakfast at the Frat* scanner panel as polars frames.
+
+[datasets.BreakfastAtTheFrat](datasets.BreakfastAtTheFrat.md#numpyro_forecast.datasets.BreakfastAtTheFrat)  
+The three sheets of the dunnhumby *Breakfast at the Frat* workbook as polars frames.
+
 
 ## Optional dependencies
 

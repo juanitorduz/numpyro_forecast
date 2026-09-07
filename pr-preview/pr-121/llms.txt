@@ -120,6 +120,8 @@
 - [datasets.load_bart_hierarchical](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_bart_hierarchical.html)
 - [datasets.load_victoria_electricity](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_victoria_electricity.html)
 - [datasets.bart_available](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.bart_available.html)
+- [datasets.load_breakfast_at_the_frat](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.load_breakfast_at_the_frat.html)
+- [datasets.BreakfastAtTheFrat](https://juanitorduz.github.io/numpyro_forecast/reference/datasets.BreakfastAtTheFrat.html)
 
 #### Optional dependencies
 > Lazy imports behind pyproject extras.

@@ -145,6 +145,8 @@ Example datasets used in the tutorials.
 - `datasets.load_bart_hierarchical`
 - `datasets.load_victoria_electricity`
 - `datasets.bart_available`
+- `datasets.load_breakfast_at_the_frat`
+- `datasets.BreakfastAtTheFrat`
 
 ### Optional dependencies
 
