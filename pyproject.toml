@@ -41,6 +41,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dataframes = [
+    "fastexcel>=0.12",
     "pandas>=2.2",
     "polars>=1.0",
 ]
