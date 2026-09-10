@@ -89,7 +89,8 @@ pl.Config.set_tbl_hide_column_data_types(True)
 pl.Config.set_tbl_rows(40)
 pl.Config.set_tbl_cols(20)
 
-numpyro.set_host_device_count(n=4)
+N_CHAINS = 4
+numpyro.set_host_device_count(n=N_CHAINS)
 
 rng_key = random.PRNGKey(seed=42)
 
@@ -570,7 +571,7 @@ realized_calendar
 
 # Build the modeling panel
 
-The panel keeps the stores in which all six series are complete over the 156 weeks and takes six stores per price segment (the segments are the retailer's `mainstream`, `upscale` and `value` labels), the largest by average weekly baskets. Six products in 18 stores give 108 series. The knob `n_stores_per_segment` scales the panel; the whole complete set costs about three times the fit. Every series is identified as `store::product`. The store index never enters the model: it drives the cross-price block, the sibling flags, the policy builder, the per-store base prices and the per-store decisions. All six series are complete in 52 stores: 32 mainstream, 11 upscale and 9 value.
+The panel keeps the stores in which all six series are complete over the 156 weeks and takes six stores per price segment (the segments are the retailer's `mainstream`, `upscale` and `value` labels), the largest by average weekly baskets, so the zone-level shares of the decision sections describe high-volume stores. Six products in 18 stores give 108 series. The knob `n_stores_per_segment` scales the panel; the whole complete set costs about three times the fit. Every series is identified as `store::product`. The store index never enters the model: it drives the cross-price block, the sibling flags, the policy builder, the per-store base prices and the per-store decisions. All six series are complete in 52 stores: 32 mainstream, 11 upscale and 9 value.
 
 
     In [11]:
@@ -2301,6 +2302,14 @@ def dispersion(
     return conc[series_to_product]
 
 
+def offdiagonal_pairs(
+    n_products: int,
+) -> tuple[Int[np.ndarray, " n_pairs"], Int[np.ndarray, " n_pairs"]]:
+    """Return the row and column indices of the off-diagonal cells of the cross-price matrix."""
+    rows, cols = np.where(~np.eye(n_products, dtype=bool))
+    return rows, cols
+
+
 def make_cereal_model(
     series_to_product: Int[Array, " n_series"],
     fourier_full: Float[Array, " duration_full n_fourier"],
@@ -2329,7 +2338,7 @@ def make_cereal_model(
         The model function, callable as ``model(covariates)`` for prior sampling and
         ``model(covariates, data)`` for training and forecasting.
     """
-    rows_np, cols_np = np.where(~np.eye(n_products, dtype=bool))
+    rows_np, cols_np = offdiagonal_pairs(n_products)
     pair_rows = jnp.asarray(rows_np, dtype=jnp.int32)
     pair_cols = jnp.asarray(cols_np, dtype=jnp.int32)
     n_pairs = int(rows_np.size)
@@ -2348,7 +2357,6 @@ def make_cereal_model(
         sib_feature = covariates[3]
         sib_display = covariates[4]
         prices = covariates[PRICE_BLOCK:]
-        assert isinstance(prices, Float[Array, " n_products duration n_series"])  # ty: ignore[invalid-argument-type]
         lam = -x
 
         product_plate = numpyro.plate("product", n_products, dim=-1)
@@ -2400,7 +2408,7 @@ def make_cereal_model(
 
 
 fourier_full = jnp.asarray(fourier_features(N_WEEKS, 52.18, 2))
-pair_rows_np, pair_cols_np = np.where(~np.eye(n_products, dtype=bool))
+pair_rows_np, pair_cols_np = offdiagonal_pairs(n_products)
 pair_labels = [
     f"{product_order[k]} -> {product_order[p]}"
     for k, p in zip(pair_rows_np, pair_cols_np, strict=True)
@@ -2678,8 +2686,8 @@ svi_losses = np.asarray(jax.block_until_ready(svi_result.losses))
 ```
 
 
-    CPU times: user 25.7 s, sys: 14.2 s, total: 39.9 s
-    Wall time: 12.3 s
+    CPU times: user 25.3 s, sys: 15.8 s, total: 41.1 s
+    Wall time: 11.7 s
 
 
     In [30]:
@@ -2754,7 +2762,7 @@ def fit_nuts(rng_key: Array, model: ForecastModel, data: Array, covariates: Arra
         NUTS(model, target_accept_prob=0.9, init_strategy=init_to_median()),
         num_warmup=1_000,
         num_samples=1_000,
-        num_chains=4,
+        num_chains=N_CHAINS,
         progress_bar=False,
     )
     mcmc.run(rng_key, covariates, data, extra_fields=("diverging", "num_steps"))
@@ -2770,8 +2778,8 @@ n_draws = int(posterior["eps_prod"].shape[0])
 ```
 
 
-    CPU times: user 56min 35s, sys: 16min 20s, total: 1h 12min 56s
-    Wall time: 8min 20s
+    CPU times: user 55min 30s, sys: 16min 17s, total: 1h 11min 47s
+    Wall time: 8min 6s
 
 
     In [33]:
@@ -2847,7 +2855,7 @@ tree = to_datatree(
     posterior,
     y_train,
     covariates,
-    num_chains=4,
+    num_chains=N_CHAINS,
     time_coord=list(dates),
     covariate_dims=["input", "time", "series"],
     coords=coords,
@@ -3420,7 +3428,7 @@ Group: /
 │           gamma_offdiag_decentered  (chain, draw, pair) float32 480kB 0.1501 ... 0....
 │           level0                    (chain, draw, series) float32 2MB 4.558 ... 2.814
 │       Attributes:
-│           created_at:                 2026-09-07T14:54:44.163734+00:00
+│           created_at:                 2026-09-10T08:22:43.969724+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3435,7 +3443,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) int32 247MB 89 146 49 37 ... 16 5 32
 │       Attributes:
-│           created_at:                 2026-09-07T14:55:04.811719+00:00
+│           created_at:                 2026-09-10T08:22:58.327287+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3448,7 +3456,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) int32 62kB 70 181 69 46 50 100 ... 19 20 18 14 18
 │       Attributes:
-│           created_at:                 2026-09-07T14:55:04.813801+00:00
+│           created_at:                 2026-09-10T08:22:58.349359+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3462,7 +3470,7 @@ Group: /
 │       Data variables:
 │           covariates  (input, time, series) float32 680kB 0.0 -0.2239 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-09-07T14:55:04.814367+00:00
+│           created_at:                 2026-09-10T08:22:58.351606+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3477,7 +3485,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) int32 22MB 146 62 78 66 ... 13 11 4 29
 │       Attributes:
-│           created_at:                 2026-09-07T14:55:06.589071+00:00
+│           created_at:                 2026-09-10T08:23:00.906784+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -3491,7 +3499,7 @@ Group: /
         Data variables:
             covariates  (input, time, series) float32 62kB 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-09-07T14:55:06.589516+00:00
+            created_at:                 2026-09-10T08:23:00.907228+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -3820,7 +3828,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[-8.82833302e-02, -3.67299952e-02,  4.77612652e-02,1.20295743e-02,  2.74751354e-02,  4.34634499e-02],[-1.07428610e-01, -9.68286954e-03,  1.70161594e-02,2.10723447e-05,  2.34154686e-02,  2.52073966e-02],[-4.54978868e-02, -7.24219531e-03,  2.63501387e-02,3.42866853e-02,  1.77906770e-02,  3.95345055e-02],...,[-8.66414085e-02, -6.11840114e-02,  1.30629931e-02,-7.56906625e-03,  3.71690956e-03,  1.32388743e-02],[-6.29727989e-02, -1.79772731e-02,  3.74123305e-02,3.59960534e-02,  1.50648030e-02,  2.98455618e-02],[-6.16047718e-02,  1.32770918e-03,  2.03719456e-02,2.59711500e-02,  1.08735282e-02,  3.16266976e-02]],[[-7.40574151e-02, -1.53654227e-02,  3.04483194e-02,1.24364020e-02,  1.58385765e-02,  2.94967070e-02],[-7.48957917e-02, -1.51604451e-02,  3.75934131e-02,8.38670135e-03,  1.82031039e-02,  4.37210761e-02],[-6.32294863e-02, -3.49684991e-02,  4.42458242e-02,1.25036864e-02,  7.50083884e-04,  1.41549315e-02],...1.47496341e-02,  4.29379269e-02,  4.05721404e-02],[-8.06918442e-02, -1.29278097e-02,  4.69494052e-02,-1.98138747e-02,  4.43795174e-02,  6.70162612e-04],[-8.78945440e-02, -2.97230761e-02,  4.00390178e-02,1.88051108e-02,  5.56533560e-02,  4.97460999e-02]],[[-4.80730608e-02, -1.24277845e-02,  2.76308432e-02,1.49669703e-02,  7.81867001e-03,  7.95433577e-03],[-8.04358423e-02,  1.01634057e-03,  3.60564664e-02,-3.64752370e-03,  6.27621682e-03,  3.10632363e-02],[-7.34941885e-02, -6.92208670e-03,  3.38037089e-02,-2.06522434e-03,  1.17824990e-02,  2.85723228e-02],...,[-8.13424438e-02, -3.20115946e-02,  4.14486751e-02,-1.07951984e-02,  1.63114406e-02,  6.07351540e-03],[-6.84393346e-02, -1.54505260e-02,  2.59021353e-02,2.56915223e-02,  3.93401831e-02,  2.85412781e-02],[-6.84564561e-02, -3.30647193e-02,  1.84655245e-02,3.42037380e-02,  1.78188756e-02,  1.91809498e-02]]],shape=(4, 1000, 6), dtype=float32)
+-02,2.56915223e-02,  3.93401831e-02,  2.85412781e-02],[-6.84564561e-02, -3.30647193e-02,  1.84655245e-02,3.42037380e-02,  1.78188756e-02,  1.91809498e-02]]],shape=(4, 1000, 6), dtype=float32)
 
 
 beta_s
@@ -4107,7 +4115,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T14:54:44.163734+00:00
+2026-09-10T08:22:43.969724+00:00
 
 creation_library :  
 ArviZ
@@ -4243,7 +4251,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T14:55:04.811719+00:00
+2026-09-10T08:22:58.327287+00:00
 
 creation_library :  
 ArviZ
@@ -4337,7 +4345,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T14:55:04.813801+00:00
+2026-09-10T08:22:58.349359+00:00
 
 creation_library :  
 ArviZ
@@ -4452,7 +4460,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T14:55:04.814367+00:00
+2026-09-10T08:22:58.351606+00:00
 
 creation_library :  
 ArviZ
@@ -4588,7 +4596,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T14:55:06.589071+00:00
+2026-09-10T08:23:00.906784+00:00
 
 creation_library :  
 ArviZ
@@ -4703,7 +4711,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-07T14:55:06.589516+00:00
+2026-09-10T08:23:00.907228+00:00
 
 creation_library :  
 ArviZ
@@ -5703,8 +5711,8 @@ print(f"{len(policies)} policies evaluated on {n_draws} posterior draws each")
 
 
     36 policies evaluated on 4000 posterior draws each
-    CPU times: user 4min 49s, sys: 4.76 s, total: 4min 54s
-    Wall time: 27 s
+    CPU times: user 4min 40s, sys: 3.7 s, total: 4min 43s
+    Wall time: 24.2 s
 
 
     In [53]:
@@ -6058,7 +6066,7 @@ Its brand-only version drops the sibling terms from A_r. The event-level share o
 
  \alpha^{\text{ev}}\_r(a) = -\frac{A_r(a) - A_r(a_0)}{B_r(a)}. 
 
-A negative value means the cell pays unfunded; a value above one means no funding share makes it pay. Three variants, as remarks:
+A negative value means the event beats no promotion even if the retailer funds the whole cut; a value above one means no funding share makes it pay. Three variants, as remarks:
 
 - A lump-sum allowance L instead of a per-unit one adds L to A_r and removes \alpha B_r, so the break-even question becomes a question about L.
 - A perishable product replaces the holding cost of the order section by a write-off of the leftover.
@@ -6076,9 +6084,9 @@ The posterior median of the category break-even share of feature with display is
 
 - At the nominal share every curve falls with depth. The probability that no promotion or the shallowest cell is optimal is 1.00 for all four mechanics, and the expected profit lost between the shallowest and the deepest cell is 17\\ of the baseline event profit for a shelf-tag cut and 40\\ for feature with display.
 - At \tilde\alpha the curves are flat. The range of expected profit across the grid is 1.5\\ of the baseline for feature with display and 3.2\\ for a shelf-tag cut, the deepest cell is optimal in 63\\ of the draws for feature with display, and the value of perfect information about the parameters and the level path is at most 1.1\\ of the baseline.
-- The threshold table: at \alpha = 0.5 the threshold elasticity \varepsilon^\star is 1.79, so a cut pays only if \varepsilon_m \< -1.79, and the posterior probability of that is 0.00 under every mechanics. At \tilde\alpha the probability is 0.85 for feature with display from the brand-only tangent but 0.50 from the category secant; the difference is the cannibalization of the siblings. At \alpha = 0.9 every probability is 1.00.
-- The break-even shares: the brand-only shares sit between 0.68 and 0.70 for the four mechanics with 94\\ HDIs about 0.1 wide, and cannibalization adds 0.03 under feature with display and 0.09 under a shelf-tag cut.
-- What a 15\\ cut needs: under feature with display the event pays unfunded, with an event-level share of -0.32, under a feature alone -0.12; the same cut under a shelf tag needs a share of 0.79, and a 30\\ cut under feature with display needs 0.30.
+- The threshold table: at \alpha = 0.5 the threshold elasticity \varepsilon^\star is 1.79, so a cut pays only if \varepsilon_m \< -1.79, and the posterior probability of that is 0.00 under every mechanics. At \tilde\alpha the brand-only tangent gives 0.85 for feature with display (the category-secant column reads 0.50 there by construction, because \tilde\alpha is the posterior median of that same distribution). At \alpha = 0.9 every probability is 1.00.
+- The break-even shares: the brand-only shares sit between 0.68 and 0.70 for the four mechanics with 94\\ HDIs about 0.1 wide, and the `cannibalization (category - brand)` rows add 0.03 under feature with display and 0.09 under a shelf-tag cut.
+- What a 15\\ event needs: a feature-with-display event at a 15\\ cut beats no promotion even if the retailer funds the whole cut (event-level share -0.32), and so does a feature alone (-0.12). The mechanics uplift carries both, not the cut: against the same mechanics at base price the cut itself needs the category secant of the break-even table (0.71 at zone level, 0.57 to 0.89 per store), and the planner section shows the posterior adding it in no store at the nominal share. The same cut under a shelf tag needs a share of 0.79, and a 30\\ cut under feature with display needs 0.30.
 
 
     In [59]:
@@ -6363,7 +6371,7 @@ for mechanics_name in MECHANICS:
                 {
                     "mechanics": mechanics_name,
                     "depth": float(d),
-                    "P(pays unfunded)": float(np.mean(incremental_at_zero > 0)),
+                    "P(event beats no promotion)": float(np.mean(incremental_at_zero > 0)),
                     **interval_row(share),
                 }
             )
@@ -6372,7 +6380,7 @@ for mechanics_name in MECHANICS:
                 {
                     "mechanics": mechanics_name,
                     "depth": float(d),
-                    "P(pays unfunded)": float(np.mean(incremental_at_zero > 0)),
+                    "P(event beats no promotion)": float(np.mean(incremental_at_zero > 0)),
                     "median": float("nan"),
                     "hdi50_lower": float("nan"),
                     "hdi50_upper": float("nan"),
@@ -6385,7 +6393,7 @@ event_share_table.filter(pl.col("depth").is_in([0.0, 0.15, 0.30]))
 ```
 
 
-| mechanics | depth | P(pays unfunded) | median | hdi50_lower | hdi50_upper | hdi94_lower | hdi94_upper |
+| mechanics | depth | P(event beats no promotion) | median | hdi50_lower | hdi50_upper | hdi94_lower | hdi94_upper |
 |----|----|----|----|----|----|----|----|
 | "tpr-only" | 0.0 | 0.0 | NaN | NaN | NaN | NaN | NaN |
 | "tpr-only" | 0.15 | 0.0 | 0.7855 | 0.766753 | 0.804573 | 0.733981 | 0.843155 |
@@ -6655,9 +6663,6 @@ The risk table, the sensitivity and the go/no-go ladder say the following:
 
 
 ``` python
-n_chains = 4
-
-
 def incremental_paths(
     policy: tuple[str, float], alpha_value: float
 ) -> Float[np.ndarray, " sample"]:
@@ -6685,10 +6690,10 @@ def cvar_bootstrap_se(
 
 def cvar_chain_se(draws: Float[np.ndarray, " sample"], level: float = 0.10) -> float:
     """Estimate the standard error of the CVaR from the spread of the per-chain values."""
-    if n_chains < 2:
-        return float("nan")
-    per_chain = np.array([cvar(chain, level) for chain in draws.reshape(n_chains, -1)])
-    return float(per_chain.std(ddof=1) / np.sqrt(n_chains))
+    # ``mcmc.get_samples()`` flattens the chains chain-major and ``Predictive`` keeps the
+    # order, so consecutive blocks of the flat draws are the chains.
+    per_chain = np.array([cvar(chain, level) for chain in draws.reshape(N_CHAINS, -1)])
+    return float(per_chain.std(ddof=1) / np.sqrt(N_CHAINS))
 
 
 risk_rows = []
@@ -7124,7 +7129,7 @@ The vocabulary follows [Birge and Louveaux (2011)](https://doi.org/10.1007/978-1
 
 \text{EVPI}\_W is a loose ceiling: it includes the irreducible demand noise, which no model removes. \text{EVPI}\_\theta is the tighter one, the value of knowing the parameters and the level path, computed with inner negative binomial draws per posterior draw. Two caveats:
 
-- The inner maximum is optimistic by about one part in the number of inner draws, so RP is recomputed on the same inner draws and the difference is not Monte Carlo noise.
+- The inner order q\_\theta is chosen and evaluated on the same inner draws, so the value is optimistic in sample, in the direction of overstating \text{EVPI}\_\theta. RP is recomputed on the same inner draws so that the outer and inner samples match, and a held-out version keeps the same q\_\theta but evaluates it, with RP, on fresh inner draws; the cell prints both, and the gap between them is the optimism.
 - RP, VSS and both ceilings are maxima on the evaluation draws, so we also print a split-half VSS: the rule is chosen on one half of the draws and evaluated on the other.
 
 The sweep over \eta then shows the value of the stochastic solution as a function of the cost asymmetry c_u / c_o. The results, from the three cells below:
@@ -7133,7 +7138,7 @@ The sweep over \eta then shows the value of the stochastic solution as a functio
 - Orders: the recourse value is 5{,}936; the mean order loses 112 against it, a value of the stochastic solution of 1.9\\ of RP (116 on the split-half check); the marginal rule loses only 5.
 - Why the marginal rule loses little: its per-week quantiles add up to an order above the joint quantile in 17 of the 18 stores, by 5 to 41 units (the remaining store orders 2 units less), and over-ordering is cheap at a fractile of 0.74.
 - Service of the paths rule: a fill rate of 0.94 and an expected leftover of 2{,}206 units over the 18 stores.
-- Information ceilings: perfect information about the demand itself would be worth 14.5\\ of RP; about the parameters and the level path 5.5\\, from 300 inner draws.
+- Information ceilings: perfect information about the demand itself would be worth 14.5\\ of RP; about the parameters and the level path 5.5\\ from 300 inner draws, and 5.5\\ again on 100 held-out draws, so the in-sample optimism of the inner argmax is 0.06\\ of RP.
 - The sweep: the value of the stochastic solution is smallest, 0.1\\ of RP, at a holding share of 0.2, where the critical fractile of 0.59 sits nearest the probability that demand falls below its mean, 0.54 in the median store. It grows to 7.0\\ at a fractile of 0.93 and to 15.0\\ at 0.26. The marginal-rule loss stays below 0.8\\ of RP everywhere.
 
 
@@ -7295,33 +7300,56 @@ for _ in range(3):
     inner_chunks.append(inner.sum(axis=2).astype(np.float32))
 inner_demand = np.concatenate(inner_chunks, axis=1)  # (draws, inner, stores)
 n_inner = inner_demand.shape[1]
+held_out_demand = (
+    inner_rng.negative_binomial(
+        conc_focal[:, None, None, None],
+        (
+            conc_focal[:, None, None, None]
+            / (conc_focal[:, None, None, None] + mu_committed[:, None, :, :])
+        ),
+        size=(n_draws, 100, N_EVENT_WEEKS, n_stores),
+    )
+    .sum(axis=2)
+    .astype(np.float32)
+)  # (draws, held out, stores)
+n_held_out = held_out_demand.shape[1]
 
 
-def theta_information_value(eta: float) -> float:
-    """Estimate the value of perfect information about the parameters and level path, as a share of RP."""
+def theta_information_value(eta: float, held_out: bool = False) -> float:
+    """Estimate the value of perfect information about the parameters and level path, as a share of RP.
+
+    The inner order is chosen on the inner draws. With ``held_out`` it and RP are evaluated
+    on the held-out draws instead, so the two values bracket the in-sample optimism of the
+    inner argmax at a fixed choose-sample size.
+    """
     c_o = eta * cost_focal
     kappa = float((c_u / (c_u + c_o))[0])
+    evaluated_on = held_out_demand if held_out else inner_demand
     q_theta = np.quantile(inner_demand, kappa, axis=1, method="inverted_cdf")  # (draws, stores)
-    profit_theta = newsvendor_profit(q_theta[:, None, :], inner_demand, c_u, c_o).mean(
+    profit_theta = newsvendor_profit(q_theta[:, None, :], evaluated_on, c_u, c_o).mean(
         axis=1
     )  # (draws, stores)
     q_paths = integer_quantile(event_demand, kappa)
     rp_inner = (
-        newsvendor_profit(q_paths[None, :], inner_demand.reshape(-1, n_stores), c_u, c_o)
+        newsvendor_profit(q_paths[None, :], evaluated_on.reshape(-1, n_stores), c_u, c_o)
         .mean(axis=0)
         .sum()
     )
     return float((profit_theta.mean(axis=0).sum() - rp_inner) / rp_inner)
 
 
+evpi_theta_in_sample = theta_information_value(nominal_eta)
+evpi_theta_held_out = theta_information_value(nominal_eta, held_out=True)
 print(
     f"value of perfect information about parameters and level path at eta {nominal_eta}: "
-    f"{theta_information_value(nominal_eta):.1%} of RP ({n_inner} inner draws)"
+    f"{evpi_theta_in_sample:.1%} of RP ({n_inner} inner draws) | "
+    f"held out {evpi_theta_held_out:.1%} ({n_held_out} draws) | "
+    f"in-sample optimism {evpi_theta_in_sample - evpi_theta_held_out:.2%} of RP"
 )
 ```
 
 
-    value of perfect information about parameters and level path at eta 0.1: 5.5% of RP (300 inner draws)
+    value of perfect information about parameters and level path at eta 0.1: 5.5% of RP (300 inner draws) | held out 5.5% (100 draws) | in-sample optimism 0.06% of RP
 
 
     In [78]:
@@ -7437,7 +7465,7 @@ ax.set(
 The four promises of the introduction, each backed by a table above.
 
 - The right expectation. The store-level elasticities are partially pooled (a posterior-median spread of 0.31 across stores against 0.37 for within-store least squares). The store least-squares planner, which is not pooled, adds the cut in 3 stores at the nominal share where the posterior adds it in none, and in all 18 at the break-even share where the posterior adds it in 9; its predicted gains exceed the posterior-evaluated ones by 222 and 865, the postdecision disappointment of the planner table.
-- A reservation share with an interval instead of an argmax. At the nominal share the posterior puts probability 1.00 on a falling profit curve for every mechanics, so the depth decision is a corner. What the posterior adds is the break-even funding share, 0.71 for feature with display including cannibalization, with a 94\\ HDI about 0.1 wide at zone level and about twice that per store, and the event-level share of every cell, negative for a 15\\ cut under a feature.
+- A reservation share with an interval instead of an argmax. At the nominal share the posterior puts probability 1.00 on a falling profit curve for every mechanics, so the depth decision is a corner. What the posterior adds is the break-even funding share, 0.71 for feature with display including cannibalization, with a 94\\ HDI about 0.1 wide at zone level and about twice that per store, and the event-level share of every cell against no promotion, negative for a feature-with-display event at a 15\\ cut because the mechanics uplift pays for the event even when the retailer funds the whole cut.
 - A downside, and a tie-breaker where the objective is flat. Near the break-even share the expected profit moves by 1.5\\ of the baseline across the whole depth grid, every featured policy has a positive \text{CVaR}\_{0.10}, and the three deepest cells have downside values within their standard errors of each other; the risk table with slot costs is where the go turns into a no-go, between 50 and 75 per slot and store-week.
 - An order from joint paths rather than from summed quantiles. The value of the stochastic solution is 1.9\\ of the recourse value at the nominal holding share, smallest (0.1\\) where the critical fractile meets the probability that demand falls below its mean, and up to 15\\ at low fractiles. The marginal-quantile rule over-orders in 17 of the 18 stores but loses below 1\\ everywhere, because the two event weeks are only weakly correlated (0.27) and over-ordering is cheap at high fractiles.
 

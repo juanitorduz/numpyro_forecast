@@ -2300,7 +2300,7 @@ Returns
 bool
     ``True`` if `load_bart_od()` loads without error.
 
-load_breakfast_at_the_frat(cache_dir: pathlib.Path | None = None) -> numpyro_forecast.datasets.BreakfastAtTheFrat
+load_breakfast_at_the_frat(cache_dir: str | pathlib.Path | None = None) -> numpyro_forecast.datasets.BreakfastAtTheFrat
 
 Load the dunnhumby *Breakfast at the Frat* scanner panel as polars frames.
 

@@ -17,7 +17,7 @@ The panel holds 156 weeks of weekly unit sales, prices and promotion mechanics f
 ## Parameters
 
 
-`cache_dir: Path | None = None`  
+`cache_dir: str | Path | None = None`  
 Directory that holds the cached workbook. Defaults to `~/.cache/numpyro_forecast`.
 
 
