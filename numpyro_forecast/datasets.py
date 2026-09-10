@@ -9,6 +9,7 @@ panel once and returns its three sheets as polars frames.
 
 import hashlib
 import importlib.resources
+import shutil
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +30,8 @@ BREAKFAST_AT_THE_FRAT_URL = "https://ndownloader.figshare.com/files/57937129"
 """The figshare copy of the dunnhumby *Breakfast at the Frat* workbook."""
 BREAKFAST_AT_THE_FRAT_SHA256 = "61b1d77dd6d9298fed204cc231f2b853a4c7f79376cfc30231646e1e51d0daba"
 """SHA-256 digest of the workbook, checked on every load."""
+DOWNLOAD_TIMEOUT = 60.0
+"""Seconds a single socket read may block before a dataset download is abandoned."""
 _BREAKFAST_SHEETS = {
     "transactions": "dh Transaction Data",
     "products": "dh Products Lookup",
@@ -181,7 +184,7 @@ class BreakfastAtTheFrat:
     stores: "polars.DataFrame"
 
 
-def load_breakfast_at_the_frat(cache_dir: Path | None = None) -> BreakfastAtTheFrat:
+def load_breakfast_at_the_frat(cache_dir: str | Path | None = None) -> BreakfastAtTheFrat:
     """Load the dunnhumby *Breakfast at the Frat* scanner panel as polars frames.
 
     The panel holds 156 weeks of weekly unit sales, prices and promotion mechanics
@@ -228,16 +231,23 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _ensure_breakfast_workbook(cache_dir: Path | None) -> Path:
+def _ensure_breakfast_workbook(cache_dir: str | Path | None) -> Path:
     """Return the cached workbook path, downloading the file once and checking its digest."""
-    directory = _default_cache_dir() if cache_dir is None else cache_dir
+    directory = _default_cache_dir() if cache_dir is None else Path(cache_dir)
     directory.mkdir(parents=True, exist_ok=True)
     workbook = directory / "breakfast_at_the_frat.xlsx"
     if not workbook.exists():
         # Download next to the target and move it into place only when the digest matches,
-        # so an interrupted download never poisons the cache.
+        # so an interrupted download never poisons the cache. The timeout bounds each socket
+        # read, not the whole transfer, so a stalled connection raises instead of blocking.
         partial = workbook.with_name(workbook.name + ".part")
-        urllib.request.urlretrieve(BREAKFAST_AT_THE_FRAT_URL, partial)
+        with (
+            urllib.request.urlopen(
+                BREAKFAST_AT_THE_FRAT_URL, timeout=DOWNLOAD_TIMEOUT
+            ) as response,
+            partial.open("wb") as target,
+        ):
+            shutil.copyfileobj(response, target)
         digest = _sha256(partial)
         if digest != BREAKFAST_AT_THE_FRAT_SHA256:
             partial.unlink()

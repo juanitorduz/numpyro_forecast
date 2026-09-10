@@ -69,7 +69,6 @@ dev = [
     "blackjax>=1.6,<2",
     "huggingface-hub>=1.22.0",
     "scikit-learn>=1.6",
-    "fastexcel>=0.12",
 ]
 docs = [
     "great-docs==0.17.0",

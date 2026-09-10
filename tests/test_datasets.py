@@ -1,6 +1,7 @@
 """Tests for the dataset loaders."""
 
 import hashlib
+import io
 import shutil
 import sys
 import urllib.request
@@ -51,9 +52,14 @@ FIXTURE_WORKBOOK = Path(__file__).parent / "data" / "breakfast_at_the_frat_sampl
 CACHED_WORKBOOK = datasets._default_cache_dir() / "breakfast_at_the_frat.xlsx"
 
 
-def _no_download(url: str, filename: Path) -> NoReturn:
-    msg = f"unexpected download of {url} to {filename}"
+def _no_download(url: str, timeout: float) -> NoReturn:
+    msg = f"unexpected download of {url} (timeout {timeout})"
     raise AssertionError(msg)
+
+
+class _StalledResponse(io.BytesIO):
+    def read(self, size: int | None = -1, /) -> bytes:
+        raise TimeoutError("timed out")
 
 
 def _fixture_digest() -> str:
@@ -63,18 +69,18 @@ def _fixture_digest() -> str:
 def test_breakfast_loader_downloads_once_and_lowercases(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The first call downloads into the cache, later calls reuse it, and everything is lowercase."""
+    """The first call downloads with a timeout into the cache, later calls reuse it, and everything is lowercase."""
     pl = pytest.importorskip("polars")
-    calls: list[str] = []
+    calls: list[tuple[str, float]] = []
 
-    def fake_urlretrieve(url: str, filename: Path) -> None:
-        calls.append(url)
-        shutil.copyfile(FIXTURE_WORKBOOK, filename)
+    def fake_urlopen(url: str, timeout: float) -> io.BytesIO:
+        calls.append((url, timeout))
+        return io.BytesIO(FIXTURE_WORKBOOK.read_bytes())
 
-    monkeypatch.setattr(urllib.request, "urlretrieve", fake_urlretrieve)
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setattr(datasets, "BREAKFAST_AT_THE_FRAT_SHA256", _fixture_digest())
-    frat = load_breakfast_at_the_frat(cache_dir=tmp_path)
-    assert calls == [datasets.BREAKFAST_AT_THE_FRAT_URL]
+    frat = load_breakfast_at_the_frat(cache_dir=str(tmp_path))
+    assert calls == [(datasets.BREAKFAST_AT_THE_FRAT_URL, datasets.DOWNLOAD_TIMEOUT)]
     assert (tmp_path / "breakfast_at_the_frat.xlsx").exists()
     for frame in (frat.transactions, frat.products, frat.stores):
         assert frame.columns == [name.lower() for name in frame.columns]
@@ -88,14 +94,14 @@ def test_breakfast_loader_downloads_once_and_lowercases(
     assert frat.stores["seg_value_name"].to_list() == ["mainstream", "mainstream", "upscale"]
     assert frat.stores["store_id"].is_duplicated().any()  # the loader keeps the workbook as is
     load_breakfast_at_the_frat(cache_dir=tmp_path)
-    assert calls == [datasets.BREAKFAST_AT_THE_FRAT_URL]  # cached: no second download
+    assert len(calls) == 1  # cached: no second download
 
 
 def test_breakfast_loader_rejects_wrong_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A cached file with the wrong digest fails fast, names the digest and never downloads."""
-    monkeypatch.setattr(urllib.request, "urlretrieve", _no_download)
+    monkeypatch.setattr(urllib.request, "urlopen", _no_download)
     (tmp_path / "breakfast_at_the_frat.xlsx").write_bytes(b"not a workbook")
     with pytest.raises(ValueError, match=r"unexpected workbook digest .* delete the file"):
         load_breakfast_at_the_frat(cache_dir=tmp_path)
@@ -106,20 +112,30 @@ def test_breakfast_loader_discards_a_corrupt_download(
 ) -> None:
     """A download with the wrong digest is deleted, so the next call downloads again."""
 
-    def corrupt_urlretrieve(url: str, filename: Path) -> None:
-        Path(filename).write_bytes(b"truncated")
+    def corrupt_urlopen(url: str, timeout: float) -> io.BytesIO:
+        return io.BytesIO(b"truncated")
 
-    monkeypatch.setattr(urllib.request, "urlretrieve", corrupt_urlretrieve)
+    monkeypatch.setattr(urllib.request, "urlopen", corrupt_urlopen)
     with pytest.raises(ValueError, match="the file was discarded"):
         load_breakfast_at_the_frat(cache_dir=tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_breakfast_loader_propagates_a_stalled_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A read timeout raises and leaves no workbook in the cache."""
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout: _StalledResponse(b""))
+    with pytest.raises(TimeoutError):
+        load_breakfast_at_the_frat(cache_dir=tmp_path)
+    assert not (tmp_path / "breakfast_at_the_frat.xlsx").exists()
 
 
 def test_breakfast_loader_requires_dataframes_extra(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A missing ``fastexcel`` surfaces the ``dataframes`` install hint through ``require``."""
-    monkeypatch.setattr(urllib.request, "urlretrieve", _no_download)
+    monkeypatch.setattr(urllib.request, "urlopen", _no_download)
     shutil.copyfile(FIXTURE_WORKBOOK, tmp_path / "breakfast_at_the_frat.xlsx")
     monkeypatch.setattr(datasets, "BREAKFAST_AT_THE_FRAT_SHA256", _fixture_digest())
     monkeypatch.setitem(sys.modules, "fastexcel", None)
