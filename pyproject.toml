@@ -70,6 +70,7 @@ dev = [
     "huggingface-hub>=1.22.0",
     "scikit-learn>=1.6",
     "pyfixest>=0.60",
+    "seaborn>=0.13",
 ]
 docs = [
     "great-docs==0.17.0",
