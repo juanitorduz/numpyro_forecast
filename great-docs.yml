@@ -184,6 +184,8 @@ reference:
       - datasets.load_bart_hierarchical
       - datasets.load_victoria_electricity
       - datasets.bart_available
+      - datasets.load_breakfast_at_the_frat
+      - datasets.BreakfastAtTheFrat
 
   - title: Optional dependencies
     desc: Lazy imports behind pyproject extras.

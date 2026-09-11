@@ -111,6 +111,30 @@ Use American English spelling. Do not use British English spelling.
 
 Work on using Language ASD-STE100 simplified technical english.
 
+### Math
+
+- Define every symbol in prose before it appears in a display formula (what is $n$, what is $N_j$). Introduce the abstract estimand before the estimator.
+- Write distributions as `\text{Normal}`, `\text{Binomial}`, `\text{HalfNormal}`, never `\mathcal{N}`. Use `\text{E}` for expectations, `\text{P}` for probabilities, `\perp` for independence and `\mid` for conditioning.
+- Add short remarks for the natural variants (for example, what changes if the outcome is continuous).
+
+### Causal DAGs
+
+Draw DAGs with graphviz, never as markdown or ASCII art. Build `dag = gr.Digraph()` (with `import graphviz as gr`), add nodes and edges, and leave `dag` as the last expression of the cell without `;`.
+
+- Nodes are `style="filled"` with this palette: blue `#2a2eec80` for the treatment, exposure or covariates of interest; green `#328c0680` for the outcome; orange `#fa7c1780` for a secondary node of interest (mediator, collider, conditioned or selection node); `lightgray` for unobserved variables.
+- Draw a conditioned node as a box with `shape="box"`. Put the role in the label on a second line, for example `label="U\n(unobserved)"` or `label="I = 1\n(responded)"`.
+- Color the arrows that break an assumption red (`color="red"`). Use `dag.subgraph(name="cluster_...")` with a `label` to show two DAGs side by side.
+
+```python
+dag = gr.Digraph()
+dag.node("X", label="X\n(covariates)", color="#2a2eec80", style="filled")
+dag.node("Y", label="Y\n(outcome)", color="#328c0680", style="filled")
+dag.node("I", label="I = 1\n(responded)", shape="box", color="#fa7c1780", style="filled")
+dag.edge("X", "I")
+dag.edge("X", "Y")
+dag
+```
+
 ## Commands
 
 See the Makefile for the full workflow.
