@@ -1,6 +1,6 @@
 # Design: integrating `numpyro_forecast` with `dynestyx`
 
-Status: design and scaffolding. Every claim about `dynestyx` below was verified against `dynestyx==0.5.0` installed next to the current `numpyro_forecast` pins (`jax==0.11.0`, `numpyro==0.21.0`, `arviz==1.3.0`) with the throwaway probes summarized in Appendix A. The example notebook that implements this design lives in a follow-up branch.
+Status: design with a working example. Every claim about `dynestyx` below was verified against `dynestyx==0.5.0` installed next to the current `numpyro_forecast` pins (`jax==0.11.0`, `numpyro==0.21.0`, `arviz==1.3.0`) with the throwaway probes summarized in Appendix A. The example notebook that implements this design is `docs/examples/dynestyx_integration.ipynb` (Section 14).
 
 Tracking: [juanitorduz/numpyro_forecast#34](https://github.com/juanitorduz/numpyro_forecast/issues/34) and [BasisResearch/dynestyx#264](https://github.com/BasisResearch/dynestyx/issues/264).
 
@@ -99,6 +99,7 @@ This is the code the notebook defines and the code proposed for `contrib/dynesty
 
 ```python
 from dataclasses import dataclass
+from typing import Any
 
 import dynestyx as dsx
 import jax.numpy as jnp
@@ -192,15 +193,14 @@ def filtered_series(
             "dynestyx.simulate; predict_in_sample and to_datatree are not applicable."
         )
         raise ValueError(msg)
-    obs_times = _time_grid(h.t_obs, dt)
-    ctrl = (
-        {}
-        if controls is None
-        else {"ctrl_times": _time_grid(h.duration, dt), "ctrl_values": controls}
-    )
+    # The grids are NumPy constants on purpose (Section 4); dynestyx annotates them
+    # as jax Arrays but accepts array-likes, hence the untyped keyword dict.
+    grids: dict[str, Any] = {"obs_times": _time_grid(h.t_obs, dt)}
+    if controls is not None:
+        grids |= {"ctrl_times": _time_grid(h.duration, dt), "ctrl_values": controls}
     if h.future == 0:
         with Filter(filter_config=filter_config):
-            dsx.sample(name, dynamics, obs_times=obs_times, obs_values=h.data, **ctrl)
+            dsx.sample(name, dynamics, obs_values=h.data, **grids)
         return FilteredSeriesResult(
             y_future=jnp.zeros((0, dynamics.observation_dim)),
             x_future=jnp.zeros((0, dynamics.state_dim)),
@@ -210,17 +210,10 @@ def filtered_series(
     # that draw from the filtered distribution at the last observation time not
     # after predict_times[0]. Anchoring at t_obs - 1 therefore yields the filtered
     # state there and one transition per horizon step; the anchor row is dropped.
-    predict_times = _time_grid(h.duration, dt)[h.t_obs - 1 :]
+    grids["predict_times"] = _time_grid(h.duration, dt)[h.t_obs - 1 :]
     simulator = Simulator(simulator_config, n_simulations=1)
     with numpyro.handlers.trace() as tr, simulator, Filter(filter_config=filter_config):
-        dsx.sample(
-            name,
-            dynamics,
-            obs_times=obs_times,
-            obs_values=h.data,
-            predict_times=predict_times,
-            **ctrl,
-        )
+        dsx.sample(name, dynamics, obs_values=h.data, **grids)
     y = tr[f"{name}_predicted_observations"]["value"]  # (n_sim, future + 1, obs)
     x = tr[f"{name}_predicted_states"]["value"]  # (n_sim, future + 1, state)
     return FilteredSeriesResult(y_future=y[0, 1:, :], x_future=x[0, 1:, :])
@@ -228,7 +221,7 @@ def filtered_series(
 
 Why each non-obvious line is there:
 
-- `np.arange(...)` rather than `jnp.arange(...)`: see the static-shapes principle in Section 4 and Appendix A.3.
+- `np.arange(...)` rather than `jnp.arange(...)`: see the static-shapes principle in Section 4 and Appendix A.3. Wrapping the NumPy grid in `jnp.asarray` does not help: under the jitted driver that call is staged too and the rollout fails with the same `TracerArrayConversionError` (Appendix A.6). The grids are passed through an untyped keyword dict because `dynestyx` annotates them as `jax.Array` while accepting array-likes; `ty` type-checks the notebooks.
 - The inner `numpyro.handlers.trace()`: `dsx.sample` returns the innermost handler's result, which is the `Filter`'s `ConditionedResult`; the simulator's rollout reaches the model only through the sites it registers. An inner trace records those sites and lets them continue up the handler stack, so the outer `Predictive` trace still sees them (Appendix A.2).
 - `predict_times` starting at `t_obs - 1`: the anchor semantics were measured, not assumed. Without the anchor, the first forecast row reproduces the filtered state at `t_obs - 1` instead of stepping to `t_obs`, which is an off-by-one that the marginal variances expose (Appendix A.1).
 - A fresh `Simulator` per call: `Simulator` caches the concrete backend it resolves on its instance; a fresh instance per model execution keeps the block free of shared mutable state under `vmap`.
@@ -355,6 +348,8 @@ Forecasting 300 draws over 24 steps with `forecast()` (jit plus `vmap`, includin
 
 Recommendations that follow: `KFConfig()` (cd_dynamax) by default on CPU; `filter_source="cuthbert"` when `NaN` observations or callable time-varying parameters are needed, or on a GPU with long series; use `LocScaleReparam` on the direct model in any comparison.
 
+The committed notebook reproduces the picture with the fair baseline (`LocScaleReparam` on the direct model) and 4 chains of 1 000 plus 1 000 iterations: direct model about 13 s, ESS 876 for $q$ and 799 for $r$ on 1 019 459 leapfrog steps; marginalized model about 10.5 s, ESS 1 657 and 1 717 on 17 592 leapfrog steps; posterior means within 0.01 of each other; test CRPS 0.446 against 0.438.
+
 ## 12. Boundaries and non-goals
 
 - **`predict_in_sample` and `to_datatree` do not apply.** Both call the model with `data=None`, which for nf's direct models means "replay the posterior latents and sample the likelihood". A marginalized model has no posterior latents to replay; its in-sample analog is the filtered (or smoothed) predictive, which needs the data. The block raises with a message that says so. What the user does instead: read `f_filtered_states_mean`/`f_filtered_states_cov` from the posterior dict (already recorded by the filter under `MCMC` and by `draw_posterior`), build the filtered observation predictive $H m_{t \mid t}$ with variance $H P_{t \mid t} H^\top + R$ by hand, and plot it; or use dsx's `Smoother` for the smoothed path. A follow-up (Section 17) considers an nf driver variant that passes `data` to the model for exactly this class of model.
@@ -366,7 +361,7 @@ Recommendations that follow: `KFConfig()` (cd_dynamax) by default on CPU; `filte
 
 ## 13. Packaging plan
 
-### v1 (example notebook, follow-up branch)
+### v1 (example notebook)
 
 - `docs/examples/dynestyx_integration.ipynb`, authored with jupytext (`py:percent`), executed, committed with outputs, `.py` deleted. The block (`FilteredSeriesResult`, `filtered_series`) is defined in the notebook verbatim as in Section 6.2.
 - `pyproject.toml`: a new optional extra `dynestyx = ["dynestyx>=0.5.0"]`, deliberately **not** aggregated into `all` or `all_cuda`. Reasons: the notebooks are not executed in CI (the docs build renders stored outputs and `pytest` collects only `tests/` and `README.md`), so no CI job needs dsx; the extra pulls about 60 packages including `tfp-nightly`, which would slow and destabilize every CI leg for no coverage. The extra documents the pin the notebook was executed against and makes `uv sync --extra all --extra dynestyx` the reproducible authoring command.
@@ -402,7 +397,7 @@ Notebook outline (jupytext `py:percent`; conventions per `AGENTS.md`: `descripti
 10. `backtest` with a NUTS closure; per-window CRPS/coverage plot; `results_to_dataframe`.
 11. Takeaways, boundaries (Section 12 in two paragraphs), link to this document.
 
-File map for the follow-up branch:
+File map:
 
 ```
 DYNESTYX_INTEGRATION_DESIGN.md              # this document; status line updated
@@ -486,3 +481,7 @@ SVI on the dsx model (`AutoNormal`, `Adam(0.01)`, 2 000 steps): 3.0 s; `draw_pos
 ### A.5 Backend cost
 
 See the two tables in Section 11. The log likelihood at $q = 0.3$, $r = 0.5$ was $-124.36$ for all three KF backends (the direct model's value, $-1015.84$, is a joint density over the path and is not comparable).
+
+### A.6 Time grids under the jitted driver
+
+The block of Section 6.2 with the grids built three ways, forecast with `forecast()` (20 draws, 10 steps): `np.arange` succeeded with shape `(20, 10, 1)`; `jnp.asarray(np.arange(...))` and `jnp.arange` both failed inside the simulator's host-side segment bookkeeping with `TracerArrayConversionError`. The converse holds for `dsx.simulate`, the pure-JAX generator used for data simulation and prior predictive checks: it indexes the time grid inside a `lax.scan` and therefore needs a `jax.Array` (`jnp.asarray` of the NumPy grid), while a NumPy grid raises the same error there.
