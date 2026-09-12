@@ -193,8 +193,8 @@ def filtered_series(
             "dynestyx.simulate; predict_in_sample and to_datatree are not applicable."
         )
         raise ValueError(msg)
-    # The grids are NumPy constants on purpose (Section 4); dynestyx annotates them
-    # as jax Arrays but accepts array-likes, hence the untyped keyword dict.
+    # NumPy grids on purpose: host-side constants under jit (dynestyx annotates them
+    # as jax Arrays but accepts array-likes, hence the untyped keyword dict).
     grids: dict[str, Any] = {"obs_times": _time_grid(h.t_obs, dt)}
     if controls is not None:
         grids |= {"ctrl_times": _time_grid(h.duration, dt), "ctrl_values": controls}
@@ -205,11 +205,8 @@ def filtered_series(
             y_future=jnp.zeros((0, dynamics.observation_dim)),
             x_future=jnp.zeros((0, dynamics.state_dim)),
         )
-    # The simulator's first predicted state is the initial-condition draw at
-    # predict_times[0] with no transition, and a posterior rollout initializes
-    # that draw from the filtered distribution at the last observation time not
-    # after predict_times[0]. Anchoring at t_obs - 1 therefore yields the filtered
-    # state there and one transition per horizon step; the anchor row is dropped.
+    # Anchor at the last observed step: the simulator's first predicted state is the
+    # filtered draw at predict_times[0] with no transition, so that row is dropped.
     grids["predict_times"] = _time_grid(h.duration, dt)[h.t_obs - 1 :]
     simulator = Simulator(simulator_config, n_simulations=1)
     with numpyro.handlers.trace() as tr, simulator, Filter(filter_config=filter_config):
