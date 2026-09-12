@@ -95,7 +95,7 @@ Behavior:
 
 ### 6.2 Reference implementation
 
-This is the code the notebook defines and the code proposed for `contrib/dynestyx.py`; the two are meant to stay identical.
+This is the code the notebook defines and the code proposed for `contrib/dynestyx.py`; the two are identical, docstring included, so the block graduates without edits.
 
 ```python
 from dataclasses import dataclass
@@ -152,6 +152,38 @@ def filtered_series(
     posterior rollout starts from the filtered state at the last observed step
     and returns the horizon draws. The guide never sees the rollout because
     fitting always happens with ``h.future == 0``.
+
+    Parameters
+    ----------
+    h
+        The horizon for the current model call; ``h.data`` must be present.
+    name
+        Prefix of the ``dynestyx`` sites (``{name}_marginal_loglik``,
+        ``{name}_filtered_states_mean``, ``{name}_predicted_observations``, ...).
+    dynamics
+        The ``dynestyx`` model; its observation dimension must match ``h.data``.
+    filter_config
+        The filter to condition with (``KFConfig()`` for linear-Gaussian
+        models). ``None`` takes the ``dynestyx`` default, an ensemble Kalman
+        filter, which is approximate.
+    controls
+        Exogenous inputs over the full horizon, shape ``(duration, control)``,
+        normally the model's ``covariates``; forwarded as ``ctrl_values`` on a
+        grid covering the observation and prediction times.
+    dt
+        Spacing that maps integer steps to ``dynestyx`` float times.
+    simulator_config
+        Forwarded to ``Simulator`` (solver options for continuous-time models).
+
+    Returns
+    -------
+    FilteredSeriesResult
+        The horizon draws ``y_future`` and ``x_future``.
+
+    Raises
+    ------
+    ValueError
+        If ``h.data`` is ``None``.
     """
     if h.data is None:
         msg = (
