@@ -50,6 +50,12 @@ optax = [
 blackjax = [
     "blackjax>=1.6,<2",
 ]
+# Kept out of `all` on purpose: dynestyx is used only by the example notebook
+# (docs/examples/dynestyx_integration.ipynb), which CI never executes, and it
+# pulls a large transitive set (cd_dynamax, cuthbert, effectful, equinox, ...).
+dynestyx = [
+    "dynestyx>=0.5.0",
+]
 dev = [
     "graphviz>=0.20",
     "matplotlib>=3.8,<3.11",
