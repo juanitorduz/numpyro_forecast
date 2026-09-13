@@ -53,6 +53,8 @@ blackjax = [
 # Kept out of `all` on purpose: dynestyx is used only by the example notebook
 # (docs/examples/dynestyx_integration.ipynb), which CI never executes, and it
 # pulls a large transitive set (cd_dynamax, cuthbert, effectful, equinox, ...).
+# The notebook's `LTI_discrete(..., D=...)` shortcut needs the release that
+# includes BasisResearch/dynestyx#361; bump the pin when it ships.
 dynestyx = [
     "dynestyx>=0.5.0",
 ]
