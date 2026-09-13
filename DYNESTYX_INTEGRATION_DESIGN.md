@@ -6,7 +6,7 @@ Tracking: [juanitorduz/numpyro_forecast#34](https://github.com/juanitorduz/numpy
 
 ## 1. Summary
 
-A `dynestyx` state space model is written **as a `numpyro_forecast` model function** `(covariates, data=None) -> None`: the model derives its `Horizon` from the shapes, samples its parameters with `numpyro.sample`, builds a `dynestyx.DynamicalModel`, and hands both to one new model building block, `state_space_series(h, name, y, dynamics, conditioner=...)`. The `conditioner` is the `dynestyx` handler that interprets `dsx.sample` over the observed window, which is how `dynestyx` separates the model from its inference: a `Filter` or a `Smoother` marginalizes the latent path and adds the marginal log likelihood $\log p(y_{1:T} \mid \theta)$ as a NumPyro factor, a `LatentPathBuilder` samples the path explicitly. The block adds nf's horizon bookkeeping on top of whichever conditioner is passed: while forecasting it nests the conditioner inside a `Simulator`, whose posterior rollout starts from the conditioned state at the last observed step, and returns the horizon draws that the model registers as `"forecast"`; when a driver calls the model without data it draws the in-window states from the conditioner's posterior over the path (the smoothing distribution, or the explicit path) and one observation per step, which is what `predict_in_sample` and `to_datatree` read as `"obs"`. Nothing else changes: `SVI`, `MCMC`, `forecast`, `predict_in_sample`, `to_datatree`, `backtest` (including `eval_train`), the metrics and the ArviZ export all work on the model unchanged.
+A `dynestyx` state space model is written **as a `numpyro_forecast` model function** `(covariates, data=None) -> None`: the model derives its `Horizon` from the shapes, samples its parameters with `numpyro.sample`, builds a `dynestyx.DynamicalModel`, and hands both to one new model building block, `state_space_series(h, name, y, dynamics, conditioner=...)`. The `conditioner` is the `dynestyx` handler stack that interprets `dsx.sample` over the observed window, which is how `dynestyx` separates the model from its inference: a `Filter` or a `Smoother` marginalizes the latent path and adds the marginal log likelihood $\log p(y_{1:T} \mid \theta)$ as a NumPyro factor, a `LatentPathBuilder` samples the path explicitly, and a `Discretizer` after either turns a continuous-time model into the discrete transition they consume. The block adds nf's horizon bookkeeping on top of whichever conditioner is passed: while forecasting it nests the conditioner inside a `Simulator`, whose posterior rollout starts from the conditioned state at the last observed step, and registers the horizon draws as `"forecast"`; when a driver calls the model without data it draws the in-window states from the conditioner's posterior over the path (the smoothing distribution, or the explicit path) and one observation per step, and registers them as `"obs"`, which is what `predict_in_sample` and `to_datatree` read. A model is its horizon, its parameters and one block call. Nothing else changes: `SVI`, `MCMC`, `forecast`, `predict_in_sample`, `to_datatree`, `backtest` (including `eval_train`), the metrics and the ArviZ export all work on the model unchanged.
 
 The block is the entire integration. It has no class hierarchy, no adapter objects and no second driver stack; it is the same shape as the existing building blocks (a plain function that calls NumPyro primitives against a `Horizon`, with the observed series passed in as `ssoe` does), and it composes `dynestyx`'s documented handlers rather than its internals. Switching between marginalized and explicit-path inference is a one-argument change. It lives in the example notebook first and is proposed for `numpyro_forecast/contrib/dynestyx.py` once the maintainers of both libraries have reviewed it (Section 13).
 
@@ -28,7 +28,7 @@ Both libraries are NumPyro effect-handler code, so they compose at the trace lev
 
 - nf owns the **horizon bookkeeping** (`Horizon`: `t_obs`, `future`, `duration`), the **site contract** (`"obs"` and `"forecast"`, plus the `_future` suffix convention for sampled latents), the **drivers** (jitted, chunked, device-aware `Predictive` wrappers) and the **evaluation workflow** (rolling windows, CRPS, coverage, MASE, ArviZ export).
 - dsx owns the **dynamics** (`DynamicalModel`), the **conditioning** (`Filter`, `Smoother`, `LatentPathBuilder`: the marginal likelihood or the joint path density, plus the conditioned distributions over the path) and the **rollout** (a `Simulator` outside the conditioner starts every prediction segment from the conditioned distribution at the last observation time that precedes it).
-- The block translates between them: the observed window `y` becomes `obs_values`, the step index or the user's `times` become `obs_times`/`predict_times`, `covariates` become `ctrl_values`, the simulator's `{name}_predicted_observations` site becomes the array the model registers as `"forecast"`, and the conditioner's posterior over the path becomes the array the model registers as `"obs"` when called without data.
+- The block translates between them: the observed window `y` becomes `obs_values`, the step index or the user's `times` become `obs_times`/`predict_times`, `covariates` become `ctrl_values`, the simulator's `{name}_predicted_observations` site becomes the `"forecast"` site, and the conditioner's posterior over the path becomes the `"obs"` site when the model is called without data.
 
 Three properties make the composition sound rather than merely possible:
 
@@ -39,9 +39,9 @@ Three properties make the composition sound rather than merely possible:
 ## 4. Design principles
 
 - **One model, three interpretations.** A model function is written once; the `Horizon` (and only the `Horizon`) decides whether the block conditions, forecasts, or produces the in-sample predictive. This is nf's existing rule and it matches dsx's own "separation of concerns" (a `DynamicalModel` has no notion of `predict`; handlers interpret `dsx.sample`).
-- **The handler is the strategy.** Which dsx handler conditions the window is an argument of the block, not a family of blocks or a configuration enum. The three handlers dsx documents for conditioning are the three values the argument takes, and each composes with `Simulator` for the rollout exactly as dsx documents it.
+- **The handler stack is the strategy.** Which dsx handlers condition the window is an argument of the block, not a family of blocks or a configuration enum. The three handlers dsx documents for conditioning are the three values the argument takes, a `Discretizer` can follow any of them, and each stack composes with `Simulator` for the rollout exactly as dsx documents it.
 - **The series travels through `covariates`.** The block takes the observed window `y` as an argument and uses `h.data` only to detect the mode, as `ssoe` does. This is what lets `predict_in_sample`, `to_datatree` and `backtest(eval_train=True)`, which call the model with `data=None`, reach the observations that a conditioned model needs.
-- **Pure functions, explicit randomness.** The block is a plain function with no state of its own; randomness comes from the enclosing NumPyro `seed` handler exactly as for `numpyro.sample`, so `Predictive`, `MCMC` and `SVI` control every key. The one stateful object is the conditioner the user creates, which is a dsx handler and is created once outside the model (Section 6.1).
+- **Pure functions, explicit randomness.** The block is a plain function with no state of its own; randomness comes from the enclosing NumPyro `seed` handler exactly as for `numpyro.sample`, so `Predictive`, `MCMC` and `SVI` control every key. The stateful objects are the handlers the user creates, once, outside the model (Section 6.1).
 - **Static shapes, host-side time grids.** `t_obs`, `future` and `duration` are Python integers derived from array shapes, and `times` is a host-side NumPy array, so the grids the block slices from it are constants inside `jax.jit`. This is what keeps the `Filter`/`Smoother` rollout, which does its segment bookkeeping on the host with `np.searchsorted`, safe inside nf's jitted `_predict` driver (verified, Appendix A.3 and A.6). The `LatentPathBuilder` is the opposite case: it indexes its grids inside a `lax.scan` and needs jax arrays (A.8). The block converts per conditioner; a grid derived from a traced argument (a covariate column) would break the first case.
 - **Compile once, vectorize over draws.** nf's `forecast()` jits one `Predictive` per `(model, shape)` and vectorizes the sample axis with `vmap`. The Kalman filter and smoother (`lax.scan`, or cuthbert's associative scan), the path reconstruction of the builder and the discrete simulator are all `vmap`-friendly, so the whole forecast for 300 draws compiles and runs in 0.7 s on CPU (A.3). `batch_size` chunking, `parallel=False` and `device="host"` keep working because the driver does not know that dsx is inside.
 - **Reuse documented dsx composition, not internals.** The block uses `Simulator` outside a conditioner with `predict_times`, which is the posterior-rollout composition dsx documents for all three handlers, reads the simulator's sites through `numpyro.handlers.trace` (a plain NumPyro idiom; `ssoe` already uses an inner trace), and reads the per-time smoothing distributions and the reconstructed path from the result objects `dsx.sample` returns (`ConditionedResult.dists`, `LatentStateResult.state_path`, both public fields). The pure-JAX alternative that goes further into internals is discussed as Approach C.
@@ -78,7 +78,7 @@ state_space_series(
     y: Float[Array, " time obs"],
     dynamics: DynamicalModel,
     *,
-    conditioner: Filter | Smoother | LatentPathBuilder,
+    conditioner: StateSpaceHandler | Sequence[StateSpaceHandler],
     controls: Float[Array, " duration control"] | None = None,
     times: np.ndarray | None = None,
     simulator_config: SimulatorConfig | None = None,
@@ -87,19 +87,19 @@ state_space_series(
 
 - `h` is the current call's `Horizon`. `h.data` selects the mode: training when present and `h.future == 0`, forecasting when `h.future > 0`, in-sample predictive when `None`. The observations themselves come from `y`.
 - `y` is the observed window, shape `(t_obs, obs)` with time at axis `-2`, sliced from `covariates` by the caller (`y = covariates[..., :h.t_obs, :obs]`), exactly the contract of `ssoe`; the block checks that it covers `h.t_obs` steps. It is passed to dsx unchanged as `obs_values`.
-- `name` is the dsx site prefix. A `Filter` registers `{name}_marginal_log_likelihood` (the factor), `{name}_marginal_loglik` and the `{name}_filtered_states_*` deterministics selected by its config; a `Smoother` registers the same factor plus the `{name}_smoothed_states_*` deterministics selected by its config; a `LatentPathBuilder` registers the sample site `{name}_state_path_params`, the factor `{name}_joint_log_prob_factor` and the deterministics `{name}_state_path`, `{name}_state_path_times`, `{name}_joint_log_prob`. The simulator registers `{name}_predicted_times`, `{name}_predicted_states`, `{name}_predicted_observations` and one `{name}_{j}_x_0` per rollout segment. The block adds exactly one site of its own, `{name}_smoothed_states`, the draw of the in-window states from the smoothing distribution, only in the in-sample predictive mode of a `Smoother`.
+- `name` is the dsx site prefix. A `Filter` registers `{name}_marginal_log_likelihood` (the factor), `{name}_marginal_loglik` and the `{name}_filtered_states_*` deterministics selected by its config; a `Smoother` registers the same factor plus the `{name}_smoothed_states_*` deterministics selected by its config; a `LatentPathBuilder` registers the sample site `{name}_state_path_params`, the factor `{name}_joint_log_prob_factor` and the deterministics `{name}_state_path`, `{name}_state_path_times`, `{name}_joint_log_prob`. The simulator registers `{name}_predicted_times`, `{name}_predicted_states`, `{name}_predicted_observations` and one `{name}_{j}_x_0` per rollout segment. The block adds nf's two sites, `"forecast"` and `"obs"`, and one of its own, `{name}_smoothed_states`, the draw of the in-window states from the smoothing distribution, only in the in-sample predictive mode of a `Smoother`.
 - `dynamics` is any `DynamicalModel` the conditioner supports. The observation dimension must equal `y.shape[-1]`; a scalar-state model must still be written with a length-1 vector state (`dist.Normal(...).expand([1]).to_event(1)`, transitions returning `.to_event(1)` distributions), because `y` carries an observation axis.
-- `conditioner` is the dsx handler that conditions the window: `Filter(filter_config=...)` (marginalized, no in-sample predictive), `Smoother(smoother_config=...)` (marginalized, same marginal likelihood, in-sample predictive from the smoothing distribution) or `LatentPathBuilder(...)` (explicit path). Create it once outside the model and close over it: the handlers are dsx objects with state of their own, and the builder in particular caches the observation layout it needs to run under `jit` after it has seen concrete observations once (Section 10, item 12). For linear-Gaussian models pass `KFConfig()`/`KFSmootherConfig(filter_source="cd_dynamax")` explicitly; the dsx defaults (`EnKFConfig()`, `EKFSmootherConfig`) are approximate. The `Smoother` costs nothing extra during fitting (A.10), so it is the recommended conditioner when the in-sample predictive or `to_datatree` is wanted.
+- `conditioner` is the dsx handler stack that conditions the window, entered outermost first: exactly one of `Filter(filter_config=...)` (marginalized, no in-sample predictive), `Smoother(smoother_config=...)` (marginalized, same marginal likelihood, in-sample predictive from the smoothing distribution) or `LatentPathBuilder(...)` (explicit path), alone or as the first element of a sequence followed by a `Discretizer(...)`, which turns a continuous-time model into the discrete transition the conditioning handler consumes (Section 8). `StateSpaceHandler` is the union of the four handler types. Create the handlers once outside the model and close over them: they are dsx objects with state of their own, and the builder in particular caches the observation layout it needs to run under `jit` after it has seen concrete observations once (Section 10, item 12). For linear-Gaussian models pass `KFConfig()`/`KFSmootherConfig(filter_source="cd_dynamax")` explicitly; the dsx defaults (`EnKFConfig()`, `EKFSmootherConfig`) are approximate. The `Smoother` costs nothing extra during fitting (A.10), so it is the recommended conditioner when the in-sample predictive or `to_datatree` is wanted. A malformed stack (no conditioning handler, two of them, or a `Discretizer` first) raises.
 - `controls` are the exogenous inputs over the full horizon, shape `(duration, control)`, normally the covariate columns other than the series. They become `ctrl_values` on the full time grid, which covers both the observation times and the prediction times, as the simulator requires. The dynamics consume them through `B`/`D` (linear-Gaussian) or the `u` argument of a callable transition/observation.
 - `times` are the observation times over the full horizon: a host-side NumPy array with at least `duration` strictly increasing entries, of which the block uses the first `duration` (`obs_times = times[:t_obs]`, `predict_times = times[t_obs - 1:duration]`, `ctrl_times = times[:duration]`). `None` uses the step index `0, 1, ..., duration - 1`. Irregular spacing is passed through as is (A.10); it matters for continuous-time dynamics and for time-varying parameters, and is ignored by discrete transitions. It is an argument rather than a covariate column because the `Filter`/`Smoother` rollout needs concrete times under `jit` (Section 4).
 - `simulator_config` is forwarded to `Simulator`, which auto-selects the discrete, ODE or SDE backend from the dynamics; the discrete backend has no configuration.
 
 Behavior:
 
-- Training (`h.data` present, `h.future == 0`): run `dsx.sample` under the conditioner; the factor (and the path site, for the builder) enters the trace; return a result whose time axes have size 0.
-- Forecasting (`h.future > 0`): run `dsx.sample` under `Simulator(simulator_config, n_simulations=1)` outside the conditioner with `predict_times = times[t_obs - 1:duration]`, read `{name}_predicted_observations` and `{name}_predicted_states` from an inner trace, drop the simulation axis and the anchor row, and return `y_future` of shape `(future, obs)` and `x_future` of shape `(future, state)`.
-- In-sample predictive (`h.data is None`, `h.future == 0`): run `dsx.sample` under the conditioner, take one draw of every in-window state (a `Smoother`: sample `{name}_smoothed_states` from the per-time Gaussian marginals in `ConditionedResult.dists`; a `LatentPathBuilder`: the reconstructed `state_path`, which under `Predictive` is the posterior path), sample one observation per step from `dynamics.observation_model(x_t, u_t, t)` with per-step keys, and return it as `y_in_sample` of shape `(t_obs, obs)`. A `Filter` raises with a message naming the two conditioners that work: the filtering distribution $p(x_t \mid y_{1:t})$ is not the quantity `predict_in_sample` means. The draws are per-time marginals of the smoothing predictive; the joint structure of the path across time is not reproduced (no backward simulation), which only matters for path-wise functionals such as the distribution of a running maximum.
-- The block registers nothing but dsx's sites and, in the in-sample mode of a `Smoother`, `{name}_smoothed_states`. As with `ssoe`, the caller registers `numpyro.deterministic("forecast", result.y_future)` when `h.future > 0` and `numpyro.deterministic("obs", result.y_in_sample)` when `h.data is None`.
+- Training (`h.data` present, `h.future == 0`): run `dsx.sample` under the stack; the factor (and the path site, for the builder) enters the trace; return a result whose time axes have size 0.
+- Forecasting (`h.future > 0`): run `dsx.sample` under `Simulator(simulator_config, n_simulations=1)` outside the stack with `predict_times = times[t_obs - 1:duration]`, read `{name}_predicted_observations` and `{name}_predicted_states` from an inner trace, drop the simulation axis and the anchor row, register `y_future` of shape `(future, obs)` as the `"forecast"` deterministic site, and return it with `x_future` of shape `(future, state)`.
+- In-sample predictive (`h.data is None`, `h.future == 0`): run `dsx.sample` under the stack, take one draw of every in-window state (a `Smoother`: sample `{name}_smoothed_states` from the per-time Gaussian marginals in `ConditionedResult.dists`; a `LatentPathBuilder`: the reconstructed `state_path`, which under `Predictive` is the posterior path), sample one observation per step from `dynamics.observation_model(x_t, u_t, t)` with per-step keys, register the result as the `"obs"` deterministic site and return it as `y_in_sample` of shape `(t_obs, obs)`. A `Filter` raises with a message naming the two conditioners that work: the filtering distribution $p(x_t \mid y_{1:t})$ is not the quantity `predict_in_sample` means. The draws are per-time marginals of the smoothing predictive; the joint structure of the path across time is not reproduced (no backward simulation), which only matters for path-wise functionals such as the distribution of a running maximum. This mode is a shim: its target form is the same `Simulator` ∘ stack composition as forecasting with `predict_times = times[:t_obs]`, which dsx supports for `Filter` today and rejects for `Smoother` and `LatentPathBuilder` until in-window prediction lands (Section 12, A.12).
+- The block owns the likelihood (the factor), so, like `predict` and unlike `ssoe`, it registers nf's two sites itself: `"forecast"` while forecasting and `"obs"` in the in-sample mode. A model therefore has one `state_space_series` call, exactly as it has one `predict` call, and cannot forget a site. The returned `StateSpaceResult` is for the states and for custom use.
 - Prior predictive checks use `dsx.simulate(dynamics, rng_key=..., predict_times=..., n_simulations=...)`, the pure-JAX generator, directly (it needs jax time grids, A.6).
 
 ### 6.2 Reference implementation
@@ -107,6 +107,8 @@ Behavior:
 This is the code the notebook defines and the code proposed for `contrib/dynestyx.py`; the two are identical, docstring included, so the block graduates without edits.
 
 ```python
+from collections.abc import Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any
 
@@ -116,7 +118,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-from dynestyx import DynamicalModel, Filter, LatentPathBuilder, Simulator, Smoother
+from dynestyx import Discretizer, DynamicalModel, Filter, LatentPathBuilder, Simulator, Smoother
 from dynestyx.inference.configs.simulator import SimulatorConfig
 from jax import random
 from jaxtyping import Float
@@ -124,8 +126,10 @@ from jaxtyping import Float
 from numpyro_forecast import Horizon
 from numpyro_forecast.typing import Array
 
-StateSpaceConditioner = Filter | Smoother | LatentPathBuilder
-"""The dynestyx handler that conditions the dynamics on the observed window."""
+StateSpaceHandler = Filter | Smoother | LatentPathBuilder | Discretizer
+"""A dynestyx handler that interprets ``dsx.sample`` over the observed window."""
+
+_CONDITIONING_HANDLERS = (Filter, Smoother, LatentPathBuilder)
 
 
 @dataclass(frozen=True)
@@ -135,17 +139,38 @@ class StateSpaceResult:
     Attributes
     ----------
     y_future
-        Observation draws over the horizon, shape ``(future, obs)``.
+        Observation draws over the horizon, shape ``(future, obs)``; also
+        registered as the ``"forecast"`` site.
     x_future
         Latent state draws over the horizon, shape ``(future, state)``.
     y_in_sample
         One draw of the in-sample predictive, shape ``(t_obs, obs)``; filled only
-        when the model is called without data.
+        when the model is called without data, and then registered as ``"obs"``.
     """
 
     y_future: Float[Array, " future obs"]
     x_future: Float[Array, " future state"]
     y_in_sample: Float[Array, " time obs"]
+
+
+def _handler_stack(
+    conditioner: StateSpaceHandler | Sequence[StateSpaceHandler],
+) -> tuple[StateSpaceHandler, ...]:
+    """Normalize ``conditioner`` to the tuple of handlers entered outermost first."""
+    stack = tuple(conditioner) if isinstance(conditioner, Sequence) else (conditioner,)
+    conditioning = [i for i, h in enumerate(stack) if isinstance(h, _CONDITIONING_HANDLERS)]
+    if len(conditioning) != 1:
+        msg = (
+            "conditioner needs exactly one Filter, Smoother or LatentPathBuilder "
+            f"(optionally followed by a Discretizer), got {[type(h).__name__ for h in stack]}"
+        )
+        raise ValueError(msg)
+    if conditioning[0] != 0:
+        msg = (
+            "the Filter, Smoother or LatentPathBuilder must come first (outermost) in conditioner"
+        )
+        raise ValueError(msg)
+    return stack
 
 
 def _time_grid(times: np.ndarray | None, h: Horizon) -> np.ndarray:
@@ -164,7 +189,7 @@ def _time_grid(times: np.ndarray | None, h: Horizon) -> np.ndarray:
 
 
 def _in_sample_states(
-    name: str, conditioner: StateSpaceConditioner, result: Any
+    name: str, conditioner: StateSpaceHandler, result: Any
 ) -> Float[Array, " time state"]:
     """One draw of every in-window state from the conditioner's posterior over the path."""
     if isinstance(conditioner, LatentPathBuilder):
@@ -194,25 +219,29 @@ def state_space_series(
     y: Float[Array, " time obs"],
     dynamics: DynamicalModel,
     *,
-    conditioner: StateSpaceConditioner,
+    conditioner: StateSpaceHandler | Sequence[StateSpaceHandler],
     controls: Float[Array, " duration control"] | None = None,
     times: np.ndarray | None = None,
     simulator_config: SimulatorConfig | None = None,
 ) -> StateSpaceResult:
     """Condition a dynestyx model on the observed window and predict with it.
 
-    The conditioner is the ``dynestyx`` handler that interprets ``dsx.sample`` over
-    the observed window: a ``Filter`` or a ``Smoother`` adds the marginal log
-    likelihood of the window as a NumPyro factor (the latent path is integrated
-    out), a ``LatentPathBuilder`` samples the path explicitly. The block adds the
-    horizon bookkeeping on top. While forecasting it nests the conditioner inside
-    a ``Simulator``, whose posterior rollout starts from the conditioned state at
-    the last observed step, and returns the horizon draws. When the model is
-    called without data it draws the in-window states from the conditioner's
-    posterior over the path (the smoothing distribution, or the explicit path)
-    and samples one observation per step from the observation model: the
-    in-sample predictive that ``predict_in_sample`` and ``to_datatree`` read. The
-    guide never sees the rollout because fitting happens with ``h.future == 0``.
+    The conditioner is the ``dynestyx`` handler stack that interprets
+    ``dsx.sample`` over the observed window, entered outermost first: a
+    ``Filter`` or a ``Smoother`` adds the marginal log likelihood of the window as
+    a NumPyro factor (the latent path is integrated out), a ``LatentPathBuilder``
+    samples the path explicitly, and an optional ``Discretizer`` after it turns a
+    continuous-time model into the discrete transition the others consume. The
+    block adds the horizon bookkeeping on top and registers the two sites the
+    package drivers read. While forecasting it nests the stack inside a
+    ``Simulator``, whose posterior rollout starts from the conditioned state at
+    the last observed step, and registers the horizon draws as ``"forecast"``.
+    When the model is called without data it draws the in-window states from the
+    conditioner's posterior over the path (the smoothing distribution, or the
+    explicit path), samples one observation per step from the observation
+    model, and registers them as ``"obs"``: the in-sample predictive that
+    ``predict_in_sample`` and ``to_datatree`` read. The guide never sees the
+    rollout because fitting happens with ``h.future == 0``.
 
     Parameters
     ----------
@@ -230,9 +259,10 @@ def state_space_series(
         The ``dynestyx`` model; its observation dimension must match ``y``.
     conditioner
         ``Filter(filter_config=...)``, ``Smoother(smoother_config=...)`` or
-        ``LatentPathBuilder(...)``. Create it once outside the model and reuse
-        it: the builder caches the observation layout it needs under ``jit``.
-        A ``Filter`` cannot serve the in-sample predictive.
+        ``LatentPathBuilder(...)``, alone or as the first element of a sequence
+        followed by a ``Discretizer(...)``. Create the handlers once outside the
+        model and reuse them: the builder caches the observation layout it
+        needs under ``jit``. A ``Filter`` cannot serve the in-sample predictive.
     controls
         Exogenous inputs over the full horizon, shape ``(duration, control)``,
         forwarded as ``ctrl_values`` on the full time grid.
@@ -242,7 +272,8 @@ def state_space_series(
         index. Irregular spacing matters for continuous-time dynamics and for
         time-varying parameters.
     simulator_config
-        Forwarded to ``Simulator`` (solver options for continuous-time models).
+        Forwarded to ``Simulator`` (solver options for continuous-time models
+        that are not discretized).
 
     Returns
     -------
@@ -253,7 +284,8 @@ def state_space_series(
     ------
     ValueError
         If ``y`` does not cover exactly ``h.t_obs`` steps, if ``times`` is not a
-        strictly increasing grid covering the horizon, or if the in-sample
+        strictly increasing grid covering the horizon, if ``conditioner`` does
+        not hold exactly one conditioning handler first, or if the in-sample
         predictive is requested with a ``Filter`` conditioner.
     TypeError
         If the in-sample predictive is requested with a non-Gaussian smoother.
@@ -263,11 +295,13 @@ def state_space_series(
     if y.ndim < 2 or y.shape[-2] != h.t_obs:
         msg = f"y must have shape (t_obs={h.t_obs}, obs), got {y.shape}"
         raise ValueError(msg)
+    stack = _handler_stack(conditioner)
     grid = _time_grid(times, h)
     # Filter and Smoother rollouts do host-side segment bookkeeping, so their grids are
     # NumPy constants under jit; the LatentPathBuilder indexes its grids inside a scan and
     # takes jax arrays. dynestyx annotates all of them as jax Arrays, hence the untyped dict.
-    as_grid = jnp.asarray if isinstance(conditioner, LatentPathBuilder) else np.asarray
+    explicit_path = any(isinstance(handler, LatentPathBuilder) for handler in stack)
+    as_grid = jnp.asarray if explicit_path else np.asarray
     kwargs: dict[str, Any] = {"obs_times": as_grid(grid[: h.t_obs])}
     if controls is not None:
         kwargs |= {"ctrl_times": as_grid(grid), "ctrl_values": controls}
@@ -277,17 +311,22 @@ def state_space_series(
         # Anchor at the last observed step: the simulator's first predicted state is the
         # conditioned draw at predict_times[0] with no transition, so that row is dropped.
         kwargs["predict_times"] = as_grid(grid[h.t_obs - 1 :])
-        simulator = Simulator(simulator_config, n_simulations=1)
-        with numpyro.handlers.trace() as tr, simulator, conditioner:
+        with numpyro.handlers.trace() as tr, ExitStack() as handlers:
+            handlers.enter_context(Simulator(simulator_config, n_simulations=1))
+            for handler in stack:
+                handlers.enter_context(handler)
             dsx.sample(name, dynamics, obs_values=y, **kwargs)
         y_future = tr[f"{name}_predicted_observations"]["value"][0, 1:, :]
         x_future = tr[f"{name}_predicted_states"]["value"][0, 1:, :]
+        numpyro.deterministic("forecast", y_future)
         return StateSpaceResult(y_future=y_future, x_future=x_future, y_in_sample=empty_y)
-    with conditioner:
+    with ExitStack() as handlers:
+        for handler in stack:
+            handlers.enter_context(handler)
         result = dsx.sample(name, dynamics, obs_values=y, **kwargs)
     if h.data is not None:
         return StateSpaceResult(y_future=empty_y, x_future=empty_x, y_in_sample=empty_y)
-    x = _in_sample_states(name, conditioner, result)
+    x = _in_sample_states(name, stack[0], result)
     key = numpyro.prng_key()
     if key is None:
         msg = "the in-sample predictive draws observations and needs an active seed handler"
@@ -300,18 +339,21 @@ def state_space_series(
     in_axes = (0, None if u is None else 0, 0, 0)
     keys = random.split(key, h.t_obs)
     y_in_sample = jax.vmap(emit, in_axes=in_axes)(x, u, jnp.asarray(grid[: h.t_obs]), keys)
+    numpyro.deterministic("obs", y_in_sample)
     return StateSpaceResult(y_future=empty_y, x_future=empty_x, y_in_sample=y_in_sample)
 ```
 
 Why each non-obvious line is there:
 
-- `_time_grid` returns NumPy and `as_grid` converts per conditioner: the `Filter`/`Smoother` rollout needs host constants (even `jnp.asarray` of a NumPy grid is staged under the jitted driver and fails, A.6), the `LatentPathBuilder` needs jax arrays (A.8). The grids go through an untyped keyword dict because dsx annotates them as `jax.Array` while accepting array-likes; `ty` type-checks the notebooks in this repository.
+- `_handler_stack` normalizes one handler or a sequence to a tuple and validates it: exactly one conditioning handler, first. dsx handlers are entered outermost first (`with Simulator, Smoother, Discretizer`), and a `Discretizer` must be inside the conditioner because it rewrites the dynamics and forwards outward; a `Discretizer` first would hand continuous dynamics to a discrete smoother.
+- `_time_grid` returns NumPy and `as_grid` converts per stack: the `Filter`/`Smoother` rollout needs host constants (even `jnp.asarray` of a NumPy grid is staged under the jitted driver and fails, A.6), the `LatentPathBuilder` needs jax arrays (A.8). The grids go through an untyped keyword dict because dsx annotates them as `jax.Array` while accepting array-likes; `ty` type-checks the notebooks in this repository.
 - The inner `numpyro.handlers.trace()` in the forecast branch: `dsx.sample` returns the innermost handler's result, the conditioner's; the simulator's rollout reaches the model only through the sites it registers. An inner trace records those sites and lets them continue up the handler stack, so the outer `Predictive` trace still sees them (A.2).
 - `predict_times` starting at `t_obs - 1`: the anchor semantics were measured, not assumed. Without the anchor, the first forecast row reproduces the conditioned state at `t_obs - 1` instead of stepping to `t_obs`, which is an off-by-one that the marginal variances expose (A.1). The same anchor holds for the builder's rollout, which starts from the final state of the path (A.8).
-- A fresh `Simulator` per call: `Simulator` caches the concrete backend it resolves on its instance; a fresh instance per model execution keeps the block free of shared mutable state under `vmap`. The conditioner, by contrast, is deliberately shared (Section 6.1).
+- A fresh `Simulator` per call: `Simulator` caches the concrete backend it resolves on its instance; a fresh instance per model execution keeps the block free of shared mutable state under `vmap`. The conditioning handlers, by contrast, are deliberately shared (Section 6.1).
 - `_in_sample_states` rebuilds one batched `MultivariateNormal` from the per-time means and covariances rather than stacking the distribution objects with `jax.tree.map`: NumPyro distributions keep their `batch_shape` as static metadata through flattening, so a stacked object would sample one noise vector for all steps.
 - Observations are sampled per step with `jax.vmap` over per-step keys instead of asking the observation model for one batched distribution, for the same reason.
 - `y_future = ...[0, 1:, :]`: drop the `n_simulations` axis (always 1; the posterior sample axis is nf's) and the anchor row.
+- `numpyro.deterministic("forecast", ...)` and `numpyro.deterministic("obs", ...)` inside the block: nf's drivers read those two names, the block owns the likelihood, and a model has one block call, as it has one `predict` call.
 
 ### 6.3 Models built on the block
 
@@ -329,7 +371,7 @@ def local_level_dynamics(q: Array, r: Array) -> DynamicalModel:
     )
 ```
 
-This is the local level model $x_t = x_{t-1} + w_t$, $w_t \sim \text{Normal}(0, q)$, $y_t = x_t + v_t$, $v_t \sim \text{Normal}(0, r)$, with $q$ and $r$ standard deviations squared into dsx's covariance arrays. The model function closes over the conditioner and reads the series from the covariates:
+This is the local level model $x_t = x_{t-1} + w_t$, $w_t \sim \text{Normal}(0, q)$, $y_t = x_t + v_t$, $v_t \sim \text{Normal}(0, r)$, with $q$ and $r$ standard deviations squared into dsx's covariance arrays. The model function closes over the conditioner and reads the series from the covariates; the block registers the sites, so the model is the horizon, the parameters and one call:
 
 ```python
 conditioner = Smoother(smoother_config=KFSmootherConfig(filter_source="cd_dynamax"))
@@ -340,11 +382,7 @@ def local_level(covariates: Array, data: Array | None = None) -> None:
     y = covariates[..., : h.t_obs, :]  # the series doubles as the covariate
     q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))  # state noise scale
     r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))  # observation noise scale
-    result = state_space_series(h, "f", y, local_level_dynamics(q, r), conditioner=conditioner)
-    if h.future > 0:
-        numpyro.deterministic("forecast", result.y_future)
-    elif h.data is None:
-        numpyro.deterministic("obs", result.y_in_sample)
+    state_space_series(h, "f", y, local_level_dynamics(q, r), conditioner=conditioner)
 ```
 
 Replacing the conditioner by `Filter(filter_config=KFConfig())` or `LatentPathBuilder()` changes nothing else. The same generative process in nf's direct form is `innovations` plus `jnp.cumsum` plus `predict`, and the three fits agree (A.4, A.8).
@@ -373,13 +411,9 @@ def seasonal_level(covariates: Array, data: Array | None = None) -> None:
     beta = jnp.asarray(
         numpyro.sample("beta", dist.Normal(0.0, 1.0).expand([controls.shape[-1]]).to_event(1))
     )
-    result = state_space_series(
+    state_space_series(
         h, "f", y, seasonal_level_dynamics(q, r, beta), conditioner=conditioner, controls=controls
     )
-    if h.future > 0:
-        numpyro.deterministic("forecast", result.y_future)
-    elif h.data is None:
-        numpyro.deterministic("obs", result.y_in_sample)
 ```
 
 `LTI_discrete` infers `control_dim` from `D` when `B` is `None` since dynestyx#361; on dynestyx 0.5.0 the same model needs the explicit `DynamicalModel(..., control_dim=k)` constructor (Section 10, item 7).
@@ -396,6 +430,37 @@ def ar1_dynamics(phi: Array, sigma: Array) -> DynamicalModel:
 ```
 
 Under a `LatentPathBuilder` this model has no latent site at all (the path is the data), its factor is the exact likelihood $\sum_t \log p(y_t \mid y_{t-1}, \theta)$, its rollout is an AR(1) forecast and its in-sample predictive returns the data (A.9).
+
+A continuous-time model on irregularly spaced observations, a mean-reverting (Ornstein-Uhlenbeck) level $dx_t = -\theta x_t \, dt + \sigma \, dW_t$, $y_t = x_t + v_t$, is where the block reaches beyond what nf's index-based blocks can express. Its cheap exact form is the two-handler stack of Section 8:
+
+```python
+def ou_dynamics(theta: Array, sigma: Array, r: Array) -> DynamicalModel:
+    return dsx.LTI_continuous(
+        A=-theta * jnp.eye(1),
+        L=sigma * jnp.eye(1),
+        H=jnp.eye(1),
+        R=jnp.eye(1) * r**2,
+        initial_mean=jnp.zeros(1),
+        initial_cov=jnp.eye(1) * 4.0,
+    )
+
+
+conditioner = (
+    Smoother(smoother_config=KFSmootherConfig(filter_source="cuthbert")),
+    Discretizer(ExactAffineConfig(covariance_jitter=1e-6)),
+)
+
+
+def ou_level(covariates: Array, data: Array | None = None) -> None:
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :]
+    theta = jnp.asarray(numpyro.sample("theta", dist.LogNormal(-1.5, 0.7)))
+    sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
+    r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+    state_space_series(h, "f", y, ou_dynamics(theta, sigma, r), conditioner=conditioner, times=times)
+```
+
+with `times` the irregular observation grid closed over by the model. The same model under `Smoother(smoother_config=ContinuousTimeKFSmootherConfig())` alone, without the `Discretizer`, is the continuous-discrete Kalman smoother: the same posterior at 50 times the cost per gradient (A.11). The robustness caveats of the discretized form are in Section 8.
 
 ## 7. Inference and drivers matrix
 
@@ -420,6 +485,7 @@ A posterior from `mcmc.get_samples()` or `draw_posterior` also carries dsx's det
 - nf's `covariates` array spans the full horizon and is the only channel through which anything reaches the model at prediction time. Two things travel in it: the observed series (read back as `y` over the first `t_obs` rows; only those rows are ever read) and the exogenous inputs (forwarded as `controls` over the full horizon). The block maps the controls to `ctrl_values` on the full time grid, which satisfies the simulator's rule that `ctrl_times` contain every prediction time exactly.
 - Regression enters through `D` (observation) or `B` (state) of the linear-Gaussian classes, or through the `u` argument of a callable transition or observation model. Seasonality is either a regression on `fourier_features` covariates (`D`), or a seasonal state block in `A` with `H` selecting it (no covariates needed).
 - `times` carries the observation times, regular or not. Time-varying linear-Gaussian parameters (callables of `t`) are supported by `KFConfig(filter_source="cuthbert")` only; continuous-time dynamics read the actual intervals from the grid.
+- **Continuous-time models on irregular grids** are the case dsx supports and nf's index-based blocks cannot express at all, and the block carries them unchanged with `times` set to the irregular grid (A.11). Two conditioners are exact for a linear SDE. `Smoother(ContinuousTimeKFSmootherConfig())` is the continuous-discrete Kalman smoother, which solves the moment ODEs on every interval: correct, and about 80 ms per gradient at $T = 120$, so a NUTS run of 600 iterations took 521 s. `(Smoother(KFSmootherConfig(filter_source="cuthbert")), Discretizer(ExactAffineConfig(...)))` discretizes the SDE exactly on the observation grid (interval-dependent $A_k = e^{A \Delta t_k}$ and $Q_k$, which is why the `cuthbert` backend is required) and runs the discrete smoother: the same log likelihood to three decimals at 1.4 ms per gradient, and the same NUTS run in 28 s. The discretized form has three robustness requirements that the continuous-discrete form does not: dsx's runtime checks in the discretizer raise an exception on a non-finite transition covariance, which aborts HMC on the extreme proposals of its step-size search instead of counting a divergence, so `EQX_ON_ERROR=nan` must be set in the environment before dynestyx (equinox) is imported; `ExactAffineConfig(covariance_jitter=1e-6)` guards the singular covariances of tiny intervals; and the prior must keep $\theta$ away from 0, where $\sigma^2 (1 - e^{-2\theta \Delta t}) / (2 \theta)$ is a $0/0$ limit (a `LogNormal` prior on a mean-reversion rate, as in Section 6.3). Without all three the sampler either aborts or collapses its step size and runs at the maximum tree depth (A.11). These are the reasons the example notebook does not include a continuous-time example yet (Section 14) and the first items for the dsx maintainers in Section 17.
 - In a `backtest` the block sees `times[:t_obs]` of the grid the model closes over, so the window is implicitly assumed to start at the first entry. This is exact for expanding windows and for time-invariant dynamics on any window; a rolling window (`t0 > 0`) with absolute-time-dependent parameters or irregular spacing cannot be expressed today, because `backtest`'s `model_fn()` receives no window offset. Listed as an nf follow-up (Section 17).
 
 ## 9. Mapping nf models to dsx dynamics
@@ -440,7 +506,7 @@ Models whose latent path nf **filters deterministically** (`ssoe`: ARMA, exponen
 | AR(p) on the observations (`ssoe`) | lag-window state, `DiracIdentityObservation` | `LatentPathBuilder` (exact, no latent site) | A.9 for `p = 1` |
 | `markov_series` with a nonlinear Gaussian transition | callable `state_evolution(x, u, t_now, t_next)` returning a Gaussian | `EnKFConfig`, `UKFConfig`, `EKFConfig` (approximate, pseudo-marginal); `LatentPathBuilder` (explicit) | |
 | `markov_series` + count/heavy-tailed `predict` link | custom `ObservationModel` returning `Poisson`, `NegativeBinomial`, `StudentT` | `PFConfig` (approximate, pseudo-marginal); `LatentPathBuilder` (explicit) | |
-| Continuous-time latent (irregular sampling) | `LTI_continuous`, `AffineDrift` + `Diffusion` | `ContinuousTimeKFConfig`, `ContinuousTimeEnKFConfig`; `Discretizer` + `LatentPathBuilder` | `times` carries the intervals; roadmap |
+| Continuous-time latent (irregular sampling) | `LTI_continuous`, `AffineDrift` + `Diffusion` | `Smoother(ContinuousTimeKFSmootherConfig())` (exact, slow); `(Smoother(KFSmootherConfig(filter_source="cuthbert")), Discretizer(ExactAffineConfig()))` (exact, 50x cheaper, robustness caveats in Section 8); `Discretizer` + `LatentPathBuilder` for nonlinear SDEs | `times` carries the intervals; A.11 |
 | Missing observations | `NaN` in `y` | `KFConfig(filter_source="cuthbert")`; `LatentPathBuilder(missing_observation_strategy=...)` | nf models have no missing-data story of their own; roadmap |
 
 ## 10. Pinned dynestyx facts
@@ -460,6 +526,9 @@ Everything the block depends on, with where it was checked:
 11. `LatentPathBuilder` registers one sample site `f_state_path_params` of shape `(t_obs, state)` with an improper-uniform prior whose forward simulation seeds the sampler, the factor `f_joint_log_prob_factor` (the joint state-observation density) and the deterministics `f_state_path`, `f_state_path_times`, `f_state_path_param_times`, `f_joint_log_prob`. Under `Predictive` the substituted site reconstructs the posterior path; a `Simulator` outside the builder rolls out from the final state only. With `DiracIdentityObservation` and no missing data the site has shape `(0,)` and the path is the data (A.8, A.9).
 12. `LatentPathBuilder` needs a concrete observation layout: it computes one eagerly the first time it sees concrete `obs_values` and caches it per `(name, obs_values.shape)`; under a `jit` with traced observations (nf's `forecast()` and `predict_in_sample()` drivers) it can only reuse a cached layout, so the model must reuse the instance that ran the fit. A fresh `LatentPathBuilder()` inside the model raises `needs a fixed observation missingness pattern, but cannot infer one from traced obs_values` at forecast time (A.8).
 13. Time grids: the `Filter`/`Smoother` rollout does its segment bookkeeping on the host and needs concrete (NumPy) `obs_times`/`predict_times` under `jit`; the `LatentPathBuilder`'s forward sampler and `dsx.simulate` index the grid inside a `lax.scan` and need jax arrays (A.6, A.8).
+14. `Discretizer` is an innermost handler: it rewrites a continuous-time `DynamicalModel` into a discrete transition (exact Gaussian discretization for an affine SDE with `ExactAffineConfig`, the default for that case) and forwards outward, so the composition is `with Smoother(...), Discretizer(...)`. The discretized transition has interval-dependent parameters, which the `cd_dynamax` backend rejects (`requires constant (array-valued) parameters`) and the `cuthbert` backend accepts. Its log likelihood equals the continuous-discrete Kalman smoother's to three decimals at $T = 120$ on an irregular grid (A.11).
+15. dsx guards the discretizer with `equinox.error_if` checks (`Transition covariance is singular or indefinite`, `Discretization produced a non-finite transition covariance`). Under NUTS these raise on the extreme proposals of the step-size search even when the density and its gradient are finite on the whole parameter range of interest; `EQX_ON_ERROR=nan`, read by equinox at import, turns them into NaN densities that NumPyro counts as divergences (A.11).
+16. In-window prediction: `Smoother` (and `LatentPathBuilder`) validate `predict_times >= max(obs_times)` and reject anything earlier with `in-window smoothing predictions are not implemented yet. Please use Filter for in-window predictions for now`; `Filter` accepts in-window `predict_times` and starts each such segment from the filtering distribution at the preceding observation time (A.1 used one such point as the anchor).
 
 ## 11. Performance
 
@@ -482,11 +551,14 @@ The committed notebook reproduces the picture with the fair baseline (`LocScaleR
 
 Recommendations that follow: a `Smoother` with `KFSmootherConfig(filter_source="cd_dynamax")` by default for linear-Gaussian models (same cost as the filter, and the in-sample predictive comes with it); `filter_source="cuthbert"` when `NaN` observations or callable time-varying parameters are needed, or on a GPU with long series; `LatentPathBuilder` when the path itself is the object of interest, the observation model is non-Gaussian, or the dynamics are discretized continuous-time; `LocScaleReparam` on the direct model in any comparison.
 
+Continuous-time (A.11): Ornstein-Uhlenbeck level on 144 irregularly spaced observations, $T = 120$. Per gradient, `Smoother(ContinuousTimeKFSmootherConfig())` 78 to 96 ms versus `(Smoother(KFSmootherConfig(filter_source="cuthbert")), Discretizer(ExactAffineConfig()))` 1.4 to 1.9 ms at identical log likelihoods. NUTS, one chain of 300 plus 300: 521 s versus 28 s (the latter with `EQX_ON_ERROR=nan`, a covariance jitter and a `LogNormal` prior on $\theta$). Forecasting from either: `(draws, 24, 1)` with the marginal variance growing with the actual gap lengths.
+
 ## 12. Boundaries and non-goals
 
-- **In-window prediction.** dsx's `Smoother` and `LatentPathBuilder` support `predict_times >= max(obs_times)` only ([dynestyx#272](https://github.com/BasisResearch/dynestyx/issues/272)); the block never asks for less, and the in-sample predictive comes from the conditioned distributions, not from a rollout.
+- **In-window prediction.** dsx's `Smoother` and `LatentPathBuilder` support `predict_times >= max(obs_times)` only ([dynestyx#272](https://github.com/BasisResearch/dynestyx/issues/272)); the block never asks for less, and the in-sample predictive comes from the conditioned distributions, not from a rollout. The target form of that mode is the same `Simulator` ∘ stack composition as forecasting, with `predict_times = times[:t_obs]`: dsx supports it for `Filter` today (yielding the filtering predictive, a different quantity) and will for the other two once #272 lands, at which point `_in_sample_states` and the block's own `{name}_smoothed_states` site disappear.
 - **Marginal, not joint, in-sample predictive.** The in-sample draws are per-time marginals of the smoothing predictive; a functional of the whole path (a running maximum, a turning-point count) needs backward simulation, which the block does not do. nf's direct models produce joint path draws; for per-time scores and bands the two coincide.
 - **A `Filter` conditioner has no in-sample predictive.** The block raises; use a `Smoother` (same fit) or read `f_filtered_states_*` for the filtering view.
+- **Continuous-time models are supported but not showcased.** The block carries them (Section 8, A.11); the cheap exact form needs three environment-level workarounds today, so the example notebook stays with discrete-time models until dsx's discretizer tolerates HMC exploration.
 - **Absolute time in rolling windows** (Section 8): expanding windows only, or time-invariant dynamics.
 - **Prior predictive checks** use `dsx.simulate` (pure JAX, no NumPyro) rather than `Predictive(model)(key, covariates)`, which would hit the in-sample branch.
 - **Panels and hierarchy** (`dsx.plate`, nf batch dims to the left of time) are not addressed. dsx's plate is an effectful handler with its own batching contract for arrays and dynamics; mapping it onto nf's leftward batch dims is a separate design.
@@ -505,9 +577,9 @@ Recommendations that follow: a `Smoother` with `KFSmootherConfig(filter_source="
 
 ### v2 (proposed, after review by both maintainers)
 
-- `numpyro_forecast/contrib/dynestyx.py` with `state_space_series`, `StateSpaceResult` and `StateSpaceConditioner`, lazily importing dsx through `numpyro_forecast.optional.require("dynestyx", extra="dynestyx")` on first call (the package import must stay free of dsx, matching the `base-import` CI leg's invariant and `contrib/blackjax.py`), an `_api_canary("dynestyx", ["sample", "Filter", "Smoother", "LatentPathBuilder", "Simulator", "DynamicalModel", "simulate"])` tripwire, and signatures that never name dsx types (`dynamics: object`, `conditioner: object`, as `contrib/blackjax.py` does for blackjax, because the jaxtyping/beartype import hook resolves annotations at call time and a `TYPE_CHECKING`-only import would not resolve). The `isinstance` dispatch in `_in_sample_states` then goes through the lazily imported module.
-- `great-docs.yml`: `contrib.dynestyx.state_space_series`, `contrib.dynestyx.StateSpaceResult` and `contrib.dynestyx.StateSpaceConditioner` under "Extensions (contrib)".
-- `tests/test_contrib_dynestyx.py` guarded by `pytest.importorskip("dynestyx")`: the anchor invariant (first horizon row has the conditioned variance plus one transition) for all three conditioners, the `Filter` in-sample error, `forecast()` and `predict_in_sample()` shapes under `batch_size`/`parallel=False` for all three, agreement of the KF marginal likelihood with a direct `MultivariateNormal` log density on a tiny series, the irregular `times` pass-through, and one `backtest` window with `eval_train=True`. Whether CI installs the extra for these (a separate job) or they stay skip-by-default is an open question (Section 17).
+- `numpyro_forecast/contrib/dynestyx.py` with `state_space_series`, `StateSpaceResult` and `StateSpaceHandler`, lazily importing dsx through `numpyro_forecast.optional.require("dynestyx", extra="dynestyx")` on first call (the package import must stay free of dsx, matching the `base-import` CI leg's invariant and `contrib/blackjax.py`), an `_api_canary("dynestyx", ["sample", "Filter", "Smoother", "LatentPathBuilder", "Discretizer", "Simulator", "DynamicalModel", "simulate"])` tripwire, and signatures that never name dsx types (`dynamics: object`, `conditioner: object`, as `contrib/blackjax.py` does for blackjax, because the jaxtyping/beartype import hook resolves annotations at call time and a `TYPE_CHECKING`-only import would not resolve). The `isinstance` dispatch in `_in_sample_states` then goes through the lazily imported module.
+- `great-docs.yml`: `contrib.dynestyx.state_space_series`, `contrib.dynestyx.StateSpaceResult` and `contrib.dynestyx.StateSpaceHandler` under "Extensions (contrib)".
+- `tests/test_contrib_dynestyx.py` guarded by `pytest.importorskip("dynestyx")`: the anchor invariant (first horizon row has the conditioned variance plus one transition) for all three conditioners, the `Filter` in-sample error, `forecast()` and `predict_in_sample()` shapes under `batch_size`/`parallel=False` for all three, agreement of the KF marginal likelihood with a direct `MultivariateNormal` log density on a tiny series, the irregular `times` pass-through, the rejection of malformed handler stacks, the `(Smoother, Discretizer)` stack on a continuous-time model, and one `backtest` window with `eval_train=True`. Whether CI installs the extra for these (a separate job) or they stay skip-by-default is an open question (Section 17).
 - The notebook then imports the block from the package and drops its local definition.
 
 ## 14. Example scaffolding
@@ -522,7 +594,7 @@ Notebook outline (jupytext `py:percent`; conventions per `AGENTS.md`: `descripti
 
 1. Title and motivation: the two issues, what each library is, the seam, the three conditioners, what the reader will see.
 2. Setup: imports, `az.style`, `rng_key`, versions printed.
-3. The block: `StateSpaceResult`, `state_space_series`, a short explanation of the conditioner argument, the series-in-covariates contract, the anchor and the time grids.
+3. The block: `StateSpaceResult`, `state_space_series`, a short explanation of the conditioner stack, the series-in-covariates contract, the sites the block registers, the anchor and the time grids.
 4. Example 1 data (`dsx.simulate`), plot.
 5. Prior predictive check with `dsx.simulate`.
 6. The three models; fit all with NUTS; comparison table; posterior overlays.
@@ -530,7 +602,7 @@ Notebook outline (jupytext `py:percent`; conventions per `AGENTS.md`: `descripti
 8. In-sample: `to_datatree` for the direct and the smoothed models, `plot_lm` bands, filtered-versus-smoothed level.
 9. Example 2 data with seasonality; the regression model; SVI fit; forecast plot.
 10. `backtest` with NUTS closures and `eval_train=True`; per-window CRPS (in and out of sample) and coverage plots; `results_to_dataframe`.
-11. Takeaways, boundaries (Section 12 in two paragraphs), link to this document.
+11. Takeaways, boundaries (Section 12 in two paragraphs, including why there is no continuous-time example yet), link to this document.
 
 File map:
 
@@ -561,6 +633,7 @@ README.md                                   # extras sentence
 5. **Approximate default configs.** `Filter()`/`Smoother()` with no config silently use an ensemble/extended Kalman method on a linear-Gaussian model. Mitigation: every example passes the KF configs explicitly and the docstring says so; consider a `KFConfig` default when `dynamics` is linear-Gaussian in v2.
 6. **Dependency weight.** dsx's transitive closure includes `tfp-nightly`. Mitigation: a separate extra outside `all`; no CI job depends on it in v1.
 7. **Unreleased fix.** The `D`-only `LTI_discrete` shortcut needs dynestyx#361. Mitigation: the notebook states it and shows the 0.5.0 fallback; the pin is bumped on release.
+8. **Discretized continuous-time models under HMC.** The exact discretization is 50 times cheaper than the continuous-discrete smoother but aborts or stalls NUTS without `EQX_ON_ERROR=nan`, a covariance jitter and a prior bounded away from $\theta = 0$ (Section 8). Mitigation: documented, not showcased; raised with the dsx maintainers (Section 17).
 
 ## 17. Follow-ups and questions
 
@@ -569,11 +642,14 @@ For `numpyro_forecast`:
 - Promote the block to `contrib/dynestyx.py` (Section 13, v2) once the dsx maintainers have reviewed the composition.
 - A window offset for `backtest`'s model factory (or a documented closure pattern) so rolling windows can carry absolute `times`.
 - Panel support through `dsx.plate`.
-- A `Discretizer` example: an SDE latent discretized on the `times` grid under `LatentPathBuilder`, the case the dsx maintainers single out as their most distinctive.
+- A continuous-time example (Section 6.3's Ornstein-Uhlenbeck level on irregular times, or an SDE latent under `Discretizer` + `LatentPathBuilder`) once the discretizer's runtime checks cooperate with HMC; the case the dsx maintainers single out as their most distinctive.
+- A `Horizon` predictive mode set by the drivers (`predict_in_sample`/`to_datatree` passing `data` plus a mode instead of `data=None`) would remove the series-in-covariates redundancy for `ssoe` and for this block alike.
+- `to_datatree(time_coord=...)` rejects a NumPy array at its beartype check (`Sequence[Any]`); accepting array-likes is needed for irregular time coordinates (A.11).
 
 For `dynestyx` (to raise upstream, wording to be agreed):
 
-- In-window prediction under `Smoother`/`LatentPathBuilder` (dynestyx#272) would let the block ask for `predict_times` inside the window too.
+- Inference-time runtime checks (`equinox.error_if` in the discretizer) should propagate NaN rather than raise, so HMC counts a divergence instead of aborting; today this needs `EQX_ON_ERROR=nan` (Section 8, A.11). Relatedly, the exact-affine covariance is a $0/0$ limit at $\theta \to 0$; a stable formula there would remove the prior constraint.
+- In-window prediction under `Smoother`/`LatentPathBuilder` (dynestyx#272) would let the block's in-sample mode be the same `Simulator` composition as its forecast mode (Section 12) and delete its hand-rolled draw.
 - Trace-safe segment bookkeeping in the `Filter`/`Smoother` rollout (or a blessed pure-JAX rollout entry point, Approach C) would remove the NumPy-grid requirement and allow `times` to come from a covariate column.
 - A documented way to obtain the simulator's rollout from `dsx.sample`'s return value when a `Simulator` wraps a conditioner (today only the sites carry it).
 - The anchor semantics of posterior rollouts deserve a line in the `DiscreteTimeSimulator` docstring.
@@ -639,3 +715,11 @@ AR(1) with $\phi = 0.7$, $\sigma = 0.5$, $T = 120$, the Section 6.3 `ar1_dynamic
 ### A.10 Irregular times, `eval_train`, smoother gradient cost
 
 `Filter` block with `times` drawn as a cumulative sum of uniform $[0.5, 1.5]$ increments over 144 steps: NUTS 200 plus 200 and `forecast` of shape `(200, 24, 1)`, all finite. `backtest` on the `Smoother` model with NUTS closures for both `forecast_fn` and `in_sample_fn`, `eval_train=True`, `min_train_window=100`, `test_window=12`, `stride=22`: two folds at split points 100 and 122 with out-of-sample CRPS 0.618 and 0.353 and in-sample CRPS 0.233 and 0.238. Per gradient of the log density: `Filter(KFConfig())` 0.17 ms, `Smoother(KFSmootherConfig(filter_source="cd_dynamax"))` 0.17 ms, both at log likelihood $-124.36$.
+
+### A.11 Continuous time on irregular observations
+
+Ornstein-Uhlenbeck level $dx = -\theta x \, dt + \sigma \, dW$, $y_t = x_t + v_t$, $\theta = 0.15$, $\sigma = 0.6$, $r = 0.3$, simulated with `dsx.simulate` on 144 times whose gaps are uniform in $[0.3, 2.5]$; $T = 120$ observed, 24 held out; `times` passed to the block. Under `Smoother(ContinuousTimeKFSmootherConfig())`: NUTS 300 plus 300 in 521 s, posterior means $\theta = 0.229$, $\sigma = 0.612$, $r = 0.164$; `forecast` `(300, 24, 1)` in 5.2 s with first-row variances 0.366, 0.590, 0.786, 0.853 for gaps 1.06, 1.25, 2.43, 1.54; `predict_in_sample` `(300, 120, 1)`; `to_datatree(..., time_coord=times)` rejected the NumPy array (`Sequence[Any]`) and accepted `times.tolist()`. Under `(Smoother(KFSmootherConfig(filter_source="cuthbert")), Discretizer(ExactAffineConfig(covariance_jitter=1e-6)))`: log likelihood at the true parameters $-117.782$ against $-117.782$ for the continuous-discrete smoother; per gradient 1.4 to 1.9 ms against 78 to 96 ms; with `KFSmootherConfig(filter_source="cd_dynamax")` the discretized model raised `requires constant (array-valued) parameters. Received callable field(s): A, cov`. NUTS on the discretized model: with dsx's default error handling it aborted with `Transition covariance is singular or indefinite` (no jitter) and then `Discretization produced a non-finite transition covariance` (with jitter, with a `HalfNormal` or a `LogNormal` prior on $\theta$, in `float32` or `float64`), although the log density and its gradient were finite at every point of a grid with $\theta \in [10^{-4}, 100]$ and $\sigma \in [10^{-3}, 10]$; with `EQX_ON_ERROR=nan`, the jitter and the `LogNormal` prior it ran 300 plus 300 iterations in 28 s to $\theta = 0.173$, $\sigma = 0.666$, $r = 0.173$, forecast `(300, 24, 1)` with variances 0.532, 0.748, 1.115, 1.088 for the same gaps, `predict_in_sample` `(300, 120, 1)`. Without the jitter, or in `float32`, a 2-chain run of the same model made no progress in 10 minutes: the NaN densities are counted as divergences, the step size collapses and every iteration runs to the maximum tree depth.
+
+### A.12 Handler stacks
+
+The Section 6.2 block with `conditioner` given as a sequence: `(Discretizer(), Smoother())` raised `the Filter, Smoother or LatentPathBuilder must come first (outermost) in conditioner`; `(Filter(), Smoother())` and `()` raised `conditioner needs exactly one Filter, Smoother or LatentPathBuilder`. Single handlers behaved as in A.7 and A.8 with the sites registered by the block: `Filter` `forecast` `(200, 24, 1)` and the in-sample `ValueError`; `Smoother` and `LatentPathBuilder` `forecast` `(200, 24, 1)` and `predict_in_sample` `(200, 120, 1)`.
