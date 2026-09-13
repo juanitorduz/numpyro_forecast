@@ -172,7 +172,9 @@ def _in_sample_states(
     if isinstance(conditioner, Smoother):
         dists = result.dists
         if not dists or not isinstance(dists[0], dist.MultivariateNormal):
-            msg = "the in-sample predictive needs a Gaussian smoother (per-time MultivariateNormal)"
+            msg = (
+                "the in-sample predictive needs a Gaussian smoother (per-time MultivariateNormal)"
+            )
             raise TypeError(msg)
         mean = jnp.stack([d.mean for d in dists])
         cov = jnp.stack([d.covariance_matrix for d in dists])
