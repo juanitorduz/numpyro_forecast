@@ -52,7 +52,7 @@ blackjax = [
 ]
 dev = [
     "graphviz>=0.20",
-    "matplotlib>=3.8,<3.11",
+    "matplotlib>=3.8,<3.12",
     "ipykernel>=6.29",
     "jupytext>=1.16",
     "nbmake>=1.5",
