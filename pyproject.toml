@@ -71,6 +71,9 @@ dev = [
 ]
 docs = [
     "great-docs==0.17.0",
+    # Only the state space example notebook imports dynestyx, but `ty` type-checks
+    # the notebooks, so the import must resolve in the `--extra all` environment.
+    "dynestyx>=0.5.1",
 ]
 cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
