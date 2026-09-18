@@ -98,8 +98,8 @@ Behavior:
 
 - Training (`h.data` present, `h.future == 0`): run `dsx.sample` under the stack; the factor (and the path site, for the builder) enters the trace; return a result whose time axes have size 0.
 - Forecasting (`h.future > 0`): run `dsx.sample` under `Simulator(simulator_config, n_simulations=1)` outside the stack with `predict_times = times[t_obs - 1:duration]`, read `{name}_predicted_observations` and `{name}_predicted_states` from an inner trace, drop the simulation axis and the anchor row, register `y_future` of shape `(future, obs)` as the `"forecast"` deterministic site, and return it with `x_future` of shape `(future, state)`.
-- In-sample predictive (`h.data is None`, `h.future == 0`): run `dsx.sample` under the stack, take one draw of every in-window state (a `Smoother`: sample `{name}_smoothed_states` from the per-time Gaussian marginals in `ConditionedResult.dists`; a `LatentPathBuilder`: the reconstructed `state_path`, which under `Predictive` is the posterior path), sample one observation per step from `dynamics.observation_model(x_t, u_t, t)` with per-step keys, register the result as the `"obs"` deterministic site and return it as `y_in_sample` of shape `(t_obs, obs)`. This is the smoothing predictive: with $x_t \sim p(x_t \mid y_{1:T}, \theta)$ and $y_t^{\text{rep}} \sim p(y \mid x_t, \theta)$ the draw is from $p(y_t^{\text{rep}} \mid y_{1:T}, \theta)$, the per-step replicate that nf's direct models produce when `predict_in_sample` replays their sampled path. It is not a prior predictive, because the window reaches the model through `y` even though `data` is `None`; a prior predictive check uses `dsx.simulate` instead (below). A `Filter` raises with a message naming the two conditioners that work: the filtering distribution $p(x_t \mid y_{1:t})$ is not the quantity `predict_in_sample` means. The draws are per-time marginals of the smoothing predictive; the joint structure of the path across time is not reproduced (no backward simulation), which only matters for path-wise functionals such as the distribution of a running maximum. This mode is a shim: its target form is the same `Simulator` ∘ stack composition as forecasting with `predict_times = times[:t_obs]`, which dsx supports for `Filter` today and rejects for `Smoother` and `LatentPathBuilder` until in-window prediction lands (Section 12, A.12).
-- The block owns the likelihood (the factor), so, like `predict` and unlike `ssoe`, it registers nf's two sites itself: `"forecast"` while forecasting and `"obs"` in the in-sample mode. A model therefore has one `state_space_series` call, exactly as it has one `predict` call, and cannot forget a site. The returned `StateSpaceResult` is for the states and for custom use.
+- In-sample predictive (`h.data is None`, `h.future == 0`): run `dsx.sample` under the stack, take one draw of every in-window state (a `Smoother`: sample `{name}_smoothed_states` from the per-time Gaussian marginals in `ConditionedResult.dists`; a `LatentPathBuilder`: the reconstructed `state_path`, which under `Predictive` is the posterior path), sample one observation per step from `dynamics.observation_model(x_t, u_t, t)` with per-step keys, register the result as the `"obs"` deterministic site and return it as `y_in_sample` of shape `(t_obs, obs)` together with the state draw as `x_in_sample` of shape `(t_obs, state)`. This is the smoothing predictive: with $x_t \sim p(x_t \mid y_{1:T}, \theta)$ and $y_t^{\text{rep}} \sim p(y \mid x_t, \theta)$ the draw is from $p(y_t^{\text{rep}} \mid y_{1:T}, \theta)$, the per-step replicate that nf's direct models produce when `predict_in_sample` replays their sampled path. It is not a prior predictive, because the window reaches the model through `y` even though `data` is `None`; a prior predictive check uses `dsx.simulate` instead (below). A `Filter` raises with a message naming the two conditioners that work: the filtering distribution $p(x_t \mid y_{1:t})$ is not the quantity `predict_in_sample` means. The draws are per-time marginals of the smoothing predictive; the joint structure of the path across time is not reproduced (no backward simulation), which only matters for path-wise functionals such as the distribution of a running maximum. This mode is a shim: its target form is the same `Simulator` ∘ stack composition as forecasting with `predict_times = times[:t_obs]`, which dsx supports for `Filter` today and rejects for `Smoother` and `LatentPathBuilder` until in-window prediction lands (Section 12, A.12).
+- The block owns the likelihood (the factor), so, like `predict` and unlike `ssoe`, it registers nf's two sites itself: `"forecast"` while forecasting and `"obs"` in the in-sample mode. A model therefore has one `state_space_series` call, exactly as it has one `predict` call, and cannot forget a site. The returned `StateSpaceResult` is about the states, which the sites do not carry in a usable form: `x_future` over the horizon and `x_in_sample` over the window (each filled in its own mode, size-0 otherwise), so a model that wants its latent level registers `numpyro.deterministic("level", result.x_in_sample)` when `h.data is None` and reads it with `Predictive(model, posterior, return_sites=["level"])`, for any conditioner that serves the in-sample mode (Section 6.3). `y_future` and `y_in_sample` duplicate the two sites for convenience. The shapes carry no batch dims, since panels are out of scope (Section 12).
 - Prior predictive checks use `dsx.simulate(dynamics, rng_key=..., predict_times=..., n_simulations=...)`, the pure-JAX generator, directly (it needs jax time grids, A.6).
 
 ### 6.2 Reference implementation
@@ -136,6 +136,11 @@ _CONDITIONING_HANDLERS = (Filter, Smoother, LatentPathBuilder)
 class StateSpaceResult:
     """Draws produced by `state_space_series` (size-0 time axes when not applicable).
 
+    Each field is filled in the mode that produces it and has a size-0 time axis
+    otherwise: the ``future`` fields while forecasting, the ``in_sample`` fields
+    when the model is called without data, none while training. The shapes carry
+    no batch dims (panels are not supported).
+
     Attributes
     ----------
     y_future
@@ -144,13 +149,18 @@ class StateSpaceResult:
     x_future
         Latent state draws over the horizon, shape ``(future, state)``.
     y_in_sample
-        One draw of the in-sample predictive, shape ``(t_obs, obs)``; filled only
-        when the model is called without data, and then registered as ``"obs"``.
+        One draw of the in-sample predictive, shape ``(t_obs, obs)``; also
+        registered as the ``"obs"`` site.
+    x_in_sample
+        The in-window state draw behind ``y_in_sample``, shape ``(t_obs, state)``:
+        the conditioner's posterior over the path (the smoothing distribution, or
+        the explicit path), one draw per model call.
     """
 
     y_future: Float[Array, " future obs"]
     x_future: Float[Array, " future state"]
     y_in_sample: Float[Array, " time obs"]
+    x_in_sample: Float[Array, " time state"]
 
 
 def _handler_stack(
@@ -279,7 +289,8 @@ def state_space_series(
     Returns
     -------
     StateSpaceResult
-        ``y_future``, ``x_future`` and ``y_in_sample``.
+        ``y_future`` and ``x_future`` while forecasting, ``y_in_sample`` and
+        ``x_in_sample`` when called without data, size-0 time axes otherwise.
 
     Raises
     ------
@@ -320,13 +331,17 @@ def state_space_series(
         y_future = tr[f"{name}_predicted_observations"]["value"][0, 1:, :]
         x_future = tr[f"{name}_predicted_states"]["value"][0, 1:, :]
         numpyro.deterministic("forecast", y_future)
-        return StateSpaceResult(y_future=y_future, x_future=x_future, y_in_sample=empty_y)
+        return StateSpaceResult(
+            y_future=y_future, x_future=x_future, y_in_sample=empty_y, x_in_sample=empty_x
+        )
     with ExitStack() as handlers:
         for handler in stack:
             handlers.enter_context(handler)
         result = dsx.sample(name, dynamics, obs_values=y, **kwargs)
     if h.data is not None:
-        return StateSpaceResult(y_future=empty_y, x_future=empty_x, y_in_sample=empty_y)
+        return StateSpaceResult(
+            y_future=empty_y, x_future=empty_x, y_in_sample=empty_y, x_in_sample=empty_x
+        )
     x = _in_sample_states(name, stack[0], result)
     key = numpyro.prng_key()
     if key is None:
@@ -341,7 +356,9 @@ def state_space_series(
     keys = random.split(key, h.t_obs)
     y_in_sample = jax.vmap(emit, in_axes=in_axes)(x, u, jnp.asarray(grid[: h.t_obs]), keys)
     numpyro.deterministic("obs", y_in_sample)
-    return StateSpaceResult(y_future=empty_y, x_future=empty_x, y_in_sample=y_in_sample)
+    return StateSpaceResult(
+        y_future=empty_y, x_future=empty_x, y_in_sample=y_in_sample, x_in_sample=x
+    )
 ```
 
 Why each non-obvious line is there:
@@ -386,7 +403,20 @@ def local_level(covariates: Array, data: Array | None = None) -> None:
     state_space_series(h, "f", y, local_level_dynamics(q, r), conditioner=conditioner)
 ```
 
-Replacing the conditioner by `Filter(filter_config=KFConfig())` or `LatentPathBuilder()` changes nothing else. The same generative process in nf's direct form is `innovations` plus `jnp.cumsum` plus `predict`, and the three fits agree (A.4, A.8).
+Replacing the conditioner by `Filter(filter_config=KFConfig())` or `LatentPathBuilder()` changes nothing else. The same generative process in nf's direct form is `innovations` plus `jnp.cumsum` plus `predict`, and the three fits agree (A.4, A.8). A model that wants its latent level keeps the result and registers the in-window state draw in the in-sample mode:
+
+```python
+def local_level(covariates: Array, data: Array | None = None) -> None:
+    h = Horizon.from_data(covariates, data)
+    y = covariates[..., : h.t_obs, :]
+    q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
+    r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+    result = state_space_series(h, "f", y, local_level_dynamics(q, r), conditioner=conditioner)
+    if h.data is None:
+        numpyro.deterministic("level", result.x_in_sample)
+```
+
+`Predictive(model, posterior_samples=posterior, return_sites=["level"])(key, covariates_train)` then returns one level path per posterior draw, from the smoothing distribution under a `Smoother` and the posterior path under a `LatentPathBuilder`, with no site archaeology on the conditioner's recorded outputs. The site is registered only in the in-sample mode because the other modes have no in-window draw: while training the states are marginalized (or live in the builder's own site), and while forecasting `x_future` covers the horizon only.
 
 With covariates in the observation equation, $y_t = H x_t + D u_t + v_t$, the series is the first covariate column and the regressors are the rest:
 
@@ -587,7 +617,7 @@ Continuous-time (A.11): Ornstein-Uhlenbeck level on 144 irregularly spaced obser
 
 One notebook, two examples, both synthetic so the truth is known and the exactness claims can be checked.
 
-**Example 1: local level, one process, three inference strategies.** Simulate $y_t$ from the local level model with known $q$ and $r$ ($T = 120$ training steps, 24 held out) with `dsx.simulate`. Fit nf's direct model (`innovations` + `cumsum` + `predict`, `LocScaleReparam`), the dsx model under a `LatentPathBuilder` (explicit path, built by dsx) and the dsx model under a `Smoother` (marginalized), same priors, same NUTS budget. Compare: posterior of $q$, $r$ against truth, ESS, leapfrog steps and wall time, the three forecast fans ($50\%$ and $94\%$ HDI), CRPS and coverage on the held-out window. In-sample: `to_datatree` on all three models, their in-sample predictive bands side by side (the smoothing predictive for the smoother, the posterior path plus observation noise for the builder, the replayed path plus noise for the direct model), then the latent level itself: filtered versus smoothed from the recorded sites as the pedagogy for what a `Filter` cannot serve, and the smoothed level against the builder's posterior path (`f_state_path`) and the direct model's `x0 + cumsum(drift)`, the three reconstructions of the same posterior, which the dsx maintainers asked to see on numpyro_forecast#126. Prior predictive check with `dsx.simulate`.
+**Example 1: local level, one process, three inference strategies.** Simulate $y_t$ from the local level model with known $q$ and $r$ ($T = 120$ training steps, 24 held out) with `dsx.simulate`. Fit nf's direct model (`innovations` + `cumsum` + `predict`, `LocScaleReparam`), the dsx model under a `LatentPathBuilder` (explicit path, built by dsx) and the dsx model under a `Smoother` (marginalized), same priors, same NUTS budget. Compare: posterior of $q$, $r$ against truth, ESS, leapfrog steps and wall time, the three forecast fans ($50\%$ and $94\%$ HDI), CRPS and coverage on the held-out window. In-sample: `to_datatree` on all three models, their in-sample predictive bands side by side (the smoothing predictive for the smoother, the posterior path plus observation noise for the builder, the replayed path plus noise for the direct model), then the latent level itself. Every model registers a `"level"` deterministic in the in-sample mode (`result.x_in_sample` for the two dsx models, `x0 + cumsum(drift)` for the direct one) and `Predictive(..., return_sites=["level"])` reads it, so the three reconstructions of the same posterior come through one mechanism, which the dsx maintainers asked to see on numpyro_forecast#126; next to them, the filtered level from re-interpreting the smoother's posterior under a `Filter` as the pedagogy for what a `Filter` cannot serve. Prior predictive check with `dsx.simulate`.
 
 **Example 2: local level with seasonal regression, covariates through the block.** Add a Fourier seasonal component to the simulated series; the covariate array is the series followed by `fourier_features`, which the block forwards as `ctrl_values` and the dynamics consume through `D` of `LTI_discrete`. Fit with SVI (`AutoNormal`, `draw_posterior`) to show the variational path, forecast, then run `backtest` on expanding windows with a NUTS `forecast_fn` and an `in_sample_fn`, `eval_train=True`, plotting in-sample and out-of-sample CRPS and the coverage per window. This is Direction (1) of dynestyx#264 made concrete: nf's evaluation workflow applied to a dsx model.
 
@@ -600,7 +630,7 @@ Notebook outline (jupytext `py:percent`; conventions per `AGENTS.md`: `descripti
 5. Prior predictive check with `dsx.simulate`.
 6. The three models; fit all with NUTS; comparison table; posterior overlays.
 7. Forecasts with `forecast`; three-panel fan plot (thumbnail); metrics table.
-8. In-sample: `to_datatree` for the three models, three-panel predictive bands, the filtered-versus-smoothed level, and the smoothed level against the builder's and the direct model's posterior paths.
+8. In-sample: `to_datatree` for the three models, three-panel predictive bands, then the `"level"` site through `Predictive` for the three models: filtered versus smoothed level in one panel, the three reconstructions in the other.
 9. Example 2 data with seasonality; the regression model; SVI fit; forecast plot.
 10. `backtest` with NUTS closures and `eval_train=True`; per-window CRPS (in and out of sample) and coverage plots; `results_to_dataframe`.
 11. Takeaways, boundaries (Section 12 in two paragraphs, including why there is no continuous-time example yet), link to this document.
