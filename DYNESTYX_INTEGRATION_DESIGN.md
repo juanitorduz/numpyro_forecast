@@ -267,10 +267,11 @@ def state_space_series(
         Exogenous inputs over the full horizon, shape ``(duration, control)``,
         forwarded as ``ctrl_values`` on the full time grid.
     times
-        Observation times over the full horizon, at least ``duration`` strictly
-        increasing entries, a host-side NumPy array; ``None`` uses the step
-        index. Irregular spacing matters for continuous-time dynamics and for
-        time-varying parameters.
+        Observation and forecast times over the full horizon, at least
+        ``duration`` strictly increasing entries, a host-side NumPy array;
+        ``None`` uses the step index. The last ``future`` entries are the
+        forecast times. Irregular spacing matters for continuous-time dynamics
+        and for time-varying parameters.
     simulator_config
         Forwarded to ``Simulator`` (solver options for continuous-time models
         that are not discretized).
@@ -571,13 +572,13 @@ Continuous-time (A.11): Ornstein-Uhlenbeck level on 144 irregularly spaced obser
 ### v1 (example notebook)
 
 - `docs/examples/dynestyx_integration.ipynb`, authored with jupytext (`py:percent`), executed, committed with outputs, `.py` deleted. The block (`StateSpaceResult`, `state_space_series` and its two helpers) is defined in the notebook verbatim as in Section 6.2.
-- `pyproject.toml`: the optional extra `dynestyx = ["dynestyx>=0.5.1"]`, deliberately **not** aggregated into `all` or `all_cuda`. Reasons: the notebooks are not executed in CI (the docs build renders stored outputs and `pytest` collects only `tests/` and `README.md`), so no CI job needs dsx; the extra pulls about 60 packages including `tfp-nightly`, which would slow and destabilize every CI leg for no coverage. The pin is `>=0.5.1`, the first release with dynestyx#361, so the `D`-only `LTI_discrete` shortcut of Section 6.3 works out of the box and the notebook needs no 0.5.0 fallback and no git reference (which would block publishing to PyPI).
-- `README.md`: the sentence listing the optional extras mentions `dynestyx`.
+- `pyproject.toml`: `dynestyx>=0.5.1` joins the `docs` extra, which `all` and `all_cuda` include, so `uv sync --extra all` (the `make setup` every CI job runs) installs it. The first revision kept dsx in a separate extra outside `all` to spare CI its transitive closure (about 60 packages, `tfp-nightly` among them), but `ty` type-checks the notebooks, so the `prek` CI job would fail on the notebook's unresolved `dynestyx` import as soon as it lands on `main`; the docs tooling is where a dependency that exists only for an example belongs. The pin is `>=0.5.1`, the first release with dynestyx#361, so the `D`-only `LTI_discrete` shortcut of Section 6.3 works out of the box and the notebook needs no 0.5.0 fallback and no git reference (which would block publishing to PyPI). `uv.lock` is regenerated.
+- `README.md`: the sentence listing the optional extras says that `docs` also installs `dynestyx` for the example.
 - No change under `numpyro_forecast/`, no `reference:` change, `tests/test_docs_reference.py` unaffected.
 
 ### v2 (proposed, after review by both maintainers)
 
-- `numpyro_forecast/contrib/dynestyx.py` with `state_space_series`, `StateSpaceResult` and `StateSpaceHandler`, lazily importing dsx through `numpyro_forecast.optional.require("dynestyx", extra="dynestyx")` on first call (the package import must stay free of dsx, matching the `base-import` CI leg's invariant and `contrib/blackjax.py`), an `_api_canary("dynestyx", ["sample", "Filter", "Smoother", "LatentPathBuilder", "Discretizer", "Simulator", "DynamicalModel", "simulate"])` tripwire, and signatures that never name dsx types (`dynamics: object`, `conditioner: object`, as `contrib/blackjax.py` does for blackjax, because the jaxtyping/beartype import hook resolves annotations at call time and a `TYPE_CHECKING`-only import would not resolve). The `isinstance` dispatch in `_in_sample_states` then goes through the lazily imported module.
+- `numpyro_forecast/contrib/dynestyx.py` with `state_space_series`, `StateSpaceResult` and `StateSpaceHandler`, lazily importing dsx through `numpyro_forecast.optional.require("dynestyx", extra="dynestyx")` on first call (a user-facing `dynestyx` extra reappears with v2, because a `contrib` module cannot ask users for the docs tooling) (the package import must stay free of dsx, matching the `base-import` CI leg's invariant and `contrib/blackjax.py`), an `_api_canary("dynestyx", ["sample", "Filter", "Smoother", "LatentPathBuilder", "Discretizer", "Simulator", "DynamicalModel", "simulate"])` tripwire, and signatures that never name dsx types (`dynamics: object`, `conditioner: object`, as `contrib/blackjax.py` does for blackjax, because the jaxtyping/beartype import hook resolves annotations at call time and a `TYPE_CHECKING`-only import would not resolve). The `isinstance` dispatch in `_in_sample_states` then goes through the lazily imported module.
 - `great-docs.yml`: `contrib.dynestyx.state_space_series`, `contrib.dynestyx.StateSpaceResult` and `contrib.dynestyx.StateSpaceHandler` under "Extensions (contrib)".
 - `tests/test_contrib_dynestyx.py` guarded by `pytest.importorskip("dynestyx")`: the anchor invariant (first horizon row has the conditioned variance plus one transition) for all three conditioners, the `Filter` in-sample error, `forecast()` and `predict_in_sample()` shapes under `batch_size`/`parallel=False` for all three, agreement of the KF marginal likelihood with a direct `MultivariateNormal` log density on a tiny series, the irregular `times` pass-through, the rejection of malformed handler stacks, the `(Smoother, Discretizer)` stack on a continuous-time model, and one `backtest` window with `eval_train=True`. Whether CI installs the extra for these (a separate job) or they stay skip-by-default is an open question (Section 17).
 - The notebook then imports the block from the package and drops its local definition.
@@ -586,7 +587,7 @@ Continuous-time (A.11): Ornstein-Uhlenbeck level on 144 irregularly spaced obser
 
 One notebook, two examples, both synthetic so the truth is known and the exactness claims can be checked.
 
-**Example 1: local level, one process, three inference strategies.** Simulate $y_t$ from the local level model with known $q$ and $r$ ($T = 120$ training steps, 24 held out) with `dsx.simulate`. Fit nf's direct model (`innovations` + `cumsum` + `predict`, `LocScaleReparam`), the dsx model under a `LatentPathBuilder` (explicit path, built by dsx) and the dsx model under a `Smoother` (marginalized), same priors, same NUTS budget. Compare: posterior of $q$, $r$ against truth, ESS, leapfrog steps and wall time, the three forecast fans ($50\%$ and $94\%$ HDI), CRPS and coverage on the held-out window. In-sample: `to_datatree` on the smoother-conditioned model and on the direct model, the in-sample predictive bands of both with `plot_lm`, and the filtered-versus-smoothed level plot from the recorded sites as the pedagogy for what a `Filter` cannot serve. Prior predictive check with `dsx.simulate`.
+**Example 1: local level, one process, three inference strategies.** Simulate $y_t$ from the local level model with known $q$ and $r$ ($T = 120$ training steps, 24 held out) with `dsx.simulate`. Fit nf's direct model (`innovations` + `cumsum` + `predict`, `LocScaleReparam`), the dsx model under a `LatentPathBuilder` (explicit path, built by dsx) and the dsx model under a `Smoother` (marginalized), same priors, same NUTS budget. Compare: posterior of $q$, $r$ against truth, ESS, leapfrog steps and wall time, the three forecast fans ($50\%$ and $94\%$ HDI), CRPS and coverage on the held-out window. In-sample: `to_datatree` on all three models, their in-sample predictive bands side by side (the smoothing predictive for the smoother, the posterior path plus observation noise for the builder, the replayed path plus noise for the direct model), then the latent level itself: filtered versus smoothed from the recorded sites as the pedagogy for what a `Filter` cannot serve, and the smoothed level against the builder's posterior path (`f_state_path`) and the direct model's `x0 + cumsum(drift)`, the three reconstructions of the same posterior, which the dsx maintainers asked to see on numpyro_forecast#126. Prior predictive check with `dsx.simulate`.
 
 **Example 2: local level with seasonal regression, covariates through the block.** Add a Fourier seasonal component to the simulated series; the covariate array is the series followed by `fourier_features`, which the block forwards as `ctrl_values` and the dynamics consume through `D` of `LTI_discrete`. Fit with SVI (`AutoNormal`, `draw_posterior`) to show the variational path, forecast, then run `backtest` on expanding windows with a NUTS `forecast_fn` and an `in_sample_fn`, `eval_train=True`, plotting in-sample and out-of-sample CRPS and the coverage per window. This is Direction (1) of dynestyx#264 made concrete: nf's evaluation workflow applied to a dsx model.
 
@@ -599,7 +600,7 @@ Notebook outline (jupytext `py:percent`; conventions per `AGENTS.md`: `descripti
 5. Prior predictive check with `dsx.simulate`.
 6. The three models; fit all with NUTS; comparison table; posterior overlays.
 7. Forecasts with `forecast`; three-panel fan plot (thumbnail); metrics table.
-8. In-sample: `to_datatree` for the direct and the smoothed models, `plot_lm` bands, filtered-versus-smoothed level.
+8. In-sample: `to_datatree` for the three models, three-panel predictive bands, the filtered-versus-smoothed level, and the smoothed level against the builder's and the direct model's posterior paths.
 9. Example 2 data with seasonality; the regression model; SVI fit; forecast plot.
 10. `backtest` with NUTS closures and `eval_train=True`; per-window CRPS (in and out of sample) and coverage plots; `results_to_dataframe`.
 11. Takeaways, boundaries (Section 12 in two paragraphs, including why there is no continuous-time example yet), link to this document.
@@ -610,13 +611,13 @@ File map:
 DYNESTYX_INTEGRATION_DESIGN.md              # this document
 docs/examples/dynestyx_integration.py       # jupytext source, deleted after execution
 docs/examples/dynestyx_integration.ipynb    # committed with outputs
-pyproject.toml                              # `dynestyx` extra (not in `all`)
+pyproject.toml                              # `dynestyx` in the `docs` extra, `uv.lock` regenerated
 README.md                                   # extras sentence
 ```
 
 ## 15. Verification plan
 
-1. `uv sync --extra all --extra dynestyx` (v0.5.1 ships dynestyx#361, so the git install of the `ml-bugfix-controldim-LTI` branch that the probes used is no longer needed); `python -c "import numpyro_forecast"` does not import `dynestyx` (the `base-import` invariant).
+1. `uv sync --extra all` installs `dynestyx==0.5.1` through the `docs` extra (v0.5.1 ships dynestyx#361, so the git install of the `ml-bugfix-controldim-LTI` branch that the probes used is no longer needed); `python -c "import numpyro_forecast"` does not import `dynestyx` (the `base-import` invariant).
 2. The notebook executes end to end with `uv run jupytext --to notebook --execute docs/examples/dynestyx_integration.py`, every figure embedded.
 3. Numerical checks inside the notebook: recovered $q$, $r$ within two posterior standard deviations of the truth for all three fits; the three forecast fans agree visually and their CRPS agree within Monte Carlo error; the anchor invariant holds (the marginal variance of the first forecast row exceeds that of the anchor row by about $q^2$, one transition); the in-sample predictive bands of the smoothed and the direct model coincide.
 4. `uv run ruff check docs/examples/dynestyx_integration.ipynb && uv run ruff format --check docs/examples/dynestyx_integration.ipynb`; `uv run ty check` (the notebooks are type-checked).
@@ -631,7 +632,7 @@ README.md                                   # extras sentence
 3. **Traced time grids.** Anyone rewriting the block with `jnp.arange`, or deriving `times` from a covariate column, breaks the `Filter`/`Smoother` rollout under `jit`; anyone passing NumPy grids to the builder breaks its scan. Mitigation: `_time_grid` plus the per-conditioner conversion; v2 tests run `forecast()` (which jits) for all three.
 4. **Builder instance created inside the model.** Works for the fit, fails at the first jitted `forecast()` with dsx's layout error. Mitigation: the docstring and the notebook create the conditioner outside the model; a v2 test covers it.
 5. **Approximate default configs.** `Filter()`/`Smoother()` with no config silently use an ensemble/extended Kalman method on a linear-Gaussian model. Mitigation: every example passes the KF configs explicitly and the docstring says so; consider a `KFConfig` default when `dynamics` is linear-Gaussian in v2.
-6. **Dependency weight.** dsx's transitive closure includes `tfp-nightly`. Mitigation: a separate extra outside `all`; no CI job depends on it in v1.
+6. **Dependency weight.** dsx's transitive closure includes `tfp-nightly`, and through the `docs` extra every CI job installs it. Mitigation: accepted for now, since `ty` needs the import resolvable to check the notebook; the package's own dependencies and the `base-import` leg are untouched, and a `ty` exclusion for the notebook plus a separate extra is the way back if the closure ever breaks a CI leg.
 7. **Release lag.** dynestyx#361 shipped in v0.5.1 on 2026-09-15, but the probes from A.7 onward ran on the branch that became it, and the release also bumps `cd-dynamax` to 0.4.3, which the probes did not see. Mitigation: execute the notebook on `dynestyx==0.5.1` before committing it (Section 15) and keep the pin at `>=0.5.1`.
 8. **Discretized continuous-time models under HMC.** The exact discretization is 50 times cheaper than the continuous-discrete smoother but aborts or stalls NUTS without `EQX_ON_ERROR=nan`, a covariance jitter and a prior bounded away from $\theta = 0$ (Section 8). Mitigation: documented, not showcased; raised with the dsx maintainers (Section 17).
 
