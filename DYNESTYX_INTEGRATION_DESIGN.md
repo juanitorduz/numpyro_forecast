@@ -572,7 +572,7 @@ Continuous-time (A.11): Ornstein-Uhlenbeck level on 144 irregularly spaced obser
 ### v1 (example notebook)
 
 - `docs/examples/dynestyx_integration.ipynb`, authored with jupytext (`py:percent`), executed, committed with outputs, `.py` deleted. The block (`StateSpaceResult`, `state_space_series` and its two helpers) is defined in the notebook verbatim as in Section 6.2.
-- `pyproject.toml`: `dynestyx>=0.5.1` joins the `docs` extra, which `all` and `all_cuda` include, so `uv sync --extra all` (the `make setup` every CI job runs) installs it. The first revision kept dsx in a separate extra outside `all` to spare CI its transitive closure (about 60 packages, `tfp-nightly` among them), but `ty` type-checks the notebooks, so the `prek` CI job would fail on the notebook's unresolved `dynestyx` import as soon as it lands on `main`; the docs tooling is where a dependency that exists only for an example belongs. The pin is `>=0.5.1`, the first release with dynestyx#361, so the `D`-only `LTI_discrete` shortcut of Section 6.3 works out of the box and the notebook needs no 0.5.0 fallback and no git reference (which would block publishing to PyPI). `uv.lock` is regenerated.
+- `pyproject.toml`: `dynestyx>=0.5.1` joins the `docs` extra, which `all` and `all_cuda` include, so `uv sync --extra all` (the `make setup` every CI job runs) installs it. The first revision kept dsx in a separate extra outside `all` to spare CI its transitive closure (about 60 packages, `tfp-nightly` among them), but `ty` type-checks the notebooks, so the `prek` CI job would fail on the notebook's unresolved `dynestyx` import as soon as it lands on `main`; the docs tooling is where a dependency that exists only for an example belongs. The pin is `>=0.5.1`, the first release with dynestyx#361, so the `D`-only `LTI_discrete` shortcut of Section 6.3 works out of the box and the notebook needs no 0.5.0 fallback and no git reference (which would block publishing to PyPI). `uv.lock` is gitignored in this repository, so nothing else changes in the commit.
 - `README.md`: the sentence listing the optional extras says that `docs` also installs `dynestyx` for the example.
 - No change under `numpyro_forecast/`, no `reference:` change, `tests/test_docs_reference.py` unaffected.
 
@@ -611,7 +611,7 @@ File map:
 DYNESTYX_INTEGRATION_DESIGN.md              # this document
 docs/examples/dynestyx_integration.py       # jupytext source, deleted after execution
 docs/examples/dynestyx_integration.ipynb    # committed with outputs
-pyproject.toml                              # `dynestyx` in the `docs` extra, `uv.lock` regenerated
+pyproject.toml                              # `dynestyx` in the `docs` extra
 README.md                                   # extras sentence
 ```
 
