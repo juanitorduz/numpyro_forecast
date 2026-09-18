@@ -1512,7 +1512,7 @@
     "href": "package-info.html",
     "title": "Package Info",
     "section": "",
-    "text": "Package\nVersion Constraint\nLast Published\nPyPI\n\n\n\n\narviz\n&gt;=1.2.0\n2026-08-11\n\n\n\nbeartype\n&gt;=0.22\n2025-12-13\n\n\n\njax\n&lt;0.11.1,&gt;=0.10.0\n2026-09-17\n\n\n\njaxtyping\n&gt;=0.3.11\n2026-06-13\n\n\n\nnumpyro\n&gt;=0.20.0\n2026-05-02"
+    "text": "Package\nVersion Constraint\nLast Published\nPyPI\n\n\n\n\narviz\n&gt;=1.2.0\n2026-08-11\n\n\n\nbeartype\n&gt;=0.22\n2025-12-13\n\n\n\njax\n&lt;0.11.1,&gt;=0.10.0\n2026-09-17\n\n\n\njaxtyping\n&gt;=0.3.11\n2026-06-13\n\n\n\nnumpyro\n&gt;=0.20.0\n2026-09-18"
   },
   {
     "objectID": "package-info.html#all",
