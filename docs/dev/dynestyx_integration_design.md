@@ -638,7 +638,7 @@ Notebook outline (jupytext `py:percent`; conventions per `AGENTS.md`: `descripti
 File map:
 
 ```
-DYNESTYX_INTEGRATION_DESIGN.md              # this document
+docs/dev/dynestyx_integration_design.md     # this document, not part of the rendered site
 docs/examples/dynestyx_integration.py       # jupytext source, deleted after execution
 docs/examples/dynestyx_integration.ipynb    # committed with outputs
 pyproject.toml                              # `dynestyx` in the `docs` extra
