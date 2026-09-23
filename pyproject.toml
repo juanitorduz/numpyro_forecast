@@ -41,6 +41,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dataframes = [
+    "fastexcel>=0.12",
     "pandas>=2.2",
     "polars>=1.0",
 ]
@@ -68,6 +69,8 @@ dev = [
     "blackjax>=1.6,<2",
     "huggingface-hub>=1.22.0",
     "scikit-learn>=1.6",
+    "pyfixest>=0.60",
+    "seaborn>=0.13",
 ]
 docs = [
     "great-docs==0.17.0",
