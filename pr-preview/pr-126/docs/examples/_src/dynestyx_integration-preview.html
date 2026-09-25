@@ -243,7 +243,7 @@
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../../index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-08-27">v0.3.0</span></span>
+    <span class="navbar-title">numpyro_forecast</span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -260,15 +260,11 @@
     <a class="nav-link" href="../../../reference/index.html"> 
 <span class="menu-text">Reference</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="../../../changelog.html"> 
-<span class="menu-text">Changelog</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
     </span>
   </li>  
 </ul>
@@ -415,7 +411,7 @@
 <h1>The Building Block</h1>
 <p>The block below is the whole integration. Its docstring states the contract. It takes the current call’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html"><code>Horizon</code></a>, a site name, the observed window <code>y</code>, a <code>dynestyx</code> <code>DynamicalModel</code> and a <strong>conditioner</strong>. The conditioner is the stack of <code>dynestyx</code> handlers that interpret <code>dsx.sample</code> over the observed window. It takes one of three forms:</p>
 <ul>
-<li><strong><code>Filter</code> or <code>Smoother</code></strong>: they compute the marginal log likelihood <span class="math inline">\log p(y_{1:T} \mid \theta)</span> of the window and register it as a NumPyro factor. The joint density that NUTS or SVI sees is then <span class="math inline">p(\theta) \, p(y_{1:T} \mid \theta)</span>, with the latent path integrated out. The smoother also provides the smoothing distribution <span class="math inline">p(x_t \mid y_{1:T}, \theta)</span> of every in-window state, which the filter does not. During fitting only the factor is used, so the two cost the same per gradient.</li>
+<li><strong><code>Filter</code> or <code>Smoother</code></strong>: they compute the marginal log likelihood <span class="math inline">\log p(y_{1:T} \mid \theta)</span> of the window and register it as a NumPyro factor. The joint density that NUTS or SVI sees is then <span class="math inline">p(\theta) \, p(y_{1:T} \mid \theta)</span>, with the latent path integrated out. The smoother also provides the smoothing distribution <span class="math inline">p(x_t \mid y_{1:T}, \theta)</span> of every in-window state, which the filter does not. It computes it with a backward pass after the forward filter, so a full smoother evaluation costs about twice a filter evaluation. The marginal log likelihood comes from the forward pass alone, and the smoothed states are deterministic sites that NumPyro records once per draw, not once per gradient. In this notebook the compiled gradient of the log density therefore costs the same under both handlers (<span class="math inline">0.16</span> ms on the CPU for the local level model, measured with <code>jax.value_and_grad</code>), because JAX drops the backward pass from it. This is a property of the current implementation, not a guarantee for every backend or model.</li>
 <li><strong><code>LatentPathBuilder</code></strong>: it creates one sample site for the whole path and registers the joint density of states and observations as a factor. The sampler explores the path explicitly, as it does with the package’s own <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html"><code>innovations</code></a>. The difference is that <code>dynestyx</code> builds the path, so discretized continuous-time dynamics and observation models with missing values are available.</li>
 <li><strong><code>Discretizer</code></strong>: it can follow either of the above, as the second element of a sequence, and turns a continuous-time model into the discrete transition the conditioning handler consumes. We stay with discrete-time models here. The <a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md">design document</a> records the continuous-time recipe and its caveats.</li>
 </ul>
@@ -2538,14 +2534,14 @@ truth:                  [ 1.5  0.5 -0.4  0.3]</code></pre>
 <li><strong>One block, one argument.</strong> A <code>dynestyx</code> model becomes a <code>numpyro_forecast</code> model through <code>state_space_series</code>, and the handler stack passed as its <code>conditioner</code> is the inference strategy. A <code>Smoother</code> (or <code>Filter</code>) integrates the latent path out, a <code>LatentPathBuilder</code> samples it explicitly, a <code>Discretizer</code> after either handles continuous-time dynamics, and switching between them is a change of one argument.</li>
 <li><strong>The drivers work without changes.</strong> The block owns the likelihood and registers the horizon rollout as <code>"forecast"</code> and the in-sample predictive as <code>"obs"</code>. <a href="../../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a>, <a href="../../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a>, <a href="../../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a>, <a href="../../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> (in and out of sample) and the metrics work on it under the same <code>jit</code> and <code>vmap</code> as for every other model.</li>
 <li><strong>The three strategies agree.</strong> On the local level model the posteriors, the forecasts, the in-sample bands and the reconstructed level coincide across the direct model, the explicit path and the smoother.</li>
-<li><strong>The smoother is the efficient choice.</strong> On linear-Gaussian models it is exact and costs the same per gradient as the filter. The sampler explores the parameters only, needs a small fraction of the gradient evaluations of the direct model for a larger effective sample size, and the smoothing distribution gives the in-sample predictive at no extra cost.</li>
+<li><strong>The smoother is the efficient choice.</strong> On linear-Gaussian models it is exact, and the sampler explores the parameters only. It needs a small fraction of the gradient evaluations of the direct model for a larger effective sample size, and the smoothing distribution gives the in-sample predictive without a second fit. The backward pass costs about as much as the forward filter, but it does not enter the gradient of the marginal log likelihood, so here the smoother and the filter cost the same per gradient.</li>
 </ul>
 </section>
 <section id="model-limitations" class="level2">
 <h2 class="anchored" data-anchor-id="model-limitations">Model Limitations</h2>
 <ul>
 <li><code>dynestyx</code> predicts at or after the end of the window only, so the in-sample predictive comes from the conditioned distributions and not from a rollout, and it is a per-step marginal. A functional of the whole path would need backward simulation.</li>
-<li>A <code>Filter</code> conditioner has no in-sample predictive. Use a <code>Smoother</code> instead: it costs the same during fitting and reports the same marginal log likelihood, so the two handlers share the parameter posterior. They do not share the distribution over the states. The filtering distribution uses the observations up to step <span class="math inline">t</span>, the smoothing distribution uses the whole window, and the smoothed level is the better reconstruction of the true state.</li>
+<li>A <code>Filter</code> conditioner has no in-sample predictive. Use a <code>Smoother</code> instead: it reports the same marginal log likelihood, so the two handlers share the parameter posterior. They do not share the distribution over the states. The filtering distribution uses the observations up to step <span class="math inline">t</span>, the smoothing distribution uses the whole window, and the smoothed level is the better reconstruction of the true state.</li>
 <li>The observed window travels in the covariates, the time grids are host-side constants for the smoother’s rollout and jax arrays for the builder, and the rollout is anchored at the last observed step. The block handles all three, and a rewrite that derives <code>times</code> from a covariate column would break the second.</li>
 <li>The <a href="../../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> family of the package with a latent level (exponential smoothing in innovations form) is already marginalized by its deterministic recursion and has no <code>dynestyx</code> counterpart. Its members that are Markov in the observations (autoregressions) can be written with <code>DiracIdentityObservation</code> under a <code>LatentPathBuilder</code>, see the design document.</li>
 </ul>
