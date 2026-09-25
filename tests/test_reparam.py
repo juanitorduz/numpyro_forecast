@@ -24,7 +24,7 @@ from numpyro.infer.util import log_density
 from numpyro.optim import Adam
 
 from numpyro_forecast import draw_posterior, forecast, predict_in_sample, time_reparam
-from numpyro_forecast.models import Horizon, innovations, markov_series, predict
+from numpyro_forecast.models import TIME_PLATE, Horizon, innovations, markov_series, predict
 from numpyro_forecast.reparam import TimeTransform
 from numpyro_forecast.typing import Array, ForecastModel
 from tests.conftest import as_model, empty_covariates, get_trace, plate_frames, rw_model
@@ -169,6 +169,29 @@ def test_scope_applied_outside_prefixes_the_auxiliary_once() -> None:
     assert plate_frames(tr["a/drift_haar"]) == []
     assert tr["a/drift"]["type"] == "deterministic"
     assert "a/a/drift_haar" not in tr
+
+
+def test_targets_the_plate_innovations_opens() -> None:
+    """The shared ``TIME_PLATE`` name is the one `innovations` opens; a rename cannot silently no-op."""
+    tr = get_trace(rw_model, empty_covariates(T_OBS), jnp.zeros((T_OBS, 1)))
+    assert plate_frames(tr["drift"]) == [(TIME_PLATE, -2, T_OBS)]
+
+    def body(h: Horizon, covariates: Array) -> None:
+        with numpyro.plate("steps", h.t_obs, dim=-2):
+            drift = numpyro.sample("drift", dist.Normal(0.0, 1.0))
+        predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
+
+    model = time_reparam(as_model(body), "haar")
+    tr = get_trace(model, empty_covariates(T_OBS), jnp.zeros((T_OBS, 1)))
+    assert tr["drift"]["type"] == "sample"
+    assert "drift_haar" not in tr
+
+
+def test_nesting_is_rejected() -> None:
+    """Wrapping a wrapped model raises instead of silently applying only the inner transform."""
+    wrapped = time_reparam(rw_model, "haar")
+    with pytest.raises(ValueError, match="cannot be nested"):
+        time_reparam(wrapped, "dct")
 
 
 # --------------------------------------------------------------------------- exactness

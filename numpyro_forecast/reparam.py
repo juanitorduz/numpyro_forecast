@@ -60,13 +60,11 @@ from numpyro.distributions.transforms import DiscreteCosineTransform, HaarTransf
 from numpyro.infer.reparam import Reparam, UnitJacobianReparam
 from numpyro.primitives import _PYRO_STACK, Messenger
 
+from numpyro_forecast.models import TIME_PLATE
 from numpyro_forecast.typing import Array, ForecastModel
 
 TimeTransform = Literal["haar", "dct"]
 """The time-axis transform applied by `time_reparam()`: ``"haar"`` or ``"dct"``."""
-
-TIME_PLATE = "time"
-"""Name of the in-sample time plate that `time_reparam()` targets."""
 
 _AUX_INFER_KEY = "numpyro_forecast_time_reparam_aux"
 _TRANSFORMS: dict[str, tuple[Callable[[int], Transform], str]] = {
@@ -90,9 +88,10 @@ class _BlockPlates(Messenger):
         self.plate_names = plate_names
 
     def process_message(self, msg: dict[str, Any]) -> None:
-        """Stamp ``block_plates`` and the auxiliary marker onto sample messages."""
-        if msg["type"] != "sample":
-            return
+        """Stamp ``block_plates`` and the auxiliary marker onto the message.
+
+        The only message issued inside this context is the auxiliary sample.
+        """
         infer = msg.setdefault("infer", {})
         infer["block_plates"] = self.plate_names
         infer[_AUX_INFER_KEY] = True
@@ -201,6 +200,14 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
         `~~numpyro_forecast.convert.to_datatree()` and the ``model_fn`` of
         `~~numpyro_forecast.evaluate.backtest()`.
 
+    Raises
+    ------
+    ValueError
+        If ``model`` is already the result of `time_reparam()`. Nesting is not
+        supported: the inner handler would turn the site into a deterministic
+        before the outer one sees it, so the outer transform would silently be
+        a no-op.
+
     Notes
     -----
     - Create the wrapped model once and reuse it: the drivers jit-compile with
@@ -224,9 +231,13 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
       ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
       the former. ``init_to_value`` must therefore target ``drift_haar``.
-    - Measured on a random-walk level model: mean-field ``AutoNormal`` reaches a
-      markedly better ELBO in fewer steps for both transforms (DCT slightly
-      ahead of Haar); NUTS trajectories become cheaper (fewer leapfrog steps per
+    - Measured on random-walk level models: mean-field ``AutoNormal`` reaches a
+      better ELBO for both transforms (DCT slightly ahead of Haar), but an
+      optimizer schedule tuned for the original coordinates does not transfer
+      as is. The rotated posterior is better conditioned, so it tolerates and
+      may need a larger learning rate to converge within the same step budget;
+      a schedule that is too small stalls with part of the intercept still held
+      by the level. NUTS trajectories become cheaper (fewer leapfrog steps per
       iteration) while the effective sample size per draw is model dependent.
 
     Examples
@@ -240,5 +251,10 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     samples = forecast(key_pred, model_dct, posterior, data, covariates)
     ```
     """
+    if isinstance(model, numpyro.handlers.reparam) and isinstance(
+        model.config, _TimeReparamConfig
+    ):
+        msg = "time_reparam cannot be nested: `model` is already a time_reparam model"
+        raise ValueError(msg)
     wrapped = numpyro.handlers.reparam(model, config=_TimeReparamConfig(transform))
     return cast(ForecastModel, wrapped)
