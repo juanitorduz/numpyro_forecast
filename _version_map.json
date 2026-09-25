@@ -46,6 +46,10 @@
       "dev",
       "0.3.0"
     ],
+    "docs/examples/dynestyx_integration.html": [
+      "dev",
+      "0.3.0"
+    ],
     "docs/examples/electricity_forecast.html": [
       "dev",
       "0.3.0"

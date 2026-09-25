@@ -463,6 +463,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/dynestyx_integration-preview.html</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/_src/electricity_forecast-preview.html</loc>
     <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
@@ -542,6 +548,12 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html</loc>
     <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -673,6 +685,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/_src/dynestyx_integration-preview.html</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/_src/electricity_forecast-preview.html</loc>
     <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
@@ -752,6 +770,12 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/croston.html</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/docs/examples/dynestyx_integration.html</loc>
     <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
