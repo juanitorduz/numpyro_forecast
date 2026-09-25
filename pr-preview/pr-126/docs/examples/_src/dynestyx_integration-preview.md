@@ -3,7 +3,7 @@
 
 In this notebook we write a [`dynestyx`](https://github.com/BasisResearch/dynestyx) state space model as a `numpyro_forecast` model. We then fit it, forecast with it and backtest it with the drivers of the package, without changing them.
 
-`dynestyx` is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a `DynamicalModel`, which bundles an initial condition, a state evolution and an observation model. Its single primitive, `dsx.sample`, is interpreted by effect handlers. A `Filter` or a `Smoother` integrates the latent path out with a filtering algorithm (Kalman, ensemble Kalman, extended and unscented Kalman, particle filters) and adds the marginal log likelihood to the NumPyro trace. A `LatentPathBuilder` samples the path explicitly. A `Simulator` rolls the model forward in time.
+`dynestyx` is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a `DynamicalModel`, which bundles an initial condition, a state evolution and an observation model. Its primitive, `dsx.sample`, is interpreted by effect handlers. A `Filter` or a `Smoother` integrates the latent path out with a filtering algorithm (exactly with the Kalman filter for linear-Gaussian models, approximately with the ensemble, extended and unscented Kalman filters and with particle filters) and adds the marginal log likelihood, or its estimate, to the NumPyro trace. A `LatentPathBuilder` samples the path explicitly. A `Simulator` rolls the model forward in time.
 
 `numpyro_forecast` is a forecasting workflow layer. A model is a plain function `(covariates, data=None)` built from model building blocks that register the `"obs"` and `"forecast"` sites. The drivers ([`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html), [`predict_in_sample`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html), [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html), [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) and the metrics) read those sites by name.
 
@@ -28,7 +28,7 @@ We load the necessary libraries and set the notebook's configuration.
 
 ``` python
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass
 from functools import partial
@@ -94,28 +94,28 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 ```
 
 
-    dynestyx 0.5.1, numpyro 0.21.0, jax 0.11.0
+    dynestyx 0.5.1, numpyro 0.22.0, jax 0.11.2
 
 
 # The Building Block
 
 The block below is the whole integration. Its docstring states the contract. It takes the current call's [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), a site name, the observed window `y`, a `dynestyx` `DynamicalModel` and a **conditioner**. The conditioner is the stack of `dynestyx` handlers that interpret `dsx.sample` over the observed window. It takes one of three forms:
 
-- **`Filter` or `Smoother`**: they compute the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window and register it as a NumPyro factor. The joint density that NUTS or SVI sees is then p(\theta) \\ p(y\_{1:T} \mid \theta), with the latent path integrated out. The smoother also provides the smoothing distribution p(x_t \mid y\_{1:T}, \theta) of every in-window state, which the filter does not. It computes it with a backward pass after the forward filter, so a full smoother evaluation costs about twice a filter evaluation. The marginal log likelihood comes from the forward pass alone, and the smoothed states are deterministic sites that NumPyro records once per draw, not once per gradient. In this notebook the compiled gradient of the log density therefore costs the same under both handlers (0.16 ms on the CPU for the local level model, measured with `jax.value_and_grad`), because JAX drops the backward pass from it. This is a property of the current implementation, not a guarantee for every backend or model.
+- **`Filter` or `Smoother`**: they compute the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window and register it as a NumPyro factor. The joint density that NUTS or SVI sees is then p(\theta) \\ p(y\_{1:T} \mid \theta), with the latent path integrated out. The smoother also provides the smoothing distribution p(x_t \mid y\_{1:T}, \theta) of every in-window state, which the filter does not. It computes it with a backward pass after the forward filter, so a full smoother evaluation costs more than a filter evaluation. The marginal log likelihood comes from the forward pass alone, and the smoothed states are deterministic sites that NumPyro recomputes once per MCMC transition, not once per leapfrog step. The compiled gradient of the log density therefore costs the same under both handlers, because JAX drops the backward pass from it. We measure both costs in the Model Diagnostics section. This is a property of the current implementation, not a guarantee for every backend or model.
 - **`LatentPathBuilder`**: it creates one sample site for the whole path and registers the joint density of states and observations as a factor. The sampler explores the path explicitly, as it does with the package's own [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html). The difference is that `dynestyx` builds the path, so discretized continuous-time dynamics and observation models with missing values are available.
 - **`Discretizer`**: it can follow either of the above, as the second element of a sequence, and turns a continuous-time model into the discrete transition the conditioning handler consumes. We stay with discrete-time models here. The [design document](https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md) records the continuous-time recipe and its caveats.
 
 The block has three modes, and `h.data` selects them. The observations themselves come from the `y` argument, which the model slices from `covariates` (the series doubles as a covariate, the same contract as [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html)). This is what lets a model call without data still reach the observed window.
 
 1.  **Training** (`data` present, no horizon): the block runs `dsx.sample` under the conditioner. The factor (and the path site, for the builder) enters the trace.
-2.  **Forecasting** (`covariates` longer than `data`): the block nests the conditioner inside a `Simulator`. `dynestyx` interprets this as a posterior rollout from the conditioned state at the last observed step. The block registers the horizon draws as the `"forecast"` site.
+2.  **Forecasting** (`covariates` longer than `data`): the block nests the conditioner inside a `Simulator`. `dynestyx` interprets this as a posterior rollout that starts from the conditioned distribution of the state at the last observed step (the smoothing distribution, the filtering distribution or the sampled path, which coincide there). The block registers the horizon draws as the `"forecast"` site.
 3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the conditioner's posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` is a mode switch, not an absence of data. The in-sample predictive is a smoothing task, which is why a `Filter` conditioner raises in this mode.
 
 The block owns the likelihood, so it also owns the two sites, like [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html). It returns a `StateSpaceResult` with the state draws of the current mode, `x_future` over the horizon and `x_in_sample` over the window, so that a model can register its latent level.
 
 Two details of the implementation matter for correctness:
 
-- **Time grids.** The [Horizon](../../../reference/models.Horizon.md#numpyro_forecast.models.Horizon) counts the steps and the `times` argument places them. The block slices the observation times from `times` and takes the last `future` entries as the forecast times (any strictly increasing grid, the step index by default). It passes them to `dynestyx` as NumPy constants for a `Filter` or `Smoother`, whose rollout does its segment bookkeeping on the host, and as jax arrays for a `LatentPathBuilder`, which indexes them inside a scan. The drivers run the model under `jax.jit`, so a grid derived from a traced covariate column would break the first case.
+- **Time grids.** The [Horizon](../../../reference/models.Horizon.md#numpyro_forecast.models.Horizon) counts the steps and the `times` argument places them. The block slices the observation times from `times` and takes the last `future` entries as the forecast times (any strictly increasing grid, the step index by default). The handlers differ in what they accept. A `Filter` rollout splits the prediction grid into segments on the host, so its grid must be a NumPy constant. A `LatentPathBuilder` indexes the grid inside a `lax.scan`, so its grid must be a jax array (a NumPy grid fails in the eager model call that NUTS makes at initialization). A `Smoother` rollout starts from one final anchor and accepts either. The block passes NumPy grids to a `Filter` or `Smoother` and jax grids to a `LatentPathBuilder`. The drivers run the model under `jax.jit`, so a grid derived from a traced covariate column would break the `Filter` case.
 - **The anchor.** The prediction grid starts at the last observed step, `t_obs - 1`, and the block drops the first returned row. The simulator's first predicted state is the conditioned draw at `predict_times[0]` without a transition, so this anchor gives exactly one transition per horizon step. A grid that starts at `t_obs` would report the state of step `t_obs - 1` as the forecast for `t_obs`.
 
 Finally, create the handlers once, outside the model. They are `dynestyx` objects with state of their own, and the builder caches the observation layout it needs to run under `jit`.
@@ -243,8 +243,9 @@ def state_space_series(
     continuous-time model into the discrete transition the others consume. The
     block adds the horizon bookkeeping on top and registers the two sites the
     package drivers read. While forecasting it nests the stack inside a
-    ``Simulator``, whose posterior rollout starts from the conditioned state at
-    the last observed step, and registers the horizon draws as ``"forecast"``.
+    ``Simulator``, whose posterior rollout starts from the conditioned
+    distribution of the state at the last observed step, and registers the
+    horizon draws as ``"forecast"``.
     When the model is called without data it draws the in-window states from the
     conditioner's posterior over the path (the smoothing distribution, or the
     explicit path), samples one observation per step from the observation
@@ -308,9 +309,10 @@ def state_space_series(
         raise ValueError(msg)
     stack = _handler_stack(conditioner)
     grid = _time_grid(times, h)
-    # Filter and Smoother rollouts do host-side segment bookkeeping, so their grids are
-    # NumPy constants under jit; the LatentPathBuilder indexes its grids inside a scan and
-    # takes jax arrays. dynestyx annotates all of them as jax Arrays, hence the untyped dict.
+    # A Filter rollout segments the prediction grid on the host, so its grid must be a
+    # NumPy constant under jit; a LatentPathBuilder indexes its grids inside a scan and
+    # needs jax arrays; a Smoother accepts either. dynestyx annotates all of them as jax
+    # Arrays, hence the untyped dict.
     explicit_path = any(isinstance(handler, LatentPathBuilder) for handler in stack)
     as_grid = jnp.asarray if explicit_path else np.asarray
     kwargs: dict[str, Any] = {"obs_times": as_grid(grid[: h.t_obs])}
@@ -457,7 +459,7 @@ def local_level_prior(predict_times: Array) -> None:
 
 rng_key, rng_subkey = random.split(rng_key)
 with Simulator(n_simulations=1):
-    prior_draws = Predictive(local_level_prior, num_samples=50, exclude_deterministic=False)(
+    prior_draws = Predictive(local_level_prior, num_samples=50)(
         rng_subkey, predict_times=jnp.asarray(time_grid[:t_obs])
     )
 prior_paths = np.asarray(prior_draws["f_observations"][:, 0, :, 0])  # (50, t_obs)
@@ -487,7 +489,7 @@ The **direct** model is the idiomatic `numpyro_forecast` form. [`innovations`](h
 
 The two **`dynestyx`** models share one function of the conditioner. With a `LatentPathBuilder` the path is explicit: one sample site of shape (t\_{\text{obs}}, 1) plus the two scales. With a `Smoother` the Kalman smoother integrates the path out exactly, and the sampler explores 2 dimensions.
 
-We use `KFSmootherConfig(filter_source="cd_dynamax")`, the exact Rauch-Tung-Striebel smoother on the cheapest backend for a short series on the CPU. The `filter_source="cuthbert"` backend adds support for missing observations and time-varying parameters at a higher cost per gradient.
+We use `KFSmootherConfig(filter_source="cd_dynamax")`, the exact Rauch-Tung-Striebel smoother on the backend that was cheapest per gradient in our measurements for a short series on the CPU. The `filter_source="cuthbert"` backend adds support for missing observations and time-varying parameters at a higher cost per gradient. We also build the `Filter` variant of the model, with the matching `KFConfig()`, for the cost measurement and the filtering view of the level below.
 
 Every model registers a `level` deterministic site when it is called without data. The direct model computes its level in place, and the `dynestyx` models take it from the `x_in_sample` field of the block's result, which is the in-window state draw behind the in-sample predictive. We read that site later to compare the three reconstructions of the level.
 
@@ -527,12 +529,13 @@ def local_level_state_space(conditioner: StateSpaceHandler) -> ForecastModel:
 smoother = Smoother(smoother_config=KFSmootherConfig(filter_source="cd_dynamax"))
 local_level_latent = local_level_state_space(LatentPathBuilder())
 local_level_smoothed = local_level_state_space(smoother)
+local_level_filtered = local_level_state_space(Filter(filter_config=KFConfig()))
 ```
 
 
 ## Model Fitting
 
-We run the same sampler budget on the three models: 4 chains of 1{,}000 warmup and 1{,}000 sampling steps. The `num_steps` extra field records the number of leapfrog steps, that is, gradient evaluations, which is where NUTS spends its time.
+We run the same sampler budget on the three models: 4 chains of 1{,}000 warmup and 1{,}000 sampling steps. The `num_steps` extra field records the number of leapfrog steps of the sampling phase, one gradient evaluation each, which is where NUTS spends its time. Warmup steps are not counted, but they are part of the wall time.
 
 `mcmc.get_samples()` returns the flat posterior dictionary that the package drivers consume. For the `dynestyx` models it also carries the deterministic sites their handlers record (`f_marginal_loglik`, `f_state_path`, …).
 
@@ -580,9 +583,9 @@ posteriors = {label: mcmc.get_samples() for label, (mcmc, _) in fits.items()}
 ```
 
 
-          direct (innovations):   13.4 s
-       dynestyx, explicit path:    8.0 s
-     dynestyx, Kalman smoother:   11.4 s
+          direct (innovations):   16.0 s
+       dynestyx, explicit path:   10.0 s
+     dynestyx, Kalman smoother:   15.2 s
 
 
 ## Model Diagnostics
@@ -600,7 +603,7 @@ def summarize_fit(mcmc: MCMC, label: str, wall: float) -> pd.DataFrame:
     """One-row table of posterior means, diagnostics and sampler cost for ``q`` and ``r``."""
     grouped = mcmc.get_samples(group_by_chain=True)
     tree = az.from_dict({"posterior": {name: np.asarray(grouped[name]) for name in ("q", "r")}})
-    summary = az.summary(tree, var_names=["q", "r"])
+    summary = az.summary(tree, var_names=["q", "r"], round_to="none")
     num_steps = int(np.asarray(mcmc.get_extra_fields(group_by_chain=True)["num_steps"]).sum())
     return pd.DataFrame(
         {
@@ -621,7 +624,19 @@ def summarize_fit(mcmc: MCMC, label: str, wall: float) -> pd.DataFrame:
 
 comparison = pd.concat([summarize_fit(mcmc, label, wall) for label, (mcmc, wall) in fits.items()])
 print(f"truth: q = {q_true}, r = {r_true}")
-comparison.round({"q mean": 3, "q sd": 3, "r mean": 3, "r sd": 3, "r_hat q": 3, "r_hat r": 3})
+comparison.round(
+    {
+        "q mean": 3,
+        "q sd": 3,
+        "r mean": 3,
+        "r sd": 3,
+        "ess_bulk q": 0,
+        "ess_bulk r": 0,
+        "r_hat q": 3,
+        "r_hat r": 3,
+        "wall time (s)": 1,
+    }
+)
 ```
 
 
@@ -630,23 +645,84 @@ comparison.round({"q mean": 3, "q sd": 3, "r mean": 3, "r sd": 3, "r_hat q": 3, 
 
 |  | q mean | q sd | r mean | r sd | ess_bulk q | ess_bulk r | r_hat q | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.388 | 0.059 | 0.441 | 0.05 | 875 | 798 | 1.00 | 1.00 | 1019459 | 13.417454 |
-| dynestyx, explicit path | 0.389 | 0.064 | 0.441 | 0.054 | 593 | 967 | 1.01 | 1.01 | 65648 | 7.977765 |
-| dynestyx, Kalman smoother | 0.389 | 0.063 | 0.44 | 0.052 | 1525 | 1699 | 1.00 | 1.00 | 18062 | 11.390495 |
+| direct (innovations) | 0.389 | 0.061 | 0.441 | 0.051 | 726.0 | 763.0 | 1.009 | 1.008 | 1013890 | 16.0 |
+| dynestyx, explicit path | 0.389 | 0.064 | 0.441 | 0.053 | 564.0 | 974.0 | 1.013 | 1.005 | 66528 | 10.0 |
+| dynestyx, Kalman smoother | 0.387 | 0.061 | 0.440 | 0.051 | 1590.0 | 1694.0 | 1.003 | 1.004 | 17992 | 15.2 |
 
 
-The three posterior means agree to two decimals and the \hat{R} values are at most 1.01. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
+The three posterior means agree closely and the \hat{R} values are close to 1. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
 
-The smoothed model reaches the largest effective sample size with a small fraction of the gradient evaluations. It moves in a 2-dimensional posterior instead of a 123-dimensional one whose geometry couples q to every innovation.
+The smoothed model reaches the largest effective sample size with a small fraction of the gradient evaluations. It moves in a 2-dimensional posterior instead of a 123-dimensional one, where the likelihood still couples q to every innovation after the non-centered reparameterization.
 
-The explicit path built by `dynestyx` sits between the two. It needs fewer gradients than the direct model but mixes less well on q, because its path site has no reparameterization equivalent to `LocScaleReparam` yet.
+The explicit path built by `dynestyx` sits between the two. It needs fewer gradients than the direct model but mixes less well on q. A plausible reason is that the builder samples the path in centered form and has no reparameterization option, but we did not test this.
 
-Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times are similar. The advantage grows with the length of the series: the dimension of the direct posterior grows with it, while the smoother's cost is linear in it and the geometry the sampler sees stays the same. It also grows on accelerators, where the parallel-in-time scan of the `cuthbert` backend pays off.
+Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times are similar. The advantage grows with the length of the series: the dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2 and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
+
+We now measure the two costs that the building block section refers to: a full model evaluation, which returns the marginal log likelihood and the state estimates, and the gradient of the log density, which is what NUTS and SVI evaluate. Both are compiled with `jax.jit` on the training window.
+
+
+    In [9]:
+
+
+``` python
+def evaluation_cost(model: ForecastModel, site: str, num_evals: int = 1_000) -> float:
+    """Milliseconds per compiled model evaluation, returning the log likelihood and ``site``."""
+
+    def run(params: dict[str, Array]) -> tuple[Array, Array]:
+        substituted = numpyro.handlers.substitute(model, data=params)
+        tr = numpyro.handlers.trace(substituted).get_trace(covariates_train, train_data)
+        return tr["f_marginal_loglik"]["value"], tr[site]["value"]
+
+    return _timed(jax.jit(run), num_evals)
+
+
+def gradient_cost(model: ForecastModel, num_evals: int = 1_000) -> float:
+    """Milliseconds per compiled ``value_and_grad`` of the log density of ``model``."""
+
+    def log_joint(params: dict[str, Array]) -> Array:
+        return log_density(model, (covariates_train, train_data), {}, params)[0]
+
+    return _timed(jax.jit(jax.value_and_grad(log_joint)), num_evals)
+
+
+def _timed(fn: Callable[[dict[str, Array]], Any], num_evals: int) -> float:
+    """Average wall time in milliseconds of ``fn`` at the true scales, after compilation."""
+    params = {"q": jnp.asarray(q_true), "r": jnp.asarray(r_true)}
+    jax.block_until_ready(fn(params))
+    start = time.perf_counter()
+    for _ in range(num_evals):
+        out = fn(params)
+    jax.block_until_ready(out)
+    return (time.perf_counter() - start) / num_evals * 1e3
+
+
+pd.DataFrame(
+    {
+        "evaluation (ms)": {
+            "Filter": evaluation_cost(local_level_filtered, "f_filtered_states_mean"),
+            "Smoother": evaluation_cost(local_level_smoothed, "f_smoothed_states_mean"),
+        },
+        "gradient (ms)": {
+            "Filter": gradient_cost(local_level_filtered),
+            "Smoother": gradient_cost(local_level_smoothed),
+        },
+    }
+).round(3)
+```
+
+
+|          | evaluation (ms) | gradient (ms) |
+|----------|-----------------|---------------|
+| Filter   | 0.056           | 0.171         |
+| Smoother | 0.088           | 0.175         |
+
+
+The full evaluation is more expensive under the `Smoother`, which is the backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient.
 
 Next, we overlay the three posteriors of the two scales.
 
 
-    In [9]:
+    In [10]:
 
 
 ``` python
@@ -667,7 +743,7 @@ fig.suptitle("The three inference strategies recover the same posterior", fontsi
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-10-output-1.png" class="figure-img" width="1211" height="411" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-11-output-1.png" class="figure-img" width="1211" height="411" /></p>
 </figure>
 
 
@@ -685,7 +761,7 @@ This re-conditioning is one vectorized pass over the window per draw, which is c
 The driver is jitted and vectorized over the draws, and the `dynestyx` handlers inside the model run under that `jit` and `vmap` without special treatment. We define two small helpers for the HDI bands and their labels, then forecast with the three posteriors.
 
 
-    In [10]:
+    In [11]:
 
 
 ``` python
@@ -721,7 +797,7 @@ for label, model in models.items():
 We plot the three forecast fans with their 50\\ and 94\\ HDI bands.
 
 
-    In [11]:
+    In [12]:
 
 
 ``` python
@@ -752,7 +828,7 @@ fig.suptitle("Local level forecasts from the three inference strategies", fontsi
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-12-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-13-output-1.png" class="figure-img" width="1211" height="1211" /></p>
 </figure>
 
 
@@ -761,7 +837,7 @@ The three fans are the same forecast up to Monte Carlo error. The `dynestyx` mod
 The same comparison in tabular form: point accuracy through MAE and RMSE, the CRPS as a proper score for the whole predictive distribution, and the empirical coverage of the central 50\\ and 94\\ intervals.
 
 
-    In [12]:
+    In [13]:
 
 
 ``` python
@@ -783,9 +859,9 @@ pd.DataFrame(
 
 |  | direct (innovations) | dynestyx, explicit path | dynestyx, Kalman smoother |
 |----|----|----|----|
-| MAE | 0.449 | 0.449 | 0.447 |
-| RMSE | 0.591 | 0.586 | 0.591 |
-| CRPS | 0.439 | 0.441 | 0.440 |
+| MAE | 0.445 | 0.448 | 0.448 |
+| RMSE | 0.590 | 0.585 | 0.591 |
+| CRPS | 0.439 | 0.440 | 0.439 |
 | coverage (50%) | 0.833 | 0.833 | 0.833 |
 | coverage (94%) | 1.000 | 1.000 | 1.000 |
 
@@ -802,7 +878,7 @@ Recall that `data=None` is a mode switch. The window still reaches the model thr
 The three models produce it in three ways. The direct model replays its sampled path and adds observation noise. Under the `LatentPathBuilder` the block takes the posterior path that `dynestyx` reconstructs and adds the same noise. Under the `Smoother` the block draws every in-window state from the smoothing distribution p(x_t \mid y\_{1:T}, \theta) and adds the noise. The first two are joint draws of the whole path, the third is a set of per-step marginal draws. At every single step the three are the same distribution, which is all the bands below show.
 
 
-    In [13]:
+    In [14]:
 
 
 ``` python
@@ -1372,16 +1448,16 @@ Group: /
 │         * f_smoothed_states_mean_dim_0      (f_smoothed_states_mean_dim_0) int64 960B ...
 │         * f_smoothed_states_mean_dim_1      (f_smoothed_states_mean_dim_1) int64 8B 0
 │       Data variables:
-│           f_marginal_loglik                 (chain, draw) float32 16kB -125.2 ... -...
+│           f_marginal_loglik                 (chain, draw) float32 16kB -124.9 ... -...
 │           f_smoothed_states_cov             (chain, draw, f_smoothed_states_cov_dim_0, f_smoothed_states_cov_dim_1, f_smoothed_states_cov_dim_2) float32 2MB ...
 │           f_smoothed_states_cov_diag        (chain, draw, f_smoothed_states_cov_diag_dim_0, f_smoothed_states_cov_diag_dim_1) float32 2MB ...
 │           f_smoothed_states_mean            (chain, draw, f_smoothed_states_mean_dim_0, f_smoothed_states_mean_dim_1) float32 2MB ...
-│           q                                 (chain, draw) float32 16kB 0.3989 ... 0...
-│           r                                 (chain, draw) float32 16kB 0.3879 ... 0...
+│           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
+│           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
 │       Attributes:
-│           created_at:                 2026-09-25T14:59:57.083589+00:00
+│           created_at:                 2026-09-25T16:05:38.437707+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -1392,11 +1468,11 @@ Group: /
 │         * time     (time) int64 960B 0 1 2 3 4 5 6 7 ... 113 114 115 116 117 118 119
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB -12.41 -11.91 ... -9.207
+│           obs      (chain, draw, time, obs_dim) float32 2MB -12.35 -11.79 ... -9.208
 │       Attributes:
-│           created_at:                 2026-09-25T14:59:57.599189+00:00
+│           created_at:                 2026-09-25T16:05:39.106196+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -1407,9 +1483,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-09-25T14:59:57.599405+00:00
+│           created_at:                 2026-09-25T16:05:39.106436+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -1420,9 +1496,9 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-09-25T14:59:57.599562+00:00
+│           created_at:                 2026-09-25T16:05:39.106614+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -1433,11 +1509,11 @@ Group: /
 │         * time     (time) int64 192B 120 121 122 123 124 125 ... 139 140 141 142 143
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 384kB -10.05 -9.365 ... -6.873
+│           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
 │       Attributes:
-│           created_at:                 2026-09-25T14:59:57.628127+00:00
+│           created_at:                 2026-09-25T16:05:39.137370+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -1448,9 +1524,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-09-25T14:59:57.628327+00:00
+            created_at:                 2026-09-25T16:05:39.137602+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.2.0
+            creation_library_version:   1.3.1
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1670,7 +1746,7 @@ f_marginal_loglik
 float32
 
 
--125.2 -125.0 ... -127.4 -124.5
+-124.9 -125.0 ... -127.2 -124.6
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1678,7 +1754,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[-125.19349 , -124.96425 , -124.54048 , ..., -125.704956,-125.57279 , -125.51178 ],[-125.26783 , -124.49961 , -124.49961 , ..., -125.99913 ,-125.01412 , -124.93377 ],[-124.98286 , -127.0714  , -125.23277 , ..., -125.5692  ,-125.56291 , -127.77645 ],[-128.67215 , -126.31632 , -126.28569 , ..., -127.37631 ,-127.37631 , -124.52343 ]], shape=(4, 1000), dtype=float32)
+    array([[-124.92994 , -125.00486 , -124.76249 , ..., -125.692215,-125.859245, -128.18863 ],[-124.80739 , -124.64708 , -126.06529 , ..., -124.740715,-124.70812 , -124.74447 ],[-124.70758 , -126.90514 , -124.94177 , ..., -125.24226 ,-124.604454, -127.238174],[-128.95442 , -127.00242 , -126.7914  , ..., -127.24483 ,-127.24483 , -124.55983 ]], shape=(4, 1000), dtype=float32)
 
 
 f_smoothed_states_cov
@@ -1690,7 +1766,7 @@ f_smoothed_states_cov
 float32
 
 
-0.09432 0.07234 ... 0.07899 0.1047
+0.1011 0.0759 ... 0.07781 0.1032
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1698,7 +1774,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[[0.09432238]],[[0.07233942]],[[0.06929004]],...,[[0.06929198]],[[0.07235333]],[[0.09442268]]],[[[0.10601527]],[[0.08145405]],[[0.07814039]],...[[0.06070512]],[[0.06781476]],[[0.08986931]]],[[[0.1045748 ]],[[0.07897443]],[[0.07419364]],...,[[0.07419744]],[[0.07899479]],[[0.1046837 ]]]]], shape=(4, 1000, 120, 1, 1), dtype=float32)
+    array([[[[[0.10112812]],[[0.07590109]],[[0.06969309]],...,[[0.0696995 ]],[[0.07592721]],[[0.10123419]]],[[[0.09996754]],[[0.07502782]],[[0.06888031]],...[[0.06110231]],[[0.06821907]],[[0.09043334]]],[[[0.10307575]],[[0.0777852 ]],[[0.07297169]],...,[[0.07297552]],[[0.0778054 ]],[[0.10318173]]]]], shape=(4, 1000, 120, 1, 1), dtype=float32)
 
 
 f_smoothed_states_cov_diag
@@ -1710,7 +1786,7 @@ f_smoothed_states_cov_diag
 float32
 
 
-0.09432 0.07234 ... 0.07899 0.1047
+0.1011 0.0759 ... 0.07781 0.1032
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1718,7 +1794,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.09432238],[0.07233942],[0.06929004],...,[0.06929198],[0.07235333],[0.09442268]],[[0.10601527],[0.08145405],[0.07814039],...,[0.07814262],[0.08147026],[0.10613526]],[[0.10434365],[0.07852568],[0.07316757],...,......,[0.06070512],[0.06781476],[0.08986931]],[[0.0897947 ],[0.06779074],[0.06069738],...,[0.06070512],[0.06781476],[0.08986931]],[[0.1045748 ],[0.07897443],[0.07419364],...,[0.07419744],[0.07899479],[0.1046837 ]]]], shape=(4, 1000, 120, 1), dtype=float32)
+    array([[[[0.10112812],[0.07590109],[0.06969309],...,[0.0696995 ],[0.07592721],[0.10123419]],[[0.09996754],[0.07502782],[0.06888031],...,[0.06888647],[0.07505275],[0.1000687 ]],[[0.11457244],[0.08599187],[0.07877713],...,......,[0.06110231],[0.06821907],[0.09043334]],[[0.09035141],[0.06819282],[0.06109392],...,[0.06110231],[0.06821907],[0.09043334]],[[0.10307575],[0.0777852 ],[0.07297169],...,[0.07297552],[0.0778054 ],[0.10318173]]]], shape=(4, 1000, 120, 1), dtype=float32)
 
 
 f_smoothed_states_mean
@@ -1730,7 +1806,7 @@ f_smoothed_states_mean
 float32
 
 
--12.48 -12.31 ... -9.285 -9.264
+-12.4 -12.29 ... -9.287 -9.265
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1738,7 +1814,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-12.479917 ],[-12.310493 ],[-11.992172 ],...,[ -9.478284 ],[ -9.25722  ],[ -9.246113 ]],[[-12.4815445],[-12.31107  ],[-11.987763 ],...,[ -9.478997 ],[ -9.254966 ],[ -9.244871 ]],[[-12.427863 ],[-12.293048 ],[-12.055259 ],...,......,[ -9.501305 ],[ -9.367203 ],[ -9.334623 ]],[[-12.359117 ],[-12.268951 ],[-12.118784 ],...,[ -9.501305 ],[ -9.367203 ],[ -9.334623 ]],[[-12.442226 ],[-12.297675 ],[-12.0384865],...,[ -9.474147 ],[ -9.284609 ],[ -9.26367  ]]]], shape=(4, 1000, 120, 1), dtype=float32)
+    array([[[[-12.403204 ],[-12.285065 ],[-12.081824 ],...,[ -9.479487 ],[ -9.31845  ],[ -9.2904005]],[[-12.403088 ],[-12.285048 ],[-12.082108 ],...,[ -9.47956  ],[ -9.31869  ],[ -9.290606 ]],[[-12.397559 ],[-12.282885 ],[-12.085218 ],...,......,[ -9.500518 ],[ -9.365806 ],[ -9.333299 ]],[[-12.36022  ],[-12.269406 ],[-12.118064 ],...,[ -9.500518 ],[ -9.365806 ],[ -9.333299 ]],[[-12.43988  ],[-12.296936 ],[-12.041544 ],...,[ -9.474163 ],[ -9.286616 ],[ -9.26512  ]]]], shape=(4, 1000, 120, 1), dtype=float32)
 
 
 q
@@ -1750,7 +1826,7 @@ q
 float32
 
 
-0.3989 0.4276 ... 0.2616 0.3709
+0.3207 0.3186 ... 0.2633 0.3651
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1758,7 +1834,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.39887258, 0.42757586, 0.35332382, ..., 0.37153548, 0.29949325,0.4148441 ],[0.30931997, 0.3560039 , 0.3560039 , ..., 0.3161862 , 0.31349763,0.32329145],[0.3790027 , 0.49175367, 0.43996844, ..., 0.30298555, 0.40193027,0.48534104],[0.53988177, 0.31746817, 0.31838405, ..., 0.26156175, 0.26156175,0.37088972]], shape=(4, 1000), dtype=float32)
+    array([[0.32068327, 0.31857008, 0.33702788, ..., 0.37678984, 0.2931541 ,0.45265743],[0.32364076, 0.37731898, 0.3843973 , ..., 0.3405555 , 0.3298986 ,0.33731768],[0.3729805 , 0.49418774, 0.42799532, ..., 0.31091502, 0.3627534 ,0.45117033],[0.5031699 , 0.31187838, 0.31304047, ..., 0.26332444, 0.26332444,0.36514115]], shape=(4, 1000), dtype=float32)
 
 
 r
@@ -1770,7 +1846,7 @@ r
 float32
 
 
-0.3879 0.4096 ... 0.456 0.4294
+0.4482 0.4458 ... 0.4565 0.4278
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1778,20 +1854,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.38789284, 0.40957433, 0.43801975, ..., 0.51596075, 0.44678423,0.4824782 ],[0.49265105, 0.44180763, 0.44180763, ..., 0.53014916, 0.4604643 ,0.44263026],[0.4853816 , 0.33089927, 0.43639004, ..., 0.44003972, 0.37573385,0.4896246 ],[0.45221823, 0.54041326, 0.53970146, ..., 0.4559842 , 0.4559842 ,0.4293586 ]], shape=(4, 1000), dtype=float32)
+    array([[0.44820744, 0.44580153, 0.48011798, ..., 0.51331335, 0.44494927,0.5301802 ],[0.45957825, 0.4171043 , 0.52102685, ..., 0.4799249 , 0.4587699 ,0.43649143],[0.47349715, 0.33710554, 0.42352644, ..., 0.44357568, 0.42531967,0.5070788 ],[0.50365436, 0.55811256, 0.55280817, ..., 0.45648342, 0.45648342,0.42782402]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T14:59:57.083589+00:00
+2026-09-25T16:05:38.437707+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1906,7 +1982,7 @@ obs
 float32
 
 
--12.41 -11.91 ... -8.051 -9.207
+-12.35 -11.79 ... -8.059 -9.208
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1914,20 +1990,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-12.408694 ],[-11.905624 ],[-11.231727 ],...,[ -8.676435 ],[ -9.531539 ],[ -9.855018 ]],[[-12.562506 ],[-12.064575 ],[-11.283206 ],...,[ -9.30423  ],[ -9.160572 ],[ -8.448566 ]],[[-12.606714 ],[-12.018205 ],[-13.072787 ],...,......,[ -9.293865 ],[ -9.250372 ],[ -9.651805 ]],[[-13.277254 ],[-12.181114 ],[-12.200642 ],...,[ -8.9991665],[ -8.968224 ],[ -9.285858 ]],[[-12.854329 ],[-12.508338 ],[-11.404086 ],...,[ -8.9296055],[ -8.051256 ],[ -9.207139 ]]]], shape=(4, 1000, 120, 1), dtype=float32)
+    array([[[[-12.352675 ],[-11.794619 ],[-11.226136 ],...,[ -8.614657 ],[ -9.642351 ],[ -9.963312 ]],[[-12.536471 ],[-12.017875 ],[-11.389994 ],...,[ -9.309955 ],[ -9.186474 ],[ -8.454043 ]],[[-12.581463 ],[-11.981739 ],[-13.174151 ],...,......,[ -9.292221 ],[ -9.248516 ],[ -9.650716 ]],[[-13.280217 ],[-12.18261  ],[-12.19955  ],...,[ -8.998518 ],[ -8.966867 ],[ -9.283775 ]],[[-12.8492565],[-12.5082035],[-11.411583 ],...,[ -8.932751 ],[ -8.058711 ],[ -9.20815  ]]]], shape=(4, 1000, 120, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T14:59:57.599189+00:00
+2026-09-25T16:05:39.106196+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2015,13 +2091,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T14:59:57.599405+00:00
+2026-09-25T16:05:39.106436+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2109,13 +2185,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T14:59:57.599562+00:00
+2026-09-25T16:05:39.106614+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2230,7 +2306,7 @@ obs
 float32
 
 
--10.05 -9.365 ... -7.059 -6.873
+-10.23 -9.461 ... -7.083 -6.908
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2238,20 +2314,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-10.046623 ],[ -9.365475 ],[ -8.5716095],...,[ -5.4676757],[ -6.1198854],[ -4.8590226]],[[ -9.600916 ],[-10.720199 ],[-10.7961645],...,[ -8.823514 ],[ -9.338912 ],[-10.630958 ]],[[ -9.359772 ],[ -9.198961 ],[ -9.796957 ],...,......,[ -8.183839 ],[ -8.290319 ],[ -7.748237 ]],[[ -9.237168 ],[ -9.796006 ],[ -8.565223 ],...,[-10.149945 ],[-10.299105 ],[-10.641212 ]],[[ -8.80544  ],[ -8.844355 ],[ -8.497031 ],...,[ -7.942396 ],[ -7.0588217],[ -6.872678 ]]]], shape=(4, 1000, 24, 1), dtype=float32)
+    array([[[[-10.228613 ],[ -9.460849 ],[ -8.545705 ],...,[ -6.42752  ],[ -7.035676 ],[ -5.6664305]],[[ -9.418294 ],[-10.329985 ],[-10.54233  ],...,[ -8.867797 ],[ -9.285464 ],[-10.504098 ]],[[ -9.433964 ],[ -9.14304  ],[ -9.847077 ],...,......,[ -8.173868 ],[ -8.278817 ],[ -7.736565 ]],[[ -9.235904 ],[ -9.794433 ],[ -8.562177 ],...,[-10.14985  ],[-10.300585 ],[-10.64304  ]],[[ -8.808359 ],[ -8.849777 ],[ -8.502832 ],...,[ -7.9603224],[ -7.083179 ],[ -6.9077325]]]], shape=(4, 1000, 24, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T14:59:57.628127+00:00
+2026-09-25T16:05:39.137370+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2339,13 +2415,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T14:59:57.628327+00:00
+2026-09-25T16:05:39.137602+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2367,10 +2443,10 @@ sample_dims :
 \['chain', 'draw'\]
 
 
-The tree carries the `posterior`, `posterior_predictive`, `observed_data` and `predictions` groups, as for any other model of the package. We plot the three in-sample bands.
+The tree carries the `posterior`, `posterior_predictive`, `observed_data` and `constant_data` groups and, because the covariates extend past the data, the `predictions` and `predictions_constant_data` groups, as for any other model of the package. We plot the three in-sample bands.
 
 
-    In [14]:
+    In [15]:
 
 
 ``` python
@@ -2412,11 +2488,11 @@ fig.suptitle("In-sample posterior predictive from to_datatree", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-15-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-16-output-1.png" class="figure-img" width="1211" height="1211" /></p>
 </figure>
 
 
-The three bands coincide and the in-sample CRPS values agree to the third decimal. The `LatentPathBuilder` conditioner serves the in-sample predictive as well as the smoother does, so both `dynestyx` strategies work with [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
+The three bands coincide and the in-sample CRPS values agree closely. The `LatentPathBuilder` conditioner serves the in-sample predictive as well as the smoother does, so both `dynestyx` strategies work with [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
 
 
 ## Latent Level Reconstruction
@@ -2426,11 +2502,10 @@ This section separates two claims that are easy to mix up.
 **The parameter posterior is the same under a `Filter` and a `Smoother`.** Both handlers put the same number in the trace, the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window, because the Kalman smoother reads it from its forward filtering pass. The posterior p(\theta \mid y\_{1:T}) is therefore the same under both handlers. We confirm this on the fitted model with `numpyro.infer.util.log_density`, at one parameter value.
 
 
-    In [15]:
+    In [16]:
 
 
 ``` python
-local_level_filtered = local_level_state_space(Filter(filter_config=KFConfig()))
 smoothed_posterior = posteriors["dynestyx, Kalman smoother"]
 posterior_mean = {name: smoothed_posterior[name].mean() for name in ("q", "r")}
 handlers = {"Filter": local_level_filtered, "Smoother": local_level_smoothed}
@@ -2440,8 +2515,8 @@ for handler, handler_model in handlers.items():
 ```
 
 
-      Filter handler: log joint density at the posterior mean -125.156319
-    Smoother handler: log joint density at the posterior mean -125.156319
+      Filter handler: log joint density at the posterior mean -125.142899
+    Smoother handler: log joint density at the posterior mean -125.142899
 
 
 The two values agree. The draws we already have are draws from the posterior of either model, and we can read them under the other handler without refitting.
@@ -2450,10 +2525,10 @@ The two values agree. The draws we already have are draws from the posterior of 
 
 Every model registers a `level` site when it is called without data. Calling `Predictive` with the posterior draws and the training covariates only, and asking for that site, gives one level path per posterior draw. The direct model replays `x0` plus the cumulative sum of the sampled `drift`, the builder returns its posterior path, and the smoother draws from the smoothing distribution, the last two through the same `x_in_sample` field of the block's result. All three condition on the whole window, so all three are smoothing reconstructions.
 
-The filtered level needs one more step, because a `Filter` conditioner has no in-sample mode. Instead, we record the `f_filtered_states_*` sites with `Predictive` under the `Filter` model, using the draws of the smoothed fit. Drawing one level per posterior draw from those per-step Gaussians mixes the state uncertainty and the parameter uncertainty into a single band, as the `level` site does for the other three.
+The filtered level needs one more step, because a `Filter` conditioner has no in-sample mode. Instead, we record the `f_filtered_states_*` sites with `Predictive` under the `Filter` model defined above, using the draws of the smoothed fit. Drawing one level per posterior draw from those per-step Gaussians mixes the state uncertainty and the parameter uncertainty into a single band, as the `level` site does for the other three.
 
 
-    In [16]:
+    In [17]:
 
 
 ``` python
@@ -2486,7 +2561,7 @@ filtered_level = filtered_mean + filtered_sd * np.asarray(
 The simulation gives us the true level, so we can score the four reconstructions against it. The smoother conditions on more data than the filter, so it should reconstruct the state better, both as a point estimate (RMSE) and as a distribution (CRPS).
 
 
-    In [17]:
+    In [18]:
 
 
 ``` python
@@ -2511,7 +2586,7 @@ pd.DataFrame(
 We plot the filtered and smoothed levels in the top panel, and the three `level` sites in the bottom panel.
 
 
-    In [18]:
+    In [19]:
 
 
 ``` python
@@ -2551,7 +2626,7 @@ axes[-1].set(xlabel="time");
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-19-output-1.png" class="figure-img" width="1211" height="1011" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-20-output-1.png" class="figure-img" width="1211" height="1011" /></p>
 </figure>
 
 
@@ -2576,7 +2651,7 @@ In `dynestyx` terms \beta^\top u_t is the `D` matrix of `LTI_discrete`, which in
 We simulate the series with the same scales, the true coefficients `beta_true` and a period of 12 steps with 2 harmonics, again with `dsx.simulate`.
 
 
-    In [19]:
+    In [20]:
 
 
 ``` python
@@ -2622,7 +2697,7 @@ ax.set(title="Simulated local level series with seasonality", xlabel="time", yla
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-20-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-21-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -2634,7 +2709,7 @@ The seasonal pattern is visible on top of the moving level.
 The model splits the covariate array into the observed window and the controls, adds a \text{Normal}(0, 1) prior on the four coefficients, and conditions with the same smoother as before.
 
 
-    In [20]:
+    In [21]:
 
 
 ``` python
@@ -2675,7 +2750,7 @@ Variational inference is the other standard path in the package, and it works on
 Because the level is integrated out, the guide does not have to approximate a t\_{\text{obs}}-dimensional latent path, which is where mean-field guides usually underestimate uncertainty. We draw the posterior with [`draw_posterior`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.draw_posterior.html) and forecast as before.
 
 
-    In [21]:
+    In [22]:
 
 
 ``` python
@@ -2704,13 +2779,13 @@ ax.set(title="SVI loss (negative ELBO)", xlabel="step", ylabel="loss");
 ```
 
 
-    SVI: 2.5 s, final loss 147.32
+    SVI: 3.4 s, final loss 147.32
     posterior mean of beta: [ 1.68  0.54 -0.38  0.23]
     truth:                  [ 1.5  0.5 -0.4  0.3]
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-22-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-23-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -2722,7 +2797,7 @@ The loss flattens well before the 3{,}000 steps, and the posterior mean of `beta
 We plot the SVI forecast with `az.plot_lm`.
 
 
-    In [22]:
+    In [23]:
 
 
 ``` python
@@ -2772,7 +2847,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-23-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-24-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -2788,7 +2863,7 @@ The loop delegates fitting and forecasting to two closures we write. `forecast_f
 The `dynestyx` model needs no adapter for any of this. It is a `numpyro_forecast` model, and the closures are the same ones the other examples use. We size the folds at 12 steps (`test_window=12`, `stride=12`) and seed the first training window with the first 72 observations, which gives six folds.
 
 
-    In [23]:
+    In [24]:
 
 
 ``` python
@@ -2865,23 +2940,23 @@ results_to_dataframe(results).round(3)
 ```
 
 
-    backtest: 6 folds in 81.4 s
+    backtest: 6 folds in 120.5 s
 
 
 |  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 6.122 | 0.682 | 0.250 | 1.000 | 0.218 | 0.708 | 1.0 |
-| 1 | 0 | 84 | 96 | 1000 | 6.284 | 0.926 | 0.417 | 0.917 | 0.208 | 0.714 | 1.0 |
-| 2 | 0 | 96 | 108 | 1000 | 7.305 | 0.407 | 0.917 | 1.000 | 0.215 | 0.729 | 1.0 |
-| 3 | 0 | 108 | 120 | 1000 | 7.168 | 0.439 | 0.667 | 1.000 | 0.211 | 0.759 | 1.0 |
-| 4 | 0 | 120 | 132 | 1000 | 7.455 | 0.658 | 0.667 | 1.000 | 0.203 | 0.775 | 1.0 |
-| 5 | 0 | 132 | 144 | 1000 | 8.037 | 0.771 | 0.250 | 1.000 | 0.242 | 0.720 | 1.0 |
+| 0 | 0 | 72 | 84 | 1000 | 7.358 | 0.691 | 0.250 | 1.000 | 0.217 | 0.708 | 1.000 |
+| 1 | 0 | 84 | 96 | 1000 | 14.058 | 0.922 | 0.333 | 0.917 | 0.208 | 0.714 | 1.000 |
+| 2 | 0 | 96 | 108 | 1000 | 8.922 | 0.408 | 0.917 | 1.000 | 0.213 | 0.740 | 1.000 |
+| 3 | 0 | 108 | 120 | 1000 | 10.206 | 0.440 | 0.667 | 1.000 | 0.211 | 0.759 | 1.000 |
+| 4 | 0 | 120 | 132 | 1000 | 10.044 | 0.657 | 0.667 | 1.000 | 0.203 | 0.767 | 1.000 |
+| 5 | 0 | 132 | 144 | 1000 | 9.109 | 0.767 | 0.250 | 1.000 | 0.241 | 0.712 | 0.992 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.
 
 
-    In [24]:
+    In [25]:
 
 
 ``` python
@@ -2956,14 +3031,14 @@ ax.set(title="Expanding-window backtest of the dynestyx model", xlabel="time", y
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-25-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-26-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
 The bands track the series across all six folds. Finally, we look at the per-fold scores.
 
 
-    In [25]:
+    In [26]:
 
 
 ``` python
@@ -3012,7 +3087,7 @@ axes[1].set(
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/cell-26-output-1.png" class="figure-img" width="1211" height="411" /></p>
+<p><img src="dynestyx_integration_files/figure-html/cell-27-output-1.png" class="figure-img" width="1211" height="411" /></p>
 </figure>
 
 
@@ -3031,15 +3106,15 @@ The empirical coverage of the central 50\\ interval moves around the nominal lev
 - **One block, one argument.** A `dynestyx` model becomes a `numpyro_forecast` model through `state_space_series`, and the handler stack passed as its `conditioner` is the inference strategy. A `Smoother` (or `Filter`) integrates the latent path out, a `LatentPathBuilder` samples it explicitly, a `Discretizer` after either handles continuous-time dynamics, and switching between them is a change of one argument.
 - **The drivers work without changes.** The block owns the likelihood and registers the horizon rollout as `"forecast"` and the in-sample predictive as `"obs"`. [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) (in and out of sample) and the metrics work on it under the same `jit` and `vmap` as for every other model.
 - **The three strategies agree.** On the local level model the posteriors, the forecasts, the in-sample bands and the reconstructed level coincide across the direct model, the explicit path and the smoother.
-- **The smoother is the efficient choice.** On linear-Gaussian models it is exact, and the sampler explores the parameters only. It needs a small fraction of the gradient evaluations of the direct model for a larger effective sample size, and the smoothing distribution gives the in-sample predictive without a second fit. The backward pass costs about as much as the forward filter, but it does not enter the gradient of the marginal log likelihood, so here the smoother and the filter cost the same per gradient.
+- **The smoother is the efficient choice.** On linear-Gaussian models it is exact, and the sampler explores the parameters only. It needs a small fraction of the gradient evaluations of the direct model for a larger effective sample size, and the smoothing distribution gives the in-sample predictive without a second fit. The backward pass makes a full evaluation more expensive than a filter evaluation, but it does not enter the gradient of the marginal log likelihood, so the smoother and the filter cost the same per gradient here.
 
 
 ## Model Limitations
 
-- `dynestyx` predicts at or after the end of the window only, so the in-sample predictive comes from the conditioned distributions and not from a rollout, and it is a per-step marginal. A functional of the whole path would need backward simulation.
+- A `Smoother` or a `LatentPathBuilder` predicts at or after the end of the window only (a `Filter` also predicts inside the window, from the filtering distribution), so the in-sample predictive comes from the conditioned distributions and not from a rollout, and it is a per-step marginal. A functional of the whole path would need backward simulation.
 - A `Filter` conditioner has no in-sample predictive. Use a `Smoother` instead: it reports the same marginal log likelihood, so the two handlers share the parameter posterior. They do not share the distribution over the states. The filtering distribution uses the observations up to step t, the smoothing distribution uses the whole window, and the smoothed level is the better reconstruction of the true state.
-- The observed window travels in the covariates, the time grids are host-side constants for the smoother's rollout and jax arrays for the builder, and the rollout is anchored at the last observed step. The block handles all three, and a rewrite that derives `times` from a covariate column would break the second.
-- The [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) family of the package with a latent level (exponential smoothing in innovations form) is already marginalized by its deterministic recursion and has no `dynestyx` counterpart. Its members that are Markov in the observations (autoregressions) can be written with `DiracIdentityObservation` under a `LatentPathBuilder`, see the design document.
+- The observed window travels in the covariates, the time grids are NumPy constants for a `Filter` rollout and jax arrays for a `LatentPathBuilder`, and the rollout is anchored at the last observed step. The block handles all three. A rewrite that derives `times` from a covariate column would break the `Filter` rollout under `jit`.
+- The [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) family of the package (exponential smoothing in innovations form) has no stochastic latent to integrate out: with a single source of error its state is a deterministic function of the past observations, so its likelihood is exact given the parameters, and it has no `dynestyx` counterpart. Its members that are Markov in the observations (autoregressions) can be written with `DiracIdentityObservation` under a `LatentPathBuilder`, see the design document.
 
 
 ## Recommendations
@@ -3047,14 +3122,14 @@ The empirical coverage of the central 50\\ interval moves around the nominal lev
 1.  Use a `Smoother` with `KFSmootherConfig(filter_source="cd_dynamax")` on linear-Gaussian models, and switch to `filter_source="cuthbert"` when you need missing observations, time-varying parameters or a GPU on long series.
 2.  Use a `LatentPathBuilder` when the path itself is the object of interest, the observation model is non-Gaussian, or the dynamics are discretized continuous-time.
 3.  Put `LocScaleReparam` on the direct model in any comparison, as we did here.
-4.  Create the `dynestyx` handlers once, outside the model, and pass the KF configurations explicitly, because the `dynestyx` defaults are approximate filters.
+4.  Create the `dynestyx` handlers once, outside the model, and pass the KF configurations explicitly: `Filter()` defaults to an ensemble Kalman filter and `Smoother()` to an extended Kalman smoother on the `cuthbert` backend, which are approximate or needlessly expensive on a linear-Gaussian model.
 
 
 # Next Steps
 
 1.  **Continuous-time dynamics.** A mean-reverting level on irregularly spaced observations, with a `Discretizer` after the smoother, is the case `dynestyx` supports and the index-based blocks of the package cannot express. The design document records the recipe and the caveats that keep it out of this notebook for now.
-2.  **Nonlinear and non-Gaussian models.** The approximate filters and smoothers of `dynestyx` (ensemble, extended, unscented and particle) give pseudo-marginal inference beyond the linear-Gaussian case, with the same block.
-3.  **Missing observations.** The `cuthbert` backend and the builder's `missing_observation_strategy` handle `NaN` values in the window, which the models of the package do not.
+2.  **Nonlinear and non-Gaussian models.** The approximate filters and smoothers of `dynestyx` (ensemble, extended, unscented and particle) extend the block beyond the linear-Gaussian case. The particle filter gives an unbiased likelihood estimate and therefore pseudo-marginal inference; the ensemble, extended and unscented Kalman filters give biased Gaussian approximations.
+3.  **Missing observations.** `NaN` values in the window are supported by the `cuthbert` backend for the Kalman and ensemble Kalman filters and smoothers, and by the builder's `missing_observation_strategy`. The models of the package have no missing-data support.
 4.  **A `contrib` module.** Once the maintainers of both libraries have reviewed the composition, the block moves to `numpyro_forecast.contrib.dynestyx` and this notebook imports it.
 
 
