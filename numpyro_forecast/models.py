@@ -28,6 +28,16 @@ from numpyro_forecast.arrays import _zeros_like_data, concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
 
+TIME_PLATE = "time"
+"""Name of the in-sample time plate opened by `innovations()`.
+
+`~~numpyro_forecast.reparam.time_reparam()` targets the sites under this plate by
+name, so the two modules share this constant rather than each spelling the literal.
+"""
+
+TIME_FUTURE_PLATE = "time_future"
+"""Name of the forecast-horizon plate opened by `innovations()` and `ssoe()`."""
+
 
 @dataclass(frozen=True)
 class Horizon:
@@ -165,10 +175,10 @@ def innovations(
     Array
         The latent over the full horizon with time at axis ``-2``.
     """
-    prefix = _sample_time_block(name, h.t_obs, "time", dist_fn, reparam)
+    prefix = _sample_time_block(name, h.t_obs, TIME_PLATE, dist_fn, reparam)
     if h.future <= 0:
         return prefix
-    suffix = _sample_time_block(f"{name}_future", h.future, "time_future", dist_fn, reparam)
+    suffix = _sample_time_block(f"{name}_future", h.future, TIME_FUTURE_PLATE, dist_fn, reparam)
     return concat_future(prefix, suffix, axis=-2)
 
 
@@ -672,7 +682,7 @@ def ssoe[Carry](
         empty = jnp.zeros((*mu.shape[:-2], 0, mu.shape[-1]), mu.dtype)
         return SSOEResult(mu=mu, mu_future=empty, y_future=empty)
 
-    with numpyro.plate("time_future", h.future, dim=_future_plate_dim(noise_dist)):
+    with numpyro.plate(TIME_FUTURE_PLATE, h.future, dim=_future_plate_dim(noise_dist)):
         eps = cast(Array, numpyro.sample(f"{name}_future", noise_dist))
     _validate_future_errors(eps, mu, h.future)
     eps_scan = jnp.moveaxis(eps, -2, 0)

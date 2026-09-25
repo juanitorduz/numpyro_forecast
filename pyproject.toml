@@ -36,7 +36,7 @@ dependencies = [
     # <0.11.1 until numpyro releases pyro-ppl/numpyro#2245 (render_model provenance on jax 0.11.1)
     "jax>=0.10.0,<0.11.3",
     "jaxtyping>=0.3.11",
-    "numpyro>=0.20.0",
+    "numpyro>=0.22.0",
 ]
 
 [project.optional-dependencies]
