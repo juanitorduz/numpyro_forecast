@@ -3,19 +3,19 @@
 
 State Space Models with `dynestyx` and `numpyro_forecast`
 
-In this notebook we write a [`dynestyx`](https://github.com/BasisResearch/dynestyx) state space model as a `numpyro_forecast` model. We then fit it, forecast with it and backtest it with the drivers of the package, unchanged.
+In this notebook we write a [`dynestyx`](https://github.com/BasisResearch/dynestyx) state space model as a `numpyro_forecast` model. We then fit it, forecast with it and backtest it with the drivers of the package, without changing them.
 
-`dynestyx` is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a `DynamicalModel`, which bundles an initial condition, a state evolution and an observation model. Its single primitive, `dsx.sample`, is interpreted by effect handlers: a `Filter` or a `Smoother` marginalizes the latent path with a filtering algorithm (Kalman, ensemble Kalman, extended and unscented Kalman, particle filters) and adds the marginal log likelihood to the NumPyro trace, a `LatentPathBuilder` samples the path explicitly, and a `Simulator` rolls the model forward in time.
+`dynestyx` is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a `DynamicalModel`, which bundles an initial condition, a state evolution and an observation model. Its single primitive, `dsx.sample`, is interpreted by effect handlers. A `Filter` or a `Smoother` integrates the latent path out with a filtering algorithm (Kalman, ensemble Kalman, extended and unscented Kalman, particle filters) and adds the marginal log likelihood to the NumPyro trace. A `LatentPathBuilder` samples the path explicitly. A `Simulator` rolls the model forward in time.
 
-`numpyro_forecast` is a forecasting workflow layer. A model is a plain function `(covariates, data=None)` built from model building blocks that register the `"obs"` and `"forecast"` sites, and the drivers ([`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html), [`predict_in_sample`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html), [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html), [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) and the metrics) read those sites by name.
+`numpyro_forecast` is a forecasting workflow layer. A model is a plain function `(covariates, data=None)` built from model building blocks that register the `"obs"` and `"forecast"` sites. The drivers ([`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html), [`predict_in_sample`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.predict_in_sample.html), [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html), [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) and the metrics) read those sites by name.
 
-The two libraries compose at the trace level. We connect them with one new model building block, `state_space_series`. Its `conditioner` argument is the `dynestyx` handler that interprets `dsx.sample` over the observed window, so the choice between marginalizing the latent path (a `Smoother`) and sampling it explicitly (a `LatentPathBuilder`) is a one-argument change.
+The two libraries compose at the trace level. We connect them with one new model building block, `state_space_series`. Its `conditioner` argument is the `dynestyx` handler that interprets `dsx.sample` over the observed window. The choice between integrating the latent path out (a `Smoother`) and sampling it explicitly (a `LatentPathBuilder`) is therefore a change of one argument.
 
 We proceed as follows:
 
 1.  **Prepare Notebook.** We load the libraries and set the configuration.
 2.  **The Building Block.** We define `state_space_series` and explain its contract.
-3.  **Local Level Model.** We fit the same generative process three times: in the direct form of the package, with `dynestyx` sampling the path explicitly, and with `dynestyx` marginalizing it with a Kalman smoother. We compare posteriors, sampler efficiency, forecasts, in-sample fits and the reconstructed latent level.
+3.  **Local Level Model.** We fit the same model three times: in the direct form of the package, with `dynestyx` sampling the path explicitly, and with `dynestyx` integrating it out with a Kalman smoother. We compare posteriors, sampler efficiency, forecasts, in-sample fits and the reconstructed latent level.
 4.  **Seasonal Regression Model.** We add a seasonal regression through the covariates, fit it with SVI and run the expanding-window backtest of the package on the `dynestyx` model, in and out of sample. This is the evaluation direction that the [design document](https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md) of this integration proposes.
 5.  **Conclusion.** We summarize the findings, the limitations and our recommendations.
 
@@ -98,25 +98,26 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 
 # The Building Block
 
-The block below is the whole integration, and its docstring states the contract. It takes the current call's [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), a site name, the observed window `y`, a `dynestyx` `DynamicalModel` and a **conditioner**. The conditioner is the stack of `dynestyx` handlers that interpret `dsx.sample` over the observed window, and it takes one of three forms:
+The block below is the whole integration. Its docstring states the contract. It takes the current call's [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), a site name, the observed window `y`, a `dynestyx` `DynamicalModel` and a **conditioner**. The conditioner is the stack of `dynestyx` handlers that interpret `dsx.sample` over the observed window. It takes one of three forms:
 
-- **`Filter` or `Smoother`**: they compute the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window and register it as a NumPyro factor, so the joint density that NUTS or SVI sees is p(\theta) \\ p(y\_{1:T} \mid \theta) with the latent path integrated out. The smoother additionally carries the smoothing distribution p(x_t \mid y\_{1:T}, \theta) of every in-window state, which the filter does not, and it costs nothing extra during fitting.
-- **`LatentPathBuilder`**: it creates one sample site for the whole path and registers the joint state-observation density as a factor. The sampler explores the path explicitly, as it does with the package's own [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html), but `dynestyx` builds the path, which is the road to discretized continuous-time dynamics and to observation models that handle missing values.
-- **`Discretizer`**: it may follow either of the above, as the second element of a sequence, to turn a continuous-time model into the discrete transition the conditioning handler consumes. We stay with discrete-time models here, and the [design document](https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md) records the continuous-time recipe and its caveats.
+- **`Filter` or `Smoother`**: they compute the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window and register it as a NumPyro factor. The joint density that NUTS or SVI sees is then p(\theta) \\ p(y\_{1:T} \mid \theta), with the latent path integrated out. The smoother also provides the smoothing distribution p(x_t \mid y\_{1:T}, \theta) of every in-window state, which the filter does not. During fitting only the factor is used, so the two cost the same per gradient.
+- **`LatentPathBuilder`**: it creates one sample site for the whole path and registers the joint density of states and observations as a factor. The sampler explores the path explicitly, as it does with the package's own [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html). The difference is that `dynestyx` builds the path, so discretized continuous-time dynamics and observation models with missing values are available.
+- **`Discretizer`**: it can follow either of the above, as the second element of a sequence, and turns a continuous-time model into the discrete transition the conditioning handler consumes. We stay with discrete-time models here. The [design document](https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md) records the continuous-time recipe and its caveats.
 
-How does the block tell the modes apart? It reads the observed window from its `y` argument, sliced from `covariates` by the model (the series doubles as a covariate, exactly the contract of [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html)), and it uses `h.data` only as a mode switch. Training runs `dsx.sample` under the stack.
+The block has three modes, and `h.data` selects them. The observations themselves come from the `y` argument, which the model slices from `covariates` (the series doubles as a covariate, the same contract as [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html)). This is what lets a model call without data still reach the observed window.
 
-Forecasting nests the stack inside a `Simulator`, which `dynestyx` interprets as a posterior rollout from the conditioned state at the last observed step, and registers the horizon draws as the `"forecast"` site.
+1.  **Training** (`data` present, no horizon): the block runs `dsx.sample` under the conditioner. The factor (and the path site, for the builder) enters the trace.
+2.  **Forecasting** (`covariates` longer than `data`): the block nests the conditioner inside a `Simulator`. `dynestyx` interprets this as a posterior rollout from the conditioned state at the last observed step. The block registers the horizon draws as the `"forecast"` site.
+3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the conditioner's posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` is a mode switch, not an absence of data. The in-sample predictive is a smoothing task, which is why a `Filter` conditioner raises in this mode.
 
-When a driver calls the model without data, the observed window still arrives through `covariates`. The block then draws the in-window states from the conditioner's posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. In other words, `data=None` is a mode switch and not an absence of data: the in-sample predictive is a smoothing task, which is why a `Filter` conditioner raises in this mode.
+The block owns the likelihood, so it also owns the two sites, like [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html). It returns a `StateSpaceResult` with the state draws of the current mode, `x_future` over the horizon and `x_in_sample` over the window, so that a model can register its latent level.
 
-Because the block owns the likelihood, it owns the two sites too, like [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html). A model is its horizon, its parameters and one call. The block returns a `StateSpaceResult` with the state draws of the current mode, `x_future` over the horizon and `x_in_sample` over the window, for a model that wants to register its latent level.
+Two details of the implementation matter for correctness:
 
-Here are two important remarks about the time grids and the rollout. First, the [Horizon](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon) counts the steps and the `times` argument places them: the block slices the observation times from `times` and takes the last `future` entries as the forecast times (any strictly increasing grid, regular or not, and the step index by default). It hands them to `dynestyx` as NumPy constants for a `Filter` or `Smoother`, whose rollout does its segment bookkeeping on the host, and as jax arrays for a `LatentPathBuilder`, which indexes them inside a scan. The drivers run the model under `jax.jit`, so a grid derived from a traced covariate column would break the first case.
+- **Time grids.** The [Horizon](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon) counts the steps and the `times` argument places them. The block slices the observation times from `times` and takes the last `future` entries as the forecast times (any strictly increasing grid, the step index by default). It passes them to `dynestyx` as NumPy constants for a `Filter` or `Smoother`, whose rollout does its segment bookkeeping on the host, and as jax arrays for a `LatentPathBuilder`, which indexes them inside a scan. The drivers run the model under `jax.jit`, so a grid derived from a traced covariate column would break the first case.
+- **The anchor.** The prediction grid starts at the last observed step, `t_obs - 1`, and the block drops the first returned row. The simulator's first predicted state is the conditioned draw at `predict_times[0]` without a transition, so this anchor gives exactly one transition per horizon step. A grid that starts at `t_obs` would report the state of step `t_obs - 1` as the forecast for `t_obs`.
 
-Second, the prediction grid starts at the last observed step, `t_obs - 1`, and the block drops the first returned row. The simulator's first predicted state is the conditioned draw at `predict_times[0]` without a transition, so anchoring there yields exactly one transition per horizon step. Starting at `t_obs` instead would silently report the state of step `t_obs - 1` as the forecast for `t_obs`.
-
-Keep this in mind: create the handlers once, outside the model. They are `dynestyx` objects with state of their own, and the builder caches the observation layout it needs to run under `jit`.
+Finally, create the handlers once, outside the model. They are `dynestyx` objects with state of their own, and the builder caches the observation layout it needs to run under `jit`.
 
 
 ``` python
@@ -362,7 +363,7 @@ The local level model is the simplest structural time series model. The latent l
 
  \begin{align\*} x_t &= x\_{t-1} + w_t, \qquad w_t \sim \text{Normal}(0, q), \\ y_t &= x_t + v_t, \qquad v_t \sim \text{Normal}(0, r). \end{align\*} 
 
-In `dynestyx` this is `LTI_discrete` (linear time-invariant, discrete time) with transition matrix A = 1, state covariance Q = q^2, observation matrix H = 1 and observation covariance R = r^2. We write the dynamics as a small function of the two scales, so the same object serves the generative model, the prior predictive check and every inference strategy.
+In `dynestyx` this is `LTI_discrete` (linear time-invariant, discrete time) with transition matrix A = 1, state covariance Q = q^2, observation matrix H = 1 and observation covariance R = r^2. We write the dynamics as a function of the two scales, so the same object serves the data simulation, the prior predictive check and every inference strategy.
 
 
 ``` python
@@ -383,7 +384,7 @@ def local_level_dynamics(q: Array, r: Array) -> DynamicalModel:
 
 We simulate 144 steps from the model with known scales q = 0.3 and r = 0.5 using `dsx.simulate`, the pure-JAX generator of `dynestyx`. It takes an explicit key and registers no NumPyro sites. We hold out the last 24 steps as the test window.
 
-Note that the package expects time at axis -2 and the observation dimension at axis -1, which is the layout `dsx.simulate` returns. There are no exogenous inputs in this example, so the covariate array is the series itself. The models read their observed window from its first `t_obs` rows, and the trailing rows only fix the forecast horizon.
+The package expects time at axis -2 and the observation dimension at axis -1, which is the layout `dsx.simulate` returns. There are no exogenous inputs in this example, so the covariate array is the series itself. The models read their observed window from its first `t_obs` rows; the trailing rows only fix the forecast horizon.
 
 
 ``` python
@@ -422,14 +423,14 @@ ax.set(title="Simulated local level series", xlabel="time", ylabel="y");
 </figure>
 
 
-The level wanders as a random walk should, and the observations scatter around it with the larger noise scale r.
+The level moves as a random walk, and the observations scatter around it with the larger noise scale r.
 
 
 ## Prior Predictive Checks
 
-The priors on both scales are \text{HalfNormal}(1), and the initial level is \text{Normal}(0, 10). Before fitting anything, let's look at the series these priors generate.
+The priors on both scales are \text{HalfNormal}(1), and the initial level is \text{Normal}(0, 10). Before fitting anything, we look at the series these priors generate.
 
-For a state space model the prior predictive is a forward simulation. We write a tiny generative model in native `dynestyx` style (`dsx.sample` with `predict_times` only) and run it under a `Simulator` with NumPyro's `Predictive`.
+For a state space model the prior predictive is a forward simulation. We write a small generative model in native `dynestyx` style (`dsx.sample` with `predict_times` only) and run it under a `Simulator` with NumPyro's `Predictive`.
 
 
 ``` python
@@ -462,20 +463,20 @@ ax.set(title="Prior predictive check", xlabel="time", ylabel="y");
 </figure>
 
 
-The prior paths cover the observed series comfortably without being absurdly wide, which is good!
+The prior paths cover the observed series without being too wide, which is good.
 
 
 ## Model Specification
 
-All models are plain NumPyro functions `(covariates, data=None)` with the same priors and the same generative process. They differ only in how the latent level enters the trace.
+All models are plain NumPyro functions `(covariates, data=None)` with the same priors. They differ only in how the latent level enters the trace.
 
-The **direct** model is the idiomatic `numpyro_forecast` form. [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) samples one innovation per time step (with a `LocScaleReparam` to soften the funnel between q and the path), the level is their cumulative sum plus the initial level, and [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) registers the likelihood. The sampler explores t\_{\text{obs}} + 3 dimensions.
+The **direct** model is the idiomatic `numpyro_forecast` form. [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) samples one innovation per time step (with a `LocScaleReparam` to soften the funnel between q and the path), the level is their cumulative sum plus the initial level `x0`, and [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) registers the likelihood. The sampler explores t\_{\text{obs}} + 3 dimensions. One small difference with the `dynestyx` model: here the first observation sees `x0` plus one innovation, while `dynestyx` observes its initial state directly. With a \text{Normal}(0, 10) prior on the initial level this difference has no visible effect on the posteriors.
 
-The two **`dynestyx`** models share one function of the conditioner. With a `LatentPathBuilder` the path is explicit, one sample site of shape (t\_{\text{obs}}, 1) plus the two scales. With a `Smoother` the Kalman smoother replaces the path by its exact integral, and the sampler explores 2 dimensions.
+The two **`dynestyx`** models share one function of the conditioner. With a `LatentPathBuilder` the path is explicit: one sample site of shape (t\_{\text{obs}}, 1) plus the two scales. With a `Smoother` the Kalman smoother integrates the path out exactly, and the sampler explores 2 dimensions.
 
 We use `KFSmootherConfig(filter_source="cd_dynamax")`, the exact Rauch-Tung-Striebel smoother on the cheapest backend for a short series on the CPU. The `filter_source="cuthbert"` backend adds support for missing observations and time-varying parameters at a higher cost per gradient.
 
-Note that every model registers a `level` deterministic site when it is called without data. The direct model has its level at hand, and the `dynestyx` models take it from the `x_in_sample` field of the block's result, the in-window state draw behind the in-sample predictive. We read that site further down to compare the three reconstructions of the level.
+Every model registers a `level` deterministic site when it is called without data. The direct model computes its level in place, and the `dynestyx` models take it from the `x_in_sample` field of the block's result, which is the in-window state draw behind the in-sample predictive. We read that site later to compare the three reconstructions of the level.
 
 
 ``` python
@@ -515,9 +516,9 @@ local_level_smoothed = local_level_state_space(smoother)
 
 ## Model Fitting
 
-We run the same sampler budget on the three models: 4 chains of 1{,}000 warmup and 1{,}000 sampling steps. The `num_steps` extra field records the number of leapfrog steps, that is, gradient evaluations, which is what NUTS spends its time on.
+We run the same sampler budget on the three models: 4 chains of 1{,}000 warmup and 1{,}000 sampling steps. The `num_steps` extra field records the number of leapfrog steps, that is, gradient evaluations, which is where NUTS spends its time.
 
-Note that `mcmc.get_samples()` returns the flattened posterior dictionary that the package drivers consume. For the `dynestyx` models it also carries the deterministic sites their handlers record (`f_marginal_loglik`, `f_state_path`, …).
+`mcmc.get_samples()` returns the flat posterior dictionary that the package drivers consume. For the `dynestyx` models it also carries the deterministic sites their handlers record (`f_marginal_loglik`, `f_state_path`, …).
 
 
 ``` python
@@ -560,14 +561,14 @@ posteriors = {label: mcmc.get_samples() for label, (mcmc, _) in fits.items()}
 ```
 
 
-          direct (innovations):   14.9 s
-       dynestyx, explicit path:    8.7 s
-     dynestyx, Kalman smoother:   12.4 s
+          direct (innovations):   13.4 s
+       dynestyx, explicit path:    8.0 s
+     dynestyx, Kalman smoother:   11.4 s
 
 
 ## Model Diagnostics
 
-Before looking into the results, let's check some diagnostics. The posteriors of the two scales must agree with each other: the three models define the same joint distribution over (q, r, y\_{1:T}), and the smoother integrates the level out exactly. What differs is the work the sampler had to do.
+Before looking at the results, we check some diagnostics. The posteriors of the two scales must agree with each other, because the three models describe the same process and the smoother integrates the level out exactly. What differs is the work the sampler has to do.
 
 We collect the effective sample sizes and \hat{R} with ArviZ (the `(chain, draw)` layout comes from `get_samples(group_by_chain=True)`) next to the wall time and the number of gradient evaluations.
 
@@ -607,20 +608,20 @@ comparison.round({"q mean": 3, "q sd": 3, "r mean": 3, "r sd": 3, "r_hat q": 3, 
 
 |  | q mean | q sd | r mean | r sd | ess_bulk q | ess_bulk r | r_hat q | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.388 | 0.059 | 0.441 | 0.05 | 875 | 798 | 1.00 | 1.00 | 1019459 | 14.877919 |
-| dynestyx, explicit path | 0.389 | 0.064 | 0.441 | 0.054 | 593 | 967 | 1.01 | 1.01 | 65648 | 8.736305 |
-| dynestyx, Kalman smoother | 0.389 | 0.063 | 0.44 | 0.052 | 1525 | 1699 | 1.00 | 1.00 | 18062 | 12.375503 |
+| direct (innovations) | 0.388 | 0.059 | 0.441 | 0.05 | 875 | 798 | 1.00 | 1.00 | 1019459 | 13.417454 |
+| dynestyx, explicit path | 0.389 | 0.064 | 0.441 | 0.054 | 593 | 967 | 1.01 | 1.01 | 65648 | 7.977765 |
+| dynestyx, Kalman smoother | 0.389 | 0.063 | 0.44 | 0.052 | 1525 | 1699 | 1.00 | 1.00 | 18062 | 11.390495 |
 
 
-The three posterior means agree to two decimals and the \hat{R} values are at most 1.01, which is good! All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
+The three posterior means agree to two decimals and the \hat{R} values are at most 1.01. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
 
 The smoothed model reaches the largest effective sample size with a small fraction of the gradient evaluations. It moves in a 2-dimensional posterior instead of a 123-dimensional one whose geometry couples q to every innovation.
 
-The explicit path built by `dynestyx` sits in between the two. It needs fewer gradients than the direct model but mixes less well on q, since its path site has no reparameterization equivalent to `LocScaleReparam` yet.
+The explicit path built by `dynestyx` sits between the two. It needs fewer gradients than the direct model but mixes less well on q, because its path site has no reparameterization equivalent to `LocScaleReparam` yet.
 
-Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times end up in the same range. The advantage grows with the length of the series, since the direct posterior grows with it while the smoother's cost is linear in it and leaves the sampler's geometry untouched. It also grows on accelerators, where the parallel-in-time scan of the `cuthbert` backend pays off.
+Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times are similar. The advantage grows with the length of the series: the dimension of the direct posterior grows with it, while the smoother's cost is linear in it and the geometry the sampler sees stays the same. It also grows on accelerators, where the parallel-in-time scan of the `cuthbert` backend pays off.
 
-Next, let's overlay the three posteriors of the two scales.
+Next, we overlay the three posteriors of the two scales.
 
 
 ``` python
@@ -650,13 +651,13 @@ The three histograms lie on top of each other, and the truth sits inside the bul
 
 ## Forecast
 
-Forecasting is the package's [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) driver in all three cases. It runs `Predictive` over the full-horizon covariates and returns the `"forecast"` site with one path per posterior draw.
+Forecasting uses the package's [`forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html) driver in all three cases. It runs `Predictive` over the full-horizon covariates and returns the `"forecast"` site with one path per posterior draw.
 
-For the direct model the in-sample innovations are replayed from the posterior and the future ones are drawn from the prior. For the `dynestyx` models every draw re-conditions on the training window with its own (q, r) (the smoother recomputes the smoothing distribution, the builder reconstructs the posterior path), and the simulator rolls the conditioned state forward.
+For the direct model the in-sample innovations are replayed from the posterior and the future ones are drawn from the prior. For the `dynestyx` models every draw conditions again on the training window with its own (q, r) (the smoother recomputes the smoothing distribution, the builder reconstructs the posterior path), and the simulator rolls the conditioned state forward.
 
-Note that the re-conditioning is one vectorized pass over the window per draw, which is cheap here. For long windows or particle filters, the design document records a cached-anchor rollout as the fallback.
+This re-conditioning is one vectorized pass over the window per draw, which is cheap here. For long windows or particle filters, the design document records a cached-anchor rollout as the alternative.
 
-The driver is jitted and vectorized over the draws, and the `dynestyx` handlers inside the model run under that `jit` and `vmap` without any special treatment. We define two small helpers for the HDI bands and their labels, then forecast with the three posteriors.
+The driver is jitted and vectorized over the draws, and the `dynestyx` handlers inside the model run under that `jit` and `vmap` without special treatment. We define two small helpers for the HDI bands and their labels, then forecast with the three posteriors.
 
 
 ``` python
@@ -689,7 +690,7 @@ for label, model in models.items():
      dynestyx, Kalman smoother: forecast draws (4000, 24, 1)
 
 
-Let's plot the three forecast fans with their 50\\ and 94\\ HDI bands.
+We plot the three forecast fans with their 50\\ and 94\\ HDI bands.
 
 
 ``` python
@@ -724,7 +725,7 @@ fig.suptitle("Local level forecasts from the three inference strategies", fontsi
 </figure>
 
 
-The three fans are the same forecast up to Monte Carlo error, which is the point of the exercise! The `dynestyx` models are not approximations of the direct one. They are the same model with a different parameterization for the sampler.
+The three fans are the same forecast up to Monte Carlo error. The `dynestyx` models are not approximations of the direct one: they are the same model with a different parameterization for the sampler.
 
 The same comparison in tabular form: point accuracy through MAE and RMSE, the CRPS as a proper score for the whole predictive distribution, and the empirical coverage of the central 50\\ and 94\\ intervals.
 
@@ -755,16 +756,16 @@ pd.DataFrame(
 | coverage (94%) | 1.000 | 1.000 | 1.000 |
 
 
-The metrics on the held-out window agree accordingly.
+The metrics on the held-out window agree as well.
 
 
 ## Posterior Predictive Checks
 
-As our models and posterior samples are looking good, we can now look into the in-sample posterior predictive checks. Because the observed window travels in the covariates, the package's [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html) applies to the `dynestyx` models as it does to any other. It restores the `(chain, draw)` structure, samples the in-sample posterior predictive by calling the model without data, and, because we hand it the full-horizon covariates, runs the forecast into the `predictions` group.
+We now look at the in-sample posterior predictive. Because the observed window travels in the covariates, the package's [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html) applies to the `dynestyx` models as it does to any other. It restores the `(chain, draw)` structure, samples the in-sample posterior predictive by calling the model without data, and, because we pass the full-horizon covariates, writes the forecast into the `predictions` group.
 
 Recall that `data=None` is a mode switch. The window still reaches the model through the covariates, so the in-sample predictive is the smoothing predictive p(y_t^{\text{rep}} \mid y\_{1:T}, \theta) and not a prior predictive.
 
-The three models produce it in three ways. The direct model replays its sampled path and adds observation noise. Under the `LatentPathBuilder` the block takes the posterior path that `dynestyx` reconstructs and adds the same noise. Under the `Smoother` the block draws every in-window state from the smoothing distribution p(x_t \mid y\_{1:T}, \theta) and adds the noise. Marginally at every step, these are the same quantity.
+The three models produce it in three ways. The direct model replays its sampled path and adds observation noise. Under the `LatentPathBuilder` the block takes the posterior path that `dynestyx` reconstructs and adds the same noise. Under the `Smoother` the block draws every in-window state from the smoothing distribution p(x_t \mid y\_{1:T}, \theta) and adds the noise. The first two are joint draws of the whole path, the third is a set of per-step marginal draws. At every single step the three are the same distribution, which is all the bands below show.
 
 
 ``` python
@@ -1341,7 +1342,7 @@ Group: /
 │           q                                 (chain, draw) float32 16kB 0.3989 ... 0...
 │           r                                 (chain, draw) float32 16kB 0.3879 ... 0...
 │       Attributes:
-│           created_at:                 2026-09-22T20:45:59.040481+00:00
+│           created_at:                 2026-09-25T14:59:57.083589+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1356,7 +1357,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -12.41 -11.91 ... -9.207
 │       Attributes:
-│           created_at:                 2026-09-22T20:45:59.599656+00:00
+│           created_at:                 2026-09-25T14:59:57.599189+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1369,7 +1370,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-09-22T20:45:59.599883+00:00
+│           created_at:                 2026-09-25T14:59:57.599405+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1382,7 +1383,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-09-22T20:45:59.600055+00:00
+│           created_at:                 2026-09-25T14:59:57.599562+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1397,7 +1398,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 384kB -10.05 -9.365 ... -6.873
 │       Attributes:
-│           created_at:                 2026-09-22T20:45:59.628778+00:00
+│           created_at:                 2026-09-25T14:59:57.628127+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1410,7 +1411,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-09-22T20:45:59.629000+00:00
+            created_at:                 2026-09-25T14:59:57.628327+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1747,7 +1748,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-22T20:45:59.040481+00:00
+2026-09-25T14:59:57.083589+00:00
 
 creation_library :  
 ArviZ
@@ -1883,7 +1884,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-22T20:45:59.599656+00:00
+2026-09-25T14:59:57.599189+00:00
 
 creation_library :  
 ArviZ
@@ -1977,7 +1978,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-22T20:45:59.599883+00:00
+2026-09-25T14:59:57.599405+00:00
 
 creation_library :  
 ArviZ
@@ -2071,7 +2072,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-22T20:45:59.600055+00:00
+2026-09-25T14:59:57.599562+00:00
 
 creation_library :  
 ArviZ
@@ -2207,7 +2208,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-22T20:45:59.628778+00:00
+2026-09-25T14:59:57.628127+00:00
 
 creation_library :  
 ArviZ
@@ -2301,7 +2302,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-22T20:45:59.629000+00:00
+2026-09-25T14:59:57.628327+00:00
 
 creation_library :  
 ArviZ
@@ -2329,7 +2330,7 @@ sample_dims :
 \['chain', 'draw'\]
 
 
-The tree carries the `posterior`, `posterior_predictive`, `observed_data` and `predictions` groups, as for any other model of the package. Let's plot the three in-sample bands.
+The tree carries the `posterior`, `posterior_predictive`, `observed_data` and `predictions` groups, as for any other model of the package. We plot the three in-sample bands.
 
 
 ``` python
@@ -2375,12 +2376,14 @@ fig.suptitle("In-sample posterior predictive from to_datatree", fontsize=14);
 </figure>
 
 
-The three bands coincide and the in-sample CRPS values agree to the third decimal. The `LatentPathBuilder` conditioner serves the in-sample predictive as well as the smoother does, so both `dynestyx` strategies plug into [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
+The three bands coincide and the in-sample CRPS values agree to the third decimal. The `LatentPathBuilder` conditioner serves the in-sample predictive as well as the smoother does, so both `dynestyx` strategies work with [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
 
 
 ## Latent Level Reconstruction
 
-The handler choice does not change the parameter posterior. A `Filter` and a `Smoother` put the same number in the trace, the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window, because the Kalman smoother reads it off its forward filtering pass. The posterior p(\theta \mid y\_{1:T}) is therefore the same under both handlers. Let's confirm that on the fitted model with `numpyro.infer.util.log_density`, at one parameter value.
+This section separates two claims that are easy to mix up.
+
+**The parameter posterior is the same under a `Filter` and a `Smoother`.** Both handlers put the same number in the trace, the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window, because the Kalman smoother reads it from its forward filtering pass. The posterior p(\theta \mid y\_{1:T}) is therefore the same under both handlers. We confirm this on the fitted model with `numpyro.infer.util.log_density`, at one parameter value.
 
 
 ``` python
@@ -2398,13 +2401,13 @@ for handler, handler_model in handlers.items():
     Smoother handler: log joint density at the posterior mean -125.156319
 
 
-The two values agree, so the draws we already have are draws from the posterior of either model and we can re-interpret them under the other handler without refitting.
+The two values agree. The draws we already have are draws from the posterior of either model, and we can read them under the other handler without refitting.
 
-What the two handlers do not share is the distribution over the states. The filtering distribution p(x_t \mid y\_{1:t}, \theta) conditions on the observations up to step t only, so it lags the level and stays wider than the smoothing distribution, most visibly at the start of the window, where little has been seen. The smoothing distribution p(x_t \mid y\_{1:T}, \theta) conditions on the whole window at every step. They answer different questions, and only the second one gives the in-sample predictive of the section above.
+**The distributions over the states are different.** The filtering distribution p(x_t \mid y\_{1:t}, \theta) conditions on the observations up to step t only. The smoothing distribution p(x_t \mid y\_{1:T}, \theta) conditions on the whole window at every step. They answer different questions about the state, and only the second one gives the in-sample predictive of the section above.
 
-Recall that every model registers a `level` site when it is called without data. Calling `Predictive` with the posterior draws and the training covariates only, and asking for that site, gives one level path per posterior draw. The direct model replays `x0` plus the cumulative sum of the sampled `drift`, the builder returns its posterior path and the smoother draws from the smoothing distribution, the last two through the same `x_in_sample` field of the block's result. All three condition on the whole window, so all three are smoothing reconstructions.
+Every model registers a `level` site when it is called without data. Calling `Predictive` with the posterior draws and the training covariates only, and asking for that site, gives one level path per posterior draw. The direct model replays `x0` plus the cumulative sum of the sampled `drift`, the builder returns its posterior path, and the smoother draws from the smoothing distribution, the last two through the same `x_in_sample` field of the block's result. All three condition on the whole window, so all three are smoothing reconstructions.
 
-The filtered level takes one more step, since a `Filter` conditioner has no in-sample mode. `dynestyx` lets us record the `f_filtered_states_*` sites with `Predictive` instead. This is the separation between model and inference that the handlers are designed for. Drawing one level per posterior draw from those per-step Gaussians mixes the state uncertainty and the parameter uncertainty into a single band, as the `level` site does for the other three.
+The filtered level needs one more step, because a `Filter` conditioner has no in-sample mode. Instead, we record the `f_filtered_states_*` sites with `Predictive` under the `Filter` model, using the draws of the smoothed fit. Drawing one level per posterior draw from those per-step Gaussians mixes the state uncertainty and the parameter uncertainty into a single band, as the `level` site does for the other three.
 
 
 ``` python
@@ -2434,7 +2437,7 @@ filtered_level = filtered_mean + filtered_sd * np.asarray(
      dynestyx, Kalman smoother: level draws (4000, 120, 1)
 
 
-The simulation gives us the true level, so we can score the four reconstructions against it. The smoother conditions on more data than the filter, so it must reconstruct the state better, both as a point estimate (RMSE) and as a distribution (CRPS).
+The simulation gives us the true level, so we can score the four reconstructions against it. The smoother conditions on more data than the filter, so it should reconstruct the state better, both as a point estimate (RMSE) and as a distribution (CRPS).
 
 
 ``` python
@@ -2456,7 +2459,7 @@ pd.DataFrame(
 | CRPS | 0.184 | 0.156 | 0.156 | 0.156 |
 
 
-Let's plot the filtered and smoothed levels in the top panel, and the three `level` sites in the bottom panel.
+We plot the filtered and smoothed levels in the top panel, and the three `level` sites in the bottom panel.
 
 
 ``` python
@@ -2500,18 +2503,20 @@ axes[-1].set(xlabel="time");
 </figure>
 
 
-In the top panel the filtered band is wider at every step, and widest at the start of the window where few observations have entered it. Its mean reacts to each new observation and lags the level. The smoothed band conditions on the whole window at every step, so it is narrower and closer to the truth, and the scores above show what that buys: an RMSE of 0.278 and a CRPS of 0.156 against the true level, where the filtered level reaches 0.325 and 0.184. The two bands answer two different questions about the state; they are not two views of one distribution. In the bottom panel the three reconstructions coincide: the direct model, the explicit path built by `dynestyx` and the smoother recover the same level from the same posterior, and the two `dynestyx` models did so through the same `x_in_sample` field.
+In the top panel the filtered band is wider at every step, and widest at the start of the window, where few observations have entered it. Its mean reacts to each new observation and lags the level. The smoothed band conditions on the whole window at every step, so it is narrower and closer to the truth, and the table above confirms it with the lower RMSE and CRPS against the true level. The two bands are two different distributions over the state, not two views of one distribution.
+
+In the bottom panel the three reconstructions coincide. The direct model, the explicit path built by `dynestyx` and the smoother recover the same level from the same posterior, and the two `dynestyx` models did so through the same `x_in_sample` field.
 
 
 # Seasonal Regression Model
 
-The package routes everything a model needs at prediction time through the `covariates` array, which spans the full horizon. In this example the array carries two things. The observed series sits in its first column, which the model reads back as the observed window, and Fourier features fill the remaining columns, which the block forwards to `dynestyx` as control inputs (`ctrl_values`) on a time grid that covers both the observed and the predicted steps.
+The package routes everything a model needs at prediction time through the `covariates` array, which spans the full horizon. In this example the array carries two things. The observed series sits in its first column, which the model reads back as the observed window. Fourier features fill the remaining columns, which the block forwards to `dynestyx` as control inputs (`ctrl_values`) on a time grid that covers both the observed and the predicted steps.
 
-The seasonal pattern enters the observation equation as a regression on those features with coefficients \beta, so with u_t the row of features at step t:
+The seasonal pattern enters the observation equation as a regression on those features with coefficients \beta. With u_t the row of features at step t:
 
  \begin{align\*} x_t &= x\_{t-1} + w_t, \qquad w_t \sim \text{Normal}(0, q), \\ y_t &= x_t + \beta^\top u_t + v_t, \qquad v_t \sim \text{Normal}(0, r). \end{align\*} 
 
-In `dynestyx` terms \beta^\top u_t is the `D` matrix of `LTI_discrete`, which infers the control dimension from it since `dynestyx` 0.5.1.
+In `dynestyx` terms \beta^\top u_t is the `D` matrix of `LTI_discrete`, which infers the control dimension from `D` since `dynestyx` 0.5.1.
 
 
 ## Generate Data
@@ -2566,7 +2571,7 @@ ax.set(title="Simulated local level series with seasonality", xlabel="time", yla
 </figure>
 
 
-The seasonal pattern is visible on top of the wandering level.
+The seasonal pattern is visible on top of the moving level.
 
 
 ## Model Specification
@@ -2607,9 +2612,9 @@ seasonal_level_smoothed = seasonal_level_state_space(
 
 ## Model Fitting
 
-Variational inference is the other standard path in the package, and it works on the smoothed model unchanged. `AutoNormal` puts a mean-field Gaussian on the six unconstrained parameters and `Trace_ELBO` includes the smoother's factor.
+Variational inference is the other standard path in the package, and it works on the smoothed model without changes. `AutoNormal` puts a mean-field Gaussian on the six unconstrained parameters and `Trace_ELBO` includes the smoother's factor.
 
-Because the level is integrated out, the guide never has to approximate a t\_{\text{obs}}-dimensional latent path, which is where mean-field guides usually underestimate uncertainty. We draw the posterior with [`draw_posterior`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.draw_posterior.html) and forecast as before.
+Because the level is integrated out, the guide does not have to approximate a t\_{\text{obs}}-dimensional latent path, which is where mean-field guides usually underestimate uncertainty. We draw the posterior with [`draw_posterior`](https://juanitorduz.github.io/numpyro_forecast/reference/predictive.draw_posterior.html) and forecast as before.
 
 
 ``` python
@@ -2638,7 +2643,7 @@ ax.set(title="SVI loss (negative ELBO)", xlabel="step", ylabel="loss");
 ```
 
 
-    SVI: 2.8 s, final loss 147.32
+    SVI: 2.5 s, final loss 147.32
     posterior mean of beta: [ 1.68  0.54 -0.38  0.23]
     truth:                  [ 1.5  0.5 -0.4  0.3]
 
@@ -2648,12 +2653,12 @@ ax.set(title="SVI loss (negative ELBO)", xlabel="step", ylabel="loss");
 </figure>
 
 
-The loss flattens well before the 3{,}000 steps, and the posterior mean of `beta` is close to the truth, which is good!
+The loss flattens well before the 3{,}000 steps, and the posterior mean of `beta` is close to the truth.
 
 
 ## Forecast
 
-Let's plot the SVI forecast with `az.plot_lm`.
+We plot the SVI forecast with `az.plot_lm`.
 
 
 ``` python
@@ -2714,9 +2719,9 @@ The forecast follows the seasonal pattern into the test window, and the bands wi
 
 A single split scores one held-out window. [`backtest`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest.html) moves the train/test boundary forward, refits from scratch and forecasts the next window, so every later part of the series is scored out of sample once.
 
-The loop delegates fitting and forecasting to two closures we write. `forecast_fn` fits the model with NUTS on the fold's training window and hands the draws to [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), and `in_sample_fn` does the same and hands them to [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), so that with `eval_train=True` every fold is also scored in sample.
+The loop delegates fitting and forecasting to two closures we write. `forecast_fn` fits the model with NUTS on the fold's training window and passes the draws to [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast). `in_sample_fn` does the same and passes them to [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), so that with `eval_train=True` every fold is also scored in sample.
 
-The `dynestyx` model needs no adapter for any of this. It is a `numpyro_forecast` model, and the closures are the same ones the other examples use. We size the folds at 12 steps (`test_window=12`, `stride=12`) with the first 72 observations seeding the initial training window, which gives six folds.
+The `dynestyx` model needs no adapter for any of this. It is a `numpyro_forecast` model, and the closures are the same ones the other examples use. We size the folds at 12 steps (`test_window=12`, `stride=12`) and seed the first training window with the first 72 observations, which gives six folds.
 
 
 ``` python
@@ -2793,20 +2798,20 @@ results_to_dataframe(results).round(3)
 ```
 
 
-    backtest: 6 folds in 87.8 s
+    backtest: 6 folds in 81.4 s
 
 
 |  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 6.645 | 0.682 | 0.250 | 1.000 | 0.218 | 0.708 | 1.0 |
-| 1 | 0 | 84 | 96 | 1000 | 6.860 | 0.926 | 0.417 | 0.917 | 0.208 | 0.714 | 1.0 |
-| 2 | 0 | 96 | 108 | 1000 | 7.892 | 0.407 | 0.917 | 1.000 | 0.215 | 0.729 | 1.0 |
-| 3 | 0 | 108 | 120 | 1000 | 7.735 | 0.439 | 0.667 | 1.000 | 0.211 | 0.759 | 1.0 |
-| 4 | 0 | 120 | 132 | 1000 | 7.997 | 0.658 | 0.667 | 1.000 | 0.203 | 0.775 | 1.0 |
-| 5 | 0 | 132 | 144 | 1000 | 8.599 | 0.771 | 0.250 | 1.000 | 0.242 | 0.720 | 1.0 |
+| 0 | 0 | 72 | 84 | 1000 | 6.122 | 0.682 | 0.250 | 1.000 | 0.218 | 0.708 | 1.0 |
+| 1 | 0 | 84 | 96 | 1000 | 6.284 | 0.926 | 0.417 | 0.917 | 0.208 | 0.714 | 1.0 |
+| 2 | 0 | 96 | 108 | 1000 | 7.305 | 0.407 | 0.917 | 1.000 | 0.215 | 0.729 | 1.0 |
+| 3 | 0 | 108 | 120 | 1000 | 7.168 | 0.439 | 0.667 | 1.000 | 0.211 | 0.759 | 1.0 |
+| 4 | 0 | 120 | 132 | 1000 | 7.455 | 0.658 | 0.667 | 1.000 | 0.203 | 0.775 | 1.0 |
+| 5 | 0 | 132 | 144 | 1000 | 8.037 | 0.771 | 0.250 | 1.000 | 0.242 | 0.720 | 1.0 |
 
 
-Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying every fold's out-of-sample forecast on the series gives the rolling-origin view. Each band starts where its training window ends, with the dashed lines marking the successive splits.
+Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.
 
 
 ``` python
@@ -2885,7 +2890,7 @@ ax.set(title="Expanding-window backtest of the dynestyx model", xlabel="time", y
 </figure>
 
 
-The bands track the series across all six folds. Finally, let's look at the per-fold scores.
+The bands track the series across all six folds. Finally, we look at the per-fold scores.
 
 
 ``` python
@@ -2938,11 +2943,11 @@ axes[1].set(
 </figure>
 
 
-The in-sample CRPS is flat across folds, between 0.20 and 0.23, and well below the out-of-sample CRPS, as it must be for a smoothing predictive that has seen the observations it scores.
+The in-sample CRPS is stable across folds and well below the out-of-sample CRPS, as expected for a smoothing predictive that has seen the observations it scores.
 
-Out of sample, the third fold (split at 96) is the outlier. The series drops further in that window than the forecast expects, so its CRPS reaches 0.51 and its 94\\ coverage falls to 0.83. The other five folds stay between 0.31 and 0.41.
+The out-of-sample CRPS varies more from fold to fold, because each fold scores only 12 observations and the level of the series can drift away from the forecast within a window.
 
-The empirical coverage of the central 50\\ interval wobbles between 0.33 and 0.67 around the nominal level, and the 94\\ interval covers at least 11 of the 12 observations in every other fold. This is expected with 12 observations per fold, since each observation moves the coverage by about 0.08.
+The empirical coverage of the central 50\\ interval moves around the nominal level from fold to fold, and the 94\\ interval covers all or all but one of the 12 observations in every fold. With 12 observations per fold each observation moves the coverage by about 0.08, so this variation is expected.
 
 
 # Conclusion
@@ -2950,26 +2955,26 @@ The empirical coverage of the central 50\\ interval wobbles between 0.33 and 0.6
 
 ## Key Findings
 
-- **One block, one argument.** A `dynestyx` model becomes a `numpyro_forecast` model through `state_space_series`, and the handler stack passed as its `conditioner` is the inference strategy. A `Smoother` (or `Filter`) marginalizes the latent path, a `LatentPathBuilder` samples it explicitly, a `Discretizer` after either handles continuous-time dynamics, and switching between them is a one-argument change.
-- **The drivers work unchanged.** The block owns the likelihood and registers the horizon rollout as `"forecast"` and the in-sample predictive as `"obs"`, so [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) (in and out of sample) and the metrics work on it under the same `jit` and `vmap` as for every other model.
+- **One block, one argument.** A `dynestyx` model becomes a `numpyro_forecast` model through `state_space_series`, and the handler stack passed as its `conditioner` is the inference strategy. A `Smoother` (or `Filter`) integrates the latent path out, a `LatentPathBuilder` samples it explicitly, a `Discretizer` after either handles continuous-time dynamics, and switching between them is a change of one argument.
+- **The drivers work without changes.** The block owns the likelihood and registers the horizon rollout as `"forecast"` and the in-sample predictive as `"obs"`. [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) (in and out of sample) and the metrics work on it under the same `jit` and `vmap` as for every other model.
 - **The three strategies agree.** On the local level model the posteriors, the forecasts, the in-sample bands and the reconstructed level coincide across the direct model, the explicit path and the smoother.
-- **The smoother is the efficient choice.** On linear-Gaussian models it is exact and costs the same per gradient as the filter. The sampler explores the parameters only, needs a small fraction of the gradient evaluations of the direct model for a larger effective sample size, and the smoothing distribution gives the in-sample predictive for free.
+- **The smoother is the efficient choice.** On linear-Gaussian models it is exact and costs the same per gradient as the filter. The sampler explores the parameters only, needs a small fraction of the gradient evaluations of the direct model for a larger effective sample size, and the smoothing distribution gives the in-sample predictive at no extra cost.
 
 
 ## Model Limitations
 
-- `dynestyx` predicts at or after the end of the window only, so the in-sample predictive comes from the conditioned distributions rather than from a rollout, and it is a per-step marginal. A functional of the whole path would need backward simulation.
-- A `Filter` conditioner has no in-sample predictive. Use a `Smoother`, which costs the same during fitting and reports the same marginal log likelihood, so the two handlers share the parameter posterior. They do not share the distribution over the states: the filtering distribution stops at step t, the smoothing distribution uses the whole window, and the smoothed level is the better reconstruction of the true state.
-- The observed window travels in the covariates, so the time grids are host-side constants for the smoother's rollout and jax arrays for the builder, and the rollout is anchored at the last observed step. The block owns both traps, and a rewrite that derives `times` from a covariate column would break the first.
+- `dynestyx` predicts at or after the end of the window only, so the in-sample predictive comes from the conditioned distributions and not from a rollout, and it is a per-step marginal. A functional of the whole path would need backward simulation.
+- A `Filter` conditioner has no in-sample predictive. Use a `Smoother` instead: it costs the same during fitting and reports the same marginal log likelihood, so the two handlers share the parameter posterior. They do not share the distribution over the states. The filtering distribution uses the observations up to step t, the smoothing distribution uses the whole window, and the smoothed level is the better reconstruction of the true state.
+- The observed window travels in the covariates, the time grids are host-side constants for the smoother's rollout and jax arrays for the builder, and the rollout is anchored at the last observed step. The block handles all three, and a rewrite that derives `times` from a covariate column would break the second.
 - The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) family of the package with a latent level (exponential smoothing in innovations form) is already marginalized by its deterministic recursion and has no `dynestyx` counterpart. Its members that are Markov in the observations (autoregressions) can be written with `DiracIdentityObservation` under a `LatentPathBuilder`, see the design document.
 
 
 ## Recommendations
 
-1.  Reach for a `Smoother` with `KFSmootherConfig(filter_source="cd_dynamax")` on linear-Gaussian models, and switch to `filter_source="cuthbert"` when you need missing observations, time-varying parameters or a GPU on long series.
+1.  Use a `Smoother` with `KFSmootherConfig(filter_source="cd_dynamax")` on linear-Gaussian models, and switch to `filter_source="cuthbert"` when you need missing observations, time-varying parameters or a GPU on long series.
 2.  Use a `LatentPathBuilder` when the path itself is the object of interest, the observation model is non-Gaussian, or the dynamics are discretized continuous-time.
 3.  Put `LocScaleReparam` on the direct model in any comparison, as we did here.
-4.  Create the `dynestyx` handlers once, outside the model, and pass the KF configurations explicitly, since the `dynestyx` defaults are approximate filters.
+4.  Create the `dynestyx` handlers once, outside the model, and pass the KF configurations explicitly, because the `dynestyx` defaults are approximate filters.
 
 
 # Next Steps
@@ -2988,4 +2993,4 @@ The empirical coverage of the central 50\\ interval wobbles between 0.33 and 0.6
 - Särkkä, S., & Svensson, L. (2023). [*Bayesian Filtering and Smoothing*](https://users.aalto.fi/~ssarkka/pub/bfs_book_2023_online.pdf), 2nd edition. Cambridge University Press.
 - [Design document: integrating `numpyro_forecast` with `dynestyx`](https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md), the internal document this notebook implements.
 
-[Source: State Space Models with `dynestyx` and `numpyro_forecast`](_src/dynestyx_integration-preview.html#edcc4a7b)
+[Source: State Space Models with `dynestyx` and `numpyro_forecast`](_src/dynestyx_integration-preview.html#7fe54370)
