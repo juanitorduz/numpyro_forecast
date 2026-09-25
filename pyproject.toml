@@ -71,6 +71,7 @@ dev = [
 ]
 docs = [
     "great-docs==0.17.0",
+    "dynestyx>=0.5.1",
 ]
 cuda = ["jax[cuda12]"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]

@@ -47,7 +47,7 @@ For a local checkout:
 uv sync --extra all
 ```
 
-The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`). `all` (used above) pulls those three in along with the `dev` and `docs` tooling; `cuda` adds the CUDA jax plugin, and `all_cuda` is `all` plus `cuda`.
+The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`). `all` (used above) pulls those three in along with the `dev` and `docs` tooling; `cuda` adds the CUDA jax plugin, and `all_cuda` is `all` plus `cuda`. The `docs` extra also installs [dynestyx](https://github.com/BasisResearch/dynestyx) (`>=0.5.1`) for the [state space example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html), which writes a `dynestyx` model as a `numpyro_forecast` model and chooses the inference strategy (Kalman smoother or explicit latent path) with a `dynestyx` handler; outside a checkout, `pip install "dynestyx>=0.5.1"` next to the package is all the example needs.
 
 ## Quickstart
 
