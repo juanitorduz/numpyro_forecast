@@ -812,6 +812,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   <li><a href="#examples" id="toc-examples" class="nav-link" data-scroll-target="#examples">Examples</a></li>
   </ul>
@@ -844,7 +845,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L164-L244" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L163-L260" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">reparam</span><span class="op">.</span><span class="sig-name">time_reparam</span>(
@@ -881,6 +882,17 @@ The wrapped model. It is a <code>numpyro.handlers.reparam</code> handler and is 
 </dl>
 </div>
 </section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>model</code> is already the result of <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a>. Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op.
+</dd>
+</dl>
+</div>
+</section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
 <ul>
@@ -889,7 +901,7 @@ The wrapped model. It is a <code>numpyro.handlers.reparam</code> handler and is 
 <li>It composes with the per-block <code>reparam=</code> hook: after <code>innovations(..., reparam=LocScaleReparam(0))</code> the site under the plate is <code>drift_decentered</code>, so the auxiliary site is <code>drift_decentered_haar</code> and both <code>drift_decentered</code> and <code>drift</code> become deterministic. This matches Pyro, whose config applies to every site in the plate.</li>
 <li>Untouched sites: the <code>_future</code> suffix sites (they stay prior-drawn under <code>time_future</code>, so <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> is unaffected), the scan sites of <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>, the error sites of <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>, observed sites and discrete sites.</li>
 <li>Posterior dictionaries from <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> and <code>mcmc.get_samples()</code> contain both <code>drift</code> (deterministic) and <code>drift_haar</code>; <code>Predictive</code> substitutes only the latter and recomputes the former. <code>init_to_value</code> must therefore target <code>drift_haar</code>.</li>
-<li>Measured on a random-walk level model: mean-field <code>AutoNormal</code> reaches a markedly better ELBO in fewer steps for both transforms (DCT slightly ahead of Haar); NUTS trajectories become cheaper (fewer leapfrog steps per iteration) while the effective sample size per draw is model dependent.</li>
+<li>Measured on random-walk level models: mean-field <code>AutoNormal</code> reaches a better ELBO for both transforms (DCT slightly ahead of Haar), but an optimizer schedule tuned for the original coordinates does not transfer as is. The rotated posterior is better conditioned, so it tolerates and may need a larger learning rate to converge within the same step budget; a schedule that is too small stalls with part of the intercept still held by the level. NUTS trajectories become cheaper (fewer leapfrog steps per iteration) while the effective sample size per draw is model dependent.</li>
 </ul>
 </section>
 <section id="examples" class="level2 doc-examples">

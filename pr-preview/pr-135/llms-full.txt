@@ -840,6 +840,14 @@ ForecastModel
     `~~numpyro_forecast.convert.to_datatree()` and the ``model_fn`` of
     `~~numpyro_forecast.evaluate.backtest()`.
 
+Raises
+------
+ValueError
+    If ``model`` is already the result of `time_reparam()`. Nesting is not
+    supported: the inner handler would turn the site into a deterministic
+    before the outer one sees it, so the outer transform would silently be
+    a no-op.
+
 Notes
 -----
 - Create the wrapped model once and reuse it: the drivers jit-compile with
@@ -863,9 +871,13 @@ Notes
   and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
   ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
   the former. ``init_to_value`` must therefore target ``drift_haar``.
-- Measured on a random-walk level model: mean-field ``AutoNormal`` reaches a
-  markedly better ELBO in fewer steps for both transforms (DCT slightly
-  ahead of Haar); NUTS trajectories become cheaper (fewer leapfrog steps per
+- Measured on random-walk level models: mean-field ``AutoNormal`` reaches a
+  better ELBO for both transforms (DCT slightly ahead of Haar), but an
+  optimizer schedule tuned for the original coordinates does not transfer
+  as is. The rotated posterior is better conditioned, so it tolerates and
+  may need a larger learning rate to converge within the same step budget;
+  a schedule that is too small stalls with part of the intercept still held
+  by the level. NUTS trajectories become cheaper (fewer leapfrog steps per
   iteration) while the effective sample size per draw is model dependent.
 
 Examples

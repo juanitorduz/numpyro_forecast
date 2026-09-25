@@ -34,6 +34,13 @@ A forecasting model `(covariates, data=None) -> None`.
 The wrapped model. It is a `numpyro.handlers.reparam` handler and is the single object to hand to the guide, `SVI` / `MCMC` / blackjax, [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) and the `model_fn` of [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest).
 
 
+## Raises
+
+
+`ValueError`  
+If `model` is already the result of [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam). Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op.
+
+
 ## Notes
 
 - Create the wrapped model once and reuse it: the drivers jit-compile with the model as a static argument, so wrapping again inside a loop recompiles.
@@ -41,7 +48,7 @@ The wrapped model. It is a `numpyro.handlers.reparam` handler and is the single 
 - It composes with the per-block `reparam=` hook: after `innovations(..., reparam=LocScaleReparam(0))` the site under the plate is `drift_decentered`, so the auxiliary site is `drift_decentered_haar` and both `drift_decentered` and `drift` become deterministic. This matches Pyro, whose config applies to every site in the plate.
 - Untouched sites: the `_future` suffix sites (they stay prior-drawn under `time_future`, so [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) is unaffected), the scan sites of [markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series), the error sites of [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe), observed sites and discrete sites.
 - Posterior dictionaries from [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) and `mcmc.get_samples()` contain both `drift` (deterministic) and `drift_haar`; `Predictive` substitutes only the latter and recomputes the former. `init_to_value` must therefore target `drift_haar`.
-- Measured on a random-walk level model: mean-field `AutoNormal` reaches a markedly better ELBO in fewer steps for both transforms (DCT slightly ahead of Haar); NUTS trajectories become cheaper (fewer leapfrog steps per iteration) while the effective sample size per draw is model dependent.
+- Measured on random-walk level models: mean-field `AutoNormal` reaches a better ELBO for both transforms (DCT slightly ahead of Haar), but an optimizer schedule tuned for the original coordinates does not transfer as is. The rotated posterior is better conditioned, so it tolerates and may need a larger learning rate to converge within the same step budget; a schedule that is too small stalls with part of the intercept still held by the level. NUTS trajectories become cheaper (fewer leapfrog steps per iteration) while the effective sample size per draw is model dependent.
 
 
 ## Examples

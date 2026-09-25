@@ -218,7 +218,7 @@ print(f"NUTS: 4 chains x 1_000 draws in {nuts_seconds:.1f}s")
 ```
 
 
-    NUTS: 4 chains x 1_000 draws in 40.7s
+    NUTS: 4 chains x 1_000 draws in 40.9s
 
 
 ## NUTS with time-axis reparameterization
@@ -253,7 +253,7 @@ print(f"NUTS + DCT: 4 chains x 1_000 draws in {nuts_dct_seconds:.1f}s")
 ```
 
 
-    NUTS + DCT: 4 chains x 1_000 draws in 56.9s
+    NUTS + DCT: 4 chains x 1_000 draws in 55.1s
 
 
     In [8]:
@@ -282,8 +282,8 @@ nuts_comparison.round(1)
 
 |            | walltime (s) | leapfrog / draw | min ESS (drift) |
 |------------|--------------|-----------------|-----------------|
-| NUTS       | 40.7         | 446.4           | 45.8            |
-| NUTS + DCT | 56.9         | 314.4           | 558.9           |
+| NUTS       | 40.9         | 446.4           | 45.8            |
+| NUTS + DCT | 55.1         | 314.4           | 558.9           |
 
 
 ## SVI
@@ -353,7 +353,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI: 20_000 steps in 5.2s
+    SVI: 20_000 steps in 4.9s
 
 
 <figure class="figure">
@@ -375,15 +375,55 @@ svi_posterior = draw_posterior(rng_subkey, guide, svi_result.params, 2_000)
 
 ## SVI with time-axis reparameterization
 
-A diagonal-Gaussian guide is exactly the approximation that the long thin drift posterior defeats: `AutoNormal` has no off-diagonal terms with which to represent the coupling between neighboring increments, so it either shrinks every marginal to fit the ridge or overstates the joint uncertainty. In the DCT basis that coupling is largely gone, so the same guide family is fitted to a rotated posterior that is closer to diagonal. We keep the optimizer, the one-cycle schedule, and the `20_000` step budget of the baseline unchanged so that the two runs differ only in the coordinates the guide sees. `univariate_model_dct` is the model handed to `AutoNormal`, to `SVI`, and later to the export, and [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) returns a posterior dict that now carries the sampled `drift_decentered_dct` alongside the deterministic `drift_decentered` and `drift`, which [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) and [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) consume unchanged.
+A diagonal-Gaussian guide is exactly the approximation that the long thin drift posterior defeats: `AutoNormal` has no off-diagonal terms with which to represent the coupling between neighboring increments, so it either shrinks every marginal to fit the ridge or overstates the joint uncertainty. In the DCT basis that coupling is largely gone, so the same guide family is fitted to a rotated posterior that is closer to diagonal. `univariate_model_dct` is the model handed to `AutoNormal`, to `SVI`, and later to the export, and [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) returns a posterior dict that now carries the sampled `drift_decentered_dct` alongside the deterministic `drift_decentered` and `drift`, which [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) and [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) consume unchanged.
+
+We first reuse the baseline's optimizer, one-cycle schedule, and `20_000` step budget unchanged, so that the two runs differ only in the coordinates the guide sees.
 
 
     In [12]:
 
 
 ``` python
+guide_dct_same = AutoNormal(univariate_model_dct)
+svi_dct_same = SVI(univariate_model_dct, guide_dct_same, optim, Trace_ELBO())
+
+rng_key, rng_subkey = random.split(rng_key)
+svi_dct_same_result = svi_dct_same.run(
+    rng_subkey, num_steps, covariates_train, y_train, progress_bar=False
+)
+print(f"final ELBO loss, SVI + DCT (peak 0.01): {np.mean(svi_dct_same_result.losses[-100:]):.1f}")
+```
+
+
+    final ELBO loss, SVI + DCT (peak 0.01): 197.1
+
+
+The rotated run descends far faster over the first few thousand steps and then stalls well above the baseline. It has not converged to a different optimum: run for longer at a fixed learning rate it keeps descending and ends below the baseline (the [univariate example](forecasting_univariate.md) shows this under a fixed `Adam(0.005)` for `50_000` steps). What stalls it is the intercept. Early in the run the level holds part of the intercept and `bias` has to take it over, and in the original coordinates that hand-over is a two-parameter ridge between `bias` and the first increment, whereas in the DCT basis a level offset is spread over all `417` cosine coefficients, so Adam moves it one small per-coordinate step at a time. The one-cycle schedule, whose peak of `0.01` was tuned for the original coordinates, starts annealing at `30%` of the budget, long before that hand-over is complete.
+
+The rotated posterior is better conditioned, so it tolerates a larger step. Tripling the peak to `0.03` and keeping everything else identical lets the run finish within the same `20_000` steps, and it does so for every seed we tried (a peak of `0.02` finishes only for some seeds, and the baseline itself gets worse at higher peaks, so the re-tuning is specific to the new coordinates). This second fit is the `SVI + DCT` column in the comparison below.
+
+
+    In [13]:
+
+
+``` python
+scheduler_dct = optax.linear_onecycle_schedule(
+    transition_steps=num_steps,
+    peak_value=0.03,
+    pct_start=0.3,
+    pct_final=0.85,
+    div_factor=2,
+    final_div_factor=3,
+)
+optim_dct = optax_to_numpyro(
+    optax.chain(
+        optax.adam(learning_rate=scheduler_dct),
+        optax.contrib.reduce_on_plateau(factor=0.8, patience=20, accumulation_size=100),
+    )
+)
+
 guide_dct = AutoNormal(univariate_model_dct)
-svi_dct = SVI(univariate_model_dct, guide_dct, optim, Trace_ELBO())
+svi_dct = SVI(univariate_model_dct, guide_dct, optim_dct, Trace_ELBO())
 
 rng_key, rng_subkey = random.split(rng_key)
 
@@ -394,23 +434,24 @@ svi_dct_seconds = perf_counter() - start
 print(f"SVI + DCT: {num_steps:_} steps in {svi_dct_seconds:.1f}s")
 
 fig, ax = plt.subplots()
-ax.plot(svi_result.losses, color="C0", label="SVI")
-ax.plot(svi_dct_result.losses, color="C2", label="SVI + DCT")
+ax.plot(svi_result.losses, color="C0", label="SVI (peak 0.01)")
+ax.plot(svi_dct_same_result.losses, color="C2", label="SVI + DCT (peak 0.01)")
+ax.plot(svi_dct_result.losses, color="C3", label="SVI + DCT (peak 0.03)")
 ax.set_yscale("symlog")
 ax.legend()
 ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI + DCT: 20_000 steps in 3.3s
+    SVI + DCT: 20_000 steps in 2.4s
 
 
 <figure class="figure">
-<p><img src="inference_methods_comparison_files/figure-html/cell-13-output-2.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="inference_methods_comparison_files/figure-html/cell-14-output-2.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
-    In [13]:
+    In [14]:
 
 
 ``` python
@@ -426,24 +467,30 @@ def svi_report(losses: Array, median: Mapping[str, Array]) -> dict[str, float]:
 
 svi_comparison = pd.DataFrame(
     {
-        "SVI": svi_report(svi_result.losses, guide.median(svi_result.params)),
-        "SVI + DCT": svi_report(svi_dct_result.losses, guide_dct.median(svi_dct_result.params)),
+        "SVI (peak 0.01)": svi_report(svi_result.losses, guide.median(svi_result.params)),
+        "SVI + DCT (peak 0.01)": svi_report(
+            svi_dct_same_result.losses, guide_dct_same.median(svi_dct_same_result.params)
+        ),
+        "SVI + DCT (peak 0.03)": svi_report(
+            svi_dct_result.losses, guide_dct.median(svi_dct_result.params)
+        ),
     }
 ).T
 svi_comparison.round(4)
 ```
 
 
-|           | final ELBO loss | bias    | drift_scale | centered |
-|-----------|-----------------|---------|-------------|----------|
-| SVI       | -435.7541       | 14.5341 | 0.0014      | 0.0761   |
-| SVI + DCT | 197.1361        | 5.6526  | 0.1576      | 0.7438   |
+|                       | final ELBO loss | bias    | drift_scale | centered |
+|-----------------------|-----------------|---------|-------------|----------|
+| SVI (peak 0.01)       | -435.7541       | 14.5341 | 0.0014      | 0.0761   |
+| SVI + DCT (peak 0.01) | 197.1361        | 5.6526  | 0.1576      | 0.7438   |
+| SVI + DCT (peak 0.03) | -499.3820       | 14.5140 | 0.0039      | 0.0707   |
 
 
-The two curves tell one story in two halves. Over the first few thousand steps the rotated run descends far faster, which is the geometric advantage the transform is meant to buy. It then settles into a different basin: its final ELBO loss is much worse than the baseline's, and the guide medians show why. The baseline puts the intercept in `bias` and learns a tiny `drift_scale`, while the DCT run leaves part of the intercept in the level itself, at the cost of a `drift_scale` two orders of magnitude larger, which inflates every increment's marginal and, through the cumulative sum, the whole in-sample band. The model's log density is unchanged by the rotation, so this is a property of the optimization path rather than of the objective: a learning-rate schedule tuned for the original coordinates does not transfer to the rotated ones, and the reparameterization has to be re-tuned rather than dropped in. The [univariate example](forecasting_univariate.md) runs the same comparison under a fixed `Adam(0.005)` for `50_000` steps, and there the DCT fit ends at the better ELBO. We keep the run here as it is and let the CRPS below record the consequence.
+The guide medians show the mechanism directly. The stalled run still carries part of the intercept in the level (a lower `bias` and a `drift_scale` two orders of magnitude larger than the baseline's, which inflates every increment's marginal and, through the cumulative sum, the whole in-sample band), while the re-tuned run recovers the baseline's `bias` and a small `drift_scale` and ends at a lower ELBO loss than the baseline. The model's log density is unchanged by the rotation; what changed is the optimization problem the guide solves, and its schedule has to be re-tuned for the new coordinates rather than carried over.
 
 
-    In [14]:
+    In [15]:
 
 
 ``` python
@@ -463,7 +510,7 @@ Three settings matter here. The first is `maxiter`, the L-BFGS iteration budget:
 This section also owns its own `PRNGKey`, split from a fixed seed rather than threaded through the notebook's running `rng_key`, so edits earlier in the notebook cannot reshuffle its random stream.
 
 
-    In [15]:
+    In [16]:
 
 
 ``` python
@@ -488,13 +535,13 @@ print(f"Pathfinder: {len(pathfinder_fit.elbos)} paths in {pathfinder_seconds:.1f
 ```
 
 
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_7288/3865784160.py:4: UserWarning: pareto_k=12.35 > 0.7: PSIS importance weights over the pooled draws are unreliable, so multipathfinder_samples(..., resample="auto") falls back to ELBO-weighted path sampling instead of PSIS resampling; increase num_paths/maxiter/maxcor or fall back to MCMC.
+      pathfinder_fit = fit_multipathfinder(
+
+
     per-path ELBO: [-1272.3, -741.4, -524.7, -597.5, -805.8, -1532.1, -497.5, -192.3]
     pareto_k: 12.35
-    Pathfinder: 8 paths in 79.9s
-
-
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_91376/3865784160.py:4: UserWarning: pareto_k=12.35 > 0.7: PSIS importance weights over the pooled draws are unreliable, so multipathfinder_samples(..., resample="auto") falls back to ELBO-weighted path sampling instead of PSIS resampling; increase num_paths/maxiter/maxcor or fall back to MCMC.
-      pathfinder_fit = fit_multipathfinder(
+    Pathfinder: 8 paths in 68.3s
 
 
 [multipathfinder_samples](../../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples) draws fresh samples from every path's fitted approximation on each call, `2_000` per path here, and then combines the `8` paths into the `2_000` returned draws. How it combines them is the `resample` argument. With `resample="psis"` all `8 * 2_000` fresh draws are pooled, scored both under the model and under the approximation that produced them, and importance-resampled with Pareto smoothing, which is the textbook multi-path Pathfinder estimator. With `resample="elbo"` each returned draw instead picks a whole path with probability proportional to `softmax` of the per-path ELBOs and takes one fresh draw from it, so a path that fits several hundred nats better than the rest simply takes over.
@@ -504,7 +551,7 @@ The default, `resample="auto"`, chooses between the two using the `pareto_k` pri
 The output contract is unchanged either way: `2_000` samples, leading sample axis, ready for [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exactly like [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior).
 
 
-    In [16]:
+    In [17]:
 
 
 ``` python
@@ -519,7 +566,7 @@ The `MCMC` entry point used for NUTS accepts any NumPyro-compatible kernel, and 
 The flip side of skipping the Metropolis correction is that nothing rejects a bad step: the draws carry a small discretization bias controlled by the tuned step size, and an unlucky tuning run degrades the samples silently instead of showing up as divergences the way it would in NUTS. In practice one validates MCLMC against a proper score like the CRPS below or against a short NUTS reference run. We use a generous tuning budget, which costs little because a tuning step is as cheap as a sampling step.
 
 
-    In [17]:
+    In [18]:
 
 
 ``` python
@@ -541,7 +588,7 @@ print(f"MCLMC: 1 chain x 10_000 draws in {mclmc_seconds:.1f}s")
 ```
 
 
-    MCLMC: 1 chain x 10_000 draws in 5.4s
+    MCLMC: 1 chain x 10_000 draws in 5.3s
 
 
 # Exporting fits to ArviZ
@@ -551,7 +598,7 @@ print(f"MCLMC: 1 chain x 10_000 draws in {mclmc_seconds:.1f}s")
 The export is one call, identical for the four posteriors. The only post-processing we add is cosmetic, for plotting: this series is univariate, so we drop the singleton observation dimension and expose the week index as a variable that `az.plot_lm` can use as the x axis.
 
 
-    In [18]:
+    In [19]:
 
 
 ``` python
@@ -1157,7 +1204,7 @@ Group: /
 │           sigma                   (chain, draw) float32 16kB 0.01877 ... 0.02009
 │           weight                  (chain, draw, weight_dim_0) float32 832kB 5.609e-...
 │       Attributes:
-│           created_at:                 2026-09-25T16:07:17.919233+00:00
+│           created_at:                 2026-09-25T16:34:53.605231+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1170,9 +1217,9 @@ Group: /
 │         * time     (time) int64 3kB 0 1 2 3 4 5 6 7 ... 410 411 412 413 414 415 416
 │           obs_dim  int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time) float32 7MB 14.39 14.48 14.4 ... 14.7 14.29
+│           obs      (chain, draw, time) float32 7MB 14.39 14.47 14.44 ... 14.68 14.25
 │       Attributes:
-│           created_at:                 2026-09-25T16:07:18.585958+00:00
+│           created_at:                 2026-09-25T16:34:54.230682+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1185,7 +1232,7 @@ Group: /
 │       Data variables:
 │           obs      (time) float32 2kB 14.41 14.45 14.42 14.53 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-09-25T16:07:18.586235+00:00
+│           created_at:                 2026-09-25T16:34:54.230946+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1199,7 +1246,7 @@ Group: /
 │           covariates     (time, covariate_dim) float32 87kB 0.0 0.0 ... -0.2376
 │           week           (time) float64 3kB 0.0 1.0 2.0 3.0 ... 414.0 415.0 416.0
 │       Attributes:
-│           created_at:                 2026-09-25T16:07:18.586426+00:00
+│           created_at:                 2026-09-25T16:34:54.231125+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1212,9 +1259,9 @@ Group: /
 │         * time     (time) int64 416B 417 418 419 420 421 422 ... 464 465 466 467 468
 │           obs_dim  int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time) float32 832kB 14.46 14.65 14.55 ... 14.73 14.31
+│           obs      (chain, draw, time) float32 832kB 14.5 14.66 14.59 ... 14.69 14.45
 │       Attributes:
-│           created_at:                 2026-09-25T16:07:19.113846+00:00
+│           created_at:                 2026-09-25T16:34:54.765667+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1228,7 +1275,7 @@ Group: /
             covariates     (time, covariate_dim) float32 11kB -0.05158 -0.103 ... 0.3138
             week           (time) float64 416B 417.0 418.0 419.0 ... 466.0 467.0 468.0
         Attributes:
-            created_at:                 2026-09-25T16:07:19.114087+00:00
+            created_at:                 2026-09-25T16:34:54.765918+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1563,7 +1610,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:07:17.919233+00:00
+2026-09-25T16:34:53.605231+00:00
 
 creation_library :  
 ArviZ
@@ -1683,7 +1730,7 @@ obs
 float32
 
 
-14.39 14.48 14.4 ... 14.7 14.29
+14.39 14.47 14.44 ... 14.68 14.25
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1691,14 +1738,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[14.391097 , 14.483753 , 14.398748 , ..., 14.686013 ,14.69015  , 14.236555 ],[14.3917465, 14.467954 , 14.476547 , ..., 14.687921 ,14.702965 , 14.228637 ],[14.379824 , 14.447038 , 14.91455  , ..., 14.5653105,14.633377 , 14.231737 ],...,[14.412917 , 14.458443 , 14.467417 , ..., 14.641356 ,14.663988 , 14.230372 ],[14.421293 , 14.421811 , 14.430874 , ..., 14.690803 ,14.6978855, 14.2418   ],[14.433144 , 14.453783 , 14.4001665, ..., 14.687565 ,14.688769 , 14.306202 ]],[[14.369728 , 14.473923 , 14.502423 , ..., 14.672315 ,14.640793 , 14.216297 ],[14.387499 , 14.492474 , 14.457864 , ..., 14.67309  ,14.658604 , 14.234824 ],[14.451677 , 14.451719 , 14.40029  , ..., 14.669017 ,14.652614 , 14.198741 ],...[14.451054 , 14.449055 , 14.411186 , ..., 14.654637 ,14.675848 , 14.240256 ],[14.474642 , 14.417334 , 14.508359 , ..., 14.718723 ,14.674348 , 14.243044 ],[14.404666 , 14.479387 , 14.430455 , ..., 14.597317 ,14.61916  , 14.277342 ]],[[14.416995 , 14.456238 , 14.423116 , ..., 14.60572  ,14.660689 , 14.227739 ],[14.2963505, 14.447325 , 14.448355 , ..., 14.740956 ,14.6466055, 14.217475 ],[14.403504 , 14.475084 , 14.449515 , ..., 14.697034 ,14.665939 , 14.180315 ],...,[14.369616 , 14.44419  , 13.993477 , ..., 14.670926 ,14.654728 , 14.235314 ],[14.35413  , 14.479632 , 14.476526 , ..., 14.703306 ,14.61571  , 14.217773 ],[14.393924 , 14.445209 , 14.43697  , ..., 14.836169 ,14.696417 , 14.291552 ]]], shape=(4, 1000, 417), dtype=float32)
+    array([[[14.3876095, 14.465941 , 14.436863 , ..., 14.710745 ,14.641898 , 14.297402 ],[14.393753 , 14.329216 , 14.447812 , ..., 14.709267 ,14.673056 , 14.231346 ],[14.359555 , 14.503365 , 14.481538 , ..., 14.724676 ,14.634289 , 14.204009 ],...,[14.406814 , 14.445917 , 14.421692 , ..., 14.677764 ,14.643    , 14.329033 ],[14.445397 , 14.523464 , 14.422801 , ..., 14.665564 ,14.691609 , 14.249859 ],[14.399201 , 14.539675 , 14.414224 , ..., 14.678984 ,14.664358 , 14.3237915]],[[14.525057 , 14.465582 , 14.433795 , ..., 14.662696 ,14.614962 , 14.223475 ],[14.378104 , 14.535701 , 14.429616 , ..., 14.6709   ,14.678733 , 14.248827 ],[14.381308 , 14.433356 , 14.433701 , ..., 14.680571 ,14.676933 , 14.220161 ],...[14.38232  , 14.457669 , 14.439581 , ..., 14.667486 ,14.658976 , 14.207481 ],[14.423708 , 14.449862 , 14.434088 , ..., 14.698764 ,14.704353 , 14.223276 ],[14.350008 , 14.448785 , 14.3399515, ..., 14.642634 ,15.004046 , 14.282252 ]],[[14.46995  , 14.491674 , 14.408989 , ..., 14.625055 ,14.667366 , 14.221833 ],[14.365867 , 14.41265  , 14.416937 , ..., 14.565806 ,14.634846 , 14.185261 ],[14.405733 , 14.551271 , 14.4295635, ..., 14.652109 ,14.647446 , 14.191732 ],...,[14.414277 , 14.452101 , 14.446161 , ..., 14.660893 ,14.657175 , 14.20624  ],[14.248542 , 14.474654 , 14.363992 , ..., 14.7876625,14.653933 , 14.219271 ],[14.377328 , 14.427375 , 14.349741 , ..., 14.694173 ,14.681542 , 14.254318 ]]], shape=(4, 1000, 417), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:07:18.585958+00:00
+2026-09-25T16:34:54.230682+00:00
 
 creation_library :  
 ArviZ
@@ -1791,7 +1838,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:07:18.586235+00:00
+2026-09-25T16:34:54.230946+00:00
 
 creation_library :  
 ArviZ
@@ -1905,7 +1952,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:07:18.586426+00:00
+2026-09-25T16:34:54.231125+00:00
 
 creation_library :  
 ArviZ
@@ -2025,7 +2072,7 @@ obs
 float32
 
 
-14.46 14.65 14.55 ... 14.73 14.31
+14.5 14.66 14.59 ... 14.69 14.45
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2033,14 +2080,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[14.455091 , 14.653771 , 14.548081 , ..., 14.708617 ,14.695205 , 14.293684 ],[14.36083  , 14.548649 , 14.561438 , ..., 14.712377 ,14.727518 , 14.295737 ],[14.382859 , 14.599279 , 14.604938 , ..., 14.692563 ,14.7389765, 14.279635 ],...,[14.375188 , 14.596565 , 14.573913 , ..., 14.675836 ,14.712627 , 14.319072 ],[14.413354 , 14.616976 , 14.58101  , ..., 14.732131 ,14.718887 , 14.296952 ],[14.380427 , 14.621944 , 14.568143 , ..., 14.726783 ,14.843292 , 14.392938 ]],[[14.383455 , 14.596042 , 14.566034 , ..., 14.685655 ,14.643882 , 14.302657 ],[14.34152  , 14.602203 , 14.574086 , ..., 14.7121725,14.724457 , 14.422535 ],[14.4421   , 14.582148 , 14.538005 , ..., 14.719756 ,14.778161 , 14.280409 ],...[14.373328 , 14.579207 , 14.592884 , ..., 14.608672 ,14.700853 , 14.278498 ],[14.475277 , 14.704438 , 14.662845 , ..., 14.748346 ,14.76232  , 14.393854 ],[14.394987 , 14.536498 , 14.537754 , ..., 14.607213 ,14.569985 , 14.183264 ]],[[14.303774 , 14.633317 , 14.559859 , ..., 14.710306 ,14.792189 , 14.324336 ],[14.390863 , 14.576558 , 14.550767 , ..., 14.680785 ,14.672277 , 14.182729 ],[14.39993  , 14.634166 , 14.581417 , ..., 14.619547 ,14.682764 , 14.24579  ],...,[14.402321 , 14.58593  , 14.378978 , ..., 14.735634 ,14.819657 , 14.3974   ],[14.422055 , 14.60065  , 14.568976 , ..., 14.705818 ,14.723831 , 14.505547 ],[14.429055 , 14.674121 , 14.590495 , ..., 14.649624 ,14.732063 , 14.309134 ]]], shape=(4, 1000, 52), dtype=float32)
+    array([[[14.503907 , 14.659236 , 14.588355 , ..., 14.692155 ,14.684695 , 14.262318 ],[14.368981 , 14.57186  , 14.542863 , ..., 14.668153 ,14.73518  , 14.290753 ],[14.399597 , 14.563817 , 14.554544 , ..., 14.635212 ,14.627603 , 14.258506 ],...,[14.357595 , 14.587165 , 14.551408 , ..., 14.73449  ,14.762737 , 14.364089 ],[14.366856 , 14.613092 , 14.454675 , ..., 14.619513 ,14.688612 , 14.286854 ],[14.41882  , 14.626106 , 14.561189 , ..., 14.622261 ,14.690737 , 14.278607 ]],[[14.378604 , 14.5820675, 14.617068 , ..., 14.68907  ,14.611128 , 14.272454 ],[14.371564 , 14.561808 , 14.590638 , ..., 14.630689 ,14.645187 , 14.261362 ],[14.406833 , 14.582171 , 14.557283 , ..., 14.697556 ,14.738623 , 14.385211 ],...[14.412874 , 14.596779 , 14.661889 , ..., 14.607026 ,14.581307 , 14.23718  ],[14.508021 , 14.631997 , 14.600297 , ..., 14.690496 ,14.740638 , 14.280039 ],[14.421268 , 14.615503 , 14.549985 , ..., 14.683498 ,13.560177 , 14.273614 ]],[[14.424391 , 14.63654  , 14.573101 , ..., 14.637129 ,14.694934 , 14.289777 ],[14.381046 , 14.5393505, 14.584018 , ..., 14.715045 ,14.733766 , 14.365591 ],[14.312335 , 14.59347  , 14.57439  , ..., 14.720205 ,14.764447 , 14.329182 ],...,[14.419512 , 14.630643 , 14.580336 , ..., 14.659102 ,14.6970215, 14.238585 ],[14.380308 , 14.598778 , 14.652709 , ..., 14.693976 ,14.685219 , 14.273905 ],[14.411222 , 14.618261 , 14.560053 , ..., 14.696238 ,14.690015 , 14.449202 ]]], shape=(4, 1000, 52), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:07:19.113846+00:00
+2026-09-25T16:34:54.765667+00:00
 
 creation_library :  
 ArviZ
@@ -2154,7 +2201,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:07:19.114087+00:00
+2026-09-25T16:34:54.765918+00:00
 
 creation_library :  
 ArviZ
@@ -2187,7 +2234,7 @@ sample_dims :
 Because the NUTS tree keeps its `4` chains, the standard MCMC diagnostics apply directly to it: `az.summary` reports posterior summaries, effective sample sizes, and \hat{R} for the scalar parameters. Values of \hat{R} close to `1` indicate that the chains mixed well.
 
 
-    In [19]:
+    In [20]:
 
 
 ``` python
@@ -2212,7 +2259,7 @@ The scalar parameters that shape the forecast (`bias`, `drift_scale`, `nu`, `sig
 We score each engine with the **continuous ranked probability score** (CRPS), a proper scoring rule that compares a single observed value against the whole forecast distribution, rewarding forecasts that are both sharp and calibrated (lower is better). The in-sample score comes from the `posterior_predictive` group and the out-of-sample score from the `predictions` group, so the metrics are computed from the very same draws the plots below display.
 
 
-    In [20]:
+    In [21]:
 
 
 ``` python
@@ -2252,12 +2299,12 @@ comparison.round(4)
 
 |            | train CRPS | test CRPS | walltime (s) |
 |------------|------------|-----------|--------------|
-| NUTS       | 0.0242     | 0.0302    | 40.6568      |
-| SVI        | 0.0271     | 0.0371    | 5.1768       |
-| Pathfinder | 0.0276     | 0.0316    | 79.8969      |
-| MCLMC      | 0.0255     | 0.0331    | 5.4463       |
-| NUTS + DCT | 0.0242     | 0.0303    | 56.9345      |
-| SVI + DCT  | 0.1414     | 0.2042    | 3.3219       |
+| NUTS       | 0.0242     | 0.0302    | 40.8726      |
+| SVI        | 0.0271     | 0.0371    | 4.9253       |
+| Pathfinder | 0.0276     | 0.0318    | 68.3311      |
+| MCLMC      | 0.0242     | 0.0302    | 5.3368       |
+| NUTS + DCT | 0.0242     | 0.0304    | 55.0582      |
+| SVI + DCT  | 0.0258     | 0.0304    | 2.3789       |
 
 
 # Forecast visualization
@@ -2265,7 +2312,7 @@ comparison.round(4)
 For each engine we overlay the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with 50\\ and 94\\ HDI bands, on the observed series. The `DataTree` layout makes this a two-call `az.plot_lm` pattern: one call for the `posterior_predictive` group and one for the `predictions` group, sharing a single plot collection.
 
 
-    In [21]:
+    In [22]:
 
 
 ``` python
@@ -2326,19 +2373,6 @@ plot_forecast(nuts_tree, title=crps_title("NUTS"))
 
 
 <figure class="figure">
-<p><img src="inference_methods_comparison_files/figure-html/cell-22-output-1.png" class="figure-img" width="1011" height="611" /></p>
-</figure>
-
-
-    In [22]:
-
-
-``` python
-plot_forecast(svi_tree, title=crps_title("SVI"))
-```
-
-
-<figure class="figure">
 <p><img src="inference_methods_comparison_files/figure-html/cell-23-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
@@ -2347,7 +2381,7 @@ plot_forecast(svi_tree, title=crps_title("SVI"))
 
 
 ``` python
-plot_forecast(svi_dct_tree, title=crps_title("SVI + DCT"))
+plot_forecast(svi_tree, title=crps_title("SVI"))
 ```
 
 
@@ -2360,7 +2394,7 @@ plot_forecast(svi_dct_tree, title=crps_title("SVI + DCT"))
 
 
 ``` python
-plot_forecast(pathfinder_tree, title=crps_title("Pathfinder"))
+plot_forecast(svi_dct_tree, title=crps_title("SVI + DCT"))
 ```
 
 
@@ -2373,7 +2407,7 @@ plot_forecast(pathfinder_tree, title=crps_title("Pathfinder"))
 
 
 ``` python
-plot_forecast(mclmc_tree, title=crps_title("MCLMC"))
+plot_forecast(pathfinder_tree, title=crps_title("Pathfinder"))
 ```
 
 
@@ -2382,12 +2416,25 @@ plot_forecast(mclmc_tree, title=crps_title("MCLMC"))
 </figure>
 
 
+    In [26]:
+
+
+``` python
+plot_forecast(mclmc_tree, title=crps_title("MCLMC"))
+```
+
+
+<figure class="figure">
+<p><img src="inference_methods_comparison_files/figure-html/cell-27-output-1.png" class="figure-img" width="1011" height="611" /></p>
+</figure>
+
+
 # Trade-offs
 
 The summary plot puts the four engines side by side, together with the two runs that fit the same model through the DCT time-axis reparameterization.
 
 
-    In [26]:
+    In [27]:
 
 
 ``` python
@@ -2406,8 +2453,27 @@ ax.set(title="CRPS by inference method", xlabel="inference method", ylabel="CRPS
 
 
 <figure class="figure">
-<p><img src="inference_methods_comparison_files/figure-html/cell-27-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="inference_methods_comparison_files/figure-html/cell-28-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
-NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `40.7`s across its `4` chains. MCLMC (`5.4`s) and SVI (`5.2`s) both track that reference closely at a small fraction of the cost: MCLMC's `0.0255`/`0.0331` train/test CRPS comes from spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0271`/`0.0371` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.Multi-path Pathfinder is the interesting case, because its forecasts and its own diagnostic point in opposite directions. Its scores are close to the reference, `0.0276` train and `0.0316` test CRPS, the second-best test score in the table, while its `pareto_k` came out at `12.35`, more than an order of magnitude above the `0.7` reliability threshold. Both readings are correct, because they describe different objects. The `pareto_k` printed by the fit cell measures whether importance weights over the pooled per-path draws can be trusted, and on a `474`-parameter posterior they cannot: the log ratio between the target and the approximation is dominated by a handful of draws. The samples that produced the CRPS above never passed through those weights, because `resample="auto"` read the same `pareto_k`, fell back to ELBO-weighted path sampling, and let the best path take over.The cost side is less flattering. At `79.9`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `40.7`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.The two DCT columns show what [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) does and does not change. NUTS + DCT reproduces the NUTS scores exactly (`0.0242`/`0.0303`), as it must for a unit-Jacobian change of coordinates, and it changes the sampler's work: `314` leapfrog steps per draw instead of `446` and a minimum bulk ESS over the drift increments of `559` instead of `46`, a twelvefold gain per draw, at `56.9`s against `40.7`s of wall time because each leapfrog step now pays for the transform. Per effective sample it is by far the cheapest MCMC run in the notebook. SVI + DCT is the cautionary column: with the one-cycle schedule tuned for the original coordinates it lands in the worse basin diagnosed above (final ELBO loss `197` against `-436`) and its CRPS of `0.1414`/`0.2042` is the worst in the table, while the same reparameterization under a fixed `Adam(0.005)` for `50_000` steps ends at the better ELBO in the univariate example. The rotation is free for the model and for the sampler; for a variational fit it is a change of optimization problem whose schedule has to be re-tuned.## Next stepsA single train/test split is only one view of forecasting skill; the [univariate example](forecasting_univariate.md) shows how to score these same models with rolling-origin backtesting, including a fully vectorized variant. From here you can also swap guides (`AutoMultivariateNormal` captures posterior correlations that `AutoNormal` ignores, at the cost of an `O(n^2)` covariance), or swap kernels ([BlackjaxNUTSKernel](../../../reference/contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel) runs BlackJAX's own NUTS through the same adapter MCLMC used above, and [BlackjaxCustomKernel](../../../reference/contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel) accepts any BlackJAX sampler through a small build function) without touching `univariate_model` or the [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) export itself.## References- Orduz, J. [*Univariate time series forecasting with NumPyro*](https://juanitorduz.github.io/numpyro_forecasting-univariate/).- Pyro. [*Forecasting I: Univariate, Heavy Tailed*](https://pyro.ai/examples/forecasting_i.html).- Hoffman, M. D., & Gelman, A. (2014). [*The No-U-Turn Sampler: Adaptively setting path lengths in Hamiltonian Monte Carlo*](https://jmlr.org/papers/v15/hoffman14a.html). JMLR.- Hoffman, M. D., Blei, D. M., Wang, C., & Paisley, J. (2013). [*Stochastic variational inference*](https://jmlr.org/papers/v14/hoffman13a.html). JMLR.- Zhang, L., Carpenter, B., Gelman, A., & Vehtari, A. (2022). [*Pathfinder: Parallel quasi-Newton variational inference*](https://jmlr.org/papers/v23/21-0889.html). JMLR.- Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J. (2024). [*Pareto smoothed importance sampling*](https://jmlr.org/papers/v25/19-556.html). JMLR.- Robnik, J., De Luca, G. B., Silverstein, E., & Seljak, U. (2023). [*Microcanonical Hamiltonian Monte Carlo*](https://jmlr.org/papers/v24/22-1450.html). JMLR.- Robnik, J., & Seljak, U. (2024). [*Fluctuation without dissipation: Microcanonical Langevin Monte Carlo*](https://arxiv.org/abs/2303.18221).- Smith, L. N., & Topin, N. (2019). [*Super-convergence: Very fast training of neural networks using large learning rates*](https://arxiv.org/abs/1708.07120).
+Scores alone hide the cost side, so we also chart the wall time each engine needed to produce its posterior (the fit for the variational methods and the sampling run for the MCMC ones, measured on the same laptop CPU, one run each, so treat small differences as noise).
+
+
+    In [28]:
+
+
+``` python
+fig, ax = plt.subplots()
+bars = ax.bar(methods, [walltimes[m] for m in methods], color="C0")
+ax.bar_label(bars, fmt="%.1f s")
+ax.set(title="Training time by inference method", xlabel="inference method", ylabel="seconds");
+```
+
+
+<figure class="figure">
+<p><img src="inference_methods_comparison_files/figure-html/cell-29-output-1.png" class="figure-img" width="1011" height="611" /></p>
+</figure>
+
+
+NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `40.9`s across its `4` chains. MCLMC (`5.3`s) and SVI (`4.9`s) both come in at a small fraction of that cost: MCLMC matches the reference to four decimals on this run by spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0271`/`0.0371` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.Multi-path Pathfinder is the interesting case, because its forecasts and its own diagnostic point in opposite directions. Its scores are close to the reference, `0.0276` train and `0.0318` test CRPS, while its `pareto_k` came out at `12.35`, more than an order of magnitude above the `0.7` reliability threshold. Both readings are correct, because they describe different objects. The `pareto_k` printed by the fit cell measures whether importance weights over the pooled per-path draws can be trusted, and on a `474`-parameter posterior they cannot: the log ratio between the target and the approximation is dominated by a handful of draws. The samples that produced the CRPS above never passed through those weights, because `resample="auto"` read the same `pareto_k`, fell back to ELBO-weighted path sampling, and let the best path take over.The cost side is less flattering. At `68.3`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `40.9`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.The two DCT columns show what [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) changes. NUTS + DCT reproduces the NUTS scores (`0.0242`/`0.0304`), as it must for a unit-Jacobian change of coordinates, and it changes the sampler's work: `314` leapfrog steps per draw instead of `446` and a minimum bulk ESS over the drift increments of `559` instead of `46`, a twelvefold gain per draw, at `55.1`s against `40.9`s of wall time because each leapfrog step now pays for the transform. Per effective sample it is by far the cheapest MCMC run in the notebook. SVI + DCT, once its learning-rate peak is re-tuned for the rotated coordinates, is the best variational fit in the table: train CRPS `0.0258` and test CRPS `0.0304`, within a hair of the NUTS reference and well ahead of the plain SVI's `0.0371` test score, at a final ELBO loss of `-499` against `-436`, in `2.4`s. The same fit with the baseline's schedule stalled at an ELBO loss of `197`, so the rotation is free for the model and for the sampler, but for a variational fit it is a change of optimization problem whose schedule has to be re-tuned rather than carried over.## Next stepsA single train/test split is only one view of forecasting skill; the [univariate example](forecasting_univariate.md) shows how to score these same models with rolling-origin backtesting, including a fully vectorized variant. From here you can also swap guides (`AutoMultivariateNormal` captures posterior correlations that `AutoNormal` ignores, at the cost of an `O(n^2)` covariance), or swap kernels ([BlackjaxNUTSKernel](../../../reference/contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel) runs BlackJAX's own NUTS through the same adapter MCLMC used above, and [BlackjaxCustomKernel](../../../reference/contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel) accepts any BlackJAX sampler through a small build function) without touching `univariate_model` or the [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) export itself.## References- Orduz, J. [*Univariate time series forecasting with NumPyro*](https://juanitorduz.github.io/numpyro_forecasting-univariate/).- Pyro. [*Forecasting I: Univariate, Heavy Tailed*](https://pyro.ai/examples/forecasting_i.html).- Hoffman, M. D., & Gelman, A. (2014). [*The No-U-Turn Sampler: Adaptively setting path lengths in Hamiltonian Monte Carlo*](https://jmlr.org/papers/v15/hoffman14a.html). JMLR.- Hoffman, M. D., Blei, D. M., Wang, C., & Paisley, J. (2013). [*Stochastic variational inference*](https://jmlr.org/papers/v14/hoffman13a.html). JMLR.- Zhang, L., Carpenter, B., Gelman, A., & Vehtari, A. (2022). [*Pathfinder: Parallel quasi-Newton variational inference*](https://jmlr.org/papers/v23/21-0889.html). JMLR.- Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J. (2024). [*Pareto smoothed importance sampling*](https://jmlr.org/papers/v25/19-556.html). JMLR.- Robnik, J., De Luca, G. B., Silverstein, E., & Seljak, U. (2023). [*Microcanonical Hamiltonian Monte Carlo*](https://jmlr.org/papers/v24/22-1450.html). JMLR.- Robnik, J., & Seljak, U. (2024). [*Fluctuation without dissipation: Microcanonical Langevin Monte Carlo*](https://arxiv.org/abs/2303.18221).- Smith, L. N., & Topin, N. (2019). [*Super-convergence: Very fast training of neural networks using large learning rates*](https://arxiv.org/abs/1708.07120).
