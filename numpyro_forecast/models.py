@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import cast
+from typing import NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -345,9 +345,12 @@ site: ``step`` must not call ``numpyro.sample`` (that is `markov_series()`).
 ``x_t`` is one row of the ``xs`` PyTree (``None`` when ``xs`` is ``None``)."""
 
 
-@dataclass(frozen=True)
-class SSOEResult:
+class SSOEResult(NamedTuple):
     """The means and sampled future values produced by `ssoe()`.
+
+    A named tuple, hence a JAX pytree with three array leaves: it unpacks as
+    ``mu, mu_future, y_future = ssoe(...)`` and passes through ``jax.tree.map``,
+    ``jax.jit`` and ``jax.vmap`` unchanged.
 
     Attributes
     ----------

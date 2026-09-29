@@ -590,6 +590,19 @@ def test_event_shaped_noise_batched_panel() -> None:
     assert box[-1].y_future.shape == (b, FUTURE, k)
 
 
+def test_ssoe_result_is_a_pytree_and_unpacks() -> None:
+    model, box = _capture(_arma_ssoe_body)
+    covariates = _series(12)
+    get_trace(model, covariates, covariates[:10])
+    (r,) = box
+    mu, mu_future, y_future = r
+    assert mu.shape == (10, 1) and mu_future.shape == (2, 1) and y_future.shape == (2, 1)
+    assert len(jax.tree.leaves(r)) == 3
+    doubled = jax.tree.map(lambda x: 2 * x, r)
+    assert isinstance(doubled, SSOEResult)
+    assert jnp.array_equal(doubled.mu, 2 * r.mu)
+
+
 def test_event_rank_two_is_rejected() -> None:
     def body(h: Horizon) -> None:
         noise = dist.Normal(0.0, 1.0).expand([1, 3]).to_event(2)

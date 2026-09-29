@@ -109,8 +109,7 @@ This is the code the notebook defines and the code proposed for `contrib/dynesty
 ```python
 from collections.abc import Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 import dynestyx as dsx
 import jax
@@ -132,8 +131,7 @@ StateSpaceHandler = Filter | Smoother | LatentPathBuilder | Discretizer
 _CONDITIONING_HANDLERS = (Filter, Smoother, LatentPathBuilder)
 
 
-@dataclass(frozen=True)
-class StateSpaceResult:
+class StateSpaceResult(NamedTuple):
     """Draws produced by `state_space_series` (size-0 time axes when not applicable).
 
     Each field is filled in the mode that produces it and has a size-0 time axis
@@ -360,6 +358,8 @@ def state_space_series(
         y_future=empty_y, x_future=empty_x, y_in_sample=y_in_sample, x_in_sample=x
     )
 ```
+
+It is a `NamedTuple`, like `SSOEResult`, so it is a JAX pytree.
 
 Why each non-obvious line is there:
 
