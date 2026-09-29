@@ -3,6 +3,48 @@
 This changelog is generated automatically from [GitHub Releases](https://github.com/juanitorduz/numpyro_forecast/releases).
 
 
+# 0.4.0
+
+*2026-09-29* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.4.0)
+
+
+## What's Changed
+
+⚠️ API changes to make the API more functional and better integrated with JAX; see https://github.com/juanitorduz/numpyro_forecast/issues/116
+
+We are converging to a more stable API 🚀
+
+- Bump anthropics/claude-code-action from 1.0.195 to 1.0.206 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/113
+- Bump ty from 0.0.72 to 0.0.74 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/114
+- Bump ruff from 0.16.3 to 0.16.4 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/115
+- Bump anthropics/claude-code-action from 1.0.206 to 1.0.213 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/117
+- Bump ruff from 0.16.4 to 0.16.5 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/118
+- Bump ty from 0.0.74 to 0.0.77 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/119
+- Add vector autoregression components and a VAR example notebook by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/120
+- Bump anthropics/claude-code-action from 1.0.213 to 1.0.219 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/122
+- Bump ty from 0.0.77 to 0.0.79 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/123
+- Bump ruff from 0.16.5 to 0.16.6 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/124
+- Bump anthropics/claude-code-action from 1.0.219 to 1.0.226 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/127
+- Bump ruff from 0.16.6 to 0.16.7 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/128
+- Bump ty from 0.0.79 to 0.0.81 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/129
+- Design document: integrating numpyro_forecast with dynestyx by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/125
+- Bump anthropics/claude-code-action from 1.0.226 to 1.0.231 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/132
+- Update jax requirement from \<0.11.1,\>=0.10.0 to \>=0.10.0,\<0.11.3 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/131
+- Bump ruff from 0.16.7 to 0.16.8 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/133
+- Bump ty from 0.0.81 to 0.0.83 by [<span class="citation" data-cites="dependabot">@dependabot</span>](https://github.com/dependabot)\[bot\] in https://github.com/juanitorduz/numpyro_forecast/pull/134
+- Example notebook: Kalman-filtered state space models with dynestyx by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/126
+- Use a smaller thumbnail for the dynestyx example card by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/136
+- Add time_reparam: Haar/DCT time-axis reparameterization (port of Pyro's time_reparam) by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/135
+- Address review [\#116](https://github.com/juanitorduz/numpyro_forecast/issues/116): pytree Horizon/SSOEResult, distribution instances, mean/update step protocol by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/137
+- Re-execute all example notebooks ahead of the 0.4 release by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/138
+- Restructure the README for the 0.4 release by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/139
+- Agent skill, llms-full contrib section, .well-known deploy fix, AGENTS.md for 0.4 by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/140
+- Pre-release cleanup for 0.4: driver signature consistency, stale docs, broken links by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/141
+- Bump version from 0.3.0 to 0.4.0 by [<span class="citation" data-cites="juanitorduz">@juanitorduz</span>](https://github.com/juanitorduz) in https://github.com/juanitorduz/numpyro_forecast/pull/142
+
+**Full Changelog**: [https://github.com/juanitorduz/numpyro_forecast/compare/0.3.0…0.4.0](https://github.com/juanitorduz/numpyro_forecast/compare/0.3.0...0.4.0)
+
+
 # 0.3.0
 
 *2026-08-27* · [GitHub](https://github.com/juanitorduz/numpyro_forecast/releases/tag/0.3.0)

@@ -13,6 +13,9 @@ The train/forecast split for a single model call.
 [models.Transition](models.Transition.md#numpyro_forecast.models.Transition)  
 `(carry, x_t) -> dist_t`: the distribution of the next latent given the carry.
 
+[models.Advance](models.Advance.md#numpyro_forecast.models.Advance)  
+`(carry, z_t, x_t) -> carry`: the next carry from the current carry, the
+
 [models.innovations()](models.innovations.md#numpyro_forecast.models.innovations)  
 Sample conditionally iid per-step innovations over the full horizon.
 
@@ -22,11 +25,49 @@ Sample a Markov (state-space) latent over the full horizon.
 [models.ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe)  
 Run a single-source-of-error recursion over the full horizon.
 
+[models.SSOEMean](models.SSOEMean.md#numpyro_forecast.models.SSOEMean)  
+`(carry, x_t) -> mu_t`: the one-step-ahead mean of the current row, shape
+
+[models.SSOEUpdate](models.SSOEUpdate.md#numpyro_forecast.models.SSOEUpdate)  
+`(carry, y_t, eps_t, x_t) -> carry`: the next carry from the row's value and
+
 [models.SSOEResult](models.SSOEResult.md#numpyro_forecast.models.SSOEResult)  
 The means and sampled future values produced by `ssoe()`.
 
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
+
+[models.PlateName](models.PlateName.md#numpyro_forecast.models.PlateName)  
+Names of the plates the building blocks open, as `str` members.
+
+
+## Vector autoregression
+
+
+VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
+
+
+[var.var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean)  
+Compute the VAR conditional mean of the next row from a lag window.
+
+[var.var_step()](var.var_step.md#numpyro_forecast.var.var_step)  
+Build the `~~numpyro_forecast.models.ssoe()` mean and update of a VAR.
+
+[var.companion_matrix()](var.companion_matrix.md#numpyro_forecast.var.companion_matrix)  
+Stack the VAR coefficients into the companion form of a VAR(1).
+
+[var.impulse_response()](var.impulse_response.md#numpyro_forecast.var.impulse_response)  
+Compute the impulse responses (moving-average coefficients) of a VAR.
+
+
+## Priors
+
+
+Shrinkage prior moments for coefficient arrays.
+
+
+[priors.minnesota_prior()](priors.minnesota_prior.md#numpyro_forecast.priors.minnesota_prior)  
+Return the Minnesota (Litterman) prior moments for VAR coefficients.
 
 
 ## Distribution surgery
@@ -46,6 +87,19 @@ Condition a `(t+f)`-length distribution on a `t`-length data prefix.
 
 [surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
 Declare a distribution family elementwise (usable as a decorator).
+
+
+## Reparameterization
+
+
+Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+
+[reparam.time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam)  
+Reparameterize every in-sample time latent of `model` along the time axis.
+
+[reparam.TimeTransform](reparam.TimeTransform.md#numpyro_forecast.reparam.TimeTransform)  
+The time-axis transform applied by `time_reparam()`: `"haar"` or `"dct"`.
 
 
 ## Producing draws
