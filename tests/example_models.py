@@ -6,7 +6,6 @@ mirror the example notebooks under ``docs/examples/`` and act as a regression
 target for the full fit-draw-forecast path.
 """
 
-from collections.abc import Callable
 from typing import cast
 
 import jax
@@ -164,16 +163,22 @@ def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[S
     init = jnp.asarray(numpyro.sample("init", dist.Normal(0.0, 1.0)))
     noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(1.0)))
 
-    def step(level: Array, gate_t: Array | None) -> tuple[Array, Callable[[Array, Array], Array]]:
+    def mean(level: Array, _: Array | None) -> Array:
+        return level
+
+    def update(level: Array, y_t: Array, _: Array, gate_t: Array | None) -> Array:
         assert gate_t is not None  # xs is always passed here
-
-        def carry_fn(y_t: Array, _: Array) -> Array:
-            return jnp.where(gate_t, smoothing * y_t + (1.0 - smoothing) * level, level)
-
-        return level, carry_fn
+        return jnp.where(gate_t, smoothing * y_t + (1.0 - smoothing) * level, level)
 
     result = ssoe(
-        h, name, values, init[None], step, dist.Normal(0.0, noise), xs=pad_future(gate, h.future)
+        h,
+        name,
+        values,
+        init[None],
+        mean,
+        update,
+        dist.Normal(0.0, noise),
+        xs=pad_future(gate, h.future),
     )
     return result, noise
 

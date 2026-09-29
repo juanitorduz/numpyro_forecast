@@ -119,7 +119,7 @@ A model is a plain NumPyro function `(covariates, data=None)` whose first line d
 | `Horizon.from_data(covariates, data)` | Deriving the train/forecast split by hand and carrying `t_obs`, `future` and `duration` around | none |
 | `innovations(h, name, prior)` | Two `numpyro.sample` calls under two time plates, plus the concatenation of prefix and suffix | `<name>`, `<name>_future` |
 | `markov_series(h, name, init_carry, transition)` | Two `numpyro.contrib.control_flow.scan` calls, the second seeded by the first's final carry | `<name>`, `<name>_future` |
-| `ssoe(h, name, y, init_carry, step, noise_dist)` | An in-sample error-feedback `lax.scan` filter, plus a generative forecast scan driven by iid future errors | `<name>_future` only |
+| `ssoe(h, name, y, init_carry, mean, update, noise_dist)` | An in-sample error-feedback `lax.scan` filter, plus a generative forecast scan driven by iid future errors | `<name>_future` only |
 | `predict(h, obs_dist, prediction)` | Slicing the observation distribution along time, conditioning it on the observed prefix and sampling the suffix | `obs` while training; also `obs_future` and the `forecast` deterministic when `h.future > 0` |
 
 `ssoe` is the one block that does not close the loop for you: it registers only the error site, and the caller writes the likelihood against `r.mu` and registers `numpyro.deterministic("forecast", r.y_future)` when `h.future > 0`. In every block the observed data flows in through the `Horizon`, so `predict` has no `obs=` argument of its own.

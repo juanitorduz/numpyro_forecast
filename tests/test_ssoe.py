@@ -9,11 +9,11 @@ import numpyro
 import numpyro.distributions as dist
 import pytest
 from conftest import (
-    CarryFn,
     as_model,
     empty_covariates,
     get_trace,
-    identity_step,
+    identity_mean,
+    keep_carry,
     plate_frames,
     run_horizon_body,
     svi_forecast_fn,
@@ -102,11 +102,16 @@ def _arma_ssoe_body(h: Horizon, covariates: Array) -> SSOEResult:
     y = covariates[..., : h.t_obs, :]
     mu, phi, theta, sigma = _arma_params()
 
-    def step(carry: tuple[Array, Array], _: object) -> tuple[Array, CarryFn]:
+    def mean(carry: tuple[Array, Array], _: object) -> Array:
         y_prev, eps_prev = carry
-        return mu + phi * y_prev + theta * eps_prev, lambda y_t, eps_t: (y_t, eps_t)
+        return mu + phi * y_prev + theta * eps_prev
 
-    r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), step, dist.Normal(0.0, sigma))
+    def update(
+        carry: tuple[Array, Array], y_t: Array, eps_t: Array, _: object
+    ) -> tuple[Array, Array]:
+        return y_t, eps_t
+
+    r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), mean, update, dist.Normal(0.0, sigma))
     numpyro.deterministic("mu_t", r.mu)
     numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     if h.future > 0:
@@ -127,23 +132,22 @@ def _ets_body(h: Horizon, covariates: Array) -> SSOEResult:
     y = covariates[..., : h.t_obs, :]
     sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
 
-    def step(carry: EtsCarry, _: object) -> tuple[Array, CarryFn]:
+    def mean(carry: EtsCarry, _: object) -> Array:
         level, trend, season = carry
-        mu_t = jnp.asarray(level + PHI_ETS * trend + season[0])
+        return jnp.asarray(level + PHI_ETS * trend + season[0])[None]
 
-        def carry_fn(y_t: Array, eps_t: Array) -> EtsCarry:
-            e = eps_t[0]
-            new_season = season[0] + 0.2 * e
-            return (
-                level + PHI_ETS * trend + 0.5 * e,
-                PHI_ETS * trend + 0.1 * e,
-                jnp.concatenate([season[1:], new_season[None]]),
-            )
-
-        return mu_t[None], carry_fn
+    def update(carry: EtsCarry, y_t: Array, eps_t: Array, _: object) -> EtsCarry:
+        level, trend, season = carry
+        e = eps_t[0]
+        new_season = season[0] + 0.2 * e
+        return (
+            level + PHI_ETS * trend + 0.5 * e,
+            PHI_ETS * trend + 0.1 * e,
+            jnp.concatenate([season[1:], new_season[None]]),
+        )
 
     init: EtsCarry = (0.0, 0.0, jnp.zeros((4,)))
-    r = ssoe(h, "eps", y, init, step, dist.Normal(0.0, sigma))
+    r = ssoe(h, "eps", y, init, mean, update, dist.Normal(0.0, sigma))
     numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     if h.future > 0:
         numpyro.deterministic("forecast", r.y_future)
@@ -230,11 +234,11 @@ def test_frozen_gate_forecast_is_flat(layout: str) -> None:
     gate = y > 0.5
 
     def body(h: Horizon, covariates: Array) -> SSOEResult:
-        def step(level: Array, gate_t: Array | None) -> tuple[Array, CarryFn]:
+        def update(level: Array, y_t: Array, _: Array, gate_t: Array | None) -> Array:
             assert gate_t is not None
-            return level, lambda y_t, _: jnp.where(gate_t, 0.3 * y_t + 0.7 * level, level)
+            return jnp.where(gate_t, 0.3 * y_t + 0.7 * level, level)
 
-        return ssoe(h, "eps", y, init, step, noise, xs=pad_future(gate, h.future))
+        return ssoe(h, "eps", y, init, identity_mean, update, noise, xs=pad_future(gate, h.future))
 
     model, box = _capture(body)
     tr = get_trace(model, empty_covariates(t_obs + future), y)
@@ -322,10 +326,10 @@ def test_forecast_scan_feeds_drawn_errors_and_clips_carry() -> None:
     covariates = empty_covariates(t_obs + future)
 
     def identity_body(h: Horizon, covariates: Array) -> SSOEResult:
-        def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-            return carry, lambda y_t, eps_t: eps_t
+        def update(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+            return eps_t
 
-        return ssoe(h, "eps", y, jnp.zeros((1,)), step, dist.Normal(0.0, 1.0))
+        return ssoe(h, "eps", y, jnp.zeros((1,)), identity_mean, update, dist.Normal(0.0, 1.0))
 
     model, box = _capture(identity_body)
     get_trace(model, covariates, y, substitutions={"eps_future": eps})
@@ -335,10 +339,10 @@ def test_forecast_scan_feeds_drawn_errors_and_clips_carry() -> None:
     assert jnp.array_equal(r.mu_future[1:], eps[:-1])
 
     def clipping_body(h: Horizon, covariates: Array) -> SSOEResult:
-        def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-            return carry, lambda y_t, eps_t: jnp.clip(y_t, 0.0)
+        def update(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+            return jnp.clip(y_t, 0.0)
 
-        return ssoe(h, "eps", y, jnp.zeros((1,)), step, dist.Normal(0.0, 1.0))
+        return ssoe(h, "eps", y, jnp.zeros((1,)), identity_mean, update, dist.Normal(0.0, 1.0))
 
     model, box = _capture(clipping_body)
     get_trace(model, covariates, y, substitutions={"eps_future": eps})
@@ -347,7 +351,7 @@ def test_forecast_scan_feeds_drawn_errors_and_clips_carry() -> None:
     assert jnp.array_equal(r.mu_future[1:], jnp.clip(r.y_future[:-1], 0.0))
 
 
-def test_xs_pytree_reaches_step_and_censored_obs_samples_under_data_none() -> None:
+def test_xs_pytree_reaches_mean_and_update_and_censored_obs_samples_under_data_none() -> None:
     t_obs, future = 10, 3
     duration = t_obs + future
     key_y, key_a, key_c = random.split(random.PRNGKey(8), 3)
@@ -365,22 +369,27 @@ def test_xs_pytree_reaches_step_and_censored_obs_samples_under_data_none() -> No
         seasonal = covariates[..., 3:4]
         sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
 
-        def step(
-            carry: tuple[Array, Array], x_t: tuple[Array, Array, Array] | None
-        ) -> tuple[Array, CarryFn]:
+        def mean(carry: tuple[Array, Array], x_t: tuple[Array, Array, Array] | None) -> Array:
             assert x_t is not None
-            seasonal_t, available_t, censored_t = x_t
+            seasonal_t, _, _ = x_t
             lag_1, lag_2 = carry
-            pred = 0.5 * lag_1 + 0.2 * lag_2 + seasonal_t
+            return 0.5 * lag_1 + 0.2 * lag_2 + seasonal_t
 
-            def carry_fn(y_t: Array, _: Array) -> tuple[Array, Array]:
-                on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
-                return jnp.clip(jnp.where(available_t == 1, on_shelf, pred), 0.0), lag_1
-
-            return pred, carry_fn
+        def update(
+            carry: tuple[Array, Array],
+            y_t: Array,
+            _: Array,
+            x_t: tuple[Array, Array, Array] | None,
+        ) -> tuple[Array, Array]:
+            assert x_t is not None
+            _, available_t, censored_t = x_t
+            lag_1, _ = carry
+            pred = mean(carry, x_t)  # same ops, same operands: bit-identical to the filter's mu_t
+            on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
+            return jnp.clip(jnp.where(available_t == 1, on_shelf, pred), 0.0), lag_1
 
         xs = (seasonal, pad_future(available, h.future, value=1.0), pad_future(censored, h.future))
-        r = ssoe(h, "eps", y, (y[0], y[0]), step, dist.Normal(0.0, sigma), xs=xs)
+        r = ssoe(h, "eps", y, (y[0], y[0]), mean, update, dist.Normal(0.0, sigma), xs=xs)
         valid = (jnp.arange(h.t_obs)[:, None] >= 2) & (available == 1)
         numpyro.sample(
             "obs",
@@ -414,72 +423,86 @@ _ONE = jnp.zeros((1,))
 
 
 def _y_none(h: Horizon) -> None:
-    ssoe(h, "eps", None, _ONE, identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", None, _ONE, identity_mean, keep_carry, dist.Normal(0.0, 1.0))
 
 
 def _y_1d(h: Horizon) -> None:
-    ssoe(h, "eps", jnp.zeros((h.t_obs,)), _ONE, identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs,)), _ONE, identity_mean, keep_carry, dist.Normal(0.0, 1.0))
 
 
 def _y_long(h: Horizon) -> None:
-    ssoe(h, "eps", jnp.zeros((h.t_obs + 1, 1)), _ONE, identity_step, dist.Normal(0.0, 1.0))
+    ssoe(
+        h,
+        "eps",
+        jnp.zeros((h.t_obs + 1, 1)),
+        _ONE,
+        identity_mean,
+        keep_carry,
+        dist.Normal(0.0, 1.0),
+    )
 
 
 def _xs_short(h: Horizon) -> None:
     y = jnp.zeros((h.t_obs, 1))
-    ssoe(h, "eps", y, _ONE, identity_step, dist.Normal(0.0, 1.0), xs={"gate": y})
+    ssoe(h, "eps", y, _ONE, identity_mean, keep_carry, dist.Normal(0.0, 1.0), xs={"gate": y})
 
 
 def _xs_1d(h: Horizon) -> None:
     y = jnp.zeros((h.t_obs, 1))
     xs = jnp.zeros((h.duration,))
-    ssoe(h, "eps", y, _ONE, identity_step, dist.Normal(0.0, 1.0), xs=xs)
+    ssoe(h, "eps", y, _ONE, identity_mean, keep_carry, dist.Normal(0.0, 1.0), xs=xs)
 
 
 def _mu_scalar(h: Horizon) -> None:
-    def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-        return carry[0], lambda y_t, eps_t: carry
+    def mean(carry: Array, _: object) -> Array:
+        return carry[0]
 
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, mean, keep_carry, dist.Normal(0.0, 1.0))
 
 
 def _carry_tree(h: Horizon) -> None:
-    def step(carry: tuple[Array], _: object) -> tuple[Array, CarryFn]:
-        return carry[0], lambda y_t, eps_t: (y_t, eps_t)
+    def mean(carry: tuple[Array], _: object) -> Array:
+        return carry[0]
 
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), (_ONE,), step, dist.Normal(0.0, 1.0))
+    def update(carry: tuple[Array], y_t: Array, eps_t: Array, _: object) -> Any:
+        return y_t, eps_t
+
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), (_ONE,), mean, update, dist.Normal(0.0, 1.0))
 
 
 def _carry_shape(h: Horizon) -> None:
-    def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-        return carry, lambda y_t, eps_t: jnp.zeros((2,))
+    def update(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+        return jnp.zeros((2,))
 
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, identity_mean, update, dist.Normal(0.0, 1.0))
 
 
 def _mu_wide(h: Horizon) -> None:
     init = jnp.zeros((2, 1))
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, identity_mean, keep_carry, dist.Normal(0.0, 1.0))
 
 
 def _mu_float(h: Horizon) -> None:
-    def step(carry: Array, _: object) -> tuple[Any, CarryFn]:
-        return 0.0, lambda y_t, eps_t: carry
+    def mean(carry: Array, _: object) -> Any:
+        return 0.0
 
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, mean, keep_carry, dist.Normal(0.0, 1.0))
 
 
 def _mu_int(h: Horizon) -> None:
     init = jnp.zeros((1,), dtype=jnp.int32)
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, identity_step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, identity_mean, keep_carry, dist.Normal(0.0, 1.0))
 
 
 def _carry_dtype(h: Horizon) -> None:
-    def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-        return carry.astype(jnp.float32), lambda y_t, eps_t: y_t
+    def mean(carry: Array, _: object) -> Array:
+        return carry.astype(jnp.float32)
+
+    def update(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+        return y_t
 
     init = jnp.zeros((1,), dtype=jnp.int32)
-    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, step, dist.Normal(0.0, 1.0))
+    ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), init, mean, update, dist.Normal(0.0, 1.0))
 
 
 @pytest.mark.parametrize(
@@ -490,12 +513,12 @@ def _carry_dtype(h: Horizon) -> None:
         (_y_long, "exactly the observed window"),
         (_xs_short, r"span the full horizon.*\['gate'\]"),
         (_xs_1d, r"Add the axis"),
-        (_mu_scalar, "per-step mean"),
-        (_mu_wide, "per-step mean"),
-        (_mu_float, "per-step mean"),
-        (_mu_int, "floating per-step mean"),
-        (_carry_tree, "same tree structure"),
-        (_carry_shape, r"changed carry leaf"),
+        (_mu_scalar, "mean must return a per-step mean"),
+        (_mu_wide, "mean must return a per-step mean"),
+        (_mu_float, "mean must return a per-step mean"),
+        (_mu_int, "mean must return a floating per-step mean"),
+        (_carry_tree, "update must return.*same tree structure"),
+        (_carry_shape, r"update changed carry leaf"),
         (_carry_dtype, r"astype"),
     ],
     ids=[
@@ -518,7 +541,7 @@ def test_validation_messages(body: Callable[[Horizon], None], match: str) -> Non
         run_horizon_body(body, T_OBS, FUTURE)
 
 
-# --- 7. the future-error shape is enforced; step must not sample -----------------------
+# --- 7. the future-error shape is enforced; mean and update must not sample ------------
 
 
 @pytest.mark.parametrize(
@@ -538,7 +561,7 @@ def test_noise_shape_is_enforced(
     y = jnp.zeros(y_shape)
 
     def body(h: Horizon) -> None:
-        ssoe(h, "eps", y, jnp.zeros(init_shape), identity_step, noise_fn(h.future))
+        ssoe(h, "eps", y, jnp.zeros(init_shape), identity_mean, keep_carry, noise_fn(h.future))
 
     run_horizon_body(body, T_OBS, 0)
     with pytest.raises(ValueError, match="time_future plate"):
@@ -564,7 +587,7 @@ def test_event_shaped_noise_draws_rows(noise_fn: Callable[[], dist.Distribution]
 
     def body(h: Horizon) -> None:
         y = jnp.zeros((h.t_obs, 3))
-        box[:] = [ssoe(h, "eps", y, jnp.zeros((3,)), identity_step, noise_fn())]
+        box[:] = [ssoe(h, "eps", y, jnp.zeros((3,)), identity_mean, keep_carry, noise_fn())]
 
     tr = run_horizon_body(body, T_OBS, FUTURE, obs=3)
     site = tr["eps_future"]
@@ -583,7 +606,7 @@ def test_event_shaped_noise_batched_panel() -> None:
     def body(h: Horizon) -> None:
         y = jnp.zeros((b, h.t_obs, k))
         noise = dist.MultivariateNormal(jnp.zeros((b, 1, k)), scale_tril=_lower_tril(k))
-        box[:] = [ssoe(h, "eps", y, jnp.zeros((b, k)), identity_step, noise)]
+        box[:] = [ssoe(h, "eps", y, jnp.zeros((b, k)), identity_mean, keep_carry, noise)]
 
     tr = run_horizon_body(body, T_OBS, FUTURE)
     assert tr["eps_future"]["value"].shape == (b, FUTURE, k)
@@ -606,7 +629,7 @@ def test_ssoe_result_is_a_pytree_and_unpacks() -> None:
 def test_event_rank_two_is_rejected() -> None:
     def body(h: Horizon) -> None:
         noise = dist.Normal(0.0, 1.0).expand([1, 3]).to_event(2)
-        ssoe(h, "eps", jnp.zeros((h.t_obs, 3)), jnp.zeros((3,)), identity_step, noise)
+        ssoe(h, "eps", jnp.zeros((h.t_obs, 3)), jnp.zeros((3,)), identity_mean, keep_carry, noise)
 
     run_horizon_body(body, T_OBS, 0, obs=3)
     with pytest.raises(ValueError, match=r"event rank.*to_event\(1\)"):
@@ -617,7 +640,15 @@ def test_event_shaped_noise_rejects_enclosing_plate_at_dim_minus_one() -> None:
     def body(h: Horizon) -> None:
         noise = dist.MultivariateNormal(jnp.zeros(3), scale_tril=_lower_tril(3))
         with numpyro.plate("series", 3, dim=-1):
-            ssoe(h, "eps", jnp.zeros((h.t_obs, 3)), jnp.zeros((3,)), identity_step, noise)
+            ssoe(
+                h,
+                "eps",
+                jnp.zeros((h.t_obs, 3)),
+                jnp.zeros((3,)),
+                identity_mean,
+                keep_carry,
+                noise,
+            )
 
     with pytest.raises(ValueError, match=r"dim=-1.*batch the series to the left"):
         run_horizon_body(body, T_OBS, FUTURE, obs=3)
@@ -628,22 +659,25 @@ def test_noise_dtype_is_enforced() -> None:
 
     def body(h: Horizon) -> None:
         init = jnp.zeros((1,), dtype=jnp.float16)
-        ssoe(h, "eps", y, init, identity_step, dist.Normal(0.0, 1.0))
+        ssoe(h, "eps", y, init, identity_mean, keep_carry, dist.Normal(0.0, 1.0))
 
     run_horizon_body(body, T_OBS, 0)
     with pytest.raises(ValueError, match="dtype of the means"):
         run_horizon_body(body, T_OBS, FUTURE)
 
 
-def test_step_must_not_sample() -> None:
+def test_mean_must_not_sample() -> None:
     def body(h: Horizon) -> None:
-        def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
+        def mean(carry: Array, _: object) -> Array:
             shock = jnp.asarray(numpyro.sample("shock", dist.Normal(0.0, 1.0)))
-            return carry + shock, lambda y_t, eps_t: y_t
+            return carry + shock
 
-        ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, step, dist.Normal(0.0, 1.0))
+        def update(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+            return y_t
 
-    with pytest.raises(ValueError, match=r"shock.*markov_series"):
+        ssoe(h, "eps", jnp.zeros((h.t_obs, 1)), _ONE, mean, update, dist.Normal(0.0, 1.0))
+
+    with pytest.raises(ValueError, match=r"mean and update must not call.*shock.*markov_series"):
         run_horizon_body(body, T_OBS, 0)
 
 
@@ -702,10 +736,13 @@ def _ar1_ssoe_body(h: Horizon, covariates: Array) -> SSOEResult:
     phi = jnp.asarray(numpyro.sample("phi", dist.Uniform(-1.0, 1.0)))
     sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
 
-    def step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-        return phi * carry, lambda y_t, eps_t: y_t
+    def mean(carry: Array, _: object) -> Array:
+        return phi * carry
 
-    r = ssoe(h, "eps", y, jnp.zeros((1,)), step, dist.Normal(0.0, sigma))
+    def update(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+        return y_t
+
+    r = ssoe(h, "eps", y, jnp.zeros((1,)), mean, update, dist.Normal(0.0, sigma))
     numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     if h.future > 0:
         numpyro.deterministic("forecast", r.y_future)

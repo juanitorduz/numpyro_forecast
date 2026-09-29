@@ -79,7 +79,8 @@ reference:
       - models.innovations
       - models.markov_series
       - models.ssoe
-      - models.SSOEStep
+      - models.SSOEMean
+      - models.SSOEUpdate
       - models.SSOEResult
       - models.predict
       - models.PlateName

@@ -367,17 +367,21 @@ def markov_series[Carry](
     return jnp.moveaxis(jnp.concatenate([zs, zf], axis=0), 0, -2)
 
 
-type SSOEStep[Carry] = Callable[
-    [Carry, PyTree[Array] | None],
-    tuple[Float[Array, " *batch obs"], Callable[[Array, Array], Carry]],
-]
-"""``(carry, x_t) -> (mu_t, carry_fn)`` where ``mu_t`` is the one-step-ahead mean
-of the current row (shape ``(*batch, obs)``) and ``carry_fn(y_t, eps_t)`` builds
-the next carry from the row's value and error. `ssoe()` owns the error
-site: ``step`` must not call ``numpyro.sample`` (that is `markov_series()`).
+type SSOEMean[Carry] = Callable[[Carry, PyTree[Array] | None], Float[Array, " *batch obs"]]
+"""``(carry, x_t) -> mu_t``: the one-step-ahead mean of the current row, shape
+``(*batch, obs)`` (a scalar state emits ``mu[None]``). `ssoe()` owns the error
+site: ``mean`` must not call ``numpyro.sample`` (that is `markov_series()`).
 
 ``Carry`` is the user's carry type (any PyTree), bound per `ssoe()` call;
 ``x_t`` is one row of the ``xs`` PyTree (``None`` when ``xs`` is ``None``)."""
+
+type SSOEUpdate[Carry] = Callable[[Carry, Array, Array, PyTree[Array] | None], Carry]
+"""``(carry, y_t, eps_t, x_t) -> carry``: the next carry from the row's value and
+error. In-sample ``eps_t = y_t - mu_t``; over the horizon ``eps_t`` is the drawn
+error and ``y_t = mu_t + eps_t``. An update that needs the mean calls
+``mean(carry, x_t)`` again (bit-identical, computed once by XLA) rather than
+reconstructing it as ``y_t - eps_t``, which can differ by an ulp. Must preserve
+the carry's tree structure, shapes and dtypes."""
 
 
 class SSOEResult(NamedTuple):
@@ -452,7 +456,7 @@ def _validate_ssoe_mean(mu_t: Array, y_t: Array) -> None:
     """Require a floating per-step mean shaped exactly like the series rows."""
     if mu_t.ndim == 0 or mu_t.shape != y_t.shape:
         msg = (
-            "step must return a per-step mean shaped exactly like the series rows "
+            "mean must return a per-step mean shaped exactly like the series rows "
             f"((*batch, obs)); got mean shape {mu_t.shape} for rows of shape {y_t.shape}. "
             "Add the trailing axis with mu[..., None] and broadcast init_carry to the rows "
             "(a wider or narrower mean would silently broadcast the likelihood)."
@@ -460,20 +464,20 @@ def _validate_ssoe_mean(mu_t: Array, y_t: Array) -> None:
         raise ValueError(msg)
     if not jnp.issubdtype(mu_t.dtype, jnp.floating):
         msg = (
-            f"step must return a floating per-step mean, got dtype {mu_t.dtype}. Cast the "
+            f"mean must return a floating per-step mean, got dtype {mu_t.dtype}. Cast the "
             "carry that produces it, e.g. init_carry = y[0].astype(float)."
         )
         raise ValueError(msg)
 
 
 def _validate_ssoe_carry[Carry](carry: Carry, new_carry: Carry) -> Carry:
-    """Require ``carry_fn`` to preserve the carry's tree structure, shapes and dtypes."""
+    """Require ``update`` to preserve the carry's tree structure, shapes and dtypes."""
     new_carry = jax.tree.map(jnp.asarray, new_carry)
     old_structure = jax.tree.structure(carry)
     new_structure = jax.tree.structure(new_carry)
     if old_structure != new_structure:
         msg = (
-            "carry_fn must return a carry with the same tree structure as init_carry; got "
+            "update must return a carry with the same tree structure as init_carry; got "
             f"{new_structure} instead of {old_structure}."
         )
         raise ValueError(msg)
@@ -483,8 +487,8 @@ def _validate_ssoe_carry[Carry](carry: Carry, new_carry: Carry) -> Carry:
         if old_arr.shape != new.shape or old_arr.dtype != new.dtype:
             leaf_name = jax.tree_util.keystr(path) or "<root>"
             msg = (
-                f"carry_fn changed carry leaf {leaf_name} from {old_arr.dtype}{old_arr.shape} to "
-                f"{new.dtype}{new.shape}; init_carry must already match what carry_fn returns "
+                f"update changed carry leaf {leaf_name} from {old_arr.dtype}{old_arr.shape} to "
+                f"{new.dtype}{new.shape}; init_carry must already match what update returns "
                 "(broadcast it to the (*batch, obs) rows, and align dtypes with e.g. "
                 "jax.tree.map(lambda c: c.astype(y.dtype), init_carry))."
             )
@@ -550,7 +554,8 @@ def ssoe[Carry](
     name: str,
     y: Array | None,
     init_carry: Carry,
-    step: SSOEStep[Carry],
+    mean: SSOEMean[Carry],
+    update: SSOEUpdate[Carry],
     noise_dist: dist.Distribution,
     xs: PyTree[Array] | None = None,
 ) -> SSOEResult:
@@ -559,14 +564,15 @@ def ssoe[Carry](
     The building block for innovations state-space models (ARMA, exponential
     smoothing, Croston/TSB levels, censored autoregressions): a deterministic
     filter whose state is driven by the one-step-ahead *error*
-    ``eps_t = y_t - mu_t``. In-sample it runs ``step`` in a raw ``jax.lax.scan``
-    over the observed series ``y`` (no sample sites inside); when forecasting it
-    draws iid future errors at the site ``f"{name}_future"`` from ``noise_dist``
-    under a ``plate("time_future", h.future)`` and runs a second scan from
-    the final in-sample carry with ``y_t = mu_t + eps_t`` fed back through
-    ``carry_fn``. The guide never sees the future site, because fitting always
-    happens with ``future == 0``. Linear-Gaussian members (ARMA, additive
-    exponential smoothing) can be marginalized exactly by a Kalman filter; the
+    ``eps_t = y_t - mu_t``. In-sample it runs ``mean`` and ``update`` in a raw
+    ``jax.lax.scan`` over the observed series ``y`` (no sample sites inside);
+    when forecasting it draws iid future errors at the site
+    ``f"{name}_future"`` from ``noise_dist`` under a
+    ``plate("time_future", h.future)`` and runs a second scan from the final
+    in-sample carry with ``y_t = mu_t + eps_t`` fed back through ``update``.
+    The guide never sees the future site, because fitting always happens with
+    ``future == 0``. Linear-Gaussian members (ARMA, additive exponential
+    smoothing) can be marginalized exactly by a Kalman filter; the
     error-feedback form is the one that also covers the nonlinear members.
 
     The block registers nothing but the error site. The caller writes the
@@ -584,8 +590,8 @@ def ssoe[Carry](
     availability mask) through an ``xs`` leaf frozen over the horizon with
     `~~numpyro_forecast.arrays.pad_future()`, and read it from ``x_t``, never
     from ``y_t`` (over the horizon ``y_t = mu_t + eps_t`` is nonzero). With the
-    gate off, ``carry_fn`` is the identity and the forecast is the last level
-    plus iid errors. `~~numpyro_forecast.evaluate.backtest()` and
+    gate off, ``update`` returns the carry unchanged and the forecast is the
+    last level plus iid errors. `~~numpyro_forecast.evaluate.backtest()` and
     `~~numpyro_forecast.predictive.forecast()` hand the model *real* future
     covariate rows, so a gate sliced from the full covariates keeps updating on
     sampled values and leaks the test window; scenario inputs such as a future
@@ -630,14 +636,15 @@ def ssoe[Carry](
     init_carry
         Initial carry, any PyTree, already broadcast to the ``(*batch, obs)``
         rows: a scalar level is ``init[None]``, a panel level ``(series,)``.
-        Every leaf must keep its shape and dtype through ``carry_fn``.
-    step
-        ``(carry, x_t) -> (mu_t, carry_fn)`` (see `SSOEStep`): ``mu_t`` is
-        the mean for the current row (shape ``(*batch, obs)``, so a scalar
-        state emits ``mu[None]``) and ``carry_fn(y_t, eps_t)`` the next carry.
-        ``carry_fn`` receives the drawn ``eps_t`` over the horizon (not a
-        recomputed ``y_t - mu_t``, which can differ by an ulp), so close over
-        ``mu_t`` when the update needs it.
+        Every leaf must keep its shape and dtype through ``update``.
+    mean
+        ``(carry, x_t) -> mu_t`` (see `SSOEMean`): the mean for the current row
+        (shape ``(*batch, obs)``, so a scalar state emits ``mu[None]``).
+    update
+        ``(carry, y_t, eps_t, x_t) -> carry`` (see `SSOEUpdate`): the next carry
+        from the row's value and error. Over the horizon it receives the drawn
+        ``eps_t`` (not a recomputed ``y_t - mu_t``, which can differ by an ulp);
+        when the update needs the mean, call ``mean(carry, x_t)`` inside it.
     noise_dist
         Zero-centered per-step error distribution, either an elementwise family
         (event rank 0) or a multivariate family over the observation axis (event
@@ -653,8 +660,8 @@ def ssoe[Carry](
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays with
         time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
-        dict, ...), split at ``h.t_obs`` and handed to ``step`` row by row as
-        ``x_t``; ``None`` for autonomous dynamics.
+        dict, ...), split at ``h.t_obs`` and handed to ``mean`` and ``update``
+        row by row as ``x_t``; ``None`` for autonomous dynamics.
 
     Returns
     -------
@@ -667,35 +674,35 @@ def ssoe[Carry](
     ValueError
         If ``y`` is ``None``, lacks the time or observation axis, or does not
         cover exactly ``h.t_obs`` rows; if an ``xs`` leaf lacks the axes or does
-        not span ``h.duration`` rows; if ``step`` returns a mean without the
-        observation axis or a carry with a different tree structure, shape or
-        dtype; if ``step`` calls ``numpyro.sample``; if ``noise_dist`` has event
-        rank 2 or higher, or has event rank 1 inside an enclosing plate at
-        ``dim=-1``; or if it draws errors of the wrong shape or dtype.
+        not span ``h.duration`` rows; if ``mean`` returns a value without the
+        observation axis or ``update`` a carry with a different tree structure,
+        shape or dtype; if ``mean`` or ``update`` calls ``numpyro.sample``; if
+        ``noise_dist`` has event rank 2 or higher, or has event rank 1 inside an
+        enclosing plate at ``dim=-1``; or if it draws errors of the wrong shape
+        or dtype.
 
     Examples
     --------
-    ARMA(1,1) with the lambda form of ``carry_fn`` (``y`` is the observed series
-    routed through ``covariates``):
+    ARMA(1,1) (``y`` is the observed series routed through ``covariates``):
 
-    >>> def step(carry, _):
+    >>> def mean(carry, _):
     ...     y_prev, eps_prev = carry
-    ...     mu_t = mu + phi * y_prev + theta * eps_prev
-    ...     return mu_t, lambda y_t, eps_t: (y_t, eps_t)
-    >>> r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), step, dist.Normal(0.0, sigma))
+    ...     return mu + phi * y_prev + theta * eps_prev
+    >>> def update(carry, y_t, eps_t, _):
+    ...     return y_t, eps_t
+    >>> r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), mean, update, dist.Normal(0.0, sigma))
     >>> numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     >>> if h.future > 0:
     ...     numpyro.deterministic("forecast", r.y_future)
 
     A gated level (Croston, TSB) with the gate frozen over the horizon:
 
-    >>> def step(level, gate_t):
-    ...     def carry_fn(y_t, _):
-    ...         return jnp.where(gate_t, alpha * y_t + (1 - alpha) * level, level)
-    ...
-    ...     return level, carry_fn
+    >>> def mean(level, _):
+    ...     return level
+    >>> def update(level, y_t, _, gate_t):
+    ...     return jnp.where(gate_t, alpha * y_t + (1 - alpha) * level, level)
     >>> gate_full = pad_future(gate, h.future)
-    >>> r = ssoe(h, "eps", y, init[None], step, dist.Normal(0.0, noise), xs=gate_full)
+    >>> r = ssoe(h, "eps", y, init[None], mean, update, dist.Normal(0.0, noise), xs=gate_full)
     """
     y = _validate_ssoe_inputs(h, y, xs)
     y_scan = jnp.moveaxis(y, -2, 0)
@@ -707,17 +714,16 @@ def ssoe[Carry](
         carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
     ) -> tuple[Carry, Array]:
         y_t, x_t = inputs
-        mu_raw, carry_fn = step(carry, x_t)
-        mu_t = jnp.asarray(mu_raw)
+        mu_t = jnp.asarray(mean(carry, x_t))
         _validate_ssoe_mean(mu_t, y_t)
-        new_carry = _validate_ssoe_carry(carry, carry_fn(y_t, y_t - mu_t))
+        new_carry = _validate_ssoe_carry(carry, update(carry, y_t, y_t - mu_t, x_t))
         return new_carry, mu_t
 
     with numpyro.handlers.trace() as filter_trace:
         final_carry, mu_scan = jax.lax.scan(filter_body, init_carry, (y_scan, xs_obs))
     if filter_trace:
         msg = (
-            "step must not call numpyro.sample or numpyro.deterministic (found sites: "
+            "mean and update must not call numpyro.sample or numpyro.deterministic (found sites: "
             f"{sorted(filter_trace)}); a sampled transition is markov_series."
         )
         raise ValueError(msg)
@@ -735,9 +741,9 @@ def ssoe[Carry](
         carry: Carry, inputs: tuple[Array, PyTree[Array] | None]
     ) -> tuple[Carry, tuple[Array, Array]]:
         eps_t, x_t = inputs
-        mu_t, carry_fn = step(carry, x_t)
+        mu_t = mean(carry, x_t)
         y_t = mu_t + eps_t
-        return carry_fn(y_t, eps_t), (mu_t, y_t)
+        return update(carry, y_t, eps_t, x_t), (mu_t, y_t)
 
     _, (mu_future, y_future) = jax.lax.scan(forecast_body, final_carry, (eps_scan, xs_future))
     return SSOEResult(
