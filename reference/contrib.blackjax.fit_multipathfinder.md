@@ -20,14 +20,14 @@ contrib.blackjax.fit_multipathfinder(
     maxls=1000,
     gtol=1e-08,
     ftol=1e-05,
-    initial_positions=None
+    init_params=None
 )
 ```
 
 
 Runs `num_paths` independent single-path Pathfinder approximations in parallel (vmapped L-BFGS runs, by default each from its own fresh `init_to_uniform` starting point) and scores the pooled per-path draws with Pareto-smoothed importance sampling (PSIS), so the returned fit is not tied to a single mode. This is the recommended entry point over [fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder): a single L-BFGS path can settle in one mode and its local normal approximation may not reflect the rest of a multimodal or otherwise hard posterior. The PSIS weights computed here are a fit-time diagnostic; the draws themselves come from [multipathfinder_samples()](contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples), which resamples fresh per-path draws and reads `pareto_k` to pick between PSIS and ELBO-weighted path sampling.
 
-PRNG: `rng_key` is split into a model-initialization stream and a multipath-approximation stream; the initialization stream is further split into one subkey per path so that (when `initial_positions` is not supplied) every path starts from its own independent `init_to_uniform` draw, exactly the diverse starting points multipath Pathfinder wants.
+PRNG: `rng_key` is split into a model-initialization stream and a multipath-approximation stream; the initialization stream is further split into one subkey per path so that (when `init_params` is not supplied) every path starts from its own independent `init_to_uniform` draw, exactly the diverse starting points multipath Pathfinder wants.
 
 
 ## Parameters
@@ -37,7 +37,7 @@ PRNG: `rng_key` is split into a model-initialization stream and a multipath-appr
 PRNG key for initialization and the multipath Pathfinder run.
 
 `model: ForecastModel`  
-The forecasting model callable (OOP instance or functional model).
+The forecasting model function `(covariates, data=None)`.
 
 `data: Array`  
 In-sample data with time at axis `-2`.
@@ -66,8 +66,8 @@ L-BFGS gradient-norm convergence tolerance.
 `ftol: float = ``1e-05`  
 L-BFGS relative function-value convergence tolerance.
 
-`initial_positions: dict[str, Array] | None = None`  
-Optional starting positions, one per path, overriding the default per-path `init_to_uniform` draws. Every leaf must already carry a leading axis of size `num_paths` (validated; a mismatch raises `ValueError`).
+`init_params: dict[str, Array] | None = None`  
+Optional starting positions, one per path, overriding the default per-path `init_to_uniform` draws. Unlike the single-path [fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder) argument of the same name, every leaf must already carry a leading axis of size `num_paths` (validated; a mismatch raises `ValueError`).
 
 
 ## Returns
@@ -81,7 +81,7 @@ The fitted multipath approximation together with its per-path ELBOs and the fit-
 
 
 `ValueError`  
-If `num_paths` is not positive, or `initial_positions` is supplied without a leading axis of size `num_paths` on every leaf.
+If `num_paths` is not positive, or `init_params` is supplied without a leading axis of size `num_paths` on every leaf.
 
 
 ## Warns

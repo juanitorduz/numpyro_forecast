@@ -393,6 +393,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">reparam.time_reparam</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/reparam.TimeTransform.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">reparam.TimeTransform</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -449,6 +455,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.VectorizedBacktestResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -641,6 +659,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -872,7 +902,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The carry is the lag window <code>(*batch, lags, obs)</code>. <code>mean</code> emits <a href="var.var_mean.html#numpyro_forecast.var.var_mean" class="gdls-link gdls-code">var_mean()</a> of the window as the one-step-ahead mean and, given the row’s value, <code>update</code> drops the oldest row and appends the new one. Both ignore their exogenous input <code>x_t</code>; add regressors by wrapping <code>mean</code> (a VARX):</p>
+<p>The carry is the lag window <code>(*batch, lags, obs)</code>. <a href="typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> emits <a href="var.var_mean.html#numpyro_forecast.var.var_mean" class="gdls-link gdls-code">var_mean()</a> of the window as the one-step-ahead mean and, given the row’s value, <code>update</code> drops the oldest row and appends the new one. Both ignore their exogenous input <code>x_t</code>; add regressors by wrapping <a href="typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> (a VARX):</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>mean, update <span class="op">=</span> var_step(phi, intercept)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>

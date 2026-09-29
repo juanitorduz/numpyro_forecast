@@ -369,6 +369,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.evaluate_forecast.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.evaluate_forecast</span></a>
   </div>
@@ -557,6 +569,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -780,7 +804,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L229-L496" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L229-L489" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -791,8 +815,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">num_chains</span><span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictive_batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">predictive_device</span><span class="op">=</span><span class="st">"host"</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">batch_size</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">device</span><span class="op">=</span><span class="st">"host"</span>,</span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
@@ -830,13 +854,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Number of chains to split <code>posterior</code>’s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to <code>1</code> (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the <code>num_chains</code> the sampler was run with; see <code>_reshape_chains()</code> for the reshape contract and its divisibility requirement.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">predictive_batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to <code>predictive_device</code> before the next is drawn. The per-chunk accelerator footprint is a handful of <code>(batch_size, time, series)</code> buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per <code>(rng_key, predictive_batch_size)</code>. <code>None</code> (default) samples everything in one shot (the results are still moved to <code>predictive_device</code>).</p>
+<p>Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to <code>device</code> before the next is drawn. The per-chunk accelerator footprint is a handful of <code>(batch_size, time, series)</code> buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per <code>(rng_key, batch_size)</code>. <code>None</code> (default) samples everything in one shot (the results are still moved to <code>device</code>).</p>
 </dd>
-<dt><code><span class="doc-parameter-name">predictive_device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"host"</span></span></code></dt>
+<dt><code><span class="doc-parameter-name">device</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">jax.Device | str | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"host"</span></span></code></dt>
 <dd>
-<p>Where the predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> (the placement contract of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). It is resolved once and the same placement is handed to both, so an unmet <code>"cpu"</code> warns once per export. The default <code>"host"</code> keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when <code>predictive_batch_size</code> is set; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
+<p>Where the predictive draws are moved as they are sampled, forwarded to the <code>device</code> argument of <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> (the placement contract of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). It is resolved once and the same placement is handed to both, so an unmet <code>"cpu"</code> warns once per export. The default <code>"host"</code> keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when <code>batch_size</code> is set; pass <code>None</code> to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">coords</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Sequence[Any]] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -882,11 +906,11 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <
 </dd>
 <dt><code> <span class="doc-parameter-annotation">HostMemoryKindError</span></code></dt>
 <dd>
-<p>If <code>predictive_device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).</p>
+<p>If <code>device="pinned_host"</code> is requested on a device that exposes no host memory kind (see <code>_host_memory_kind()</code>).</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">DevicePlatformError</span></code></dt>
 <dd>
-If <code>predictive_device</code> names a platform whose backend is not initialized (see <code>_resolve_device()</code>).
+If <code>device</code> names a platform whose backend is not initialized (see <code>_resolve_device()</code>).
 </dd>
 </dl>
 </div>
@@ -897,14 +921,14 @@ If <code>predictive_device</code> names a platform whose backend is not initiali
 <dl>
 <dt><code> <span class="doc-parameter-annotation">UserWarning</span></code></dt>
 <dd>
-If <code>predictive_device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the predictive draws take the NumPy path of <code>"host"</code> instead (once per call).
+If <code>device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the predictive draws take the NumPy path of <code>"host"</code> instead (once per call).
 </dd>
 </dl>
 </div>
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p><a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> no longer accepts a fit object or draws a posterior itself (no <code>num_predictive_samples</code>, no internal <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> call): callers draw the posterior first and pass it in. The <code>variational</code>/<code>is_mcmc</code> attrs previously stamped on the <code>posterior</code> group are gone too, since a fit type is no longer knowable from a plain posterior dict; use <code>num_chains</code> (<code>1</code> vs.&nbsp;<code>&gt; 1</code>) to tell the two apart if needed. When a forecast horizon is present, <code>rng_key</code> is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, <code>rng_key</code> is used unsplit for the in-sample predictive draw. <code>predictive_batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
+<p>When a forecast horizon is present, <code>rng_key</code> is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, <code>rng_key</code> is used unsplit for the in-sample predictive draw. <code>batch_size</code> is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with <a href="convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups()</a>.</p>
 
 
 </section>

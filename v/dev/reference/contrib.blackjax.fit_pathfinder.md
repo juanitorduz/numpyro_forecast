@@ -34,7 +34,7 @@ PRNG: `rng_key` is split into a model-initialization stream and a Pathfinder-app
 PRNG key for initialization and the Pathfinder run.
 
 `model: ForecastModel`  
-The forecasting model callable (OOP instance or functional model).
+The forecasting model function `(covariates, data=None)`.
 
 `data: Array`  
 In-sample data with time at axis `-2`.

@@ -322,6 +322,18 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.evaluate_forecast.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.evaluate_forecast</span></a>
   </div>
@@ -510,6 +522,18 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -838,6 +862,14 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>Result of a <code>backtest_vectorized()</code> run (all windows at once).</p>
 </dd>
+<dt><a href="../reference/evaluate.WindowType.html#numpyro_forecast.evaluate.WindowType" class="doc-attribute doc-label doc-label-constant">evaluate.WindowType</a></dt>
+<dd>
+<p>Backtest windowing strategy: an expanding (<code>t0=0</code>) or fixed-size rolling window.</p>
+</dd>
+<dt><a href="../reference/evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="doc-attribute doc-label doc-label-constant">evaluate.DEFAULT_METRICS</a></dt>
+<dd>
+<p>Default metrics used by <code>backtest()</code> and <code>backtest_vectorized()</code>.</p>
+</dd>
 <dt><a href="../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="doc-function doc-label doc-label-function">evaluate.evaluate_forecast()</a></dt>
 <dd>
 <p>Evaluate forecast samples against ground truth for several metrics at once.</p>
@@ -973,6 +1005,14 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/typing.ModelFactory.html#numpyro_forecast.typing.ModelFactory" class="doc-attribute doc-label doc-label-constant">typing.ModelFactory</a></dt>
 <dd>
 <p>A zero-argument callable returning a fresh <code>ForecastModel</code> instance.</p>
+</dd>
+<dt><a href="../reference/typing.Array.html#numpyro_forecast.typing.Array" class="doc-class doc-label doc-label-class">typing.Array</a></dt>
+<dd>
+<p>A JAX array (alias of <code>jax.Array</code>).</p>
+</dd>
+<dt><a href="../reference/typing.BlackjaxBuildFn.html#numpyro_forecast.typing.BlackjaxBuildFn" class="doc-attribute doc-label doc-label-constant">typing.BlackjaxBuildFn</a></dt>
+<dd>
+<p>A blackjax sampler build function <code>(rng_key, logdensity_fn, position, num_warmup)</code>.</p>
 </dd>
 </dl>
 </section>

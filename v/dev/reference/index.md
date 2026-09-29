@@ -98,6 +98,9 @@ Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `ti
 [reparam.time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam)  
 Reparameterize every in-sample time latent of `model` along the time axis.
 
+[reparam.TimeTransform](reparam.TimeTransform.md#numpyro_forecast.reparam.TimeTransform)  
+The time-axis transform applied by `time_reparam()`: `"haar"` or `"dct"`.
+
 
 ## Producing draws
 
@@ -132,6 +135,12 @@ Per-window result of a `backtest()` run.
 
 [evaluate.VectorizedBacktestResult](evaluate.VectorizedBacktestResult.md#numpyro_forecast.evaluate.VectorizedBacktestResult)  
 Result of a `backtest_vectorized()` run (all windows at once).
+
+[evaluate.WindowType](evaluate.WindowType.md#numpyro_forecast.evaluate.WindowType)  
+Backtest windowing strategy: an expanding (`t0=0`) or fixed-size rolling window.
+
+[evaluate.DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS)  
+Default metrics used by `backtest()` and `backtest_vectorized()`.
 
 [evaluate.evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)  
 Evaluate forecast samples against ground truth for several metrics at once.
@@ -237,6 +246,12 @@ A metric maps `(pred, truth)` forecast samples and ground truth to a scalar arra
 
 [typing.ModelFactory](typing.ModelFactory.md#numpyro_forecast.typing.ModelFactory)  
 A zero-argument callable returning a fresh `ForecastModel` instance.
+
+[typing.Array](typing.Array.md#numpyro_forecast.typing.Array)  
+A JAX array (alias of `jax.Array`).
+
+[typing.BlackjaxBuildFn](typing.BlackjaxBuildFn.md#numpyro_forecast.typing.BlackjaxBuildFn)  
+A blackjax sampler build function `(rng_key, logdensity_fn, position, num_warmup)`.
 
 
 ## Autocorrelation

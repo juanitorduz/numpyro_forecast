@@ -15,8 +15,8 @@ convert.to_datatree(
     covariates,
     *,
     num_chains=1,
-    predictive_batch_size=None,
-    predictive_device="host",
+    batch_size=None,
+    device="host",
     coords=None,
     time_coord=None,
     posterior_dims=None,
@@ -49,11 +49,11 @@ Covariates with time at axis `-2`. When `covariates` extends beyond `data` along
 `num_chains: int = ``1`  
 Number of chains to split `posterior`'s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to `1` (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the `num_chains` the sampler was run with; see `_reshape_chains()` for the reshape contract and its divisibility requirement.
 
-`predictive_batch_size: int | None = None`  
-Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to `predictive_device` before the next is drawn. The per-chunk accelerator footprint is a handful of `(batch_size, time, series)` buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per `(rng_key, predictive_batch_size)`. `None` (default) samples everything in one shot (the results are still moved to `predictive_device`).
+`batch_size: int | None = None`  
+Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to `device` before the next is drawn. The per-chunk accelerator footprint is a handful of `(batch_size, time, series)` buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per `(rng_key, batch_size)`. `None` (default) samples everything in one shot (the results are still moved to `device`).
 
-`predictive_device: jax.Device | str | None = ``"host"`  
-Where the predictive draws are moved as they are sampled, forwarded to the `device` argument of [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) (the placement contract of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). It is resolved once and the same placement is handed to both, so an unmet `"cpu"` warns once per export. The default `"host"` keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when `predictive_batch_size` is set; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).
+`device: jax.Device | str | None = ``"host"`  
+Where the predictive draws are moved as they are sampled, forwarded to the `device` argument of [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) (the placement contract of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). It is resolved once and the same placement is handed to both, so an unmet `"cpu"` warns once per export. The default `"host"` keeps the predictive draws in pageable host memory (jax Arrays the tree views as NumPy without a copy, or NumPy arrays when no CPU backend is initialized), which is what bounds accelerator memory when `batch_size` is set; pass `None` to keep the draws on the default device (chunked compute without per-chunk host transfers, for when the draws fit on the accelerator and transfers would dominate runtime).
 
 `coords: Mapping[str, Sequence[Any]] | None = None`  
 Optional extra coordinates; these take precedence over the generated `time` coordinate. They also propagate to the forecast groups, where the generated forecast `time` takes precedence instead (a user `time` entry covers the in-sample window; use `time_coord` for explicit forecast time values).
@@ -85,19 +85,19 @@ If `covariates` is shorter than `data` along the time axis, if `time_coord` is g
 If `covariate_dims` does not name every `covariates` axis.
 
 `HostMemoryKindError`  
-If `predictive_device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
+If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 `DevicePlatformError`  
-If `predictive_device` names a platform whose backend is not initialized (see `_resolve_device()`).
+If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
 
 
 ## Warns
 
 
 `UserWarning`  
-If `predictive_device="cpu"` is requested and the JAX CPU backend is not initialized, so the predictive draws take the NumPy path of `"host"` instead (once per call).
+If `device="cpu"` is requested and the JAX CPU backend is not initialized, so the predictive draws take the NumPy path of `"host"` instead (once per call).
 
 
 ## Notes
 
-[to_datatree](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) no longer accepts a fit object or draws a posterior itself (no `num_predictive_samples`, no internal [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) call): callers draw the posterior first and pass it in. The `variational`/`is_mcmc` attrs previously stamped on the `posterior` group are gone too, since a fit type is no longer knowable from a plain posterior dict; use `num_chains` (`1` vs. `> 1`) to tell the two apart if needed. When a forecast horizon is present, `rng_key` is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, `rng_key` is used unsplit for the in-sample predictive draw. `predictive_batch_size` is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with [add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups).
+When a forecast horizon is present, `rng_key` is split internally into a predictive subkey and a forecast subkey, so passing the same key twice never correlates the two sample sets. When there is no horizon, `rng_key` is used unsplit for the in-sample predictive draw. `batch_size` is the built-in route to memory-bounded predictive sampling; for fully manual control over the forecast draws, build the in-sample tree with matching-length covariates and attach the horizon with [add_forecast_groups()](convert.add_forecast_groups.md#numpyro_forecast.convert.add_forecast_groups).

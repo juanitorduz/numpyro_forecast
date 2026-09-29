@@ -46,6 +46,7 @@
 > Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
 
 - [reparam.time_reparam](https://juanitorduz.github.io/numpyro_forecast/reference/reparam.time_reparam.html)
+- [reparam.TimeTransform](https://juanitorduz.github.io/numpyro_forecast/reference/reparam.TimeTransform.html)
 
 #### Producing draws
 > Drawing posterior samples and generating forecasts and in-sample predictions.
@@ -61,6 +62,8 @@
 - [evaluate.backtest_vectorized](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.backtest_vectorized.html)
 - [evaluate.BacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.BacktestResult.html)
 - [evaluate.VectorizedBacktestResult](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html)
+- [evaluate.WindowType](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.WindowType.html)
+- [evaluate.DEFAULT_METRICS](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.DEFAULT_METRICS.html)
 - [evaluate.evaluate_forecast](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html)
 - [evaluate.results_to_dataframe](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.results_to_dataframe.html)
 - [evaluate.eval_crps](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.eval_crps.html)
@@ -101,6 +104,8 @@
 - [typing.InSampleFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.InSampleFn.html)
 - [typing.Metric](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Metric.html)
 - [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
+- [typing.Array](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Array.html)
+- [typing.BlackjaxBuildFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxBuildFn.html)
 
 #### Autocorrelation
 > Batched autocorrelation and partial autocorrelation diagnostics.

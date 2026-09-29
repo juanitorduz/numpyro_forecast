@@ -16,7 +16,7 @@
 # Optional Dependencies
 
 
-## `all`
+## [all](reference/typing.Array.html#numpyro_forecast.typing.Array.all)
 
 | Package | Version Constraint | Last Published | PyPI |
 |----|----|----|----|

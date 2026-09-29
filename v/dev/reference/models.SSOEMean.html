@@ -358,6 +358,12 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">reparam.time_reparam</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/reparam.TimeTransform.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">reparam.TimeTransform</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -414,6 +420,18 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.VectorizedBacktestResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -606,6 +624,18 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -821,7 +851,7 @@ ul.task-list li input[type="checkbox"] {
 <p><code><span class="doc-type-alias-keyword kw">type</span> <span class="doc-parameter-name">models.SSOEMean[Carry]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">Callable[[Carry, PyTree[Array] | None], Float[Array, <span class="st">" *batch obs"</span>]]</span></code></p>
 </div>
 <div class="doc-text">
-<p><code>(*batch, obs)</code> (a scalar state emits <code>mu[None]</code>). <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a> owns the error site: <code>mean</code> must not call <code>numpyro.sample</code> (that is <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>).</p>
+<p><code>(*batch, obs)</code> (a scalar state emits <code>mu[None]</code>). <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a> owns the error site: <a href="typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> must not call <code>numpyro.sample</code> (that is <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>).</p>
 <p><code>Carry</code> is the user’s carry type (any PyTree), bound per <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a> call; <code>x_t</code> is one row of the <code>xs</code> PyTree (<code>None</code> when <code>xs</code> is <code>None</code>).</p>
 </div>
 

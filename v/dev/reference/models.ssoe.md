@@ -20,7 +20,7 @@ models.ssoe(
 ```
 
 
-The building block for innovations state-space models (ARMA, exponential smoothing, Croston/TSB levels, censored autoregressions): a deterministic filter whose state is driven by the one-step-ahead *error* `eps_t = y_t - mu_t`. In-sample it runs `mean` and `update` in a raw `jax.lax.scan` over the observed series `y` (no sample sites inside); when forecasting it draws iid future errors at the site `f"{name}_future"` from `noise_dist` under a `plate("time_future", h.future)` and runs a second scan from the final in-sample carry with `y_t = mu_t + eps_t` fed back through `update`. The guide never sees the future site, because fitting always happens with `future == 0`. Linear-Gaussian members (ARMA, additive exponential smoothing) can be marginalized exactly by a Kalman filter; the error-feedback form is the one that also covers the nonlinear members.
+The building block for innovations state-space models (ARMA, exponential smoothing, Croston/TSB levels, censored autoregressions): a deterministic filter whose state is driven by the one-step-ahead *error* `eps_t = y_t - mu_t`. In-sample it runs [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) and `update` in a raw `jax.lax.scan` over the observed series `y` (no sample sites inside); when forecasting it draws iid future errors at the site `f"{name}_future"` from `noise_dist` under a `plate("time_future", h.future)` and runs a second scan from the final in-sample carry with `y_t = mu_t + eps_t` fed back through `update`. The guide never sees the future site, because fitting always happens with `future == 0`. Linear-Gaussian members (ARMA, additive exponential smoothing) can be marginalized exactly by a Kalman filter; the error-feedback form is the one that also covers the nonlinear members.
 
 The block registers nothing but the error site. The caller writes the likelihood against `r.mu` and registers `numpyro.deterministic("forecast", r.y_future)` when `h.future > 0` (an unconditional registration is harmless to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast), but lands a size-0 variable in every posterior). Driver contract: [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None` and read `"obs"`, so `y` must come from `covariates` or be computed in the model, never from `h.data`; [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) reads `"forecast"`.
 
@@ -56,7 +56,7 @@ Initial carry, any PyTree, already broadcast to the `(*batch, obs)` rows: a scal
 Zero-centered per-step error distribution, either an elementwise family (event rank 0) or a multivariate family over the observation axis (event rank 1, e.g. `dist.MultivariateNormal(jnp.zeros(obs), scale_tril=L)` for shocks correlated across series, the VAR case). For a `(t_obs, obs)` series the batch shape is `(obs,)` (`()` is fine when `obs == 1`) for the elementwise form and `()` for the multivariate form; a batched `(B, t_obs, obs)` series takes `(B, 1, obs)` and `(B, 1)` respectively. Either way the draw under the time plate (`dim=-2` for event rank 0, `dim=-1` for event rank 1) is exactly `(*batch, future, obs)` with the dtype of the means; event rank 2 or higher is rejected.
 
 `xs: PyTree[Array] | None = None`  
-Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis `-2` and `duration` rows (a single array, a tuple, a dict, …), split at `h.t_obs` and handed to `mean` and `update` row by row as `x_t`; `None` for autonomous dynamics.
+Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis `-2` and `duration` rows (a single array, a tuple, a dict, …), split at `h.t_obs` and handed to [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) and `update` row by row as `x_t`; `None` for autonomous dynamics.
 
 
 ## Returns
@@ -70,7 +70,7 @@ Optional exogenous inputs over the full horizon: a PyTree of arrays with time at
 
 
 `ValueError`  
-If `y` is `None`, lacks the time or observation axis, or does not cover exactly `h.t_obs` rows; if an `xs` leaf lacks the axes or does not span `h.duration` rows; if `mean` returns a value without the observation axis or `update` a carry with a different tree structure, shape or dtype; if `mean` or `update` calls `numpyro.sample`; if `noise_dist` has event rank 2 or higher, or has event rank 1 inside an enclosing plate at `dim=-1`; or if it draws errors of the wrong shape or dtype.
+If `y` is `None`, lacks the time or observation axis, or does not cover exactly `h.t_obs` rows; if an `xs` leaf lacks the axes or does not span `h.duration` rows; if [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) returns a value without the observation axis or `update` a carry with a different tree structure, shape or dtype; if [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) or `update` calls `numpyro.sample`; if `noise_dist` has event rank 2 or higher, or has event rank 1 inside an enclosing plate at `dim=-1`; or if it draws errors of the wrong shape or dtype.
 
 
 ## Examples

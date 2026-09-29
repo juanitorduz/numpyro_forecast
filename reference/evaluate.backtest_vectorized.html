@@ -369,6 +369,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.evaluate_forecast.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.evaluate_forecast</span></a>
   </div>
@@ -557,6 +569,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -778,14 +802,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1012-L1184" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1015-L1187" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest_vectorized</span>(</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">rng_key</span>,</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">data</span>,</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">model_fn</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">model_fn</span>,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">data</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariates</span>,</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">train_window</span>,</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">test_window</span>,</span>
@@ -810,6 +834,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Base PRNG key.</p>
 </dd>
+<dt><code><span class="doc-parameter-name">model_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ModelFactory</span></code></dt>
+<dd>
+<p>Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>). Must return the same model object <code>guide</code> was built on (see <code>guide</code> below).</p>
+</dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
 <p>Dataset with time at axis <code>-2</code>.</p>
@@ -817,10 +845,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
 <p>Covariates with time at axis <code>-2</code> (same duration as <code>data</code>).</p>
-</dd>
-<dt><code><span class="doc-parameter-name">model_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ModelFactory</span></code></dt>
-<dd>
-<p>Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>). Must return the same model object <code>guide</code> was built on (see <code>guide</code> below).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">train_window</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span></code></dt>
 <dd>
@@ -855,7 +879,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Mapping of metric name to function; defaults to <code>DEFAULT_METRICS</code>. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as <code>{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}</code>, is scored inside the single fused computation. Host-side metrics are unsupported here; use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>, or <code>keep_predictions=True</code> and score on the host.</p>
+<p>Mapping of metric name to function; defaults to <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a>. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as <code>{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}</code>, is scored inside the single fused computation. Host-side metrics are unsupported here; use <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>, or <code>keep_predictions=True</code> and score on the host.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">keep_predictions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">False</span></span></code></dt>
 <dd>

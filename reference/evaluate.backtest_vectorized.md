@@ -9,9 +9,9 @@ Usage
 ``` python
 evaluate.backtest_vectorized(
     rng_key,
+    model_fn,
     data,
     covariates,
-    model_fn,
     *,
     train_window,
     test_window,
@@ -37,14 +37,14 @@ PRNG: `fold_in(rng_key, -1)` seeds a discarded eager warm-up init; `fold_in(rng_
 `rng_key: Array`  
 Base PRNG key.
 
+`model_fn: ModelFactory`  
+Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)). Must return the same model object `guide` was built on (see `guide` below).
+
 `data: Array`  
 Dataset with time at axis `-2`.
 
 `covariates: Array`  
 Covariates with time at axis `-2` (same duration as `data`).
-
-`model_fn: ModelFactory`  
-Factory returning a fresh model; called exactly once (per-window model variation is unsupported here, use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest)). Must return the same model object `guide` was built on (see `guide` below).
 
 `train_window: int`  
 Fixed training-window length (`>= 1`).
@@ -74,7 +74,7 @@ Number of SVI steps per window.
 Number of forecast samples drawn per window.
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}`, is scored inside the single fused computation. Host-side metrics are unsupported here; use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest), or `keep_predictions=True` and score on the host.
+Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}`, is scored inside the single fused computation. Host-side metrics are unsupported here; use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest), or `keep_predictions=True` and score on the host.
 
 `keep_predictions: bool = ``False`  
 If `True`, retain the stacked forecast samples on the result.

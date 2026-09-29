@@ -38,7 +38,7 @@ Forecast samples with the sample axis first, shape `(sample, *batch)`.
 Ground-truth values with shape `(*batch)`.
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; when `None` defaults to `DEFAULT_METRICS` (`mae`, `rmse`, `crps` and `coverage`). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any extra parameters with `functools.partial()` (see above).
+Mapping of metric name to function; when `None` defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) (`mae`, `rmse`, `crps` and `coverage`). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any extra parameters with `functools.partial()` (see above).
 
 
 ## Returns

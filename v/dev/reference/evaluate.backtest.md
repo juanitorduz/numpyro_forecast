@@ -9,9 +9,9 @@ Usage
 ``` python
 evaluate.backtest(
     rng_key,
+    model_fn,
     data,
     covariates,
-    model_fn,
     *,
     forecast_fn,
     in_sample_fn=None,
@@ -52,7 +52,7 @@ in_sample_fn(
 ) -> draws  # shape (num_samples, *batch, t1 - t0, obs)
 ```
 
-`batch_size` is forwarded unchanged into both closures so a chunked implementation can bound its own device memory. A closure may return draws committed to host memory (e.g. via `device="host"`, to cap peak accelerator usage): every metric in `DEFAULT_METRICS` accepts a host-committed `pred` or `truth` (or both), in any mix and regardless of `batch_size`, moving a host-committed operand to device memory first where needed. Returning draws already on-device still avoids the extra host-to-device hop for metrics scored every window.
+`batch_size` is forwarded unchanged into both closures so a chunked implementation can bound its own device memory. A closure may return draws committed to host memory (e.g. via `device="host"`, to cap peak accelerator usage): every metric in [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) accepts a host-committed `pred` or `truth` (or both), in any mix and regardless of `batch_size`, moving a host-committed operand to device memory first where needed. Returning draws already on-device still avoids the extra host-to-device hop for metrics scored every window.
 
 A minimal `forecast_fn` built on plain NumPyro (`AutoNormal` + `SVI.run` + `Predictive`):
 
@@ -89,14 +89,14 @@ def forecast_fn(
 `rng_key: Array`  
 Base PRNG key (used for every window, matching Pyro).
 
+`model_fn: ModelFactory`  
+Factory returning a fresh [ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel) per window.
+
 `data: Array`  
 Dataset with time at axis `-2`.
 
 `covariates: Array`  
 Covariates with time at axis `-2` (same duration as `data`).
-
-`model_fn: ModelFactory`  
-Factory returning a fresh [ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel) per window.
 
 `forecast_fn: ForecastFn`  
 Closure that fits `model` on the training window and forecasts the test horizon (see [ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn) and the contract above).
@@ -105,7 +105,7 @@ Closure that fits `model` on the training window and forecasts the test horizon 
 Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`.
 
 `metrics: Mapping[str, Metric] | None = None`  
-Mapping of metric name to function; defaults to `DEFAULT_METRICS`. Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
+Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.
 
 `per_window_metrics: Callable[[int, int, int], Mapping[str, Metric]] | None = None`  
 Optional `(t0, t1, t2) -> Mapping[str, Metric]` callable producing extra metrics merged over `metrics` for each window. Use it for window-dependent metrics such as a MASE scaled by that window's training data ([numpyro_forecast.metrics.make_mase()](metrics.make_mase.md#numpyro_forecast.metrics.make_mase)).
@@ -159,3 +159,6 @@ One result per backtest window.
 
 `ValueError`  
 If `data` and `covariates` durations differ, or if `eval_train=True` but `in_sample_fn` is `None`.
+
+`BacktestWindowError`  
+If `window_type` and `train_window` disagree (`"rolling"` without a `train_window`, or `"expanding"` with one).

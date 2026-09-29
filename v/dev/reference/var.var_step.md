@@ -14,7 +14,7 @@ var.var_step(
 ```
 
 
-The carry is the lag window `(*batch, lags, obs)`. `mean` emits [var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean) of the window as the one-step-ahead mean and, given the row's value, `update` drops the oldest row and appends the new one. Both ignore their exogenous input `x_t`; add regressors by wrapping `mean` (a VARX):
+The carry is the lag window `(*batch, lags, obs)`. [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) emits [var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean) of the window as the one-step-ahead mean and, given the row's value, `update` drops the oldest row and appends the new one. Both ignore their exogenous input `x_t`; add regressors by wrapping [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) (a VARX):
 
 ``` python
 mean, update = var_step(phi, intercept)

@@ -194,7 +194,15 @@
       "dev",
       "0.3.0"
     ],
+    "reference/evaluate.DEFAULT_METRICS.html": [
+      "dev",
+      "0.3.0"
+    ],
     "reference/evaluate.VectorizedBacktestResult.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/evaluate.WindowType.html": [
       "dev",
       "0.3.0"
     ],
@@ -358,6 +366,10 @@
       "dev",
       "0.3.0"
     ],
+    "reference/reparam.TimeTransform.html": [
+      "dev",
+      "0.3.0"
+    ],
     "reference/reparam.time_reparam.html": [
       "dev",
       "0.3.0"
@@ -375,6 +387,14 @@
       "0.3.0"
     ],
     "reference/surgery.slice_time.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.Array.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/typing.BlackjaxBuildFn.html": [
       "dev",
       "0.3.0"
     ],

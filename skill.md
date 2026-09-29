@@ -30,7 +30,7 @@ pip install numpyro_forecast
 | Forecast over the horizon | `forecast(rng_key, model, posterior, data, covariates)` |
 | In-sample posterior predictive | `predict_in_sample(rng_key, model, posterior, covariates)` |
 | ArviZ DataTree with posterior, in-sample predictive, forecasts and observed data | `to_datatree(rng_key, model, posterior, data, covariates)` |
-| Rolling or expanding window backtest with scores per window | `backtest(rng_key, data, covariates, model_fn, forecast_fn=...); backtest_vectorized for one vmapped SVI fit` |
+| Rolling or expanding window backtest with scores per window | `backtest(rng_key, model_fn, data, covariates, forecast_fn=...); backtest_vectorized for one vmapped SVI fit` |
 | Better SVI or NUTS geometry for a random-walk level | `time_reparam(model, "dct") or time_reparam(model, "haar"), created once and reused` |
 | BlackJAX samplers or Pathfinder | `contrib.blackjax.BlackjaxNUTSKernel / BlackjaxMCLMCKernel with MCMC; fit_multipathfinder + multipathfinder_samples` |
 
@@ -81,6 +81,7 @@ Time-axis operations on observation distributions, extensible via singledispatch
 Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
 
 - `reparam.time_reparam`
+- `reparam.TimeTransform`
 
 ### Producing draws
 
@@ -98,6 +99,8 @@ Rolling-window backtesting and forecast metrics.
 - `evaluate.backtest_vectorized`
 - `evaluate.BacktestResult`
 - `evaluate.VectorizedBacktestResult`
+- `evaluate.WindowType`
+- `evaluate.DEFAULT_METRICS`
 - `evaluate.evaluate_forecast`
 - `evaluate.results_to_dataframe`
 - `evaluate.eval_crps`
@@ -141,6 +144,8 @@ Public type contracts.
 - `typing.InSampleFn`
 - `typing.Metric`
 - `typing.ModelFactory`
+- `typing.Array`
+- `typing.BlackjaxBuildFn`
 
 ### Autocorrelation
 
@@ -211,7 +216,7 @@ Package exception hierarchy raised at validation boundaries.
 
 - Keep inference plain NumPyro: SVI with an autoguide or MCMC with any kernel; nothing in the package wraps svi.run or mcmc.run.
 - Use LocScaleReparam(0) on innovations priors for SVI, and time_reparam(model, "dct") when the latent is a random-walk level.
-- On a GPU, call numpyro.set_platform("cuda") before building the model and pass batch_size and device="host" to draw_posterior, forecast and predict_in_sample so the draws never sit on the accelerator at once; draws come back as jax Arrays on the CPU device or NumPy arrays.
+- On a GPU, call numpyro.set_platform("cuda") before building the model and pass batch_size and device="host" to draw_posterior, forecast, predict_in_sample and to_datatree so the draws never sit on the accelerator at once; draws come back as jax Arrays on the CPU device or NumPy arrays.
 - Score forecasts with eval_crps and eval_coverage on held-out data, and backtest over rolling origins rather than trusting a single split.
 - Write integers with four or more digits with underscores (1_000, 10_000) and thread PRNG keys explicitly with jax.random.split.
 

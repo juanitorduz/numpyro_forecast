@@ -145,7 +145,19 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.DEFAULT_METRICS.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.VectorizedBacktestResult.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.WindowType.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -374,6 +386,18 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/surgery.slice_time.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/typing.Array.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxBuildFn.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -985,7 +1009,19 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.DEFAULT_METRICS.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.VectorizedBacktestResult.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/evaluate.WindowType.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -1225,6 +1261,12 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/reparam.TimeTransform.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/reparam.time_reparam.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
@@ -1250,6 +1292,18 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/surgery.slice_time.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/typing.Array.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/typing.BlackjaxBuildFn.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>

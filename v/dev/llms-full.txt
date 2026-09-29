@@ -979,6 +979,8 @@ posterior = draw_posterior(key_post, guide, svi_result.params, num_samples=100)
 samples = forecast(key_pred, model_dct, posterior, data, covariates)
 ```
 
+Literal(*args, **kwargs)
+
 
 ## Producing draws
 
@@ -1243,7 +1245,7 @@ UserWarning
 Rolling-window backtesting and forecast metrics.
 
 
-backtest(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, forecast_fn: numpyro_forecast.typing.ForecastFn, in_sample_fn: numpyro_forecast.typing.InSampleFn | None = None, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
+backtest(rng_key: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], data: jax.Array, covariates: jax.Array, *, forecast_fn: numpyro_forecast.typing.ForecastFn, in_sample_fn: numpyro_forecast.typing.InSampleFn | None = None, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, per_window_metrics: collections.abc.Callable[[int, int, int], collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]]] | None = None, transform: collections.abc.Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]] | None = None, window_type: Literal['expanding', 'rolling'] | None = None, train_window: int | None = None, min_train_window: int = 1, test_window: int | None = None, min_test_window: int = 1, stride: int = 1, num_samples: int = 100, batch_size: int | None = None, eval_train: bool = False, keep_predictions: bool = False, reuse_model: bool = True) -> list[numpyro_forecast.evaluate.BacktestResult]
 
 Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -1317,12 +1319,12 @@ Parameters
 ----------
 rng_key
     Base PRNG key (used for every window, matching Pyro).
+model_fn
+    Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
 data
     Dataset with time at axis ``-2``.
 covariates
     Covariates with time at axis ``-2`` (same duration as ``data``).
-model_fn
-    Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
 forecast_fn
     Closure that fits ``model`` on the training window and forecasts the
     test horizon (see `~~numpyro_forecast.typing.ForecastFn` and the
@@ -1400,8 +1402,11 @@ Raises
 ValueError
     If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
     but ``in_sample_fn`` is ``None``.
+BacktestWindowError
+    If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
+    ``train_window``, or ``"expanding"`` with one).
 
-backtest_vectorized(rng_key: jax.Array, data: jax.Array, covariates: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], *, train_window: int, test_window: int, guide: numpyro_forecast.typing.Guide, optim: '_NumPyroOptim | None' = None, stride: int = 1, num_steps: int = 1001, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
+backtest_vectorized(rng_key: jax.Array, model_fn: collections.abc.Callable[[], numpyro_forecast.typing.ForecastModel], data: jax.Array, covariates: jax.Array, *, train_window: int, test_window: int, guide: numpyro_forecast.typing.Guide, optim: '_NumPyroOptim | None' = None, stride: int = 1, num_steps: int = 1001, num_samples: int = 100, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None, keep_predictions: bool = False) -> numpyro_forecast.evaluate.VectorizedBacktestResult
 
 Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
@@ -1420,14 +1425,14 @@ Parameters
 ----------
 rng_key
     Base PRNG key.
-data
-    Dataset with time at axis ``-2``.
-covariates
-    Covariates with time at axis ``-2`` (same duration as ``data``).
 model_fn
     Factory returning a fresh model; called exactly once (per-window model
     variation is unsupported here, use `backtest()`). Must return the
     same model object ``guide`` was built on (see ``guide`` below).
+data
+    Dataset with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` (same duration as ``data``).
 train_window
     Fixed training-window length (``>= 1``).
 test_window
@@ -1528,6 +1533,20 @@ predictions
     Stacked out-of-sample forecast samples with shape
     ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
     unless ``keep_predictions=True``.
+
+Literal(*args, **kwargs)
+
+evaluate.DEFAULT_METRICS
+
+dict() -> new empty dictionary
+dict(mapping) -> new dictionary initialized from a mapping object's
+    (key, value) pairs
+dict(iterable) -> new dictionary initialized as if via:
+    d = {}
+    for k, v in iterable:
+        d[k] = v
+dict(**kwargs) -> new dictionary initialized with the name=value pairs
+    in the keyword argument list.  For example:  dict(one=1, two=2)
 
 evaluate_forecast(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, metrics: collections.abc.Mapping[str, collections.abc.Callable[[jax.Array, jax.Array], jax.Array]] | None = None) -> dict[str, float]
 
@@ -1854,7 +1873,7 @@ ValueError
 Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, predictive_batch_size: int | None = None, predictive_device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
 
@@ -1894,11 +1913,11 @@ num_chains
     SVI or Pathfinder draws). For an MCMC posterior, pass the
     ``num_chains`` the sampler was run with; see `_reshape_chains()`
     for the reshape contract and its divisibility requirement.
-predictive_batch_size
+batch_size
     Optional chunk size that bounds how many draws touch the accelerator
     at once, across both the in-sample and forecast predictive sampling.
     When set, sampling runs in chunks of this many draws, each chunk moved
-    to ``predictive_device`` before the next is drawn. The per-chunk
+    to ``device`` before the next is drawn. The per-chunk
     accelerator footprint is a handful of ``(batch_size, time, series)``
     buffers, so it scales linearly with this value times the panel width:
     on wide panels lower it until a chunk fits. The batch size must be
@@ -1906,10 +1925,10 @@ predictive_batch_size
     sampling falls back to the single-shot path and the full array is
     materialized on the default device before the single transfer.
     Chunking changes the PRNG stream layout of the predictive draws, so
-    results are reproducible per ``(rng_key, predictive_batch_size)``.
+    results are reproducible per ``(rng_key, batch_size)``.
     ``None`` (default) samples everything in one shot (the results are
-    still moved to ``predictive_device``).
-predictive_device
+    still moved to ``device``).
+device
     Where the predictive draws are moved as they are sampled, forwarded to
     the ``device`` argument of
     `~~numpyro_forecast.predictive.predict_in_sample()` and
@@ -1919,7 +1938,7 @@ predictive_device
     warns once per export. The default ``"host"`` keeps the predictive
     draws in pageable host memory (jax Arrays the tree views as NumPy
     without a copy, or NumPy arrays when no CPU backend is initialized),
-    which is what bounds accelerator memory when ``predictive_batch_size``
+    which is what bounds accelerator memory when ``batch_size``
     is set; pass ``None`` to keep the draws on the default device (chunked
     compute without per-chunk host transfers, for when the draws fit on
     the accelerator and transfers would dominate runtime).
@@ -1971,33 +1990,26 @@ ValueError
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
-    If ``predictive_device="pinned_host"`` is requested on a device that
+    If ``device="pinned_host"`` is requested on a device that
     exposes no host memory kind (see
     `~~numpyro_forecast._offload._host_memory_kind()`).
 DevicePlatformError
-    If ``predictive_device`` names a platform whose backend is not
+    If ``device`` names a platform whose backend is not
     initialized (see `~~numpyro_forecast._offload._resolve_device()`).
 
 Warns
 -----
 UserWarning
-    If ``predictive_device="cpu"`` is requested and the JAX CPU backend is
+    If ``device="cpu"`` is requested and the JAX CPU backend is
     not initialized, so the predictive draws take the NumPy path of
     ``"host"`` instead (once per call).
 
 Notes
 -----
-``to_datatree`` no longer accepts a fit object or draws a posterior itself
-(no ``num_predictive_samples``, no internal
-`~~numpyro_forecast.predictive.draw_posterior()` call): callers
-draw the posterior first and pass it in. The ``variational``/``is_mcmc``
-attrs previously stamped on the ``posterior`` group are gone too, since a
-fit type is no longer knowable from a plain posterior dict; use
-``num_chains`` (``1`` vs. ``> 1``) to tell the two apart if needed.
 When a forecast horizon is present, ``rng_key`` is split internally into a
 predictive subkey and a forecast subkey, so passing the same key twice
 never correlates the two sample sets. When there is no horizon, ``rng_key``
-is used unsplit for the in-sample predictive draw. ``predictive_batch_size``
+is used unsplit for the in-sample predictive draw. ``batch_size``
 is the built-in route to memory-bounded predictive sampling; for fully
 manual control over the forecast draws, build the in-sample tree with
 matching-length covariates and attach the horizon with
@@ -2236,7 +2248,7 @@ Parameters
 rng_key
     PRNG key for initialization and the Pathfinder run.
 model
-    The forecasting model callable (OOP instance or functional model).
+    The forecasting model function ``(covariates, data=None)``.
 data
     In-sample data with time at axis ``-2``.
 covariates
@@ -2379,7 +2391,7 @@ pareto_k
     `multipathfinder_samples()` reads it to decide whether
     ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
 
-fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, initial_positions: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
+fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
 
 Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -2397,7 +2409,7 @@ PSIS and ELBO-weighted path sampling.
 
 PRNG: ``rng_key`` is split into a model-initialization stream and a
 multipath-approximation stream; the initialization stream is further split
-into one subkey per path so that (when ``initial_positions`` is not
+into one subkey per path so that (when ``init_params`` is not
 supplied) every path starts from its own independent ``init_to_uniform``
 draw, exactly the diverse starting points multipath Pathfinder wants.
 
@@ -2406,7 +2418,7 @@ Parameters
 rng_key
     PRNG key for initialization and the multipath Pathfinder run.
 model
-    The forecasting model callable (OOP instance or functional model).
+    The forecasting model function ``(covariates, data=None)``.
 data
     In-sample data with time at axis ``-2``.
 covariates
@@ -2428,11 +2440,12 @@ gtol
     L-BFGS gradient-norm convergence tolerance.
 ftol
     L-BFGS relative function-value convergence tolerance.
-initial_positions
+init_params
     Optional starting positions, one per path, overriding the default
-    per-path ``init_to_uniform`` draws. Every leaf must already carry a
-    leading axis of size ``num_paths`` (validated; a mismatch raises
-    ``ValueError``).
+    per-path ``init_to_uniform`` draws. Unlike the single-path
+    `fit_pathfinder()` argument of the same name, every leaf must already
+    carry a leading axis of size ``num_paths`` (validated; a mismatch
+    raises ``ValueError``).
 
 Returns
 -------
@@ -2444,7 +2457,7 @@ MultiPathfinderFit
 Raises
 ------
 ValueError
-    If ``num_paths`` is not positive, or ``initial_positions`` is supplied
+    If ``num_paths`` is not positive, or ``init_params`` is supplied
     without a leading axis of size ``num_paths`` on every leaf.
 
 Warns
@@ -2643,6 +2656,27 @@ obs)``. The same ``batch_size``/host-offload notes as `ForecastFn`
 apply.
 
 Callable(*args, **kwargs)
+
+Callable(*args, **kwargs)
+
+Array()
+
+Array base class for JAX
+
+``jax.Array`` is the public interface for instance checks and type annotation
+of JAX arrays and tracers. Its main applications are in instance checks and
+type annotations; for example::
+
+  x = jnp.arange(5)
+  isinstance(x, jax.Array)  # returns True both inside and outside traced functions.
+
+  def f(x: Array) -> Array:  # type annotations are valid for traced and non-traced types.
+    return x
+
+``jax.Array`` should not be used directly for creation of arrays; instead you
+should use array creation routines offered in :mod:`jax.numpy`, such as
+:func:`jax.numpy.array`, :func:`jax.numpy.zeros`, :func:`jax.numpy.ones`,
+:func:`jax.numpy.full`, :func:`jax.numpy.arange`, etc.
 
 Callable(*args, **kwargs)
 
@@ -2995,9 +3029,12 @@ BacktestWindowError(message: str | None = None) -> None
 
 A backtest window configuration is invalid.
 
-Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when
-``train_window``, ``test_window``, or ``stride`` is below 1, or when the
-series has no room for a single window.
+Raised by `~~numpyro_forecast.evaluate.backtest()` when ``window_type`` and
+``train_window`` disagree (``"rolling"`` without a ``train_window``, or
+``"expanding"`` with one), and by
+`~~numpyro_forecast.evaluate.backtest_vectorized()` when ``train_window``,
+``test_window``, or ``stride`` is below 1, or when the series has no room
+for a single window.
 
 VectorizedMetricError(message: str | None = None) -> None
 

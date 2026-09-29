@@ -1,7 +1,7 @@
 # TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`
 
 
-This notebook ports the blog post [**Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints**](https://juanitorduz.github.io/availability_tsb/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It closes the intermittent-demand trilogy started by the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) and the [TSB example](https://juanitorduz.github.io/numpyro_forecast/examples/tsb.html), and like those notebooks it focuses on the *one* structural change the method makes and why that change matters.
+This notebook ports the blog post [**Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints**](https://juanitorduz.github.io/availability_tsb/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It closes the intermittent-demand trilogy started by the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) and the [TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html), and like those notebooks it focuses on the *one* structural change the method makes and why that change matters.
 
 The motivation is a fact of retail life that the classical intermittent-demand methods ignore: a sales series contains **two kinds of zeros**. Some periods are zero because nobody wanted the product (no demand), and some are zero because nobody *could* buy it (a stock-out, a delisting, a closed store). What we observe is censored demand, y_t = a_t \cdot d^{\ast}\_t, where d^{\ast}\_t is the demand that would have materialized and a_t \in \\0, 1\\ says whether the product was on the shelf.
 
@@ -309,7 +309,7 @@ All three methods in this trilogy decompose the sparse series into a **demand si
 | TSB | demand indicator d_t | every period | P(\text{available}) \cdot P(\text{demand} \mid \text{available}) |
 | availability TSB | demand indicator d_t | available periods a_t = 1 | P(\text{demand} \mid \text{available}) |
 
-[Croston's method](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) updates both components only at demand events, so a stock-out run simply freezes it, but it also *stretches the measured inter-demand intervals*: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. [TSB](https://juanitorduz.github.io/numpyro_forecast/examples/tsb.html) replaces the intervals with the demand indicator d_t = \mathbf{1}\[y_t \> 0\] smoothed at every period:
+[Croston's method](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) updates both components only at demand events, so a stock-out run simply freezes it, but it also *stretches the measured inter-demand intervals*: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. [TSB](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html) replaces the intervals with the demand indicator d_t = \mathbf{1}\[y_t \> 0\] smoothed at every period:
 
  \hat{p}\_t = \begin{cases} \beta + (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t \> 0, \\ (1 - \beta) \\ \hat{p}\_{t-1} & \text{if } y_t = 0. \end{cases} 
 
@@ -675,8 +675,8 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 
 
     mean ELBO loss over the last 100 steps: 56,657
-    CPU times: user 16.8 s, sys: 5.06 s, total: 21.8 s
-    Wall time: 12.1 s
+    CPU times: user 15.4 s, sys: 3.51 s, total: 18.9 s
+    Wall time: 14 s
 
 
 <figure class="figure">
@@ -700,7 +700,7 @@ post = draw_posterior(rng_subkey, guide, svi_result.params, 1_000, batch_size=25
 
 # Diagnostics
 
-We export the posterior draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html); the tree shares the draws made above rather than drawing its own, so every number in this notebook comes from one ensemble. Because we pass the *extended* covariates (whose availability input carries the realized test availability), the tree automatically gains `predictions` groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide `time` coordinate, name the covariate axes explicitly (the covariates are `3`-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with `predictive_batch_size`, since every stored site on this panel is a `(draws, time, series)` block.
+We export the posterior draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html); the tree shares the draws made above rather than drawing its own, so every number in this notebook comes from one ensemble. Because we pass the *extended* covariates (whose availability input carries the realized test availability), the tree automatically gains `predictions` groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide `time` coordinate, name the covariate axes explicitly (the covariates are `3`-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with `batch_size`, since every stored site on this panel is a `(draws, time, series)` block.
 
 
     In [11]:
@@ -714,7 +714,7 @@ tree = to_datatree(
     post,
     train_data,
     covariates_full,
-    predictive_batch_size=250,
+    batch_size=250,
     posterior_dims={
         "rate": ["time", "obs_dim"],
         "demand_rate": ["time", "obs_dim"],
@@ -1286,9 +1286,9 @@ Group: /
 │           z_noise            (chain, draw, z_noise_dim_0) float32 4MB 2.114 ... 1.463
 │           z_smoothing        (chain, draw, z_smoothing_dim_0) float32 4MB 0.1354 .....
 │       Attributes:
-│           created_at:                 2026-09-29T18:37:50.777466+00:00
+│           created_at:                 2026-09-29T20:18:03.439383+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -1301,9 +1301,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 200MB -2.411 2.176 ... 3.494
 │       Attributes:
-│           created_at:                 2026-09-29T18:37:51.760153+00:00
+│           created_at:                 2026-09-29T20:18:04.530368+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -1314,9 +1314,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 200kB 1.0 1.0 2.0 3.0 ... 2.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-09-29T18:37:51.760459+00:00
+│           created_at:                 2026-09-29T20:18:04.530635+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -1328,9 +1328,9 @@ Group: /
 │       Data variables:
 │           covariates  (covariate, time, obs_dim) float32 400kB 1.0 1.0 2.0 ... 1.0 0.0
 │       Attributes:
-│           created_at:                 2026-09-29T18:37:51.760994+00:00
+│           created_at:                 2026-09-29T20:18:04.531073+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -1343,9 +1343,9 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 40MB -0.0 1.284 ... -0.0 0.0
 │       Attributes:
-│           created_at:                 2026-09-29T18:37:52.214986+00:00
+│           created_at:                 2026-09-29T20:18:05.171049+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -1357,9 +1357,9 @@ Group: /
         Data variables:
             covariates  (covariate, time, obs_dim) float32 80kB 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-09-29T18:37:52.215426+00:00
+            created_at:                 2026-09-29T20:18:05.171458+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.2.0
+            creation_library_version:   1.3.1
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1586,7 +1586,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[1.6830889, 1.6427356, 1.670532 , 1.5880697, 1.5700085, 1.6223239,1.5693989, 1.6397216, 1.6740153, 1.6018517, 1.6628773, 1.5791447,1.6692698, 1.7028002, 1.6141055, 1.6434184, 1.6742266, 1.6991282,1.5497599, 1.6521606, 1.641932 , 1.6542914, 1.6280221, 1.5868461,1.592354 , 1.6452563, 1.6724737, 1.6219709, 1.6484717, 1.6368321,1.5939205, 1.60569  , 1.6100743, 1.646105 , 1.6867211, 1.7064407,1.6453838, 1.6304584, 1.6315597, 1.6086584, 1.6282517, 1.6464732,1.6484544, 1.6160932, 1.6425617, 1.6391444, 1.5990663, 1.708033 ,1.7118311, 1.5963851, 1.5679781, 1.6594075, 1.6239382, 1.6636318,1.6659166, 1.6266116, 1.7216173, 1.6436812, 1.6445401, 1.5957773,1.6409773, 1.6438389, 1.6544106, 1.6371112, 1.5771887, 1.6216853,1.6256223, 1.6564131, 1.6838307, 1.6709511, 1.6225231, 1.5937877,1.6563084, 1.6940908, 1.5967051, 1.6580257, 1.6450334, 1.6195965,1.6226683, 1.6324172, 1.5880731, 1.648344 , 1.6278843, 1.7292119,1.6618775, 1.6337361, 1.6030726, 1.5906308, 1.706031 , 1.6479034,1.6660079, 1.6832035, 1.618009 , 1.6562307, 1.630581 , 1.6694293,1.5701301, 1.6883911, 1.6491681, 1.6778747, 1.6237495, 1.6523125,1.619282 , 1.6318966, 1.631547 , 1.5991095, 1.6184378, 1.6223356,1.7005424, 1.5878308, 1.6196954, 1.7225122, 1.6284506, 1.6267582,1.6278545, 1.6578996, 1.607652 , 1.6353269, 1.6893538, 1.609944 ,...1.6483366, 1.6599567, 1.6300855, 1.640372 , 1.6540304, 1.659268 ,1.6785252, 1.6188642, 1.5573807, 1.724116 , 1.6031795, 1.5601392,1.6618817, 1.6566564, 1.618464 , 1.6236327, 1.6471549, 1.6538484,1.605211 , 1.6112833, 1.6349254, 1.6023123, 1.6260904, 1.6275762,1.6405144, 1.6962036, 1.6279378, 1.6106479, 1.6673688, 1.6453379,1.627044 , 1.6830935, 1.6920681, 1.6189305, 1.6941955, 1.683213 ,1.6854355, 1.611254 , 1.661999 , 1.6678545, 1.5559381, 1.5835695,1.669683 , 1.6371962, 1.6523274, 1.5790212, 1.6376905, 1.6671858,1.702201 , 1.6136436, 1.7124825, 1.6441057, 1.6563668, 1.6388444,1.613972 , 1.6904377, 1.6151383, 1.6649694, 1.6731608, 1.6635972,1.6884398, 1.7059077, 1.6578754, 1.6902304, 1.5808332, 1.6359782,1.6254426, 1.6160561, 1.6517308, 1.6573962, 1.6522982, 1.695053 ,1.6246531, 1.6865323, 1.6512927, 1.6009731, 1.6144377, 1.6702751,1.5603327, 1.6284459, 1.6322434, 1.6882706, 1.615306 , 1.6672494,1.6122873, 1.6655935, 1.5761752, 1.6040055, 1.705358 , 1.5742253,1.6207461, 1.5818622, 1.5719784, 1.6237286, 1.6370362, 1.6042618,1.5968386, 1.6513058, 1.6100917, 1.7413875, 1.6766182, 1.5386484,1.6902134, 1.5730664, 1.6362877, 1.6166518, 1.5991837, 1.7127372,1.6404935, 1.6560645, 1.6559546, 1.6283464, 1.6374022, 1.69475  ,1.6173904, 1.5991156, 1.574604 , 1.6089334]], dtype=float32)
+    array([[1.6830889, 1.6427357, 1.670532 , 1.5880697, 1.5700085, 1.6223239,1.5693989, 1.6397216, 1.6740153, 1.6018517, 1.6628774, 1.5791448,1.6692698, 1.7028002, 1.6141056, 1.6434184, 1.6742268, 1.6991282,1.5497599, 1.6521606, 1.641932 , 1.6542914, 1.6280221, 1.5868461,1.592354 , 1.6452563, 1.6724737, 1.6219709, 1.6484718, 1.6368322,1.5939206, 1.60569  , 1.6100743, 1.6461052, 1.6867212, 1.7064408,1.645384 , 1.6304584, 1.6315598, 1.6086584, 1.6282518, 1.6464732,1.6484544, 1.6160932, 1.6425617, 1.6391444, 1.5990663, 1.7080331,1.7118312, 1.5963851, 1.5679783, 1.6594076, 1.6239383, 1.6636319,1.6659166, 1.6266116, 1.7216175, 1.6436813, 1.6445402, 1.5957774,1.6409773, 1.6438389, 1.6544106, 1.6371113, 1.5771887, 1.6216854,1.6256223, 1.6564131, 1.6838307, 1.6709511, 1.6225231, 1.5937877,1.6563085, 1.694091 , 1.5967051, 1.6580259, 1.6450335, 1.6195965,1.6226684, 1.6324173, 1.5880733, 1.6483442, 1.6278843, 1.729212 ,1.6618776, 1.6337361, 1.6030726, 1.5906308, 1.7060311, 1.6479034,1.6660079, 1.6832035, 1.6180091, 1.6562307, 1.6305811, 1.6694294,1.5701301, 1.6883911, 1.6491683, 1.6778748, 1.6237495, 1.6523125,1.619282 , 1.6318966, 1.631547 , 1.5991096, 1.6184379, 1.6223357,1.7005426, 1.5878308, 1.6196954, 1.7225124, 1.6284506, 1.6267582,1.6278545, 1.6578996, 1.607652 , 1.635327 , 1.6893538, 1.6099441,...1.6483368, 1.6599567, 1.6300855, 1.640372 , 1.6540306, 1.6592681,1.6785253, 1.6188643, 1.5573807, 1.7241161, 1.6031795, 1.5601392,1.6618818, 1.6566564, 1.6184641, 1.6236327, 1.647155 , 1.6538484,1.605211 , 1.6112833, 1.6349254, 1.6023124, 1.6260904, 1.6275764,1.6405145, 1.6962036, 1.6279378, 1.610648 , 1.6673689, 1.6453379,1.627044 , 1.6830935, 1.6920681, 1.6189305, 1.6941955, 1.6832132,1.6854355, 1.6112541, 1.661999 , 1.6678545, 1.5559381, 1.5835695,1.669683 , 1.6371963, 1.6523274, 1.5790212, 1.6376905, 1.6671858,1.702201 , 1.6136436, 1.7124825, 1.6441058, 1.6563668, 1.6388445,1.613972 , 1.6904378, 1.6151383, 1.6649694, 1.6731608, 1.6635972,1.6884398, 1.7059078, 1.6578755, 1.6902304, 1.5808333, 1.6359782,1.6254427, 1.6160562, 1.6517308, 1.6573963, 1.6522982, 1.6950531,1.6246531, 1.6865324, 1.6512928, 1.6009731, 1.6144377, 1.6702752,1.5603327, 1.628446 , 1.6322435, 1.6882707, 1.6153061, 1.6672494,1.6122874, 1.6655936, 1.5761752, 1.6040055, 1.7053581, 1.5742253,1.6207463, 1.5818622, 1.5719786, 1.6237286, 1.6370363, 1.6042618,1.5968386, 1.6513059, 1.6100917, 1.7413876, 1.6766182, 1.5386484,1.6902136, 1.5730665, 1.6362877, 1.6166518, 1.5991838, 1.7127372,1.6404936, 1.6560646, 1.6559547, 1.6283464, 1.6374022, 1.6947501,1.6173904, 1.5991156, 1.574604 , 1.6089334]], dtype=float32)
 
 
 p_noise
@@ -1713,13 +1713,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T18:37:50.777466+00:00
+2026-09-29T20:18:03.439383+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1849,13 +1849,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T18:37:51.760153+00:00
+2026-09-29T20:18:04.530368+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1943,13 +1943,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T18:37:51.760459+00:00
+2026-09-29T20:18:04.530635+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2058,13 +2058,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T18:37:51.760994+00:00
+2026-09-29T20:18:04.531073+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2194,13 +2194,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T18:37:52.214986+00:00
+2026-09-29T20:18:05.171049+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -2309,13 +2309,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-29T18:37:52.215426+00:00
+2026-09-29T20:18:05.171458+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -3206,8 +3206,8 @@ The same caveats as in the sibling notebooks apply to the likelihood choices: Ga
 # References
 
 - Orduz, J. [*Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints*](https://juanitorduz.github.io/availability_tsb/). The blog post this notebook ports.
-- The [TSB example](https://juanitorduz.github.io/numpyro_forecast/examples/tsb.html) in this documentation, whose two-component level-model construction this notebook promotes to a panel, and the blog post it ports: Orduz, J. [*TSB Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/tsb_numpyro/).
-- The [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) in this documentation, the first notebook of the intermittent-demand trilogy.
+- The [TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html) in this documentation, whose two-component level-model construction this notebook promotes to a panel, and the blog post it ports: Orduz, J. [*TSB Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/tsb_numpyro/).
+- The [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) in this documentation, the first notebook of the intermittent-demand trilogy.
 - Teunter, R. H., Syntetos, A. A., & Babai, M. Z. (2011). *Intermittent demand: Linking forecasting to inventory obsolescence*. European Journal of Operational Research, 214(3), 606-615. The paper that introduces the TSB method.
 - Croston, J. D. (1972). *Forecasting and stock control for intermittent demands*. Operational Research Quarterly, 23(3), 289-303.
 - statsforecast documentation: [`TSB`](https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html), the classical TSB baseline.

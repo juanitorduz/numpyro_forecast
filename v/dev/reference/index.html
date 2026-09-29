@@ -346,6 +346,12 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">reparam.time_reparam</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/reparam.TimeTransform.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">reparam.TimeTransform</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -402,6 +408,18 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.VectorizedBacktestResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -594,6 +612,18 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -945,6 +975,10 @@ ul.task-list li input[type="checkbox"] {
 <dd>
 <p>Reparameterize every in-sample time latent of <code>model</code> along the time axis.</p>
 </dd>
+<dt><a href="../reference/reparam.TimeTransform.html#numpyro_forecast.reparam.TimeTransform" class="doc-attribute doc-label doc-label-constant">reparam.TimeTransform</a></dt>
+<dd>
+<p>The time-axis transform applied by <code>time_reparam()</code>: <code>"haar"</code> or <code>"dct"</code>.</p>
+</dd>
 </dl>
 </section>
 <section id="producing-draws" class="level2 doc-group">
@@ -988,6 +1022,14 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/evaluate.VectorizedBacktestResult.html#numpyro_forecast.evaluate.VectorizedBacktestResult" class="doc-class doc-label doc-label-dataclass">evaluate.VectorizedBacktestResult</a></dt>
 <dd>
 <p>Result of a <code>backtest_vectorized()</code> run (all windows at once).</p>
+</dd>
+<dt><a href="../reference/evaluate.WindowType.html#numpyro_forecast.evaluate.WindowType" class="doc-attribute doc-label doc-label-constant">evaluate.WindowType</a></dt>
+<dd>
+<p>Backtest windowing strategy: an expanding (<code>t0=0</code>) or fixed-size rolling window.</p>
+</dd>
+<dt><a href="../reference/evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="doc-attribute doc-label doc-label-constant">evaluate.DEFAULT_METRICS</a></dt>
+<dd>
+<p>Default metrics used by <code>backtest()</code> and <code>backtest_vectorized()</code>.</p>
 </dd>
 <dt><a href="../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="doc-function doc-label doc-label-function">evaluate.evaluate_forecast()</a></dt>
 <dd>
@@ -1124,6 +1166,14 @@ ul.task-list li input[type="checkbox"] {
 <dt><a href="../reference/typing.ModelFactory.html#numpyro_forecast.typing.ModelFactory" class="doc-attribute doc-label doc-label-constant">typing.ModelFactory</a></dt>
 <dd>
 <p>A zero-argument callable returning a fresh <code>ForecastModel</code> instance.</p>
+</dd>
+<dt><a href="../reference/typing.Array.html#numpyro_forecast.typing.Array" class="doc-class doc-label doc-label-class">typing.Array</a></dt>
+<dd>
+<p>A JAX array (alias of <code>jax.Array</code>).</p>
+</dd>
+<dt><a href="../reference/typing.BlackjaxBuildFn.html#numpyro_forecast.typing.BlackjaxBuildFn" class="doc-attribute doc-label doc-label-constant">typing.BlackjaxBuildFn</a></dt>
+<dd>
+<p>A blackjax sampler build function <code>(rng_key, logdensity_fn, position, num_warmup)</code>.</p>
 </dd>
 </dl>
 </section>

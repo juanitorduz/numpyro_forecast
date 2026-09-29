@@ -369,6 +369,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.evaluate_forecast.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.evaluate_forecast</span></a>
   </div>
@@ -557,6 +569,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -780,7 +804,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L802-L989" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L802-L990" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">fit_multipathfinder</span>(</span>
@@ -796,12 +820,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">maxls</span><span class="op">=</span><span class="dv">1000</span>,</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">gtol</span><span class="op">=</span><span class="fl">1e-08</span>,</span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">ftol</span><span class="op">=</span><span class="fl">1e-05</span>,</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">initial_positions</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">init_params</span><span class="op">=</span><span class="cn-none">None</span></span>
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Runs <code>num_paths</code> independent single-path Pathfinder approximations in parallel (vmapped L-BFGS runs, by default each from its own fresh <code>init_to_uniform</code> starting point) and scores the pooled per-path draws with Pareto-smoothed importance sampling (PSIS), so the returned fit is not tied to a single mode. This is the recommended entry point over <a href="contrib.blackjax.fit_pathfinder.html#numpyro_forecast.contrib.blackjax.fit_pathfinder" class="gdls-link gdls-code">fit_pathfinder()</a>: a single L-BFGS path can settle in one mode and its local normal approximation may not reflect the rest of a multimodal or otherwise hard posterior. The PSIS weights computed here are a fit-time diagnostic; the draws themselves come from <a href="contrib.blackjax.multipathfinder_samples.html#numpyro_forecast.contrib.blackjax.multipathfinder_samples" class="gdls-link gdls-code">multipathfinder_samples()</a>, which resamples fresh per-path draws and reads <code>pareto_k</code> to pick between PSIS and ELBO-weighted path sampling.</p>
-<p>PRNG: <code>rng_key</code> is split into a model-initialization stream and a multipath-approximation stream; the initialization stream is further split into one subkey per path so that (when <code>initial_positions</code> is not supplied) every path starts from its own independent <code>init_to_uniform</code> draw, exactly the diverse starting points multipath Pathfinder wants.</p>
+<p>PRNG: <code>rng_key</code> is split into a model-initialization stream and a multipath-approximation stream; the initialization stream is further split into one subkey per path so that (when <code>init_params</code> is not supplied) every path starts from its own independent <code>init_to_uniform</code> draw, exactly the diverse starting points multipath Pathfinder wants.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -813,7 +837,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">model</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">ForecastModel</span></code></dt>
 <dd>
-<p>The forecasting model callable (OOP instance or functional model).</p>
+<p>The forecasting model function <code>(covariates, data=None)</code>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -851,9 +875,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>L-BFGS relative function-value convergence tolerance.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">initial_positions</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dt><code><span class="doc-parameter-name">init_params</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dict[str, Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional starting positions, one per path, overriding the default per-path <code>init_to_uniform</code> draws. Every leaf must already carry a leading axis of size <code>num_paths</code> (validated; a mismatch raises <code>ValueError</code>).
+Optional starting positions, one per path, overriding the default per-path <code>init_to_uniform</code> draws. Unlike the single-path <a href="contrib.blackjax.fit_pathfinder.html#numpyro_forecast.contrib.blackjax.fit_pathfinder" class="gdls-link gdls-code">fit_pathfinder()</a> argument of the same name, every leaf must already carry a leading axis of size <code>num_paths</code> (validated; a mismatch raises <code>ValueError</code>).
 </dd>
 </dl>
 </div>
@@ -875,7 +899,7 @@ The fitted multipath approximation together with its per-path ELBOs and the fit-
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>num_paths</code> is not positive, or <code>initial_positions</code> is supplied without a leading axis of size <code>num_paths</code> on every leaf.
+If <code>num_paths</code> is not positive, or <code>init_params</code> is supplied without a leading axis of size <code>num_paths</code> on every leaf.
 </dd>
 </dl>
 </div>

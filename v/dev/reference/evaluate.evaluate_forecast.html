@@ -393,6 +393,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">reparam.time_reparam</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/reparam.TimeTransform.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">reparam.TimeTransform</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -449,6 +455,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.VectorizedBacktestResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -641,6 +659,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ModelFactory.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">typing.ModelFactory</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
       </ul>
@@ -893,7 +923,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Mapping of metric name to function; when <code>None</code> defaults to <code>DEFAULT_METRICS</code> (<code>mae</code>, <code>rmse</code>, <code>crps</code> and <code>coverage</code>). Each function takes <code>(pred, truth)</code> and returns a scalar array (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind any extra parameters with <code>functools.partial()</code> (see above).
+Mapping of metric name to function; when <code>None</code> defaults to <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a> (<code>mae</code>, <code>rmse</code>, <code>crps</code> and <code>coverage</code>). Each function takes <code>(pred, truth)</code> and returns a scalar array (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); bind any extra parameters with <code>functools.partial()</code> (see above).
 </dd>
 </dl>
 </div>

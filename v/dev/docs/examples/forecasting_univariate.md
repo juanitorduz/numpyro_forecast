@@ -316,8 +316,8 @@ print(f"DCT fit wall time: {dct_fit_seconds:.1f} s")
 
 
     AutoNormal            mean of last 200 losses: -422.42
-    AutoNormal + DCT      mean of last 200 losses: -460.37
-    DCT fit wall time: 2.3 s
+    AutoNormal + DCT      mean of last 200 losses: -460.38
+    DCT fit wall time: 1.2 s
 
 
 <figure class="figure">
@@ -512,9 +512,9 @@ metrics = {
 rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
+    lambda: univariate_model,
     data,  # full dataset, no train/test split
     covariates,  # full covariates
-    lambda: univariate_model,
     forecast_fn=forecast_fn,
     in_sample_fn=in_sample_fn,
     metrics=metrics,
@@ -677,9 +677,9 @@ The run above expanded the training window fold by fold. Switching to a **rollin
 rng_key, rng_subkey = random.split(rng_key)
 rolling_results = backtest(
     rng_subkey,
+    lambda: univariate_model,
     data,
     covariates,
-    lambda: univariate_model,
     forecast_fn=forecast_fn,
     metrics=metrics,
     window_type="rolling",  # fixed-size training window instead of expanding
@@ -749,9 +749,9 @@ rng_key, rng_subkey = random.split(rng_key)
 start_seconds = perf_counter()
 vectorized_results = backtest_vectorized(
     rng_subkey,
+    lambda: univariate_model,
     data,
     covariates,
-    lambda: univariate_model,
     train_window=104,  # same rolling configuration as the loop run above
     test_window=52,
     stride=52,
@@ -781,7 +781,7 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 10.2s (incl. compile)  |  loop 42.1s
+    wall-clock: vectorized 2.0s (incl. compile)  |  loop 16.4s
     vectorized mean out-of-sample CRPS: 0.0444
     loop       mean out-of-sample CRPS: 0.0432
     vectorized mean 50% coverage: 0.47  (nominal 0.50)
