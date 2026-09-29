@@ -34,7 +34,8 @@ dependencies = [
     "arviz>=1.2.0",
     "beartype>=0.22",
     "equinox>=0.13",
-    # <0.11.1 until numpyro releases pyro-ppl/numpyro#2245 (render_model provenance on jax 0.11.1)
+    # Upper bound: pin the newest jax minor CI has run against; bump it (dependabot
+    # does) once the suite is green on the next one.
     "jax>=0.10.0,<0.11.3",
     "jaxtyping>=0.3.11",
     "numpyro>=0.22.0",
@@ -82,6 +83,7 @@ all_cuda = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs,cuda]"]
 
 [project.urls]
 Homepage = "https://juanitorduz.github.io"
+Documentation = "https://juanitorduz.github.io/numpyro_forecast/"
 Repository = "https://github.com/juanitorduz/numpyro_forecast"
 Issues = "https://github.com/juanitorduz/numpyro_forecast/issues"
 

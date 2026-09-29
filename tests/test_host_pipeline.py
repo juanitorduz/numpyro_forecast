@@ -124,7 +124,7 @@ def test_host_pipeline_draw_predict_forecast_datatree(
 
     # Stage 4: to_datatree, once more fed the host posterior; covariates_full extends
     # beyond data so it exercises to_datatree's internal forecast() call too (default
-    # predictive_device="host"), producing the predictions groups alongside the
+    # device="host"), producing the predictions groups alongside the
     # in-sample ones.
     tree = to_datatree(key_tree, rw_model, posterior, data, covariates_full)
     assert set(tree.children) == {

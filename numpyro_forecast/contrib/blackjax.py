@@ -574,7 +574,7 @@ def fit_pathfinder(
     rng_key
         PRNG key for initialization and the Pathfinder run.
     model
-        The forecasting model callable (OOP instance or functional model).
+        The forecasting model function ``(covariates, data=None)``.
     data
         In-sample data with time at axis ``-2``.
     covariates
@@ -812,7 +812,7 @@ def fit_multipathfinder(
     maxls: int = 1_000,
     gtol: float = 1e-8,
     ftol: float = 1e-5,
-    initial_positions: dict[str, Array] | None = None,
+    init_params: dict[str, Array] | None = None,
 ) -> MultiPathfinderFit:
     """Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -830,7 +830,7 @@ def fit_multipathfinder(
 
     PRNG: ``rng_key`` is split into a model-initialization stream and a
     multipath-approximation stream; the initialization stream is further split
-    into one subkey per path so that (when ``initial_positions`` is not
+    into one subkey per path so that (when ``init_params`` is not
     supplied) every path starts from its own independent ``init_to_uniform``
     draw, exactly the diverse starting points multipath Pathfinder wants.
 
@@ -839,7 +839,7 @@ def fit_multipathfinder(
     rng_key
         PRNG key for initialization and the multipath Pathfinder run.
     model
-        The forecasting model callable (OOP instance or functional model).
+        The forecasting model function ``(covariates, data=None)``.
     data
         In-sample data with time at axis ``-2``.
     covariates
@@ -861,11 +861,12 @@ def fit_multipathfinder(
         L-BFGS gradient-norm convergence tolerance.
     ftol
         L-BFGS relative function-value convergence tolerance.
-    initial_positions
+    init_params
         Optional starting positions, one per path, overriding the default
-        per-path ``init_to_uniform`` draws. Every leaf must already carry a
-        leading axis of size ``num_paths`` (validated; a mismatch raises
-        ``ValueError``).
+        per-path ``init_to_uniform`` draws. Unlike the single-path
+        `fit_pathfinder()` argument of the same name, every leaf must already
+        carry a leading axis of size ``num_paths`` (validated; a mismatch
+        raises ``ValueError``).
 
     Returns
     -------
@@ -877,7 +878,7 @@ def fit_multipathfinder(
     Raises
     ------
     ValueError
-        If ``num_paths`` is not positive, or ``initial_positions`` is supplied
+        If ``num_paths`` is not positive, or ``init_params`` is supplied
         without a leading axis of size ``num_paths`` on every leaf.
 
     Warns
@@ -903,11 +904,11 @@ def fit_multipathfinder(
     if num_paths < 1:
         msg = "num_paths must be positive"
         raise ValueError(msg)
-    if initial_positions is not None:
-        leaves = jax.tree.leaves(initial_positions)
+    if init_params is not None:
+        leaves = jax.tree.leaves(init_params)
         if not leaves or any(jnp.ndim(leaf) == 0 or leaf.shape[0] != num_paths for leaf in leaves):
             msg = (
-                "initial_positions must carry a leading axis of size "
+                "init_params must carry a leading axis of size "
                 f"num_paths={num_paths} on every leaf"
             )
             raise ValueError(msg)
@@ -917,7 +918,7 @@ def fit_multipathfinder(
     init_key, approx_key = random.split(rng_key)
     init_keys = random.split(init_key, num_paths)
 
-    if initial_positions is None:
+    if init_params is None:
         positions = []
         for key in init_keys:
             param_info, potential_fn_gen, _postprocess_fn, _ = initialize_model(
@@ -938,7 +939,7 @@ def fit_multipathfinder(
             dynamic_args=True,
             model_args=(covariates, data),
         )
-        stacked_positions = initial_positions
+        stacked_positions = init_params
 
     potential_fn = potential_fn_gen(covariates, data)
 

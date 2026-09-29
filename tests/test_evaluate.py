@@ -27,7 +27,7 @@ from numpyro_forecast.evaluate import (
     eval_rmse,
     evaluate_forecast,
 )
-from numpyro_forecast.exceptions import DeviceMemoryError
+from numpyro_forecast.exceptions import BacktestWindowError, DeviceMemoryError
 from numpyro_forecast.typing import ForecastFn
 
 
@@ -115,9 +115,9 @@ def test_walltime_includes_compute() -> None:
 
     results = backtest(
         random.PRNGKey(1),
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=svi_forecast_fn(num_steps=100),
         train_window=40,
         test_window=5,
@@ -394,9 +394,9 @@ def test_backtest_expanding_window(rng_key: Array) -> None:
     covariates = jnp.zeros((24, 0))
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
@@ -417,9 +417,9 @@ def test_backtest_rolling_window(rng_key: Array) -> None:
     covariates = jnp.zeros((24, 0))
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         window_type="rolling",
         train_window=12,
@@ -443,9 +443,9 @@ def test_backtest_infers_rolling_from_train_window(rng_key: Array) -> None:
     run = partial(
         backtest,
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         train_window=12,
         test_window=4,
@@ -459,12 +459,12 @@ def test_backtest_infers_rolling_from_train_window(rng_key: Array) -> None:
 
 
 def test_backtest_rolling_requires_train_window(rng_key: Array) -> None:
-    with pytest.raises(ValueError, match="'rolling' requires a fixed train_window"):
+    with pytest.raises(BacktestWindowError, match="'rolling' requires a fixed train_window"):
         backtest(
             rng_key,
+            rw_model_factory,
             jnp.zeros((24, 1)),
             jnp.zeros((24, 0)),
-            rw_model_factory,
             forecast_fn=_never_called,
             window_type="rolling",
             test_window=4,
@@ -472,12 +472,12 @@ def test_backtest_rolling_requires_train_window(rng_key: Array) -> None:
 
 
 def test_backtest_expanding_rejects_train_window(rng_key: Array) -> None:
-    with pytest.raises(ValueError, match="'expanding' is incompatible with train_window"):
+    with pytest.raises(BacktestWindowError, match="'expanding' is incompatible with train_window"):
         backtest(
             rng_key,
+            rw_model_factory,
             jnp.zeros((24, 1)),
             jnp.zeros((24, 0)),
-            rw_model_factory,
             forecast_fn=_never_called,
             window_type="expanding",
             train_window=12,
@@ -496,9 +496,9 @@ def test_backtest_honors_partial_coverage_metric(rng_key: Array) -> None:
     run = partial(
         backtest,
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
@@ -544,9 +544,9 @@ def test_backtest_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="share the time axis length"):
         backtest(
             random.PRNGKey(0),
+            rw_model_factory,
             jnp.zeros((20, 1)),
             jnp.zeros((18, 0)),
-            rw_model_factory,
             forecast_fn=_never_called,
         )
 
@@ -557,9 +557,9 @@ def test_backtest_defaults_leave_train_metrics_and_prediction_empty(rng_key: Arr
     covariates = jnp.zeros((24, 0))
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
@@ -584,9 +584,9 @@ def test_backtest_per_window_metrics_hook(rng_key: Array) -> None:
 
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         metrics={"crps": eval_crps},
         per_window_metrics=cast("Any", per_window),
@@ -607,9 +607,9 @@ def test_backtest_eval_train_populates_train_metrics(rng_key: Array) -> None:
     covariates = jnp.zeros((24, 0))
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=svi_forecast_fn(num_steps=20),
         in_sample_fn=svi_in_sample_fn(num_steps=20),
         metrics={"crps": eval_crps},
@@ -636,9 +636,9 @@ def test_backtest_eval_train_does_not_change_oos_metrics(rng_key: Array) -> None
     def run(*, eval_train: bool) -> list[BacktestResult]:
         return backtest(
             rng_key,
+            rw_model_factory,
             data,
             covariates,
-            rw_model_factory,
             forecast_fn=_canned_forecast_fn,
             in_sample_fn=_canned_in_sample_fn,
             metrics={"crps": eval_crps},
@@ -661,9 +661,9 @@ def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
     covariates = jnp.zeros((24, 0))
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         test_window=4,
         min_train_window=12,
@@ -692,9 +692,9 @@ def test_backtest_keeps_numpy_predictions_from_host_forecast_fn(rng_key: Array) 
 
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=numpy_forecast_fn,
         test_window=4,
         min_train_window=12,
@@ -721,9 +721,9 @@ def test_backtest_eval_train_applies_transform_twice_per_window(rng_key: Array) 
 
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_canned_forecast_fn,
         in_sample_fn=_canned_in_sample_fn,
         test_window=4,
@@ -745,9 +745,9 @@ def test_backtest_eval_train_requires_in_sample_fn(rng_key: Array) -> None:
     with pytest.raises(ValueError, match="eval_train=True requires in_sample_fn"):
         backtest(
             rng_key,
+            rw_model_factory,
             data,
             covariates,
-            rw_model_factory,
             forecast_fn=_never_called,
             test_window=4,
             min_train_window=12,
@@ -781,9 +781,9 @@ def test_backtest_forwards_batch_size_into_both_closures(rng_key: Array) -> None
 
     results = backtest(
         rng_key,
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=_spy_closure(forecast_calls),
         in_sample_fn=in_sample_fn,
         test_window=4,
@@ -1119,9 +1119,9 @@ def test_rolling_backtest_reuse_model_predict_cache(
         with count_compilations() as tally:  # type: ignore[operator]
             backtest(
                 rng_key,
+                rw_model_factory,
                 data,
                 cov,
-                rw_model_factory,
                 forecast_fn=svi_forecast_fn(num_steps=30),
                 train_window=train,
                 test_window=test,
