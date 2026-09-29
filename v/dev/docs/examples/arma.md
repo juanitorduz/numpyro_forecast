@@ -871,13 +871,13 @@ Group: /
 │         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           mu       (chain, draw) float32 16kB -0.09647 -0.02102 ... 0.0329 0.04597
-│           mu_t     (chain, draw, time, obs_dim) float32 2MB -0.1546 0.5496 ... -0.4146
-│           phi      (chain, draw) float32 16kB 0.6022 0.408 0.4649 ... 0.3659 0.1668
-│           sigma    (chain, draw) float32 16kB 0.4242 0.4562 0.3988 ... 0.501 0.408
-│           theta    (chain, draw) float32 16kB 0.3627 0.5471 0.3764 ... 0.5953 0.6119
+│           mu       (chain, draw) float32 16kB -0.05354 -0.08141 ... 0.03074 -0.159
+│           mu_t     (chain, draw, time, obs_dim) float32 2MB -0.08595 0.608 ... -0.7564
+│           phi      (chain, draw) float32 16kB 0.6054 0.4154 0.4926 ... 0.2251 0.4391
+│           sigma    (chain, draw) float32 16kB 0.4405 0.4372 0.405 ... 0.4894 0.4797
+│           theta    (chain, draw) float32 16kB 0.4176 0.5858 0.4847 ... 0.6386 0.6684
 │       Attributes:
-│           created_at:                 2026-08-27T12:28:19.105676+00:00
+│           created_at:                 2026-09-29T18:36:44.286167+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -890,9 +890,9 @@ Group: /
 │         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB -1.017 0.3373 ... -0.6977
+│           obs      (chain, draw, time, obs_dim) float32 2MB -0.9815 0.3875 ... -1.089
 │       Attributes:
-│           created_at:                 2026-08-27T12:28:19.258163+00:00
+│           created_at:                 2026-09-29T18:36:44.518066+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -905,7 +905,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 400B 0.6115 0.06982 ... -0.1484 -0.1441
 │       Attributes:
-│           created_at:                 2026-08-27T12:28:19.258431+00:00
+│           created_at:                 2026-09-29T18:36:44.518634+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -918,7 +918,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 400B 0.6115 0.06982 ... -0.1441
         Attributes:
-            created_at:                 2026-08-27T12:28:19.258608+00:00
+            created_at:                 2026-09-29T18:36:44.518889+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1035,7 +1035,7 @@ mu
 float32
 
 
--0.09647 -0.02102 ... 0.04597
+-0.05354 -0.08141 ... -0.159
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1043,7 +1043,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[-0.09646773, -0.02101522, -0.07238156, ...,  0.11212269,-0.00052988, -0.00798731],[-0.07251706, -0.07538717, -0.02875393, ..., -0.12315954,-0.07018185, -0.07903112],[ 0.02153392, -0.07431991, -0.04518985, ..., -0.10758153,-0.10836137, -0.07513384],[-0.06687693, -0.03768033, -0.08406789, ..., -0.0970888 ,0.03289504,  0.04597342]], shape=(4, 1000), dtype=float32)
+    array([[-0.05353752, -0.08140954, -0.0567093 , ...,  0.10703055,-0.03254374, -0.03095772],[-0.22311457, -0.03350156, -0.01837373, ..., -0.09982332,-0.0806132 , -0.08145211],[-0.05799301, -0.07847627, -0.05110772, ..., -0.12552881,-0.09890103, -0.08041198],[-0.07975131, -0.19651209, -0.05325823, ..., -0.17290503,0.03073598, -0.15896983]], shape=(4, 1000), dtype=float32)
 
 
 mu_t
@@ -1055,7 +1055,7 @@ mu_t
 float32
 
 
--0.1546 0.5496 ... 0.5639 -0.4146
+-0.08595 0.608 ... 0.6479 -0.7564
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1063,7 +1063,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.15455699],[ 0.5496475 ],[-0.22846411],...,[ 0.04035873],[ 0.6136581 ],[-0.4622672 ]],[[-0.02958961],[ 0.5792373 ],[-0.27121457],...,[ 0.07765268],[ 0.65390897],[-0.5205126 ]],[[-0.10603137],[ 0.48198977],[-0.19505152],...,......,[ 0.04807812],[ 0.6310429 ],[-0.64130867]],[[ 0.04493116],[ 0.5939707 ],[-0.2536009 ],...,[ 0.11755434],[ 0.68493474],[-0.51754355]],[[ 0.05364065],[ 0.48932704],[-0.19906978],...,[ 0.10942935],[ 0.5639006 ],[-0.41464213]]]], shape=(4, 1000, 100, 1), dtype=float32)
+    array([[[[-0.08594751],[ 0.60796094],[-0.23601644],...,[ 0.06806014],[ 0.6864663 ],[-0.4920753 ]],[[-0.11522446],[ 0.5983549 ],[-0.36203542],...,[ 0.04816629],[ 0.64241576],[-0.6063587 ]],[[-0.08464254],[ 0.58198   ],[-0.27058232],...,......,[ 0.03919895],[ 0.5378025 ],[-0.70524055]],[[ 0.03765557],[ 0.53489643],[-0.2505472 ],...,[ 0.11406086],[ 0.6066918 ],[-0.48490864]],[[-0.22877088],[ 0.6711763 ],[-0.5302377 ],...,[ 0.0374452 ],[ 0.6478612 ],[-0.7563576 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
 
 
 phi
@@ -1075,7 +1075,7 @@ phi
 float32
 
 
-0.6022 0.408 ... 0.3659 0.1668
+0.6054 0.4154 ... 0.2251 0.4391
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1083,7 +1083,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.6021626 , 0.40800858, 0.4648949 , ..., 0.5031756 , 0.5679749 ,0.26459742],[0.576758  , 0.2835461 , 0.3803724 , ..., 0.37069368, 0.24272537,0.5902207 ],[0.4283185 , 0.67807937, 0.50356376, ..., 0.52087355, 0.23761964,0.11487448],[0.1969738 , 0.29357028, 0.2519021 , ..., 0.38436627, 0.3658948 ,0.16677523]], shape=(4, 1000), dtype=float32)
+    array([[0.6053697 , 0.41536808, 0.4925691 , ..., 0.62072694, 0.63036966,0.27410424],[0.34513617, 0.26235163, 0.31884098, ..., 0.41596568, 0.35300756,0.51378226],[0.34261084, 0.618533  , 0.4513055 , ..., 0.53108823, 0.21794033,0.10294604],[0.15468061, 0.25447977, 0.19006538, ..., 0.26529837, 0.22512996,0.43908358]], shape=(4, 1000), dtype=float32)
 
 
 sigma
@@ -1095,7 +1095,7 @@ sigma
 float32
 
 
-0.4242 0.4562 ... 0.501 0.408
+0.4405 0.4372 ... 0.4894 0.4797
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1103,7 +1103,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.42417994, 0.4562234 , 0.39884937, ..., 0.4779843 , 0.44065925,0.40929258],[0.4311424 , 0.4428815 , 0.47394285, ..., 0.45420346, 0.42864746,0.42506742],[0.43986347, 0.41962373, 0.4243214 , ..., 0.46540776, 0.45097387,0.44440666],[0.42705545, 0.41944715, 0.41231525, ..., 0.4772875 , 0.500982  ,0.40796116]], shape=(4, 1000), dtype=float32)
+    array([[0.44048485, 0.43724412, 0.40497988, ..., 0.47260043, 0.43283954,0.40126675],[0.41872618, 0.45392305, 0.475544  , ..., 0.42072555, 0.43041325,0.4319648 ],[0.41660511, 0.4120218 , 0.41787556, ..., 0.4638983 , 0.45330495,0.44524717],[0.44428536, 0.45545897, 0.40450835, ..., 0.47782534, 0.48940834,0.47966656]], shape=(4, 1000), dtype=float32)
 
 
 theta
@@ -1115,7 +1115,7 @@ theta
 float32
 
 
-0.3627 0.5471 ... 0.5953 0.6119
+0.4176 0.5858 ... 0.6386 0.6684
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1123,14 +1123,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.36270773, 0.5470649 , 0.37636673, ..., 0.44055176, 0.4442067 ,0.49163032],[0.29103065, 0.61470795, 0.5654199 , ..., 0.46207082, 0.6839458 ,0.2747228 ],[0.3634448 , 0.34727144, 0.35864997, ..., 0.43632984, 0.5381683 ,0.7571629 ],[0.5067898 , 0.5136883 , 0.70493054, ..., 0.6249902 , 0.59532595,0.61187446]], shape=(4, 1000), dtype=float32)
+    array([[0.41762936, 0.58581674, 0.48473513, ..., 0.41051865, 0.35632563,0.45346403],[0.54128635, 0.71010363, 0.5689944 , ..., 0.37809575, 0.6203449 ,0.28989708],[0.4621228 , 0.32600176, 0.41184545, ..., 0.43451095, 0.55045915,0.7531333 ],[0.47648752, 0.6992502 , 0.7484971 , ..., 0.7183454 , 0.63860416,0.6683593 ]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.105676+00:00
+2026-09-29T18:36:44.286167+00:00
 
 creation_library :  
 ArviZ
@@ -1251,7 +1251,7 @@ obs
 float32
 
 
--1.017 0.3373 ... 0.3093 -0.6977
+-0.9815 0.3875 ... 0.3485 -1.089
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1259,14 +1259,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-1.0169957 ],[ 0.33730668],[-1.0464648 ],...,[-0.64169127],[ 0.50451714],[-0.92574334]],[[ 0.02451567],[ 0.31905827],[-0.15904397],...,[-1.1264307 ],[ 0.06864069],[-0.00616606]],[[-0.46010378],[ 0.7067954 ],[-1.003775  ],...,......,[-0.4517897 ],[ 0.7969543 ],[-0.6166142 ]],[[ 0.2246039 ],[ 0.82003504],[ 0.05850028],...,[ 0.87950796],[ 0.82522213],[-0.35609692]],[[ 0.07195892],[ 0.78940415],[ 0.03490523],...,[-0.33626258],[ 0.30929595],[-0.6976971 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
+    array([[[[-0.9815372 ],[ 0.387458  ],[-1.08546   ],...,[-0.640207  ],[ 0.57313013],[-0.97336686]],[[-0.06337   ],[ 0.34899953],[-0.25453123],...,[-1.1058261 ],[ 0.08149518],[-0.11340947]],[[-0.44415724],[ 0.810241  ],[-1.0917363 ],...,......,[-0.4612322 ],[ 0.7039009 ],[-0.6805183 ]],[[ 0.21317753],[ 0.7557382 ],[ 0.05434383],...,[ 0.8584119 ],[ 0.74373823],[-0.32719174]],[[-0.20723289],[ 1.0239966 ],[-0.25513798],...,[-0.48658392],[ 0.3485059 ],[-1.0891638 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.258163+00:00
+2026-09-29T18:36:44.518066+00:00
 
 creation_library :  
 ArviZ
@@ -1360,7 +1360,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.258431+00:00
+2026-09-29T18:36:44.518634+00:00
 
 creation_library :  
 ArviZ
@@ -1454,7 +1454,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.258608+00:00
+2026-09-29T18:36:44.518889+00:00
 
 creation_library :  
 ArviZ
@@ -1499,10 +1499,10 @@ recovery
 
 |  | true_value | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|----|
-| mu | 0.0 | -0.081 | 0.07 | -0.22 | 0.046 | 2796 | 2133 | 1.00 | 0.0013 | 0.00095 |
-| phi | 0.4 | 0.369 | 0.144 | 0.083 | 0.62 | 2016 | 2108 | 1.00 | 0.0033 | 0.0023 |
-| theta | 0.7 | 0.532 | 0.15 | 0.25 | 0.8 | 1994 | 1819 | 1.00 | 0.0033 | 0.0021 |
-| sigma | 0.5 | 0.436 | 0.0314 | 0.38 | 0.5 | 3077 | 2811 | 1.00 | 0.00057 | 0.00041 |
+| mu | 0.0 | -0.081 | 0.069 | -0.21 | 0.05 | 2991 | 2645 | 1.00 | 0.0013 | 0.00094 |
+| phi | 0.4 | 0.371 | 0.146 | 0.088 | 0.63 | 2208 | 2452 | 1.00 | 0.0031 | 0.0021 |
+| theta | 0.7 | 0.528 | 0.152 | 0.25 | 0.8 | 2371 | 2308 | 1.00 | 0.0031 | 0.0021 |
+| sigma | 0.5 | 0.436 | 0.0318 | 0.38 | 0.5 | 3344 | 2937 | 1.00 | 0.00055 | 0.00041 |
 
 
 The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \hat{R} values are essentially 1, and the effective sample sizes are healthy. The point estimates for \theta and \sigma come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of 0.43 (against the population value 0.5; we printed the realized value right after generating the data), and the posterior mean of \sigma matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with T = 100 observations, because \phi and \theta can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
@@ -1685,8 +1685,8 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
     folds: 5 (split points: [50, 60, 70, 80, 90])
     mean in-sample CRPS:     0.2399
-    mean out-of-sample CRPS: 0.2914
-    mean out-of-sample 50% coverage: 0.58  (nominal 0.50)
+    mean out-of-sample CRPS: 0.2911
+    mean out-of-sample 50% coverage: 0.60  (nominal 0.50)
     mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
 

@@ -342,7 +342,7 @@ print(f"DCT fit wall time: {dct_fit_seconds:.1f} s")
 
     AutoNormal            mean of last 200 losses: -422.42
     AutoNormal + DCT      mean of last 200 losses: -460.37
-    DCT fit wall time: 1.7 s
+    DCT fit wall time: 2.3 s
 
 
 <figure class="figure">
@@ -836,7 +836,7 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 14.9s (incl. compile)  |  loop 22.3s
+    wall-clock: vectorized 10.2s (incl. compile)  |  loop 42.1s
     vectorized mean out-of-sample CRPS: 0.0444
     loop       mean out-of-sample CRPS: 0.0432
     vectorized mean 50% coverage: 0.47  (nominal 0.50)

@@ -218,7 +218,7 @@ print(f"NUTS: 4 chains x 1_000 draws in {nuts_seconds:.1f}s")
 ```
 
 
-    NUTS: 4 chains x 1_000 draws in 40.9s
+    NUTS: 4 chains x 1_000 draws in 42.5s
 
 
 ## NUTS with time-axis reparameterization
@@ -253,7 +253,7 @@ print(f"NUTS + DCT: 4 chains x 1_000 draws in {nuts_dct_seconds:.1f}s")
 ```
 
 
-    NUTS + DCT: 4 chains x 1_000 draws in 55.1s
+    NUTS + DCT: 4 chains x 1_000 draws in 57.3s
 
 
     In [8]:
@@ -282,11 +282,11 @@ nuts_comparison.round(1)
 
 |            | walltime (s) | leapfrog / draw | min ESS (drift) |
 |------------|--------------|-----------------|-----------------|
-| NUTS       | 40.9         | 446.4           | 45.8            |
-| NUTS + DCT | 55.1         | 314.4           | 558.9           |
+| NUTS       | 42.5         | 446.4           | 45.8            |
+| NUTS + DCT | 57.3         | 314.4           | 558.9           |
 
 
-The rotation pays off in the mixing, not in the wall time. The smallest bulk ESS over the drift increments goes from about `46` to about `559`, twelve times more effective draws from the same `4 x 1_000` iterations, and each draw needs fewer leapfrog steps (`314` against `446`) because the trajectories no longer have to crawl along the thin axis of the ellipse. Each leapfrog step is a little more expensive (the DCT and its gradient are part of every density evaluation), so the run takes longer overall, `55` against `41` seconds, but the effective sample size per second is still about nine times higher. The plain NUTS run would need several times more iterations to match the precision of the reparameterized one on the drift block.
+The rotation pays off in the mixing, not in the wall time. The smallest bulk ESS over the drift increments goes from about `46` to about `559`, twelve times more effective draws from the same `4 x 1_000` iterations, and each draw needs fewer leapfrog steps (`314` against `446`) because the trajectories no longer have to crawl along the thin axis of the ellipse. Each leapfrog step is a little more expensive (the DCT and its gradient are part of every density evaluation), so the run takes longer overall, `57` against `43` seconds, but the effective sample size per second is still about nine times higher. The plain NUTS run would need several times more iterations to match the precision of the reparameterized one on the drift block.
 
 
 ## SVI
@@ -356,7 +356,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI: 20_000 steps in 4.9s
+    SVI: 20_000 steps in 5.0s
 
 
 <figure class="figure">
@@ -446,7 +446,7 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 ```
 
 
-    SVI + DCT: 20_000 steps in 2.4s
+    SVI + DCT: 20_000 steps in 2.5s
 
 
 <figure class="figure">
@@ -538,13 +538,13 @@ print(f"Pathfinder: {len(pathfinder_fit.elbos)} paths in {pathfinder_seconds:.1f
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_7288/3865784160.py:4: UserWarning: pareto_k=12.35 > 0.7: PSIS importance weights over the pooled draws are unreliable, so multipathfinder_samples(..., resample="auto") falls back to ELBO-weighted path sampling instead of PSIS resampling; increase num_paths/maxiter/maxcor or fall back to MCMC.
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_80958/3865784160.py:4: UserWarning: pareto_k=12.35 > 0.7: PSIS importance weights over the pooled draws are unreliable, so multipathfinder_samples(..., resample="auto") falls back to ELBO-weighted path sampling instead of PSIS resampling; increase num_paths/maxiter/maxcor or fall back to MCMC.
       pathfinder_fit = fit_multipathfinder(
 
 
     per-path ELBO: [-1272.3, -741.4, -524.7, -597.5, -805.8, -1532.1, -497.5, -192.3]
     pareto_k: 12.35
-    Pathfinder: 8 paths in 68.3s
+    Pathfinder: 8 paths in 81.3s
 
 
 [multipathfinder_samples](../../../reference/contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples) draws fresh samples from every path's fitted approximation on each call, `2_000` per path here, and then combines the `8` paths into the `2_000` returned draws. How it combines them is the `resample` argument. With `resample="psis"` all `8 * 2_000` fresh draws are pooled, scored both under the model and under the approximation that produced them, and importance-resampled with Pareto smoothing, which is the textbook multi-path Pathfinder estimator. With `resample="elbo"` each returned draw instead picks a whole path with probability proportional to `softmax` of the per-path ELBOs and takes one fresh draw from it, so a path that fits several hundred nats better than the rest simply takes over.
@@ -591,7 +591,7 @@ print(f"MCLMC: 1 chain x 10_000 draws in {mclmc_seconds:.1f}s")
 ```
 
 
-    MCLMC: 1 chain x 10_000 draws in 5.3s
+    MCLMC: 1 chain x 10_000 draws in 5.7s
 
 
 # Exporting fits to ArviZ
@@ -1207,7 +1207,7 @@ Group: /
 │           sigma                   (chain, draw) float32 16kB 0.01877 ... 0.02009
 │           weight                  (chain, draw, weight_dim_0) float32 832kB 5.609e-...
 │       Attributes:
-│           created_at:                 2026-09-25T16:34:53.605231+00:00
+│           created_at:                 2026-09-29T18:43:56.556481+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1222,7 +1222,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time) float32 7MB 14.39 14.47 14.44 ... 14.68 14.25
 │       Attributes:
-│           created_at:                 2026-09-25T16:34:54.230682+00:00
+│           created_at:                 2026-09-29T18:43:57.149621+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1235,7 +1235,7 @@ Group: /
 │       Data variables:
 │           obs      (time) float32 2kB 14.41 14.45 14.42 14.53 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-09-25T16:34:54.230946+00:00
+│           created_at:                 2026-09-29T18:43:57.149871+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1249,7 +1249,7 @@ Group: /
 │           covariates     (time, covariate_dim) float32 87kB 0.0 0.0 ... -0.2376
 │           week           (time) float64 3kB 0.0 1.0 2.0 3.0 ... 414.0 415.0 416.0
 │       Attributes:
-│           created_at:                 2026-09-25T16:34:54.231125+00:00
+│           created_at:                 2026-09-29T18:43:57.150049+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1264,7 +1264,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time) float32 832kB 14.5 14.66 14.59 ... 14.69 14.45
 │       Attributes:
-│           created_at:                 2026-09-25T16:34:54.765667+00:00
+│           created_at:                 2026-09-29T18:43:57.636355+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1278,7 +1278,7 @@ Group: /
             covariates     (time, covariate_dim) float32 11kB -0.05158 -0.103 ... 0.3138
             week           (time) float64 416B 417.0 418.0 419.0 ... 466.0 467.0 468.0
         Attributes:
-            created_at:                 2026-09-25T16:34:54.765918+00:00
+            created_at:                 2026-09-29T18:43:57.636584+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1613,7 +1613,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:34:53.605231+00:00
+2026-09-29T18:43:56.556481+00:00
 
 creation_library :  
 ArviZ
@@ -1748,7 +1748,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:34:54.230682+00:00
+2026-09-29T18:43:57.149621+00:00
 
 creation_library :  
 ArviZ
@@ -1841,7 +1841,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:34:54.230946+00:00
+2026-09-29T18:43:57.149871+00:00
 
 creation_library :  
 ArviZ
@@ -1955,7 +1955,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:34:54.231125+00:00
+2026-09-29T18:43:57.150049+00:00
 
 creation_library :  
 ArviZ
@@ -2090,7 +2090,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:34:54.765667+00:00
+2026-09-29T18:43:57.636355+00:00
 
 creation_library :  
 ArviZ
@@ -2204,7 +2204,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:34:54.765918+00:00
+2026-09-29T18:43:57.636584+00:00
 
 creation_library :  
 ArviZ
@@ -2302,12 +2302,12 @@ comparison.round(4)
 
 |            | train CRPS | test CRPS | walltime (s) |
 |------------|------------|-----------|--------------|
-| NUTS       | 0.0242     | 0.0302    | 40.8726      |
-| SVI        | 0.0271     | 0.0371    | 4.9253       |
-| Pathfinder | 0.0276     | 0.0318    | 68.3311      |
-| MCLMC      | 0.0242     | 0.0302    | 5.3368       |
-| NUTS + DCT | 0.0242     | 0.0304    | 55.0582      |
-| SVI + DCT  | 0.0258     | 0.0304    | 2.3789       |
+| NUTS       | 0.0242     | 0.0302    | 42.4745      |
+| SVI        | 0.0271     | 0.0371    | 5.0278       |
+| Pathfinder | 0.0276     | 0.0318    | 81.3455      |
+| MCLMC      | 0.0242     | 0.0302    | 5.6866       |
+| NUTS + DCT | 0.0242     | 0.0304    | 57.2736      |
+| SVI + DCT  | 0.0258     | 0.0304    | 2.4753       |
 
 
 # Forecast visualization
@@ -2479,13 +2479,13 @@ ax.set(title="Training time by inference method", xlabel="inference method", yla
 </figure>
 
 
-NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `40.9`s across its `4` chains. MCLMC (`5.3`s) and SVI (`4.9`s) both come in at a small fraction of that cost: MCLMC matches the reference to four decimals on this run by spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0271`/`0.0371` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.
+NUTS sets the reference score on both windows (train CRPS `0.0242`, test CRPS `0.0302`) in `42.5`s across its `4` chains. MCLMC (`5.7`s) and SVI (`5.0`s) both come in at a small fraction of that cost: MCLMC matches the reference to four decimals on this run by spending two fixed gradient evaluations per draw instead of a full NUTS trajectory, though its silent-failure mode still deserves the validation that NUTS's divergence diagnostics provide for free, and SVI's `0.0271`/`0.0371` reflects a diagonal-Gaussian guide that cannot bend to the true posterior's shape as faithfully as sampling does.
 
 Multi-path Pathfinder is the interesting case, because its forecasts and its own diagnostic point in opposite directions. Its scores are close to the reference, `0.0276` train and `0.0318` test CRPS, while its `pareto_k` came out at `12.35`, more than an order of magnitude above the `0.7` reliability threshold. Both readings are correct, because they describe different objects. The `pareto_k` printed by the fit cell measures whether importance weights over the pooled per-path draws can be trusted, and on a `474`-parameter posterior they cannot: the log ratio between the target and the approximation is dominated by a handful of draws. The samples that produced the CRPS above never passed through those weights, because `resample="auto"` read the same `pareto_k`, fell back to ELBO-weighted path sampling, and let the best path take over.
 
-The cost side is less flattering. At `68.3`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `40.9`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.
+The cost side is less flattering. At `81.3`s for `8` paths, Pathfinder is the slowest fit in the notebook, slower than NUTS's `42.5`s, because the ELBO is estimated at every one of the `500` L-BFGS iterates of all `8` paths. Most of that budget buys the diversity that makes the ELBO comparison meaningful rather than accuracy as such: fewer paths, or a smaller `maxiter`, would be much cheaper at the price of not knowing whether any path had converged. Read the table together with the diagnostic rather than either alone. Pathfinder here is an accurate, well-diagnosed fit that is not yet a cheap one, and tuning it down toward its usual role, a fast approximate posterior or an MCMC initializer, is the obvious next experiment.
 
-The two DCT columns show what [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) changes. NUTS + DCT reproduces the NUTS scores (`0.0242`/`0.0304`), as it must for a unit-Jacobian change of coordinates, and it changes the sampler's work: `314` leapfrog steps per draw instead of `446` and a minimum bulk ESS over the drift increments of `559` instead of `46`, a twelvefold gain per draw, at `55.1`s against `40.9`s of wall time because each leapfrog step now pays for the transform. Per effective sample it is by far the cheapest MCMC run in the notebook. SVI + DCT, once its learning-rate peak is re-tuned for the rotated coordinates, is the best variational fit in the table: train CRPS `0.0258` and test CRPS `0.0304`, within a hair of the NUTS reference and well ahead of the plain SVI's `0.0371` test score, at a final ELBO loss of `-499` against `-436`, in `2.4`s. The same fit with the baseline's schedule stalled at an ELBO loss of `197`, so the rotation is free for the model and for the sampler, but for a variational fit it is a change of optimization problem whose schedule has to be re-tuned rather than carried over.
+The two DCT columns show what [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) changes. NUTS + DCT reproduces the NUTS scores (`0.0242`/`0.0304`), as it must for a unit-Jacobian change of coordinates, and it changes the sampler's work: `314` leapfrog steps per draw instead of `446` and a minimum bulk ESS over the drift increments of `559` instead of `46`, a twelvefold gain per draw, at `57.3`s against `42.5`s of wall time because each leapfrog step now pays for the transform. Per effective sample it is by far the cheapest MCMC run in the notebook. SVI + DCT, once its learning-rate peak is re-tuned for the rotated coordinates, is the best variational fit in the table: train CRPS `0.0258` and test CRPS `0.0304`, within a hair of the NUTS reference and well ahead of the plain SVI's `0.0371` test score, at a final ELBO loss of `-499` against `-436`, in `2.5`s. The same fit with the baseline's schedule stalled at an ELBO loss of `197`, so the rotation is free for the model and for the sampler, but for a variational fit it is a change of optimization problem whose schedule has to be re-tuned rather than carried over.
 
 
 # Next steps

@@ -92,7 +92,7 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 ```
 
 
-    dynestyx 0.5.1, numpyro 0.22.0, jax 0.11.2
+    dynestyx 0.5.1, numpyro 0.22.0, jax 0.11.0
 
 
 # The Building Block
@@ -562,8 +562,8 @@ posteriors = {label: mcmc.get_samples() for label, (mcmc, _) in fits.items()}
 
 
           direct (innovations):   16.0 s
-       dynestyx, explicit path:   10.0 s
-     dynestyx, Kalman smoother:   15.2 s
+       dynestyx, explicit path:   10.5 s
+     dynestyx, Kalman smoother:   13.9 s
 
 
 ## Model Diagnostics
@@ -620,9 +620,9 @@ comparison.round(
 
 |  | q mean | q sd | r mean | r sd | ess_bulk q | ess_bulk r | r_hat q | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.389 | 0.061 | 0.441 | 0.051 | 726.0 | 763.0 | 1.009 | 1.008 | 1013890 | 16.0 |
-| dynestyx, explicit path | 0.389 | 0.064 | 0.441 | 0.053 | 564.0 | 974.0 | 1.013 | 1.005 | 66528 | 10.0 |
-| dynestyx, Kalman smoother | 0.387 | 0.061 | 0.440 | 0.051 | 1590.0 | 1694.0 | 1.003 | 1.004 | 17992 | 15.2 |
+| direct (innovations) | 0.388 | 0.060 | 0.441 | 0.050 | 810.0 | 797.0 | 1.006 | 1.005 | 1016944 | 16.0 |
+| dynestyx, explicit path | 0.387 | 0.064 | 0.441 | 0.054 | 502.0 | 939.0 | 1.013 | 1.004 | 66520 | 10.5 |
+| dynestyx, Kalman smoother | 0.388 | 0.062 | 0.439 | 0.052 | 1497.0 | 1512.0 | 1.001 | 1.003 | 18726 | 13.9 |
 
 
 The three posterior means agree closely and the \hat{R} values are close to 1. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
@@ -685,8 +685,8 @@ pd.DataFrame(
 
 |          | evaluation (ms) | gradient (ms) |
 |----------|-----------------|---------------|
-| Filter   | 0.056           | 0.171         |
-| Smoother | 0.088           | 0.175         |
+| Filter   | 0.054           | 0.169         |
+| Smoother | 0.083           | 0.170         |
 
 
 The full evaluation is more expensive under the `Smoother`, which is the backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient.
@@ -819,9 +819,9 @@ pd.DataFrame(
 
 |  | direct (innovations) | dynestyx, explicit path | dynestyx, Kalman smoother |
 |----|----|----|----|
-| MAE | 0.445 | 0.448 | 0.448 |
-| RMSE | 0.590 | 0.585 | 0.591 |
-| CRPS | 0.439 | 0.440 | 0.439 |
+| MAE | 0.450 | 0.447 | 0.448 |
+| RMSE | 0.592 | 0.586 | 0.591 |
+| CRPS | 0.439 | 0.439 | 0.439 |
 | coverage (50%) | 0.833 | 0.833 | 0.833 |
 | coverage (94%) | 1.000 | 1.000 | 1.000 |
 
@@ -1409,12 +1409,12 @@ Group: /
 │           f_smoothed_states_cov             (chain, draw, f_smoothed_states_cov_dim_0, f_smoothed_states_cov_dim_1, f_smoothed_states_cov_dim_2) float32 2MB ...
 │           f_smoothed_states_cov_diag        (chain, draw, f_smoothed_states_cov_diag_dim_0, f_smoothed_states_cov_diag_dim_1) float32 2MB ...
 │           f_smoothed_states_mean            (chain, draw, f_smoothed_states_mean_dim_0, f_smoothed_states_mean_dim_1) float32 2MB ...
-│           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
-│           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
+│           q                                 (chain, draw) float32 16kB 0.3219 ... 0...
+│           r                                 (chain, draw) float32 16kB 0.4499 ... 0...
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:38.437707+00:00
+│           created_at:                 2026-09-29T18:44:59.781210+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.1
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -1425,11 +1425,11 @@ Group: /
 │         * time     (time) int64 960B 0 1 2 3 4 5 6 7 ... 113 114 115 116 117 118 119
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB -12.35 -11.79 ... -9.208
+│           obs      (chain, draw, time, obs_dim) float32 2MB -12.35 -11.79 ... -9.2
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.106196+00:00
+│           created_at:                 2026-09-29T18:45:00.452818+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.1
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -1440,9 +1440,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.106436+00:00
+│           created_at:                 2026-09-29T18:45:00.453060+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.1
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -1453,9 +1453,9 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.106614+00:00
+│           created_at:                 2026-09-29T18:45:00.453232+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.1
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -1466,11 +1466,11 @@ Group: /
 │         * time     (time) int64 192B 120 121 122 123 124 125 ... 139 140 141 142 143
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
+│           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.462 ... -6.576
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.137370+00:00
+│           created_at:                 2026-09-29T18:45:00.482006+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.3.1
+│           creation_library_version:   1.2.0
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -1481,9 +1481,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-09-25T16:05:39.137602+00:00
+            created_at:                 2026-09-29T18:45:00.482236+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.3.1
+            creation_library_version:   1.2.0
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1703,7 +1703,7 @@ f_marginal_loglik
 float32
 
 
--124.9 -125.0 ... -127.2 -124.6
+-124.9 -125.0 ... -124.8 -125.3
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1711,7 +1711,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[-124.92994 , -125.00486 , -124.76249 , ..., -125.692215,-125.859245, -128.18863 ],[-124.80739 , -124.64708 , -126.06529 , ..., -124.740715,-124.70812 , -124.74447 ],[-124.70758 , -126.90514 , -124.94177 , ..., -125.24226 ,-124.604454, -127.238174],[-128.95442 , -127.00242 , -126.7914  , ..., -127.24483 ,-127.24483 , -124.55983 ]], shape=(4, 1000), dtype=float32)
+    array([[-124.88876 , -124.99384 , -124.76112 , ..., -125.643524,-125.95374 , -128.06805 ],[-126.585556, -126.89137 , -128.90501 , ..., -127.777855,-127.46771 , -126.49622 ],[-125.18157 , -126.81692 , -124.9656  , ..., -125.33757 ,-124.50931 , -127.02582 ],[-128.67673 , -126.856224, -126.65243 , ..., -126.99803 ,-124.81197 , -125.2828  ]], shape=(4, 1000), dtype=float32)
 
 
 f_smoothed_states_cov
@@ -1723,7 +1723,7 @@ f_smoothed_states_cov
 float32
 
 
-0.1011 0.0759 ... 0.07781 0.1032
+0.1019 0.07648 ... 0.09637 0.1275
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1731,7 +1731,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[[0.10112812]],[[0.07590109]],[[0.06969309]],...,[[0.0696995 ]],[[0.07592721]],[[0.10123419]]],[[[0.09996754]],[[0.07502782]],[[0.06888031]],...[[0.06110231]],[[0.06821907]],[[0.09043334]]],[[[0.10307575]],[[0.0777852 ]],[[0.07297169]],...,[[0.07297552]],[[0.0778054 ]],[[0.10318173]]]]], shape=(4, 1000, 120, 1, 1), dtype=float32)
+    array([[[[[0.10190625]],[[0.07648206]],[[0.0702241 ]],...,[[0.07023025]],[[0.07650696]],[[0.10200723]]],[[[0.10020462]],[[0.07520562]],[[0.06903331]],...[[0.0726242 ]],[[0.07625547]],[[0.10007304]]],[[[0.12728971]],[[0.09633911]],[[0.09082829]],...,[[0.0908336 ]],[[0.09636883]],[[0.12745686]]]]], shape=(4, 1000, 120, 1, 1), dtype=float32)
 
 
 f_smoothed_states_cov_diag
@@ -1743,7 +1743,7 @@ f_smoothed_states_cov_diag
 float32
 
 
-0.1011 0.0759 ... 0.07781 0.1032
+0.1019 0.07648 ... 0.09637 0.1275
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1751,7 +1751,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.10112812],[0.07590109],[0.06969309],...,[0.0696995 ],[0.07592721],[0.10123419]],[[0.09996754],[0.07502782],[0.06888031],...,[0.06888647],[0.07505275],[0.1000687 ]],[[0.11457244],[0.08599187],[0.07877713],...,......,[0.06110231],[0.06821907],[0.09043334]],[[0.09035141],[0.06819282],[0.06109392],...,[0.06110231],[0.06821907],[0.09043334]],[[0.10307575],[0.0777852 ],[0.07297169],...,[0.07297552],[0.0778054 ],[0.10318173]]]], shape=(4, 1000, 120, 1), dtype=float32)
+    array([[[[0.10190625],[0.07648206],[0.0702241 ],...,[0.07023025],[0.07650696],[0.10200723]],[[0.10020462],[0.07520562],[0.06903331],...,[0.06903952],[0.07523075],[0.10030637]],[[0.11317147],[0.08494237],[0.07776923],...,......,[0.09761517],[0.10112456],[0.13063863]],[[0.09997185],[0.07624005],[0.07262184],...,[0.0726242 ],[0.07625547],[0.10007304]],[[0.12728971],[0.09633911],[0.09082829],...,[0.0908336 ],[0.09636883],[0.12745686]]]], shape=(4, 1000, 120, 1), dtype=float32)
 
 
 f_smoothed_states_mean
@@ -1763,7 +1763,7 @@ f_smoothed_states_mean
 float32
 
 
--12.4 -12.29 ... -9.287 -9.265
+-12.4 -12.28 -12.08 ... -9.28 -9.26
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1771,7 +1771,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-12.403204 ],[-12.285065 ],[-12.081824 ],...,[ -9.479487 ],[ -9.31845  ],[ -9.2904005]],[[-12.403088 ],[-12.285048 ],[-12.082108 ],...,[ -9.47956  ],[ -9.31869  ],[ -9.290606 ]],[[-12.397559 ],[-12.282885 ],[-12.085218 ],...,......,[ -9.500518 ],[ -9.365806 ],[ -9.333299 ]],[[-12.36022  ],[-12.269406 ],[-12.118064 ],...,[ -9.500518 ],[ -9.365806 ],[ -9.333299 ]],[[-12.43988  ],[-12.296936 ],[-12.041544 ],...,[ -9.474163 ],[ -9.286616 ],[ -9.26512  ]]]], shape=(4, 1000, 120, 1), dtype=float32)
+    array([[[[-12.403057 ],[-12.284998 ],[-12.081832 ],...,[ -9.479497 ],[ -9.318483 ],[ -9.290429 ]],[[-12.402802 ],[-12.284947 ],[-12.08235  ],...,[ -9.479632 ],[ -9.318932 ],[ -9.290812 ]],[[-12.396707 ],[-12.282622 ],[-12.086243 ],...,......,[ -9.482726 ],[ -9.2452   ],[ -9.2398815]],[[-12.468278 ],[-12.306387 ],[-12.006601 ],...,[ -9.476214 ],[ -9.265225 ],[ -9.250785 ]],[[-12.44565  ],[-12.29852  ],[-12.030406 ],...,[ -9.474283 ],[ -9.279732 ],[ -9.260233 ]]]], shape=(4, 1000, 120, 1), dtype=float32)
 
 
 q
@@ -1783,7 +1783,7 @@ q
 float32
 
 
-0.3207 0.3186 ... 0.2633 0.3651
+0.3219 0.3187 ... 0.3952 0.4179
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1791,7 +1791,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.32068327, 0.31857008, 0.33702788, ..., 0.37678984, 0.2931541 ,0.45265743],[0.32364076, 0.37731898, 0.3843973 , ..., 0.3405555 , 0.3298986 ,0.33731768],[0.3729805 , 0.49418774, 0.42799532, ..., 0.31091502, 0.3627534 ,0.45117033],[0.5031699 , 0.31187838, 0.31304047, ..., 0.26332444, 0.26332444,0.36514115]], shape=(4, 1000), dtype=float32)
+    array([[0.32186854, 0.31868607, 0.3338542 , ..., 0.37039608, 0.29078498,0.4422371 ],[0.298495  , 0.2765043 , 0.29046074, ..., 0.25165963, 0.2564709 ,0.27137333],[0.382778  , 0.48304665, 0.42931172, ..., 0.3110407 , 0.37453946,0.4492668 ],[0.50052255, 0.30794704, 0.31041244, ..., 0.49821067, 0.3952465 ,0.41785324]], shape=(4, 1000), dtype=float32)
 
 
 r
@@ -1803,7 +1803,7 @@ r
 float32
 
 
-0.4482 0.4458 ... 0.4565 0.4278
+0.4499 0.4465 ... 0.4052 0.4696
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1811,20 +1811,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.44820744, 0.44580153, 0.48011798, ..., 0.51331335, 0.44494927,0.5301802 ],[0.45957825, 0.4171043 , 0.52102685, ..., 0.4799249 , 0.4587699 ,0.43649143],[0.47349715, 0.33710554, 0.42352644, ..., 0.44357568, 0.42531967,0.5070788 ],[0.50365436, 0.55811256, 0.55280817, ..., 0.45648342, 0.45648342,0.42782402]], shape=(4, 1000), dtype=float32)
+    array([[0.4499408 , 0.44651303, 0.47797546, ..., 0.5144475 , 0.44538447,0.53533477],[0.5412483 , 0.5310988 , 0.5962385 , ..., 0.5115205 , 0.51047224,0.4840019 ],[0.492019  , 0.33756116, 0.42512512, ..., 0.4379216 , 0.43050238,0.50275046],[0.49905622, 0.553213  , 0.5483081 , ..., 0.44653752, 0.40519   ,0.46957293]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:38.437707+00:00
+2026-09-29T18:44:59.781210+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.1
+1.2.0
 
 creation_library_language :  
 Python
@@ -1939,7 +1939,7 @@ obs
 float32
 
 
--12.35 -11.79 ... -8.059 -9.208
+-12.35 -11.79 ... -7.928 -9.2
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1947,20 +1947,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-12.352675 ],[-11.794619 ],[-11.226136 ],...,[ -8.614657 ],[ -9.642351 ],[ -9.963312 ]],[[-12.536471 ],[-12.017875 ],[-11.389994 ],...,[ -9.309955 ],[ -9.186474 ],[ -8.454043 ]],[[-12.581463 ],[-11.981739 ],[-13.174151 ],...,......,[ -9.292221 ],[ -9.248516 ],[ -9.650716 ]],[[-13.280217 ],[-12.18261  ],[-12.19955  ],...,[ -8.998518 ],[ -8.966867 ],[ -9.283775 ]],[[-12.8492565],[-12.5082035],[-11.411583 ],...,[ -8.932751 ],[ -8.058711 ],[ -9.20815  ]]]], shape=(4, 1000, 120, 1), dtype=float32)
+    array([[[[-12.352342 ],[-11.792645 ],[-11.222844 ],...,[ -8.611349 ],[ -9.64364  ],[ -9.965928 ]],[[-12.536553 ],[-12.017352 ],[-11.38936  ],...,[ -9.30982  ],[ -9.186414 ],[ -8.453017 ]],[[-12.5793495],[-11.982824 ],[-13.169401 ],...,......,[ -9.195711 ],[ -9.088374 ],[ -9.538207 ]],[[-13.355255 ],[-12.332992 ],[-12.035568 ],...,[ -9.094979 ],[ -8.9543295],[ -9.149765 ]],[[-12.899676 ],[-12.525226 ],[-11.330671 ],...,[ -8.87552  ],[ -7.928029 ],[ -9.200133 ]]]], shape=(4, 1000, 120, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.106196+00:00
+2026-09-29T18:45:00.452818+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.1
+1.2.0
 
 creation_library_language :  
 Python
@@ -2048,13 +2048,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.106436+00:00
+2026-09-29T18:45:00.453060+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.1
+1.2.0
 
 creation_library_language :  
 Python
@@ -2142,13 +2142,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.106614+00:00
+2026-09-29T18:45:00.453232+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.1
+1.2.0
 
 creation_library_language :  
 Python
@@ -2263,7 +2263,7 @@ obs
 float32
 
 
--10.23 -9.461 ... -7.083 -6.908
+-10.23 -9.462 ... -6.807 -6.576
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -2271,20 +2271,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-10.228613 ],[ -9.460849 ],[ -8.545705 ],...,[ -6.42752  ],[ -7.035676 ],[ -5.6664305]],[[ -9.418294 ],[-10.329985 ],[-10.54233  ],...,[ -8.867797 ],[ -9.285464 ],[-10.504098 ]],[[ -9.433964 ],[ -9.14304  ],[ -9.847077 ],...,......,[ -8.173868 ],[ -8.278817 ],[ -7.736565 ]],[[ -9.235904 ],[ -9.794433 ],[ -8.562177 ],...,[-10.14985  ],[-10.300585 ],[-10.64304  ]],[[ -8.808359 ],[ -8.849777 ],[ -8.502832 ],...,[ -7.9603224],[ -7.083179 ],[ -6.9077325]]]], shape=(4, 1000, 24, 1), dtype=float32)
+    array([[[[-10.232276 ],[ -9.46155  ],[ -8.542868 ],...,[ -6.417066 ],[ -7.027518 ],[ -5.6530113]],[[ -9.417987 ],[-10.330314 ],[-10.543344 ],...,[ -8.867403 ],[ -9.285353 ],[-10.505429 ]],[[ -9.43568  ],[ -9.142244 ],[ -9.844754 ],...,......,[ -6.8889246],[ -6.723004 ],[ -6.261673 ]],[[ -9.172021 ],[ -9.566921 ],[ -8.459595 ],...,[-10.002009 ],[-10.290252 ],[-10.591355 ]],[[ -8.759649 ],[ -8.794904 ],[ -8.417436 ],...,[ -7.7828183],[ -6.8074403],[ -6.5761333]]]], shape=(4, 1000, 24, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.137370+00:00
+2026-09-29T18:45:00.482006+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.1
+1.2.0
 
 creation_library_language :  
 Python
@@ -2372,13 +2372,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.137602+00:00
+2026-09-29T18:45:00.482236+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.3.1
+1.2.0
 
 creation_library_language :  
 Python
@@ -2466,8 +2466,8 @@ for handler, handler_model in handlers.items():
 ```
 
 
-      Filter handler: log joint density at the posterior mean -125.142899
-    Smoother handler: log joint density at the posterior mean -125.142899
+      Filter handler: log joint density at the posterior mean -125.147804
+    Smoother handler: log joint density at the posterior mean -125.147804
 
 
 The two values agree. The draws we already have are draws from the posterior of either model, and we can read them under the other handler without refitting.
@@ -2712,7 +2712,7 @@ ax.set(title="SVI loss (negative ELBO)", xlabel="step", ylabel="loss");
 ```
 
 
-    SVI: 3.4 s, final loss 147.32
+    SVI: 3.5 s, final loss 147.32
     posterior mean of beta: [ 1.68  0.54 -0.38  0.23]
     truth:                  [ 1.5  0.5 -0.4  0.3]
 
@@ -2867,17 +2867,17 @@ results_to_dataframe(results).round(3)
 ```
 
 
-    backtest: 6 folds in 120.5 s
+    backtest: 6 folds in 97.8 s
 
 
 |  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 7.358 | 0.691 | 0.250 | 1.000 | 0.217 | 0.708 | 1.000 |
-| 1 | 0 | 84 | 96 | 1000 | 14.058 | 0.922 | 0.333 | 0.917 | 0.208 | 0.714 | 1.000 |
-| 2 | 0 | 96 | 108 | 1000 | 8.922 | 0.408 | 0.917 | 1.000 | 0.213 | 0.740 | 1.000 |
-| 3 | 0 | 108 | 120 | 1000 | 10.206 | 0.440 | 0.667 | 1.000 | 0.211 | 0.759 | 1.000 |
-| 4 | 0 | 120 | 132 | 1000 | 10.044 | 0.657 | 0.667 | 1.000 | 0.203 | 0.767 | 1.000 |
-| 5 | 0 | 132 | 144 | 1000 | 9.109 | 0.767 | 0.250 | 1.000 | 0.241 | 0.712 | 0.992 |
+| 0 | 0 | 72 | 84 | 1000 | 7.693 | 0.689 | 0.250 | 1.000 | 0.217 | 0.708 | 1.000 |
+| 1 | 0 | 84 | 96 | 1000 | 7.703 | 0.927 | 0.333 | 0.917 | 0.207 | 0.726 | 1.000 |
+| 2 | 0 | 96 | 108 | 1000 | 7.795 | 0.410 | 0.917 | 1.000 | 0.213 | 0.740 | 1.000 |
+| 3 | 0 | 108 | 120 | 1000 | 9.040 | 0.439 | 0.667 | 1.000 | 0.210 | 0.750 | 1.000 |
+| 4 | 0 | 120 | 132 | 1000 | 8.648 | 0.657 | 0.667 | 1.000 | 0.202 | 0.775 | 1.000 |
+| 5 | 0 | 132 | 144 | 1000 | 9.462 | 0.765 | 0.250 | 1.000 | 0.242 | 0.727 | 0.992 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.
