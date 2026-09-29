@@ -167,3 +167,18 @@ exclude_lines = [
 
 [tool.ty.environment]
 python-version = "3.12"
+
+# numpyro 0.22 annotates `numpyro.sample`/`numpyro.deterministic` as returning
+# `jax.typing.ArrayLike` (a union with Python scalars), so every indexed, attribute-accessed
+# or Array-typed use of a sampled value is a diagnostic. The package and tests narrow with
+# `jnp.asarray(...)`; the example notebooks are prose-first, so the four rules that union
+# triggers are ignored there instead (nothing else is). Remove once numpyro narrows the
+# primitives' return types (tracked in docs/dev/issue_116_review_plan.md, Task 8).
+[[tool.ty.overrides]]
+include = ["docs/examples/**"]
+
+[tool.ty.overrides.rules]
+not-subscriptable = "ignore"
+invalid-argument-type = "ignore"
+invalid-return-type = "ignore"
+unresolved-attribute = "ignore"
