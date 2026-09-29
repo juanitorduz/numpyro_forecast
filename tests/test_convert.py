@@ -583,7 +583,7 @@ def test_to_datatree_deterministic_given_key() -> None:
     )
 
 
-# --- predictive_batch_size (issue #64) ----------------------------------------
+# --- batch_size (issue #64) ----------------------------------------
 
 
 def _svi_posterior_with_horizon(
@@ -594,7 +594,7 @@ def _svi_posterior_with_horizon(
     return posterior, data, empty_covariates(n + horizon)
 
 
-def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
+def test_to_datatree_batch_size_groups_and_shapes() -> None:
     """Chunked predictive sampling produces the same tree layout as the default."""
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     n = data.shape[-2]
@@ -604,7 +604,7 @@ def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
         posterior,
         data,
         covariates,
-        predictive_batch_size=4,
+        batch_size=4,
     )
     assert set(tree.children) == {
         "posterior",
@@ -622,41 +622,35 @@ def test_to_datatree_predictive_batch_size_groups_and_shapes() -> None:
     assert bool(np.all(np.isfinite(np.asarray(predictions))))
 
 
-def test_to_datatree_predictive_batch_size_ge_samples_matches_default() -> None:
+def test_to_datatree_batch_size_ge_samples_matches_default() -> None:
     """A batch size at or above the draw count hits the passthrough: identical tree."""
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     default = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates)
-    batched = to_datatree(
-        random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=64
-    )
+    batched = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, batch_size=64)
     for group in default.children:
         xarray_testing.assert_equal(default[group].dataset, batched[group].dataset)
 
 
-def test_to_datatree_predictive_batch_size_deterministic_given_key() -> None:
+def test_to_datatree_batch_size_deterministic_given_key() -> None:
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     trees = [
-        to_datatree(
-            random.PRNGKey(7), _model(), posterior, data, covariates, predictive_batch_size=4
-        )
+        to_datatree(random.PRNGKey(7), _model(), posterior, data, covariates, batch_size=4)
         for _ in range(2)
     ]
     for group in trees[0].children:
         xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
 
 
-def test_to_datatree_rejects_non_positive_predictive_batch_size() -> None:
+def test_to_datatree_rejects_non_positive_batch_size() -> None:
     """The batch-size contract is enforced at the public to_datatree surface."""
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     with pytest.raises(ValueError, match="batch_size must be positive"):
-        to_datatree(
-            random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=0
-        )
+        to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, batch_size=0)
 
 
 @pytest.mark.parametrize("other_device", [None, "host"])
-def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> None:
-    """predictive_device is a placement knob, never a draws knob: equal trees."""
+def test_to_datatree_device_matches_cpu(other_device: str | None) -> None:
+    """device is a placement knob, never a draws knob: equal trees."""
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     trees = [
         to_datatree(
@@ -665,8 +659,8 @@ def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> 
             posterior,
             data,
             covariates,
-            predictive_batch_size=4,
-            predictive_device=device,
+            batch_size=4,
+            device=device,
         )
         for device in ("cpu", other_device)
     ]
@@ -674,11 +668,9 @@ def test_to_datatree_predictive_device_matches_cpu(other_device: str | None) -> 
         xarray_testing.assert_equal(trees[0][group].dataset, trees[1][group].dataset)
 
 
-@pytest.mark.parametrize("predictive_device", ["host", None])
-def test_to_datatree_forwards_predictive_device(
-    monkeypatch: pytest.MonkeyPatch, predictive_device: str | None
-) -> None:
-    """Both predictive calls receive the *resolved* predictive_device (default ``"host"``).
+@pytest.mark.parametrize("device", ["host", None])
+def test_to_datatree_forwards_device(monkeypatch: pytest.MonkeyPatch, device: str | None) -> None:
+    """Both predictive calls receive the *resolved* device (default ``"host"``).
 
     ``to_datatree`` resolves the placement once (``"host"`` becomes the CPU
     backend device) and hands the same value to both drivers.
@@ -701,22 +693,20 @@ def test_to_datatree_forwards_predictive_device(
     monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
 
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
-    if predictive_device is None:
+    if device is None:
         to_datatree(
             random.PRNGKey(2),
             _model(),
             posterior,
             data,
             covariates,
-            predictive_batch_size=4,
-            predictive_device=None,
+            batch_size=4,
+            device=None,
         )
     else:
-        # The default must forward "host", so predictive_device is deliberately omitted.
-        to_datatree(
-            random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=4
-        )
-    expected = None if predictive_device is None else jax.devices("cpu")[0]
+        # The default must forward "host", so device is deliberately omitted.
+        to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, batch_size=4)
+    expected = None if device is None else jax.devices("cpu")[0]
     assert captured["predict_in_sample"] == expected
     assert captured["forecast"] == expected
 
@@ -743,7 +733,7 @@ def test_to_datatree_forwards_numpy_sentinel_without_cpu_backend(
     monkeypatch.setattr(convert_mod, "forecast", spy_forecast)
     monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
-    to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, predictive_batch_size=4)
+    to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, batch_size=4)
     assert captured == {"predict_in_sample": "numpy", "forecast": "numpy"}
 
 
@@ -753,7 +743,7 @@ def test_to_datatree_default_works_without_cpu_backend(
     """Regression for the GPU crash: to_datatree must not need the CPU backend.
 
     ``numpyro.set_platform("cuda")`` restricts ``jax_platforms`` to cuda only,
-    so ``jax.devices("cpu")`` raises. The default ``predictive_device="host"``
+    so ``jax.devices("cpu")`` raises. The default ``device="host"``
     then takes the backend-free NumPy path (one ``jax.device_get`` per chunk),
     so the export succeeds with no warning.
     """
@@ -761,15 +751,13 @@ def test_to_datatree_default_works_without_cpu_backend(
     posterior, data, covariates = _svi_posterior_with_horizon(num_draws=10)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        tree = to_datatree(
-            random.PRNGKey(7), _model(), posterior, data, covariates, predictive_batch_size=4
-        )
+        tree = to_datatree(random.PRNGKey(7), _model(), posterior, data, covariates, batch_size=4)
     assert "posterior_predictive" in tree.children
     assert "predictions" in tree.children
 
 
 def test_to_datatree_cpu_without_cpu_backend_warns_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit ``predictive_device="cpu"`` with no CPU backend warns once per export.
+    """An explicit ``device="cpu"`` with no CPU backend warns once per export.
 
     The device is resolved once and the resolved ``"numpy"`` sentinel is handed
     to both predictive drivers, so the unmet request is reported a single time.
@@ -784,15 +772,15 @@ def test_to_datatree_cpu_without_cpu_backend_warns_once(monkeypatch: pytest.Monk
             posterior,
             data,
             covariates,
-            predictive_batch_size=4,
-            predictive_device="cpu",
+            batch_size=4,
+            device="cpu",
         )
     assert "predictions" in tree.children
     fallback = [r for r in records if "falls back to device='host'" in str(r.message)]
     assert len(fallback) == 1, [str(r.message) for r in records]
 
 
-def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:
+def test_to_datatree_batch_size_mcmc_keeps_chain_structure() -> None:
     posterior, data, _covariates = _mcmc_posterior(num_chains=2)
     n = data.shape[-2]
     tree = to_datatree(
@@ -802,7 +790,7 @@ def test_to_datatree_predictive_batch_size_mcmc_keeps_chain_structure() -> None:
         data,
         empty_covariates(n + 4),
         num_chains=2,
-        predictive_batch_size=16,
+        batch_size=16,
     )
     pp = tree["posterior_predictive"]["obs"]
     assert pp.sizes == {"chain": 2, "draw": 50, "time": n, "obs_dim": 1}

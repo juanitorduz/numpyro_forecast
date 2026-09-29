@@ -688,9 +688,9 @@ def test_backtest_with_series_as_covariate(rng_key: Array) -> None:
     series = _series(40, key=9)
     results = backtest(
         rng_key,
-        series,
-        series,
         lambda: ARMA_SSOE,
+        series,
+        series,
         forecast_fn=svi_forecast_fn(20),
         in_sample_fn=svi_in_sample_fn(20),
         min_train_window=30,

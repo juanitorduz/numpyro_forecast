@@ -28,7 +28,7 @@ Optional extras:
 - `optax`: optax optimizers for SVI, wrapped with `numpyro.optim.optax_to_numpyro`.
 - `blackjax`: the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`.
 - `cuda`: the CUDA jax plugin (Linux only), see [Scaling to GPU](#scaling-to-gpu).
-- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The [dynestyx state space model integration example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html) additionally needs `pip install "dynestyx>=0.5.1"`.
+- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The `docs` extra also installs `dynestyx` for the [dynestyx state space model integration example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html); without it, that one notebook needs `pip install "dynestyx>=0.5.1"`.
 
 ## Quickstart
 
@@ -136,7 +136,7 @@ Every driver (`forecast`, `predict_in_sample`, `to_datatree`, `backtest`) takes 
 
 ## Backtesting and evaluation
 
-`backtest(rng_key, data, covariates, model_fn, forecast_fn=...)` runs the rolling or expanding window loop and scores every window. Fitting and forecasting are closures you write, so `backtest` does not depend on how a model is fit; `backtest_vectorized` fits every rolling window in one vmapped SVI run. The metrics are `eval_crps`, `eval_mae`, `eval_rmse` and `eval_coverage`, plus `crps_empirical`, `eval_pinball`, `eval_interval_score` and `make_mase` in `numpyro_forecast.metrics`; `evaluate_forecast` bundles them. `to_datatree` exports a posterior with its in-sample predictive, forecasts and observed data as an ArviZ-schema `xarray.DataTree` for diagnostics and plotting.
+`backtest(rng_key, model_fn, data, covariates, forecast_fn=...)` runs the rolling or expanding window loop and scores every window. Fitting and forecasting are closures you write, so `backtest` does not depend on how a model is fit; `backtest_vectorized` fits every rolling window in one vmapped SVI run. The metrics are `eval_crps`, `eval_mae`, `eval_rmse` and `eval_coverage`, plus `crps_empirical`, `eval_pinball`, `eval_interval_score` and `make_mase` in `numpyro_forecast.metrics`; `evaluate_forecast` bundles them. `to_datatree` exports a posterior with its in-sample predictive, forecasts and observed data as an ArviZ-schema `xarray.DataTree` for diagnostics and plotting.
 
 ![Rolling-origin backtest forecasts on weekly BART ridership](https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/backtest_univariate.png)
 
@@ -152,7 +152,7 @@ import numpyro
 numpyro.set_platform("cuda")
 ```
 
-On an accelerator the posterior draws are usually the largest allocation, so `draw_posterior`, `forecast` and `predict_in_sample` take `batch_size` to chunk the sample axis and `device="host"` to move each chunk off the accelerator as it is drawn; `to_datatree` (`predictive_batch_size`, `predictive_device`) and `backtest` (`batch_size`, forwarded to your closures) expose the same knobs. The [stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) fits a 1,000-series retail panel with SVI and a custom optax optimizer; the [same model on the full 50,000-series dataset](https://juanitorduz.github.io/fresh_retail_stockout/) runs end to end in about 10 minutes on a GPU.
+On an accelerator the posterior draws are usually the largest allocation, so `draw_posterior`, `forecast`, `predict_in_sample` and `to_datatree` take `batch_size` to chunk the sample axis and `device="host"` to move each chunk off the accelerator as it is drawn (`to_datatree` defaults to `"host"`; `backtest` forwards `batch_size` to your closures). The [stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) fits a 1,000-series retail panel with SVI and a custom optax optimizer; the [same model on the full 50,000-series dataset](https://juanitorduz.github.io/fresh_retail_stockout/) runs end to end in about 10 minutes on a GPU.
 
 ## Examples
 
@@ -174,7 +174,7 @@ prek run --all-files       # lint + format + type check
 uv run pytest              # run the tests (README examples included)
 ```
 
-To use the development version without a checkout, `uv add "numpyro_forecast @ git+https://github.com/juanitorduz/numpyro_forecast"` (or the same spec with `pip install`). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow and guidelines.
+To use the development version without a checkout, `uv add "numpyro_forecast @ git+https://github.com/juanitorduz/numpyro_forecast"` (or the same spec with `pip install`). See [`CONTRIBUTING.md`](https://github.com/juanitorduz/numpyro_forecast/blob/main/CONTRIBUTING.md) for the full workflow and guidelines.
 
 ## License
 
