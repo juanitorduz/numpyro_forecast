@@ -47,7 +47,7 @@ For a local checkout:
 uv sync --extra all
 ```
 
-The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`). `all` (used above) pulls those three in along with the `dev` and `docs` tooling; `cuda` adds the CUDA jax plugin, and `all_cuda` is `all` plus `cuda`. The `docs` extra also installs [dynestyx](https://github.com/BasisResearch/dynestyx) (`>=0.5.1`) for the [state space example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html), which writes a `dynestyx` model as a `numpyro_forecast` model and chooses the inference strategy (Kalman smoother or explicit latent path) with a `dynestyx` handler; outside a checkout, `pip install "dynestyx>=0.5.1"` next to the package is all the example needs.
+The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`). `all` (used above) pulls those three in along with the `dev` and `docs` tooling; `cuda` adds the CUDA jax plugin (Linux only; jax ships no CUDA wheels for other platforms), and `all_cuda` is `all` plus `cuda`. The `docs` extra also installs [dynestyx](https://github.com/BasisResearch/dynestyx) (`>=0.5.1`) for the [state space example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html), which writes a `dynestyx` model as a `numpyro_forecast` model and chooses the inference strategy (Kalman smoother or explicit latent path) with a `dynestyx` handler; outside a checkout, `pip install "dynestyx>=0.5.1"` next to the package is all the example needs.
 
 ## Quickstart
 
@@ -79,9 +79,7 @@ Define a model, fit it with SVI, and draw probabilistic forecasts:
 ...     sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
 ...     nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
 ...     # In-sample innovations at "drift", the forecast suffix at "drift_future".
-...     drift = innovations(
-...         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
-...     )
+...     drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0))
 ...     level = jnp.cumsum(drift, axis=-2)  # random-walk level
 ...     regression = (weight * covariates).sum(axis=-1, keepdims=True)
 ...     prediction = level + bias + regression
@@ -119,16 +117,16 @@ A model is a plain NumPyro function `(covariates, data=None)` whose first line d
 | Building block | What it replaces in raw NumPyro | Sites it registers |
 | --- | --- | --- |
 | `Horizon.from_data(covariates, data)` | Deriving the train/forecast split by hand and carrying `t_obs`, `future` and `duration` around | none |
-| `innovations(h, name, dist_fn)` | Two `numpyro.sample` calls under two time plates, plus the concatenation of prefix and suffix | `<name>`, `<name>_future` |
+| `innovations(h, name, prior)` | Two `numpyro.sample` calls under two time plates, plus the concatenation of prefix and suffix | `<name>`, `<name>_future` |
 | `markov_series(h, name, init_carry, transition)` | Two `numpyro.contrib.control_flow.scan` calls, the second seeded by the first's final carry | `<name>`, `<name>_future` |
-| `ssoe(h, name, y, init_carry, step, noise_dist)` | An in-sample error-feedback `lax.scan` filter, plus a generative forecast scan driven by iid future errors | `<name>_future` only |
+| `ssoe(h, name, y, init_carry, mean, update, noise_dist)` | An in-sample error-feedback `lax.scan` filter, plus a generative forecast scan driven by iid future errors | `<name>_future` only |
 | `predict(h, obs_dist, prediction)` | Slicing the observation distribution along time, conditioning it on the observed prefix and sampling the suffix | `obs` while training; also `obs_future` and the `forecast` deterministic when `h.future > 0` |
 
 `ssoe` is the one block that does not close the loop for you: it registers only the error site, and the caller writes the likelihood against `r.mu` and registers `numpyro.deterministic("forecast", r.y_future)` when `h.future > 0`. In every block the observed data flows in through the `Horizon`, so `predict` has no `obs=` argument of its own.
 
-A vector autoregression is an `ssoe` recursion with a lag-window carry and shocks correlated across series: `numpyro_forecast.var` supplies the step factory (`var_step`), the conditional mean, the companion matrix and `impulse_response`, and `numpyro_forecast.priors.minnesota_prior` the moments of the Minnesota shrinkage prior, decoupled from the recursion; see the [VAR example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/var.html).
+A vector autoregression is an `ssoe` recursion with a lag-window carry and shocks correlated across series: `numpyro_forecast.var` supplies the mean/update pair (`var_step`), the conditional mean, the companion matrix and `impulse_response`, and `numpyro_forecast.priors.minnesota_prior` the moments of the Minnesota shrinkage prior, decoupled from the recursion; see the [VAR example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/var.html).
 
-The three latent blocks differ in where the sampling happens. `innovations` samples conditionally iid per-step innovations outside any loop, and you build the series arithmetically from them (a random walk is `jnp.cumsum(drift, axis=-2)`). `ssoe` is an iid error plate plus a deterministic scan that consumes those errors, the single-source-of-error form behind ARMA, exponential smoothing and Croston/TSB. `markov_series` samples inside `numpyro.contrib.control_flow.scan`, one step at a time, which is what you need when the per-step distribution depends on the previous state.
+The three latent blocks differ in where the sampling happens. `innovations` samples conditionally iid per-step innovations outside any loop, and you build the series arithmetically from them (a random walk is `jnp.cumsum(drift, axis=-2)`). `ssoe` is an iid error plate plus a deterministic scan driven by your `mean` and `update` functions, the single-source-of-error form behind ARMA, exponential smoothing and Croston/TSB. `markov_series` samples inside `numpyro.contrib.control_flow.scan`, one step at a time, which is what you need when the per-step distribution depends on the previous state.
 
 Reuse a group of sites across channels with NumPyro's `handlers.scope`, with one caveat: `scope` prefixes every site inside it, `obs`, `obs_future` and `forecast` included, after which the drivers can no longer find `"forecast"` and `"obs"`. Scope the latent helpers and register the observation and forecast sites outside the scope, by calling `predict` there or, as the Croston and TSB examples do, by writing `obs` and `forecast` yourself. `scope` is the composition tool; it is not a replacement for the `_future` suffix, which is what keeps the guide's shape fixed.
 

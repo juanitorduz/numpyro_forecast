@@ -10,7 +10,7 @@ The model-side API is a small set of **model building blocks** (`Horizon.from_da
 
 Vector autoregression components (`var_mean`, `var_step`, `companion_matrix`, `impulse_response`) live in `var.py` and prior helpers (`minnesota_prior`) in `priors.py`; the two modules are decoupled by design (neither imports the other, they share only the `(lags, obs, obs)` coefficient layout) so a prior is always the caller's `numpyro.sample` and never baked into a recursion.
 
-Dependencies: `arviz` is a core dependency (the ArviZ export is part of the package contract), while `matplotlib` lives in the `dev` extra only. The extras are `dataframes`, `optax`, `blackjax`, `dev`, `docs`, `cuda`, plus the umbrellas `all` (everything but cuda) and `all_cuda`; there are no dependency groups, so `uv sync --extra all` is the way to build the environment.
+Dependencies: `arviz` is a core dependency (the ArviZ export is part of the package contract), and so is `equinox`, used only for `Horizon` (an `eqx.Module` so the horizon is a JAX pytree with static integer fields; do not add other Modules or a class hierarchy on top of it), while `matplotlib` lives in the `dev` extra only. The extras are `dataframes`, `optax`, `blackjax`, `dev`, `docs`, `cuda`, plus the umbrellas `all` (everything but cuda) and `all_cuda`; there are no dependency groups, so `uv sync --extra all` is the way to build the environment.
 
 ## Conventions
 
@@ -26,6 +26,7 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
 - **Host offload contract:** `device="host"` on `draw_posterior`, `forecast`, `predict_in_sample` and the pathfinder samplers returns draws as `Array | np.ndarray` (jax Arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized). Any new signature that consumes draws must accept both, and the placement contract is documented once, on `draw_posterior`; other drivers point at it.
 - **`rng_key` first:** every JAX/NumPyro function that consumes randomness takes `rng_key: Array` as its first parameter (first after `self` for methods), required and positional (not keyword-only), always.
 - **Integer literals:** write integers with four or more digits using underscore separators so zeros are easy to count: `1_000`, `10_000`, `1_234_567_890` (not `1000`, `1234567890`).
+- **Pytrees:** `Horizon` is an `eqx.Module` (static ints, `data` leaf) and `SSOEResult` a `NamedTuple`; a new result type is a `NamedTuple`, a new value type that mixes arrays and static Python scalars is an `eqx.Module` with `eqx.field(static=True)`; never `jax.tree_util.register_dataclass`, whose unflatten re-runs the beartype-wrapped `__init__` and rejects NumPy leaves.
 
 ## Hard requirements
 
@@ -38,6 +39,7 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   `F821` into `F722`, which we ignore globally; `F821` stays active otherwise).
   Do **not** use `from __future__ import annotations` (incompatible with runtime
   type checking).
+- **Sampled values and `ty`:** numpyro annotates `numpyro.sample` as returning `ArrayLike`. In `numpyro_forecast/`, `tests/` and `scripts/` narrow with `jnp.asarray(numpyro.sample(...))` when the value is indexed, attribute-accessed or passed to an `Array`-typed parameter (never `typing.cast`). In the example notebooks write the plain `numpyro.sample(...)`: `pyproject.toml` ignores `not-subscriptable`, `invalid-argument-type`, `invalid-return-type` and `unresolved-attribute` under `docs/examples/**` and nothing else. Those four are therefore blind in notebooks (a wrong argument type, a misspelled attribute or a stale return annotation is not reported there), which is why a notebook's model cell must be smoke-executed after any package API change; every other rule still applies, so keep the notebooks clean otherwise.
 
 ## Tests
 

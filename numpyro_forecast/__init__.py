@@ -49,9 +49,11 @@ from numpyro_forecast.exceptions import (
     VectorizedMetricError,
 )
 from numpyro_forecast.models import (
+    Advance,
     Horizon,
+    SSOEMean,
     SSOEResult,
-    SSOEStep,
+    SSOEUpdate,
     Transition,
     innovations,
     markov_series,
@@ -69,6 +71,7 @@ except PackageNotFoundError:  # pragma: no cover - package not installed
 
 __all__ = [
     "DEFAULT_METRICS",
+    "Advance",
     "BacktestResult",
     "BacktestWindowError",
     "CovariateDimsError",
@@ -79,8 +82,9 @@ __all__ = [
     "KernelConfigError",
     "MVNLayoutError",
     "NumpyroForecastError",
+    "SSOEMean",
     "SSOEResult",
-    "SSOEStep",
+    "SSOEUpdate",
     "Transition",
     "VectorizedBacktestResult",
     "VectorizedMetricError",

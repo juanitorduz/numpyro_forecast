@@ -60,9 +60,7 @@ def reparam_model(covariates: Array, data: Array | None = None) -> None:
     h = Horizon.from_data(covariates, data)
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = innovations(
-        h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam()
-    )
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam())
     level = jnp.cumsum(drift, axis=-2)
     predict(h, dist.Normal(0.0, sigma), level)
 

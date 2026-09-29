@@ -33,6 +33,7 @@ classifiers = [
 dependencies = [
     "arviz>=1.2.0",
     "beartype>=0.22",
+    "equinox>=0.13",
     # <0.11.1 until numpyro releases pyro-ppl/numpyro#2245 (render_model provenance on jax 0.11.1)
     "jax>=0.10.0,<0.11.3",
     "jaxtyping>=0.3.11",
@@ -62,8 +63,8 @@ dev = [
     "pytest-split>=0.10",
     "pytest-xdist",
     "pytest>=8.0",
-    "ruff==0.16.8",
-    "ty==0.0.83",
+    "ruff==0.16.9",
+    "ty==0.0.84",
     "optax>=0.2",
     "blackjax>=1.6,<2",
     "huggingface-hub>=1.22.0",
@@ -73,7 +74,9 @@ docs = [
     "great-docs==0.17.0",
     "dynestyx>=0.5.1",
 ]
-cuda = ["jax[cuda12]"]
+# jax-cuda12-plugin ships no darwin wheel; the marker keeps `uv workspace metadata`
+# (called by the ty pre-commit hook) working on macOS while `all_cuda` on Linux is unchanged.
+cuda = ["jax[cuda12]; sys_platform == 'linux'"]
 all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
 all_cuda = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs,cuda]"]
 
@@ -164,3 +167,18 @@ exclude_lines = [
 
 [tool.ty.environment]
 python-version = "3.12"
+
+# numpyro 0.22 annotates `numpyro.sample`/`numpyro.deterministic` as returning
+# `jax.typing.ArrayLike` (a union with Python scalars), so every indexed, attribute-accessed
+# or Array-typed use of a sampled value is a diagnostic. The package and tests narrow with
+# `jnp.asarray(...)`; the example notebooks are prose-first, so the four rules that union
+# triggers are ignored there instead (nothing else is). Remove once numpyro narrows the
+# primitives' return types (see the issue #116 follow-up notes in the PR that added this).
+[[tool.ty.overrides]]
+include = ["docs/examples/**"]
+
+[tool.ty.overrides.rules]
+not-subscriptable = "ignore"
+invalid-argument-type = "ignore"
+invalid-return-type = "ignore"
+unresolved-attribute = "ignore"
