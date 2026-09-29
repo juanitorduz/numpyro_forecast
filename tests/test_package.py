@@ -99,6 +99,7 @@ def test_all_matches_exported_names() -> None:
         "results_to_dataframe",
         "innovations",
         "ssoe",
+        "time_reparam",
         "to_datatree",
     }
     for name in names:
