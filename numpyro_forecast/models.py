@@ -12,10 +12,10 @@ primitives, and not effect handlers.
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import NamedTuple, cast
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpyro
@@ -43,14 +43,18 @@ class PlateName(StrEnum):
     TIME_FUTURE = "time_future"
 
 
-@dataclass(frozen=True)
-class Horizon:
+class Horizon(eqx.Module):
     """The train/forecast split for a single model call.
 
     An immutable value derived once per model call from the covariate and data
     shapes by `from_data()`; every building block (`innovations()`,
     `markov_series()`, `ssoe()`, `predict()`) takes it as its first
     argument.
+
+    A JAX pytree (an `equinox.Module`): ``data`` is the only leaf, while
+    ``t_obs``, ``future`` and ``duration`` are static metadata. A jitted function
+    that takes a `Horizon` can therefore use the three integers as shapes and
+    recompiles once per horizon length.
 
     Attributes
     ----------
@@ -66,11 +70,11 @@ class Horizon:
     """
 
     data: Array | None
-    t_obs: int
-    future: int
-    duration: int
+    t_obs: int = eqx.field(static=True)
+    future: int = eqx.field(static=True)
+    duration: int = eqx.field(static=True)
 
-    def __post_init__(self) -> None:
+    def __check_init__(self) -> None:
         """Validate that the horizon fields are internally consistent."""
         if self.t_obs < 0 or self.future < 0:
             msg = "t_obs and future must be non-negative"

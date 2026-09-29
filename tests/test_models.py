@@ -1,6 +1,8 @@
 """Tests for the model building blocks (``numpyro_forecast.models``)."""
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
@@ -279,3 +281,29 @@ def test_poisson_local_level_end_to_end() -> None:
     assert bool(jnp.all(fc == jnp.floor(fc)))  # integer-valued counts
     # The forecast median should be in the right ballpark of the true rate.
     assert 2.0 < float(jnp.median(fc)) < 10.0
+
+
+def test_horizon_is_a_pytree_with_static_shapes() -> None:
+    h = Horizon.from_data(jnp.zeros((25, 0)), jnp.ones((20, 1)))
+    # data is the only leaf; the three ints are static metadata.
+    (leaf,) = jax.tree.leaves(h)
+    assert leaf is h.data
+
+    def forecast_zeros(h: Horizon) -> Array:
+        # future is static metadata, so it is a legal shape inside jit and vmap.
+        assert h.data is not None
+        return jnp.zeros((h.future, 1)) + h.data.sum()
+
+    assert jax.jit(forecast_zeros)(h).shape == (5, 1)
+    batched = Horizon.from_data(jnp.zeros((3, 25, 0)), jnp.ones((3, 20, 1)))
+    assert jax.vmap(forecast_zeros)(batched).shape == (3, 5, 1)
+
+
+def test_horizon_unflattens_with_host_leaves() -> None:
+    # The beartype hook checks construction, not tree_unflatten: NumPy leaves are fine.
+    h = Horizon.from_data(jnp.zeros((25, 0)), jnp.ones((20, 1)))
+    host = jax.tree.map(np.asarray, h)
+    assert isinstance(host.data, np.ndarray)
+    assert (host.t_obs, host.future, host.duration) == (20, 5, 25)
+    with pytest.raises(TypeError):
+        Horizon(data=np.ones((20, 1)), t_obs=20, future=5, duration=25)  # ty: ignore[invalid-argument-type]
