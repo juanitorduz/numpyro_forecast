@@ -54,6 +54,7 @@ jobs:
         with:
           name: docs-site
           path: great-docs/_site
+          include-hidden-files: true
 
   # Production site: publish to the root of gh-pages on pushes to main and on
   # published releases (release events run with github.ref set to the tag, so
