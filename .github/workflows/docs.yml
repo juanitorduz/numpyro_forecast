@@ -50,10 +50,14 @@ jobs:
       # API), not the pruned reference of the last release.
       - name: Build docs
         run: make docs ARGS=${{ github.event_name == 'pull_request' && '--unversioned' || '' }}
+      # include-hidden-files: great-docs writes the Agent Skills discovery
+      # manifest under .well-known/ (a dot directory), which upload-artifact
+      # drops by default; without it `npx skills add <site>` returns 404.
       - uses: actions/upload-artifact@v7
         with:
           name: docs-site
           path: great-docs/_site
+          include-hidden-files: true
 
   # Production site: publish to the root of gh-pages on pushes to main and on
   # published releases (release events run with github.ref set to the tag, so

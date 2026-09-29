@@ -23,6 +23,15 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         var,
     )
 
+# The blackjax backend module imports no optional dependency itself (`blackjax` is
+# pulled in lazily by `optional.require()` when a kernel initializes; see
+# tests/test_package.py), so binding it here costs nothing and makes
+# `numpyro_forecast.contrib.blackjax` resolvable by attribute walk from the package:
+# great-docs introspects the `contrib.blackjax.*` reference entries that way (for
+# the API reference and llms-full.txt) and otherwise falls back to static analysis.
+# Kept outside the jaxtyping hook above, so the backend stays uninstrumented exactly
+# as when a user imports it directly.
+import numpyro_forecast.contrib.blackjax  # noqa: F401
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
