@@ -599,7 +599,6 @@ def _validate_markov_default_carry[Carry](carry: Carry, z: Array) -> Carry:
 ```
 
 (`jnp.asarray` the leaves before reading `.shape`/`.dtype` if a Python scalar `init_carry` must stay legal; the existing tests only pass arrays.)
-```
 
 Docstring updates in `markov_series`: the `transition` entry becomes "Per-step ``(carry, x_t) -> dist_t`` callable returning the distribution of the next latent (see `Transition`); the wrapper owns the ``numpyro.sample`` statement."; add an `advance` entry: "Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the next carry from the sampled latent; ``None`` means the carry *is* the latent, ``carry_{t+1} = z_t``, so ``init_carry`` must be a single array shaped like one draw. A vector autoregression with ``p`` lags keeps a ``(p, obs)`` window here."; extend the `Raises` entry with "or if ``advance`` is omitted and ``init_carry`` is not a single array with the shape and dtype of a draw".
 

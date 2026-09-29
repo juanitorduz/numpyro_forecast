@@ -488,7 +488,9 @@ def ou_level(covariates: Array, data: Array | None = None) -> None:
     theta = jnp.asarray(numpyro.sample("theta", dist.LogNormal(-1.5, 0.7)))
     sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
     r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
-    state_space_series(h, "f", y, ou_dynamics(theta, sigma, r), conditioner=conditioner, times=times)
+    state_space_series(
+        h, "f", y, ou_dynamics(theta, sigma, r), conditioner=conditioner, times=times
+    )
 ```
 
 with `times` the irregular observation grid closed over by the model. The same model under `Smoother(smoother_config=ContinuousTimeKFSmootherConfig())` alone, without the `Discretizer`, is the continuous-discrete Kalman smoother: the same posterior at 50 times the cost per gradient (A.11). The robustness caveats of the discretized form are in Section 8.
