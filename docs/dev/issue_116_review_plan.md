@@ -10,6 +10,8 @@
 
 **Spec:** the issue text plus the decisions in the next section. This document is both the design record and the plan.
 
+**Status (2026-09-29):** Tasks 0 to 7 are implemented on branch `feat/issue-116-review` (subagent-driven, one task review each plus a whole-branch review). Task 8, the upstream numpyro annotation track, is the open follow-up; its Step 3 lists the local cleanup that becomes possible once numpyro narrows `numpyro.sample`.
+
 ## Global Constraints
 
 - `AGENTS.md` rules apply to every task: complete type hints checked by `ty`; NumPy docstrings on every public symbol; jaxtyping shape strings with a leading space; no `from __future__ import annotations`; `rng_key` first; integers with four or more digits use underscores; no em-dashes, no hard-wrapped prose, American English.
