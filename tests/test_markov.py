@@ -1,5 +1,6 @@
 """Tests for `markov_series()` (roadmap §7.5)."""
 
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -213,15 +214,20 @@ def test_advance_builds_a_window_carry() -> None:
     assert tr["z_future"]["value"].shape == (3, 1)
 
 
-def test_missing_advance_with_structured_carry_is_rejected() -> None:
-    def transition(window: Array, _: Array | None) -> dist.Distribution:
-        return dist.Normal(window[0], DRIFT)
+@pytest.mark.parametrize(
+    "init_carry", [jnp.zeros((2, 1)), (jnp.zeros((1,)),)], ids=["window", "single_leaf_tuple"]
+)
+def test_missing_advance_with_structured_carry_is_rejected(init_carry: object) -> None:
+    """Without ``advance`` a carry that is not one draw-shaped array raises guided ``ValueError``."""
+
+    def transition(carry: object, _: Array | None) -> dist.Distribution:
+        return dist.Normal(jax.tree.leaves(carry)[0][:1], DRIFT)
 
     covariates = empty_covariates(5)
     h = Horizon.from_data(covariates, jnp.zeros((5, 1)))
 
     def body() -> None:
-        markov_series(h, "z", jnp.zeros((2, 1)), transition)
+        markov_series(h, "z", init_carry, transition)
 
     with pytest.raises(ValueError, match="pass advance="):
         trace(seed(body, random.PRNGKey(0))).get_trace()

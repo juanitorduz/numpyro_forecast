@@ -249,7 +249,8 @@ def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
 def _validate_markov_default_carry[Carry](carry: Carry, z: Array) -> Carry:
     """Require the sampled latent to match the carry when ``advance`` is omitted."""
     leaves = jax.tree.leaves(carry)
-    if len(leaves) != 1 or leaves[0].shape != z.shape or leaves[0].dtype != z.dtype:
+    structure_differs = jax.tree.structure(carry) != jax.tree.structure(z)
+    if structure_differs or leaves[0].shape != z.shape or leaves[0].dtype != z.dtype:
         msg = (
             "markov_series without advance= uses the sampled latent as the next carry, so "
             f"init_carry must be a single array shaped like one draw ({z.dtype}{z.shape}); got "
