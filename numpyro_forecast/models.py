@@ -8,6 +8,11 @@ sample latents and observation sites against it. A model is a plain NumPyro func
 calls the blocks directly. They are ordinary Python functions that call
 ``numpyro.sample`` and ``numpyro.deterministic`` on your behalf: not NumPyro
 primitives, and not effect handlers.
+
+The recursive blocks take plain per-step functions: `markov_series()` a
+`Transition` (and an optional `Advance`), `ssoe()` an `SSOEMean` and an
+`SSOEUpdate`; none of them returns a closure, and the wrapper owns every
+sample site.
 """
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
