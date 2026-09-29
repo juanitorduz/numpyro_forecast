@@ -137,7 +137,7 @@ def _sample_time_block(
     site: str,
     size: int,
     plate_name: str,
-    dist_fn: Callable[[], dist.Distribution],
+    prior: dist.Distribution,
     reparam: Reparam | None,
 ) -> Array:
     """Sample a single time block of ``size`` steps under a time plate at axis ``-2``."""
@@ -145,13 +145,13 @@ def _sample_time_block(
         if reparam is not None:
             stack.enter_context(numpyro.handlers.reparam(config={site: reparam}))
         stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
-        return cast(Array, numpyro.sample(site, dist_fn()))
+        return cast(Array, numpyro.sample(site, prior))
 
 
 def innovations(
     h: Horizon,
     name: str,
-    dist_fn: Callable[[], dist.Distribution],
+    prior: dist.Distribution,
     *,
     reparam: Reparam | None = None,
 ) -> Array:
@@ -172,8 +172,12 @@ def innovations(
         The horizon for the current model call (see `Horizon`).
     name
         Base sample-site name for the in-sample latent.
-    dist_fn
-        Zero-argument callable returning the per-step prior distribution.
+    prior
+        The per-step prior distribution, shared by the in-sample and forecast
+        sites (each time plate expands a copy; the instance is never mutated).
+        Its batch shape is the per-step shape, for example ``()`` for a scalar
+        latent or ``(n_series,)`` under an enclosing series plate; the time axis
+        comes from the plate.
     reparam
         Optional reparameterization (e.g. ``LocScaleReparam``) applied to both
         the in-sample and forecast sites.
@@ -183,12 +187,10 @@ def innovations(
     Array
         The latent over the full horizon with time at axis ``-2``.
     """
-    prefix = _sample_time_block(name, h.t_obs, PlateName.TIME, dist_fn, reparam)
+    prefix = _sample_time_block(name, h.t_obs, PlateName.TIME, prior, reparam)
     if h.future <= 0:
         return prefix
-    suffix = _sample_time_block(
-        f"{name}_future", h.future, PlateName.TIME_FUTURE, dist_fn, reparam
-    )
+    suffix = _sample_time_block(f"{name}_future", h.future, PlateName.TIME_FUTURE, prior, reparam)
     return concat_future(prefix, suffix, axis=-2)
 
 

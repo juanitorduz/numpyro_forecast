@@ -107,15 +107,27 @@ def test_innovations_reparam_applies() -> None:
 
     def body() -> None:
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
-        drift = innovations(
-            h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
-        )
+        drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0))
         predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
 
     tr = trace(seed(body, random.PRNGKey(0))).get_trace()
     assert tr["drift"]["value"].shape == (10, 1)
     # LocScaleReparam introduces a decentered companion site.
     assert any("decentered" in name for name in tr)
+
+
+def test_innovations_shares_one_distribution_across_both_time_plates() -> None:
+    covariates = jnp.zeros((25, 0))
+    h = Horizon.from_data(covariates, jnp.zeros((20, 1)))
+    prior = dist.Normal(0.0, 0.3)
+
+    def body() -> None:
+        innovations(h, "drift", prior)
+
+    tr = trace(seed(body, random.PRNGKey(0))).get_trace()
+    assert tr["drift"]["value"].shape == (20, 1)
+    assert tr["drift_future"]["value"].shape == (5, 1)
+    assert prior.batch_shape == ()  # the plates expand a copy, never the instance
 
 
 def test_predict_forecast_requires_data() -> None:
@@ -164,7 +176,7 @@ def _link_form_body(h: Horizon, covariates: Array) -> None:
     """Random-walk body written with the link form of predict and a shift_loc link."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = innovations(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale))
     predict(h, lambda mu: shift_loc(dist.Normal(0.0, sigma), mu), jnp.cumsum(drift, axis=-2))
 
 
@@ -197,7 +209,7 @@ def test_predict_rejects_link_that_returns_no_distribution() -> None:
     """A link returning the predictor itself fails with a message naming both forms."""
 
     def bad_body(h: Horizon, covariates: Array) -> None:
-        level = innovations(h, "level", lambda: dist.Normal(0.0, 1.0))
+        level = innovations(h, "level", dist.Normal(0.0, 1.0))
         # ty rejects this link statically; the runtime guard covers untyped callers.
         predict(h, lambda mu: mu, jnp.cumsum(level, axis=-2))  # ty: ignore[invalid-argument-type]
 
@@ -208,7 +220,7 @@ def test_predict_rejects_link_that_returns_no_distribution() -> None:
 
 def test_predict_rejects_float_data_for_discrete_obs() -> None:
     def poisson_body(h: Horizon, covariates: Array) -> None:
-        rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        rate = innovations(h, "log_rate", dist.Normal(0.0, 1.0))
         predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
     model = as_model(poisson_body)
@@ -232,7 +244,7 @@ def test_predict_treats_undetermined_support_as_continuous() -> None:
     """An undetermined support must not raise from the discrete-data check."""
 
     def body(h: Horizon, covariates: Array) -> None:
-        level = innovations(h, "level", lambda: dist.Normal(0.0, 1.0))
+        level = innovations(h, "level", dist.Normal(0.0, 1.0))
         predict(h, lambda mu: _UndeterminedSupportNormal(mu, 0.5), jnp.cumsum(level, axis=-2))
 
     with pytest.raises(NotImplementedError, match="cannot be determined statically"):
@@ -245,7 +257,7 @@ def test_predict_treats_undetermined_support_as_continuous() -> None:
 
 def test_predict_accepts_integer_data_for_discrete_obs() -> None:
     def poisson_body(h: Horizon, covariates: Array) -> None:
-        rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, 1.0))
+        rate = innovations(h, "log_rate", dist.Normal(0.0, 1.0))
         predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(rate, axis=-2))
 
     model = as_model(poisson_body)
@@ -259,7 +271,7 @@ def test_poisson_local_level_end_to_end() -> None:
 
     def poisson_body(h: Horizon, covariates: Array) -> None:
         drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 0.5))
-        log_rate = innovations(h, "log_rate", lambda: dist.Normal(0.0, drift_scale))
+        log_rate = innovations(h, "log_rate", dist.Normal(0.0, drift_scale))
         predict(h, lambda eta: dist.Poisson(jnp.exp(eta)), jnp.cumsum(log_rate, axis=-2))
 
     model = as_model(poisson_body)

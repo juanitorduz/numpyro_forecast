@@ -79,9 +79,7 @@ Define a model, fit it with SVI, and draw probabilistic forecasts:
 ...     sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
 ...     nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
 ...     # In-sample innovations at "drift", the forecast suffix at "drift_future".
-...     drift = innovations(
-...         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
-...     )
+...     drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0))
 ...     level = jnp.cumsum(drift, axis=-2)  # random-walk level
 ...     regression = (weight * covariates).sum(axis=-1, keepdims=True)
 ...     prediction = level + bias + regression
@@ -119,7 +117,7 @@ A model is a plain NumPyro function `(covariates, data=None)` whose first line d
 | Building block | What it replaces in raw NumPyro | Sites it registers |
 | --- | --- | --- |
 | `Horizon.from_data(covariates, data)` | Deriving the train/forecast split by hand and carrying `t_obs`, `future` and `duration` around | none |
-| `innovations(h, name, dist_fn)` | Two `numpyro.sample` calls under two time plates, plus the concatenation of prefix and suffix | `<name>`, `<name>_future` |
+| `innovations(h, name, prior)` | Two `numpyro.sample` calls under two time plates, plus the concatenation of prefix and suffix | `<name>`, `<name>_future` |
 | `markov_series(h, name, init_carry, transition)` | Two `numpyro.contrib.control_flow.scan` calls, the second seeded by the first's final carry | `<name>`, `<name>_future` |
 | `ssoe(h, name, y, init_carry, step, noise_dist)` | An in-sample error-feedback `lax.scan` filter, plus a generative forecast scan driven by iid future errors | `<name>_future` only |
 | `predict(h, obs_dist, prediction)` | Slicing the observation distribution along time, conditioning it on the observed prefix and sampling the suffix | `obs` while training; also `obs_future` and the `forecast` deterministic when `h.future > 0` |

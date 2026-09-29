@@ -51,7 +51,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     drift = innovations(
         h,
         "drift",
-        lambda: dist.Normal(0.0, drift_scale),
+        dist.Normal(0.0, drift_scale),
         reparam=LocScaleReparam(centered=centered),
     )
     # Cumulative sum over time is the random-walk level (= the tutorials' scan).
@@ -110,7 +110,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             drift = innovations(
                 h,
                 "drift",
-                lambda: dist.Normal(0.0, drift_scale),
+                dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=destin_centered),
             )
         level = jnp.cumsum(drift, axis=-2)

@@ -209,7 +209,7 @@ def rw_body(h: Horizon, covariates: Array) -> None:
     """Random-walk model body using the model building blocks (shared test helper)."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = innovations(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale))
     predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
 
 
