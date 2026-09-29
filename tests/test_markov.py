@@ -116,7 +116,7 @@ def test_forecast_without_data_rejected_for_hand_built_horizon() -> None:
     """A hand-built ``Horizon`` with ``future > 0`` and no data is rejected.
 
     ``Horizon.from_data`` never produces this combination, so the guard is only
-    reachable by constructing the dataclass directly.
+    reachable by constructing ``Horizon`` directly.
     """
     h = Horizon(data=None, t_obs=5, future=3, duration=8)
 

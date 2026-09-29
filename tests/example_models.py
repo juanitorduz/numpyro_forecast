@@ -6,8 +6,6 @@ mirror the example notebooks under ``docs/examples/`` and act as a regression
 target for the full fit-draw-forecast path.
 """
 
-from typing import cast
-
 import jax
 import jax.numpy as jnp
 import numpyro
@@ -123,7 +121,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             destin_scale = numpyro.sample("destin_scale", dist.LogNormal(-5.0, 5.0))
         scale = origin_scale + destin_scale
 
-        seasonal = cast("Array", origin_seasonal + destin_seasonal)
+        seasonal = jnp.asarray(origin_seasonal + destin_seasonal)
         seasonal_repeat = periodic_repeat(seasonal, duration, axis=-2)
         prediction = level + seasonal_repeat + pairwise
 

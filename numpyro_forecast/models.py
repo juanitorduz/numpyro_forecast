@@ -150,7 +150,7 @@ def _sample_time_block(
         if reparam is not None:
             stack.enter_context(numpyro.handlers.reparam(config={site: reparam}))
         stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
-        return cast(Array, numpyro.sample(site, prior))
+        return jnp.asarray(numpyro.sample(site, prior))
 
 
 def innovations(
@@ -347,7 +347,7 @@ def markov_series[Carry](
                 else nullcontext()
             )
             with ctx, _plate_stack(plates):
-                z = cast(Array, numpyro.sample(site_name, dist_t))
+                z = jnp.asarray(numpyro.sample(site_name, dist_t))
             if advance is not None:
                 return advance(carry, z, x_t), z
             return _validate_markov_default_carry(carry, z), z
@@ -386,7 +386,8 @@ error. In-sample ``eps_t = y_t - mu_t``; over the horizon ``eps_t`` is the drawn
 error and ``y_t = mu_t + eps_t``. An update that needs the mean calls
 ``mean(carry, x_t)`` again (bit-identical, computed once by XLA) rather than
 reconstructing it as ``y_t - eps_t``, which can differ by an ulp. Must preserve
-the carry's tree structure, shapes and dtypes."""
+the carry's tree structure, shapes and dtypes. Like ``mean``, it must not call
+``numpyro.sample``."""
 
 
 class SSOEResult(NamedTuple):
@@ -738,7 +739,7 @@ def ssoe[Carry](
         return SSOEResult(mu=mu, mu_future=empty, y_future=empty)
 
     with numpyro.plate(PlateName.TIME_FUTURE, h.future, dim=_future_plate_dim(noise_dist)):
-        eps = cast(Array, numpyro.sample(f"{name}_future", noise_dist))
+        eps = jnp.asarray(numpyro.sample(f"{name}_future", noise_dist))
     _validate_future_errors(eps, mu, h.future)
     eps_scan = jnp.moveaxis(eps, -2, 0)
 
