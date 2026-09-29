@@ -1,53 +1,28 @@
 """Time-axis reparameterization of in-sample latents (Haar / DCT).
 
-Port of the ``time_reparam`` option of Pyro's forecasting module. Pyro wraps the
-model with ``poutine.reparam(model, time_reparam_haar)`` in
-[`Forecaster` / `HMCForecaster`](https://github.com/pyro-ppl/pyro/blob/dev/pyro/contrib/forecast/forecaster.py),
-and the config callables in
-[`pyro.contrib.forecast.util`](https://github.com/pyro-ppl/pyro/blob/dev/pyro/contrib/forecast/util.py)
-return a ``HaarReparam`` / ``DiscreteCosineReparam`` for every non-observed site
-inside the ``time`` plate. Neighboring steps of a random-walk latent are
-strongly coupled, so its posterior is a long thin ellipse that a diagonal guide
-cannot represent and a diagonal mass matrix explores slowly. Rotating the time
-axis into a wavelet or frequency basis makes that posterior closer to diagonal,
-and because the rotation is orthonormal the model's log density is unchanged:
-only the coordinates the guide or sampler sees change.
+Neighboring steps of a random-walk latent are strongly coupled, so its posterior
+is a long thin ellipse that a mean-field guide cannot represent and a diagonal
+mass matrix explores slowly. `time_reparam()` rotates the time axis of every
+in-sample latent into a wavelet (`numpyro.distributions.transforms.HaarTransform`)
+or frequency (`numpyro.distributions.transforms.DiscreteCosineTransform`) basis
+where that posterior is closer to diagonal. The rotation is orthonormal, so the
+model's log density is unchanged: only the coordinates the guide or sampler sees
+change.
 
-NumPyro 0.22 ships the transforms and reparameterizers
-(`numpyro.distributions.transforms.HaarTransform`,
-`numpyro.distributions.transforms.DiscreteCosineTransform`,
-`numpyro.infer.reparam.UnitJacobianReparam`, added in
-[pyro-ppl/numpyro#2208](https://github.com/pyro-ppl/numpyro/pull/2208)) but not
-Pyro's ``experimental_allow_batch`` flag: the transformed axis must be an event
-dimension, while `~~numpyro_forecast.models.innovations()` samples its
-in-sample site as a batch dimension under ``plate("time", t, dim=-2)``. Applied
-naively the auxiliary site is re-expanded by that plate to ``(t, 1, t, 1)``.
-This module therefore hides the auxiliary site from every enclosing plate
-(``infer={"block_plates": ...}``, the mechanism
-`numpyro.infer.reparam.NeuTraReparam` uses) and lets ``UnitJacobianReparam``
-make the time axis and every plate axis to its right event axes. Plate axes to
-the left of time stay batch axes of the auxiliary site, but without a plate
-frame: the same split as Pyro's ``experimental_allow_batch`` ("the targeted
-batch dimension and all batch dimensions to the right will be converted to
-event dimensions").
+This is the port of the ``time_reparam`` option of Pyro's ``Forecaster`` and
+``HMCForecaster``, which wrap the model with ``poutine.reparam`` and a config
+that returns a ``HaarReparam`` / ``DiscreteCosineReparam`` for every non-observed
+site inside the ``time`` plate
+([source](https://github.com/pyro-ppl/pyro/blob/dev/pyro/contrib/forecast/util.py)).
+Two deliberate differences:
 
-Two deliberate differences from Pyro:
-
-- Pyro's string mapping is swapped relative to its documentation:
-  ``Forecaster(time_reparam="haar")`` routes to ``time_reparam_haar``, whose body
-  returns ``DiscreteCosineReparam`` (and ``"dct"`` returns ``HaarReparam``).
-  Here ``"haar"`` applies ``HaarTransform`` and ``"dct"`` applies
-  ``DiscreteCosineTransform``.
+- Pyro's string mapping is swapped relative to its documentation (its ``"haar"``
+  runs a DCT and its ``"dct"`` a Haar transform). Here ``"haar"`` applies
+  ``HaarTransform`` and ``"dct"`` applies ``DiscreteCosineTransform``.
 - Discrete sites under the ``time`` plate are skipped instead of failing inside
-  ``biject_to``.
-
-The ``smooth`` (DCT) and ``flip`` (Haar) knobs of the underlying transforms are
-intentionally not exposed. ``smooth=1`` whitens a Brownian latent, but
-`~~numpyro_forecast.models.innovations()` sites are the white increments of the
-walk, and on those it manufactures the ill-conditioning the transform is meant
-to remove (NUTS hit the tree-depth cap on every iteration with a minimum
-effective sample size below ten). Pyro's ``Forecaster`` does not expose them
-either.
+  ``biject_to``. The ``smooth`` (DCT) and ``flip`` (Haar) knobs are not exposed:
+  on the white increments `~~numpyro_forecast.models.innovations()` samples they
+  create the ill-conditioning the transform is meant to remove.
 """
 
 from collections.abc import Callable, Mapping
@@ -56,11 +31,17 @@ from typing import Any, Literal, cast
 
 import numpyro
 import numpyro.distributions as dist
-from numpyro.distributions.transforms import DiscreteCosineTransform, HaarTransform, Transform
+from numpyro.distributions import biject_to
+from numpyro.distributions.transforms import (
+    ComposeTransform,
+    DiscreteCosineTransform,
+    HaarTransform,
+    Transform,
+)
 from numpyro.infer.reparam import Reparam, UnitJacobianReparam
-from numpyro.primitives import _PYRO_STACK, Messenger
+from numpyro.primitives import _PYRO_STACK
 
-from numpyro_forecast.models import TIME_PLATE
+from numpyro_forecast.models import PlateName
 from numpyro_forecast.typing import Array, ForecastModel
 
 TimeTransform = Literal["haar", "dct"]
@@ -73,41 +54,20 @@ _TRANSFORMS: dict[str, tuple[Callable[[int], Transform], str]] = {
 }
 
 
-class _BlockPlates(Messenger):
-    """Hide the sample sites issued inside this context from the named plates.
-
-    Entered around the auxiliary ``numpyro.sample`` of `_TimeReparam`, it lands on
-    top of NumPyro's handler stack, so it runs before the plates and can stamp the
-    message with ``infer["block_plates"]`` (which `numpyro.plate` honors by
-    neither expanding the distribution nor pushing its frame) and with a marker
-    that keeps `_TimeReparamConfig` from targeting the auxiliary site again.
-    """
-
-    def __init__(self, plate_names: frozenset[str]) -> None:
-        super().__init__()
-        self.plate_names = plate_names
-
-    def process_message(self, msg: dict[str, Any]) -> None:
-        """Stamp ``block_plates`` and the auxiliary marker onto the message.
-
-        The only message issued inside this context is the auxiliary sample.
-        """
-        infer = msg.setdefault("infer", {})
-        infer["block_plates"] = self.plate_names
-        infer[_AUX_INFER_KEY] = True
-
-
 class _TimeReparam(UnitJacobianReparam):
     """`numpyro.infer.reparam.UnitJacobianReparam` whose auxiliary site ignores its plates.
 
-    This plays the role of Pyro's ``experimental_allow_batch=True`` in
-    [`pyro.infer.reparam.UnitJacobianReparam`](https://github.com/pyro-ppl/pyro/blob/dev/pyro/infer/reparam/unit_jacobian.py):
-    the time axis and every plate axis to its right become event axes of the
-    auxiliary site. The upstream ``__call__`` is reused unchanged; the
-    `_BlockPlates` messenger entered around it hides the auxiliary sample from
-    the plates, and ``UnitJacobianReparam._wrap`` re-expands the base
-    distribution to the full plate shape before making the trailing axes an
-    event, so no axis is lost.
+    `~~numpyro_forecast.models.innovations()` samples the time axis as a batch
+    dimension under ``plate("time", t, dim=-2)``, while ``UnitJacobianReparam``
+    needs the transformed axis to be an event dimension; applied naively, the
+    plate re-expands the auxiliary site to ``(t, 1, t, 1)``. The auxiliary
+    sample therefore carries ``infer["block_plates"]`` (the mechanism
+    `numpyro.infer.reparam.NeuTraReparam` uses; `numpyro.plate` then neither
+    expands the distribution nor pushes its frame), and ``_wrap`` re-expands the
+    base distribution to the full plate shape before the time axis and every
+    plate axis to its right become event axes. Plate axes to the left of time
+    stay batch axes without a plate frame: the split of Pyro's
+    ``experimental_allow_batch=True``.
     """
 
     def __init__(self, transform: Transform, suffix: str, plate_names: frozenset[str]) -> None:
@@ -118,10 +78,18 @@ class _TimeReparam(UnitJacobianReparam):
         self, name: str, fn: dist.Distribution, obs: Array | None
     ) -> tuple[dist.Distribution | None, Array | None]:
         """Sample ``f"{name}_{suffix}"`` outside the plates and return the inverse image."""
-        with _BlockPlates(self.plate_names):
-            return cast(
-                tuple[dist.Distribution | None, Array | None], super().__call__(name, fn, obs)
-            )
+        if obs is not None:
+            msg = "time_reparam does not support observed sites"
+            raise ValueError(msg)
+        fn, expand_shape, event_dim = self._unwrap(fn)
+        transform = ComposeTransform([biject_to(fn.support).inv, self.transform])
+        base_event_dim = max(event_dim, self.transform.domain.event_dim)
+        x = numpyro.sample(
+            f"{name}_{self.suffix}",
+            dist.TransformedDistribution(self._wrap(fn, expand_shape, base_event_dim), transform),
+            infer={"block_plates": self.plate_names, _AUX_INFER_KEY: True},
+        )
+        return None, cast(Array, transform.inv(x))
 
 
 @dataclass(frozen=True)
@@ -152,7 +120,7 @@ class _TimeReparamConfig:
         if getattr(fn.support, "is_discrete", False):
             return None
         plates = [handler for handler in _PYRO_STACK if isinstance(handler, numpyro.plate)]
-        time_plate = next((plate for plate in plates if plate.name == TIME_PLATE), None)
+        time_plate = next((plate for plate in plates if plate.name == PlateName.TIME), None)
         if time_plate is None:
             return None
         dim = cast(int, time_plate.dim) - fn.event_dim

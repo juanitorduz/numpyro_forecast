@@ -24,7 +24,7 @@ from numpyro.infer.util import log_density
 from numpyro.optim import Adam
 
 from numpyro_forecast import draw_posterior, forecast, predict_in_sample, time_reparam
-from numpyro_forecast.models import TIME_PLATE, Horizon, innovations, markov_series, predict
+from numpyro_forecast.models import Horizon, PlateName, innovations, markov_series, predict
 from numpyro_forecast.reparam import TimeTransform
 from numpyro_forecast.typing import Array, ForecastModel
 from tests.conftest import as_model, empty_covariates, get_trace, plate_frames, rw_model
@@ -41,9 +41,6 @@ TRANSFORMS: dict[TimeTransform, Transform] = {
 def _split(model: ForecastModel) -> tuple[ForecastModel, Array, Array]:
     """Return ``model`` with matching zero data ``(T_OBS, 1)`` and covariates ``(T_OBS + FUTURE, 0)``."""
     return model, jnp.zeros((T_OBS, 1)), empty_covariates(T_OBS + FUTURE)
-
-
-# --------------------------------------------------------------------------- targeting
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])
@@ -172,9 +169,9 @@ def test_scope_applied_outside_prefixes_the_auxiliary_once() -> None:
 
 
 def test_targets_the_plate_innovations_opens() -> None:
-    """The shared ``TIME_PLATE`` name is the one `innovations` opens; a rename cannot silently no-op."""
+    """The shared ``PlateName.TIME`` name is the one `innovations` opens; a rename cannot silently no-op."""
     tr = get_trace(rw_model, empty_covariates(T_OBS), jnp.zeros((T_OBS, 1)))
-    assert plate_frames(tr["drift"]) == [(TIME_PLATE, -2, T_OBS)]
+    assert plate_frames(tr["drift"]) == [(PlateName.TIME, -2, T_OBS)]
 
     def body(h: Horizon, covariates: Array) -> None:
         with numpyro.plate("steps", h.t_obs, dim=-2):
@@ -192,9 +189,6 @@ def test_nesting_is_rejected() -> None:
     wrapped = time_reparam(rw_model, "haar")
     with pytest.raises(ValueError, match="cannot be nested"):
         time_reparam(wrapped, "dct")
-
-
-# --------------------------------------------------------------------------- exactness
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])
@@ -225,9 +219,6 @@ def test_log_density_is_unchanged(transform: TimeTransform) -> None:
         rw_model, (train, data), {}, {**scalars, "drift": tr["drift"]["value"]}
     )
     assert jnp.allclose(wrapped_ld, plain_ld, rtol=1e-6)
-
-
-# --------------------------------------------------------------------------- drivers
 
 
 def test_predictive_reads_the_auxiliary_and_ignores_a_stale_deterministic() -> None:

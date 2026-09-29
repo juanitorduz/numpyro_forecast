@@ -81,6 +81,7 @@ reference:
       - models.SSOEStep
       - models.SSOEResult
       - models.predict
+      - models.PlateName
 
   - title: Vector autoregression
     desc: "VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses."
