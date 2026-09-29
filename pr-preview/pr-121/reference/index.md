@@ -31,6 +31,9 @@ The means and sampled future values produced by `ssoe()`.
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
 
+[models.PlateName](models.PlateName.md#numpyro_forecast.models.PlateName)  
+Names of the plates the building blocks open, as `str` members.
+
 
 ## Vector autoregression
 
@@ -78,6 +81,16 @@ Condition a `(t+f)`-length distribution on a `t`-length data prefix.
 
 [surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
 Declare a distribution family elementwise (usable as a decorator).
+
+
+## Reparameterization
+
+
+Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+
+[reparam.time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam)  
+Reparameterize every in-sample time latent of `model` along the time axis.
 
 
 ## Producing draws

@@ -17,6 +17,7 @@
 - [models.SSOEStep](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEStep.html)
 - [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
 - [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
+- [models.PlateName](https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html)
 
 #### Vector autoregression
 > VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
@@ -38,6 +39,11 @@
 - [surgery.slice_time](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.slice_time.html)
 - [surgery.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html)
 - [surgery.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html)
+
+#### Reparameterization
+> Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+- [reparam.time_reparam](https://juanitorduz.github.io/numpyro_forecast/reference/reparam.time_reparam.html)
 
 #### Producing draws
 > Drawing posterior samples and generating forecasts and in-sample predictions.

@@ -41,6 +41,7 @@ from numpyro_forecast import (
     innovations,
     predict,
     predict_in_sample,
+    time_reparam,
 )
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.features import fourier_features
@@ -299,6 +300,55 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 </figure>
 
 
+## Time-axis reparameterizationThe `drift` increments live under the `time` plate, and after the `LocScaleReparam` the site the guide actually sees is `drift_decentered`, a vector of `417` coordinates, one per training week. Their prior is independent, but their posterior is not: the level is the cumulative sum of the increments and the observations pin down the level, so the data constrain sums of neighboring increments far more tightly than any single one. Raising one increment and lowering the next moves the level at a single week and leaves every later week where it was, so the likelihood barely notices; raising both shifts the whole remaining path and every later observation pushes back. The posterior over the block is therefore a long thin ellipse: strong negative correlation between neighbors, tight along some directions and loose along others. A mean-field `AutoNormal` fits one independent Normal per coordinate, so it can only represent an axis-aligned ellipse and has to compromise between the tight and the loose directions.`time_reparam(univariate_model, "dct")` changes the coordinates rather than the model. The discrete cosine transform re-expresses the `417` increments as `417` coefficients of cosine waves of increasing frequency: the first coefficient is the average increment, the next few capture slow trends, and the last ones capture week-to-week wiggles. These waves are exactly the directions the data treat differently (low frequencies move the level and are tightly constrained, high frequencies mostly cancel out and are loose), so in the new coordinates the posterior ellipse is close to axis-aligned and a diagonal guide can cover it. The wrapped model samples an auxiliary site `drift_decentered_dct` and turns `drift_decentered` (and hence `drift`) into deterministic sites. The rotation is orthonormal, so the log density is identical and only the coordinates the mean-field guide has to cover change. We fit the wrapped model with the same guide class, optimizer, seed, and step budget and compare the two ELBO trajectories.
+
+
+    In [9]:
+
+
+``` python
+univariate_model_dct = time_reparam(univariate_model, "dct")
+
+rng_key, key_fit_dct = random.split(rng_key)
+guide_dct = AutoNormal(univariate_model_dct)
+svi_dct = SVI(univariate_model_dct, guide_dct, Adam(step_size=0.005), Trace_ELBO())
+start_seconds = perf_counter()
+svi_result_dct = svi_dct.run(key_fit_dct, 50_000, covariates_train, y_train, progress_bar=False)
+dct_fit_seconds = perf_counter() - start_seconds
+
+fig, axes = plt.subplots(ncols=2, figsize=(12, 5), layout="constrained")
+for ax, start in zip(axes, [0, 30_000], strict=True):
+    steps = np.arange(start, len(svi_result.losses))
+    ax.plot(steps, svi_result.losses[start:], color="C0", label="AutoNormal")
+    ax.plot(
+        steps, svi_result_dct.losses[start:], color="C1", label="AutoNormal + DCT time_reparam"
+    )
+    ax.set(xlabel="SVI step", ylabel="loss")
+axes[0].legend()
+axes[0].set(title="ELBO loss")
+axes[1].set(title="ELBO loss (last 20,000 steps)")
+
+print(f"AutoNormal            mean of last 200 losses: {np.mean(svi_result.losses[-200:]):.2f}")
+print(
+    f"AutoNormal + DCT      mean of last 200 losses: {np.mean(svi_result_dct.losses[-200:]):.2f}"
+)
+print(f"DCT fit wall time: {dct_fit_seconds:.1f} s")
+```
+
+
+    AutoNormal            mean of last 200 losses: -422.42
+    AutoNormal + DCT      mean of last 200 losses: -460.37
+    DCT fit wall time: 1.7 s
+
+
+<figure class="figure">
+<p><img src="forecasting_univariate_files/figure-html/cell-10-output-2.png" class="figure-img" width="1211" height="511" /></p>
+</figure>
+
+
+The reparameterized fit ends lower: the mean of the last `200` losses is about `-460` against `-422` for the plain guide, and it takes roughly the same wall time (a couple of seconds on a laptop CPU). [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) is a change of coordinates with unit Jacobian, so this is the same model and the same posterior; only the geometry the mean-field guide sees changes, from correlated increments to nearly independent cosine coefficients, with the guide now sampling the auxiliary site `drift_decentered_dct` while `drift` is a deterministic site. The DCT run drops much faster in the first few thousand steps, then spends the middle of the run above the baseline before overtaking it near the end, so the gain here is a better optimum rather than a uniformly faster path.
+
+
 # Posterior predictive check
 
 We now look at two things. First the **in-sample** posterior predictive over the training window: here the horizon is zero, so the guide is not resized and we just sample the `obs` site. Then the **forecast** over the test horizon: [draw_posterior](../../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) draws latent samples from the fitted guide, and [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) continues the level from its inferred endpoint and draws the future random-walk increments from the prior.
@@ -306,7 +356,7 @@ We now look at two things. First the **in-sample** posterior predictive over the
 To score both we use the **continuous ranked probability score** (CRPS), a proper scoring rule that compares a single ground-truth value to the whole forecast distribution rather than just a point estimate. It rewards forecasts that are both sharp and calibrated, and lower is better.
 
 
-    In [9]:
+    In [10]:
 
 
 ``` python
@@ -331,8 +381,8 @@ print(
 ```
 
 
-    Train CRPS: 0.0283
-    Test CRPS:  0.0350
+    Train CRPS: 0.0284
+    Test CRPS:  0.0351
     Test 50% coverage: 0.63  (nominal 0.50)
     Test 94% coverage: 0.92  (nominal 0.94)
 
@@ -342,7 +392,7 @@ print(
 The combined view puts everything together: the in-sample posterior predictive (blue) and the forecast over the held-out year (orange), each with 50\\ and 94\\ HDI bands, against the observed series. The forecast tracks the seasonal pattern and the uncertainty widens into the future, as it should.
 
 
-    In [10]:
+    In [11]:
 
 
 ``` python
@@ -415,7 +465,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-11-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-12-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -430,7 +480,7 @@ We use an expanding window: each fold trains on everything up to its split point
 One practical point: because every fold is refit from scratch, each one needs enough optimization to converge. We give SVI `num_steps=50_000` per fold (the same budget as the main fit) so that the larger expanding windows are fit just as well as the small early ones, which keeps the inferred drift volatility stable and the per-fold scores comparable. With too small a budget the later windows would be under-fit, inflating `drift_scale` so that both the forecast bands and the in-sample CRPS grow spuriously with window length.
 
 
-    In [11]:
+    In [12]:
 
 
 ``` python
@@ -480,7 +530,7 @@ def in_sample_fn(
 ```
 
 
-    In [12]:
+    In [13]:
 
 
 ``` python
@@ -524,10 +574,10 @@ print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.9
 
 
     folds: 7
-    mean in-sample CRPS:     0.0300
-    mean out-of-sample CRPS: 0.0376
-    mean out-of-sample 50% coverage: 0.59  (nominal 0.50)
-    mean out-of-sample 94% coverage: 0.96  (nominal 0.94)
+    mean in-sample CRPS:     0.0296
+    mean out-of-sample CRPS: 0.0393
+    mean out-of-sample 50% coverage: 0.54  (nominal 0.50)
+    mean out-of-sample 94% coverage: 0.94  (nominal 0.94)
 
 
 ## Rolling forecasts
@@ -535,7 +585,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.9
 Overlaying every fold's out-of-sample forecast (orange 50\\ and 94\\ HDI bands) on the full observed series gives the rolling-origin view: each band picks up where the previous fold's training data ended, so together they trace a continuous one-year-ahead forecast across the second half of the series. The dashed lines mark the successive train/test splits.
 
 
-    In [13]:
+    In [14]:
 
 
 ``` python
@@ -595,7 +645,7 @@ ax.legend(handles=[band_94, band_50, obs_line, split_lines[0]], loc="lower left"
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-14-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-15-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -613,7 +663,7 @@ The per-fold CRPS shows the model generalizing better as it sees more history. T
 The train-versus-test gap is therefore widest early, when data is scarce, and closes as history accumulates (the two curves even cross near the middle of the series). That closing gap is the healthy signature of a model whose generalization improves with more data, rather than an under-fit whose error would instead grow with window length. If you shrink `num_steps` you will see that healthy pattern break: both curves climb with the window as the larger folds stop converging.
 
 
-    In [14]:
+    In [15]:
 
 
 ``` python
@@ -626,7 +676,7 @@ ax.set(xlabel="train/test split week", ylabel="CRPS", title="CRPS per backtest f
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-15-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-16-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -637,7 +687,7 @@ CRPS rewards sharp *and* calibrated forecasts but does not separate the two, so 
 A small caveat: [eval_coverage](../../../reference/evaluate.eval_coverage.md#numpyro_forecast.evaluate.eval_coverage) measures coverage of the central quantile interval, while the plotted bands are arviz HDI. For the near-symmetric Student-T posterior predictive here the two nearly coincide, so this is a faithful check of the bands shown above.
 
 
-    In [15]:
+    In [16]:
 
 
 ``` python
@@ -656,7 +706,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-16-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-17-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -665,7 +715,7 @@ ax.set(
 The run above expanded the training window fold by fold. Switching to a **rolling** window takes a single argument, `window_type="rolling"`, plus a fixed `train_window`. We rerun the same backtest with a `104`-week (two-year) rolling window, matching the expanding run's seed so the two share identical split points, horizon, stride, sample count, and SVI budget. The only thing that changes is whether each fold keeps the older history or drops it.
 
 
-    In [16]:
+    In [17]:
 
 
 ``` python
@@ -695,21 +745,21 @@ for wk, exp_c, roll_c in zip(split_weeks, oos_crps, rolling_oos_crps, strict=Tru
 
 
     expanding folds: 7  |  rolling folds: 7
-    expanding mean out-of-sample CRPS: 0.0376
-    rolling   mean out-of-sample CRPS: 0.0470
-      split week 104: expanding 0.0708  rolling 0.0726
-      split week 156: expanding 0.0437  rolling 0.0469
-      split week 208: expanding 0.0314  rolling 0.0523
-      split week 260: expanding 0.0250  rolling 0.0343
-      split week 312: expanding 0.0289  rolling 0.0375
-      split week 364: expanding 0.0308  rolling 0.0429
-      split week 416: expanding 0.0326  rolling 0.0428
+    expanding mean out-of-sample CRPS: 0.0393
+    rolling   mean out-of-sample CRPS: 0.0432
+      split week 104: expanding 0.0726  rolling 0.0737
+      split week 156: expanding 0.0414  rolling 0.0444
+      split week 208: expanding 0.0304  rolling 0.0331
+      split week 260: expanding 0.0280  rolling 0.0300
+      split week 312: expanding 0.0328  rolling 0.0354
+      split week 364: expanding 0.0343  rolling 0.0400
+      split week 416: expanding 0.0353  rolling 0.0461
 
 
 Both strategies train each fold on the same fixed `104`-week window at the first split, then diverge: the expanding window keeps every additional year while the rolling window always discards all but the most recent two.
 
 
-    In [17]:
+    In [18]:
 
 
 ``` python
@@ -726,7 +776,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-18-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-19-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -742,7 +792,7 @@ The rolling loop above refits one fold at a time, so each fold pays its own SVI 
 The `metrics` mapping needs no change at all. Metrics are pure JAX scalar kernels, so the partial-bound 50\\ and 94\\ coverage levels defined earlier are scored inside the same single fused computation, right alongside the default CRPS. The two backtests are estimator-equivalent but differ in PRNG stream layout, so the per-fold numbers agree statistically rather than bitwise.
 
 
-    In [18]:
+    In [19]:
 
 
 ``` python
@@ -782,14 +832,14 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 2.8s (incl. compile)  |  loop 20.9s
-    vectorized mean out-of-sample CRPS: 0.0434
-    loop       mean out-of-sample CRPS: 0.0470
-    vectorized mean 50% coverage: 0.50  (nominal 0.50)
-    vectorized mean 94% coverage: 0.95  (nominal 0.94)
+    wall-clock: vectorized 14.9s (incl. compile)  |  loop 22.3s
+    vectorized mean out-of-sample CRPS: 0.0444
+    loop       mean out-of-sample CRPS: 0.0432
+    vectorized mean 50% coverage: 0.47  (nominal 0.50)
+    vectorized mean 94% coverage: 0.94  (nominal 0.94)
 
 
-    In [19]:
+    In [20]:
 
 
 ``` python
@@ -806,7 +856,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="forecasting_univariate_files/figure-html/cell-20-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="forecasting_univariate_files/figure-html/cell-21-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 

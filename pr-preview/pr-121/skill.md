@@ -30,6 +30,7 @@ Plain model functions that register the train/forecast sites for you.
 - `models.SSOEStep`
 - `models.SSOEResult`
 - `models.predict`
+- `models.PlateName`
 
 ### Vector autoregression
 
@@ -54,6 +55,12 @@ Time-axis operations on observation distributions, extensible via singledispatch
 - `surgery.slice_time`
 - `surgery.prefix_condition`
 - `surgery.register_elementwise`
+
+### Reparameterization
+
+Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+- `reparam.time_reparam`
 
 ### Producing draws
 
