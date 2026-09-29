@@ -63,16 +63,19 @@ def var_mean(
     Examples
     --------
     A latent VAR under `~~numpyro_forecast.models.markov_series()`: the transition
-    returns the next-row distribution and the window update, with ``phi`` and the
-    Cholesky factor ``scale_tril`` sampled outside:
+    returns the next-row distribution and ``advance`` shifts the lag window, with
+    ``phi`` and the Cholesky factor ``scale_tril`` sampled outside:
 
     ```python
-    def transition(carry, _):
-        dist_t = dist.MultivariateNormal(var_mean(phi, carry), scale_tril=scale_tril)
-        return dist_t, lambda z: jnp.concatenate([carry[..., 1:, :], z[..., None, :]], axis=-2)
+    def transition(window, _):
+        return dist.MultivariateNormal(var_mean(phi, window), scale_tril=scale_tril)
 
 
-    z = markov_series(h, "z", init_carry=jnp.zeros((n_lags, n_obs)), transition=transition)
+    def advance(window, z_t, _):
+        return jnp.concatenate([window[..., 1:, :], z_t[..., None, :]], axis=-2)
+
+
+    z = markov_series(h, "z", jnp.zeros((n_lags, n_obs)), transition, advance=advance)
     ```
     """
     mu = jnp.einsum("...lij,...lj->...i", phi, lags[..., ::-1, :])

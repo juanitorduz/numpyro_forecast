@@ -142,10 +142,8 @@ def test_markov_series_sites_are_outside_the_time_plate() -> None:
     """Scan sites carry no ``time`` plate, so the reparam is a no-op on them (documented boundary)."""
 
     def body(h: Horizon, covariates: Array) -> None:
-        def transition(
-            carry: Array, _: object
-        ) -> tuple[dist.Distribution, Callable[[Array], Array]]:
-            return dist.Normal(carry, 1.0).to_event(1), lambda z: z
+        def transition(carry: Array, _: object) -> dist.Distribution:
+            return dist.Normal(carry, 1.0).to_event(1)
 
         level = markov_series(h, "level", jnp.zeros((1,)), transition)
         predict(h, dist.Normal(0.0, 1.0), level)

@@ -194,15 +194,17 @@ def innovations(
     return concat_future(prefix, suffix, axis=-2)
 
 
-type Transition[Carry] = Callable[
-    [Carry, PyTree[Array] | None],
-    tuple[dist.Distribution, Callable[[Array], Carry]],
-]
-"""``(carry, x_t) -> (dist_t, carry_fn)`` where ``carry_fn(z_t)`` builds the next
-carry from the *sampled* latent. The wrapper owns the sample statement.
+type Transition[Carry] = Callable[[Carry, PyTree[Array] | None], dist.Distribution]
+"""``(carry, x_t) -> dist_t``: the distribution of the next latent given the carry.
+The wrapper owns the sample statement; see `Advance` for the carry update.
 
 ``Carry`` is the user's carry type (any PyTree), bound per `markov_series()`
 call; ``x_t`` is one row of the ``xs`` PyTree (``None`` for autonomous dynamics)."""
+
+type Advance[Carry] = Callable[[Carry, Array, PyTree[Array] | None], Carry]
+"""``(carry, z_t, x_t) -> carry``: the next carry from the current carry, the
+*sampled* latent ``z_t`` and the exogenous row. Omit it when the carry is the
+latent itself (the AR(1) case); a lag window keeps the last ``p`` samples."""
 
 
 @contextmanager
@@ -244,6 +246,21 @@ def _validate_markov_step_dist(dist_t: dist.Distribution) -> None:
         raise ValueError(msg)
 
 
+def _validate_markov_default_carry[Carry](carry: Carry, z: Array) -> Carry:
+    """Require the sampled latent to match the carry when ``advance`` is omitted."""
+    leaves = jax.tree.leaves(carry)
+    if len(leaves) != 1 or leaves[0].shape != z.shape or leaves[0].dtype != z.dtype:
+        msg = (
+            "markov_series without advance= uses the sampled latent as the next carry, so "
+            f"init_carry must be a single array shaped like one draw ({z.dtype}{z.shape}); got "
+            f"{jax.tree.structure(carry)} with leaves "
+            f"{[f'{leaf.dtype}{leaf.shape}' for leaf in leaves]}; pass advance=(carry, z_t, x_t) "
+            "-> carry to build a structured carry (for example a lag window) from the draw."
+        )
+        raise ValueError(msg)
+    return cast(Carry, z)
+
+
 def markov_series[Carry](
     h: Horizon,
     name: str,
@@ -251,6 +268,7 @@ def markov_series[Carry](
     transition: Transition[Carry],
     xs: PyTree[Array] | None = None,
     *,
+    advance: Advance[Carry] | None = None,
     plates: Sequence[tuple[str, int]] = (),
     reparam_config: Mapping[str, Reparam] | None = None,
 ) -> Array:
@@ -272,13 +290,20 @@ def markov_series[Carry](
     init_carry
         Initial carry passed to the first transition.
     transition
-        Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
-        owns the ``numpyro.sample`` statement.
+        Per-step ``(carry, x_t) -> dist_t`` callable returning the distribution
+        of the next latent (see `Transition`); the wrapper owns the
+        ``numpyro.sample`` statement.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays
         with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
         leaf by leaf into scan layout internally; ``None`` for autonomous
         dynamics.
+    advance
+        Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
+        next carry from the sampled latent; ``None`` means the carry *is* the
+        latent, ``carry_{t+1} = z_t``, so ``init_carry`` must be a single array
+        shaped like one draw. A vector autoregression with ``p`` lags keeps a
+        ``(p, obs)`` window here.
     plates
         ``(name, size)`` pairs opened **inside** the scan body around the sample
         statement (the only placement NumPyro supports for scan + plate).
@@ -297,8 +322,9 @@ def markov_series[Carry](
     ValueError
         If forecasting without observed data (only reachable with a hand-built
         `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-        data), if the per-step shape lacks the observation dimension, or if an
-        enclosing plate is detected.
+        data), if the per-step shape lacks the observation dimension, if an
+        enclosing plate is detected, or if ``advance`` is omitted and
+        ``init_carry`` is not a single array with the shape and dtype of a draw.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
@@ -307,7 +333,7 @@ def markov_series[Carry](
 
     def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
         def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
-            dist_t, carry_fn = transition(carry, x_t)
+            dist_t = transition(carry, x_t)
             _validate_markov_step_dist(dist_t)
             ctx = (
                 numpyro.handlers.reparam(config=dict(reparam_config))
@@ -316,7 +342,9 @@ def markov_series[Carry](
             )
             with ctx, _plate_stack(plates):
                 z = cast(Array, numpyro.sample(site_name, dist_t))
-            return carry_fn(z), z
+            if advance is not None:
+                return advance(carry, z, x_t), z
+            return _validate_markov_default_carry(carry, z), z
 
         return body
 
