@@ -6,7 +6,7 @@
 
 📖 **Documentation:** <https://juanitorduz.github.io/numpyro_forecast/>
 
-📚 **Examples:** 15 worked notebooks, from univariate and hierarchical forecasting to intermittent demand, state space models and VAR: <https://juanitorduz.github.io/numpyro_forecast/docs/examples/>
+📚 **Examples:** many worked notebooks, from univariate and hierarchical forecasting to intermittent demand, state space models and VAR: <https://juanitorduz.github.io/numpyro_forecast/docs/examples/>
 
 Arrays follow Pyro's layout: time at axis `-2`, the observation dimension at `-1`, batch dimensions to the left. Univariate, multivariate and hierarchical models all fit that layout. It is not an AutoML library: there is no model zoo, you define the model and the package gives you a clean path from model to forecasts and scores.
 
@@ -28,7 +28,7 @@ Optional extras:
 - `optax`: optax optimizers for SVI, wrapped with `numpyro.optim.optax_to_numpyro`.
 - `blackjax`: the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`.
 - `cuda`: the CUDA jax plugin (Linux only), see [Scaling to GPU](#scaling-to-gpu).
-- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The [state space example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html) additionally needs `pip install "dynestyx>=0.5.1"`.
+- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The [dynestyx state space model integration example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html) additionally needs `pip install "dynestyx>=0.5.1"`.
 
 ## Quickstart
 
