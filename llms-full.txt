@@ -2112,6 +2112,460 @@ ValueError
 Optional backends behind pyproject extras (never imported by default).
 
 
+BlackjaxNUTSKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, num_adaptation_steps: int = 500, target_acceptance_rate: float = 0.8) -> None
+
+BlackJAX NUTS with Stan-style window adaptation.
+
+Adaptation (step size and inverse mass matrix) runs once in
+`_BlackjaxKernel.init()` via ``blackjax.window_adaptation``; each MCMC step
+is then a single tuned NUTS step.
+
+Run configuration
+-----------------
+Pass this kernel to `numpyro.infer.MCMC` with **``chain_method="sequential"``
+only**. With more than one chain, ``chain_method="vectorized"`` hands
+`_BlackjaxKernel.init()` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
+rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
+``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
+package and shares the same single-key assumption.
+Also pass **``num_warmup=0``**: adaptation runs once inside `_BlackjaxKernel.init()`
+(via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
+of that are simply discarded work, not additional tuning.
+
+Parameters
+----------
+model
+    The NumPyro model to sample from.
+num_adaptation_steps
+    Number of window-adaptation steps.
+target_acceptance_rate
+    Target acceptance probability for dual-averaging step-size adaptation.
+
+BlackjaxMCLMCKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, num_tuning_steps: int = 500) -> None
+
+BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
+
+The step size, trajectory length ``L``, and diagonal preconditioner (inverse
+mass matrix) are tuned once in `_BlackjaxKernel.init()` via
+``blackjax.mclmc_find_L_and_step_size``; each MCMC step is then a single
+tuned MCLMC step.
+
+Run configuration
+-----------------
+Pass this kernel to `numpyro.infer.MCMC` with **``chain_method="sequential"``
+only**. With more than one chain, ``chain_method="vectorized"`` hands
+`_BlackjaxKernel.init()` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
+rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
+``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
+package and shares the same single-key assumption.
+Also pass **``num_warmup=0``**: tuning runs once inside `_BlackjaxKernel.init()`
+(via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
+on top of that are simply discarded work, not additional tuning.
+
+Parameters
+----------
+model
+    The NumPyro model to sample from.
+num_tuning_steps
+    Number of tuning steps for ``L`` and the step size.
+
+BlackjaxCustomKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, build_fn: collections.abc.Callable[..., object]) -> None
+
+Adapt an arbitrary BlackJAX sampler via a user-supplied ``build_fn``.
+
+The escape hatch for kernels without a dedicated wrapper. ``build_fn`` receives
+``(rng_key, logdensity_fn, position, num_warmup)`` and must return
+``(inner_state, step_fn)``, where ``inner_state`` exposes ``.position`` over the
+same sites as the model and ``step_fn`` has signature
+``(rng_key, inner_state) -> (inner_state, info)``. The base class validates the
+returned state's key set and raises `TypeError` if it is malformed.
+
+Run configuration
+-----------------
+Pass this kernel to `numpyro.infer.MCMC` with **``chain_method="sequential"``
+only**. With more than one chain, ``chain_method="vectorized"`` hands
+`_BlackjaxKernel.init()` a stacked ``rng_key`` of shape ``(num_chains, 2)``
+rather than vmapping a per-chain call, and the ``jax.random.split`` inside ``init``
+rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
+``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
+package and shares the same single-key assumption.
+Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
+once inside `_BlackjaxKernel.init()`, so any NumPyro-driven warmup steps
+on top of that are simply discarded work, not additional tuning.
+
+Parameters
+----------
+model
+    The NumPyro model to sample from.
+build_fn
+    The blackjax build callable described above.
+
+PathfinderFit(state: Any, model: numpyro_forecast.typing.ForecastModel, covariates: jax.Array, data: jax.Array, elbo: float) -> None
+
+The result of fitting a forecasting model with BlackJAX Pathfinder.
+
+A plain-data (picklable) container: it holds the raw blackjax
+``PathfinderState``, the model and its data/covariates (needed to rebuild the
+unconstrained-to-constrained transform when drawing), and the fitted ELBO.
+Draws are produced lazily by `pathfinder_samples()`.
+
+Attributes
+----------
+state
+    The blackjax ``PathfinderState`` (the variational approximation).
+model
+    The forecasting model that was fit.
+covariates
+    In-sample covariates used at fit time (time at axis ``-2``).
+data
+    In-sample data used at fit time (time at axis ``-2``).
+elbo
+    The evidence lower bound of the fitted approximation.
+
+fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
+
+Fit a forecasting model with BlackJAX Pathfinder variational inference.
+
+PRNG: ``rng_key`` is split into a model-initialization stream and a
+Pathfinder-approximation stream.
+
+Parameters
+----------
+rng_key
+    PRNG key for initialization and the Pathfinder run.
+model
+    The forecasting model callable (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+num_elbo_samples
+    Number of Monte Carlo samples used to estimate the ELBO along the
+    L-BFGS optimization path.
+ftol
+    L-BFGS relative function-value tolerance (convergence criterion).
+maxiter
+    Maximum number of L-BFGS iterations (blackjax's default is ``30``).
+    Models with per-step time latents typically need far more: the default
+    suits tens of parameters, while a few hundred parameters (e.g. a
+    400-step random walk) converge around ``1_000``.
+maxcor
+    L-BFGS history size; caps the rank of the low-rank-plus-diagonal
+    covariance correction at roughly ``2 * maxcor``. High-dimensional
+    posteriors need it raised well above the default of ``10``.
+maxls
+    Maximum number of line-search steps per L-BFGS iteration.
+gtol
+    L-BFGS gradient-norm convergence tolerance.
+init_params
+    Optional initial unconstrained position, overriding NumPyro's own
+    initialization draw (``param_info.z``); ``initialize_model`` still runs
+    regardless, since it also builds the potential/postprocess functions.
+
+Returns
+-------
+PathfinderFit
+    The fitted variational approximation.
+
+See Also
+--------
+fit_multipathfinder
+    The recommended entry point: runs several L-BFGS paths in parallel and
+    combines them (see `multipathfinder_samples()`), instead of relying
+    on this single path's local normal approximation.
+
+Notes
+-----
+Runs with `_stable_bfgs_sample()` patched into blackjax (via
+`_ensure_stable_bfgs_sample()`): upstream's ``bfgs_sample`` underflows its
+log-determinant beyond a few hundred parameters, which floors every path ELBO
+at ``-inf`` and makes the returned state garbage.
+
+pathfinder_samples(rng_key: jax.Array, fit: numpyro_forecast.contrib.blackjax.PathfinderFit, num_samples: int, *, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
+
+Draw ``num_samples`` posterior samples from a fitted Pathfinder approximation.
+
+The returned dict has the sample axis leading and is ready to pass to
+`~~numpyro_forecast.predictive.forecast()` or NumPyro's
+``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
+Chunking and device offload are delegated to the shared
+`~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+memory-bounding contract applies.
+
+PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
+split into a model-initialization stream and a Pathfinder-sampling stream (the
+init param draws are unused, but the streams are kept isolated).
+
+Parameters
+----------
+rng_key
+    PRNG key.
+fit
+    A fit from `fit_pathfinder()`.
+num_samples
+    Number of posterior draws.
+batch_size
+    Optional chunk size for the drawing itself; see
+    `~~numpyro_forecast.predictive.draw_posterior()` (the same
+    memory/reproducibility contract applies).
+device
+    Where each chunk of draws is moved as soon as it is drawn; see
+    `~~numpyro_forecast.predictive.draw_posterior()`, including
+    for the NumPy path taken when the JAX CPU backend is not initialized and
+    for the rules on mixing a host-committed result with other arrays.
+
+Returns
+-------
+dict[str, Array]
+    Posterior samples of the latent sites, sample axis leading (with
+    ``device="host"``: leaves committed to the CPU device, or NumPy arrays
+    when no CPU backend is initialized).
+
+Raises
+------
+ValueError
+    If ``num_samples`` or ``batch_size`` is not positive.
+HostMemoryKindError
+    If ``device="pinned_host"`` is requested on a device that exposes no
+    host memory kind (see
+    `~~numpyro_forecast._offload._host_memory_kind()`).
+DevicePlatformError
+    If ``device`` names a platform whose backend is not initialized (see
+    `~~numpyro_forecast._offload._resolve_device()`).
+
+Warns
+-----
+UserWarning
+    If ``device="cpu"`` is requested and the JAX CPU backend is not
+    initialized, so the draws take the NumPy path of ``"host"`` instead.
+
+MultiPathfinderFit(state: Any, model: numpyro_forecast.typing.ForecastModel, covariates: jax.Array, data: jax.Array, elbos: tuple[float, ...], log_weights: jax.Array, pareto_k: float) -> None
+
+The result of fitting a forecasting model with multi-path BlackJAX Pathfinder.
+
+A plain-data (picklable) container, mirroring `PathfinderFit`: it holds
+the raw blackjax ``MultipathfinderState`` (the pooled per-path approximations),
+the model and its data/covariates, the per-path ELBOs, and the Pareto-smoothed
+importance sampling (PSIS) weights/diagnostic over the pooled draws. Draws are
+produced lazily by `multipathfinder_samples()`.
+
+Attributes
+----------
+state
+    The blackjax ``MultipathfinderState`` (per-path ``PathfinderState`` objects,
+    the pooled samples, and their log target/approximation densities).
+model
+    The forecasting model that was fit.
+covariates
+    In-sample covariates used at fit time (time at axis ``-2``).
+data
+    In-sample data used at fit time (time at axis ``-2``).
+elbos
+    The evidence lower bound of each path's fitted approximation, in path
+    order; converted eagerly with ``float()`` so pickling this fit never
+    carries JAX tracers.
+log_weights
+    Normalized PSIS log importance weights over the flattened pool of
+    ``num_paths * num_elbo_samples`` draws (path-major, matching
+    ``state.samples``); a fit-time diagnostic, valid only for that exact
+    stored pool. `multipathfinder_samples()` draws fresh samples and
+    recomputes its own weights, so it never consumes these.
+pareto_k
+    The Pareto shape-parameter diagnostic for the fit-time PSIS weights:
+    below ``0.5`` is reliable, ``0.5`` to ``0.7`` is borderline, and above
+    ``0.7`` indicates the importance weights are unreliable.
+    `multipathfinder_samples()` reads it to decide whether
+    ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
+
+fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, initial_positions: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
+
+Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
+
+Runs ``num_paths`` independent single-path Pathfinder approximations in
+parallel (vmapped L-BFGS runs, by default each from its own fresh
+``init_to_uniform`` starting point) and scores the pooled per-path draws
+with Pareto-smoothed importance sampling (PSIS), so the returned fit is not
+tied to a single mode. This is the recommended entry point over
+`fit_pathfinder()`: a single L-BFGS path can settle in one mode and its
+local normal approximation may not reflect the rest of a multimodal or
+otherwise hard posterior. The PSIS weights computed here are a fit-time
+diagnostic; the draws themselves come from `multipathfinder_samples()`,
+which resamples fresh per-path draws and reads ``pareto_k`` to pick between
+PSIS and ELBO-weighted path sampling.
+
+PRNG: ``rng_key`` is split into a model-initialization stream and a
+multipath-approximation stream; the initialization stream is further split
+into one subkey per path so that (when ``initial_positions`` is not
+supplied) every path starts from its own independent ``init_to_uniform``
+draw, exactly the diverse starting points multipath Pathfinder wants.
+
+Parameters
+----------
+rng_key
+    PRNG key for initialization and the multipath Pathfinder run.
+model
+    The forecasting model callable (OOP instance or functional model).
+data
+    In-sample data with time at axis ``-2``.
+covariates
+    Covariates with time at axis ``-2`` and the same duration as ``data``.
+num_paths
+    Number of independent L-BFGS paths to run in parallel (vmapped).
+num_elbo_samples
+    Number of Monte Carlo samples drawn per path to estimate its ELBO and
+    to build the pooled sample used for PSIS resampling.
+maxiter
+    Maximum number of L-BFGS iterations per path.
+maxcor
+    L-BFGS history size; caps the rank of the low-rank-plus-diagonal
+    covariance correction at roughly ``2 * maxcor``. High-dimensional
+    posteriors need it raised well above the default of ``10``.
+maxls
+    Maximum number of line-search steps per L-BFGS iteration.
+gtol
+    L-BFGS gradient-norm convergence tolerance.
+ftol
+    L-BFGS relative function-value convergence tolerance.
+initial_positions
+    Optional starting positions, one per path, overriding the default
+    per-path ``init_to_uniform`` draws. Every leaf must already carry a
+    leading axis of size ``num_paths`` (validated; a mismatch raises
+    ``ValueError``).
+
+Returns
+-------
+MultiPathfinderFit
+    The fitted multipath approximation together with its per-path ELBOs
+    and the fit-time PSIS log weights/``pareto_k`` diagnostic over the
+    pooled draws.
+
+Raises
+------
+ValueError
+    If ``num_paths`` is not positive, or ``initial_positions`` is supplied
+    without a leading axis of size ``num_paths`` on every leaf.
+
+Warns
+-----
+UserWarning
+    If one or more per-path ELBOs are non-finite (raise ``maxiter``/``maxcor``
+    or inspect ``fit.elbos``), or if the PSIS ``pareto_k`` diagnostic exceeds
+    ``0.7``, in which case ``multipathfinder_samples(..., resample="auto")``
+    falls back to ELBO-weighted path sampling (increase
+    ``num_paths``/``maxiter``/``maxcor``, or fall back to MCMC). Neither
+    condition raises: the fit is always returned, carrying everything needed
+    to inspect and diagnose it.
+
+Notes
+-----
+Runs with `_stable_bfgs_sample()` patched into blackjax (via
+`_ensure_stable_bfgs_sample()`, called before
+``blackjax.vi.multipathfinder.multi_approximate``): ``multi_approximate``
+calls ``approximate``/``sample`` imported from ``blackjax.vi.pathfinder``,
+whose module globals hold ``bfgs_sample``, so patching that module (as
+`fit_pathfinder()` already does) covers the multipath route too.
+
+multipathfinder_samples(rng_key: jax.Array, fit: numpyro_forecast.contrib.blackjax.MultiPathfinderFit, num_samples: int, *, resample: Literal['auto', 'psis', 'elbo'] = 'auto', batch_size: int | None = None, device: jaxlib._jax.Device | str | None = None) -> dict[str, jax.Array | numpy.ndarray]
+
+Draw ``num_samples`` posterior samples from a fitted multipath Pathfinder fit.
+
+Every call draws fresh unconstrained samples from each path's fitted normal
+approximation (``num_samples`` per path, via ``blackjax.vi.pathfinder.sample``
+vmapped over the paths) and then combines the paths into a single set of
+``num_samples`` draws. Nothing is recycled from the small pool stored at fit
+time, so asking for more draws than that pool held costs nothing in
+duplication. The output contract is identical to
+`~~numpyro_forecast.predictive.draw_posterior()` and
+`pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
+and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
+are delegated to the shared
+`~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+memory-bounding contract applies.
+
+Resampling strategies
+---------------------
+``resample="psis"``
+    Pool the ``num_paths * num_samples`` fresh draws, score them under the
+    model (``logp``) and under their own path's approximation (``logq``),
+    Pareto-smooth the importance ratios, and resample ``num_samples`` of them
+    with replacement. This is the textbook multipath Pathfinder estimator and
+    the most faithful one *when the importance weights behave*.
+``resample="elbo"``
+    Pick a whole path per draw, with probability ``softmax(fit.elbos)`` over
+    the paths whose ELBO is finite (non-finite paths get zero weight, and an
+    all-non-finite fit degrades to a uniform choice), then take one fresh draw
+    from that path. With ELBO gaps of hundreds of nats this collapses onto the
+    single best path, which is the right answer when the paths disagree
+    strongly: no single draw is ever duplicated.
+``resample="auto"`` (default)
+    ``"psis"`` when ``fit.pareto_k <= 0.7``, ``"elbo"`` otherwise.
+
+The gate matters because importance sampling degenerates in high dimensions:
+on a posterior with hundreds of parameters the ratio ``logp - logq`` is
+dominated by a handful of draws, ``pareto_k`` climbs far above ``0.7``, and
+PSIS resampling collapses the answer onto those few draws. ELBO-weighted path
+sampling never concentrates like that, because it reweights *paths* (a handful
+of well-separated numbers) rather than individual draws.
+
+PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
+split into a model-initialization stream (used only to rebuild the
+constraining transform), a per-path sampling stream, and a resampling-index
+stream. The split is the same in every mode, so ``resample="auto"`` produces
+bitwise the same draws as the explicit mode it resolves to.
+
+Parameters
+----------
+rng_key
+    PRNG key.
+fit
+    A fit from `fit_multipathfinder()`.
+num_samples
+    Number of posterior draws.
+resample
+    How to combine the per-path draws: ``"auto"`` (default), ``"psis"``, or
+    ``"elbo"``; see "Resampling strategies" above.
+batch_size
+    Optional chunk size for the drawing itself; see
+    `~~numpyro_forecast.predictive.draw_posterior()` (the same
+    memory/reproducibility contract applies). Note that each chunk draws
+    ``num_paths * batch_size`` samples internally.
+device
+    Where each chunk of draws is moved as soon as it is drawn; see
+    `~~numpyro_forecast.predictive.draw_posterior()`, including
+    for the NumPy path taken when the JAX CPU backend is not initialized and
+    for the rules on mixing a host-committed result with other arrays.
+
+Returns
+-------
+dict[str, Array]
+    Posterior samples of the latent sites, sample axis leading (with
+    ``device="host"``: leaves committed to the CPU device, or NumPy arrays
+    when no CPU backend is initialized).
+
+Raises
+------
+ValueError
+    If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
+    not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+HostMemoryKindError
+    If ``device="pinned_host"`` is requested on a device that exposes no
+    host memory kind (see
+    `~~numpyro_forecast._offload._host_memory_kind()`).
+DevicePlatformError
+    If ``device`` names a platform whose backend is not initialized (see
+    `~~numpyro_forecast._offload._resolve_device()`).
+
+Warns
+-----
+UserWarning
+    In PSIS mode, if the ``pareto_k`` recomputed on this call's fresh draws
+    exceeds ``0.7``. This is a separate diagnostic from ``fit.pareto_k``,
+    which is computed once over the pool stored at fit time. Also if
+    ``device="cpu"`` is requested and the JAX CPU backend is not
+    initialized, so the draws take the NumPy path of ``"host"`` instead.
+
 
 ## Typing
 
