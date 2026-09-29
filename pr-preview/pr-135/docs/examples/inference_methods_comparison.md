@@ -264,6 +264,9 @@ nuts_comparison.round(1)
 | NUTS + DCT | 55.1         | 314.4           | 558.9           |
 
 
+The rotation pays off in the mixing, not in the wall time. The smallest bulk ESS over the drift increments goes from about `46` to about `559`, twelve times more effective draws from the same `4 x 1_000` iterations, and each draw needs fewer leapfrog steps (`314` against `446`) because the trajectories no longer have to crawl along the thin axis of the ellipse. Each leapfrog step is a little more expensive (the DCT and its gradient are part of every density evaluation), so the run takes longer overall, `55` against `41` seconds, but the effective sample size per second is still about nine times higher. The plain NUTS run would need several times more iterations to match the precision of the reparameterized one on the drift block.
+
+
 ## SVI
 
 NumPyro's `SVI` expects a NumPyro optimizer, so any optax `GradientTransformation` needs one line of glue, `numpyro.optim.optax_to_numpyro`, before it can be passed in. We use that to run a custom optimizer built from two pieces:

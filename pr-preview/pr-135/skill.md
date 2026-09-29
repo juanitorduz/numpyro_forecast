@@ -30,6 +30,7 @@ Plain model functions that register the train/forecast sites for you.
 - `models.SSOEStep`
 - `models.SSOEResult`
 - `models.predict`
+- `models.PlateName`
 
 ### Vector autoregression
 

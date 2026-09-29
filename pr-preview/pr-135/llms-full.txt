@@ -362,6 +362,15 @@ ValueError
     If the observation distribution has discrete support but ``h.data`` is
     not integer-dtyped (the usual mistake for count models).
 
+PlateName(*values)
+
+Names of the plates the building blocks open, as ``str`` members.
+
+``TIME`` is the in-sample plate of `innovations()`; ``TIME_FUTURE`` is the
+forecast-horizon plate of `innovations()` and `ssoe()`.
+`~~numpyro_forecast.reparam.time_reparam()` targets the sites under ``TIME`` by
+name, so both modules read this enum rather than spelling the literal.
+
 
 ## Vector autoregression
 

@@ -632,6 +632,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
+<p>The rotation pays off in the mixing, not in the wall time. The smallest bulk ESS over the drift increments goes from about <code>46</code> to about <code>559</code>, twelve times more effective draws from the same <code>4 x 1_000</code> iterations, and each draw needs fewer leapfrog steps (<code>314</code> against <code>446</code>) because the trajectories no longer have to crawl along the thin axis of the ellipse. Each leapfrog step is a little more expensive (the DCT and its gradient are part of every density evaluation), so the run takes longer overall, <code>55</code> against <code>41</code> seconds, but the effective sample size per second is still about nine times higher. The plain NUTS run would need several times more iterations to match the precision of the reparameterized one on the drift block.</p>
 </section>
 <section id="svi" class="level2">
 <h2 class="anchored" data-anchor-id="svi">SVI</h2>

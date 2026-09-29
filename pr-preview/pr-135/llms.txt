@@ -17,6 +17,7 @@
 - [models.SSOEStep](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEStep.html)
 - [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
 - [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
+- [models.PlateName](https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html)
 
 #### Vector autoregression
 > VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.

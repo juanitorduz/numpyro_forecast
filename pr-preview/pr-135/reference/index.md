@@ -31,6 +31,9 @@ The means and sampled future values produced by `ssoe()`.
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
 
+[models.PlateName](models.PlateName.md#numpyro_forecast.models.PlateName)  
+Names of the plates the building blocks open, as `str` members.
+
 
 ## Vector autoregression
 

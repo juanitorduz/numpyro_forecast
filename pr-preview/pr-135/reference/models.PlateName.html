@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>surgery.prefix_condition() – numpyro_forecast | numpyro_forecast</title>
+<title>models.PlateName – numpyro_forecast | numpyro_forecast</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -122,9 +122,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../theme-init.js"></script>
 
 
-  <link rel="alternate" type="text/markdown" href="surgery.prefix_condition.md">
-  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html">
-  <meta name="description" content="Condition a (t+f)-length distribution on a t-length data prefix.">
+  <link rel="alternate" type="text/markdown" href="models.PlateName.md">
+  <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html">
+  <meta name="description" content="Names of the plates the building blocks open, as str members.">
   <script type="application/ld+json">
 [
   {
@@ -144,23 +144,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "surgery.prefix_condition - numpyro_forecast",
+    "name": "models.PlateName - numpyro_forecast",
     "isPartOf": {
       "@type": "WebSite",
       "name": "numpyro_forecast"
     },
-    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html"
+    "url": "https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html"
   }
 ]
 </script>
   <meta property="og:type" content="website">
-  <meta property="og:title" content="surgery.prefix_condition() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Condition a (t+f)-length distribution on a t-length data prefix.">
-  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html">
+  <meta property="og:title" content="models.PlateName – numpyro_forecast | numpyro_forecast">
+  <meta property="og:description" content="Names of the plates the building blocks open, as str members.">
+  <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="surgery.prefix_condition() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Condition a (t+f)-length distribution on a t-length data prefix.">
+  <meta name="twitter:title" content="models.PlateName – numpyro_forecast | numpyro_forecast">
+  <meta name="twitter:description" content="Names of the plates the building blocks open, as str members.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -210,7 +210,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">surgery.prefix_condition()</span></h1>
+        <h1 class="quarto-secondary-nav-title no-breadcrumbs gd-ref-title"><span class="gd-ref-title-prefix">API</span><span class="gd-ref-title-sep">/</span><span class="gd-ref-title-name">TIME</span></h1>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -284,7 +284,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/models.PlateName.html" class="sidebar-item-text sidebar-link">
+  <a href="../reference/models.PlateName.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">models.PlateName</span></a>
   </div>
 </li>
@@ -356,7 +356,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link active">
+  <a href="../reference/surgery.prefix_condition.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">surgery.prefix_condition</span></a>
   </div>
 </li>
@@ -816,9 +816,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h3 id="toc-title">On this page</h3>
    
   <ul class="collapse">
-  <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
-  <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
-  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
+  <li><a href="#attributes" id="toc-attributes" class="nav-link active" data-scroll-target="#attributes">Attributes</a>
+  <ul class="collapse">
+  <li><a href="#time" id="toc-time" class="nav-link" data-scroll-target="#time"><span class="doc-object-name doc-attribute doc-label doc-label-constant">TIME</span></a></li>
+  <li><a href="#time_future" id="toc-time_future" class="nav-link" data-scroll-target="#time_future"><span class="doc-object-name doc-attribute doc-label doc-label-constant">TIME_FUTURE</span></a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -827,7 +829,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-function doc-label doc-label-function">surgery.prefix_condition()</span></h2>
+<h2 class="title" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 1.25rem;"><span class="doc-object-name doc-class doc-label doc-label-enum">models.PlateName</span></h2>
 </div>
 
 
@@ -845,59 +847,70 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Condition a <code>(t+f)</code>-length distribution on a <code>t</code>-length data prefix.</p>
+<p>Names of the plates the building blocks open, as <code>str</code> members.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L217-L248" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L33-L43" target="_blank" rel="noopener">Source</a></p>
 </div>
-<div class="doc-signature doc-Kind.FUNCTION">
-<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">prefix_condition</span>(
-    <span class="va">noise_dist</span>,
-    <span class="va">data</span>,
-)</span></code></pre></div>
+<div class="doc-signature doc-Kind.CLASS">
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">PlateName</span>()</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e.&nbsp;a time slice <code>[t:]</code>. Only registered elementwise families take this path; correlated families (e.g. <code>MultivariateNormal</code>) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix).</p>
+<p><a href="models.PlateName.html#numpyro_forecast.models.PlateName.TIME" class="gdls-link gdls-code">TIME</a> is the in-sample plate of <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a>; <a href="models.PlateName.html#numpyro_forecast.models.PlateName.TIME_FUTURE" class="gdls-link gdls-code">TIME_FUTURE</a> is the forecast-horizon plate of <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> and <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>. <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a> targets the sites under <a href="models.PlateName.html#numpyro_forecast.models.PlateName.TIME" class="gdls-link gdls-code">TIME</a> by name, so both modules read this enum rather than spelling the literal.</p>
 </div>
-<section id="parameters" class="level2 doc-parameters">
-<h2 class="doc-parameters">Parameters</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code><span class="doc-parameter-name">noise_dist</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
-<dd>
-<p>The observation distribution over the full horizon <code>(*batch, t+f, obs)</code>.</p>
-</dd>
-<dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
-<dd>
-The observed prefix with shape <code>(*batch, t, obs)</code>.
-</dd>
-</dl>
+<section id="attributes" class="level2 doc-attributes">
+<h2 class="doc-attributes">Attributes</h2>
+<table class="gd-summary-table">
+<thead>
+<tr>
+<th>
+Name
+</th>
+<th>
+Description
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="#TIME" class="doc-attribute doc-label doc-label-constant">TIME</a>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#TIME_FUTURE" class="doc-attribute doc-label doc-label-constant">TIME_FUTURE</a>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+<hr style="border: none; border-top: 2px solid #c5c8cd; margin: 1.5rem 0 1rem 0;">
+<section id="time" class="level3">
+<h4 class="anchored" data-anchor-id="time"><span class="doc-object-name doc-attribute doc-label doc-label-constant">TIME</span></h4>
+<div class="doc-subject">
+
+</div>
+<div class="doc-signature doc-attribute">
+<p><code><span class="doc-parameter-name">TIME</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default"><span class="st">"time"</span></span></code></p>
 </div>
 </section>
-<section id="returns" class="level2 doc-returns">
-<h2 class="doc-returns">Returns</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
-<dd>
-The forecast-horizon distribution over <code>(*batch, f, obs)</code>.
-</dd>
-</dl>
+<hr style="border: none; border-top: 2px dotted #b0b4ba; margin: 1.5rem 0 1rem 0;">
+<section id="time_future" class="level3">
+<h4 class="anchored" data-anchor-id="time_future"><span class="doc-object-name doc-attribute doc-label doc-label-constant">TIME_FUTURE</span></h4>
+<div class="doc-subject">
+
 </div>
-</section>
-<section id="raises" class="level2 doc-raises">
-<h2 class="doc-raises">Raises</h2>
-<div class="doc-definition-items">
-<dl>
-<dt><code> <span class="doc-parameter-annotation">NotImplementedError</span></code></dt>
-<dd>
-If <code>noise_dist</code> is not a registered elementwise family (and has no dedicated dispatch).
-</dd>
-</dl>
+<div class="doc-signature doc-attribute">
+<p><code><span class="doc-parameter-name">TIME_FUTURE</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default"><span class="st">"time_future"</span></span></code></p>
 </div>
 
 
+</section>
 </section>
 
 </main>
