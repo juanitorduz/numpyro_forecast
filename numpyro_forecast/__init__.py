@@ -18,6 +18,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         optional,
         predictive,
         priors,
+        reparam,
         surgery,
         var,
     )
@@ -58,6 +59,7 @@ from numpyro_forecast.models import (
     ssoe,
 )
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.reparam import time_reparam
 from numpyro_forecast.surgery import register_elementwise
 
 try:
@@ -101,5 +103,6 @@ __all__ = [
     "register_elementwise",
     "results_to_dataframe",
     "ssoe",
+    "time_reparam",
     "to_datatree",
 ]

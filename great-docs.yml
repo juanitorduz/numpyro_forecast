@@ -81,6 +81,7 @@ reference:
       - models.SSOEStep
       - models.SSOEResult
       - models.predict
+      - models.PlateName
 
   - title: Vector autoregression
     desc: "VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses."
@@ -102,6 +103,11 @@ reference:
       - surgery.slice_time
       - surgery.prefix_condition
       - surgery.register_elementwise
+
+  - title: Reparameterization
+    desc: Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+    contents:
+      - reparam.time_reparam
 
   - title: Producing draws
     desc: Drawing posterior samples and generating forecasts and in-sample predictions.
