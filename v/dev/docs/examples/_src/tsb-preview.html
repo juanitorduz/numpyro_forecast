@@ -267,7 +267,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -547,7 +547,7 @@ empirical demand rate (share of periods with demand): 0.294</code></pre>
 \sigma &amp; \sim \text{HalfNormal}(1).
 \end{align*}</span></p>
 <p>One transparency note on the priors, sharper than in the Croston notebook: <span class="math inline">\text{Normal}(0, 1)</span> on the initial levels allows negative values, which is looser still for the probability channel, whose level is meant to live in <span class="math inline">[0, 1]</span>. We keep the loose prior for comparability with the blog post and the Croston notebook; centering the probability init near the base demand rate, using a <span class="math inline">\text{Beta}</span> init, or replacing the Gaussian <code>obs_prob</code> likelihood with a <span class="math inline">\text{Bernoulli}</span> one (the indicator is, after all, a Bernoulli outcome) are the natural refinements.</p>
-<p>Because both components run the <em>same</em> level model, we write it once and compose with NumPyro’s <a href="https://num.pyro.ai/en/stable/handlers.html#scope"><code>scope</code></a> handler, exactly as the Croston notebook does. The reusable <code>level_channel</code> samples the three component priors (sites <code>smoothing</code>, <code>init</code>, <code>noise</code>) and hands the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block a <code>step</code> that emits the <em>pre-update</em> level (the one-step-ahead mean) and a <code>carry_fn</code> that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an <code>xs</code> input padded with zeros over the horizon by <a href="../../../reference/arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future</a>, so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model’s flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since <a href="../../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> hands the model real future rows. Calling the helper under <code>scope(level_channel, "z", divider="_")</code> and <code>scope(level_channel, "p", divider="_")</code> yields the parameter names <code>z_smoothing</code>, <code>z_init</code>, …, and the innovation sites <code>z_eps_future</code> and <code>p_eps_future</code>. <strong>This is the identical helper used in the Croston notebook</strong>; the entire difference between the two methods is in the <code>tsb</code> body below, in a single argument.</p>
+<p>Because both components run the <em>same</em> level model, we write it once and compose with NumPyro’s <a href="https://num.pyro.ai/en/stable/handlers.html#scope"><code>scope</code></a> handler, exactly as the Croston notebook does. The reusable <code>level_channel</code> samples the three component priors (sites <code>smoothing</code>, <code>init</code>, <code>noise</code>) and hands the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block a <code>mean</code> that emits the <em>pre-update</em> level (the one-step-ahead mean) and an <code>update</code> that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an <code>xs</code> input padded with zeros over the horizon by <a href="../../../reference/arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future</a>, so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model’s flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since <a href="../../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> hands the model real future rows. Calling the helper under <code>scope(level_channel, "z", divider="_")</code> and <code>scope(level_channel, "p", divider="_")</code> yields the parameter names <code>z_smoothing</code>, <code>z_init</code>, …, and the innovation sites <code>z_eps_future</code> and <code>p_eps_future</code>. <strong>This is the identical helper used in the Croston notebook</strong>; the entire difference between the two methods is in the <code>tsb</code> body below, in a single argument.</p>
 <p>The <code>tsb</code> body then does what is specific to TSB:</p>
 <ol type="1">
 <li><strong>Bookkeeping.</strong> From the observed prefix of the covariates it builds the demand indicator <code>is_demand</code> and the float <code>demand_indicator</code>. Where Croston passes <code>is_demand</code> as the event gate to <em>both</em> channels, TSB passes an all-<code>True</code> gate (<code>every_period</code>) to the probability channel, so that channel updates on every period. That one substitution is the method. Over the forecast horizon the all-true gate is padded with zeros like any other: TSB’s multi-step forecast is the flat level at the end of training, the assumption made visible in code rather than left implicit.</li>
@@ -586,69 +586,71 @@ empirical demand rate (share of periods with demand): 0.294</code></pre>
 <span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a><span class="co">        sampled future values) and the observation noise scale.</span></span>
 <span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
 <span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>    smoothing <span class="op">=</span> numpyro.sample(<span class="st">"smoothing"</span>, dist.Beta(concentration1<span class="op">=</span><span class="dv">2</span>, concentration0<span class="op">=</span><span class="dv">20</span>))</span>
-<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>    <span class="co"># jnp.asarray only narrows numpyro's union return type for the type checker.</span></span>
-<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>    init <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"init"</span>, dist.Normal(loc<span class="op">=</span><span class="dv">0</span>, scale<span class="op">=</span><span class="dv">1</span>)))</span>
-<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>    noise <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"noise"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="dv">1</span>)))</span>
-<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> step(level, gate_t):</span>
-<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Emit the pre-update level (the one-step-ahead mean); update only where gated.</span></span>
-<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> level, <span class="kw">lambda</span> y_t, _: jnp.where(</span>
-<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>            gate_t, smoothing <span class="op">*</span> y_t <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> smoothing) <span class="op">*</span> level, level</span>
-<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> ssoe(</span>
-<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>        h,</span>
-<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>        <span class="st">"eps"</span>,</span>
-<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>        values,</span>
-<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>        init[<span class="va">None</span>],</span>
-<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>        step,</span>
-<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>        dist.Normal(loc<span class="op">=</span><span class="dv">0</span>, scale<span class="op">=</span>noise),</span>
-<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>        xs<span class="op">=</span>pad_future(gate, h.future),</span>
-<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result, noise</span>
-<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-51"><a href="#cb10-51" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-52"><a href="#cb10-52" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tsb(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
-<span id="cb10-53"><a href="#cb10-53" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""TSB's method as two scoped exponential smoothing level channels.</span></span>
-<span id="cb10-54"><a href="#cb10-54" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-55"><a href="#cb10-55" aria-hidden="true" tabindex="-1"></a><span class="co">    Identical to the Croston body except the probability channel smooths the</span></span>
-<span id="cb10-56"><a href="#cb10-56" aria-hidden="true" tabindex="-1"></a><span class="co">    demand indicator at *every* period (``every_period`` gate, unmasked</span></span>
-<span id="cb10-57"><a href="#cb10-57" aria-hidden="true" tabindex="-1"></a><span class="co">    likelihood) instead of inter-demand intervals at demand events only.</span></span>
-<span id="cb10-58"><a href="#cb10-58" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-59"><a href="#cb10-59" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters</span></span>
-<span id="cb10-60"><a href="#cb10-60" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
-<span id="cb10-61"><a href="#cb10-61" aria-hidden="true" tabindex="-1"></a><span class="co">    covariates</span></span>
-<span id="cb10-62"><a href="#cb10-62" aria-hidden="true" tabindex="-1"></a><span class="co">        The observed demand series itself, with time at axis ``-2``; only the</span></span>
-<span id="cb10-63"><a href="#cb10-63" aria-hidden="true" tabindex="-1"></a><span class="co">        first ``h.t_obs`` rows are read.</span></span>
-<span id="cb10-64"><a href="#cb10-64" aria-hidden="true" tabindex="-1"></a><span class="co">    data</span></span>
-<span id="cb10-65"><a href="#cb10-65" aria-hidden="true" tabindex="-1"></a><span class="co">        Observed demand with time at axis ``-2``, or ``None`` when the drivers</span></span>
-<span id="cb10-66"><a href="#cb10-66" aria-hidden="true" tabindex="-1"></a><span class="co">        sample the observation sites.</span></span>
-<span id="cb10-67"><a href="#cb10-67" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb10-68"><a href="#cb10-68" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
-<span id="cb10-69"><a href="#cb10-69" aria-hidden="true" tabindex="-1"></a>    y <span class="op">=</span> covariates[..., : h.t_obs, :]  <span class="co"># observed history only; never reads beyond t_obs</span></span>
-<span id="cb10-70"><a href="#cb10-70" aria-hidden="true" tabindex="-1"></a>    is_demand <span class="op">=</span> y <span class="op">&gt;</span> <span class="dv">0</span></span>
-<span id="cb10-71"><a href="#cb10-71" aria-hidden="true" tabindex="-1"></a>    demand_indicator <span class="op">=</span> is_demand.astype(y.dtype)</span>
-<span id="cb10-72"><a href="#cb10-72" aria-hidden="true" tabindex="-1"></a>    every_period <span class="op">=</span> jnp.ones_like(is_demand)  <span class="co"># TSB updates the probability at EVERY period</span></span>
-<span id="cb10-73"><a href="#cb10-73" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-74"><a href="#cb10-74" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Demand-size channel: byte-for-byte identical to Croston (updates only at demand events).</span></span>
-<span id="cb10-75"><a href="#cb10-75" aria-hidden="true" tabindex="-1"></a>    z, z_noise <span class="op">=</span> scope(level_channel, <span class="st">"z"</span>, divider<span class="op">=</span><span class="st">"_"</span>)(h, y, is_demand)</span>
-<span id="cb10-76"><a href="#cb10-76" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Availability channel: smooths the 0/1 indicator every period (the one structural change).</span></span>
-<span id="cb10-77"><a href="#cb10-77" aria-hidden="true" tabindex="-1"></a>    p, p_noise <span class="op">=</span> scope(level_channel, <span class="st">"p"</span>, divider<span class="op">=</span><span class="st">"_"</span>)(h, demand_indicator, every_period)</span>
-<span id="cb10-78"><a href="#cb10-78" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-79"><a href="#cb10-79" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"rate"</span>, z.mu <span class="op">*</span> p.mu)</span>
-<span id="cb10-80"><a href="#cb10-80" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"prob"</span>, p.mu)</span>
-<span id="cb10-81"><a href="#cb10-81" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(<span class="st">"obs"</span>, dist.Normal(loc<span class="op">=</span>z.mu, scale<span class="op">=</span>z_noise).mask(is_demand), obs<span class="op">=</span>h.data)</span>
-<span id="cb10-82"><a href="#cb10-82" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(</span>
-<span id="cb10-83"><a href="#cb10-83" aria-hidden="true" tabindex="-1"></a>        <span class="st">"obs_prob"</span>,</span>
-<span id="cb10-84"><a href="#cb10-84" aria-hidden="true" tabindex="-1"></a>        dist.Normal(loc<span class="op">=</span>p.mu, scale<span class="op">=</span>p_noise),  <span class="co"># not masked: every period contributes</span></span>
-<span id="cb10-85"><a href="#cb10-85" aria-hidden="true" tabindex="-1"></a>        obs<span class="op">=</span>demand_indicator,</span>
-<span id="cb10-86"><a href="#cb10-86" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb10-87"><a href="#cb10-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-88"><a href="#cb10-88" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb10-89"><a href="#cb10-89" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"rate_future"</span>, z.mu_future <span class="op">*</span> p.mu_future)</span>
-<span id="cb10-90"><a href="#cb10-90" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"z_forecast"</span>, z.y_future)</span>
-<span id="cb10-91"><a href="#cb10-91" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"p_forecast"</span>, p.y_future)</span>
-<span id="cb10-92"><a href="#cb10-92" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, z.y_future <span class="op">*</span> p.y_future)</span></code></pre></div>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>    init <span class="op">=</span> numpyro.sample(<span class="st">"init"</span>, dist.Normal(loc<span class="op">=</span><span class="dv">0</span>, scale<span class="op">=</span><span class="dv">1</span>))</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>    noise <span class="op">=</span> numpyro.sample(<span class="st">"noise"</span>, dist.HalfNormal(scale<span class="op">=</span><span class="dv">1</span>))</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> mean(level, _):</span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Emit the pre-update level (the one-step-ahead mean).</span></span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> level</span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> update(level, y_t, _, gate_t):</span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Update only where gated; the gate is frozen over the horizon.</span></span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.where(gate_t, smoothing <span class="op">*</span> y_t <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> smoothing) <span class="op">*</span> level, level)</span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> ssoe(</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>        h,</span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>        <span class="st">"eps"</span>,</span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>        values,</span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>        init[<span class="va">None</span>],</span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>        mean,</span>
+<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>        update,</span>
+<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a>        dist.Normal(loc<span class="op">=</span><span class="dv">0</span>, scale<span class="op">=</span>noise),</span>
+<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a>        xs<span class="op">=</span>pad_future(gate, h.future),</span>
+<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-51"><a href="#cb10-51" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result, noise</span>
+<span id="cb10-52"><a href="#cb10-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-53"><a href="#cb10-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-54"><a href="#cb10-54" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tsb(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
+<span id="cb10-55"><a href="#cb10-55" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""TSB's method as two scoped exponential smoothing level channels.</span></span>
+<span id="cb10-56"><a href="#cb10-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-57"><a href="#cb10-57" aria-hidden="true" tabindex="-1"></a><span class="co">    Identical to the Croston body except the probability channel smooths the</span></span>
+<span id="cb10-58"><a href="#cb10-58" aria-hidden="true" tabindex="-1"></a><span class="co">    demand indicator at *every* period (``every_period`` gate, unmasked</span></span>
+<span id="cb10-59"><a href="#cb10-59" aria-hidden="true" tabindex="-1"></a><span class="co">    likelihood) instead of inter-demand intervals at demand events only.</span></span>
+<span id="cb10-60"><a href="#cb10-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-61"><a href="#cb10-61" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters</span></span>
+<span id="cb10-62"><a href="#cb10-62" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
+<span id="cb10-63"><a href="#cb10-63" aria-hidden="true" tabindex="-1"></a><span class="co">    covariates</span></span>
+<span id="cb10-64"><a href="#cb10-64" aria-hidden="true" tabindex="-1"></a><span class="co">        The observed demand series itself, with time at axis ``-2``; only the</span></span>
+<span id="cb10-65"><a href="#cb10-65" aria-hidden="true" tabindex="-1"></a><span class="co">        first ``h.t_obs`` rows are read.</span></span>
+<span id="cb10-66"><a href="#cb10-66" aria-hidden="true" tabindex="-1"></a><span class="co">    data</span></span>
+<span id="cb10-67"><a href="#cb10-67" aria-hidden="true" tabindex="-1"></a><span class="co">        Observed demand with time at axis ``-2``, or ``None`` when the drivers</span></span>
+<span id="cb10-68"><a href="#cb10-68" aria-hidden="true" tabindex="-1"></a><span class="co">        sample the observation sites.</span></span>
+<span id="cb10-69"><a href="#cb10-69" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb10-70"><a href="#cb10-70" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
+<span id="cb10-71"><a href="#cb10-71" aria-hidden="true" tabindex="-1"></a>    y <span class="op">=</span> covariates[..., : h.t_obs, :]  <span class="co"># observed history only; never reads beyond t_obs</span></span>
+<span id="cb10-72"><a href="#cb10-72" aria-hidden="true" tabindex="-1"></a>    is_demand <span class="op">=</span> y <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb10-73"><a href="#cb10-73" aria-hidden="true" tabindex="-1"></a>    demand_indicator <span class="op">=</span> is_demand.astype(y.dtype)</span>
+<span id="cb10-74"><a href="#cb10-74" aria-hidden="true" tabindex="-1"></a>    every_period <span class="op">=</span> jnp.ones_like(is_demand)  <span class="co"># TSB updates the probability at EVERY period</span></span>
+<span id="cb10-75"><a href="#cb10-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-76"><a href="#cb10-76" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Demand-size channel: byte-for-byte identical to Croston (updates only at demand events).</span></span>
+<span id="cb10-77"><a href="#cb10-77" aria-hidden="true" tabindex="-1"></a>    z, z_noise <span class="op">=</span> scope(level_channel, <span class="st">"z"</span>, divider<span class="op">=</span><span class="st">"_"</span>)(h, y, is_demand)</span>
+<span id="cb10-78"><a href="#cb10-78" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Availability channel: smooths the 0/1 indicator every period (the one structural change).</span></span>
+<span id="cb10-79"><a href="#cb10-79" aria-hidden="true" tabindex="-1"></a>    p, p_noise <span class="op">=</span> scope(level_channel, <span class="st">"p"</span>, divider<span class="op">=</span><span class="st">"_"</span>)(h, demand_indicator, every_period)</span>
+<span id="cb10-80"><a href="#cb10-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-81"><a href="#cb10-81" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"rate"</span>, z.mu <span class="op">*</span> p.mu)</span>
+<span id="cb10-82"><a href="#cb10-82" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"prob"</span>, p.mu)</span>
+<span id="cb10-83"><a href="#cb10-83" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(<span class="st">"obs"</span>, dist.Normal(loc<span class="op">=</span>z.mu, scale<span class="op">=</span>z_noise).mask(is_demand), obs<span class="op">=</span>h.data)</span>
+<span id="cb10-84"><a href="#cb10-84" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(</span>
+<span id="cb10-85"><a href="#cb10-85" aria-hidden="true" tabindex="-1"></a>        <span class="st">"obs_prob"</span>,</span>
+<span id="cb10-86"><a href="#cb10-86" aria-hidden="true" tabindex="-1"></a>        dist.Normal(loc<span class="op">=</span>p.mu, scale<span class="op">=</span>p_noise),  <span class="co"># not masked: every period contributes</span></span>
+<span id="cb10-87"><a href="#cb10-87" aria-hidden="true" tabindex="-1"></a>        obs<span class="op">=</span>demand_indicator,</span>
+<span id="cb10-88"><a href="#cb10-88" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-89"><a href="#cb10-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-90"><a href="#cb10-90" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb10-91"><a href="#cb10-91" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"rate_future"</span>, z.mu_future <span class="op">*</span> p.mu_future)</span>
+<span id="cb10-92"><a href="#cb10-92" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"z_forecast"</span>, z.y_future)</span>
+<span id="cb10-93"><a href="#cb10-93" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"p_forecast"</span>, p.y_future)</span>
+<span id="cb10-94"><a href="#cb10-94" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, z.y_future <span class="op">*</span> p.y_future)</span></code></pre></div>
 </div></div>
 <div id="d4724cc3" class="cell markdown">
 <section id="inference-with-nuts" class="level1">

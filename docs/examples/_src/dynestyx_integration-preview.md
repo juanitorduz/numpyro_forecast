@@ -30,9 +30,8 @@ We load the necessary libraries and set the notebook's configuration.
 import time
 from collections.abc import Callable, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
 from functools import partial
-from typing import Any
+from typing import Any, NamedTuple
 
 import arviz as az
 import dynestyx as dsx
@@ -131,8 +130,7 @@ StateSpaceHandler = Filter | Smoother | LatentPathBuilder | Discretizer
 _CONDITIONING_HANDLERS = (Filter, Smoother, LatentPathBuilder)
 
 
-@dataclass(frozen=True)
-class StateSpaceResult:
+class StateSpaceResult(NamedTuple):
     """Draws produced by `state_space_series` (size-0 time axes when not applicable).
 
     Each field is filled in the mode that produces it and has a size-0 time axis
@@ -213,7 +211,7 @@ def _in_sample_states(
         mean = jnp.stack([d.mean for d in dists])
         cov = jnp.stack([d.covariance_matrix for d in dists])
         state_dist = dist.MultivariateNormal(mean, covariance_matrix=cov).to_event(1)
-        return jnp.asarray(numpyro.sample(f"{name}_smoothed_states", state_dist))
+        return numpyro.sample(f"{name}_smoothed_states", state_dist)
     msg = (
         "the in-sample predictive (a model call with data=None, as made by predict_in_sample "
         "and to_datatree) needs a Smoother or a LatentPathBuilder conditioner; a Filter only "
@@ -451,9 +449,8 @@ For a state space model the prior predictive is a forward simulation. We write a
 ``` python
 def local_level_prior(predict_times: Array) -> None:
     """Sample the scales from their priors and simulate a path from the local level model."""
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-    r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+    q = numpyro.sample("q", dist.HalfNormal(1.0))
+    r = numpyro.sample("r", dist.HalfNormal(1.0))
     dsx.sample("f", local_level_dynamics(q, r), predict_times=predict_times)
 
 
@@ -501,10 +498,10 @@ Every model registers a `level` deterministic site when it is called without dat
 def local_level_direct(covariates: Array, data: Array | None = None) -> None:
     """Local level model with the innovations sampled explicitly."""
     h = Horizon.from_data(covariates, data)
-    q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-    r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
-    x0 = jnp.asarray(numpyro.sample("x0", dist.Normal(0.0, 10.0)))
-    drift = innovations(h, "drift", lambda: dist.Normal(0.0, q), reparam=LocScaleReparam(0))
+    q = numpyro.sample("q", dist.HalfNormal(1.0))
+    r = numpyro.sample("r", dist.HalfNormal(1.0))
+    x0 = numpyro.sample("x0", dist.Normal(0.0, 10.0))
+    drift = innovations(h, "drift", dist.Normal(0.0, q), reparam=LocScaleReparam(0))
     level = x0 + jnp.cumsum(drift, axis=-2)
     if h.data is None:
         numpyro.deterministic("level", level)
@@ -517,8 +514,8 @@ def local_level_state_space(conditioner: StateSpaceHandler) -> ForecastModel:
     def model(covariates: Array, data: Array | None = None) -> None:
         h = Horizon.from_data(covariates, data)
         y = covariates[..., : h.t_obs, :]  # the observed window travels in the covariates
-        q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-        r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+        q = numpyro.sample("q", dist.HalfNormal(1.0))
+        r = numpyro.sample("r", dist.HalfNormal(1.0))
         result = state_space_series(h, "f", y, local_level_dynamics(q, r), conditioner=conditioner)
         if h.data is None:
             numpyro.deterministic("level", result.x_in_sample)
@@ -2720,10 +2717,10 @@ def seasonal_level_state_space(conditioner: StateSpaceHandler) -> ForecastModel:
         h = Horizon.from_data(covariates, data)
         y = covariates[..., : h.t_obs, :1]  # the observed series is the first column
         controls = covariates[..., 1:]  # the Fourier features span the full horizon
-        q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-        r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
-        beta = jnp.asarray(
-            numpyro.sample("beta", dist.Normal(0.0, 1.0).expand([controls.shape[-1]]).to_event(1))
+        q = numpyro.sample("q", dist.HalfNormal(1.0))
+        r = numpyro.sample("r", dist.HalfNormal(1.0))
+        beta = numpyro.sample(
+            "beta", dist.Normal(0.0, 1.0).expand([controls.shape[-1]]).to_event(1)
         )
         state_space_series(
             h,

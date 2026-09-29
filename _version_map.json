@@ -294,7 +294,19 @@
       "dev",
       "0.3.0"
     ],
+    "reference/models.Advance.html": [
+      "dev",
+      "0.3.0"
+    ],
     "reference/models.Horizon.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.PlateName.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/models.SSOEMean.html": [
       "dev",
       "0.3.0"
     ],
@@ -302,7 +314,7 @@
       "dev",
       "0.3.0"
     ],
-    "reference/models.SSOEStep.html": [
+    "reference/models.SSOEUpdate.html": [
       "dev",
       "0.3.0"
     ],
@@ -343,6 +355,10 @@
       "0.3.0"
     ],
     "reference/priors.minnesota_prior.html": [
+      "dev",
+      "0.3.0"
+    ],
+    "reference/reparam.time_reparam.html": [
       "dev",
       "0.3.0"
     ],

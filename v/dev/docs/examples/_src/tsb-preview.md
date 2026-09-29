@@ -232,7 +232,7 @@ Each component gets its own priors,
 
 One transparency note on the priors, sharper than in the Croston notebook: \text{Normal}(0, 1) on the initial levels allows negative values, which is looser still for the probability channel, whose level is meant to live in \[0, 1\]. We keep the loose prior for comparability with the blog post and the Croston notebook; centering the probability init near the base demand rate, using a \text{Beta} init, or replacing the Gaussian `obs_prob` likelihood with a \text{Bernoulli} one (the indicator is, after all, a Bernoulli outcome) are the natural refinements.
 
-Because both components run the *same* level model, we write it once and compose with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, exactly as the Croston notebook does. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, `noise`) and hands the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block a `step` that emits the *pre-update* level (the one-step-ahead mean) and a `carry_fn` that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an `xs` input padded with zeros over the horizon by [pad_future](../../../reference/arrays.pad_future.md#numpyro_forecast.arrays.pad_future), so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model's flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_eps_future`. **This is the identical helper used in the Croston notebook**; the entire difference between the two methods is in the `tsb` body below, in a single argument.
+Because both components run the *same* level model, we write it once and compose with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, exactly as the Croston notebook does. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, `noise`) and hands the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block a `mean` that emits the *pre-update* level (the one-step-ahead mean) and an `update` that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an `xs` input padded with zeros over the horizon by [pad_future](../../../reference/arrays.pad_future.md#numpyro_forecast.arrays.pad_future), so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model's flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_eps_future`. **This is the identical helper used in the Croston notebook**; the entire difference between the two methods is in the `tsb` body below, in a single argument.
 
 The `tsb` body then does what is specific to TSB:
 
@@ -274,22 +274,24 @@ def level_channel(h: Horizon, values: Array, gate: Array) -> tuple[SSOEResult, A
         sampled future values) and the observation noise scale.
     """
     smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    init = jnp.asarray(numpyro.sample("init", dist.Normal(loc=0, scale=1)))
-    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
+    init = numpyro.sample("init", dist.Normal(loc=0, scale=1))
+    noise = numpyro.sample("noise", dist.HalfNormal(scale=1))
 
-    def step(level, gate_t):
-        # Emit the pre-update level (the one-step-ahead mean); update only where gated.
-        return level, lambda y_t, _: jnp.where(
-            gate_t, smoothing * y_t + (1 - smoothing) * level, level
-        )
+    def mean(level, _):
+        # Emit the pre-update level (the one-step-ahead mean).
+        return level
+
+    def update(level, y_t, _, gate_t):
+        # Update only where gated; the gate is frozen over the horizon.
+        return jnp.where(gate_t, smoothing * y_t + (1 - smoothing) * level, level)
 
     result = ssoe(
         h,
         "eps",
         values,
         init[None],
-        step,
+        mean,
+        update,
         dist.Normal(loc=0, scale=noise),
         xs=pad_future(gate, h.future),
     )

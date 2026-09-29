@@ -268,7 +268,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -508,10 +508,10 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <div id="d061d0f7" class="cell markdown">
 <section id="the-model" class="level1">
 <h1>The model</h1>
-<p>The model is a plain NumPyro function <code>(covariates, data=None)</code>. Its first line derives the per-call <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html"><code>Horizon</code></a> from the shapes (the observed data <code>h.data</code>, the number of in-sample steps <code>h.t_obs</code>, and the forecast length <code>h.future</code>), and the recursion goes to the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block. The block takes the driving series <code>y</code> (sliced from the covariates, see the design note above), the initial state, a <code>step</code> function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:</p>
+<p>The model is a plain NumPyro function <code>(covariates, data=None)</code>. Its first line derives the per-call <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html"><code>Horizon</code></a> from the shapes (the observed data <code>h.data</code>, the number of in-sample steps <code>h.t_obs</code>, and the forecast length <code>h.future</code>), and the recursion goes to the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block. The block takes the driving series <code>y</code> (sliced from the covariates, see the design note above), the initial state, a <code>mean</code> function, an <code>update</code> function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:</p>
 <ol type="1">
-<li><strong>In sample.</strong> A deterministic filter consumes the observed series: at each step <code>step(carry, x_t)</code> returns the one-step-ahead mean <span class="math inline">\mu_t</span> and a <code>carry_fn(y_t, eps_t)</code> that advances the state with the innovation <span class="math inline">\varepsilon_t = y_t - \mu_t</span>. The means come back as <code>r.mu</code>; the whole in-sample likelihood is then a single <code>Normal</code> observation site <code>"obs"</code> against them, and we also expose <span class="math inline">\mu_t</span> as the deterministic site <code>"mu"</code> for the in-sample fit plot.</li>
-<li><strong>Out of sample.</strong> When <code>h.future &gt; 0</code> the block draws the horizon innovations from the prior at a separate <code>"eps_future"</code> site (under its own <code>time_future</code> plate), rolls the state forward from the final in-sample state feeding those innovations back through <code>carry_fn</code>, and returns the trajectory as <code>r.y_future</code>, which we register as the deterministic <code>"forecast"</code> site the package’s <a href="../../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a> driver reads. Because <code>"eps_future"</code> does not exist while training, <code>Predictive</code> draws it from the prior at forecast time, exactly like the built-in <code>_future</code> sites.</li>
+<li><strong>In sample.</strong> A deterministic filter consumes the observed series: at each step <code>mean(carry, x_t)</code> returns the one-step-ahead mean <span class="math inline">\mu_t</span> and <code>update(carry, y_t, eps_t, x_t)</code> advances the state with the innovation <span class="math inline">\varepsilon_t = y_t - \mu_t</span>. The means come back as <code>r.mu</code>; the whole in-sample likelihood is then a single <code>Normal</code> observation site <code>"obs"</code> against them, and we also expose <span class="math inline">\mu_t</span> as the deterministic site <code>"mu"</code> for the in-sample fit plot.</li>
+<li><strong>Out of sample.</strong> When <code>h.future &gt; 0</code> the block draws the horizon innovations from the prior at a separate <code>"eps_future"</code> site (under its own <code>time_future</code> plate), rolls the state forward from the final in-sample state feeding those innovations back through <code>update</code>, and returns the trajectory as <code>r.y_future</code>, which we register as the deterministic <code>"forecast"</code> site the package’s <a href="../../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a> driver reads. Because <code>"eps_future"</code> does not exist while training, <code>Predictive</code> draws it from the prior at forecast time, exactly like the built-in <code>_future</code> sites.</li>
 </ol>
 <p>The state update <code>advance</code> is shared by both scans and is the SSOE update above, one innovation driving level, trend, and seasonality. One shape convention to know: rows carry the observation axis, so the scalar state emits a <code>(1,)</code> mean (<code>mu[None]</code>) and reads the scalar innovation back out of the <code>(1,)</code> error (<code>eps_t[0]</code>); the block checks these shapes so a mismatch fails loudly instead of broadcasting silently.</p>
 <p>The priors follow the source post: <span class="math inline">\text{Beta}(5, 5)</span> on the level, trend, and seasonal smoothing parameters (flat enough near the boundaries to avoid a funnel-shaped posterior), <span class="math inline">\text{Beta}(2, 5)</span> on the damping factor (favoring some damping), a tight <span class="math inline">\text{HalfNormal}(0.5)</span> on the noise, and weakly informative priors on the initial states.</p>
@@ -557,19 +557,22 @@ s_t &amp;= s_{t-m} + \gamma \, \varepsilon_t,
 <span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>        seasonality <span class="op">=</span> jnp.concatenate([seasonality[<span class="dv">1</span>:], new_season[<span class="va">None</span>]])</span>
 <span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> (level, trend, seasonality)</span>
 <span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> step(carry, _):</span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> mean(carry, _):</span>
 <span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>        level, trend, seasonality <span class="op">=</span> carry</span>
-<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a>        mu <span class="op">=</span> level <span class="op">+</span> phi <span class="op">*</span> trend <span class="op">+</span> seasonality[<span class="dv">0</span>]</span>
-<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Rows carry the observation axis: emit a (1,) mean, read the scalar error back.</span></span>
-<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> mu[<span class="va">None</span>], <span class="kw">lambda</span> y_t, eps_t: advance(carry, eps_t[<span class="dv">0</span>])</span>
-<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>    init_state <span class="op">=</span> (level_init, trend_init, seasonality_init)</span>
-<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, init_state, step, dist.Normal(<span class="dv">0</span>, noise))</span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Rows carry the observation axis: emit a (1,) mean.</span></span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> (level <span class="op">+</span> phi <span class="op">*</span> trend <span class="op">+</span> seasonality[<span class="dv">0</span>])[<span class="va">None</span>]</span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> update(carry, y_t, eps_t, _):</span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Read the scalar error back from the (1,) row.</span></span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> advance(carry, eps_t[<span class="dv">0</span>])</span>
 <span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"mu"</span>, r.mu)</span>
-<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(<span class="st">"obs"</span>, dist.Normal(r.mu, noise), obs<span class="op">=</span>h.data)</span>
-<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a>    init_state <span class="op">=</span> (level_init, trend_init, seasonality_init)</span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, init_state, mean, update, dist.Normal(<span class="dv">0</span>, noise))</span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"mu"</span>, r.mu)</span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(<span class="st">"obs"</span>, dist.Normal(r.mu, noise), obs<span class="op">=</span>h.data)</span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
 </div></div>
 <div id="3353fefc" class="cell markdown">
 <section id="priors" class="level1">

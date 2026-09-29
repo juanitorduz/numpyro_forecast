@@ -154,12 +154,11 @@ def make_multi_series_model(period: int = 24 * 7) -> ForecastModel:
             drift = innovations(
                 h,
                 "drift",
-                lambda: dist.Normal(0.0, drift_scale),
+                dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=centered),
             )
             with numpyro.plate("hour_of_week", period, dim=-2):
-                # asarray narrows numpyro's union return type for the type checker.
-                seasonal = jnp.asarray(numpyro.sample("seasonal", dist.Normal(0.0, 5.0)))
+                seasonal = numpyro.sample("seasonal", dist.Normal(0.0, 5.0))
 
         level = jnp.cumsum(drift, axis=-2)
         prediction = level + periodic_repeat(seasonal, duration, axis=-2)

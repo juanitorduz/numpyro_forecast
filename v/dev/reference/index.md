@@ -11,7 +11,10 @@ Plain model functions that register the train/forecast sites for you.
 The train/forecast split for a single model call.
 
 [models.Transition](models.Transition.md#numpyro_forecast.models.Transition)  
-`(carry, x_t) -> (dist_t, carry_fn)` where `carry_fn(z_t)` builds the next
+`(carry, x_t) -> dist_t`: the distribution of the next latent given the carry.
+
+[models.Advance](models.Advance.md#numpyro_forecast.models.Advance)  
+`(carry, z_t, x_t) -> carry`: the next carry from the current carry, the
 
 [models.innovations()](models.innovations.md#numpyro_forecast.models.innovations)  
 Sample conditionally iid per-step innovations over the full horizon.
@@ -22,14 +25,20 @@ Sample a Markov (state-space) latent over the full horizon.
 [models.ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe)  
 Run a single-source-of-error recursion over the full horizon.
 
-[models.SSOEStep](models.SSOEStep.md#numpyro_forecast.models.SSOEStep)  
-`(carry, x_t) -> (mu_t, carry_fn)` where `mu_t` is the one-step-ahead mean
+[models.SSOEMean](models.SSOEMean.md#numpyro_forecast.models.SSOEMean)  
+`(carry, x_t) -> mu_t`: the one-step-ahead mean of the current row, shape
+
+[models.SSOEUpdate](models.SSOEUpdate.md#numpyro_forecast.models.SSOEUpdate)  
+`(carry, y_t, eps_t, x_t) -> carry`: the next carry from the row's value and
 
 [models.SSOEResult](models.SSOEResult.md#numpyro_forecast.models.SSOEResult)  
 The means and sampled future values produced by `ssoe()`.
 
 [models.predict()](models.predict.md#numpyro_forecast.models.predict)  
 Register the observation and forecast sites for the model.
+
+[models.PlateName](models.PlateName.md#numpyro_forecast.models.PlateName)  
+Names of the plates the building blocks open, as `str` members.
 
 
 ## Vector autoregression
@@ -42,7 +51,7 @@ VAR components that compose with `ssoe` and `markov_series`: conditional mean, s
 Compute the VAR conditional mean of the next row from a lag window.
 
 [var.var_step()](var.var_step.md#numpyro_forecast.var.var_step)  
-Build the `~~numpyro_forecast.models.ssoe()` step of a VAR from its coefficients.
+Build the `~~numpyro_forecast.models.ssoe()` mean and update of a VAR.
 
 [var.companion_matrix()](var.companion_matrix.md#numpyro_forecast.var.companion_matrix)  
 Stack the VAR coefficients into the companion form of a VAR(1).
@@ -78,6 +87,16 @@ Condition a `(t+f)`-length distribution on a `t`-length data prefix.
 
 [surgery.register_elementwise()](surgery.register_elementwise.md#numpyro_forecast.surgery.register_elementwise)  
 Declare a distribution family elementwise (usable as a decorator).
+
+
+## Reparameterization
+
+
+Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+
+[reparam.time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam)  
+Reparameterize every in-sample time latent of `model` along the time axis.
 
 
 ## Producing draws

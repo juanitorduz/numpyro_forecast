@@ -17,6 +17,11 @@ shapes by `from_data()`; every building block (`innovations()`,
 `markov_series()`, `ssoe()`, `predict()`) takes it as its first
 argument.
 
+A JAX pytree (an `equinox.Module`): ``data`` is the only leaf, while
+``t_obs``, ``future`` and ``duration`` are static metadata. A jitted function
+that takes a `Horizon` can therefore use the three integers as shapes and
+recompiles once per horizon length.
+
 Attributes
 ----------
 data
@@ -54,7 +59,32 @@ __type_params__ attribute.
 
 See PEP 695 for more information.
 
-innovations(h: numpyro_forecast.models.Horizon, name: str, dist_fn: collections.abc.Callable[[], numpyro.distributions.distribution.Distribution], *, reparam: numpyro.infer.reparam.Reparam | None = None) -> jax.Array
+Advance
+
+Type alias.
+
+Type aliases are created through the type statement::
+
+    type Alias = int
+
+In this example, Alias and int will be treated equivalently by static
+type checkers.
+
+At runtime, Alias is an instance of TypeAliasType. The __name__
+attribute holds the name of the type alias. The value of the type alias
+is stored in the __value__ attribute. It is evaluated lazily, so the
+value is computed only if the attribute is accessed.
+
+Type aliases can also be generic::
+
+    type ListOrSet[T] = list[T] | set[T]
+
+In this case, the type parameters of the alias are stored in the
+__type_params__ attribute.
+
+See PEP 695 for more information.
+
+innovations(h: numpyro_forecast.models.Horizon, name: str, prior: numpyro.distributions.distribution.Distribution, *, reparam: numpyro.infer.reparam.Reparam | None = None) -> jax.Array
 
 Sample conditionally iid per-step innovations over the full horizon.
 
@@ -73,8 +103,12 @@ h
     The horizon for the current model call (see `Horizon`).
 name
     Base sample-site name for the in-sample latent.
-dist_fn
-    Zero-argument callable returning the per-step prior distribution.
+prior
+    The per-step prior distribution, shared by the in-sample and forecast
+    sites (each time plate expands a copy; the instance is never mutated).
+    Its batch shape is the per-step shape, for example ``()`` for a scalar
+    latent or ``(n_series,)`` under an enclosing series plate; the time axis
+    comes from the plate.
 reparam
     Optional reparameterization (e.g. ``LocScaleReparam``) applied to both
     the in-sample and forecast sites.
@@ -84,7 +118,7 @@ Returns
 Array
     The latent over the full horizon with time at axis ``-2``.
 
-markov_series(h: numpyro_forecast.models.Horizon, name: str, init_carry: Carry, transition: Transition[Carry], xs: jaxtyping.PyTree[jax.Array] | None = None, *, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
+markov_series(h: numpyro_forecast.models.Horizon, name: str, init_carry: Carry, transition: Transition[Carry], xs: jaxtyping.PyTree[jax.Array] | None = None, *, advance: Advance[Carry] | None = None, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
 
 Sample a Markov (state-space) latent over the full horizon.
 
@@ -104,13 +138,20 @@ name
 init_carry
     Initial carry passed to the first transition.
 transition
-    Per-step ``(carry, x_t) -> (dist_t, carry_fn)`` callable; the wrapper
-    owns the ``numpyro.sample`` statement.
+    Per-step ``(carry, x_t) -> dist_t`` callable returning the distribution
+    of the next latent (see `Transition`); the wrapper owns the
+    ``numpyro.sample`` statement.
 xs
     Optional exogenous inputs over the full horizon: a PyTree of arrays
     with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
     leaf by leaf into scan layout internally; ``None`` for autonomous
     dynamics.
+advance
+    Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
+    next carry from the sampled latent; ``None`` means the carry *is* the
+    latent, ``carry_{t+1} = z_t``, so ``init_carry`` must be a single array
+    shaped like one draw. A vector autoregression with ``p`` lags keeps a
+    ``(p, obs)`` window here.
 plates
     ``(name, size)`` pairs opened **inside** the scan body around the sample
     statement (the only placement NumPyro supports for scan + plate).
@@ -129,24 +170,26 @@ Raises
 ValueError
     If forecasting without observed data (only reachable with a hand-built
     `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-    data), if the per-step shape lacks the observation dimension, or if an
-    enclosing plate is detected.
+    data), if the per-step shape lacks the observation dimension, if an
+    enclosing plate is detected, or if ``advance`` is omitted and
+    ``init_carry`` is not a single array with the shape and dtype of a draw.
 
-ssoe(h: numpyro_forecast.models.Horizon, name: str, y: jax.Array | None, init_carry: Carry, step: SSOEStep[Carry], noise_dist: numpyro.distributions.distribution.Distribution, xs: jaxtyping.PyTree[jax.Array] | None = None) -> numpyro_forecast.models.SSOEResult
+ssoe(h: numpyro_forecast.models.Horizon, name: str, y: jax.Array | None, init_carry: Carry, mean: SSOEMean[Carry], update: SSOEUpdate[Carry], noise_dist: numpyro.distributions.distribution.Distribution, xs: jaxtyping.PyTree[jax.Array] | None = None) -> numpyro_forecast.models.SSOEResult
 
 Run a single-source-of-error recursion over the full horizon.
 
 The building block for innovations state-space models (ARMA, exponential
 smoothing, Croston/TSB levels, censored autoregressions): a deterministic
 filter whose state is driven by the one-step-ahead *error*
-``eps_t = y_t - mu_t``. In-sample it runs ``step`` in a raw ``jax.lax.scan``
-over the observed series ``y`` (no sample sites inside); when forecasting it
-draws iid future errors at the site ``f"{name}_future"`` from ``noise_dist``
-under a ``plate("time_future", h.future)`` and runs a second scan from
-the final in-sample carry with ``y_t = mu_t + eps_t`` fed back through
-``carry_fn``. The guide never sees the future site, because fitting always
-happens with ``future == 0``. Linear-Gaussian members (ARMA, additive
-exponential smoothing) can be marginalized exactly by a Kalman filter; the
+``eps_t = y_t - mu_t``. In-sample it runs ``mean`` and ``update`` in a raw
+``jax.lax.scan`` over the observed series ``y`` (no sample sites inside);
+when forecasting it draws iid future errors at the site
+``f"{name}_future"`` from ``noise_dist`` under a
+``plate("time_future", h.future)`` and runs a second scan from the final
+in-sample carry with ``y_t = mu_t + eps_t`` fed back through ``update``.
+The guide never sees the future site, because fitting always happens with
+``future == 0``. Linear-Gaussian members (ARMA, additive exponential
+smoothing) can be marginalized exactly by a Kalman filter; the
 error-feedback form is the one that also covers the nonlinear members.
 
 The block registers nothing but the error site. The caller writes the
@@ -164,8 +207,8 @@ computed in the model, never from ``h.data``;
 availability mask) through an ``xs`` leaf frozen over the horizon with
 `~~numpyro_forecast.arrays.pad_future()`, and read it from ``x_t``, never
 from ``y_t`` (over the horizon ``y_t = mu_t + eps_t`` is nonzero). With the
-gate off, ``carry_fn`` is the identity and the forecast is the last level
-plus iid errors. `~~numpyro_forecast.evaluate.backtest()` and
+gate off, ``update`` returns the carry unchanged and the forecast is the
+last level plus iid errors. `~~numpyro_forecast.evaluate.backtest()` and
 `~~numpyro_forecast.predictive.forecast()` hand the model *real* future
 covariate rows, so a gate sliced from the full covariates keeps updating on
 sampled values and leaks the test window; scenario inputs such as a future
@@ -210,14 +253,15 @@ y
 init_carry
     Initial carry, any PyTree, already broadcast to the ``(*batch, obs)``
     rows: a scalar level is ``init[None]``, a panel level ``(series,)``.
-    Every leaf must keep its shape and dtype through ``carry_fn``.
-step
-    ``(carry, x_t) -> (mu_t, carry_fn)`` (see `SSOEStep`): ``mu_t`` is
-    the mean for the current row (shape ``(*batch, obs)``, so a scalar
-    state emits ``mu[None]``) and ``carry_fn(y_t, eps_t)`` the next carry.
-    ``carry_fn`` receives the drawn ``eps_t`` over the horizon (not a
-    recomputed ``y_t - mu_t``, which can differ by an ulp), so close over
-    ``mu_t`` when the update needs it.
+    Every leaf must keep its shape and dtype through ``update``.
+mean
+    ``(carry, x_t) -> mu_t`` (see `SSOEMean`): the mean for the current row
+    (shape ``(*batch, obs)``, so a scalar state emits ``mu[None]``).
+update
+    ``(carry, y_t, eps_t, x_t) -> carry`` (see `SSOEUpdate`): the next carry
+    from the row's value and error. Over the horizon it receives the drawn
+    ``eps_t`` (not a recomputed ``y_t - mu_t``, which can differ by an ulp);
+    when the update needs the mean, call ``mean(carry, x_t)`` inside it.
 noise_dist
     Zero-centered per-step error distribution, either an elementwise family
     (event rank 0) or a multivariate family over the observation axis (event
@@ -233,8 +277,8 @@ noise_dist
 xs
     Optional exogenous inputs over the full horizon: a PyTree of arrays with
     time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
-    dict, ...), split at ``h.t_obs`` and handed to ``step`` row by row as
-    ``x_t``; ``None`` for autonomous dynamics.
+    dict, ...), split at ``h.t_obs`` and handed to ``mean`` and ``update``
+    row by row as ``x_t``; ``None`` for autonomous dynamics.
 
 Returns
 -------
@@ -247,37 +291,37 @@ Raises
 ValueError
     If ``y`` is ``None``, lacks the time or observation axis, or does not
     cover exactly ``h.t_obs`` rows; if an ``xs`` leaf lacks the axes or does
-    not span ``h.duration`` rows; if ``step`` returns a mean without the
-    observation axis or a carry with a different tree structure, shape or
-    dtype; if ``step`` calls ``numpyro.sample``; if ``noise_dist`` has event
-    rank 2 or higher, or has event rank 1 inside an enclosing plate at
-    ``dim=-1``; or if it draws errors of the wrong shape or dtype.
+    not span ``h.duration`` rows; if ``mean`` returns a value without the
+    observation axis or ``update`` a carry with a different tree structure,
+    shape or dtype; if ``mean`` or ``update`` calls ``numpyro.sample``; if
+    ``noise_dist`` has event rank 2 or higher, or has event rank 1 inside an
+    enclosing plate at ``dim=-1``; or if it draws errors of the wrong shape
+    or dtype.
 
 Examples
 --------
-ARMA(1,1) with the lambda form of ``carry_fn`` (``y`` is the observed series
-routed through ``covariates``):
+ARMA(1,1) (``y`` is the observed series routed through ``covariates``):
 
->>> def step(carry, _):
+>>> def mean(carry, _):
 ...     y_prev, eps_prev = carry
-...     mu_t = mu + phi * y_prev + theta * eps_prev
-...     return mu_t, lambda y_t, eps_t: (y_t, eps_t)
->>> r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), step, dist.Normal(0.0, sigma))
+...     return mu + phi * y_prev + theta * eps_prev
+>>> def update(carry, y_t, eps_t, _):
+...     return y_t, eps_t
+>>> r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), mean, update, dist.Normal(0.0, sigma))
 >>> numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
 >>> if h.future > 0:
 ...     numpyro.deterministic("forecast", r.y_future)
 
 A gated level (Croston, TSB) with the gate frozen over the horizon:
 
->>> def step(level, gate_t):
-...     def carry_fn(y_t, _):
-...         return jnp.where(gate_t, alpha * y_t + (1 - alpha) * level, level)
-...
-...     return level, carry_fn
+>>> def mean(level, _):
+...     return level
+>>> def update(level, y_t, _, gate_t):
+...     return jnp.where(gate_t, alpha * y_t + (1 - alpha) * level, level)
 >>> gate_full = pad_future(gate, h.future)
->>> r = ssoe(h, "eps", y, init[None], step, dist.Normal(0.0, noise), xs=gate_full)
+>>> r = ssoe(h, "eps", y, init[None], mean, update, dist.Normal(0.0, noise), xs=gate_full)
 
-SSOEStep
+SSOEMean
 
 Type alias.
 
@@ -302,9 +346,38 @@ __type_params__ attribute.
 
 See PEP 695 for more information.
 
-SSOEResult(mu: jaxtyping.Float[Array, '*batch t_obs obs'], mu_future: jaxtyping.Float[Array, '*batch future obs'], y_future: jaxtyping.Float[Array, '*batch future obs']) -> None
+SSOEUpdate
+
+Type alias.
+
+Type aliases are created through the type statement::
+
+    type Alias = int
+
+In this example, Alias and int will be treated equivalently by static
+type checkers.
+
+At runtime, Alias is an instance of TypeAliasType. The __name__
+attribute holds the name of the type alias. The value of the type alias
+is stored in the __value__ attribute. It is evaluated lazily, so the
+value is computed only if the attribute is accessed.
+
+Type aliases can also be generic::
+
+    type ListOrSet[T] = list[T] | set[T]
+
+In this case, the type parameters of the alias are stored in the
+__type_params__ attribute.
+
+See PEP 695 for more information.
+
+SSOEResult(mu: jaxtyping.Float[Array, '*batch t_obs obs'], mu_future: jaxtyping.Float[Array, '*batch future obs'], y_future: jaxtyping.Float[Array, '*batch future obs'])
 
 The means and sampled future values produced by `ssoe()`.
+
+A named tuple, hence a JAX pytree with three array leaves: it unpacks as
+``mu, mu_future, y_future = ssoe(...)`` and passes through ``jax.tree.map``,
+``jax.jit`` and ``jax.vmap`` unchanged.
 
 Attributes
 ----------
@@ -362,6 +435,15 @@ ValueError
     If the observation distribution has discrete support but ``h.data`` is
     not integer-dtyped (the usual mistake for count models).
 
+PlateName(*values)
+
+Names of the plates the building blocks open, as ``str`` members.
+
+``TIME`` is the in-sample plate of `innovations()`; ``TIME_FUTURE`` is the
+forecast-horizon plate of `innovations()` and `ssoe()`.
+`~~numpyro_forecast.reparam.time_reparam()` targets the sites under ``TIME`` by
+name, so both modules read this enum rather than spelling the literal.
+
 
 ## Vector autoregression
 
@@ -398,37 +480,39 @@ Float[Array, "*batch obs"]
 Examples
 --------
 A latent VAR under `~~numpyro_forecast.models.markov_series()`: the transition
-returns the next-row distribution and the window update, with ``phi`` and the
-Cholesky factor ``scale_tril`` sampled outside:
+returns the next-row distribution and ``advance`` shifts the lag window, with
+``phi`` and the Cholesky factor ``scale_tril`` sampled outside:
 
 ```python
-def transition(carry, _):
-    dist_t = dist.MultivariateNormal(var_mean(phi, carry), scale_tril=scale_tril)
-    return dist_t, lambda z: jnp.concatenate([carry[..., 1:, :], z[..., None, :]], axis=-2)
+def transition(window, _):
+    return dist.MultivariateNormal(var_mean(phi, window), scale_tril=scale_tril)
 
 
-z = markov_series(h, "z", init_carry=jnp.zeros((n_lags, n_obs)), transition=transition)
+def advance(window, z_t, _):
+    return jnp.concatenate([window[..., 1:, :], z_t[..., None, :]], axis=-2)
+
+
+z = markov_series(h, "z", jnp.zeros((n_lags, n_obs)), transition, advance=advance)
 ```
 
-var_step(phi: jaxtyping.Float[Array, '*#batch lags obs obs'], intercept: jaxtyping.Float[Array, '*#batch obs'] | None = None) -> SSOEStep[jaxtyping.Float[Array, '*batch lags obs']]
+var_step(phi: jaxtyping.Float[Array, '*#batch lags obs obs'], intercept: jaxtyping.Float[Array, '*#batch obs'] | None = None) -> tuple[SSOEMean[jaxtyping.Float[Array, '*batch lags obs']], SSOEUpdate[jaxtyping.Float[Array, '*batch lags obs']]]
 
-Build the `~~numpyro_forecast.models.ssoe()` step of a VAR from its coefficients.
+Build the `~~numpyro_forecast.models.ssoe()` mean and update of a VAR.
 
-The carry is the lag window ``(*batch, lags, obs)``. Each step emits
+The carry is the lag window ``(*batch, lags, obs)``. ``mean`` emits
 `var_mean()` of the window as the one-step-ahead mean and, given the row's
-value, drops the oldest row and appends the new one. The step ignores its
-exogenous input ``x_t``; add regressors by wrapping it (a VARX):
+value, ``update`` drops the oldest row and appends the new one. Both ignore
+their exogenous input ``x_t``; add regressors by wrapping ``mean`` (a VARX):
 
 ```python
-base = var_step(phi, intercept)
+mean, update = var_step(phi, intercept)
 
 
-def step(carry, x_t):
-    mu, carry_fn = base(carry, x_t)
-    return mu + beta @ x_t, carry_fn
+def mean_x(carry, x_t):
+    return mean(carry, x_t) + beta @ x_t
 ```
 
-The step knows nothing about priors: ``phi`` and ``intercept`` are whatever
+The pair knows nothing about priors: ``phi`` and ``intercept`` are whatever
 the model sampled (a weakly informative ``Normal``, the moments of
 `~~numpyro_forecast.priors.minnesota_prior()`, a hierarchical prior, ...), so
 changing the prior never touches the recursion.
@@ -442,8 +526,11 @@ intercept
 
 Returns
 -------
-SSOEStep[Float[Array, "*batch lags obs"]]
-    A ``(carry, x_t) -> (mu_t, carry_fn)`` callable for `~~numpyro_forecast.models.ssoe()`.
+tuple[SSOEMean[Float[Array, "*batch lags obs"]], SSOEUpdate[Float[Array, "*batch lags obs"]]]
+    A ``(mean, update)`` pair for `~~numpyro_forecast.models.ssoe()`:
+    ``mean(carry, x_t)`` is `var_mean()` of the window and
+    ``update(carry, y_t, eps_t, x_t)`` drops the oldest row and appends
+    ``y_t``.
 
 Raises
 ------
@@ -472,7 +559,8 @@ def var_model(covariates, data=None):
     )
     scale_tril = sigma[..., :, None] * l_omega
     noise = dist.MultivariateNormal(jnp.zeros(k), scale_tril=scale_tril)
-    r = ssoe(h, "eps", y, y_init, var_step(phi, intercept), noise)
+    mean, update = var_step(phi, intercept)
+    r = ssoe(h, "eps", y, y_init, mean, update, noise)
     numpyro.sample("obs", dist.MultivariateNormal(r.mu, scale_tril=scale_tril), obs=h.data)
     if h.future > 0:
         numpyro.deterministic("forecast", r.y_future)
@@ -792,6 +880,104 @@ Returns
 -------
 type[dist.Distribution]
     ``cls`` unchanged, so this can decorate a class definition.
+
+
+## Reparameterization
+
+Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+
+time_reparam(model: numpyro_forecast.typing.ForecastModel, transform: Literal['haar', 'dct']) -> numpyro_forecast.typing.ForecastModel
+
+Reparameterize every in-sample time latent of ``model`` along the time axis.
+
+Port of the ``time_reparam`` argument of Pyro's ``Forecaster`` and
+``HMCForecaster``
+([forecaster.py](https://github.com/pyro-ppl/pyro/blob/dev/pyro/contrib/forecast/forecaster.py)).
+The returned model is ``numpyro.handlers.reparam(model, config)`` with a
+config that targets every non-observed continuous sample site under the
+``time`` plate opened by `~~numpyro_forecast.models.innovations()`, exactly
+as Pyro's ``time_reparam_haar`` targets every site inside its ``time``
+plate. Each targeted site ``name`` becomes a ``deterministic`` site of the
+same shape, computed from a new sample site ``f"{name}_haar"`` or
+``f"{name}_dct"`` whose event shape owns the time axis and every plate axis
+to its right (plate axes to the left of time stay batch axes). The
+transform is orthonormal, so the model's log density is unchanged; only the
+geometry inference sees changes.
+
+Parameters
+----------
+model
+    A forecasting model ``(covariates, data=None) -> None``.
+transform
+    ``"haar"`` for `numpyro.distributions.transforms.HaarTransform` (a
+    multi-resolution average/difference basis, suited to blocky or
+    multi-scale dynamics) or ``"dct"`` for
+    `numpyro.distributions.transforms.DiscreteCosineTransform` (a cosine
+    frequency basis, close to the Karhunen-Loeve basis of first-order Markov
+    processes). Note that Pyro's own string mapping is swapped: its
+    ``"haar"`` runs a DCT and its ``"dct"`` runs a Haar transform.
+
+Returns
+-------
+ForecastModel
+    The wrapped model. It is a `numpyro.handlers.reparam` handler and is
+    the single object to hand to the guide, ``SVI`` / ``MCMC`` / blackjax,
+    `~~numpyro_forecast.predictive.forecast()`,
+    `~~numpyro_forecast.predictive.predict_in_sample()`,
+    `~~numpyro_forecast.convert.to_datatree()` and the ``model_fn`` of
+    `~~numpyro_forecast.evaluate.backtest()`.
+
+Raises
+------
+ValueError
+    If ``model`` is already the result of `time_reparam()`. Nesting is not
+    supported: the inner handler would turn the site into a deterministic
+    before the outer one sees it, so the outer transform would silently be
+    a no-op.
+
+Notes
+-----
+- Create the wrapped model once and reuse it: the drivers jit-compile with
+  the model as a static argument, so wrapping again inside a loop recompiles.
+- Apply it innermost. ``scope(time_reparam(model), prefix="a")`` yields
+  ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
+  ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
+  a second time (generic NumPyro reparam-under-scope behavior).
+- It composes with the per-block ``reparam=`` hook: after
+  ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
+  is ``drift_decentered``, so the auxiliary site is
+  ``drift_decentered_haar`` and both ``drift_decentered`` and ``drift``
+  become deterministic. This matches Pyro, whose config applies to every
+  site in the plate.
+- Untouched sites: the ``_future`` suffix sites (they stay prior-drawn under
+  ``time_future``, so `~~numpyro_forecast.predictive.forecast()` is
+  unaffected), the scan sites of
+  `~~numpyro_forecast.models.markov_series()`, the error sites of
+  `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+- Posterior dictionaries from `~~numpyro_forecast.predictive.draw_posterior()`
+  and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
+  ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
+  the former. ``init_to_value`` must therefore target ``drift_haar``.
+- Measured on random-walk level models: mean-field ``AutoNormal`` reaches a
+  better ELBO for both transforms (DCT slightly ahead of Haar), but an
+  optimizer schedule tuned for the original coordinates does not transfer
+  as is. The rotated posterior is better conditioned, so it tolerates and
+  may need a larger learning rate to converge within the same step budget;
+  a schedule that is too small stalls with part of the intercept still held
+  by the level. NUTS trajectories become cheaper (fewer leapfrog steps per
+  iteration) while the effective sample size per draw is model dependent.
+
+Examples
+--------
+```python
+model_dct = time_reparam(seasonal_model, "dct")
+guide = AutoNormal(model_dct)
+svi = SVI(model_dct, guide, Adam(0.01), Trace_ELBO())
+svi_result = svi.run(key_fit, 1_500, covariates[:t_obs], data, progress_bar=False)
+posterior = draw_posterior(key_post, guide, svi_result.params, num_samples=100)
+samples = forecast(key_pred, model_dct, posterior, data, covariates)
+```
 
 
 ## Producing draws

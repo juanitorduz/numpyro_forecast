@@ -197,7 +197,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -263,12 +263,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">models.ssoe</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">models.SSOEStep</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -785,7 +779,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L494-L693" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L558-L759" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">ssoe</span>(
@@ -793,15 +787,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <span class="va">name</span>,
     <span class="va">y</span>,
     <span class="va">init_carry</span>,
-    <span class="va">step</span>,
+    <span class="va">mean</span>,
+    <span class="va">update</span>,
     <span class="va">noise_dist</span>,
     <span class="va">xs</span><span class="op">=</span><span class="cn-none">None</span>,
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The building block for innovations state-space models (ARMA, exponential smoothing, Croston/TSB levels, censored autoregressions): a deterministic filter whose state is driven by the one-step-ahead <em>error</em> <code>eps_t = y_t - mu_t</code>. In-sample it runs <code>step</code> in a raw <code>jax.lax.scan</code> over the observed series <code>y</code> (no sample sites inside); when forecasting it draws iid future errors at the site <code>f"{name}_future"</code> from <code>noise_dist</code> under a <code>plate("time_future", h.future)</code> and runs a second scan from the final in-sample carry with <code>y_t = mu_t + eps_t</code> fed back through <code>carry_fn</code>. The guide never sees the future site, because fitting always happens with <code>future == 0</code>. Linear-Gaussian members (ARMA, additive exponential smoothing) can be marginalized exactly by a Kalman filter; the error-feedback form is the one that also covers the nonlinear members.</p>
+<p>The building block for innovations state-space models (ARMA, exponential smoothing, Croston/TSB levels, censored autoregressions): a deterministic filter whose state is driven by the one-step-ahead <em>error</em> <code>eps_t = y_t - mu_t</code>. In-sample it runs <code>mean</code> and <code>update</code> in a raw <code>jax.lax.scan</code> over the observed series <code>y</code> (no sample sites inside); when forecasting it draws iid future errors at the site <code>f"{name}_future"</code> from <code>noise_dist</code> under a <code>plate("time_future", h.future)</code> and runs a second scan from the final in-sample carry with <code>y_t = mu_t + eps_t</code> fed back through <code>update</code>. The guide never sees the future site, because fitting always happens with <code>future == 0</code>. Linear-Gaussian members (ARMA, additive exponential smoothing) can be marginalized exactly by a Kalman filter; the error-feedback form is the one that also covers the nonlinear members.</p>
 <p>The block registers nothing but the error site. The caller writes the likelihood against <code>r.mu</code> and registers <code>numpyro.deterministic("forecast", r.y_future)</code> when <code>h.future &gt; 0</code> (an unconditional registration is harmless to <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>, but lands a size-0 variable in every posterior). Driver contract: <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> call the model with <code>data=None</code> and read <code>"obs"</code>, so <code>y</code> must come from <code>covariates</code> or be computed in the model, never from <code>h.data</code>; <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> reads <code>"forecast"</code>.</p>
-<p><strong>Frozen gates.</strong> Route an update gate (Croston’s demand indicator, an availability mask) through an <code>xs</code> leaf frozen over the horizon with <a href="arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future()</a>, and read it from <code>x_t</code>, never from <code>y_t</code> (over the horizon <code>y_t = mu_t + eps_t</code> is nonzero). With the gate off, <code>carry_fn</code> is the identity and the forecast is the last level plus iid errors. <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> hand the model <em>real</em> future covariate rows, so a gate sliced from the full covariates keeps updating on sampled values and leaks the test window; scenario inputs such as a future availability mask are the only thing to read from those rows.</p>
+<p><strong>Frozen gates.</strong> Route an update gate (Croston’s demand indicator, an availability mask) through an <code>xs</code> leaf frozen over the horizon with <a href="arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future()</a>, and read it from <code>x_t</code>, never from <code>y_t</code> (over the horizon <code>y_t = mu_t + eps_t</code> is nonzero). With the gate off, <code>update</code> returns the carry unchanged and the forecast is the last level plus iid errors. <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> hand the model <em>real</em> future covariate rows, so a gate sliced from the full covariates keeps updating on sampled values and leaks the test window; scenario inputs such as a future availability mask are the only thing to read from those rows.</p>
 <p><strong>Shapes.</strong> Rows are <code>(*batch, obs)</code>: a scalar state emits <code>mu[None]</code> and starts from <code>init[None]</code> (the block refuses a scalar or a wider mean because either would silently broadcast the likelihood into a <code>(t, t)</code> log-prob); a tuple carry with scalar leaves reads <code>eps_t[0]</code> (the ETS idiom). A panel puts the series on the observation axis: <code>y</code> is <code>(t_obs, series)</code>, the carry <code>(series,)</code>, and a <code>noise</code> sampled under <code>plate("series")</code> has exactly the batch shape <code>(series,)</code> the block needs. Batch dims to the left of time (<code>(B, t_obs, obs)</code>) take a <code>(B, obs)</code> carry and a <code>(B, 1, obs)</code> noise batch. Errors correlated across the observation axis are a multivariate <code>noise_dist</code> with event shape <code>(obs,)</code>, which is how a vector autoregression enters the block (see <a href="var.var_step.html#numpyro_forecast.var.var_step" class="gdls-link gdls-code">var_step()</a>). Inputs are jax Arrays (the import hook rejects NumPy). With <code>obs == 1</code> a noise batch shape <code>(future, 1)</code> is indistinguishable from time and is consumed as such: per-step error scales, if that is what you meant.</p>
 <p><strong>Composition.</strong> Two channels are two calls sharing the same <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>; each opens its own <code>time_future</code> plate. Scoping a helper that contains the call is fine (<code>handlers.scope</code> prefixes the error site and the plate; use <code>name="eps"</code> inside a scoped helper so the site reads <code>z_eps_future</code>); register <code>"obs"</code> and <code>"forecast"</code> outside any scope and build the forecast from the channels’ <code>y_future</code>.</p>
 </div>
@@ -823,11 +818,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">init_carry</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Carry</span></code></dt>
 <dd>
-<p>Initial carry, any PyTree, already broadcast to the <code>(*batch, obs)</code> rows: a scalar level is <code>init[None]</code>, a panel level <code>(series,)</code>. Every leaf must keep its shape and dtype through <code>carry_fn</code>.</p>
+<p>Initial carry, any PyTree, already broadcast to the <code>(*batch, obs)</code> rows: a scalar level is <code>init[None]</code>, a panel level <code>(series,)</code>. Every leaf must keep its shape and dtype through <code>update</code>.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">step</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">SSOEStep[Carry]</span></code></dt>
+<dt><code><span class="doc-parameter-name">mean</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">SSOEMean[Carry]</span></code></dt>
 <dd>
-<p><code>(carry, x_t) -&gt; (mu_t, carry_fn)</code> (see <a href="models.SSOEStep.html#numpyro_forecast.models.SSOEStep" class="gdls-link gdls-code">SSOEStep</a>): <code>mu_t</code> is the mean for the current row (shape <code>(*batch, obs)</code>, so a scalar state emits <code>mu[None]</code>) and <code>carry_fn(y_t, eps_t)</code> the next carry. <code>carry_fn</code> receives the drawn <code>eps_t</code> over the horizon (not a recomputed <code>y_t - mu_t</code>, which can differ by an ulp), so close over <code>mu_t</code> when the update needs it.</p>
+<p><code>(carry, x_t) -&gt; mu_t</code> (see <a href="models.SSOEMean.html#numpyro_forecast.models.SSOEMean" class="gdls-link gdls-code">SSOEMean</a>): the mean for the current row (shape <code>(*batch, obs)</code>, so a scalar state emits <code>mu[None]</code>).</p>
+</dd>
+<dt><code><span class="doc-parameter-name">update</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">SSOEUpdate[Carry]</span></code></dt>
+<dd>
+<p><code>(carry, y_t, eps_t, x_t) -&gt; carry</code> (see <a href="models.SSOEUpdate.html#numpyro_forecast.models.SSOEUpdate" class="gdls-link gdls-code">SSOEUpdate</a>): the next carry from the row’s value and error. Over the horizon it receives the drawn <code>eps_t</code> (not a recomputed <code>y_t - mu_t</code>, which can differ by an ulp); when the update needs the mean, call <code>mean(carry, x_t)</code> inside it.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">noise_dist</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
@@ -835,7 +834,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">xs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">PyTree[Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis <code>-2</code> and <code>duration</code> rows (a single array, a tuple, a dict, …), split at <code>h.t_obs</code> and handed to <code>step</code> row by row as <code>x_t</code>; <code>None</code> for autonomous dynamics.
+Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis <code>-2</code> and <code>duration</code> rows (a single array, a tuple, a dict, …), split at <code>h.t_obs</code> and handed to <code>mean</code> and <code>update</code> row by row as <code>x_t</code>; <code>None</code> for autonomous dynamics.
 </dd>
 </dl>
 </div>
@@ -857,30 +856,30 @@ Optional exogenous inputs over the full horizon: a PyTree of arrays with time at
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>y</code> is <code>None</code>, lacks the time or observation axis, or does not cover exactly <code>h.t_obs</code> rows; if an <code>xs</code> leaf lacks the axes or does not span <code>h.duration</code> rows; if <code>step</code> returns a mean without the observation axis or a carry with a different tree structure, shape or dtype; if <code>step</code> calls <code>numpyro.sample</code>; if <code>noise_dist</code> has event rank 2 or higher, or has event rank 1 inside an enclosing plate at <code>dim=-1</code>; or if it draws errors of the wrong shape or dtype.
+If <code>y</code> is <code>None</code>, lacks the time or observation axis, or does not cover exactly <code>h.t_obs</code> rows; if an <code>xs</code> leaf lacks the axes or does not span <code>h.duration</code> rows; if <code>mean</code> returns a value without the observation axis or <code>update</code> a carry with a different tree structure, shape or dtype; if <code>mean</code> or <code>update</code> calls <code>numpyro.sample</code>; if <code>noise_dist</code> has event rank 2 or higher, or has event rank 1 inside an enclosing plate at <code>dim=-1</code>; or if it draws errors of the wrong shape or dtype.
 </dd>
 </dl>
 </div>
 </section>
 <section id="examples" class="level2 doc-examples">
 <h2 class="doc-examples">Examples</h2>
-<p>ARMA(1,1) with the lambda form of <code>carry_fn</code> (<code>y</code> is the observed series routed through <code>covariates</code>):</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> step(carry, _):</span>
+<p>ARMA(1,1) (<code>y</code> is the observed series routed through <code>covariates</code>):</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> mean(carry, _):</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>...     y_prev, eps_prev <span class="op">=</span> carry</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>...     mu_t <span class="op">=</span> mu <span class="op">+</span> phi <span class="op">*</span> y_prev <span class="op">+</span> theta <span class="op">*</span> eps_prev</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> mu_t, <span class="kw">lambda</span> y_t, eps_t: (y_t, eps_t)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, (mu[<span class="va">None</span>], jnp.zeros((<span class="dv">1</span>,))), step, dist.Normal(<span class="fl">0.0</span>, sigma))</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> numpyro.sample(<span class="st">"obs"</span>, dist.Normal(r.mu, sigma), obs<span class="op">=</span>h.data)</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>...     numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> mu <span class="op">+</span> phi <span class="op">*</span> y_prev <span class="op">+</span> theta <span class="op">*</span> eps_prev</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> update(carry, y_t, eps_t, _):</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> y_t, eps_t</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, (mu[<span class="va">None</span>], jnp.zeros((<span class="dv">1</span>,))), mean, update, dist.Normal(<span class="fl">0.0</span>, sigma))</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> numpyro.sample(<span class="st">"obs"</span>, dist.Normal(r.mu, sigma), obs<span class="op">=</span>h.data)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>...     numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
 <p>A gated level (Croston, TSB) with the gate frozen over the horizon:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> step(level, gate_t):</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>...     <span class="kw">def</span> carry_fn(y_t, _):</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>...         <span class="cf">return</span> jnp.where(gate_t, alpha <span class="op">*</span> y_t <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> alpha) <span class="op">*</span> level, level)</span></code></pre></div>
-<p>…</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> level, carry_fn</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> gate_full <span class="op">=</span> pad_future(gate, h.future)</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, init[<span class="va">None</span>], step, dist.Normal(<span class="fl">0.0</span>, noise), xs<span class="op">=</span>gate_full)</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> mean(level, _):</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> level</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> <span class="kw">def</span> update(level, y_t, _, gate_t):</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>...     <span class="cf">return</span> jnp.where(gate_t, alpha <span class="op">*</span> y_t <span class="op">+</span> (<span class="dv">1</span> <span class="op">-</span> alpha) <span class="op">*</span> level, level)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> gate_full <span class="op">=</span> pad_future(gate, h.future)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="op">&gt;&gt;&gt;</span> r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, init[<span class="va">None</span>], mean, update, dist.Normal(<span class="fl">0.0</span>, noise), xs<span class="op">=</span>gate_full)</span></code></pre></div>
 
 
 </section>

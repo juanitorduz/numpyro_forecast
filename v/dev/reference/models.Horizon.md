@@ -7,16 +7,13 @@ The train/forecast split for a single model call.
 Usage
 
 ``` python
-models.Horizon(
-    data,
-    t_obs,
-    future,
-    duration,
-)
+models.Horizon()
 ```
 
 
 An immutable value derived once per model call from the covariate and data shapes by [from_data()](models.Horizon.md#numpyro_forecast.models.Horizon.from_data); every building block ([innovations()](models.innovations.md#numpyro_forecast.models.innovations), [markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series), [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe), [predict()](models.predict.md#numpyro_forecast.models.predict)) takes it as its first argument.
+
+A JAX pytree (an `equinox.Module`): `data` is the only leaf, while `t_obs`, `future` and `duration` are static metadata. A jitted function that takes a [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon) can therefore use the three integers as shapes and recompiles once per horizon length.
 
 
 ## Attributes
@@ -60,13 +57,13 @@ Mirrors Pyro's [zero_data](models.Horizon.md#numpyro_forecast.models.Horizon.zer
 
 | Name | Description |
 |----|----|
-| [__post_init__()](#__post_init__) | Validate that the horizon fields are internally consistent. |
+| [__check_init__()](#__check_init__) | Validate that the horizon fields are internally consistent. |
 | [from_data()](#from_data) | Derive the horizon from the covariate and data shapes. |
 
 ------------------------------------------------------------------------
 
 
-#### \_\_post_init\_\_()
+#### \_\_check_init\_\_()
 
 
 Validate that the horizon fields are internally consistent.
@@ -75,7 +72,7 @@ Validate that the horizon fields are internally consistent.
 Usage
 
 ``` python
-__post_init__()
+__check_init__()
 ```
 
 

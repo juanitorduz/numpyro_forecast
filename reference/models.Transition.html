@@ -90,7 +90,7 @@ ul.task-list li input[type="checkbox"] {
 
   <link rel="alternate" type="text/markdown" href="models.Transition.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html">
-  <meta name="description" content="carry from the sampled latent. The wrapper owns the sample statement.">
+  <meta name="description" content="The wrapper owns the sample statement; see Advance for the carry update.">
   <script type="application/ld+json">
 [
   {
@@ -121,12 +121,12 @@ ul.task-list li input[type="checkbox"] {
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="models.Transition – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="carry from the sampled latent. The wrapper owns the sample statement.">
+  <meta property="og:description" content="The wrapper owns the sample statement; see Advance for the carry update.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="models.Transition – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="carry from the sampled latent. The wrapper owns the sample statement.">
+  <meta name="twitter:description" content="The wrapper owns the sample statement; see Advance for the carry update.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -162,7 +162,7 @@ ul.task-list li input[type="checkbox"] {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -228,12 +228,6 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.ssoe</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">models.SSOEStep</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -737,13 +731,13 @@ ul.task-list li input[type="checkbox"] {
 
 
 <div class="doc-subject">
-<p><code>(carry, x_t) -&gt; (dist_t, carry_fn)</code> where <code>carry_fn(z_t)</code> builds the next</p>
+<p><code>(carry, x_t) -&gt; dist_t</code>: the distribution of the next latent given the carry.</p>
 </div>
 <div class="doc-signature doc-type-alias">
-<p><code><span class="doc-type-alias-keyword kw">type</span> <span class="doc-parameter-name">models.Transition[Carry]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">Callable[<br>&nbsp;&nbsp;&nbsp;&nbsp;[Carry, PyTree[Array] | None], tuple[dist.Distribution, Callable[[Array], Carry]]<br>]</span></code></p>
+<p><code><span class="doc-type-alias-keyword kw">type</span> <span class="doc-parameter-name">models.Transition[Carry]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">Callable[[Carry, PyTree[Array] | None], dist.Distribution]</span></code></p>
 </div>
 <div class="doc-text">
-<p>carry from the <em>sampled</em> latent. The wrapper owns the sample statement.</p>
+<p>The wrapper owns the sample statement; see <a href="models.Advance.html#numpyro_forecast.models.Advance" class="gdls-link gdls-code">Advance</a> for the carry update.</p>
 <p><code>Carry</code> is the user’s carry type (any PyTree), bound per <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a> call; <code>x_t</code> is one row of the <code>xs</code> PyTree (<code>None</code> for autonomous dynamics).</p>
 </div>
 

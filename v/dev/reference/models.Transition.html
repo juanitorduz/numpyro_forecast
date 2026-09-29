@@ -90,7 +90,7 @@ ul.task-list li input[type="checkbox"] {
 
 
   <link rel="alternate" type="text/markdown" href="models.Transition.md">
-  <meta name="description" content="carry from the sampled latent. The wrapper owns the sample statement.">
+  <meta name="description" content="The wrapper owns the sample statement; see Advance for the carry update.">
   <script type="application/ld+json">
 [
   {
@@ -121,12 +121,12 @@ ul.task-list li input[type="checkbox"] {
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="models.Transition – numpyro_forecast (dev) | numpyro_forecast">
-  <meta property="og:description" content="carry from the sampled latent. The wrapper owns the sample statement.">
+  <meta property="og:description" content="The wrapper owns the sample statement; see Advance for the carry update.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="models.Transition – numpyro_forecast (dev) | numpyro_forecast">
-  <meta name="twitter:description" content="carry from the sampled latent. The wrapper owns the sample statement.">
+  <meta name="twitter:description" content="The wrapper owns the sample statement; see Advance for the carry update.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -162,7 +162,7 @@ ul.task-list li input[type="checkbox"] {
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -214,6 +214,12 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/models.Advance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.Advance</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/models.innovations.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.innovations</span></a>
   </div>
@@ -232,8 +238,14 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">models.SSOEStep</span></a>
+  <a href="../reference/models.SSOEMean.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEMean</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEUpdate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEUpdate</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -246,6 +258,12 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="../reference/models.predict.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.predict</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.PlateName.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.PlateName</span></a>
   </div>
 </li>
       </ul>
@@ -331,9 +349,23 @@ ul.task-list li input[type="checkbox"] {
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start">
- <span class="menu-text">Producing draws</span></a>
+ <span class="menu-text">Reparameterization</span></a>
 </div>
       <ul id="quarto-sidebar-section-5" class="list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/reparam.time_reparam.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">reparam.time_reparam</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start">
+ <span class="menu-text">Producing draws</span></a>
+</div>
+      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/predictive.draw_posterior.html" class="sidebar-item-text sidebar-link">
@@ -359,7 +391,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Backtesting &amp; evaluation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-6" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.backtest.html" class="sidebar-item-text sidebar-link">
@@ -451,7 +483,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">ArviZ export</span></a>
 </div>
-      <ul id="quarto-sidebar-section-7" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/convert.to_datatree.html" class="sidebar-item-text sidebar-link">
@@ -477,7 +509,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Extensions (contrib)</span></a>
 </div>
-      <ul id="quarto-sidebar-section-8" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/contrib.blackjax.BlackjaxNUTSKernel.html" class="sidebar-item-text sidebar-link">
@@ -539,7 +571,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Typing</span></a>
 </div>
-      <ul id="quarto-sidebar-section-9" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/typing.ForecastModel.html" class="sidebar-item-text sidebar-link">
@@ -583,7 +615,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Autocorrelation</span></a>
 </div>
-      <ul id="quarto-sidebar-section-10" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/acf.acf.html" class="sidebar-item-text sidebar-link">
@@ -603,7 +635,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Seasonal features</span></a>
 </div>
-      <ul id="quarto-sidebar-section-11" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/features.fourier_features.html" class="sidebar-item-text sidebar-link">
@@ -623,7 +655,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Array helpers</span></a>
 </div>
-      <ul id="quarto-sidebar-section-12" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/arrays.zero_data_like.html" class="sidebar-item-text sidebar-link">
@@ -649,7 +681,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Datasets</span></a>
 </div>
-      <ul id="quarto-sidebar-section-13" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.load_bart_weekly.html" class="sidebar-item-text sidebar-link">
@@ -681,7 +713,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Optional dependencies</span></a>
 </div>
-      <ul id="quarto-sidebar-section-14" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/optional.require.html" class="sidebar-item-text sidebar-link">
@@ -695,7 +727,7 @@ ul.task-list li input[type="checkbox"] {
             <a class="sidebar-item-text sidebar-link text-start">
  <span class="menu-text">Exceptions</span></a>
 </div>
-      <ul id="quarto-sidebar-section-15" class="list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-16" class="list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../reference/exceptions.NumpyroForecastError.html" class="sidebar-item-text sidebar-link">
@@ -783,13 +815,13 @@ ul.task-list li input[type="checkbox"] {
 
 
 <div class="doc-subject">
-<p><code>(carry, x_t) -&gt; (dist_t, carry_fn)</code> where <code>carry_fn(z_t)</code> builds the next</p>
+<p><code>(carry, x_t) -&gt; dist_t</code>: the distribution of the next latent given the carry.</p>
 </div>
 <div class="doc-signature doc-type-alias">
-<p><code><span class="doc-type-alias-keyword kw">type</span> <span class="doc-parameter-name">models.Transition[Carry]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">Callable[<br>&nbsp;&nbsp;&nbsp;&nbsp;[Carry, PyTree[Array] | None], tuple[dist.Distribution, Callable[[Array], Carry]]<br>]</span></code></p>
+<p><code><span class="doc-type-alias-keyword kw">type</span> <span class="doc-parameter-name">models.Transition[Carry]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">Callable[[Carry, PyTree[Array] | None], dist.Distribution]</span></code></p>
 </div>
 <div class="doc-text">
-<p>carry from the <em>sampled</em> latent. The wrapper owns the sample statement.</p>
+<p>The wrapper owns the sample statement; see <a href="models.Advance.html#numpyro_forecast.models.Advance" class="gdls-link gdls-code">Advance</a> for the carry update.</p>
 <p><code>Carry</code> is the user’s carry type (any PyTree), bound per <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a> call; <code>x_t</code> is one row of the <code>xs</code> PyTree (<code>None</code> for autonomous dynamics).</p>
 </div>
 

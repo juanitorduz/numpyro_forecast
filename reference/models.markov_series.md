@@ -14,6 +14,7 @@ models.markov_series(
     transition,
     xs=None,
     *,
+    advance=None,
     plates=(),
     reparam_config=None
 )
@@ -36,10 +37,13 @@ Base sample-site name for the in-sample latent scan.
 Initial carry passed to the first transition.
 
 `transition: Transition[Carry]`  
-Per-step `(carry, x_t) -> (dist_t, carry_fn)` callable; the wrapper owns the `numpyro.sample` statement.
+Per-step `(carry, x_t) -> dist_t` callable returning the distribution of the next latent (see [Transition](models.Transition.md#numpyro_forecast.models.Transition)); the wrapper owns the `numpyro.sample` statement.
 
 `xs: PyTree[Array] | None = None`  
 Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis `-2` (a single array, a tuple, a dict, …), moved leaf by leaf into scan layout internally; `None` for autonomous dynamics.
+
+`advance: Advance[Carry] | None = None`  
+Optional `(carry, z_t, x_t) -> carry` (see [Advance](models.Advance.md#numpyro_forecast.models.Advance)) that builds the next carry from the sampled latent; `None` means the carry *is* the latent, `carry_{t+1} = z_t`, so `init_carry` must be a single array shaped like one draw. A vector autoregression with `p` lags keeps a `(p, obs)` window here.
 
 `plates: Sequence[tuple[str, int]] = ()`  
 `(name, size)` pairs opened **inside** the scan body around the sample statement (the only placement NumPyro supports for scan + plate).
@@ -59,4 +63,4 @@ The latent over the full horizon in package layout `(*plate_batch, duration, obs
 
 
 `ValueError`  
-If forecasting without observed data (only reachable with a hand-built [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon): [Horizon.from_data()](models.Horizon.md#numpyro_forecast.models.Horizon.from_data) never sets `future > 0` without data), if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.
+If forecasting without observed data (only reachable with a hand-built [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon): [Horizon.from_data()](models.Horizon.md#numpyro_forecast.models.Horizon.from_data) never sets `future > 0` without data), if the per-step shape lacks the observation dimension, if an enclosing plate is detected, or if `advance` is omitted and `init_carry` is not a single array with the shape and dtype of a draw.

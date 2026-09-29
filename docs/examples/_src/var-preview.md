@@ -5,7 +5,7 @@ This notebook ports the blog post [**Bayesian VAR in NumPyro**](https://juanitor
 
 The package provides the VAR pieces as reusable components. You do not write the lag recursion, the forecast loop or the IRF recursion yourself:
 
-- [`var_step`](https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html) turns sampled coefficients into a step for the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block runs the in-sample recursion and the generative forecast.
+- [`var_step`](https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html) turns sampled coefficients into the `mean` and `update` functions for the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block runs the in-sample recursion and the generative forecast.
 - [`impulse_response`](https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html) computes the responses for all posterior draws at once, with optional orthogonalization and cumulation.
 - [`companion_matrix`](https://juanitorduz.github.io/numpyro_forecast/reference/var.companion_matrix.html) gives the stability check.
 - [`minnesota_prior`](https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html) returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own `numpyro.sample` call.
@@ -181,7 +181,7 @@ Stack the last p observations into a state s\_{t-1} = \[y\_{t-1}; \dots; y\_{t-p
 1.  **In sample**, [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) runs a deterministic `jax.lax.scan` over the observed rows, computing \mu_t from the lag window and pushing the observed y_t into the window. It returns the means as `r.mu`, and we write the likelihood `obs ~ MultivariateNormal(r.mu, L)` ourselves.
 2.  **Out of sample**, when `covariates` extend beyond `data`, the block draws the future shocks \varepsilon\_{T+h} from the noise distribution at a separate `eps_future` site, feeds y\_{T+h} = \mu\_{T+h} + \varepsilon\_{T+h} back into the window, and returns the sampled paths as `r.y_future`.
 
-The noise distribution is a `MultivariateNormal` over the series axis, so the future shocks are correlated across series exactly as the in-sample residuals are. `var_step(phi, intercept)` builds the step function from the sampled coefficients: the carry is the lag window with shape `(lags, series)` in natural time order (most recent row last), the mean is c + \sum_l \Phi_l y\_{t-l}, and the carry update drops the oldest row and appends the new one.
+The noise distribution is a `MultivariateNormal` over the series axis, so the future shocks are correlated across series exactly as the in-sample residuals are. `var_step(phi, intercept)` builds the `mean` and `update` functions from the sampled coefficients: the carry is the lag window with shape `(lags, series)` in natural time order (most recent row last), the mean is c + \sum_l \Phi_l y\_{t-l}, and the carry update drops the oldest row and appends the new one.
 
 
 ## Data layout and the first p observations
@@ -248,17 +248,15 @@ def make_var_model(phi_prior: dist.Distribution, y_init: Array) -> ForecastModel
         h = Horizon.from_data(covariates, data)
         y = covariates[..., : h.t_obs, :]  # observed history only; never reads beyond t_obs
 
-        # jnp.asarray only narrows numpyro's union return type for the type checker.
-        intercept = jnp.asarray(
-            numpyro.sample("intercept", dist.Normal(0.0, 1.0).expand([k]).to_event(1))
-        )
-        sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0).expand([k]).to_event(1)))
-        l_omega = jnp.asarray(numpyro.sample("l_omega", dist.LKJCholesky(k, concentration=1.0)))
-        phi = jnp.asarray(numpyro.sample("phi", phi_prior))
+        intercept = numpyro.sample("intercept", dist.Normal(0.0, 1.0).expand([k]).to_event(1))
+        sigma = numpyro.sample("sigma", dist.HalfNormal(1.0).expand([k]).to_event(1))
+        l_omega = numpyro.sample("l_omega", dist.LKJCholesky(k, concentration=1.0))
+        phi = numpyro.sample("phi", phi_prior)
         scale_tril = sigma[..., :, None] * l_omega
 
         noise = dist.MultivariateNormal(jnp.zeros(k), scale_tril=scale_tril)
-        r = ssoe(h, "eps", y, y_init, var_step(phi, intercept), noise)
+        mean, update = var_step(phi, intercept)
+        r = ssoe(h, "eps", y, y_init, mean, update, noise)
 
         numpyro.deterministic("mu_t", r.mu)
         numpyro.sample("obs", dist.MultivariateNormal(r.mu, scale_tril=scale_tril), obs=h.data)

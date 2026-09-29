@@ -346,12 +346,12 @@ where \Phi is the standard \text{Normal} CDF, and the whole term is masked out o
 
 Clean on-shelf days pass the observation through; capped days floor the lag at the model's own prediction, since the truth is at least the cap; off-shelf days carry the prediction itself, the model's best estimate of the demand nobody could express. This is the same one-step-ahead logic a state space filter applies to missing observations, done with a plug-in mean instead of a full state distribution.
 
-The model is a plain NumPyro function `(covariates, data=None)` that derives its train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) and hands the recursion to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, the single-source-of-error recursion shared with the [ARMA](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) and [exponential smoothing](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) examples. [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series, an initial carry, a `step` function, and the innovation distribution. `step(carry, x_t)` returns the one-step-ahead mean \hat{y}\_t and a `carry_fn(y_t, eps_t)` that builds the next carry from the day's value and its error; closing `carry_fn` over the prediction is what lets the lag filter above floor capped days at \hat{y}\_t. Rows carry the observation axis, so the two placeholder lags are `y[0]` with shape `(1,)`, the mean has shape `(1,)`, and a scalar state would emit `mu[None]`; the block checks these shapes. The block owns two scans, neither containing a sample site:
+The model is a plain NumPyro function `(covariates, data=None)` that derives its train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) and hands the recursion to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, the single-source-of-error recursion shared with the [ARMA](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) and [exponential smoothing](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) examples. [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series, an initial carry, a `mean` function, an `update` function, and the innovation distribution. `mean(carry, x_t)` returns the one-step-ahead mean \hat{y}\_t and `update(carry, y_t, eps_t, x_t)` builds the next carry from the day's value and its error; calling `mean` again inside `update` (the same expression on the same inputs, so exactly the filter's prediction) is what lets the lag filter above floor capped days at \hat{y}\_t. Rows carry the observation axis, so the two placeholder lags are `y[0]` with shape `(1,)`, the mean has shape `(1,)`, and a scalar state would emit `mu[None]`; the block checks these shapes. The block owns two scans, neither containing a sample site:
 
-1.  **In sample.** A deterministic `jax.lax.scan` runs `step` over the observed history, feeding each observation and its error \varepsilon_t = y_t - \hat{y}\_t through `carry_fn`, and returns the one-step-ahead means as `r.mu` (exposed as the deterministic site `"pred_mean"`); the `"obs"` site conditions the data on them through the censored likelihood. The AR(2) needs two lags, so the first two steps run on placeholder lags and are masked out of the likelihood.
-2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations at the `"eps_future"` site (under its own `time_future` plate), rolls the recursion forward from the final filtered lags with each *sampled* value \hat{y}\_t + \varepsilon_t fed back through `carry_fn`, and returns the trajectory as `r.y_future`, which we register (clipped at zero, since demand is nonnegative) as the deterministic `"forecast"` site the package reads. Since `"eps_future"` does not exist during training, `Predictive` draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html) (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.
+1.  **In sample.** A deterministic `jax.lax.scan` runs `mean` over the observed history, feeding each observation and its error \varepsilon_t = y_t - \hat{y}\_t through `update`, and returns the one-step-ahead means as `r.mu` (exposed as the deterministic site `"pred_mean"`); the `"obs"` site conditions the data on them through the censored likelihood. The AR(2) needs two lags, so the first two steps run on placeholder lags and are masked out of the likelihood.
+2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations at the `"eps_future"` site (under its own `time_future` plate), rolls the recursion forward from the final filtered lags with each *sampled* value \hat{y}\_t + \varepsilon_t fed back through `update`, and returns the trajectory as `r.y_future`, which we register (clipped at zero, since demand is nonnegative) as the deterministic `"forecast"` site the package reads. Since `"eps_future"` does not exist during training, `Predictive` draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html) (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.
 
-One small difference from the blog post's hand-rolled scans: the same `carry_fn` serves both scans, so the clip at zero now applies to the filtered lag in sample as well, which only matters on stockout days whose prediction is negative.
+One small difference from the blog post's hand-rolled scans: the same `update` serves both scans, so the clip at zero now applies to the filtered lag in sample as well, which only matters on stockout days whose prediction is negative.
 
 
     In [5]:
@@ -384,28 +384,29 @@ def ar2_seasonal(covariates: Array, data: Array | None = None) -> None:
     phi_2 = numpyro.sample("phi_2", dist.Normal(loc=0, scale=1))
     sigma = numpyro.sample("sigma", dist.HalfNormal(scale=1))
     with numpyro.plate("fourier_modes", fourier.shape[-1]):
-        # jnp.asarray only narrows numpyro's union return type for the type checker.
-        beta_seasonal = jnp.asarray(numpyro.sample("beta_seasonal", dist.Normal(loc=0, scale=1)))
+        beta_seasonal = numpyro.sample("beta_seasonal", dist.Normal(loc=0, scale=1))
     seasonal = (fourier @ beta_seasonal)[..., None]
 
-    def step(carry, x_t):
-        seasonal_t, available_t, censored_t = x_t
+    def mean(carry, x_t):
+        seasonal_t, _, _ = x_t
         lag_1, lag_2 = carry
-        pred = mu + phi_1 * lag_1 + phi_2 * lag_2 + seasonal_t
+        return mu + phi_1 * lag_1 + phi_2 * lag_2 + seasonal_t
 
-        def carry_fn(y_t, _):
-            # The filtered lag: pass clean observations through, floor capped days at the
-            # prediction, and substitute the prediction on stockout days.
-            on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
-            y_filtered = jnp.where(available_t == 1, on_shelf, pred)
-            return jnp.clip(y_filtered, min=0.0), lag_1
-
-        return pred, carry_fn
+    def update(carry, y_t, eps_t, x_t):
+        _, available_t, censored_t = x_t
+        lag_1, _ = carry
+        # The filtered lag: pass clean observations through, floor capped days at the
+        # prediction, and substitute the prediction on stockout days. Calling mean again
+        # reproduces the filter's prediction exactly (same expression, same inputs).
+        pred = mean(carry, x_t)
+        on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
+        y_filtered = jnp.where(available_t == 1, on_shelf, pred)
+        return jnp.clip(y_filtered, min=0.0), lag_1
 
     # Over the horizon the product is available and uncensored: no gate, no cap.
     xs = (seasonal, pad_future(available, h.future, value=1.0), pad_future(censored, h.future))
     init_carry = (y[0], y[0])  # placeholder lags; the first two steps are masked below
-    r = ssoe(h, "eps", y, init_carry, step, dist.Normal(loc=0, scale=sigma), xs=xs)
+    r = ssoe(h, "eps", y, init_carry, mean, update, dist.Normal(loc=0, scale=sigma), xs=xs)
     pred_mean = numpyro.deterministic("pred_mean", r.mu)
 
     valid = (jnp.arange(h.t_obs)[:, None] >= 2) & (available == 1)

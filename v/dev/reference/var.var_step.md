@@ -1,7 +1,7 @@
 ## var.var_step()
 
 
-Build the [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe) step of a VAR from its coefficients.
+Build the [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe) mean and update of a VAR.
 
 
 Usage
@@ -14,18 +14,17 @@ var.var_step(
 ```
 
 
-The carry is the lag window `(*batch, lags, obs)`. Each step emits [var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean) of the window as the one-step-ahead mean and, given the row's value, drops the oldest row and appends the new one. The step ignores its exogenous input `x_t`; add regressors by wrapping it (a VARX):
+The carry is the lag window `(*batch, lags, obs)`. `mean` emits [var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean) of the window as the one-step-ahead mean and, given the row's value, `update` drops the oldest row and appends the new one. Both ignore their exogenous input `x_t`; add regressors by wrapping `mean` (a VARX):
 
 ``` python
-base = var_step(phi, intercept)
+mean, update = var_step(phi, intercept)
 
 
-def step(carry, x_t):
-    mu, carry_fn = base(carry, x_t)
-    return mu + beta @ x_t, carry_fn
+def mean_x(carry, x_t):
+    return mean(carry, x_t) + beta @ x_t
 ```
 
-The step knows nothing about priors: `phi` and `intercept` are whatever the model sampled (a weakly informative `Normal`, the moments of [minnesota_prior()](priors.minnesota_prior.md#numpyro_forecast.priors.minnesota_prior), a hierarchical prior, …), so changing the prior never touches the recursion.
+The pair knows nothing about priors: `phi` and `intercept` are whatever the model sampled (a weakly informative `Normal`, the moments of [minnesota_prior()](priors.minnesota_prior.md#numpyro_forecast.priors.minnesota_prior), a hierarchical prior, …), so changing the prior never touches the recursion.
 
 
 ## Parameters
@@ -41,8 +40,11 @@ Optional intercept of shape `(*batch, obs)`.
 ## Returns
 
 
-`SSOEStep[Float[Array, ``"*batch lags obs"]]`  
-A `(carry, x_t) -> (mu_t, carry_fn)` callable for [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe).
+`tuple[`\
+`    SSOEMean[Float[Array, `<span class="st">`"*batch lags obs"]],`\
+`    SSOEUpdate[Float[Array, ``"*batch lags obs"``]],`\
+`]`</span>  
+A `(mean, update)` pair for [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe): `mean(carry, x_t)` is [var_mean()](var.var_mean.md#numpyro_forecast.var.var_mean) of the window and `update(carry, y_t, eps_t, x_t)` drops the oldest row and appends `y_t`.
 
 
 ## Raises
@@ -70,7 +72,8 @@ def var_model(covariates, data=None):
     )
     scale_tril = sigma[..., :, None] * l_omega
     noise = dist.MultivariateNormal(jnp.zeros(k), scale_tril=scale_tril)
-    r = ssoe(h, "eps", y, y_init, var_step(phi, intercept), noise)
+    mean, update = var_step(phi, intercept)
+    r = ssoe(h, "eps", y, y_init, mean, update, noise)
     numpyro.sample("obs", dist.MultivariateNormal(r.mu, scale_tril=scale_tril), obs=h.data)
     if h.future > 0:
         numpyro.deterministic("forecast", r.y_future)

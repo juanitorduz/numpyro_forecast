@@ -23,7 +23,6 @@ We proceed in four steps. First, an exploratory analysis of the full 50{,}000-se
 
 
 ``` python
-from collections.abc import Callable
 from typing import cast
 
 import arviz as az
@@ -1989,9 +1988,9 @@ def make_fresh_retail_model(
         # signature (so `duration` and `n_series` are already bound by
         # `covariates`); plain annotated assignments would NOT be checked at runtime.
         availability = covariates[0]
-        assert isinstance(availability, Float[Array, " duration n_series"])  # ty: ignore[invalid-argument-type]
+        assert isinstance(availability, Float[Array, " duration n_series"])
         features = covariates[1:]
-        assert isinstance(features, Float[Array, " n_cov duration n_series"])  # ty: ignore[invalid-argument-type]
+        assert isinstance(features, Float[Array, " n_cov duration n_series"])
 
         # Global hyperpriors. The seasonal scale must be a scalar because
         # ZeroSumNormal cannot broadcast a per-series scale over the plate.
@@ -2001,34 +2000,27 @@ def make_fresh_retail_model(
 
         with numpyro.plate("store", n_stores, dim=-1):
             with numpyro.plate("covariate", n_cov, dim=-2):
-                b_loc_store = cast("Array", numpyro.sample("b_loc_store", dist.Normal(0.0, 0.5)))
-                b_scale_store = cast(
-                    "Array", numpyro.sample("b_scale_store", dist.HalfNormal(0.3))
-                )
+                b_loc_store = numpyro.sample("b_loc_store", dist.Normal(0.0, 0.5))
+                b_scale_store = numpyro.sample("b_scale_store", dist.HalfNormal(0.3))
 
         with numpyro.plate("series", n_series, dim=-1):
             drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-3.0, 1.0))
-            phi_trend = cast("Array", numpyro.sample("phi_trend", dist.Beta(8.0, 2.0)))
-            tau_trend = cast("Array", numpyro.sample("tau_trend", dist.LogNormal(-4.0, 1.0)))
-            init_level = cast("Array", numpyro.sample("init_level", dist.Normal(1.0, 0.5)))
-            b_avail = cast("Array", numpyro.sample("b_avail", dist.LogNormal(1.0, 0.5)))
-            floor = cast("Array", numpyro.sample("floor", dist.Beta(2.0, 18.0)))
-            sigma = cast("Array", numpyro.sample("sigma", dist.HalfNormal(0.5)))
-            noise_loading = cast("Array", numpyro.sample("noise_loading", dist.HalfNormal(0.2)))
-            seasonal = cast(
-                "Array",
-                numpyro.sample("seasonal", dist.ZeroSumNormal(seasonal_scale, event_shape=(7,))),
+            phi_trend = numpyro.sample("phi_trend", dist.Beta(8.0, 2.0))
+            tau_trend = numpyro.sample("tau_trend", dist.LogNormal(-4.0, 1.0))
+            init_level = numpyro.sample("init_level", dist.Normal(1.0, 0.5))
+            b_avail = numpyro.sample("b_avail", dist.LogNormal(1.0, 0.5))
+            floor = numpyro.sample("floor", dist.Beta(2.0, 18.0))
+            sigma = numpyro.sample("sigma", dist.HalfNormal(0.5))
+            noise_loading = numpyro.sample("noise_loading", dist.HalfNormal(0.2))
+            seasonal = numpyro.sample(
+                "seasonal", dist.ZeroSumNormal(seasonal_scale, event_shape=(7,))
             )
             with numpyro.plate("covariate", n_cov, dim=-2):
                 with handlers.reparam(config={"b": LocScaleReparam(centered=centered_b)}):
-                    b = cast(
-                        "Array",
-                        numpyro.sample(
-                            "b",
-                            dist.Normal(
-                                b_loc_store[:, series_to_store],
-                                b_scale_store[:, series_to_store],
-                            ),
+                    b = numpyro.sample(
+                        "b",
+                        dist.Normal(
+                            b_loc_store[:, series_to_store], b_scale_store[:, series_to_store]
                         ),
                     )
             # innovations opens its own time plate at dim=-2, so the covariate
@@ -2036,7 +2028,7 @@ def make_fresh_retail_model(
             drift = innovations(
                 h,
                 "drift",
-                lambda: dist.Normal(0.0, drift_scale),
+                dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=centered_drift),
             )
 
@@ -2045,16 +2037,14 @@ def make_fresh_retail_model(
         # parameters enter through the closure), seeds the forecast scan with the
         # final in-sample slope, and returns the latent in the package layout
         # (duration, n_series).
-        def slope_transition(
-            carry: Array, _: Array | None
-        ) -> tuple[dist.Distribution, Callable[[Array], Array]]:
-            return dist.Normal(phi_trend * carry, tau_trend), lambda value: value
+        def slope_transition(carry: Array, _: Array | None) -> dist.Distribution:
+            return dist.Normal(phi_trend * carry, tau_trend)
 
         slope = markov_series(h, "slope", jnp.zeros(n_series), slope_transition)
         level = init_level + jnp.cumsum(drift, axis=-2) + jnp.cumsum(slope, axis=-2)
         seasonal_rep = periodic_repeat(seasonal.T, duration, axis=-2)
         covariates_contribution = (features * b[:, None, :]).sum(axis=0)
-        factor = cast("Array", availability_factor(availability, b_avail, floor))
+        factor = availability_factor(availability, b_avail, floor)
         mu = factor * (level + seasonal_rep + covariates_contribution)
         # The constant basal noise bounds the likelihood at exact-zero sales: a
         # learned basal term collapses there and NaNs the optimization, and a tiny
@@ -5152,7 +5142,7 @@ active_mean_x = features_train.where(features_train > 0).mean("time")
 contributions = b_post_mean * active_mean_x
 
 pc = az.plot_forest(
-    contributions.to_dataset(name="contribution"),  # ty: ignore[invalid-argument-type]
+    contributions.to_dataset(name="contribution"),
     sample_dims=["series"],
     ci_kind="hdi",
     ci_probs=hdi_probs,

@@ -11,12 +11,15 @@
 
 - [models.Horizon](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html)
 - [models.Transition](https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html)
+- [models.Advance](https://juanitorduz.github.io/numpyro_forecast/reference/models.Advance.html)
 - [models.innovations](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html)
 - [models.markov_series](https://juanitorduz.github.io/numpyro_forecast/reference/models.markov_series.html)
 - [models.ssoe](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html)
-- [models.SSOEStep](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEStep.html)
+- [models.SSOEMean](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEMean.html)
+- [models.SSOEUpdate](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEUpdate.html)
 - [models.SSOEResult](https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEResult.html)
 - [models.predict](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html)
+- [models.PlateName](https://juanitorduz.github.io/numpyro_forecast/reference/models.PlateName.html)
 
 #### Vector autoregression
 > VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
@@ -38,6 +41,11 @@
 - [surgery.slice_time](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.slice_time.html)
 - [surgery.prefix_condition](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.prefix_condition.html)
 - [surgery.register_elementwise](https://juanitorduz.github.io/numpyro_forecast/reference/surgery.register_elementwise.html)
+
+#### Reparameterization
+> Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+- [reparam.time_reparam](https://juanitorduz.github.io/numpyro_forecast/reference/reparam.time_reparam.html)
 
 #### Producing draws
 > Drawing posterior samples and generating forecasts and in-sample predictions.

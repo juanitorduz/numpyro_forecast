@@ -301,12 +301,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/reference/models.SSOEStep.html</loc>
-    <lastmod>2026-09-29</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/reference/models.Transition.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
@@ -1135,7 +1129,25 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/models.Advance.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/models.Horizon.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/models.PlateName.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/models.SSOEMean.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -1147,7 +1159,7 @@
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/models.SSOEStep.html</loc>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/models.SSOEUpdate.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -1208,6 +1220,12 @@
   </url>
   <url>
     <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/priors.minnesota_prior.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://juanitorduz.github.io/numpyro_forecast/v/dev/reference/reparam.time_reparam.html</loc>
     <lastmod>2026-09-29</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>

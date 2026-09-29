@@ -268,7 +268,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -345,67 +345,66 @@
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> collections.abc <span class="im">import</span> Callable, Sequence</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> contextlib <span class="im">import</span> ExitStack</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Any</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> dynestyx <span class="im">as</span> dsx</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx <span class="im">import</span> Discretizer, DynamicalModel, Filter, LatentPathBuilder, Simulator, Smoother</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx.inference.configs.simulator <span class="im">import</span> SimulatorConfig</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx.inference.configs.smoother <span class="im">import</span> KFSmootherConfig</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx.inference.filters <span class="im">import</span> KFConfig</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS, SVI, Predictive, Trace_ELBO</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.autoguide <span class="im">import</span> AutoNormal</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.util <span class="im">import</span> log_density</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    backtest,</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    draw_posterior,</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    eval_rmse,</span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>    innovations,</span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>    predict,</span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>    predict_in_sample,</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>    results_to_dataframe,</span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> fourier_features</span>
-<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
-<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"dynestyx </span><span class="sc">{</span>dsx<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">, numpyro </span><span class="sc">{</span>numpyro<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">, jax </span><span class="sc">{</span>jax<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Any, NamedTuple</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> dynestyx <span class="im">as</span> dsx</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx <span class="im">import</span> Discretizer, DynamicalModel, Filter, LatentPathBuilder, Simulator, Smoother</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx.inference.configs.simulator <span class="im">import</span> SimulatorConfig</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx.inference.configs.smoother <span class="im">import</span> KFSmootherConfig</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dynestyx.inference.filters <span class="im">import</span> KFConfig</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS, SVI, Predictive, Trace_ELBO</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.autoguide <span class="im">import</span> AutoNormal</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.util <span class="im">import</span> log_density</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    backtest,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    draw_posterior,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    eval_rmse,</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    innovations,</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>    predict,</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>    predict_in_sample,</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>    results_to_dataframe,</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> fourier_features</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"dynestyx </span><span class="sc">{</span>dsx<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">, numpyro </span><span class="sc">{</span>numpyro<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">, jax </span><span class="sc">{</span>jax<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>dynestyx 0.5.1, numpyro 0.22.0, jax 0.11.2</code></pre>
 </div>
@@ -441,235 +440,234 @@
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>_CONDITIONING_HANDLERS <span class="op">=</span> (Filter, Smoother, LatentPathBuilder)</span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span>(frozen<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> StateSpaceResult:</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Draws produced by `state_space_series` (size-0 time axes when not applicable).</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">    Each field is filled in the mode that produces it and has a size-0 time axis</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co">    otherwise: the ``future`` fields while forecasting, the ``in_sample`` fields</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co">    when the model is called without data, none while training. The shapes carry</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co">    no batch dims (panels are not supported).</span></span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co">    Attributes</span></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co">    y_future</span></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co">        Observation draws over the horizon, shape ``(future, obs)``; also</span></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co">        registered as the ``"forecast"`` site.</span></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co">    x_future</span></span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co">        Latent state draws over the horizon, shape ``(future, state)``.</span></span>
-<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="co">    y_in_sample</span></span>
-<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="co">        One draw of the in-sample predictive, shape ``(t_obs, obs)``; also</span></span>
-<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="co">        registered as the ``"obs"`` site.</span></span>
-<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a><span class="co">    x_in_sample</span></span>
-<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a><span class="co">        The in-window state draw behind ``y_in_sample``, shape ``(t_obs, state)``:</span></span>
-<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a><span class="co">        the conditioner's posterior over the path (the smoothing distribution, or</span></span>
-<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="co">        the explicit path), one draw per model call.</span></span>
-<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>    y_future: Float[Array, <span class="st">" future obs"</span>]</span>
-<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    x_future: Float[Array, <span class="st">" future state"</span>]</span>
-<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>    y_in_sample: Float[Array, <span class="st">" time obs"</span>]</span>
-<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>    x_in_sample: Float[Array, <span class="st">" time state"</span>]</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> StateSpaceResult(NamedTuple):</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Draws produced by `state_space_series` (size-0 time axes when not applicable).</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">    Each field is filled in the mode that produces it and has a size-0 time axis</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">    otherwise: the ``future`` fields while forecasting, the ``in_sample`` fields</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co">    when the model is called without data, none while training. The shapes carry</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co">    no batch dims (panels are not supported).</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co">    Attributes</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co">    y_future</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co">        Observation draws over the horizon, shape ``(future, obs)``; also</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co">        registered as the ``"forecast"`` site.</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co">    x_future</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co">        Latent state draws over the horizon, shape ``(future, state)``.</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co">    y_in_sample</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="co">        One draw of the in-sample predictive, shape ``(t_obs, obs)``; also</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="co">        registered as the ``"obs"`` site.</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="co">    x_in_sample</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a><span class="co">        The in-window state draw behind ``y_in_sample``, shape ``(t_obs, state)``:</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a><span class="co">        the conditioner's posterior over the path (the smoothing distribution, or</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a><span class="co">        the explicit path), one draw per model call.</span></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>    y_future: Float[Array, <span class="st">" future obs"</span>]</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>    x_future: Float[Array, <span class="st">" future state"</span>]</span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    y_in_sample: Float[Array, <span class="st">" time obs"</span>]</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>    x_in_sample: Float[Array, <span class="st">" time state"</span>]</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _handler_stack(</span>
-<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>    conditioner: StateSpaceHandler <span class="op">|</span> Sequence[StateSpaceHandler],</span>
-<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[StateSpaceHandler, ...]:</span>
-<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Normalize ``conditioner`` to the tuple of handlers entered outermost first."""</span></span>
-<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>    stack <span class="op">=</span> <span class="bu">tuple</span>(conditioner) <span class="cf">if</span> <span class="bu">isinstance</span>(conditioner, Sequence) <span class="cf">else</span> (conditioner,)</span>
-<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>    conditioning <span class="op">=</span> [i <span class="cf">for</span> i, h <span class="kw">in</span> <span class="bu">enumerate</span>(stack) <span class="cf">if</span> <span class="bu">isinstance</span>(h, _CONDITIONING_HANDLERS)]</span>
-<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span>(conditioning) <span class="op">!=</span> <span class="dv">1</span>:</span>
-<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> (</span>
-<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>            <span class="st">"conditioner needs exactly one Filter, Smoother or LatentPathBuilder "</span></span>
-<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"(optionally followed by a Discretizer), got </span><span class="sc">{</span>[<span class="bu">type</span>(h).<span class="va">__name__</span> <span class="cf">for</span> h <span class="kw">in</span> stack]<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
-<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> conditioning[<span class="dv">0</span>] <span class="op">!=</span> <span class="dv">0</span>:</span>
-<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> (</span>
-<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>            <span class="st">"the Filter, Smoother or LatentPathBuilder must come first (outermost) in conditioner"</span></span>
-<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
-<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> stack</span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _handler_stack(</span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>    conditioner: StateSpaceHandler <span class="op">|</span> Sequence[StateSpaceHandler],</span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[StateSpaceHandler, ...]:</span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Normalize ``conditioner`` to the tuple of handlers entered outermost first."""</span></span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>    stack <span class="op">=</span> <span class="bu">tuple</span>(conditioner) <span class="cf">if</span> <span class="bu">isinstance</span>(conditioner, Sequence) <span class="cf">else</span> (conditioner,)</span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>    conditioning <span class="op">=</span> [i <span class="cf">for</span> i, h <span class="kw">in</span> <span class="bu">enumerate</span>(stack) <span class="cf">if</span> <span class="bu">isinstance</span>(h, _CONDITIONING_HANDLERS)]</span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span>(conditioning) <span class="op">!=</span> <span class="dv">1</span>:</span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> (</span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>            <span class="st">"conditioner needs exactly one Filter, Smoother or LatentPathBuilder "</span></span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"(optionally followed by a Discretizer), got </span><span class="sc">{</span>[<span class="bu">type</span>(h).<span class="va">__name__</span> <span class="cf">for</span> h <span class="kw">in</span> stack]<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> conditioning[<span class="dv">0</span>] <span class="op">!=</span> <span class="dv">0</span>:</span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> (</span>
+<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>            <span class="st">"the Filter, Smoother or LatentPathBuilder must come first (outermost) in conditioner"</span></span>
+<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> stack</span>
+<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-56"><a href="#cb3-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _time_grid(times: np.ndarray <span class="op">|</span> <span class="va">None</span>, h: Horizon) <span class="op">-&gt;</span> np.ndarray:</span>
-<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Full-horizon float times: ``times[:duration]``, or ``0, 1, ..., duration - 1``."""</span></span>
-<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> times <span class="kw">is</span> <span class="va">None</span>:</span>
-<span id="cb3-61"><a href="#cb3-61" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> np.arange(h.duration, dtype<span class="op">=</span>np.float32)</span>
-<span id="cb3-62"><a href="#cb3-62" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> np.asarray(times, dtype<span class="op">=</span>np.float32)</span>
-<span id="cb3-63"><a href="#cb3-63" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> grid.ndim <span class="op">!=</span> <span class="dv">1</span> <span class="kw">or</span> grid.shape[<span class="dv">0</span>] <span class="op">&lt;</span> h.duration:</span>
-<span id="cb3-64"><a href="#cb3-64" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="ss">f"times must be a 1-D array with at least duration=</span><span class="sc">{</span>h<span class="sc">.</span>duration<span class="sc">}</span><span class="ss"> entries, got </span><span class="sc">{</span>grid<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb3-65"><a href="#cb3-65" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
-<span id="cb3-66"><a href="#cb3-66" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> grid[: h.duration]</span>
-<span id="cb3-67"><a href="#cb3-67" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> np.<span class="bu">any</span>(np.diff(grid) <span class="op">&lt;=</span> <span class="dv">0</span>):</span>
-<span id="cb3-68"><a href="#cb3-68" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="st">"times must be strictly increasing"</span></span>
-<span id="cb3-69"><a href="#cb3-69" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
-<span id="cb3-70"><a href="#cb3-70" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> grid</span>
+<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _time_grid(times: np.ndarray <span class="op">|</span> <span class="va">None</span>, h: Horizon) <span class="op">-&gt;</span> np.ndarray:</span>
+<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Full-horizon float times: ``times[:duration]``, or ``0, 1, ..., duration - 1``."""</span></span>
+<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> times <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> np.arange(h.duration, dtype<span class="op">=</span>np.float32)</span>
+<span id="cb3-61"><a href="#cb3-61" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> np.asarray(times, dtype<span class="op">=</span>np.float32)</span>
+<span id="cb3-62"><a href="#cb3-62" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> grid.ndim <span class="op">!=</span> <span class="dv">1</span> <span class="kw">or</span> grid.shape[<span class="dv">0</span>] <span class="op">&lt;</span> h.duration:</span>
+<span id="cb3-63"><a href="#cb3-63" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="ss">f"times must be a 1-D array with at least duration=</span><span class="sc">{</span>h<span class="sc">.</span>duration<span class="sc">}</span><span class="ss"> entries, got </span><span class="sc">{</span>grid<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb3-64"><a href="#cb3-64" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-65"><a href="#cb3-65" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> grid[: h.duration]</span>
+<span id="cb3-66"><a href="#cb3-66" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> np.<span class="bu">any</span>(np.diff(grid) <span class="op">&lt;=</span> <span class="dv">0</span>):</span>
+<span id="cb3-67"><a href="#cb3-67" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="st">"times must be strictly increasing"</span></span>
+<span id="cb3-68"><a href="#cb3-68" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-69"><a href="#cb3-69" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> grid</span>
+<span id="cb3-70"><a href="#cb3-70" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-71"><a href="#cb3-71" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-72"><a href="#cb3-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-73"><a href="#cb3-73" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _in_sample_states(</span>
-<span id="cb3-74"><a href="#cb3-74" aria-hidden="true" tabindex="-1"></a>    name: <span class="bu">str</span>, conditioner: StateSpaceHandler, result: Any</span>
-<span id="cb3-75"><a href="#cb3-75" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> Float[Array, <span class="st">" time state"</span>]:</span>
-<span id="cb3-76"><a href="#cb3-76" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""One draw of every in-window state from the conditioner's posterior over the path."""</span></span>
-<span id="cb3-77"><a href="#cb3-77" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(conditioner, LatentPathBuilder):</span>
-<span id="cb3-78"><a href="#cb3-78" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result.state_path</span>
-<span id="cb3-79"><a href="#cb3-79" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(conditioner, Smoother):</span>
-<span id="cb3-80"><a href="#cb3-80" aria-hidden="true" tabindex="-1"></a>        dists <span class="op">=</span> result.dists</span>
-<span id="cb3-81"><a href="#cb3-81" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> dists <span class="kw">or</span> <span class="kw">not</span> <span class="bu">isinstance</span>(dists[<span class="dv">0</span>], dist.MultivariateNormal):</span>
-<span id="cb3-82"><a href="#cb3-82" aria-hidden="true" tabindex="-1"></a>            msg <span class="op">=</span> (</span>
-<span id="cb3-83"><a href="#cb3-83" aria-hidden="true" tabindex="-1"></a>                <span class="st">"the in-sample predictive needs a Gaussian smoother (per-time MultivariateNormal)"</span></span>
-<span id="cb3-84"><a href="#cb3-84" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb3-85"><a href="#cb3-85" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">TypeError</span>(msg)</span>
-<span id="cb3-86"><a href="#cb3-86" aria-hidden="true" tabindex="-1"></a>        mean <span class="op">=</span> jnp.stack([d.mean <span class="cf">for</span> d <span class="kw">in</span> dists])</span>
-<span id="cb3-87"><a href="#cb3-87" aria-hidden="true" tabindex="-1"></a>        cov <span class="op">=</span> jnp.stack([d.covariance_matrix <span class="cf">for</span> d <span class="kw">in</span> dists])</span>
-<span id="cb3-88"><a href="#cb3-88" aria-hidden="true" tabindex="-1"></a>        state_dist <span class="op">=</span> dist.MultivariateNormal(mean, covariance_matrix<span class="op">=</span>cov).to_event(<span class="dv">1</span>)</span>
-<span id="cb3-89"><a href="#cb3-89" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.asarray(numpyro.sample(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_smoothed_states"</span>, state_dist))</span>
-<span id="cb3-90"><a href="#cb3-90" aria-hidden="true" tabindex="-1"></a>    msg <span class="op">=</span> (</span>
-<span id="cb3-91"><a href="#cb3-91" aria-hidden="true" tabindex="-1"></a>        <span class="st">"the in-sample predictive (a model call with data=None, as made by predict_in_sample "</span></span>
-<span id="cb3-92"><a href="#cb3-92" aria-hidden="true" tabindex="-1"></a>        <span class="st">"and to_datatree) needs a Smoother or a LatentPathBuilder conditioner; a Filter only "</span></span>
-<span id="cb3-93"><a href="#cb3-93" aria-hidden="true" tabindex="-1"></a>        <span class="st">"carries the filtering distribution p(x_t | y_1:t)."</span></span>
-<span id="cb3-94"><a href="#cb3-94" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb3-95"><a href="#cb3-95" aria-hidden="true" tabindex="-1"></a>    <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-72"><a href="#cb3-72" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _in_sample_states(</span>
+<span id="cb3-73"><a href="#cb3-73" aria-hidden="true" tabindex="-1"></a>    name: <span class="bu">str</span>, conditioner: StateSpaceHandler, result: Any</span>
+<span id="cb3-74"><a href="#cb3-74" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> Float[Array, <span class="st">" time state"</span>]:</span>
+<span id="cb3-75"><a href="#cb3-75" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""One draw of every in-window state from the conditioner's posterior over the path."""</span></span>
+<span id="cb3-76"><a href="#cb3-76" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(conditioner, LatentPathBuilder):</span>
+<span id="cb3-77"><a href="#cb3-77" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result.state_path</span>
+<span id="cb3-78"><a href="#cb3-78" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">isinstance</span>(conditioner, Smoother):</span>
+<span id="cb3-79"><a href="#cb3-79" aria-hidden="true" tabindex="-1"></a>        dists <span class="op">=</span> result.dists</span>
+<span id="cb3-80"><a href="#cb3-80" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> dists <span class="kw">or</span> <span class="kw">not</span> <span class="bu">isinstance</span>(dists[<span class="dv">0</span>], dist.MultivariateNormal):</span>
+<span id="cb3-81"><a href="#cb3-81" aria-hidden="true" tabindex="-1"></a>            msg <span class="op">=</span> (</span>
+<span id="cb3-82"><a href="#cb3-82" aria-hidden="true" tabindex="-1"></a>                <span class="st">"the in-sample predictive needs a Gaussian smoother (per-time MultivariateNormal)"</span></span>
+<span id="cb3-83"><a href="#cb3-83" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb3-84"><a href="#cb3-84" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">TypeError</span>(msg)</span>
+<span id="cb3-85"><a href="#cb3-85" aria-hidden="true" tabindex="-1"></a>        mean <span class="op">=</span> jnp.stack([d.mean <span class="cf">for</span> d <span class="kw">in</span> dists])</span>
+<span id="cb3-86"><a href="#cb3-86" aria-hidden="true" tabindex="-1"></a>        cov <span class="op">=</span> jnp.stack([d.covariance_matrix <span class="cf">for</span> d <span class="kw">in</span> dists])</span>
+<span id="cb3-87"><a href="#cb3-87" aria-hidden="true" tabindex="-1"></a>        state_dist <span class="op">=</span> dist.MultivariateNormal(mean, covariance_matrix<span class="op">=</span>cov).to_event(<span class="dv">1</span>)</span>
+<span id="cb3-88"><a href="#cb3-88" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> numpyro.sample(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_smoothed_states"</span>, state_dist)</span>
+<span id="cb3-89"><a href="#cb3-89" aria-hidden="true" tabindex="-1"></a>    msg <span class="op">=</span> (</span>
+<span id="cb3-90"><a href="#cb3-90" aria-hidden="true" tabindex="-1"></a>        <span class="st">"the in-sample predictive (a model call with data=None, as made by predict_in_sample "</span></span>
+<span id="cb3-91"><a href="#cb3-91" aria-hidden="true" tabindex="-1"></a>        <span class="st">"and to_datatree) needs a Smoother or a LatentPathBuilder conditioner; a Filter only "</span></span>
+<span id="cb3-92"><a href="#cb3-92" aria-hidden="true" tabindex="-1"></a>        <span class="st">"carries the filtering distribution p(x_t | y_1:t)."</span></span>
+<span id="cb3-93"><a href="#cb3-93" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb3-94"><a href="#cb3-94" aria-hidden="true" tabindex="-1"></a>    <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-95"><a href="#cb3-95" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-96"><a href="#cb3-96" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-97"><a href="#cb3-97" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-98"><a href="#cb3-98" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> state_space_series(</span>
-<span id="cb3-99"><a href="#cb3-99" aria-hidden="true" tabindex="-1"></a>    h: Horizon,</span>
-<span id="cb3-100"><a href="#cb3-100" aria-hidden="true" tabindex="-1"></a>    name: <span class="bu">str</span>,</span>
-<span id="cb3-101"><a href="#cb3-101" aria-hidden="true" tabindex="-1"></a>    y: Float[Array, <span class="st">" time obs"</span>],</span>
-<span id="cb3-102"><a href="#cb3-102" aria-hidden="true" tabindex="-1"></a>    dynamics: DynamicalModel,</span>
-<span id="cb3-103"><a href="#cb3-103" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb3-104"><a href="#cb3-104" aria-hidden="true" tabindex="-1"></a>    conditioner: StateSpaceHandler <span class="op">|</span> Sequence[StateSpaceHandler],</span>
-<span id="cb3-105"><a href="#cb3-105" aria-hidden="true" tabindex="-1"></a>    controls: Float[Array, <span class="st">" duration control"</span>] <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb3-106"><a href="#cb3-106" aria-hidden="true" tabindex="-1"></a>    times: np.ndarray <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb3-107"><a href="#cb3-107" aria-hidden="true" tabindex="-1"></a>    simulator_config: SimulatorConfig <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb3-108"><a href="#cb3-108" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> StateSpaceResult:</span>
-<span id="cb3-109"><a href="#cb3-109" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Condition a dynestyx model on the observed window and predict with it.</span></span>
-<span id="cb3-110"><a href="#cb3-110" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-111"><a href="#cb3-111" aria-hidden="true" tabindex="-1"></a><span class="co">    The conditioner is the ``dynestyx`` handler stack that interprets</span></span>
-<span id="cb3-112"><a href="#cb3-112" aria-hidden="true" tabindex="-1"></a><span class="co">    ``dsx.sample`` over the observed window, entered outermost first: a</span></span>
-<span id="cb3-113"><a href="#cb3-113" aria-hidden="true" tabindex="-1"></a><span class="co">    ``Filter`` or a ``Smoother`` adds the marginal log likelihood of the window as</span></span>
-<span id="cb3-114"><a href="#cb3-114" aria-hidden="true" tabindex="-1"></a><span class="co">    a NumPyro factor (the latent path is integrated out), a ``LatentPathBuilder``</span></span>
-<span id="cb3-115"><a href="#cb3-115" aria-hidden="true" tabindex="-1"></a><span class="co">    samples the path explicitly, and an optional ``Discretizer`` after it turns a</span></span>
-<span id="cb3-116"><a href="#cb3-116" aria-hidden="true" tabindex="-1"></a><span class="co">    continuous-time model into the discrete transition the others consume. The</span></span>
-<span id="cb3-117"><a href="#cb3-117" aria-hidden="true" tabindex="-1"></a><span class="co">    block adds the horizon bookkeeping on top and registers the two sites the</span></span>
-<span id="cb3-118"><a href="#cb3-118" aria-hidden="true" tabindex="-1"></a><span class="co">    package drivers read. While forecasting it nests the stack inside a</span></span>
-<span id="cb3-119"><a href="#cb3-119" aria-hidden="true" tabindex="-1"></a><span class="co">    ``Simulator``, whose posterior rollout starts from the conditioned</span></span>
-<span id="cb3-120"><a href="#cb3-120" aria-hidden="true" tabindex="-1"></a><span class="co">    distribution of the state at the last observed step, and registers the</span></span>
-<span id="cb3-121"><a href="#cb3-121" aria-hidden="true" tabindex="-1"></a><span class="co">    horizon draws as ``"forecast"``.</span></span>
-<span id="cb3-122"><a href="#cb3-122" aria-hidden="true" tabindex="-1"></a><span class="co">    When the model is called without data it draws the in-window states from the</span></span>
-<span id="cb3-123"><a href="#cb3-123" aria-hidden="true" tabindex="-1"></a><span class="co">    conditioner's posterior over the path (the smoothing distribution, or the</span></span>
-<span id="cb3-124"><a href="#cb3-124" aria-hidden="true" tabindex="-1"></a><span class="co">    explicit path), samples one observation per step from the observation</span></span>
-<span id="cb3-125"><a href="#cb3-125" aria-hidden="true" tabindex="-1"></a><span class="co">    model, and registers them as ``"obs"``: the in-sample predictive that</span></span>
-<span id="cb3-126"><a href="#cb3-126" aria-hidden="true" tabindex="-1"></a><span class="co">    ``predict_in_sample`` and ``to_datatree`` read. The guide never sees the</span></span>
-<span id="cb3-127"><a href="#cb3-127" aria-hidden="true" tabindex="-1"></a><span class="co">    rollout because fitting happens with ``h.future == 0``.</span></span>
-<span id="cb3-128"><a href="#cb3-128" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-129"><a href="#cb3-129" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters</span></span>
-<span id="cb3-130"><a href="#cb3-130" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
-<span id="cb3-131"><a href="#cb3-131" aria-hidden="true" tabindex="-1"></a><span class="co">    h</span></span>
-<span id="cb3-132"><a href="#cb3-132" aria-hidden="true" tabindex="-1"></a><span class="co">        The horizon for the current model call. ``h.data`` selects the mode</span></span>
-<span id="cb3-133"><a href="#cb3-133" aria-hidden="true" tabindex="-1"></a><span class="co">        (training when present, in-sample predictive when ``None``); the</span></span>
-<span id="cb3-134"><a href="#cb3-134" aria-hidden="true" tabindex="-1"></a><span class="co">        observations themselves come from ``y``.</span></span>
-<span id="cb3-135"><a href="#cb3-135" aria-hidden="true" tabindex="-1"></a><span class="co">    name</span></span>
-<span id="cb3-136"><a href="#cb3-136" aria-hidden="true" tabindex="-1"></a><span class="co">        Prefix of the ``dynestyx`` sites.</span></span>
-<span id="cb3-137"><a href="#cb3-137" aria-hidden="true" tabindex="-1"></a><span class="co">    y</span></span>
-<span id="cb3-138"><a href="#cb3-138" aria-hidden="true" tabindex="-1"></a><span class="co">        The observed window, shape ``(t_obs, obs)`` with time at axis ``-2``,</span></span>
-<span id="cb3-139"><a href="#cb3-139" aria-hidden="true" tabindex="-1"></a><span class="co">        sliced from ``covariates`` by the caller (the contract of ``ssoe``, so</span></span>
-<span id="cb3-140"><a href="#cb3-140" aria-hidden="true" tabindex="-1"></a><span class="co">        that model calls without data still reach the observations).</span></span>
-<span id="cb3-141"><a href="#cb3-141" aria-hidden="true" tabindex="-1"></a><span class="co">    dynamics</span></span>
-<span id="cb3-142"><a href="#cb3-142" aria-hidden="true" tabindex="-1"></a><span class="co">        The ``dynestyx`` model; its observation dimension must match ``y``.</span></span>
-<span id="cb3-143"><a href="#cb3-143" aria-hidden="true" tabindex="-1"></a><span class="co">    conditioner</span></span>
-<span id="cb3-144"><a href="#cb3-144" aria-hidden="true" tabindex="-1"></a><span class="co">        ``Filter(filter_config=...)``, ``Smoother(smoother_config=...)`` or</span></span>
-<span id="cb3-145"><a href="#cb3-145" aria-hidden="true" tabindex="-1"></a><span class="co">        ``LatentPathBuilder(...)``, alone or as the first element of a sequence</span></span>
-<span id="cb3-146"><a href="#cb3-146" aria-hidden="true" tabindex="-1"></a><span class="co">        followed by a ``Discretizer(...)``. Create the handlers once outside the</span></span>
-<span id="cb3-147"><a href="#cb3-147" aria-hidden="true" tabindex="-1"></a><span class="co">        model and reuse them: the builder caches the observation layout it</span></span>
-<span id="cb3-148"><a href="#cb3-148" aria-hidden="true" tabindex="-1"></a><span class="co">        needs under ``jit``. A ``Filter`` cannot serve the in-sample predictive.</span></span>
-<span id="cb3-149"><a href="#cb3-149" aria-hidden="true" tabindex="-1"></a><span class="co">    controls</span></span>
-<span id="cb3-150"><a href="#cb3-150" aria-hidden="true" tabindex="-1"></a><span class="co">        Exogenous inputs over the full horizon, shape ``(duration, control)``,</span></span>
-<span id="cb3-151"><a href="#cb3-151" aria-hidden="true" tabindex="-1"></a><span class="co">        forwarded as ``ctrl_values`` on the full time grid.</span></span>
-<span id="cb3-152"><a href="#cb3-152" aria-hidden="true" tabindex="-1"></a><span class="co">    times</span></span>
-<span id="cb3-153"><a href="#cb3-153" aria-hidden="true" tabindex="-1"></a><span class="co">        Observation and forecast times over the full horizon, at least</span></span>
-<span id="cb3-154"><a href="#cb3-154" aria-hidden="true" tabindex="-1"></a><span class="co">        ``duration`` strictly increasing entries, a host-side NumPy array;</span></span>
-<span id="cb3-155"><a href="#cb3-155" aria-hidden="true" tabindex="-1"></a><span class="co">        ``None`` uses the step index. The last ``future`` entries are the</span></span>
-<span id="cb3-156"><a href="#cb3-156" aria-hidden="true" tabindex="-1"></a><span class="co">        forecast times. Irregular spacing matters for continuous-time dynamics</span></span>
-<span id="cb3-157"><a href="#cb3-157" aria-hidden="true" tabindex="-1"></a><span class="co">        and for time-varying parameters.</span></span>
-<span id="cb3-158"><a href="#cb3-158" aria-hidden="true" tabindex="-1"></a><span class="co">    simulator_config</span></span>
-<span id="cb3-159"><a href="#cb3-159" aria-hidden="true" tabindex="-1"></a><span class="co">        Forwarded to ``Simulator`` (solver options for continuous-time models</span></span>
-<span id="cb3-160"><a href="#cb3-160" aria-hidden="true" tabindex="-1"></a><span class="co">        that are not discretized).</span></span>
-<span id="cb3-161"><a href="#cb3-161" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-162"><a href="#cb3-162" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns</span></span>
-<span id="cb3-163"><a href="#cb3-163" aria-hidden="true" tabindex="-1"></a><span class="co">    -------</span></span>
-<span id="cb3-164"><a href="#cb3-164" aria-hidden="true" tabindex="-1"></a><span class="co">    StateSpaceResult</span></span>
-<span id="cb3-165"><a href="#cb3-165" aria-hidden="true" tabindex="-1"></a><span class="co">        ``y_future`` and ``x_future`` while forecasting, ``y_in_sample`` and</span></span>
-<span id="cb3-166"><a href="#cb3-166" aria-hidden="true" tabindex="-1"></a><span class="co">        ``x_in_sample`` when called without data, size-0 time axes otherwise.</span></span>
-<span id="cb3-167"><a href="#cb3-167" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-168"><a href="#cb3-168" aria-hidden="true" tabindex="-1"></a><span class="co">    Raises</span></span>
-<span id="cb3-169"><a href="#cb3-169" aria-hidden="true" tabindex="-1"></a><span class="co">    ------</span></span>
-<span id="cb3-170"><a href="#cb3-170" aria-hidden="true" tabindex="-1"></a><span class="co">    ValueError</span></span>
-<span id="cb3-171"><a href="#cb3-171" aria-hidden="true" tabindex="-1"></a><span class="co">        If ``y`` does not cover exactly ``h.t_obs`` steps, if ``times`` is not a</span></span>
-<span id="cb3-172"><a href="#cb3-172" aria-hidden="true" tabindex="-1"></a><span class="co">        strictly increasing grid covering the horizon, if ``conditioner`` does</span></span>
-<span id="cb3-173"><a href="#cb3-173" aria-hidden="true" tabindex="-1"></a><span class="co">        not hold exactly one conditioning handler first, or if the in-sample</span></span>
-<span id="cb3-174"><a href="#cb3-174" aria-hidden="true" tabindex="-1"></a><span class="co">        predictive is requested with a ``Filter`` conditioner.</span></span>
-<span id="cb3-175"><a href="#cb3-175" aria-hidden="true" tabindex="-1"></a><span class="co">    TypeError</span></span>
-<span id="cb3-176"><a href="#cb3-176" aria-hidden="true" tabindex="-1"></a><span class="co">        If the in-sample predictive is requested with a non-Gaussian smoother.</span></span>
-<span id="cb3-177"><a href="#cb3-177" aria-hidden="true" tabindex="-1"></a><span class="co">    RuntimeError</span></span>
-<span id="cb3-178"><a href="#cb3-178" aria-hidden="true" tabindex="-1"></a><span class="co">        If the in-sample predictive runs outside a NumPyro ``seed`` handler.</span></span>
-<span id="cb3-179"><a href="#cb3-179" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb3-180"><a href="#cb3-180" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> y.ndim <span class="op">&lt;</span> <span class="dv">2</span> <span class="kw">or</span> y.shape[<span class="op">-</span><span class="dv">2</span>] <span class="op">!=</span> h.t_obs:</span>
-<span id="cb3-181"><a href="#cb3-181" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="ss">f"y must have shape (t_obs=</span><span class="sc">{</span>h<span class="sc">.</span>t_obs<span class="sc">}</span><span class="ss">, obs), got </span><span class="sc">{</span>y<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb3-182"><a href="#cb3-182" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
-<span id="cb3-183"><a href="#cb3-183" aria-hidden="true" tabindex="-1"></a>    stack <span class="op">=</span> _handler_stack(conditioner)</span>
-<span id="cb3-184"><a href="#cb3-184" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> _time_grid(times, h)</span>
-<span id="cb3-185"><a href="#cb3-185" aria-hidden="true" tabindex="-1"></a>    <span class="co"># A Filter rollout segments the prediction grid on the host, so its grid must be a</span></span>
-<span id="cb3-186"><a href="#cb3-186" aria-hidden="true" tabindex="-1"></a>    <span class="co"># NumPy constant under jit; a LatentPathBuilder indexes its grids inside a scan and</span></span>
-<span id="cb3-187"><a href="#cb3-187" aria-hidden="true" tabindex="-1"></a>    <span class="co"># needs jax arrays; a Smoother accepts either. dynestyx annotates all of them as jax</span></span>
-<span id="cb3-188"><a href="#cb3-188" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Arrays, hence the untyped dict.</span></span>
-<span id="cb3-189"><a href="#cb3-189" aria-hidden="true" tabindex="-1"></a>    explicit_path <span class="op">=</span> <span class="bu">any</span>(<span class="bu">isinstance</span>(handler, LatentPathBuilder) <span class="cf">for</span> handler <span class="kw">in</span> stack)</span>
-<span id="cb3-190"><a href="#cb3-190" aria-hidden="true" tabindex="-1"></a>    as_grid <span class="op">=</span> jnp.asarray <span class="cf">if</span> explicit_path <span class="cf">else</span> np.asarray</span>
-<span id="cb3-191"><a href="#cb3-191" aria-hidden="true" tabindex="-1"></a>    kwargs: <span class="bu">dict</span>[<span class="bu">str</span>, Any] <span class="op">=</span> {<span class="st">"obs_times"</span>: as_grid(grid[: h.t_obs])}</span>
-<span id="cb3-192"><a href="#cb3-192" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> controls <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb3-193"><a href="#cb3-193" aria-hidden="true" tabindex="-1"></a>        kwargs <span class="op">|=</span> {<span class="st">"ctrl_times"</span>: as_grid(grid), <span class="st">"ctrl_values"</span>: controls}</span>
-<span id="cb3-194"><a href="#cb3-194" aria-hidden="true" tabindex="-1"></a>    empty_y <span class="op">=</span> jnp.zeros((<span class="dv">0</span>, dynamics.observation_dim))</span>
-<span id="cb3-195"><a href="#cb3-195" aria-hidden="true" tabindex="-1"></a>    empty_x <span class="op">=</span> jnp.zeros((<span class="dv">0</span>, dynamics.state_dim))</span>
-<span id="cb3-196"><a href="#cb3-196" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb3-197"><a href="#cb3-197" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Anchor at the last observed step: the simulator's first predicted state is the</span></span>
-<span id="cb3-198"><a href="#cb3-198" aria-hidden="true" tabindex="-1"></a>        <span class="co"># conditioned draw at predict_times[0] with no transition, so that row is dropped.</span></span>
-<span id="cb3-199"><a href="#cb3-199" aria-hidden="true" tabindex="-1"></a>        kwargs[<span class="st">"predict_times"</span>] <span class="op">=</span> as_grid(grid[h.t_obs <span class="op">-</span> <span class="dv">1</span> :])</span>
-<span id="cb3-200"><a href="#cb3-200" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> numpyro.handlers.trace() <span class="im">as</span> tr, ExitStack() <span class="im">as</span> handlers:</span>
-<span id="cb3-201"><a href="#cb3-201" aria-hidden="true" tabindex="-1"></a>            handlers.enter_context(Simulator(simulator_config, n_simulations<span class="op">=</span><span class="dv">1</span>))</span>
-<span id="cb3-202"><a href="#cb3-202" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> handler <span class="kw">in</span> stack:</span>
-<span id="cb3-203"><a href="#cb3-203" aria-hidden="true" tabindex="-1"></a>                handlers.enter_context(handler)</span>
-<span id="cb3-204"><a href="#cb3-204" aria-hidden="true" tabindex="-1"></a>            dsx.sample(name, dynamics, obs_values<span class="op">=</span>y, <span class="op">**</span>kwargs)</span>
-<span id="cb3-205"><a href="#cb3-205" aria-hidden="true" tabindex="-1"></a>        y_future <span class="op">=</span> tr[<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_predicted_observations"</span>][<span class="st">"value"</span>][<span class="dv">0</span>, <span class="dv">1</span>:, :]</span>
-<span id="cb3-206"><a href="#cb3-206" aria-hidden="true" tabindex="-1"></a>        x_future <span class="op">=</span> tr[<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_predicted_states"</span>][<span class="st">"value"</span>][<span class="dv">0</span>, <span class="dv">1</span>:, :]</span>
-<span id="cb3-207"><a href="#cb3-207" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, y_future)</span>
-<span id="cb3-208"><a href="#cb3-208" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> StateSpaceResult(</span>
-<span id="cb3-209"><a href="#cb3-209" aria-hidden="true" tabindex="-1"></a>            y_future<span class="op">=</span>y_future, x_future<span class="op">=</span>x_future, y_in_sample<span class="op">=</span>empty_y, x_in_sample<span class="op">=</span>empty_x</span>
-<span id="cb3-210"><a href="#cb3-210" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb3-211"><a href="#cb3-211" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> ExitStack() <span class="im">as</span> handlers:</span>
-<span id="cb3-212"><a href="#cb3-212" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> handler <span class="kw">in</span> stack:</span>
-<span id="cb3-213"><a href="#cb3-213" aria-hidden="true" tabindex="-1"></a>            handlers.enter_context(handler)</span>
-<span id="cb3-214"><a href="#cb3-214" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> dsx.sample(name, dynamics, obs_values<span class="op">=</span>y, <span class="op">**</span>kwargs)</span>
-<span id="cb3-215"><a href="#cb3-215" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.data <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb3-216"><a href="#cb3-216" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> StateSpaceResult(</span>
-<span id="cb3-217"><a href="#cb3-217" aria-hidden="true" tabindex="-1"></a>            y_future<span class="op">=</span>empty_y, x_future<span class="op">=</span>empty_x, y_in_sample<span class="op">=</span>empty_y, x_in_sample<span class="op">=</span>empty_x</span>
-<span id="cb3-218"><a href="#cb3-218" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb3-219"><a href="#cb3-219" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> _in_sample_states(name, stack[<span class="dv">0</span>], result)</span>
-<span id="cb3-220"><a href="#cb3-220" aria-hidden="true" tabindex="-1"></a>    key <span class="op">=</span> numpyro.prng_key()</span>
-<span id="cb3-221"><a href="#cb3-221" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> key <span class="kw">is</span> <span class="va">None</span>:</span>
-<span id="cb3-222"><a href="#cb3-222" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="st">"the in-sample predictive draws observations and needs an active seed handler"</span></span>
-<span id="cb3-223"><a href="#cb3-223" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">RuntimeError</span>(msg)</span>
-<span id="cb3-224"><a href="#cb3-224" aria-hidden="true" tabindex="-1"></a>    u <span class="op">=</span> <span class="va">None</span> <span class="cf">if</span> controls <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> controls[..., : h.t_obs, :]</span>
-<span id="cb3-225"><a href="#cb3-225" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-226"><a href="#cb3-226" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> emit(x_t: Array, u_t: Array <span class="op">|</span> <span class="va">None</span>, t: Array, key_t: Array) <span class="op">-&gt;</span> Array:</span>
-<span id="cb3-227"><a href="#cb3-227" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.asarray(dynamics.observation_model(x_t, u_t, t).sample(key_t))</span>
-<span id="cb3-228"><a href="#cb3-228" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-229"><a href="#cb3-229" aria-hidden="true" tabindex="-1"></a>    in_axes <span class="op">=</span> (<span class="dv">0</span>, <span class="va">None</span> <span class="cf">if</span> u <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> <span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>)</span>
-<span id="cb3-230"><a href="#cb3-230" aria-hidden="true" tabindex="-1"></a>    keys <span class="op">=</span> random.split(key, h.t_obs)</span>
-<span id="cb3-231"><a href="#cb3-231" aria-hidden="true" tabindex="-1"></a>    y_in_sample <span class="op">=</span> jax.vmap(emit, in_axes<span class="op">=</span>in_axes)(x, u, jnp.asarray(grid[: h.t_obs]), keys)</span>
-<span id="cb3-232"><a href="#cb3-232" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"obs"</span>, y_in_sample)</span>
-<span id="cb3-233"><a href="#cb3-233" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> StateSpaceResult(</span>
-<span id="cb3-234"><a href="#cb3-234" aria-hidden="true" tabindex="-1"></a>        y_future<span class="op">=</span>empty_y, x_future<span class="op">=</span>empty_x, y_in_sample<span class="op">=</span>y_in_sample, x_in_sample<span class="op">=</span>x</span>
-<span id="cb3-235"><a href="#cb3-235" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div>
+<span id="cb3-97"><a href="#cb3-97" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> state_space_series(</span>
+<span id="cb3-98"><a href="#cb3-98" aria-hidden="true" tabindex="-1"></a>    h: Horizon,</span>
+<span id="cb3-99"><a href="#cb3-99" aria-hidden="true" tabindex="-1"></a>    name: <span class="bu">str</span>,</span>
+<span id="cb3-100"><a href="#cb3-100" aria-hidden="true" tabindex="-1"></a>    y: Float[Array, <span class="st">" time obs"</span>],</span>
+<span id="cb3-101"><a href="#cb3-101" aria-hidden="true" tabindex="-1"></a>    dynamics: DynamicalModel,</span>
+<span id="cb3-102"><a href="#cb3-102" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
+<span id="cb3-103"><a href="#cb3-103" aria-hidden="true" tabindex="-1"></a>    conditioner: StateSpaceHandler <span class="op">|</span> Sequence[StateSpaceHandler],</span>
+<span id="cb3-104"><a href="#cb3-104" aria-hidden="true" tabindex="-1"></a>    controls: Float[Array, <span class="st">" duration control"</span>] <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb3-105"><a href="#cb3-105" aria-hidden="true" tabindex="-1"></a>    times: np.ndarray <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb3-106"><a href="#cb3-106" aria-hidden="true" tabindex="-1"></a>    simulator_config: SimulatorConfig <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb3-107"><a href="#cb3-107" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> StateSpaceResult:</span>
+<span id="cb3-108"><a href="#cb3-108" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Condition a dynestyx model on the observed window and predict with it.</span></span>
+<span id="cb3-109"><a href="#cb3-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-110"><a href="#cb3-110" aria-hidden="true" tabindex="-1"></a><span class="co">    The conditioner is the ``dynestyx`` handler stack that interprets</span></span>
+<span id="cb3-111"><a href="#cb3-111" aria-hidden="true" tabindex="-1"></a><span class="co">    ``dsx.sample`` over the observed window, entered outermost first: a</span></span>
+<span id="cb3-112"><a href="#cb3-112" aria-hidden="true" tabindex="-1"></a><span class="co">    ``Filter`` or a ``Smoother`` adds the marginal log likelihood of the window as</span></span>
+<span id="cb3-113"><a href="#cb3-113" aria-hidden="true" tabindex="-1"></a><span class="co">    a NumPyro factor (the latent path is integrated out), a ``LatentPathBuilder``</span></span>
+<span id="cb3-114"><a href="#cb3-114" aria-hidden="true" tabindex="-1"></a><span class="co">    samples the path explicitly, and an optional ``Discretizer`` after it turns a</span></span>
+<span id="cb3-115"><a href="#cb3-115" aria-hidden="true" tabindex="-1"></a><span class="co">    continuous-time model into the discrete transition the others consume. The</span></span>
+<span id="cb3-116"><a href="#cb3-116" aria-hidden="true" tabindex="-1"></a><span class="co">    block adds the horizon bookkeeping on top and registers the two sites the</span></span>
+<span id="cb3-117"><a href="#cb3-117" aria-hidden="true" tabindex="-1"></a><span class="co">    package drivers read. While forecasting it nests the stack inside a</span></span>
+<span id="cb3-118"><a href="#cb3-118" aria-hidden="true" tabindex="-1"></a><span class="co">    ``Simulator``, whose posterior rollout starts from the conditioned</span></span>
+<span id="cb3-119"><a href="#cb3-119" aria-hidden="true" tabindex="-1"></a><span class="co">    distribution of the state at the last observed step, and registers the</span></span>
+<span id="cb3-120"><a href="#cb3-120" aria-hidden="true" tabindex="-1"></a><span class="co">    horizon draws as ``"forecast"``.</span></span>
+<span id="cb3-121"><a href="#cb3-121" aria-hidden="true" tabindex="-1"></a><span class="co">    When the model is called without data it draws the in-window states from the</span></span>
+<span id="cb3-122"><a href="#cb3-122" aria-hidden="true" tabindex="-1"></a><span class="co">    conditioner's posterior over the path (the smoothing distribution, or the</span></span>
+<span id="cb3-123"><a href="#cb3-123" aria-hidden="true" tabindex="-1"></a><span class="co">    explicit path), samples one observation per step from the observation</span></span>
+<span id="cb3-124"><a href="#cb3-124" aria-hidden="true" tabindex="-1"></a><span class="co">    model, and registers them as ``"obs"``: the in-sample predictive that</span></span>
+<span id="cb3-125"><a href="#cb3-125" aria-hidden="true" tabindex="-1"></a><span class="co">    ``predict_in_sample`` and ``to_datatree`` read. The guide never sees the</span></span>
+<span id="cb3-126"><a href="#cb3-126" aria-hidden="true" tabindex="-1"></a><span class="co">    rollout because fitting happens with ``h.future == 0``.</span></span>
+<span id="cb3-127"><a href="#cb3-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-128"><a href="#cb3-128" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters</span></span>
+<span id="cb3-129"><a href="#cb3-129" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
+<span id="cb3-130"><a href="#cb3-130" aria-hidden="true" tabindex="-1"></a><span class="co">    h</span></span>
+<span id="cb3-131"><a href="#cb3-131" aria-hidden="true" tabindex="-1"></a><span class="co">        The horizon for the current model call. ``h.data`` selects the mode</span></span>
+<span id="cb3-132"><a href="#cb3-132" aria-hidden="true" tabindex="-1"></a><span class="co">        (training when present, in-sample predictive when ``None``); the</span></span>
+<span id="cb3-133"><a href="#cb3-133" aria-hidden="true" tabindex="-1"></a><span class="co">        observations themselves come from ``y``.</span></span>
+<span id="cb3-134"><a href="#cb3-134" aria-hidden="true" tabindex="-1"></a><span class="co">    name</span></span>
+<span id="cb3-135"><a href="#cb3-135" aria-hidden="true" tabindex="-1"></a><span class="co">        Prefix of the ``dynestyx`` sites.</span></span>
+<span id="cb3-136"><a href="#cb3-136" aria-hidden="true" tabindex="-1"></a><span class="co">    y</span></span>
+<span id="cb3-137"><a href="#cb3-137" aria-hidden="true" tabindex="-1"></a><span class="co">        The observed window, shape ``(t_obs, obs)`` with time at axis ``-2``,</span></span>
+<span id="cb3-138"><a href="#cb3-138" aria-hidden="true" tabindex="-1"></a><span class="co">        sliced from ``covariates`` by the caller (the contract of ``ssoe``, so</span></span>
+<span id="cb3-139"><a href="#cb3-139" aria-hidden="true" tabindex="-1"></a><span class="co">        that model calls without data still reach the observations).</span></span>
+<span id="cb3-140"><a href="#cb3-140" aria-hidden="true" tabindex="-1"></a><span class="co">    dynamics</span></span>
+<span id="cb3-141"><a href="#cb3-141" aria-hidden="true" tabindex="-1"></a><span class="co">        The ``dynestyx`` model; its observation dimension must match ``y``.</span></span>
+<span id="cb3-142"><a href="#cb3-142" aria-hidden="true" tabindex="-1"></a><span class="co">    conditioner</span></span>
+<span id="cb3-143"><a href="#cb3-143" aria-hidden="true" tabindex="-1"></a><span class="co">        ``Filter(filter_config=...)``, ``Smoother(smoother_config=...)`` or</span></span>
+<span id="cb3-144"><a href="#cb3-144" aria-hidden="true" tabindex="-1"></a><span class="co">        ``LatentPathBuilder(...)``, alone or as the first element of a sequence</span></span>
+<span id="cb3-145"><a href="#cb3-145" aria-hidden="true" tabindex="-1"></a><span class="co">        followed by a ``Discretizer(...)``. Create the handlers once outside the</span></span>
+<span id="cb3-146"><a href="#cb3-146" aria-hidden="true" tabindex="-1"></a><span class="co">        model and reuse them: the builder caches the observation layout it</span></span>
+<span id="cb3-147"><a href="#cb3-147" aria-hidden="true" tabindex="-1"></a><span class="co">        needs under ``jit``. A ``Filter`` cannot serve the in-sample predictive.</span></span>
+<span id="cb3-148"><a href="#cb3-148" aria-hidden="true" tabindex="-1"></a><span class="co">    controls</span></span>
+<span id="cb3-149"><a href="#cb3-149" aria-hidden="true" tabindex="-1"></a><span class="co">        Exogenous inputs over the full horizon, shape ``(duration, control)``,</span></span>
+<span id="cb3-150"><a href="#cb3-150" aria-hidden="true" tabindex="-1"></a><span class="co">        forwarded as ``ctrl_values`` on the full time grid.</span></span>
+<span id="cb3-151"><a href="#cb3-151" aria-hidden="true" tabindex="-1"></a><span class="co">    times</span></span>
+<span id="cb3-152"><a href="#cb3-152" aria-hidden="true" tabindex="-1"></a><span class="co">        Observation and forecast times over the full horizon, at least</span></span>
+<span id="cb3-153"><a href="#cb3-153" aria-hidden="true" tabindex="-1"></a><span class="co">        ``duration`` strictly increasing entries, a host-side NumPy array;</span></span>
+<span id="cb3-154"><a href="#cb3-154" aria-hidden="true" tabindex="-1"></a><span class="co">        ``None`` uses the step index. The last ``future`` entries are the</span></span>
+<span id="cb3-155"><a href="#cb3-155" aria-hidden="true" tabindex="-1"></a><span class="co">        forecast times. Irregular spacing matters for continuous-time dynamics</span></span>
+<span id="cb3-156"><a href="#cb3-156" aria-hidden="true" tabindex="-1"></a><span class="co">        and for time-varying parameters.</span></span>
+<span id="cb3-157"><a href="#cb3-157" aria-hidden="true" tabindex="-1"></a><span class="co">    simulator_config</span></span>
+<span id="cb3-158"><a href="#cb3-158" aria-hidden="true" tabindex="-1"></a><span class="co">        Forwarded to ``Simulator`` (solver options for continuous-time models</span></span>
+<span id="cb3-159"><a href="#cb3-159" aria-hidden="true" tabindex="-1"></a><span class="co">        that are not discretized).</span></span>
+<span id="cb3-160"><a href="#cb3-160" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-161"><a href="#cb3-161" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns</span></span>
+<span id="cb3-162"><a href="#cb3-162" aria-hidden="true" tabindex="-1"></a><span class="co">    -------</span></span>
+<span id="cb3-163"><a href="#cb3-163" aria-hidden="true" tabindex="-1"></a><span class="co">    StateSpaceResult</span></span>
+<span id="cb3-164"><a href="#cb3-164" aria-hidden="true" tabindex="-1"></a><span class="co">        ``y_future`` and ``x_future`` while forecasting, ``y_in_sample`` and</span></span>
+<span id="cb3-165"><a href="#cb3-165" aria-hidden="true" tabindex="-1"></a><span class="co">        ``x_in_sample`` when called without data, size-0 time axes otherwise.</span></span>
+<span id="cb3-166"><a href="#cb3-166" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-167"><a href="#cb3-167" aria-hidden="true" tabindex="-1"></a><span class="co">    Raises</span></span>
+<span id="cb3-168"><a href="#cb3-168" aria-hidden="true" tabindex="-1"></a><span class="co">    ------</span></span>
+<span id="cb3-169"><a href="#cb3-169" aria-hidden="true" tabindex="-1"></a><span class="co">    ValueError</span></span>
+<span id="cb3-170"><a href="#cb3-170" aria-hidden="true" tabindex="-1"></a><span class="co">        If ``y`` does not cover exactly ``h.t_obs`` steps, if ``times`` is not a</span></span>
+<span id="cb3-171"><a href="#cb3-171" aria-hidden="true" tabindex="-1"></a><span class="co">        strictly increasing grid covering the horizon, if ``conditioner`` does</span></span>
+<span id="cb3-172"><a href="#cb3-172" aria-hidden="true" tabindex="-1"></a><span class="co">        not hold exactly one conditioning handler first, or if the in-sample</span></span>
+<span id="cb3-173"><a href="#cb3-173" aria-hidden="true" tabindex="-1"></a><span class="co">        predictive is requested with a ``Filter`` conditioner.</span></span>
+<span id="cb3-174"><a href="#cb3-174" aria-hidden="true" tabindex="-1"></a><span class="co">    TypeError</span></span>
+<span id="cb3-175"><a href="#cb3-175" aria-hidden="true" tabindex="-1"></a><span class="co">        If the in-sample predictive is requested with a non-Gaussian smoother.</span></span>
+<span id="cb3-176"><a href="#cb3-176" aria-hidden="true" tabindex="-1"></a><span class="co">    RuntimeError</span></span>
+<span id="cb3-177"><a href="#cb3-177" aria-hidden="true" tabindex="-1"></a><span class="co">        If the in-sample predictive runs outside a NumPyro ``seed`` handler.</span></span>
+<span id="cb3-178"><a href="#cb3-178" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb3-179"><a href="#cb3-179" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> y.ndim <span class="op">&lt;</span> <span class="dv">2</span> <span class="kw">or</span> y.shape[<span class="op">-</span><span class="dv">2</span>] <span class="op">!=</span> h.t_obs:</span>
+<span id="cb3-180"><a href="#cb3-180" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="ss">f"y must have shape (t_obs=</span><span class="sc">{</span>h<span class="sc">.</span>t_obs<span class="sc">}</span><span class="ss">, obs), got </span><span class="sc">{</span>y<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb3-181"><a href="#cb3-181" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(msg)</span>
+<span id="cb3-182"><a href="#cb3-182" aria-hidden="true" tabindex="-1"></a>    stack <span class="op">=</span> _handler_stack(conditioner)</span>
+<span id="cb3-183"><a href="#cb3-183" aria-hidden="true" tabindex="-1"></a>    grid <span class="op">=</span> _time_grid(times, h)</span>
+<span id="cb3-184"><a href="#cb3-184" aria-hidden="true" tabindex="-1"></a>    <span class="co"># A Filter rollout segments the prediction grid on the host, so its grid must be a</span></span>
+<span id="cb3-185"><a href="#cb3-185" aria-hidden="true" tabindex="-1"></a>    <span class="co"># NumPy constant under jit; a LatentPathBuilder indexes its grids inside a scan and</span></span>
+<span id="cb3-186"><a href="#cb3-186" aria-hidden="true" tabindex="-1"></a>    <span class="co"># needs jax arrays; a Smoother accepts either. dynestyx annotates all of them as jax</span></span>
+<span id="cb3-187"><a href="#cb3-187" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Arrays, hence the untyped dict.</span></span>
+<span id="cb3-188"><a href="#cb3-188" aria-hidden="true" tabindex="-1"></a>    explicit_path <span class="op">=</span> <span class="bu">any</span>(<span class="bu">isinstance</span>(handler, LatentPathBuilder) <span class="cf">for</span> handler <span class="kw">in</span> stack)</span>
+<span id="cb3-189"><a href="#cb3-189" aria-hidden="true" tabindex="-1"></a>    as_grid <span class="op">=</span> jnp.asarray <span class="cf">if</span> explicit_path <span class="cf">else</span> np.asarray</span>
+<span id="cb3-190"><a href="#cb3-190" aria-hidden="true" tabindex="-1"></a>    kwargs: <span class="bu">dict</span>[<span class="bu">str</span>, Any] <span class="op">=</span> {<span class="st">"obs_times"</span>: as_grid(grid[: h.t_obs])}</span>
+<span id="cb3-191"><a href="#cb3-191" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> controls <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb3-192"><a href="#cb3-192" aria-hidden="true" tabindex="-1"></a>        kwargs <span class="op">|=</span> {<span class="st">"ctrl_times"</span>: as_grid(grid), <span class="st">"ctrl_values"</span>: controls}</span>
+<span id="cb3-193"><a href="#cb3-193" aria-hidden="true" tabindex="-1"></a>    empty_y <span class="op">=</span> jnp.zeros((<span class="dv">0</span>, dynamics.observation_dim))</span>
+<span id="cb3-194"><a href="#cb3-194" aria-hidden="true" tabindex="-1"></a>    empty_x <span class="op">=</span> jnp.zeros((<span class="dv">0</span>, dynamics.state_dim))</span>
+<span id="cb3-195"><a href="#cb3-195" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb3-196"><a href="#cb3-196" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Anchor at the last observed step: the simulator's first predicted state is the</span></span>
+<span id="cb3-197"><a href="#cb3-197" aria-hidden="true" tabindex="-1"></a>        <span class="co"># conditioned draw at predict_times[0] with no transition, so that row is dropped.</span></span>
+<span id="cb3-198"><a href="#cb3-198" aria-hidden="true" tabindex="-1"></a>        kwargs[<span class="st">"predict_times"</span>] <span class="op">=</span> as_grid(grid[h.t_obs <span class="op">-</span> <span class="dv">1</span> :])</span>
+<span id="cb3-199"><a href="#cb3-199" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> numpyro.handlers.trace() <span class="im">as</span> tr, ExitStack() <span class="im">as</span> handlers:</span>
+<span id="cb3-200"><a href="#cb3-200" aria-hidden="true" tabindex="-1"></a>            handlers.enter_context(Simulator(simulator_config, n_simulations<span class="op">=</span><span class="dv">1</span>))</span>
+<span id="cb3-201"><a href="#cb3-201" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> handler <span class="kw">in</span> stack:</span>
+<span id="cb3-202"><a href="#cb3-202" aria-hidden="true" tabindex="-1"></a>                handlers.enter_context(handler)</span>
+<span id="cb3-203"><a href="#cb3-203" aria-hidden="true" tabindex="-1"></a>            dsx.sample(name, dynamics, obs_values<span class="op">=</span>y, <span class="op">**</span>kwargs)</span>
+<span id="cb3-204"><a href="#cb3-204" aria-hidden="true" tabindex="-1"></a>        y_future <span class="op">=</span> tr[<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_predicted_observations"</span>][<span class="st">"value"</span>][<span class="dv">0</span>, <span class="dv">1</span>:, :]</span>
+<span id="cb3-205"><a href="#cb3-205" aria-hidden="true" tabindex="-1"></a>        x_future <span class="op">=</span> tr[<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">_predicted_states"</span>][<span class="st">"value"</span>][<span class="dv">0</span>, <span class="dv">1</span>:, :]</span>
+<span id="cb3-206"><a href="#cb3-206" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, y_future)</span>
+<span id="cb3-207"><a href="#cb3-207" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> StateSpaceResult(</span>
+<span id="cb3-208"><a href="#cb3-208" aria-hidden="true" tabindex="-1"></a>            y_future<span class="op">=</span>y_future, x_future<span class="op">=</span>x_future, y_in_sample<span class="op">=</span>empty_y, x_in_sample<span class="op">=</span>empty_x</span>
+<span id="cb3-209"><a href="#cb3-209" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb3-210"><a href="#cb3-210" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> ExitStack() <span class="im">as</span> handlers:</span>
+<span id="cb3-211"><a href="#cb3-211" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> handler <span class="kw">in</span> stack:</span>
+<span id="cb3-212"><a href="#cb3-212" aria-hidden="true" tabindex="-1"></a>            handlers.enter_context(handler)</span>
+<span id="cb3-213"><a href="#cb3-213" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> dsx.sample(name, dynamics, obs_values<span class="op">=</span>y, <span class="op">**</span>kwargs)</span>
+<span id="cb3-214"><a href="#cb3-214" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.data <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb3-215"><a href="#cb3-215" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> StateSpaceResult(</span>
+<span id="cb3-216"><a href="#cb3-216" aria-hidden="true" tabindex="-1"></a>            y_future<span class="op">=</span>empty_y, x_future<span class="op">=</span>empty_x, y_in_sample<span class="op">=</span>empty_y, x_in_sample<span class="op">=</span>empty_x</span>
+<span id="cb3-217"><a href="#cb3-217" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb3-218"><a href="#cb3-218" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> _in_sample_states(name, stack[<span class="dv">0</span>], result)</span>
+<span id="cb3-219"><a href="#cb3-219" aria-hidden="true" tabindex="-1"></a>    key <span class="op">=</span> numpyro.prng_key()</span>
+<span id="cb3-220"><a href="#cb3-220" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> key <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb3-221"><a href="#cb3-221" aria-hidden="true" tabindex="-1"></a>        msg <span class="op">=</span> <span class="st">"the in-sample predictive draws observations and needs an active seed handler"</span></span>
+<span id="cb3-222"><a href="#cb3-222" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">RuntimeError</span>(msg)</span>
+<span id="cb3-223"><a href="#cb3-223" aria-hidden="true" tabindex="-1"></a>    u <span class="op">=</span> <span class="va">None</span> <span class="cf">if</span> controls <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> controls[..., : h.t_obs, :]</span>
+<span id="cb3-224"><a href="#cb3-224" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-225"><a href="#cb3-225" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> emit(x_t: Array, u_t: Array <span class="op">|</span> <span class="va">None</span>, t: Array, key_t: Array) <span class="op">-&gt;</span> Array:</span>
+<span id="cb3-226"><a href="#cb3-226" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.asarray(dynamics.observation_model(x_t, u_t, t).sample(key_t))</span>
+<span id="cb3-227"><a href="#cb3-227" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-228"><a href="#cb3-228" aria-hidden="true" tabindex="-1"></a>    in_axes <span class="op">=</span> (<span class="dv">0</span>, <span class="va">None</span> <span class="cf">if</span> u <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> <span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>)</span>
+<span id="cb3-229"><a href="#cb3-229" aria-hidden="true" tabindex="-1"></a>    keys <span class="op">=</span> random.split(key, h.t_obs)</span>
+<span id="cb3-230"><a href="#cb3-230" aria-hidden="true" tabindex="-1"></a>    y_in_sample <span class="op">=</span> jax.vmap(emit, in_axes<span class="op">=</span>in_axes)(x, u, jnp.asarray(grid[: h.t_obs]), keys)</span>
+<span id="cb3-231"><a href="#cb3-231" aria-hidden="true" tabindex="-1"></a>    numpyro.deterministic(<span class="st">"obs"</span>, y_in_sample)</span>
+<span id="cb3-232"><a href="#cb3-232" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> StateSpaceResult(</span>
+<span id="cb3-233"><a href="#cb3-233" aria-hidden="true" tabindex="-1"></a>        y_future<span class="op">=</span>empty_y, x_future<span class="op">=</span>empty_x, y_in_sample<span class="op">=</span>y_in_sample, x_in_sample<span class="op">=</span>x</span>
+<span id="cb3-234"><a href="#cb3-234" aria-hidden="true" tabindex="-1"></a>    )</span></code></pre></div>
 </div></div>
 <div id="6d6f6c91" class="cell markdown">
 <section id="local-level-model" class="level1">
@@ -750,25 +748,24 @@ y_t &amp;= x_t + v_t, \qquad v_t \sim \text{Normal}(0, r).
 <div class="cell-container"><div class="cell-decorator"><pre>In [5]:</pre></div><div id="b2067190" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-25T16:04:52.078686Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-25T16:04:52.078573Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-25T16:04:52.608370Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-25T16:04:52.607985Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> local_level_prior(predict_times: Array) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Sample the scales from their priors and simulate a path from the local level model."""</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># jnp.asarray only narrows numpyro's union return type for the type checker.</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    q <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    dsx.sample(<span class="st">"f"</span>, local_level_dynamics(q, r), predict_times<span class="op">=</span>predict_times)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    q <span class="op">=</span> numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    dsx.sample(<span class="st">"f"</span>, local_level_dynamics(q, r), predict_times<span class="op">=</span>predict_times)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Simulator(n_simulations<span class="op">=</span><span class="dv">1</span>):</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    prior_draws <span class="op">=</span> Predictive(local_level_prior, num_samples<span class="op">=</span><span class="dv">50</span>)(</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>        rng_subkey, predict_times<span class="op">=</span>jnp.asarray(time_grid[:t_obs])</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>prior_paths <span class="op">=</span> np.asarray(prior_draws[<span class="st">"f_observations"</span>][:, <span class="dv">0</span>, :, <span class="dv">0</span>])  <span class="co"># (50, t_obs)</span></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>ax.plot(time_index[:t_obs], prior_paths.T, color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.25</span>, lw<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>ax.plot([], [], color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.5</span>, label<span class="op">=</span><span class="st">"prior predictive paths"</span>)</span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>ax.plot(time_index[:t_obs], train_data[:, <span class="dv">0</span>], color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="fl">1.5</span>, label<span class="op">=</span><span class="st">"observed"</span>)</span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"upper left"</span>)</span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Prior predictive check"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"y"</span>)<span class="op">;</span></span></code></pre></div>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> Simulator(n_simulations<span class="op">=</span><span class="dv">1</span>):</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    prior_draws <span class="op">=</span> Predictive(local_level_prior, num_samples<span class="op">=</span><span class="dv">50</span>)(</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        rng_subkey, predict_times<span class="op">=</span>jnp.asarray(time_grid[:t_obs])</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>prior_paths <span class="op">=</span> np.asarray(prior_draws[<span class="st">"f_observations"</span>][:, <span class="dv">0</span>, :, <span class="dv">0</span>])  <span class="co"># (50, t_obs)</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots()</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>ax.plot(time_index[:t_obs], prior_paths.T, color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.25</span>, lw<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>ax.plot([], [], color<span class="op">=</span><span class="st">"C0"</span>, alpha<span class="op">=</span><span class="fl">0.5</span>, label<span class="op">=</span><span class="st">"prior predictive paths"</span>)</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>ax.plot(time_index[:t_obs], train_data[:, <span class="dv">0</span>], color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="fl">1.5</span>, label<span class="op">=</span><span class="st">"observed"</span>)</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>ax.legend(loc<span class="op">=</span><span class="st">"upper left"</span>)</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(title<span class="op">=</span><span class="st">"Prior predictive check"</span>, xlabel<span class="op">=</span><span class="st">"time"</span>, ylabel<span class="op">=</span><span class="st">"y"</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
@@ -792,10 +789,10 @@ y_t &amp;= x_t + v_t, \qquad v_t \sim \text{Normal}(0, r).
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> local_level_direct(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Local level model with the innovations sampled explicitly."""</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    q <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    x0 <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"x0"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">10.0</span>)))</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    drift <span class="op">=</span> innovations(h, <span class="st">"drift"</span>, <span class="kw">lambda</span>: dist.Normal(<span class="fl">0.0</span>, q), reparam<span class="op">=</span>LocScaleReparam(<span class="dv">0</span>))</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    q <span class="op">=</span> numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    x0 <span class="op">=</span> numpyro.sample(<span class="st">"x0"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">10.0</span>))</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    drift <span class="op">=</span> innovations(h, <span class="st">"drift"</span>, dist.Normal(<span class="fl">0.0</span>, q), reparam<span class="op">=</span>LocScaleReparam(<span class="dv">0</span>))</span>
 <span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    level <span class="op">=</span> x0 <span class="op">+</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>)</span>
 <span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.data <span class="kw">is</span> <span class="va">None</span>:</span>
 <span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"level"</span>, level)</span>
@@ -808,8 +805,8 @@ y_t &amp;= x_t + v_t, \qquad v_t \sim \text{Normal}(0, r).
 <span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> model(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
 <span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
 <span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        y <span class="op">=</span> covariates[..., : h.t_obs, :]  <span class="co"># the observed window travels in the covariates</span></span>
-<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        q <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        q <span class="op">=</span> numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
 <span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> state_space_series(h, <span class="st">"f"</span>, y, local_level_dynamics(q, r), conditioner<span class="op">=</span>conditioner)</span>
 <span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> h.data <span class="kw">is</span> <span class="va">None</span>:</span>
 <span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>            numpyro.deterministic(<span class="st">"level"</span>, result.x_in_sample)</span>
@@ -2168,10 +2165,10 @@ y_t &amp;= x_t + \beta^\top u_t + v_t, \qquad v_t \sim \text{Normal}(0, r).
 <span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
 <span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>        y <span class="op">=</span> covariates[..., : h.t_obs, :<span class="dv">1</span>]  <span class="co"># the observed series is the first column</span></span>
 <span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>        controls <span class="op">=</span> covariates[..., <span class="dv">1</span>:]  <span class="co"># the Fourier features span the full horizon</span></span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        q <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>)))</span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        beta <span class="op">=</span> jnp.asarray(</span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>            numpyro.sample(<span class="st">"beta"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>).expand([controls.shape[<span class="op">-</span><span class="dv">1</span>]]).to_event(<span class="dv">1</span>))</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        q <span class="op">=</span> numpyro.sample(<span class="st">"q"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> numpyro.sample(<span class="st">"r"</span>, dist.HalfNormal(<span class="fl">1.0</span>))</span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        beta <span class="op">=</span> numpyro.sample(</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">"beta"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>).expand([controls.shape[<span class="op">-</span><span class="dv">1</span>]]).to_event(<span class="dv">1</span>)</span>
 <span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>        )</span>
 <span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>        state_space_series(</span>
 <span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>            h,</span>

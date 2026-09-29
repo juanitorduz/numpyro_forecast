@@ -7,12 +7,11 @@ The means and sampled future values produced by [ssoe()](models.ssoe.md#numpyro_
 Usage
 
 ``` python
-models.SSOEResult(
-    mu,
-    mu_future,
-    y_future,
-)
+models.SSOEResult()
 ```
+
+
+A named tuple, hence a JAX pytree with three array leaves: it unpacks as `mu, mu_future, y_future = ssoe(...)` and passes through `jax.tree.map`, `jax.jit` and `jax.vmap` unchanged.
 
 
 ## Attributes

@@ -182,10 +182,10 @@ with the coefficient map \beta = \beta^{\*} \alpha and \gamma = \gamma^{\*} (1 -
 
 # The model
 
-The model is a plain NumPyro function `(covariates, data=None)`. Its first line derives the per-call [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) from the shapes (the observed data `h.data`, the number of in-sample steps `h.t_obs`, and the forecast length `h.future`), and the recursion goes to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block takes the driving series `y` (sliced from the covariates, see the design note above), the initial state, a `step` function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:
+The model is a plain NumPyro function `(covariates, data=None)`. Its first line derives the per-call [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) from the shapes (the observed data `h.data`, the number of in-sample steps `h.t_obs`, and the forecast length `h.future`), and the recursion goes to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block takes the driving series `y` (sliced from the covariates, see the design note above), the initial state, a `mean` function, an `update` function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:
 
-1.  **In sample.** A deterministic filter consumes the observed series: at each step `step(carry, x_t)` returns the one-step-ahead mean \mu_t and a `carry_fn(y_t, eps_t)` that advances the state with the innovation \varepsilon_t = y_t - \mu_t. The means come back as `r.mu`; the whole in-sample likelihood is then a single `Normal` observation site `"obs"` against them, and we also expose \mu_t as the deterministic site `"mu"` for the in-sample fit plot.
-2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), rolls the state forward from the final in-sample state feeding those innovations back through `carry_fn`, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, exactly like the built-in `_future` sites.
+1.  **In sample.** A deterministic filter consumes the observed series: at each step `mean(carry, x_t)` returns the one-step-ahead mean \mu_t and `update(carry, y_t, eps_t, x_t)` advances the state with the innovation \varepsilon_t = y_t - \mu_t. The means come back as `r.mu`; the whole in-sample likelihood is then a single `Normal` observation site `"obs"` against them, and we also expose \mu_t as the deterministic site `"mu"` for the in-sample fit plot.
+2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), rolls the state forward from the final in-sample state feeding those innovations back through `update`, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, exactly like the built-in `_future` sites.
 
 The state update `advance` is shared by both scans and is the SSOE update above, one innovation driving level, trend, and seasonality. One shape convention to know: rows carry the observation axis, so the scalar state emits a `(1,)` mean (`mu[None]`) and reads the scalar innovation back out of the `(1,)` error (`eps_t[0]`); the block checks these shapes so a mismatch fails loudly instead of broadcasting silently.
 
@@ -232,14 +232,17 @@ def exponential_smoothing_ssm(covariates: Array, data: Array | None = None) -> N
         seasonality = jnp.concatenate([seasonality[1:], new_season[None]])
         return (level, trend, seasonality)
 
-    def step(carry, _):
+    def mean(carry, _):
         level, trend, seasonality = carry
-        mu = level + phi * trend + seasonality[0]
-        # Rows carry the observation axis: emit a (1,) mean, read the scalar error back.
-        return mu[None], lambda y_t, eps_t: advance(carry, eps_t[0])
+        # Rows carry the observation axis: emit a (1,) mean.
+        return (level + phi * trend + seasonality[0])[None]
+
+    def update(carry, y_t, eps_t, _):
+        # Read the scalar error back from the (1,) row.
+        return advance(carry, eps_t[0])
 
     init_state = (level_init, trend_init, seasonality_init)
-    r = ssoe(h, "eps", y, init_state, step, dist.Normal(0, noise))
+    r = ssoe(h, "eps", y, init_state, mean, update, dist.Normal(0, noise))
 
     numpyro.deterministic("mu", r.mu)
     numpyro.sample("obs", dist.Normal(r.mu, noise), obs=h.data)

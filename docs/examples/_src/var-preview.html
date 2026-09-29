@@ -268,7 +268,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -335,7 +335,7 @@
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/var_numpyro/"><strong>Bayesian VAR in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. A vector autoregression (VAR) models several time series jointly: each series is regressed on the past values of all series, and the shocks are correlated across series. We fit a VAR with two lags to the quarterly growth rates of US real GDP, consumption and investment, sample the posterior with NUTS, forecast 30 quarters ahead, and compute impulse response functions (IRFs), the standard tool to read a VAR.</p>
 <p>The package provides the VAR pieces as reusable components. You do not write the lag recursion, the forecast loop or the IRF recursion yourself:</p>
 <ul>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html"><code>var_step</code></a> turns sampled coefficients into a step for the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block. The block runs the in-sample recursion and the generative forecast.</li>
+<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html"><code>var_step</code></a> turns sampled coefficients into the <code>mean</code> and <code>update</code> functions for the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block. The block runs the in-sample recursion and the generative forecast.</li>
 <li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html"><code>impulse_response</code></a> computes the responses for all posterior draws at once, with optional orthogonalization and cumulation.</li>
 <li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.companion_matrix.html"><code>companion_matrix</code></a> gives the stability check.</li>
 <li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html"><code>minnesota_prior</code></a> returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own <code>numpyro.sample</code> call.</li>
@@ -495,7 +495,7 @@ L_\Omega &amp; \sim \text{LKJCholesky}(\eta = 1), \\
 <li><strong>In sample</strong>, <a href="../../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> runs a deterministic <code>jax.lax.scan</code> over the observed rows, computing <span class="math inline">\mu_t</span> from the lag window and pushing the observed <span class="math inline">y_t</span> into the window. It returns the means as <code>r.mu</code>, and we write the likelihood <code>obs ~ MultivariateNormal(r.mu, L)</code> ourselves.</li>
 <li><strong>Out of sample</strong>, when <code>covariates</code> extend beyond <code>data</code>, the block draws the future shocks <span class="math inline">\varepsilon_{T+h}</span> from the noise distribution at a separate <code>eps_future</code> site, feeds <span class="math inline">y_{T+h} = \mu_{T+h} + \varepsilon_{T+h}</span> back into the window, and returns the sampled paths as <code>r.y_future</code>.</li>
 </ol>
-<p>The noise distribution is a <code>MultivariateNormal</code> over the series axis, so the future shocks are correlated across series exactly as the in-sample residuals are. <code>var_step(phi, intercept)</code> builds the step function from the sampled coefficients: the carry is the lag window with shape <code>(lags, series)</code> in natural time order (most recent row last), the mean is <span class="math inline">c + \sum_l \Phi_l y_{t-l}</span>, and the carry update drops the oldest row and appends the new one.</p>
+<p>The noise distribution is a <code>MultivariateNormal</code> over the series axis, so the future shocks are correlated across series exactly as the in-sample residuals are. <code>var_step(phi, intercept)</code> builds the <code>mean</code> and <code>update</code> functions from the sampled coefficients: the carry is the lag window with shape <code>(lags, series)</code> in natural time order (most recent row last), the mean is <span class="math inline">c + \sum_l \Phi_l y_{t-l}</span>, and the carry update drops the oldest row and appends the new one.</p>
 </section>
 <section id="data-layout-and-the-first-p-observations" class="level2">
 <h2 class="anchored" data-anchor-id="data-layout-and-the-first-p-observations">Data layout and the first <span class="math inline">p</span> observations</h2>
@@ -553,29 +553,27 @@ forecast window: 2009Q4 to 2017Q1</code></pre>
 <span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
 <span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>        y <span class="op">=</span> covariates[..., : h.t_obs, :]  <span class="co"># observed history only; never reads beyond t_obs</span></span>
 <span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># jnp.asarray only narrows numpyro's union return type for the type checker.</span></span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>        intercept <span class="op">=</span> jnp.asarray(</span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>            numpyro.sample(<span class="st">"intercept"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>).expand([k]).to_event(<span class="dv">1</span>))</span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>        sigma <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"sigma"</span>, dist.HalfNormal(<span class="fl">1.0</span>).expand([k]).to_event(<span class="dv">1</span>)))</span>
-<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>        l_omega <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"l_omega"</span>, dist.LKJCholesky(k, concentration<span class="op">=</span><span class="fl">1.0</span>)))</span>
-<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>        phi <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"phi"</span>, phi_prior))</span>
-<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>        scale_tril <span class="op">=</span> sigma[..., :, <span class="va">None</span>] <span class="op">*</span> l_omega</span>
-<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>        noise <span class="op">=</span> dist.MultivariateNormal(jnp.zeros(k), scale_tril<span class="op">=</span>scale_tril)</span>
-<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, y_init, var_step(phi, intercept), noise)</span>
-<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"mu_t"</span>, r.mu)</span>
-<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>        numpyro.sample(<span class="st">"obs"</span>, dist.MultivariateNormal(r.mu, scale_tril<span class="op">=</span>scale_tril), obs<span class="op">=</span>h.data)</span>
-<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>            numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>        intercept <span class="op">=</span> numpyro.sample(<span class="st">"intercept"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>).expand([k]).to_event(<span class="dv">1</span>))</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>        sigma <span class="op">=</span> numpyro.sample(<span class="st">"sigma"</span>, dist.HalfNormal(<span class="fl">1.0</span>).expand([k]).to_event(<span class="dv">1</span>))</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>        l_omega <span class="op">=</span> numpyro.sample(<span class="st">"l_omega"</span>, dist.LKJCholesky(k, concentration<span class="op">=</span><span class="fl">1.0</span>))</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>        phi <span class="op">=</span> numpyro.sample(<span class="st">"phi"</span>, phi_prior)</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>        scale_tril <span class="op">=</span> sigma[..., :, <span class="va">None</span>] <span class="op">*</span> l_omega</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>        noise <span class="op">=</span> dist.MultivariateNormal(jnp.zeros(k), scale_tril<span class="op">=</span>scale_tril)</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>        mean, update <span class="op">=</span> var_step(phi, intercept)</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, y_init, mean, update, noise)</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"mu_t"</span>, r.mu)</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>        numpyro.sample(<span class="st">"obs"</span>, dist.MultivariateNormal(r.mu, scale_tril<span class="op">=</span>scale_tril), obs<span class="op">=</span>h.data)</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>            numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> var_model</span>
 <span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> var_model</span>
-<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>k <span class="op">=</span> <span class="bu">len</span>(names)</span>
-<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>weak_prior <span class="op">=</span> dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>).expand([p, k, k]).to_event(<span class="dv">3</span>)</span>
-<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a>var_model <span class="op">=</span> make_var_model(weak_prior, y_init)</span></code></pre></div>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>k <span class="op">=</span> <span class="bu">len</span>(names)</span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>weak_prior <span class="op">=</span> dist.Normal(<span class="fl">0.0</span>, <span class="fl">1.0</span>).expand([p, k, k]).to_event(<span class="dv">3</span>)</span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>var_model <span class="op">=</span> make_var_model(weak_prior, y_init)</span></code></pre></div>
 </div></div>
 <div id="4a5fd9d1" class="cell markdown">
 <section id="inference-with-nuts" class="level1">

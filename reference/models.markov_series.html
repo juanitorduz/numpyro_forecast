@@ -197,7 +197,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -263,12 +263,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.ssoe</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">models.SSOEStep</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -784,7 +778,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L225-L316" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L270-L372" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">markov_series</span>(</span>
@@ -794,9 +788,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">transition</span>,</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">xs</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>,</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">plates</span><span class="op">=</span>(),</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">reparam_config</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">advance</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">plates</span><span class="op">=</span>(),</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">reparam_config</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>In-sample steps run in a <code>numpyro.contrib.control_flow.scan</code> with site <code>name</code>; when forecasting, horizon steps run in a second scan with site <code>f"{name}_future"</code> <strong>seeded by the final in-sample carry</strong>. The guide never sees the future site (same invariant as <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a>), and under posterior replay the carry is a deterministic function of the replayed draws, so the forecast is conditioned through the state.</p>
@@ -819,11 +814,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">transition</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Transition[Carry]</span></code></dt>
 <dd>
-<p>Per-step <code>(carry, x_t) -&gt; (dist_t, carry_fn)</code> callable; the wrapper owns the <code>numpyro.sample</code> statement.</p>
+<p>Per-step <code>(carry, x_t) -&gt; dist_t</code> callable returning the distribution of the next latent (see <a href="models.Transition.html#numpyro_forecast.models.Transition" class="gdls-link gdls-code">Transition</a>); the wrapper owns the <code>numpyro.sample</code> statement.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">xs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">PyTree[Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
 <p>Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis <code>-2</code> (a single array, a tuple, a dict, …), moved leaf by leaf into scan layout internally; <code>None</code> for autonomous dynamics.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">advance</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Advance[Carry] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+<p>Optional <code>(carry, z_t, x_t) -&gt; carry</code> (see <a href="models.Advance.html#numpyro_forecast.models.Advance" class="gdls-link gdls-code">Advance</a>) that builds the next carry from the sampled latent; <code>None</code> means the carry <em>is</em> the latent, <code>carry_{t+1} = z_t</code>, so <code>init_carry</code> must be a single array shaped like one draw. A vector autoregression with <code>p</code> lags keeps a <code>(p, obs)</code> window here.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">plates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[tuple[str, int]]</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">()</span></code></dt>
 <dd>
@@ -853,7 +852,7 @@ The latent over the full horizon in package layout <code>(*plate_batch, duration
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if the per-step shape lacks the observation dimension, or if an enclosing plate is detected.
+If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if the per-step shape lacks the observation dimension, if an enclosing plate is detected, or if <code>advance</code> is omitted and <code>init_carry</code> is not a single array with the shape and dtype of a draw.
 </dd>
 </dl>
 </div>

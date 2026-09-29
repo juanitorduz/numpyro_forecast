@@ -11,7 +11,7 @@ Plain model functions that register the train/forecast sites for you.
 The train/forecast split for a single model call.
 
 [models.Transition](models.Transition.md#numpyro_forecast.models.Transition)  
-`(carry, x_t) -> (dist_t, carry_fn)` where `carry_fn(z_t)` builds the next
+`(carry, x_t) -> dist_t`: the distribution of the next latent given the carry.
 
 [models.innovations()](models.innovations.md#numpyro_forecast.models.innovations)  
 Sample conditionally iid per-step innovations over the full horizon.
@@ -21,9 +21,6 @@ Sample a Markov (state-space) latent over the full horizon.
 
 [models.ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe)  
 Run a single-source-of-error recursion over the full horizon.
-
-[models.SSOEStep](models.SSOEStep.md#numpyro_forecast.models.SSOEStep)  
-`(carry, x_t) -> (mu_t, carry_fn)` where `mu_t` is the one-step-ahead mean
 
 [models.SSOEResult](models.SSOEResult.md#numpyro_forecast.models.SSOEResult)  
 The means and sampled future values produced by `ssoe()`.

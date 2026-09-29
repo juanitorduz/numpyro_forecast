@@ -397,23 +397,23 @@ def panel_level_channel(
 
     with numpyro.plate("series", n_series):
         smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=1.5, concentration0=3))
-        # jnp.asarray only narrows numpyro's union return type for the type checker.
-        noise = noise_floor + jnp.asarray(
-            numpyro.sample("noise", dist.HalfNormal(scale=noise_scale))
-        )
+        noise = noise_floor + numpyro.sample("noise", dist.HalfNormal(scale=noise_scale))
 
-    def step(level, gate_t):
-        # Emit the pre-update level (the one-step-ahead mean); update only where gated.
-        return level, lambda y_t, _: jnp.where(
-            gate_t, smoothing * y_t + (1 - smoothing) * level, level
-        )
+    def mean(level, _):
+        # Emit the pre-update level (the one-step-ahead mean).
+        return level
+
+    def update(level, y_t, _, gate_t):
+        # Update only where gated; the gate is frozen over the horizon.
+        return jnp.where(gate_t, smoothing * y_t + (1 - smoothing) * level, level)
 
     result = ssoe(
         h,
         "eps",
         values,
         init,
-        step,
+        mean,
+        update,
         dist.Normal(loc=0, scale=noise),
         xs=pad_future(gate, h.future),
     )
@@ -446,10 +446,7 @@ def availability_tsb(covariates: Array, data: Array | None = None) -> None:
     is_demand = y > 0
     demand_indicator = is_demand.astype(y.dtype)
 
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    noise_scale = jnp.asarray(
-        numpyro.sample("noise_scale", dist.LogNormal(loc=jnp.log(5), scale=1))
-    )
+    noise_scale = numpyro.sample("noise_scale", dist.LogNormal(loc=jnp.log(5), scale=1))
 
     # Demand-size component: identical to Croston/TSB (updates only at demand events).
     z, z_noise = scope(panel_level_channel, "z", divider="_")(

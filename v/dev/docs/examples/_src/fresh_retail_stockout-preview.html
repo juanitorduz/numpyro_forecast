@@ -267,7 +267,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -350,76 +350,75 @@
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [1]:</pre></div><div id="0434fbec" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-08-27T12:33:33.869684Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-08-27T12:33:33.869604Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-08-27T12:33:37.756167Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-08-27T12:33:37.755521Z&quot;}}" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> collections.abc <span class="im">import</span> Callable</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.dates <span class="im">as</span> mdates</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.lines <span class="im">as</span> mlines</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> optax</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> polars <span class="im">as</span> pl</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> huggingface_hub <span class="im">import</span> hf_hub_download</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> huggingface_hub <span class="im">import</span> logging <span class="im">as</span> hf_logging</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float, Int</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib <span class="im">import</span> ticker <span class="im">as</span> mtick</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro <span class="im">import</span> handlers</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> SVI, Predictive, Trace_ELBO</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.autoguide <span class="im">import</span> AutoNormal</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> optax_to_numpyro</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> LabelEncoder</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    draw_posterior,</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    innovations,</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    markov_series,</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    predict,</span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    predict_in_sample,</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> periodic_repeat</span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.metrics <span class="im">import</span> crps_empirical</span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">7</span>]</span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a><span class="co"># Render polars tables without truncating string cells, and drop the shape and</span></span>
-<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a><span class="co"># dtype headers, which are noise in a rendered document.</span></span>
-<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>pl.Config.set_fmt_str_lengths(<span class="dv">100</span>)</span>
-<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>pl.Config.set_tbl_hide_dataframe_shape(<span class="va">True</span>)</span>
-<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>pl.Config.set_tbl_hide_column_data_types(<span class="va">True</span>)</span>
-<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="co"># The Hub intermittently sends an unauthenticated-request warning header on</span></span>
-<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a><span class="co"># responses, which huggingface_hub logs to stderr; the example needs no token,</span></span>
-<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a><span class="co"># so keep the rendered document clean.</span></span>
-<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a>hf_logging.set_verbosity_error()</span>
-<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> cast</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.dates <span class="im">as</span> mdates</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.lines <span class="im">as</span> mlines</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> optax</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> polars <span class="im">as</span> pl</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> huggingface_hub <span class="im">import</span> hf_hub_download</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> huggingface_hub <span class="im">import</span> logging <span class="im">as</span> hf_logging</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float, Int</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib <span class="im">import</span> ticker <span class="im">as</span> mtick</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro <span class="im">import</span> handlers</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> SVI, Predictive, Trace_ELBO</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.autoguide <span class="im">import</span> AutoNormal</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.reparam <span class="im">import</span> LocScaleReparam</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> optax_to_numpyro</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.preprocessing <span class="im">import</span> LabelEncoder</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    draw_posterior,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    innovations,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    markov_series,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    predict,</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    predict_in_sample,</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> periodic_repeat</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.metrics <span class="im">import</span> crps_empirical</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">7</span>]</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a><span class="co"># Render polars tables without truncating string cells, and drop the shape and</span></span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a><span class="co"># dtype headers, which are noise in a rendered document.</span></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>pl.Config.set_fmt_str_lengths(<span class="dv">100</span>)</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>pl.Config.set_tbl_hide_dataframe_shape(<span class="va">True</span>)</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>pl.Config.set_tbl_hide_column_data_types(<span class="va">True</span>)</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a><span class="co"># The Hub intermittently sends an unauthenticated-request warning header on</span></span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="co"># responses, which huggingface_hub logs to stderr; the example needs no token,</span></span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a><span class="co"># so keep the rendered document clean.</span></span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a>hf_logging.set_verbosity_error()</span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
 <pre><code>/Users/juanitorduz/Documents/numpyro_forecast/.venv/lib/python3.14/site-packages/preliz/ppls/pymc_io.py:16: UserWarning: PyMC not installed. PyMC related functions will not work.
   warnings.warn("PyMC not installed. PyMC related functions will not work.")
@@ -2141,9 +2140,9 @@ f_{t,s} &amp;= \phi_s + (1 - \phi_s) \, \frac{1 - e^{-b_s a_{t,s}}}{1 - e^{-b_s}
 <span id="cb33-45"><a href="#cb33-45" aria-hidden="true" tabindex="-1"></a>        <span class="co"># signature (so `duration` and `n_series` are already bound by</span></span>
 <span id="cb33-46"><a href="#cb33-46" aria-hidden="true" tabindex="-1"></a>        <span class="co"># `covariates`); plain annotated assignments would NOT be checked at runtime.</span></span>
 <span id="cb33-47"><a href="#cb33-47" aria-hidden="true" tabindex="-1"></a>        availability <span class="op">=</span> covariates[<span class="dv">0</span>]</span>
-<span id="cb33-48"><a href="#cb33-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">assert</span> <span class="bu">isinstance</span>(availability, Float[Array, <span class="st">" duration n_series"</span>])  <span class="co"># ty: ignore[invalid-argument-type]</span></span>
+<span id="cb33-48"><a href="#cb33-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">assert</span> <span class="bu">isinstance</span>(availability, Float[Array, <span class="st">" duration n_series"</span>])</span>
 <span id="cb33-49"><a href="#cb33-49" aria-hidden="true" tabindex="-1"></a>        features <span class="op">=</span> covariates[<span class="dv">1</span>:]</span>
-<span id="cb33-50"><a href="#cb33-50" aria-hidden="true" tabindex="-1"></a>        <span class="cf">assert</span> <span class="bu">isinstance</span>(features, Float[Array, <span class="st">" n_cov duration n_series"</span>])  <span class="co"># ty: ignore[invalid-argument-type]</span></span>
+<span id="cb33-50"><a href="#cb33-50" aria-hidden="true" tabindex="-1"></a>        <span class="cf">assert</span> <span class="bu">isinstance</span>(features, Float[Array, <span class="st">" n_cov duration n_series"</span>])</span>
 <span id="cb33-51"><a href="#cb33-51" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb33-52"><a href="#cb33-52" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Global hyperpriors. The seasonal scale must be a scalar because</span></span>
 <span id="cb33-53"><a href="#cb33-53" aria-hidden="true" tabindex="-1"></a>        <span class="co"># ZeroSumNormal cannot broadcast a per-series scale over the plate.</span></span>
@@ -2153,77 +2152,68 @@ f_{t,s} &amp;= \phi_s + (1 - \phi_s) \, \frac{1 - e^{-b_s a_{t,s}}}{1 - e^{-b_s}
 <span id="cb33-57"><a href="#cb33-57" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb33-58"><a href="#cb33-58" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> numpyro.plate(<span class="st">"store"</span>, n_stores, dim<span class="op">=-</span><span class="dv">1</span>):</span>
 <span id="cb33-59"><a href="#cb33-59" aria-hidden="true" tabindex="-1"></a>            <span class="cf">with</span> numpyro.plate(<span class="st">"covariate"</span>, n_cov, dim<span class="op">=-</span><span class="dv">2</span>):</span>
-<span id="cb33-60"><a href="#cb33-60" aria-hidden="true" tabindex="-1"></a>                b_loc_store <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"b_loc_store"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">0.5</span>)))</span>
-<span id="cb33-61"><a href="#cb33-61" aria-hidden="true" tabindex="-1"></a>                b_scale_store <span class="op">=</span> cast(</span>
-<span id="cb33-62"><a href="#cb33-62" aria-hidden="true" tabindex="-1"></a>                    <span class="st">"Array"</span>, numpyro.sample(<span class="st">"b_scale_store"</span>, dist.HalfNormal(<span class="fl">0.3</span>))</span>
-<span id="cb33-63"><a href="#cb33-63" aria-hidden="true" tabindex="-1"></a>                )</span>
-<span id="cb33-64"><a href="#cb33-64" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-65"><a href="#cb33-65" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> numpyro.plate(<span class="st">"series"</span>, n_series, dim<span class="op">=-</span><span class="dv">1</span>):</span>
-<span id="cb33-66"><a href="#cb33-66" aria-hidden="true" tabindex="-1"></a>            drift_scale <span class="op">=</span> numpyro.sample(<span class="st">"drift_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">3.0</span>, <span class="fl">1.0</span>))</span>
-<span id="cb33-67"><a href="#cb33-67" aria-hidden="true" tabindex="-1"></a>            phi_trend <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"phi_trend"</span>, dist.Beta(<span class="fl">8.0</span>, <span class="fl">2.0</span>)))</span>
-<span id="cb33-68"><a href="#cb33-68" aria-hidden="true" tabindex="-1"></a>            tau_trend <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"tau_trend"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">4.0</span>, <span class="fl">1.0</span>)))</span>
-<span id="cb33-69"><a href="#cb33-69" aria-hidden="true" tabindex="-1"></a>            init_level <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"init_level"</span>, dist.Normal(<span class="fl">1.0</span>, <span class="fl">0.5</span>)))</span>
-<span id="cb33-70"><a href="#cb33-70" aria-hidden="true" tabindex="-1"></a>            b_avail <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"b_avail"</span>, dist.LogNormal(<span class="fl">1.0</span>, <span class="fl">0.5</span>)))</span>
-<span id="cb33-71"><a href="#cb33-71" aria-hidden="true" tabindex="-1"></a>            floor <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"floor"</span>, dist.Beta(<span class="fl">2.0</span>, <span class="fl">18.0</span>)))</span>
-<span id="cb33-72"><a href="#cb33-72" aria-hidden="true" tabindex="-1"></a>            sigma <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"sigma"</span>, dist.HalfNormal(<span class="fl">0.5</span>)))</span>
-<span id="cb33-73"><a href="#cb33-73" aria-hidden="true" tabindex="-1"></a>            noise_loading <span class="op">=</span> cast(<span class="st">"Array"</span>, numpyro.sample(<span class="st">"noise_loading"</span>, dist.HalfNormal(<span class="fl">0.2</span>)))</span>
-<span id="cb33-74"><a href="#cb33-74" aria-hidden="true" tabindex="-1"></a>            seasonal <span class="op">=</span> cast(</span>
-<span id="cb33-75"><a href="#cb33-75" aria-hidden="true" tabindex="-1"></a>                <span class="st">"Array"</span>,</span>
-<span id="cb33-76"><a href="#cb33-76" aria-hidden="true" tabindex="-1"></a>                numpyro.sample(<span class="st">"seasonal"</span>, dist.ZeroSumNormal(seasonal_scale, event_shape<span class="op">=</span>(<span class="dv">7</span>,))),</span>
-<span id="cb33-77"><a href="#cb33-77" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb33-78"><a href="#cb33-78" aria-hidden="true" tabindex="-1"></a>            <span class="cf">with</span> numpyro.plate(<span class="st">"covariate"</span>, n_cov, dim<span class="op">=-</span><span class="dv">2</span>):</span>
-<span id="cb33-79"><a href="#cb33-79" aria-hidden="true" tabindex="-1"></a>                <span class="cf">with</span> handlers.reparam(config<span class="op">=</span>{<span class="st">"b"</span>: LocScaleReparam(centered<span class="op">=</span>centered_b)}):</span>
-<span id="cb33-80"><a href="#cb33-80" aria-hidden="true" tabindex="-1"></a>                    b <span class="op">=</span> cast(</span>
-<span id="cb33-81"><a href="#cb33-81" aria-hidden="true" tabindex="-1"></a>                        <span class="st">"Array"</span>,</span>
-<span id="cb33-82"><a href="#cb33-82" aria-hidden="true" tabindex="-1"></a>                        numpyro.sample(</span>
-<span id="cb33-83"><a href="#cb33-83" aria-hidden="true" tabindex="-1"></a>                            <span class="st">"b"</span>,</span>
-<span id="cb33-84"><a href="#cb33-84" aria-hidden="true" tabindex="-1"></a>                            dist.Normal(</span>
-<span id="cb33-85"><a href="#cb33-85" aria-hidden="true" tabindex="-1"></a>                                b_loc_store[:, series_to_store],</span>
-<span id="cb33-86"><a href="#cb33-86" aria-hidden="true" tabindex="-1"></a>                                b_scale_store[:, series_to_store],</span>
-<span id="cb33-87"><a href="#cb33-87" aria-hidden="true" tabindex="-1"></a>                            ),</span>
-<span id="cb33-88"><a href="#cb33-88" aria-hidden="true" tabindex="-1"></a>                        ),</span>
-<span id="cb33-89"><a href="#cb33-89" aria-hidden="true" tabindex="-1"></a>                    )</span>
-<span id="cb33-90"><a href="#cb33-90" aria-hidden="true" tabindex="-1"></a>            <span class="co"># innovations opens its own time plate at dim=-2, so the covariate</span></span>
-<span id="cb33-91"><a href="#cb33-91" aria-hidden="true" tabindex="-1"></a>            <span class="co"># plate above must already be closed here.</span></span>
-<span id="cb33-92"><a href="#cb33-92" aria-hidden="true" tabindex="-1"></a>            drift <span class="op">=</span> innovations(</span>
-<span id="cb33-93"><a href="#cb33-93" aria-hidden="true" tabindex="-1"></a>                h,</span>
-<span id="cb33-94"><a href="#cb33-94" aria-hidden="true" tabindex="-1"></a>                <span class="st">"drift"</span>,</span>
-<span id="cb33-95"><a href="#cb33-95" aria-hidden="true" tabindex="-1"></a>                <span class="kw">lambda</span>: dist.Normal(<span class="fl">0.0</span>, drift_scale),</span>
-<span id="cb33-96"><a href="#cb33-96" aria-hidden="true" tabindex="-1"></a>                reparam<span class="op">=</span>LocScaleReparam(centered<span class="op">=</span>centered_drift),</span>
-<span id="cb33-97"><a href="#cb33-97" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb33-98"><a href="#cb33-98" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-99"><a href="#cb33-99" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The damped AR(1) slope is a Markov latent: markov_series scans over</span></span>
-<span id="cb33-100"><a href="#cb33-100" aria-hidden="true" tabindex="-1"></a>        <span class="co"># time (and must be called outside the series plate; the per-series</span></span>
-<span id="cb33-101"><a href="#cb33-101" aria-hidden="true" tabindex="-1"></a>        <span class="co"># parameters enter through the closure), seeds the forecast scan with the</span></span>
-<span id="cb33-102"><a href="#cb33-102" aria-hidden="true" tabindex="-1"></a>        <span class="co"># final in-sample slope, and returns the latent in the package layout</span></span>
-<span id="cb33-103"><a href="#cb33-103" aria-hidden="true" tabindex="-1"></a>        <span class="co"># (duration, n_series).</span></span>
-<span id="cb33-104"><a href="#cb33-104" aria-hidden="true" tabindex="-1"></a>        <span class="kw">def</span> slope_transition(</span>
-<span id="cb33-105"><a href="#cb33-105" aria-hidden="true" tabindex="-1"></a>            carry: Array, _: Array <span class="op">|</span> <span class="va">None</span></span>
-<span id="cb33-106"><a href="#cb33-106" aria-hidden="true" tabindex="-1"></a>        ) <span class="op">-&gt;</span> <span class="bu">tuple</span>[dist.Distribution, Callable[[Array], Array]]:</span>
-<span id="cb33-107"><a href="#cb33-107" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> dist.Normal(phi_trend <span class="op">*</span> carry, tau_trend), <span class="kw">lambda</span> value: value</span>
-<span id="cb33-108"><a href="#cb33-108" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-109"><a href="#cb33-109" aria-hidden="true" tabindex="-1"></a>        slope <span class="op">=</span> markov_series(h, <span class="st">"slope"</span>, jnp.zeros(n_series), slope_transition)</span>
-<span id="cb33-110"><a href="#cb33-110" aria-hidden="true" tabindex="-1"></a>        level <span class="op">=</span> init_level <span class="op">+</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>) <span class="op">+</span> jnp.cumsum(slope, axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb33-111"><a href="#cb33-111" aria-hidden="true" tabindex="-1"></a>        seasonal_rep <span class="op">=</span> periodic_repeat(seasonal.T, duration, axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb33-112"><a href="#cb33-112" aria-hidden="true" tabindex="-1"></a>        covariates_contribution <span class="op">=</span> (features <span class="op">*</span> b[:, <span class="va">None</span>, :]).<span class="bu">sum</span>(axis<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb33-113"><a href="#cb33-113" aria-hidden="true" tabindex="-1"></a>        factor <span class="op">=</span> cast(<span class="st">"Array"</span>, availability_factor(availability, b_avail, floor))</span>
-<span id="cb33-114"><a href="#cb33-114" aria-hidden="true" tabindex="-1"></a>        mu <span class="op">=</span> factor <span class="op">*</span> (level <span class="op">+</span> seasonal_rep <span class="op">+</span> covariates_contribution)</span>
-<span id="cb33-115"><a href="#cb33-115" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The constant basal noise bounds the likelihood at exact-zero sales: a</span></span>
-<span id="cb33-116"><a href="#cb33-116" aria-hidden="true" tabindex="-1"></a>        <span class="co"># learned basal term collapses there and NaNs the optimization, and a tiny</span></span>
-<span id="cb33-117"><a href="#cb33-117" aria-hidden="true" tabindex="-1"></a>        <span class="co"># epsilon (e.g. 1e-6) leaves that degenerate optimum in play; 0.02 sits just</span></span>
-<span id="cb33-118"><a href="#cb33-118" aria-hidden="true" tabindex="-1"></a>        <span class="co"># below one physical sale unit on the scaled axis (see the markdown above).</span></span>
-<span id="cb33-119"><a href="#cb33-119" aria-hidden="true" tabindex="-1"></a>        sigma_t <span class="op">=</span> factor <span class="op">*</span> (sigma <span class="op">+</span> noise_loading <span class="op">*</span> jax.nn.softplus(level)) <span class="op">+</span> <span class="fl">0.02</span></span>
-<span id="cb33-120"><a href="#cb33-120" aria-hidden="true" tabindex="-1"></a>        predict(h, <span class="kw">lambda</span> m: dist.Normal(m, sigma_t), mu)</span>
-<span id="cb33-121"><a href="#cb33-121" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-122"><a href="#cb33-122" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fresh_retail_model</span>
-<span id="cb33-123"><a href="#cb33-123" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-124"><a href="#cb33-124" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-125"><a href="#cb33-125" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> make_fresh_retail_model(</span>
-<span id="cb33-126"><a href="#cb33-126" aria-hidden="true" tabindex="-1"></a>    series_to_store<span class="op">=</span>series_to_store,</span>
-<span id="cb33-127"><a href="#cb33-127" aria-hidden="true" tabindex="-1"></a>    n_stores<span class="op">=</span>n_stores,</span>
-<span id="cb33-128"><a href="#cb33-128" aria-hidden="true" tabindex="-1"></a>    n_series<span class="op">=</span>n_series,</span>
-<span id="cb33-129"><a href="#cb33-129" aria-hidden="true" tabindex="-1"></a>    n_cov<span class="op">=</span>n_covariates,</span>
-<span id="cb33-130"><a href="#cb33-130" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb33-60"><a href="#cb33-60" aria-hidden="true" tabindex="-1"></a>                b_loc_store <span class="op">=</span> numpyro.sample(<span class="st">"b_loc_store"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">0.5</span>))</span>
+<span id="cb33-61"><a href="#cb33-61" aria-hidden="true" tabindex="-1"></a>                b_scale_store <span class="op">=</span> numpyro.sample(<span class="st">"b_scale_store"</span>, dist.HalfNormal(<span class="fl">0.3</span>))</span>
+<span id="cb33-62"><a href="#cb33-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-63"><a href="#cb33-63" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> numpyro.plate(<span class="st">"series"</span>, n_series, dim<span class="op">=-</span><span class="dv">1</span>):</span>
+<span id="cb33-64"><a href="#cb33-64" aria-hidden="true" tabindex="-1"></a>            drift_scale <span class="op">=</span> numpyro.sample(<span class="st">"drift_scale"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">3.0</span>, <span class="fl">1.0</span>))</span>
+<span id="cb33-65"><a href="#cb33-65" aria-hidden="true" tabindex="-1"></a>            phi_trend <span class="op">=</span> numpyro.sample(<span class="st">"phi_trend"</span>, dist.Beta(<span class="fl">8.0</span>, <span class="fl">2.0</span>))</span>
+<span id="cb33-66"><a href="#cb33-66" aria-hidden="true" tabindex="-1"></a>            tau_trend <span class="op">=</span> numpyro.sample(<span class="st">"tau_trend"</span>, dist.LogNormal(<span class="op">-</span><span class="fl">4.0</span>, <span class="fl">1.0</span>))</span>
+<span id="cb33-67"><a href="#cb33-67" aria-hidden="true" tabindex="-1"></a>            init_level <span class="op">=</span> numpyro.sample(<span class="st">"init_level"</span>, dist.Normal(<span class="fl">1.0</span>, <span class="fl">0.5</span>))</span>
+<span id="cb33-68"><a href="#cb33-68" aria-hidden="true" tabindex="-1"></a>            b_avail <span class="op">=</span> numpyro.sample(<span class="st">"b_avail"</span>, dist.LogNormal(<span class="fl">1.0</span>, <span class="fl">0.5</span>))</span>
+<span id="cb33-69"><a href="#cb33-69" aria-hidden="true" tabindex="-1"></a>            floor <span class="op">=</span> numpyro.sample(<span class="st">"floor"</span>, dist.Beta(<span class="fl">2.0</span>, <span class="fl">18.0</span>))</span>
+<span id="cb33-70"><a href="#cb33-70" aria-hidden="true" tabindex="-1"></a>            sigma <span class="op">=</span> numpyro.sample(<span class="st">"sigma"</span>, dist.HalfNormal(<span class="fl">0.5</span>))</span>
+<span id="cb33-71"><a href="#cb33-71" aria-hidden="true" tabindex="-1"></a>            noise_loading <span class="op">=</span> numpyro.sample(<span class="st">"noise_loading"</span>, dist.HalfNormal(<span class="fl">0.2</span>))</span>
+<span id="cb33-72"><a href="#cb33-72" aria-hidden="true" tabindex="-1"></a>            seasonal <span class="op">=</span> numpyro.sample(</span>
+<span id="cb33-73"><a href="#cb33-73" aria-hidden="true" tabindex="-1"></a>                <span class="st">"seasonal"</span>, dist.ZeroSumNormal(seasonal_scale, event_shape<span class="op">=</span>(<span class="dv">7</span>,))</span>
+<span id="cb33-74"><a href="#cb33-74" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb33-75"><a href="#cb33-75" aria-hidden="true" tabindex="-1"></a>            <span class="cf">with</span> numpyro.plate(<span class="st">"covariate"</span>, n_cov, dim<span class="op">=-</span><span class="dv">2</span>):</span>
+<span id="cb33-76"><a href="#cb33-76" aria-hidden="true" tabindex="-1"></a>                <span class="cf">with</span> handlers.reparam(config<span class="op">=</span>{<span class="st">"b"</span>: LocScaleReparam(centered<span class="op">=</span>centered_b)}):</span>
+<span id="cb33-77"><a href="#cb33-77" aria-hidden="true" tabindex="-1"></a>                    b <span class="op">=</span> numpyro.sample(</span>
+<span id="cb33-78"><a href="#cb33-78" aria-hidden="true" tabindex="-1"></a>                        <span class="st">"b"</span>,</span>
+<span id="cb33-79"><a href="#cb33-79" aria-hidden="true" tabindex="-1"></a>                        dist.Normal(</span>
+<span id="cb33-80"><a href="#cb33-80" aria-hidden="true" tabindex="-1"></a>                            b_loc_store[:, series_to_store], b_scale_store[:, series_to_store]</span>
+<span id="cb33-81"><a href="#cb33-81" aria-hidden="true" tabindex="-1"></a>                        ),</span>
+<span id="cb33-82"><a href="#cb33-82" aria-hidden="true" tabindex="-1"></a>                    )</span>
+<span id="cb33-83"><a href="#cb33-83" aria-hidden="true" tabindex="-1"></a>            <span class="co"># innovations opens its own time plate at dim=-2, so the covariate</span></span>
+<span id="cb33-84"><a href="#cb33-84" aria-hidden="true" tabindex="-1"></a>            <span class="co"># plate above must already be closed here.</span></span>
+<span id="cb33-85"><a href="#cb33-85" aria-hidden="true" tabindex="-1"></a>            drift <span class="op">=</span> innovations(</span>
+<span id="cb33-86"><a href="#cb33-86" aria-hidden="true" tabindex="-1"></a>                h,</span>
+<span id="cb33-87"><a href="#cb33-87" aria-hidden="true" tabindex="-1"></a>                <span class="st">"drift"</span>,</span>
+<span id="cb33-88"><a href="#cb33-88" aria-hidden="true" tabindex="-1"></a>                dist.Normal(<span class="fl">0.0</span>, drift_scale),</span>
+<span id="cb33-89"><a href="#cb33-89" aria-hidden="true" tabindex="-1"></a>                reparam<span class="op">=</span>LocScaleReparam(centered<span class="op">=</span>centered_drift),</span>
+<span id="cb33-90"><a href="#cb33-90" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb33-91"><a href="#cb33-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-92"><a href="#cb33-92" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The damped AR(1) slope is a Markov latent: markov_series scans over</span></span>
+<span id="cb33-93"><a href="#cb33-93" aria-hidden="true" tabindex="-1"></a>        <span class="co"># time (and must be called outside the series plate; the per-series</span></span>
+<span id="cb33-94"><a href="#cb33-94" aria-hidden="true" tabindex="-1"></a>        <span class="co"># parameters enter through the closure), seeds the forecast scan with the</span></span>
+<span id="cb33-95"><a href="#cb33-95" aria-hidden="true" tabindex="-1"></a>        <span class="co"># final in-sample slope, and returns the latent in the package layout</span></span>
+<span id="cb33-96"><a href="#cb33-96" aria-hidden="true" tabindex="-1"></a>        <span class="co"># (duration, n_series).</span></span>
+<span id="cb33-97"><a href="#cb33-97" aria-hidden="true" tabindex="-1"></a>        <span class="kw">def</span> slope_transition(carry: Array, _: Array <span class="op">|</span> <span class="va">None</span>) <span class="op">-&gt;</span> dist.Distribution:</span>
+<span id="cb33-98"><a href="#cb33-98" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> dist.Normal(phi_trend <span class="op">*</span> carry, tau_trend)</span>
+<span id="cb33-99"><a href="#cb33-99" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-100"><a href="#cb33-100" aria-hidden="true" tabindex="-1"></a>        slope <span class="op">=</span> markov_series(h, <span class="st">"slope"</span>, jnp.zeros(n_series), slope_transition)</span>
+<span id="cb33-101"><a href="#cb33-101" aria-hidden="true" tabindex="-1"></a>        level <span class="op">=</span> init_level <span class="op">+</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>) <span class="op">+</span> jnp.cumsum(slope, axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb33-102"><a href="#cb33-102" aria-hidden="true" tabindex="-1"></a>        seasonal_rep <span class="op">=</span> periodic_repeat(seasonal.T, duration, axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb33-103"><a href="#cb33-103" aria-hidden="true" tabindex="-1"></a>        covariates_contribution <span class="op">=</span> (features <span class="op">*</span> b[:, <span class="va">None</span>, :]).<span class="bu">sum</span>(axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb33-104"><a href="#cb33-104" aria-hidden="true" tabindex="-1"></a>        factor <span class="op">=</span> availability_factor(availability, b_avail, floor)</span>
+<span id="cb33-105"><a href="#cb33-105" aria-hidden="true" tabindex="-1"></a>        mu <span class="op">=</span> factor <span class="op">*</span> (level <span class="op">+</span> seasonal_rep <span class="op">+</span> covariates_contribution)</span>
+<span id="cb33-106"><a href="#cb33-106" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The constant basal noise bounds the likelihood at exact-zero sales: a</span></span>
+<span id="cb33-107"><a href="#cb33-107" aria-hidden="true" tabindex="-1"></a>        <span class="co"># learned basal term collapses there and NaNs the optimization, and a tiny</span></span>
+<span id="cb33-108"><a href="#cb33-108" aria-hidden="true" tabindex="-1"></a>        <span class="co"># epsilon (e.g. 1e-6) leaves that degenerate optimum in play; 0.02 sits just</span></span>
+<span id="cb33-109"><a href="#cb33-109" aria-hidden="true" tabindex="-1"></a>        <span class="co"># below one physical sale unit on the scaled axis (see the markdown above).</span></span>
+<span id="cb33-110"><a href="#cb33-110" aria-hidden="true" tabindex="-1"></a>        sigma_t <span class="op">=</span> factor <span class="op">*</span> (sigma <span class="op">+</span> noise_loading <span class="op">*</span> jax.nn.softplus(level)) <span class="op">+</span> <span class="fl">0.02</span></span>
+<span id="cb33-111"><a href="#cb33-111" aria-hidden="true" tabindex="-1"></a>        predict(h, <span class="kw">lambda</span> m: dist.Normal(m, sigma_t), mu)</span>
+<span id="cb33-112"><a href="#cb33-112" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-113"><a href="#cb33-113" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fresh_retail_model</span>
+<span id="cb33-114"><a href="#cb33-114" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-115"><a href="#cb33-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-116"><a href="#cb33-116" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> make_fresh_retail_model(</span>
+<span id="cb33-117"><a href="#cb33-117" aria-hidden="true" tabindex="-1"></a>    series_to_store<span class="op">=</span>series_to_store,</span>
+<span id="cb33-118"><a href="#cb33-118" aria-hidden="true" tabindex="-1"></a>    n_stores<span class="op">=</span>n_stores,</span>
+<span id="cb33-119"><a href="#cb33-119" aria-hidden="true" tabindex="-1"></a>    n_series<span class="op">=</span>n_series,</span>
+<span id="cb33-120"><a href="#cb33-120" aria-hidden="true" tabindex="-1"></a>    n_cov<span class="op">=</span>n_covariates,</span>
+<span id="cb33-121"><a href="#cb33-121" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div></div>
 <div id="7f245551" class="cell markdown">
 <p>Let us visualize the model structure:</p>
@@ -4142,7 +4132,7 @@ largest daily gap on 2024-06-22 (availability 0.42): expected sales 13.7 vs dema
 <span id="cb70-10"><a href="#cb70-10" aria-hidden="true" tabindex="-1"></a>contributions <span class="op">=</span> b_post_mean <span class="op">*</span> active_mean_x</span>
 <span id="cb70-11"><a href="#cb70-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb70-12"><a href="#cb70-12" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
-<span id="cb70-13"><a href="#cb70-13" aria-hidden="true" tabindex="-1"></a>    contributions.to_dataset(name<span class="op">=</span><span class="st">"contribution"</span>),  <span class="co"># ty: ignore[invalid-argument-type]</span></span>
+<span id="cb70-13"><a href="#cb70-13" aria-hidden="true" tabindex="-1"></a>    contributions.to_dataset(name<span class="op">=</span><span class="st">"contribution"</span>),</span>
 <span id="cb70-14"><a href="#cb70-14" aria-hidden="true" tabindex="-1"></a>    sample_dims<span class="op">=</span>[<span class="st">"series"</span>],</span>
 <span id="cb70-15"><a href="#cb70-15" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
 <span id="cb70-16"><a href="#cb70-16" aria-hidden="true" tabindex="-1"></a>    ci_probs<span class="op">=</span>hdi_probs,</span>

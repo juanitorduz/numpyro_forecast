@@ -266,7 +266,7 @@
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -464,19 +464,18 @@ y_{t,s} &amp; \sim \text{Normal}(\mu_{t,s}, \sigma).
 <span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>            drift <span class="op">=</span> innovations(</span>
 <span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>                h,</span>
 <span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>                <span class="st">"drift"</span>,</span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>                <span class="kw">lambda</span>: dist.Normal(<span class="fl">0.0</span>, drift_scale),</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>                dist.Normal(<span class="fl">0.0</span>, drift_scale),</span>
 <span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>                reparam<span class="op">=</span>LocScaleReparam(centered<span class="op">=</span>centered),</span>
 <span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>            )</span>
 <span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>            <span class="cf">with</span> numpyro.plate(<span class="st">"hour_of_week"</span>, period, dim<span class="op">=-</span><span class="dv">2</span>):</span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>                <span class="co"># asarray narrows numpyro's union return type for the type checker.</span></span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>                seasonal <span class="op">=</span> jnp.asarray(numpyro.sample(<span class="st">"seasonal"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">5.0</span>)))</span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>        level <span class="op">=</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>        prediction <span class="op">=</span> level <span class="op">+</span> periodic_repeat(seasonal, duration, axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>        predict(h, dist.Normal(<span class="fl">0.0</span>, sigma), prediction)</span>
-<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> multi_series_model</span></code></pre></div>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>                seasonal <span class="op">=</span> numpyro.sample(<span class="st">"seasonal"</span>, dist.Normal(<span class="fl">0.0</span>, <span class="fl">5.0</span>))</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>        level <span class="op">=</span> jnp.cumsum(drift, axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>        prediction <span class="op">=</span> level <span class="op">+</span> periodic_repeat(seasonal, duration, axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>        predict(h, dist.Normal(<span class="fl">0.0</span>, sigma), prediction)</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> multi_series_model</span></code></pre></div>
 </div></div>
 <div id="660bcf7b" class="cell markdown">
 <p>Let’s visualize the model:</p>

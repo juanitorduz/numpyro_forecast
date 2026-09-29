@@ -205,7 +205,7 @@ Each component gets its own priors,
 
 One transparency note on the priors: \text{Normal}(0, 1) on the initial levels allows negative values for two quantities that are strictly positive (a demand size and an inverse interval). We keep the blog post's choice for comparability; centering the inits on the data or switching to positive priors is the natural refinement, in the same spirit as the truncated or log-normal component likelihoods mentioned in the forecast section.
 
-Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis with the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, whose job is precisely a recursion driven by the observed series: it takes the driving series, an initial carry, a `step` function returning the one-step-ahead mean and the carry update, and the innovation distribution, and it owns both the in-sample filter and the forecast scan. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, and `noise`) and hands [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) a `step` that emits the *pre-update* level (the one-step-ahead mean) and a `carry_fn` that applies the gated update above. The gate travels as an `xs` input, padded with zeros over the forecast horizon by [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html): with the gate off, the level is frozen there, so the forecast is the final level plus the component's iid innovation noise at every horizon step, which is exactly the level model's flat forecast distribution \text{Normal}(\ell_T, \sigma). Padding the gate ourselves also matters for the cross-validation below, where [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows of the series that must not update the levels. Rows carry the observation axis, so the scalar level is `init[None]`. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_inv_eps_future` that the block registers only when forecasting.
+Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis with the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, whose job is precisely a recursion driven by the observed series: it takes the driving series, an initial carry, a `mean` function returning the one-step-ahead mean, an `update` function returning the next carry, and the innovation distribution, and it owns both the in-sample filter and the forecast scan. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, and `noise`) and hands [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) a `mean` that emits the *pre-update* level (the one-step-ahead mean) and an `update` that applies the gated update above. The gate travels as an `xs` input, padded with zeros over the forecast horizon by [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html): with the gate off, the level is frozen there, so the forecast is the final level plus the component's iid innovation noise at every horizon step, which is exactly the level model's flat forecast distribution \text{Normal}(\ell_T, \sigma). Padding the gate ourselves also matters for the cross-validation below, where [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows of the series that must not update the levels. Rows carry the observation axis, so the scalar level is `init[None]`. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_inv_eps_future` that the block registers only when forecasting.
 
 The `croston` body then only does what is specific to Croston's method:
 
@@ -242,22 +242,24 @@ def level_channel(h: Horizon, values: Array, gate: Array) -> tuple[SSOEResult, A
         sampled future values) and the observation noise scale.
     """
     smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    init = jnp.asarray(numpyro.sample("init", dist.Normal(loc=0, scale=1)))
-    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
+    init = numpyro.sample("init", dist.Normal(loc=0, scale=1))
+    noise = numpyro.sample("noise", dist.HalfNormal(scale=1))
 
-    def step(level, gate_t):
-        # Emit the pre-update level (the one-step-ahead mean); update only at events.
-        return level, lambda y_t, _: jnp.where(
-            gate_t, smoothing * y_t + (1 - smoothing) * level, level
-        )
+    def mean(level, _):
+        # Emit the pre-update level (the one-step-ahead mean).
+        return level
+
+    def update(level, y_t, _, gate_t):
+        # Update only at events; the gate is frozen over the horizon.
+        return jnp.where(gate_t, smoothing * y_t + (1 - smoothing) * level, level)
 
     result = ssoe(
         h,
         "eps",
         values,
         init[None],
-        step,
+        mean,
+        update,
         dist.Normal(loc=0, scale=noise),
         xs=pad_future(gate, h.future),
     )

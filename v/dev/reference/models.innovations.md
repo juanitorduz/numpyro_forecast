@@ -10,7 +10,7 @@ Usage
 models.innovations(
     h,
     name,
-    dist_fn,
+    prior,
     *,
     reparam=None,
 )
@@ -29,8 +29,8 @@ The horizon for the current model call (see [Horizon](models.Horizon.md#numpyro_
 `name: str`  
 Base sample-site name for the in-sample latent.
 
-`dist_fn: Callable[[], dist.Distribution]`  
-Zero-argument callable returning the per-step prior distribution.
+`prior: dist.Distribution`  
+The per-step prior distribution, shared by the in-sample and forecast sites (each time plate expands a copy; the instance is never mutated). Its batch shape is the per-step shape, for example `()` for a scalar latent or `(n_series,)` under an enclosing series plate; the time axis comes from the plate.
 
 `reparam: Reparam | None = None`  
 Optional reparameterization (e.g. `LocScaleReparam`) applied to both the in-sample and forecast sites.

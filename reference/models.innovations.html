@@ -197,7 +197,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="36" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
     </span>
   </li>  
 </ul>
@@ -263,12 +263,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/models.ssoe.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.ssoe</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">models.SSOEStep</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -783,13 +777,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L133-L172" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L156-L199" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">innovations</span>(
     <span class="va">h</span>,
     <span class="va">name</span>,
-    <span class="va">dist_fn</span>,
+    <span class="va">prior</span>,
     <span class="op">*</span>,
     <span class="va">reparam</span><span class="op">=</span><span class="cn-none">None</span>,
 )</span></code></pre></div>
@@ -809,9 +803,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dd>
 <p>Base sample-site name for the in-sample latent.</p>
 </dd>
-<dt><code><span class="doc-parameter-name">dist_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Callable[[], dist.Distribution]</span></code></dt>
+<dt><code><span class="doc-parameter-name">prior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
-<p>Zero-argument callable returning the per-step prior distribution.</p>
+<p>The per-step prior distribution, shared by the in-sample and forecast sites (each time plate expands a copy; the instance is never mutated). Its batch shape is the per-step shape, for example <code>()</code> for a scalar latent or <code>(n_series,)</code> under an enclosing series plate; the time axis comes from the plate.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">reparam</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Reparam | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>

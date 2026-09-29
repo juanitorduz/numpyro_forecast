@@ -240,7 +240,7 @@ y_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qq
 
 The key insight (from the blog post, and the same one behind the innovations state space form of exponential smoothing) is that *in sample the errors are deterministic* given the parameters and the observed data: running the recursion forward, the one-step-ahead prediction at time t is \hat{y}\_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} and the error is simply \varepsilon_t = y_t - \hat{y}\_t, initialized with y\_{-1} = \mu and \varepsilon\_{-1} = 0. The whole in-sample likelihood is then a single Gaussian observation site: conditioning y_t \sim \text{Normal}(\hat{y}\_t, \sigma) is exactly the blog post's "condition on the errors" trick, \varepsilon_t \sim \text{Normal}(0, \sigma), since the two differ only by a location shift.
 
-The model is a plain NumPyro function `(covariates, data=None)`: its first line derives the train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), and the recursion is one [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) call. The block takes the driving series `y`, the initial carry (y\_{-1}, \varepsilon\_{-1}), a `step` function, and the innovation distribution; `step(carry, x_t)` returns the one-step-ahead mean and a `carry_fn(y_t, eps_t)` that builds the next carry, here simply the day's value and error. Rows carry the observation axis, so the carry is `(mu[None], zeros((1,)))` and the mean has shape `(1,)`; the block checks these shapes. It then owns the two scans:
+The model is a plain NumPyro function `(covariates, data=None)`: its first line derives the train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), and the recursion is one [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) call. The block takes the driving series `y`, the initial carry (y\_{-1}, \varepsilon\_{-1}), a `mean` function, an `update` function, and the innovation distribution; `mean(carry, x_t)` returns the one-step-ahead mean and `update(carry, y_t, eps_t, x_t)` builds the next carry, here simply the day's value and error. Rows carry the observation axis, so the carry is `(mu[None], zeros((1,)))` and the mean has shape `(1,)`; the block checks these shapes. It then owns the two scans:
 
 1.  **In sample.** A deterministic `jax.lax.scan` filters the observed series into one-step-ahead means \hat{y}\_t, returned as `r.mu` (exposed as the deterministic site `"mu_t"`), and the `"obs"` site conditions the data on them.
 2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), then rolls the recursion forward feeding the *sampled* observation and innovation back into the carry, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, so the forecast uncertainty compounds over the horizon exactly as the generative process says it should.
@@ -264,19 +264,20 @@ def arma_1_1(covariates: Array, data: Array | None = None) -> None:
     h = Horizon.from_data(covariates, data)
     y = covariates[..., : h.t_obs, :]  # observed history only; never reads beyond t_obs
 
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(loc=0, scale=1)))
+    mu = numpyro.sample("mu", dist.Normal(loc=0, scale=1))
     phi = numpyro.sample("phi", dist.Uniform(low=-1, high=1))
     theta = numpyro.sample("theta", dist.Uniform(low=-1, high=1))
     sigma = numpyro.sample("sigma", dist.HalfNormal(scale=1))
 
-    def step(carry, _):
+    def mean(carry, _):
         y_prev, error_prev = carry
-        pred = mu + phi * y_prev + theta * error_prev
-        return pred, lambda y_t, eps_t: (y_t, eps_t)
+        return mu + phi * y_prev + theta * error_prev
+
+    def update(carry, y_t, eps_t, _):
+        return y_t, eps_t
 
     init_carry = (mu[None], jnp.zeros((1,)))  # y_{-1} = mu and eps_{-1} = 0 seed the recursion
-    r = ssoe(h, "eps", y, init_carry, step, dist.Normal(loc=0, scale=sigma))
+    r = ssoe(h, "eps", y, init_carry, mean, update, dist.Normal(loc=0, scale=sigma))
 
     numpyro.deterministic("mu_t", r.mu)
     numpyro.sample("obs", dist.Normal(loc=r.mu, scale=sigma), obs=h.data)
