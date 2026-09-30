@@ -21,13 +21,8 @@ Every model is a plain function on the [Horizon.from_data](../../../reference/mo
 
 
 ``` python
-import hashlib
-import shutil
-import urllib.request
 import warnings
-import zipfile
 from functools import partial
-from pathlib import Path
 from time import perf_counter
 
 import arviz as az
@@ -61,6 +56,7 @@ from numpyro_forecast import (
     results_to_dataframe,
     to_datatree,
 )
+from numpyro_forecast.datasets import load_m5
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.typing import Array, ForecastModel
@@ -95,72 +91,39 @@ warnings.filterwarnings("ignore", message="When multiple credible intervals are 
 
 # Read data
 
-The data comes from the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files: the daily sales of the training period (`d_1` to `d_1941`), the 28 evaluation days (`d_1942` to `d_1969`, released after the competition), the calendar with the SNAP days, the weekly shelf prices, and the official evaluation weights. The archive is 50 MB and is downloaded once into `~/.cache/numpyro_forecast/m5/`.
+[load_m5()](../../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) downloads the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files once into `~/.cache/numpyro_forecast/m5/` (a 50 MB archive checked against its digest) and reads them: the daily sales of the training period (`d_1` to `d_1941`) followed by the 28 evaluation days (`d_1942` to `d_1969`, released after the competition) as a dense `(days, series)` array, which is already the layout the models need; the weekly shelf prices repeated over the days of every series (`NaN` when the item was not on the shelf); the identifiers of the 30,490 series in the order of the sales file; the calendar with the events and the SNAP days; and the official evaluation weights.
 
 
     In [2]:
 
 
 ``` python
-M5_URL = "https://github.com/Nixtla/m5-forecasts/raw/main/datasets/m5.zip"
-M5_SHA256 = "cc704ba15d6802f8262e6ec7d4c6041e4ad6366a94365e8c84f721e450eed774"
-M5_FILES = (
-    "calendar.csv",
-    "sales_train_evaluation.csv",
-    "sales_test_evaluation.csv",
-    "sell_prices.csv",
-    "weights_evaluation.csv",
-)
-
-
-def ensure_m5_files(cache_dir: str | Path | None = None) -> Path:
-    """Download the M5 archive once and unpack the files the notebook reads.
-
-    The archive streams into a ``.part`` file and moves into place only when its
-    SHA-256 digest matches, so an interrupted download never poisons the cache.
-    """
-    directory = (
-        Path.home() / ".cache" / "numpyro_forecast" / "m5"
-        if cache_dir is None
-        else Path(cache_dir)
-    )
-    directory.mkdir(parents=True, exist_ok=True)
-    if all((directory / name).exists() for name in M5_FILES):
-        return directory
-    archive = directory / "m5.zip"
-    if not archive.exists():
-        partial_file = archive.with_name(archive.name + ".part")
-        with (
-            urllib.request.urlopen(M5_URL, timeout=60) as response,
-            partial_file.open("wb") as target,
-        ):
-            shutil.copyfileobj(response, target)
-        digest = hashlib.sha256(partial_file.read_bytes()).hexdigest()
-        if digest != M5_SHA256:
-            partial_file.unlink()
-            msg = f"unexpected digest {digest} of the downloaded archive; the file was discarded"
-            raise ValueError(msg)
-        partial_file.replace(archive)
-    with zipfile.ZipFile(archive) as archive_file:
-        archive_file.extractall(directory, members=M5_FILES)
-    return directory
-
-
-data_dir = ensure_m5_files()
+m5 = load_m5()
 
 KEYS = ["item_id", "dept_id", "cat_id", "store_id", "state_id"]
 N_DAYS_TRAIN = 1_941
 HORIZON = 28
 N_DAYS = N_DAYS_TRAIN + HORIZON
 
-calendar_lf: pl.LazyFrame = pl.scan_csv(data_dir / "calendar.csv", try_parse_dates=True)
-sales_train_lf: pl.LazyFrame = pl.scan_csv(data_dir / "sales_train_evaluation.csv")
-sales_test_lf: pl.LazyFrame = pl.scan_csv(data_dir / "sales_test_evaluation.csv")
-prices_lf: pl.LazyFrame = pl.scan_csv(data_dir / "sell_prices.csv")
+sales = m5.sales
+keys_df = m5.keys
+n_series = sales.shape[1]
+print(f"sales: {sales.shape} (days, series), {np.isnan(sales).sum()} missing values")
+keys_df.head(3)
 ```
 
 
-The frames are scanned lazily and shaped with small named polars expressions, one per column computation, and frame steps composed with `pipe`. The calendar gives every day its weekday, its position in years, the SNAP flags of the three states, a Christmas flag (the one day a year the stores are closed) and the 31 day-of-month dummies of model 1.
+    sales: (1969, 30490) (days, series), 0 missing values
+
+
+| id                   | item_id         | dept_id     | cat_id    | store_id | state_id |
+|----------------------|-----------------|-------------|-----------|----------|----------|
+| "HOBBIES_1_001_CA_1" | "HOBBIES_1_001" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
+| "HOBBIES_1_002_CA_1" | "HOBBIES_1_002" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
+| "HOBBIES_1_003_CA_1" | "HOBBIES_1_003" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
+
+
+The calendar is shaped with small named polars expressions, one per column computation. It gives every day its weekday, its position in years, the SNAP flags of the three states, a Christmas flag (the one day a year the stores are closed) and the 31 day-of-month dummies of model 1.
 
 
     In [3]:
@@ -190,24 +153,18 @@ def day_of_month_dummies() -> list[pl.Expr]:
     ]
 
 
-def week_position() -> pl.Expr:
-    """Position of the Walmart week ``wm_yr_wk`` among the calendar weeks, from 0."""
-    return pl.col("wm_yr_wk").rank("dense").cast(pl.Int64).sub(pl.lit(1))
-
-
 calendar_df = (
-    calendar_lf.with_row_index("t")
+    m5.calendar.lazy()
+    .with_row_index("t")
     .with_columns(
         *day_of_month_dummies(),
         christmas=is_christmas().cast(pl.Float32),
         dow=day_of_week_index(),
         years=years_since_start(),
-        week=week_position(),
     )
     .select(
         "t",
         "date",
-        "week",
         "dow",
         "years",
         "christmas",
@@ -222,82 +179,21 @@ calendar_df.head(3)
 ```
 
 
-| t | date | week | dow | years | christmas | snap_CA | snap_TX | snap_WI | dom_1 | dom_2 | dom_3 | dom_4 | dom_5 | dom_6 | dom_7 | dom_8 | dom_9 | dom_10 | dom_11 | dom_12 | dom_13 | dom_14 | dom_15 | dom_16 | dom_17 | dom_18 | dom_19 | dom_20 | dom_21 | dom_22 | dom_23 | dom_24 | dom_25 | dom_26 | dom_27 | dom_28 | dom_29 | dom_30 | dom_31 |
-|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 2011-01-29 | 0 | 5 | 0.0 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 0.0 |
-| 1 | 2011-01-30 | 0 | 6 | 0.00274 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 |
-| 2 | 2011-01-31 | 0 | 0 | 0.005479 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
+| t | date | dow | years | christmas | snap_CA | snap_TX | snap_WI | dom_1 | dom_2 | dom_3 | dom_4 | dom_5 | dom_6 | dom_7 | dom_8 | dom_9 | dom_10 | dom_11 | dom_12 | dom_13 | dom_14 | dom_15 | dom_16 | dom_17 | dom_18 | dom_19 | dom_20 | dom_21 | dom_22 | dom_23 | dom_24 | dom_25 | dom_26 | dom_27 | dom_28 | dom_29 | dom_30 | dom_31 |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| 0 | 2011-01-29 | 5 | 0.0 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 0.0 |
+| 1 | 2011-01-30 | 6 | 0.00274 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 |
+| 2 | 2011-01-31 | 0 | 0.005479 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
 
 
-The sales file is wide, one row per series and one column per day, which is already the dense layout the models need. We append the 28 evaluation days to every series (joined on the five identifier columns, keeping the file order) and collect the frame once, so the identifiers and the sales matrix share the same row order.
+A missing price means the item was not on the shelf that week; the kit's `saled` flag is "price listed and not Christmas", and it later gates the mean of model 2.
 
 
     In [4]:
 
 
 ``` python
-def series_id() -> pl.Expr:
-    """Name a series by its item and store, ``HOBBIES_1_001_CA_1``."""
-    return pl.concat_str([pl.col("item_id"), pl.col("store_id")], separator="_")
-
-
-def day_columns(first: int, last: int) -> list[str]:
-    """Names of the daily sales columns ``d_first`` to ``d_last``."""
-    return [f"d_{day}" for day in range(first, last + 1)]
-
-
-def join_test_days(train: pl.LazyFrame, test: pl.LazyFrame) -> pl.LazyFrame:
-    """Append the 28 evaluation days to every series, keeping the file order."""
-    return train.join(test, on=KEYS, how="left", maintain_order="left")
-
-
-sales_df = (
-    sales_train_lf.pipe(join_test_days, sales_test_lf)
-    .with_columns(id=series_id())
-    .collect(engine="streaming")
-)
-keys_df = sales_df.select("id", *KEYS)
-sales = sales_df.select(day_columns(1, N_DAYS)).to_numpy().T.astype(np.float32)
-del sales_df
-n_series = sales.shape[1]
-print(f"sales: {sales.shape} (days, series), {np.isnan(sales).sum()} missing values")
-keys_df.head(3)
-```
-
-
-    sales: (1969, 30490) (days, series), 0 missing values
-
-
-| id                   | item_id         | dept_id     | cat_id    | store_id | state_id |
-|----------------------|-----------------|-------------|-----------|----------|----------|
-| "HOBBIES_1_001_CA_1" | "HOBBIES_1_001" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
-| "HOBBIES_1_002_CA_1" | "HOBBIES_1_002" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
-| "HOBBIES_1_003_CA_1" | "HOBBIES_1_003" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
-
-
-Prices are weekly. We pivot them to one row per series and one column per Walmart week, then index the weekly matrix with the week of every calendar day. A missing price means the item was not on the shelf that week; the kit's `saled` flag is "price listed and not Christmas", and it later gates the mean of model 2.
-
-
-    In [5]:
-
-
-``` python
-def weekly_prices(prices: pl.LazyFrame, keys: pl.DataFrame) -> pl.DataFrame:
-    """Pivot the weekly shelf prices to one row per series (file order), one column per week."""
-    weeks = prices.select("wm_yr_wk").unique().sort("wm_yr_wk").collect(engine="streaming")
-    positions = keys.lazy().with_row_index("n").select("n", "store_id", "item_id")
-    return (
-        prices.join(positions, on=["store_id", "item_id"])
-        .collect(engine="streaming")
-        .pivot(on="wm_yr_wk", index="n", values="sell_price")
-        .sort("n")
-        .select([str(week) for week in weeks["wm_yr_wk"].to_list()])
-    )
-
-
-weekly_price = prices_lf.pipe(weekly_prices, keys_df).to_numpy().astype(np.float32)
-week_of_day = calendar_df["week"].to_numpy()[:N_DAYS]
-price = weekly_price[:, week_of_day].T
+price = m5.price
 christmas = calendar_df["christmas"].to_numpy()[:N_DAYS]
 saled = (~np.isnan(price)).astype(np.float32) * (1.0 - christmas[:, None])
 price_filled = np.nan_to_num(price, nan=0.0)
@@ -313,7 +209,7 @@ print(f"price: {price.shape}, share of series-days with a listed price {saled.me
 The competition scores 42,840 series: the 30,490 items in stores (level 12) and their sums over the 11 coarser groupings. A label and a dense group id per level turn into a sparse `(30,490, 42,840)` summation matrix, so any array of bottom-level values (data or forecast draws) is aggregated to every level with one sparse product.
 
 
-    In [6]:
+    In [5]:
 
 
 ``` python
@@ -416,7 +312,7 @@ pl.DataFrame(
 The total daily sales grow over the five years and drop to a few units on every December 25. The kit relies on the StudentT tails of models 1 and 3 to absorb these days (and model 2 gates its mean with the `saled` flag), so we do the same.
 
 
-    In [7]:
+    In [6]:
 
 
 ``` python
@@ -435,14 +331,14 @@ ax.set(title="Total daily unit sales of the 30,490 series", xlabel="date", ylabe
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-8-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-7-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
 The 70 store-by-department series (level 9) are the data of model 3. The seven departments of the first store show the range of scales and the weekly pattern that the models have to capture.
 
 
-    In [8]:
+    In [7]:
 
 
 ``` python
@@ -463,14 +359,14 @@ fig.suptitle("Store CA_1: daily unit sales by department", fontsize=16, fontweig
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-9-output-1.png" class="figure-img" width="1211" height="1411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-8-output-1.png" class="figure-img" width="1211" height="1411" /></p>
 </figure>
 
 
 At the bottom level most series are intermittent. Among the days with a listed price, the share of days with zero sales runs from about a half (`FOODS_3`, `HOUSEHOLD_1`) to 85% (`HOBBIES_2`); the food departments are the least intermittent and sell the most units per day.
 
 
-    In [9]:
+    In [8]:
 
 
 ``` python
@@ -509,7 +405,7 @@ zero_days = pl.DataFrame(
 We keep seven items for the item-level plots: the best seller of each department in store CA_1 over the last training year.
 
 
-    In [10]:
+    In [9]:
 
 
 ``` python
@@ -540,7 +436,7 @@ fig.suptitle("Best seller of each department in store CA_1", fontsize=16, fontwe
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-11-output-1.png" class="figure-img" width="1211" height="1411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-10-output-1.png" class="figure-img" width="1211" height="1411" /></p>
 </figure>
 
 
@@ -553,7 +449,7 @@ The kit's `m5_backtest` scores a forecast of the 42,840 series with the structur
 The dollar sales are the sales times the shelf price; the scale clamps the sum of the absolute differences at one (as the kit does) so a series that never moves does not get an infinite score. The weights depend on the forecast origin, so they are built per window. We check them against the official weights of the evaluation window, which validates the aggregation matrix and the price join in one go.
 
 
-    In [11]:
+    In [10]:
 
 
 ``` python
@@ -582,7 +478,7 @@ def m5_scales(y: np.ndarray) -> np.ndarray:
 
 weights_holdout = m5_weights(N_DAYS_TRAIN)
 scales_holdout = m5_scales(sales_agg[:N_DAYS_TRAIN])
-official_weights = pl.read_csv(data_dir / "weights_evaluation.csv").with_columns(
+official_weights = m5.weights.with_columns(
     label=pl.concat_str(
         [pl.col("Level_id"), pl.col("Agg_Level_1"), pl.col("Agg_Level_2")], separator="/"
     )
@@ -605,7 +501,7 @@ assert max_weight_gap < 1e-4
 The scoring functions plug into [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): a `transform` sums the bottom-level draws and the truth to the 42,840 aggregates, and `per_window_metrics` returns one weighted scaled CRPS per level for the window's origin, so every series is sorted once. The headline WS-CRPS is the mean of the 12 level scores.
 
 
-    In [12]:
+    In [11]:
 
 
 ``` python
@@ -659,7 +555,7 @@ def ws_crps_table(scores: dict[str, dict[str, float]]) -> pl.DataFrame:
 The official pinball loss of the uncertainty competition (WSPL) has the same weights and scales, with the mean pinball loss over the nine competition quantiles in place of the CRPS. We compute it on the evaluation window to compare with the published leaderboard.
 
 
-    In [13]:
+    In [12]:
 
 
 ``` python
@@ -689,7 +585,7 @@ def ws_pinball(
 Models 1 and 3 forecast an aggregate. The kit's submission splits such a forecast to the items in proportion to their sales over the last 28 training days and draws Poisson noise at the bottom, so that the item forecasts are integer and their spread at the bottom is not just a scaled copy of the aggregate's. The Poisson draws use NumPy: `jax.random.poisson` on the CPU is about 40 times slower for an array of this size.
 
 
-    In [14]:
+    In [13]:
 
 
 ``` python
@@ -744,7 +640,7 @@ dept_ids = [
 All three models use the kit's optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (`learning_rate_decay=0.1` in Pyro's `Forecaster`). The step counts are the kit's defaults, 1,001 for models 1 and 2 and 2,001 for model 3.
 
 
-    In [15]:
+    In [14]:
 
 
 ``` python
@@ -904,7 +800,7 @@ with the kit's priors \beta_0 \sim \text{Normal}(0, 10), \beta\_{\text{trend}} \
 The model has no latent time process, so [predict()](../../../reference/models.predict.md#numpyro_forecast.models.predict) is the only building block it needs. The forecast covariates are just the calendar of the next 28 days.
 
 
-    In [16]:
+    In [15]:
 
 
 ``` python
@@ -948,7 +844,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-17-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-16-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -957,7 +853,7 @@ numpyro.render_model(
 The kit's priors are wide on the log scale: an intercept with a standard deviation of 10, weekday effects with a standard deviation of 5 and a unit-variance weight on each of the 31 dummies. The 94\\ prior band spans about -20 to 20 and the observed log total of about 10.4 sits at the edge of the 50\\ band: weakly informative priors that the 1,941 observations will dominate. The plot shows the last twenty weeks of the training data against the prior bands.
 
 
-    In [17]:
+    In [16]:
 
 
 ``` python
@@ -1007,7 +903,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-18-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-17-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -1016,7 +912,7 @@ ax.set(
 The final fit uses the full training period. We time it with `jax.block_until_ready` so the JIT compilation is included, as it is in every backtest window.
 
 
-    In [18]:
+    In [17]:
 
 
 ``` python
@@ -1032,11 +928,11 @@ plot_loss(svi_top.losses, "Model 1: ELBO loss")
 ```
 
 
-    model 1: 1001 steps in 2.4 s, final loss -1402.0
+    model 1: 1001 steps in 4.1 s, final loss -1402.0
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-19-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-18-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1045,7 +941,7 @@ plot_loss(svi_top.losses, "Model 1: ELBO loss")
 [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call. The trend is about 0.08 per year on the log scale (8% a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.
 
 
-    In [19]:
+    In [18]:
 
 
 ``` python
@@ -1078,7 +974,7 @@ az.summary(tree_top, var_names=["bias", "trend", "dof", "noise_scale"])
 The weekday effects show the weekend peak (Saturday and Sunday about 0.33 above the midweek days on the log scale, about 40% more sales) and the day-of-month effects the pay-day pattern: the first days of the month sell more than the last ones.
 
 
-    In [20]:
+    In [19]:
 
 
 ``` python
@@ -1090,11 +986,11 @@ pc.viz["figure"].item().suptitle("Model 1: weekday effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-21-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-20-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
-    In [21]:
+    In [20]:
 
 
 ``` python
@@ -1106,7 +1002,7 @@ pc.viz["figure"].item().suptitle("Model 1: day-of-month effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-22-output-1.png" class="figure-img" width="811" height="911" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-21-output-1.png" class="figure-img" width="811" height="911" /></p>
 </figure>
 
 
@@ -1115,7 +1011,7 @@ pc.viz["figure"].item().suptitle("Model 1: day-of-month effects", fontsize=14);
 The in-sample posterior predictive (blue) and the 28-day forecast (orange) on the log scale, over the last twenty training weeks and the evaluation window.
 
 
-    In [22]:
+    In [21]:
 
 
 ``` python
@@ -1166,7 +1062,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-23-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-22-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -1175,7 +1071,7 @@ ax.set(
 The forecast draws go back to units with `exp`, are split to the items with their last-28-day shares and get Poisson noise. The bottom-level draws are then summed to every level and scored. The split does not know anything about the items, so the item levels (10 to 12) measure the share heuristic, not the model.
 
 
-    In [23]:
+    In [22]:
 
 
 ``` python
@@ -1209,7 +1105,7 @@ print(
 The split forecast at the store level (level 3) shows what top-down means: every store gets the same shape, scaled by its share.
 
 
-    In [24]:
+    In [23]:
 
 
 ``` python
@@ -1228,7 +1124,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-25-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-24-output-1.png" class="figure-img" width="1511" height="1443" /></p>
 </figure>
 
 
@@ -1246,7 +1142,7 @@ with all weights \sim \text{Normal}(0, 1), \text{bexp}(x) = 10^3\\ \text{sigmoid
 Training subsamples the series plate. The guide's `create_plates` opens the `series` plate with `subsample_size=600`; under `replay` the model's plate receives the same indices, `numpyro.subsample` picks the matching columns of the data and the covariates, and the observed log density is scaled by 30{,}490 / 600. [Horizon.from_data](../../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) is called on the subsampled arrays, so [predict()](../../../reference/models.predict.md#numpyro_forecast.models.predict) observes the minibatch. [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) and `Predictive` run without the guide and see the full plate. The Gamma distribution is not a location family, so it enters [predict()](../../../reference/models.predict.md#numpyro_forecast.models.predict) through a link that maps the mean to the distribution, after registering it as elementwise for the prefix conditioning.
 
 
-    In [25]:
+    In [24]:
 
 
 ``` python
@@ -1350,7 +1246,7 @@ covariates_bottom_train = covariates_bottom[:, T0:N_DAYS_TRAIN]
 The model has no time latents, so it can be evaluated on any window and any subset of series with the same posterior draws. A second model instance for the seven focus items and the last sixteen training weeks makes the prior and posterior predictive checks cheap. The 94\\ prior bands reach hundreds of units, up to the cap of the bounded exponential for the top seller, while the 50\\ HDI sits at zero: the prior is wide on the log scale and the Gamma is right-skewed. The observations lie inside the bands; the check says the prior is proper and not degenerate, and little more.
 
 
-    In [26]:
+    In [25]:
 
 
 ``` python
@@ -1377,7 +1273,7 @@ del prior_obs_focus
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-27-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-26-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1386,7 +1282,7 @@ del prior_obs_focus
 Each step evaluates the Gamma likelihood of 600 series over 1,820 days (about 1.1 million cells), so the 1,001 steps take about a minute despite the 55 million cells of the full panel. The loss is noisy because of the subsampling.
 
 
-    In [27]:
+    In [26]:
 
 
 ``` python
@@ -1407,11 +1303,11 @@ plot_loss(svi_bottom.losses[50:], "Model 2: ELBO loss (from step 50)")
 ```
 
 
-    model 2: 1001 steps in 62.8 s, final loss -1.102e+08
+    model 2: 1001 steps in 56.9 s, final loss -1.102e+08
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-28-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-27-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1420,7 +1316,7 @@ plot_loss(svi_bottom.losses[50:], "Model 2: ELBO loss (from step 50)")
 The posterior has 1,540 parameters: for every store, the two heads times three moving averages times seven departments, the SNAP effect per head and department, and the weekday effects. We export the draws to ArviZ with named coordinates (the full posterior predictive of 30,490 series over 1,820 days would not fit in memory, so this tree carries the posterior only). The SNAP effect on the mean is a food effect: it is largest in the `FOODS_2` and `FOODS_3` departments, where a food-stamp day lifts the expected sales by 5% to 75% depending on the store, and within \pm 0.1 on the log scale for the hobbies and household departments.
 
 
-    In [28]:
+    In [27]:
 
 
 ``` python
@@ -1455,14 +1351,14 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-29-output-1.png" class="figure-img" width="811" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-28-output-1.png" class="figure-img" width="811" height="1211" /></p>
 </figure>
 
 
 The moving-average weights of the mean head in store CA_1 show how the model reads an item's history. The three windows overlap (the 84-day window contains the other two), so the individual weights are weakly identified and change sign from one department to the next; in `HOBBIES_2` the 56-day and 84-day weights nearly cancel at about \mp 1. What is stable is their sum, between 0.25 and 0.4 in every department: an exponent below one on the recent level, which shrinks the high sellers toward their department.
 
 
-    In [29]:
+    In [28]:
 
 
 ``` python
@@ -1480,7 +1376,7 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-30-output-1.png" class="figure-img" width="811" height="711" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-29-output-1.png" class="figure-img" width="811" height="711" /></p>
 </figure>
 
 
@@ -1489,7 +1385,7 @@ pc.viz["figure"].item().suptitle(
 The posterior predictive of the focus items over the last sixteen training weeks and the evaluation window. The Gamma has its mode at zero whenever its shape m / v is below one, so the 50\\ HDI of an intermittent item sits on the floor while the 94\\ band covers the spikes; for the food best sellers the bands follow the weekly pattern but the model, which has no item-level parameters, underestimates the level of the top seller `FOODS_3_090_CA_1`.
 
 
-    In [30]:
+    In [29]:
 
 
 ``` python
@@ -1519,7 +1415,7 @@ del pp_focus, fc_focus
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-31-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-30-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1528,7 +1424,7 @@ del pp_focus, fc_focus
 The forecast of all 30,490 series takes about two minutes: the Gamma sampler dominates (500 draws of 28 days for every series). As the kit does, only the last week of data is passed to [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), since the model needs no history beyond its covariates. The draws are summed to every level and scored.
 
 
-    In [31]:
+    In [30]:
 
 
 ``` python
@@ -1560,14 +1456,14 @@ print(
 ```
 
 
-    forecast of (500, 28, 30490) draws in 113 s
+    forecast of (500, 28, 30490) draws in 112 s
     model 2 evaluation window: WS-CRPS 0.728, WSPL 0.266
 
 
 Summed to the store level, the bottom-up forecast keeps the weekly pattern of every store, but the bands are narrow: the 3,049 Gamma draws of a store are independent given the parameters, so their sum has far less spread than the store's sales.
 
 
-    In [32]:
+    In [31]:
 
 
 ``` python
@@ -1586,7 +1482,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-33-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-32-output-1.png" class="figure-img" width="1511" height="1443" /></p>
 </figure>
 
 
@@ -1602,7 +1498,7 @@ Model 3 works on the 70 store-by-department series (level 9). Each series j is d
 with \beta\_{0,j} \sim \text{Normal}(0, 10), \beta\_{\text{trend},j} \sim \text{LogNormal}(-1, 1), s\_{j,d} \sim \text{Normal}(0, 1), w\_{j,k} \sim \text{Normal}(0, 1), \sigma\_{\text{noise},j} \sim \text{LogNormal}(-1, 1) and one shared \nu \sim \text{Uniform}(1, 10). The series are independent given \nu: this is a batch of 70 univariate regressions, written with a `series` plate on the observation axis and a `day_of_week` plate for the weekday effects.
 
 
-    In [33]:
+    In [32]:
 
 
 ``` python
@@ -1649,7 +1545,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-34-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-33-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1658,7 +1554,7 @@ numpyro.render_model(
 On the scaled axis a store-department sells a few typical daily changes a day: the medians of the 70 training series lie between 2 and 8, and those of the seven departments of store CA_1 between 2 and 6. The prior intercept with a standard deviation of 10 and the 104 Fourier weights with unit variance give 94\\ prior bands of about \pm 25 and 50\\ bands of about \pm 10 around a center a little above zero (the positive trend prior over five years): wide, but the data sit inside the 50\\ band.
 
 
-    In [34]:
+    In [33]:
 
 
 ``` python
@@ -1683,14 +1579,14 @@ del prior_obs_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-35-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-34-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
 ## Fit
 
 
-    In [35]:
+    In [34]:
 
 
 ``` python
@@ -1711,11 +1607,11 @@ plot_loss(svi_mid.losses, "Model 3: ELBO loss")
 ```
 
 
-    model 3: 2001 steps in 4.6 s, final loss 219410.7
+    model 3: 2001 steps in 5.1 s, final loss 219410.7
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-36-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-35-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1724,7 +1620,7 @@ plot_loss(svi_mid.losses, "Model 3: ELBO loss")
 The degrees of freedom are shared by the 70 series, about 6.5. The trends are per series: in store CA_1 they range from 0.14 (`FOODS_2`) to 0.88 (`HOUSEHOLD_1`) typical daily changes per year. The noise scales are the residual spread in units of a typical daily change, between 0.55 and 0.9.
 
 
-    In [36]:
+    In [35]:
 
 
 ``` python
@@ -1754,7 +1650,7 @@ az.summary(tree_mid, var_names=["dof"])
 | dof | 6.465 | 0.084 | 6.3      | 6.6      | 443      | 423      | nan   | 0.004     | 0.0028  |
 
 
-    In [37]:
+    In [36]:
 
 
 ``` python
@@ -1771,11 +1667,11 @@ pc.viz["figure"].item().suptitle("Model 3: trend by department, store CA_1", fon
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-38-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-37-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
-    In [38]:
+    In [37]:
 
 
 ``` python
@@ -1792,7 +1688,7 @@ pc.viz["figure"].item().suptitle("Model 3: noise scale by department, store CA_1
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-39-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-38-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
@@ -1801,7 +1697,7 @@ pc.viz["figure"].item().suptitle("Model 3: noise scale by department, store CA_1
 The in-sample predictive over the last sixteen training weeks and the forecast for the seven departments of store CA_1, back in units.
 
 
-    In [39]:
+    In [38]:
 
 
 ``` python
@@ -1825,7 +1721,7 @@ del pp_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-40-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-39-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1834,7 +1730,7 @@ del pp_mid
 The forecast draws go back to units (clipped at zero: a StudentT can go negative), are split to the items of each store-department with their last-28-day shares, get Poisson noise, and are summed up to the levels above.
 
 
-    In [40]:
+    In [39]:
 
 
 ``` python
@@ -1865,7 +1761,7 @@ print(
 The kit backtests on three windows of 28 days inside the training period, 35 days apart (origins at days 1,843, 1,878 and 1,913), refitting on all the data before each origin. [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) does the same with `min_train_window` and `stride`. It takes the raw bottom-level sales as `data` for all three models, and each `forecast_fn` closure builds its own training target from the window (the log of the total, the scaled level-9 sums, or the clamped counts from day 121), fits, forecasts and returns bottom-level draws, so the same `transform` and `per_window_metrics` score the three models. The windows use 250 draws to keep the run time of model 2 at about six minutes.
 
 
-    In [41]:
+    In [40]:
 
 
 ``` python
@@ -1977,15 +1873,15 @@ for name, (model, covariates, forecast_fn) in backtest_runs.items():
 ```
 
 
-    top-down: 3 windows in 53 s
-    bottom-up: 3 windows in 368 s
-    middle-out: 3 windows in 55 s
+    top-down: 3 windows in 56 s
+    bottom-up: 3 windows in 356 s
+    middle-out: 3 windows in 61 s
 
 
 [results_to_dataframe](../../../reference/evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe) turns the results into one row per window with a column per metric. The headline WS-CRPS is the mean over the 12 level columns, and `walltime` is the time of the whole `forecast_fn` (fit, draws, forecast and reconciliation).
 
 
-    In [42]:
+    In [41]:
 
 
 ``` python
@@ -2006,21 +1902,21 @@ backtest_df.select("model", "t1", "t2", "walltime", "ws_crps").with_columns(
 
 | model        | t1   | t2   | walltime | ws_crps |
 |--------------|------|------|----------|---------|
-| "top-down"   | 1843 | 1871 | 9.4      | 0.557   |
-| "top-down"   | 1878 | 1906 | 9.1      | 0.553   |
-| "top-down"   | 1913 | 1941 | 9.5      | 0.581   |
-| "bottom-up"  | 1843 | 1871 | 111.7    | 0.802   |
-| "bottom-up"  | 1878 | 1906 | 108.3    | 0.719   |
-| "bottom-up"  | 1913 | 1941 | 110.2    | 0.763   |
-| "middle-out" | 1843 | 1871 | 10.7     | 0.622   |
-| "middle-out" | 1878 | 1906 | 10.6     | 0.676   |
-| "middle-out" | 1913 | 1941 | 10.5     | 0.746   |
+| "top-down"   | 1843 | 1871 | 9.1      | 0.557   |
+| "top-down"   | 1878 | 1906 | 8.9      | 0.553   |
+| "top-down"   | 1913 | 1941 | 9.0      | 0.581   |
+| "bottom-up"  | 1843 | 1871 | 110.5    | 0.802   |
+| "bottom-up"  | 1878 | 1906 | 100.8    | 0.719   |
+| "bottom-up"  | 1913 | 1941 | 103.8    | 0.763   |
+| "middle-out" | 1843 | 1871 | 11.5     | 0.622   |
+| "middle-out" | 1878 | 1906 | 11.0     | 0.676   |
+| "middle-out" | 1913 | 1941 | 10.8     | 0.746   |
 
 
 The ranking is the same in every window: the top-down model scores best, the middle-out model second and the bottom-up model last. The top-down score is stable (0.55 to 0.58), the middle-out score degrades from window to window (0.62 to 0.75) and the bottom-up score is the noisiest (0.72 to 0.80). The last window (origin at day 1,913, the four weeks before Memorial Day) is the hardest for the two split models, and the evaluation window is right after it.
 
 
-    In [43]:
+    In [42]:
 
 
 ``` python
@@ -2036,14 +1932,14 @@ ax.legend();
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-44-output-1.png" class="figure-img" width="1011" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-43-output-1.png" class="figure-img" width="1011" height="511" /></p>
 </figure>
 
 
 Averaged over the three windows, the per-level scores show where each strategy pays. The top-down model is best at every level from the total to the store-departments (levels 1 to 9). At the item levels (10 to 12) the top-down and middle-out models are indistinguishable, because both hand the same share split the same Poisson noise, and the bottom-up model is far behind: it has to get every intermittent series right on its own, while the split turns a good aggregate into a serviceable item forecast.
 
 
-    In [44]:
+    In [43]:
 
 
 ``` python
@@ -2069,7 +1965,7 @@ ax.legend();
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-45-output-1.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-44-output-1.png" class="figure-img" width="1211" height="511" /></p>
 </figure>
 
 
@@ -2078,7 +1974,7 @@ ax.legend();
 The final fits of the three sections forecast the official evaluation window (days 1,942 to 1,969, released after the competition). The per-level WS-CRPS table below repeats the backtest ranking: the top-down model is best at every level except the state level, where the middle-out model is ahead by 0.005. The WSPL row is the competition metric with the official weights: the winner of the uncertainty competition scored 0.154 and the runner-up 0.159 (Makridakis et al., 2022), so the kit's models are baselines, not contenders, but the table shows what the three reconciliation strategies do with the same data.
 
 
-    In [45]:
+    In [44]:
 
 
 ``` python
@@ -2116,7 +2012,7 @@ holdout_table
 At the top level the three forecasts are close to the observed total and differ mostly in their spread: the top-down model's StudentT gives the widest bands, the bottom-up sum of independent Gamma draws the narrowest.
 
 
-    In [46]:
+    In [45]:
 
 
 ``` python
@@ -2148,16 +2044,16 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-47-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-46-output-1.png" class="figure-img" width="1211" height="1211" /></p>
 </figure>
 
 
 # Fitting times
 
-The wall times of the three final fits, JIT compilation included. Model 2 evaluates 1.1 million Gamma densities per step and gathers its minibatch from a 1.4 GB covariate tensor; model 3 runs twice the steps of the others on 70 series with 104 features; model 1 is a single series. Per step, model 2 costs more than 20 times model 1.
+The wall times of the three final fits, JIT compilation included. Model 2 evaluates 1.1 million Gamma densities per step and gathers its minibatch from a 1.4 GB covariate tensor; model 3 runs twice the steps of the others on 70 series with 104 features; model 1 is a single series. Per step, model 2 costs more than ten times model 1 (the exact ratio moves with the JIT compilation share of these short fits).
 
 
-    In [47]:
+    In [46]:
 
 
 ``` python
@@ -2186,13 +2082,13 @@ fit_times.with_columns(pl.col("fit_seconds").round(1), pl.col("ms_per_step").rou
 
 | model        | steps | fit_seconds | ms_per_step |
 |--------------|-------|-------------|-------------|
-| "top-down"   | 1001  | 2.4         | 2.4         |
-| "bottom-up"  | 1001  | 62.8        | 62.7        |
-| "middle-out" | 2001  | 4.6         | 2.3         |
+| "top-down"   | 1001  | 4.1         | 4.1         |
+| "bottom-up"  | 1001  | 56.9        | 56.9        |
+| "middle-out" | 2001  | 5.1         | 2.6         |
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-48-output-2.png" class="figure-img" width="811" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-47-output-2.png" class="figure-img" width="811" height="511" /></p>
 </figure>
 
 

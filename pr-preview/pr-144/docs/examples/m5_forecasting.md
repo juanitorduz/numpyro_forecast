@@ -20,13 +20,8 @@ Every model is a plain function on the [Horizon.from_data](../../reference/model
 
 
 ``` python
-import hashlib
-import shutil
-import urllib.request
 import warnings
-import zipfile
 from functools import partial
-from pathlib import Path
 from time import perf_counter
 
 import arviz as az
@@ -60,6 +55,7 @@ from numpyro_forecast import (
     results_to_dataframe,
     to_datatree,
 )
+from numpyro_forecast.datasets import load_m5
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.typing import Array, ForecastModel
@@ -94,69 +90,36 @@ warnings.filterwarnings("ignore", message="When multiple credible intervals are 
 
 # Read data
 
-The data comes from the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files: the daily sales of the training period (`d_1` to `d_1941`), the 28 evaluation days (`d_1942` to `d_1969`, released after the competition), the calendar with the SNAP days, the weekly shelf prices, and the official evaluation weights. The archive is 50 MB and is downloaded once into `~/.cache/numpyro_forecast/m5/`.
+[load_m5()](../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) downloads the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files once into `~/.cache/numpyro_forecast/m5/` (a 50 MB archive checked against its digest) and reads them: the daily sales of the training period (`d_1` to `d_1941`) followed by the 28 evaluation days (`d_1942` to `d_1969`, released after the competition) as a dense `(days, series)` array, which is already the layout the models need; the weekly shelf prices repeated over the days of every series (`NaN` when the item was not on the shelf); the identifiers of the 30,490 series in the order of the sales file; the calendar with the events and the SNAP days; and the official evaluation weights.
 
 
 ``` python
-M5_URL = "https://github.com/Nixtla/m5-forecasts/raw/main/datasets/m5.zip"
-M5_SHA256 = "cc704ba15d6802f8262e6ec7d4c6041e4ad6366a94365e8c84f721e450eed774"
-M5_FILES = (
-    "calendar.csv",
-    "sales_train_evaluation.csv",
-    "sales_test_evaluation.csv",
-    "sell_prices.csv",
-    "weights_evaluation.csv",
-)
-
-
-def ensure_m5_files(cache_dir: str | Path | None = None) -> Path:
-    """Download the M5 archive once and unpack the files the notebook reads.
-
-    The archive streams into a ``.part`` file and moves into place only when its
-    SHA-256 digest matches, so an interrupted download never poisons the cache.
-    """
-    directory = (
-        Path.home() / ".cache" / "numpyro_forecast" / "m5"
-        if cache_dir is None
-        else Path(cache_dir)
-    )
-    directory.mkdir(parents=True, exist_ok=True)
-    if all((directory / name).exists() for name in M5_FILES):
-        return directory
-    archive = directory / "m5.zip"
-    if not archive.exists():
-        partial_file = archive.with_name(archive.name + ".part")
-        with (
-            urllib.request.urlopen(M5_URL, timeout=60) as response,
-            partial_file.open("wb") as target,
-        ):
-            shutil.copyfileobj(response, target)
-        digest = hashlib.sha256(partial_file.read_bytes()).hexdigest()
-        if digest != M5_SHA256:
-            partial_file.unlink()
-            msg = f"unexpected digest {digest} of the downloaded archive; the file was discarded"
-            raise ValueError(msg)
-        partial_file.replace(archive)
-    with zipfile.ZipFile(archive) as archive_file:
-        archive_file.extractall(directory, members=M5_FILES)
-    return directory
-
-
-data_dir = ensure_m5_files()
+m5 = load_m5()
 
 KEYS = ["item_id", "dept_id", "cat_id", "store_id", "state_id"]
 N_DAYS_TRAIN = 1_941
 HORIZON = 28
 N_DAYS = N_DAYS_TRAIN + HORIZON
 
-calendar_lf: pl.LazyFrame = pl.scan_csv(data_dir / "calendar.csv", try_parse_dates=True)
-sales_train_lf: pl.LazyFrame = pl.scan_csv(data_dir / "sales_train_evaluation.csv")
-sales_test_lf: pl.LazyFrame = pl.scan_csv(data_dir / "sales_test_evaluation.csv")
-prices_lf: pl.LazyFrame = pl.scan_csv(data_dir / "sell_prices.csv")
+sales = m5.sales
+keys_df = m5.keys
+n_series = sales.shape[1]
+print(f"sales: {sales.shape} (days, series), {np.isnan(sales).sum()} missing values")
+keys_df.head(3)
 ```
 
 
-The frames are scanned lazily and shaped with small named polars expressions, one per column computation, and frame steps composed with `pipe`. The calendar gives every day its weekday, its position in years, the SNAP flags of the three states, a Christmas flag (the one day a year the stores are closed) and the 31 day-of-month dummies of model 1.
+    sales: (1969, 30490) (days, series), 0 missing values
+
+
+| id                   | item_id         | dept_id     | cat_id    | store_id | state_id |
+|----------------------|-----------------|-------------|-----------|----------|----------|
+| "HOBBIES_1_001_CA_1" | "HOBBIES_1_001" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
+| "HOBBIES_1_002_CA_1" | "HOBBIES_1_002" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
+| "HOBBIES_1_003_CA_1" | "HOBBIES_1_003" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
+
+
+The calendar is shaped with small named polars expressions, one per column computation. It gives every day its weekday, its position in years, the SNAP flags of the three states, a Christmas flag (the one day a year the stores are closed) and the 31 day-of-month dummies of model 1.
 
 
 ``` python
@@ -183,24 +146,18 @@ def day_of_month_dummies() -> list[pl.Expr]:
     ]
 
 
-def week_position() -> pl.Expr:
-    """Position of the Walmart week ``wm_yr_wk`` among the calendar weeks, from 0."""
-    return pl.col("wm_yr_wk").rank("dense").cast(pl.Int64).sub(pl.lit(1))
-
-
 calendar_df = (
-    calendar_lf.with_row_index("t")
+    m5.calendar.lazy()
+    .with_row_index("t")
     .with_columns(
         *day_of_month_dummies(),
         christmas=is_christmas().cast(pl.Float32),
         dow=day_of_week_index(),
         years=years_since_start(),
-        week=week_position(),
     )
     .select(
         "t",
         "date",
-        "week",
         "dow",
         "years",
         "christmas",
@@ -215,76 +172,18 @@ calendar_df.head(3)
 ```
 
 
-| t | date | week | dow | years | christmas | snap_CA | snap_TX | snap_WI | dom_1 | dom_2 | dom_3 | dom_4 | dom_5 | dom_6 | dom_7 | dom_8 | dom_9 | dom_10 | dom_11 | dom_12 | dom_13 | dom_14 | dom_15 | dom_16 | dom_17 | dom_18 | dom_19 | dom_20 | dom_21 | dom_22 | dom_23 | dom_24 | dom_25 | dom_26 | dom_27 | dom_28 | dom_29 | dom_30 | dom_31 |
-|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 2011-01-29 | 0 | 5 | 0.0 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 0.0 |
-| 1 | 2011-01-30 | 0 | 6 | 0.00274 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 |
-| 2 | 2011-01-31 | 0 | 0 | 0.005479 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
+| t | date | dow | years | christmas | snap_CA | snap_TX | snap_WI | dom_1 | dom_2 | dom_3 | dom_4 | dom_5 | dom_6 | dom_7 | dom_8 | dom_9 | dom_10 | dom_11 | dom_12 | dom_13 | dom_14 | dom_15 | dom_16 | dom_17 | dom_18 | dom_19 | dom_20 | dom_21 | dom_22 | dom_23 | dom_24 | dom_25 | dom_26 | dom_27 | dom_28 | dom_29 | dom_30 | dom_31 |
+|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| 0 | 2011-01-29 | 5 | 0.0 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 0.0 |
+| 1 | 2011-01-30 | 6 | 0.00274 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 |
+| 2 | 2011-01-31 | 0 | 0.005479 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
 
 
-The sales file is wide, one row per series and one column per day, which is already the dense layout the models need. We append the 28 evaluation days to every series (joined on the five identifier columns, keeping the file order) and collect the frame once, so the identifiers and the sales matrix share the same row order.
-
-
-``` python
-def series_id() -> pl.Expr:
-    """Name a series by its item and store, ``HOBBIES_1_001_CA_1``."""
-    return pl.concat_str([pl.col("item_id"), pl.col("store_id")], separator="_")
-
-
-def day_columns(first: int, last: int) -> list[str]:
-    """Names of the daily sales columns ``d_first`` to ``d_last``."""
-    return [f"d_{day}" for day in range(first, last + 1)]
-
-
-def join_test_days(train: pl.LazyFrame, test: pl.LazyFrame) -> pl.LazyFrame:
-    """Append the 28 evaluation days to every series, keeping the file order."""
-    return train.join(test, on=KEYS, how="left", maintain_order="left")
-
-
-sales_df = (
-    sales_train_lf.pipe(join_test_days, sales_test_lf)
-    .with_columns(id=series_id())
-    .collect(engine="streaming")
-)
-keys_df = sales_df.select("id", *KEYS)
-sales = sales_df.select(day_columns(1, N_DAYS)).to_numpy().T.astype(np.float32)
-del sales_df
-n_series = sales.shape[1]
-print(f"sales: {sales.shape} (days, series), {np.isnan(sales).sum()} missing values")
-keys_df.head(3)
-```
-
-
-    sales: (1969, 30490) (days, series), 0 missing values
-
-
-| id                   | item_id         | dept_id     | cat_id    | store_id | state_id |
-|----------------------|-----------------|-------------|-----------|----------|----------|
-| "HOBBIES_1_001_CA_1" | "HOBBIES_1_001" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
-| "HOBBIES_1_002_CA_1" | "HOBBIES_1_002" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
-| "HOBBIES_1_003_CA_1" | "HOBBIES_1_003" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
-
-
-Prices are weekly. We pivot them to one row per series and one column per Walmart week, then index the weekly matrix with the week of every calendar day. A missing price means the item was not on the shelf that week; the kit's `saled` flag is "price listed and not Christmas", and it later gates the mean of model 2.
+A missing price means the item was not on the shelf that week; the kit's `saled` flag is "price listed and not Christmas", and it later gates the mean of model 2.
 
 
 ``` python
-def weekly_prices(prices: pl.LazyFrame, keys: pl.DataFrame) -> pl.DataFrame:
-    """Pivot the weekly shelf prices to one row per series (file order), one column per week."""
-    weeks = prices.select("wm_yr_wk").unique().sort("wm_yr_wk").collect(engine="streaming")
-    positions = keys.lazy().with_row_index("n").select("n", "store_id", "item_id")
-    return (
-        prices.join(positions, on=["store_id", "item_id"])
-        .collect(engine="streaming")
-        .pivot(on="wm_yr_wk", index="n", values="sell_price")
-        .sort("n")
-        .select([str(week) for week in weeks["wm_yr_wk"].to_list()])
-    )
-
-
-weekly_price = prices_lf.pipe(weekly_prices, keys_df).to_numpy().astype(np.float32)
-week_of_day = calendar_df["week"].to_numpy()[:N_DAYS]
-price = weekly_price[:, week_of_day].T
+price = m5.price
 christmas = calendar_df["christmas"].to_numpy()[:N_DAYS]
 saled = (~np.isnan(price)).astype(np.float32) * (1.0 - christmas[:, None])
 price_filled = np.nan_to_num(price, nan=0.0)
@@ -416,7 +315,7 @@ ax.set(title="Total daily unit sales of the 30,490 series", xlabel="date", ylabe
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-8-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-7-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -441,7 +340,7 @@ fig.suptitle("Store CA_1: daily unit sales by department", fontsize=16, fontweig
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-9-output-1.png" class="figure-img" width="1211" height="1411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-8-output-1.png" class="figure-img" width="1211" height="1411" /></p>
 </figure>
 
 
@@ -512,7 +411,7 @@ fig.suptitle("Best seller of each department in store CA_1", fontsize=16, fontwe
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-11-output-1.png" class="figure-img" width="1211" height="1411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-10-output-1.png" class="figure-img" width="1211" height="1411" /></p>
 </figure>
 
 
@@ -551,7 +450,7 @@ def m5_scales(y: np.ndarray) -> np.ndarray:
 
 weights_holdout = m5_weights(N_DAYS_TRAIN)
 scales_holdout = m5_scales(sales_agg[:N_DAYS_TRAIN])
-official_weights = pl.read_csv(data_dir / "weights_evaluation.csv").with_columns(
+official_weights = m5.weights.with_columns(
     label=pl.concat_str(
         [pl.col("Level_id"), pl.col("Agg_Level_1"), pl.col("Agg_Level_2")], separator="/"
     )
@@ -902,7 +801,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-17-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-16-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -958,7 +857,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-18-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-17-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -980,11 +879,11 @@ plot_loss(svi_top.losses, "Model 1: ELBO loss")
 ```
 
 
-    model 1: 1001 steps in 2.4 s, final loss -1402.0
+    model 1: 1001 steps in 4.1 s, final loss -1402.0
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-19-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-18-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1032,7 +931,7 @@ pc.viz["figure"].item().suptitle("Model 1: weekday effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-21-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-20-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
@@ -1045,7 +944,7 @@ pc.viz["figure"].item().suptitle("Model 1: day-of-month effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-22-output-1.png" class="figure-img" width="811" height="911" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-21-output-1.png" class="figure-img" width="811" height="911" /></p>
 </figure>
 
 
@@ -1102,7 +1001,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-23-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-22-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -1158,7 +1057,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-25-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-24-output-1.png" class="figure-img" width="1511" height="1443" /></p>
 </figure>
 
 
@@ -1301,7 +1200,7 @@ del prior_obs_focus
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-27-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-26-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1328,11 +1227,11 @@ plot_loss(svi_bottom.losses[50:], "Model 2: ELBO loss (from step 50)")
 ```
 
 
-    model 2: 1001 steps in 62.8 s, final loss -1.102e+08
+    model 2: 1001 steps in 56.9 s, final loss -1.102e+08
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-28-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-27-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1373,7 +1272,7 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-29-output-1.png" class="figure-img" width="811" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-28-output-1.png" class="figure-img" width="811" height="1211" /></p>
 </figure>
 
 
@@ -1395,7 +1294,7 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-30-output-1.png" class="figure-img" width="811" height="711" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-29-output-1.png" class="figure-img" width="811" height="711" /></p>
 </figure>
 
 
@@ -1431,7 +1330,7 @@ del pp_focus, fc_focus
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-31-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-30-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1469,7 +1368,7 @@ print(
 ```
 
 
-    forecast of (500, 28, 30490) draws in 113 s
+    forecast of (500, 28, 30490) draws in 112 s
     model 2 evaluation window: WS-CRPS 0.728, WSPL 0.266
 
 
@@ -1492,7 +1391,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-33-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-32-output-1.png" class="figure-img" width="1511" height="1443" /></p>
 </figure>
 
 
@@ -1552,7 +1451,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-34-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-33-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1583,7 +1482,7 @@ del prior_obs_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-35-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-34-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1608,11 +1507,11 @@ plot_loss(svi_mid.losses, "Model 3: ELBO loss")
 ```
 
 
-    model 3: 2001 steps in 4.6 s, final loss 219410.7
+    model 3: 2001 steps in 5.1 s, final loss 219410.7
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-36-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-35-output-2.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1662,7 +1561,7 @@ pc.viz["figure"].item().suptitle("Model 3: trend by department, store CA_1", fon
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-38-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-37-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
@@ -1680,7 +1579,7 @@ pc.viz["figure"].item().suptitle("Model 3: noise scale by department, store CA_1
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-39-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-38-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
@@ -1710,7 +1609,7 @@ del pp_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-40-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-39-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1856,9 +1755,9 @@ for name, (model, covariates, forecast_fn) in backtest_runs.items():
 ```
 
 
-    top-down: 3 windows in 53 s
-    bottom-up: 3 windows in 368 s
-    middle-out: 3 windows in 55 s
+    top-down: 3 windows in 56 s
+    bottom-up: 3 windows in 356 s
+    middle-out: 3 windows in 61 s
 
 
 [results_to_dataframe](../../reference/evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe) turns the results into one row per window with a column per metric. The headline WS-CRPS is the mean over the 12 level columns, and `walltime` is the time of the whole `forecast_fn` (fit, draws, forecast and reconciliation).
@@ -1882,15 +1781,15 @@ backtest_df.select("model", "t1", "t2", "walltime", "ws_crps").with_columns(
 
 | model        | t1   | t2   | walltime | ws_crps |
 |--------------|------|------|----------|---------|
-| "top-down"   | 1843 | 1871 | 9.4      | 0.557   |
-| "top-down"   | 1878 | 1906 | 9.1      | 0.553   |
-| "top-down"   | 1913 | 1941 | 9.5      | 0.581   |
-| "bottom-up"  | 1843 | 1871 | 111.7    | 0.802   |
-| "bottom-up"  | 1878 | 1906 | 108.3    | 0.719   |
-| "bottom-up"  | 1913 | 1941 | 110.2    | 0.763   |
-| "middle-out" | 1843 | 1871 | 10.7     | 0.622   |
-| "middle-out" | 1878 | 1906 | 10.6     | 0.676   |
-| "middle-out" | 1913 | 1941 | 10.5     | 0.746   |
+| "top-down"   | 1843 | 1871 | 9.1      | 0.557   |
+| "top-down"   | 1878 | 1906 | 8.9      | 0.553   |
+| "top-down"   | 1913 | 1941 | 9.0      | 0.581   |
+| "bottom-up"  | 1843 | 1871 | 110.5    | 0.802   |
+| "bottom-up"  | 1878 | 1906 | 100.8    | 0.719   |
+| "bottom-up"  | 1913 | 1941 | 103.8    | 0.763   |
+| "middle-out" | 1843 | 1871 | 11.5     | 0.622   |
+| "middle-out" | 1878 | 1906 | 11.0     | 0.676   |
+| "middle-out" | 1913 | 1941 | 10.8     | 0.746   |
 
 
 The ranking is the same in every window: the top-down model scores best, the middle-out model second and the bottom-up model last. The top-down score is stable (0.55 to 0.58), the middle-out score degrades from window to window (0.62 to 0.75) and the bottom-up score is the noisiest (0.72 to 0.80). The last window (origin at day 1,913, the four weeks before Memorial Day) is the hardest for the two split models, and the evaluation window is right after it.
@@ -1909,7 +1808,7 @@ ax.legend();
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-44-output-1.png" class="figure-img" width="1011" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-43-output-1.png" class="figure-img" width="1011" height="511" /></p>
 </figure>
 
 
@@ -1939,7 +1838,7 @@ ax.legend();
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-45-output-1.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-44-output-1.png" class="figure-img" width="1211" height="511" /></p>
 </figure>
 
 
@@ -2012,13 +1911,13 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-47-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-46-output-1.png" class="figure-img" width="1211" height="1211" /></p>
 </figure>
 
 
 # Fitting times
 
-The wall times of the three final fits, JIT compilation included. Model 2 evaluates 1.1 million Gamma densities per step and gathers its minibatch from a 1.4 GB covariate tensor; model 3 runs twice the steps of the others on 70 series with 104 features; model 1 is a single series. Per step, model 2 costs more than 20 times model 1.
+The wall times of the three final fits, JIT compilation included. Model 2 evaluates 1.1 million Gamma densities per step and gathers its minibatch from a 1.4 GB covariate tensor; model 3 runs twice the steps of the others on 70 series with 104 features; model 1 is a single series. Per step, model 2 costs more than ten times model 1 (the exact ratio moves with the JIT compilation share of these short fits).
 
 
 ``` python
@@ -2047,13 +1946,13 @@ fit_times.with_columns(pl.col("fit_seconds").round(1), pl.col("ms_per_step").rou
 
 | model        | steps | fit_seconds | ms_per_step |
 |--------------|-------|-------------|-------------|
-| "top-down"   | 1001  | 2.4         | 2.4         |
-| "bottom-up"  | 1001  | 62.8        | 62.7        |
-| "middle-out" | 2001  | 4.6         | 2.3         |
+| "top-down"   | 1001  | 4.1         | 4.1         |
+| "bottom-up"  | 1001  | 56.9        | 56.9        |
+| "middle-out" | 2001  | 5.1         | 2.6         |
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-48-output-2.png" class="figure-img" width="811" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-47-output-2.png" class="figure-img" width="811" height="511" /></p>
 </figure>
 
 
@@ -2083,4 +1982,4 @@ fit_times.with_columns(pl.col("fit_seconds").round(1), pl.col("ms_per_step").rou
 - Nixtla. [*m5-forecasts*](https://github.com/Nixtla/m5-forecasts) (the data mirror).
 - Related examples: [hierarchical forecasting I](hierarchical_forecasting_1.md), [forecasting retail demand under stockouts](fresh_retail_stockout.md), [univariate forecasting](forecasting_univariate.md).
 
-[Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`](_src/m5_forecasting-preview.html#74068dab)
+[Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`](_src/m5_forecasting-preview.html#47c78a71)
