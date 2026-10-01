@@ -9,6 +9,7 @@ falling back to the first figure). These tests pin that derivation logic.
 
 import base64
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -114,6 +115,33 @@ class TestExtractThumbnail:
         dest = tmp_path / "thumb.png"
         assert not build_docs.extract_thumbnail(notebook, dest)
         assert not dest.exists()
+
+
+_EXAMPLES = sorted((Path(__file__).resolve().parent.parent / "docs" / "examples").glob("*.ipynb"))
+# Landscape thumbnails keep the example cards the same height; the narrowest committed
+# thumbnail is 1.3 wide for 1 tall and the typical one is about 2 (``figsize=(12, 6)``).
+_MIN_THUMBNAIL_ASPECT = 1.25
+
+
+def _png_size(png: bytes) -> tuple[int, int]:
+    """Return ``(width, height)`` from the IHDR chunk of a PNG."""
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    return int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")
+
+
+@pytest.mark.parametrize("path", _EXAMPLES, ids=[path.stem for path in _EXAMPLES])
+def test_committed_thumbnails_are_landscape(
+    build_docs: ModuleType, tmp_path: Path, path: Path
+) -> None:
+    """Every notebook's card thumbnail is a landscape figure, not a tall or square grid."""
+    notebook = json.loads(path.read_text())
+    dest = tmp_path / f"{path.stem}.png"
+    assert build_docs.extract_thumbnail(notebook, dest), f"{path.name} has no figure"
+    width, height = _png_size(dest.read_bytes())
+    assert width / height >= _MIN_THUMBNAIL_ASPECT, (
+        f"{path.name}: thumbnail is {width}x{height}; tag a single landscape panel "
+        "(see 'Developing example notebooks' in AGENTS.md)"
+    )
 
 
 class TestNewestSemver:
