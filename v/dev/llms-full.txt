@@ -2974,6 +2974,54 @@ Returns
 bool
     ``True`` if `load_bart_od()` loads without error.
 
+load_m5(cache_dir: str | pathlib.Path | None = None) -> numpyro_forecast.datasets.M5Data
+
+Load the M5 competition data (download and cache once, then read the files).
+
+The files come from [Nixtla's mirror](https://github.com/Nixtla/m5-forecasts) of the
+competition data: the daily unit sales of the 30,490 series over the training period
+(days 1 to 1,941) and the 28 evaluation days released after the competition, the
+calendar with the events and the SNAP days, the weekly shelf prices, and the official
+evaluation weights. The 50 MB archive is downloaded once into ``cache_dir`` (default
+``~/.cache/numpyro_forecast/m5``) and checked against a pinned SHA-256 digest.
+
+Reading needs polars (``pip install numpyro_forecast[dataframes]``).
+
+Parameters
+----------
+cache_dir
+    Directory that holds the archive and the extracted files; created if missing.
+
+Returns
+-------
+M5Data
+    Dense ``(days, series)`` sales and price arrays, the identifier table, the
+    calendar and the official weights.
+
+M5Data(sales: jaxtyping.Float[ndarray, 'days series'], price: jaxtyping.Float[ndarray, 'days series'], keys: polars.DataFrame, calendar: polars.DataFrame, weights: polars.DataFrame)
+
+The M5 competition data as dense arrays plus the identifier and calendar tables.
+
+Attributes
+----------
+sales
+    Daily unit sales ``(days, series)`` over the 1,941 training days followed by the
+    28 evaluation days, series in the order of the sales file.
+price
+    Weekly shelf price of every series repeated over its days, ``NaN`` on the days
+    the item was not listed.
+keys
+    One row per series: ``id`` (``item_id`` and ``store_id`` joined by ``_``) and the
+    five identifier columns ``item_id``, ``dept_id``, ``cat_id``, ``store_id``,
+    ``state_id``.
+calendar
+    One row per day with the ``date`` parsed, the Walmart week ``wm_yr_wk``, the
+    weekday columns, the event names and types (``null`` when there is none) and the
+    SNAP flags of the three states.
+weights
+    The official evaluation weights of the 42,840 aggregates (``Level_id``,
+    ``Agg_Level_1``, ``Agg_Level_2``, ``Dollar_Sales``, ``weight``).
+
 
 ## Optional dependencies
 

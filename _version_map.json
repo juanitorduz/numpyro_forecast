@@ -86,6 +86,10 @@
       "dev",
       "0.4.0"
     ],
+    "docs/examples/m5_forecasting.html": [
+      "dev",
+      "0.4.0"
+    ],
     "docs/examples/tsb.html": [
       "dev",
       "0.4.0"
@@ -174,6 +178,10 @@
       "dev",
       "0.4.0"
     ],
+    "reference/datasets.M5Data.html": [
+      "dev",
+      "0.4.0"
+    ],
     "reference/datasets.bart_available.html": [
       "dev",
       "0.4.0"
@@ -183,6 +191,10 @@
       "0.4.0"
     ],
     "reference/datasets.load_bart_weekly.html": [
+      "dev",
+      "0.4.0"
+    ],
+    "reference/datasets.load_m5.html": [
       "dev",
       "0.4.0"
     ],

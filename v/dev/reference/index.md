@@ -314,6 +314,12 @@ Load hourly Victoria (Australia) electricity demand and temperature.
 [datasets.bart_available()](datasets.bart_available.md#numpyro_forecast.datasets.bart_available)  
 Return whether the BART dataset can be loaded (download succeeds).
 
+[datasets.load_m5()](datasets.load_m5.md#numpyro_forecast.datasets.load_m5)  
+Load the M5 competition data (download and cache once, then read the files).
+
+[datasets.M5Data](datasets.M5Data.md#numpyro_forecast.datasets.M5Data)  
+The M5 competition data as dense arrays plus the identifier and calendar tables.
+
 
 ## Optional dependencies
 
