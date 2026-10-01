@@ -999,6 +999,14 @@ pc = az.plot_lm(
     figure_kwargs={"figsize": (12, 6)},
 )
 
+# The in-sample band artists, collected before the forecast call replaces them in `pc.viz`.
+band_handles = []
+
+for prob in HDI_PROBS:
+    band = pc.viz["ci_band"]["date"].sel(prob=prob).item()
+    band.set_label(f"in-sample {hdi_label(prob)}")
+    band_handles.append(band)
+
 az.plot_lm(
     tree_top_zoom,
     y="obs",
@@ -1011,20 +1019,17 @@ az.plot_lm(
     visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
 )
 
+for prob in HDI_PROBS:
+    band = pc.viz["ci_band"]["date"].sel(prob=prob).item()
+    band.set_label(f"forecast {hdi_label(prob)}")
+    band_handles.append(band)
+
 ax = pc.viz["figure"].item().axes[0]
 (observed_line,) = ax.plot(
     date_num[plot_start:], np.log(y_total[plot_start:]), color="black", lw=1, label="observed"
 )
 ax.axvline(split_date, color="gray", ls="--")
 ax.xaxis_date()
-
-band_handles = []
-
-for prob in HDI_PROBS:
-    band = pc.viz["ci_band"]["date"].sel(prob=prob).item()
-    band.set_label(f"forecast {hdi_label(prob)}")
-    band_handles.append(band)
-
 ax.legend(handles=[*band_handles, observed_line], loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(
     title="Model 1: in-sample predictive and forecast of the log total sales",

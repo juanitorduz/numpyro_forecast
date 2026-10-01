@@ -1384,37 +1384,42 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">6</span>)},</span>
 <span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>az.plot_lm(</span>
-<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>    tree_top_zoom,</span>
-<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"date"</span>,</span>
-<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a>    group<span class="op">=</span><span class="st">"predictions"</span>,</span>
-<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a>    plot_collection<span class="op">=</span>pc,</span>
-<span id="cb34-26"><a href="#cb34-26" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb34-27"><a href="#cb34-27" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>HDI_PROBS,</span>
-<span id="cb34-28"><a href="#cb34-28" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb34-29"><a href="#cb34-29" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
-<span id="cb34-30"><a href="#cb34-30" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb34-31"><a href="#cb34-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-32"><a href="#cb34-32" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
-<span id="cb34-33"><a href="#cb34-33" aria-hidden="true" tabindex="-1"></a>(observed_line,) <span class="op">=</span> ax.plot(</span>
-<span id="cb34-34"><a href="#cb34-34" aria-hidden="true" tabindex="-1"></a>    date_num[plot_start:], np.log(y_total[plot_start:]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"observed"</span></span>
-<span id="cb34-35"><a href="#cb34-35" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb34-36"><a href="#cb34-36" aria-hidden="true" tabindex="-1"></a>ax.axvline(split_date, color<span class="op">=</span><span class="st">"gray"</span>, ls<span class="op">=</span><span class="st">"--"</span>)</span>
-<span id="cb34-37"><a href="#cb34-37" aria-hidden="true" tabindex="-1"></a>ax.xaxis_date()</span>
-<span id="cb34-38"><a href="#cb34-38" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-39"><a href="#cb34-39" aria-hidden="true" tabindex="-1"></a>band_handles <span class="op">=</span> []</span>
-<span id="cb34-40"><a href="#cb34-40" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-41"><a href="#cb34-41" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
-<span id="cb34-42"><a href="#cb34-42" aria-hidden="true" tabindex="-1"></a>    band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"date"</span>].sel(prob<span class="op">=</span>prob).item()</span>
-<span id="cb34-43"><a href="#cb34-43" aria-hidden="true" tabindex="-1"></a>    band.set_label(<span class="ss">f"forecast </span><span class="sc">{</span>hdi_label(prob)<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb34-44"><a href="#cb34-44" aria-hidden="true" tabindex="-1"></a>    band_handles.append(band)</span>
-<span id="cb34-45"><a href="#cb34-45" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-46"><a href="#cb34-46" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[<span class="op">*</span>band_handles, observed_line], loc<span class="op">=</span><span class="st">"upper left"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">1.01</span>, <span class="fl">1.0</span>))</span>
-<span id="cb34-47"><a href="#cb34-47" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
-<span id="cb34-48"><a href="#cb34-48" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Model 1: in-sample predictive and forecast of the log total sales"</span>,</span>
-<span id="cb34-49"><a href="#cb34-49" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"log total sales"</span>,</span>
-<span id="cb34-50"><a href="#cb34-50" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a><span class="co"># The in-sample band artists, collected before the forecast call replaces them in `pc.viz`.</span></span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>band_handles <span class="op">=</span> []</span>
+<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
+<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a>    band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"date"</span>].sel(prob<span class="op">=</span>prob).item()</span>
+<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a>    band.set_label(<span class="ss">f"in-sample </span><span class="sc">{</span>hdi_label(prob)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb34-26"><a href="#cb34-26" aria-hidden="true" tabindex="-1"></a>    band_handles.append(band)</span>
+<span id="cb34-27"><a href="#cb34-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-28"><a href="#cb34-28" aria-hidden="true" tabindex="-1"></a>az.plot_lm(</span>
+<span id="cb34-29"><a href="#cb34-29" aria-hidden="true" tabindex="-1"></a>    tree_top_zoom,</span>
+<span id="cb34-30"><a href="#cb34-30" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb34-31"><a href="#cb34-31" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"date"</span>,</span>
+<span id="cb34-32"><a href="#cb34-32" aria-hidden="true" tabindex="-1"></a>    group<span class="op">=</span><span class="st">"predictions"</span>,</span>
+<span id="cb34-33"><a href="#cb34-33" aria-hidden="true" tabindex="-1"></a>    plot_collection<span class="op">=</span>pc,</span>
+<span id="cb34-34"><a href="#cb34-34" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb34-35"><a href="#cb34-35" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>HDI_PROBS,</span>
+<span id="cb34-36"><a href="#cb34-36" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb34-37"><a href="#cb34-37" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{<span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}, <span class="st">"observed_scatter"</span>: <span class="va">False</span>, <span class="st">"pe_line"</span>: <span class="va">False</span>},</span>
+<span id="cb34-38"><a href="#cb34-38" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb34-39"><a href="#cb34-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-40"><a href="#cb34-40" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
+<span id="cb34-41"><a href="#cb34-41" aria-hidden="true" tabindex="-1"></a>    band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"date"</span>].sel(prob<span class="op">=</span>prob).item()</span>
+<span id="cb34-42"><a href="#cb34-42" aria-hidden="true" tabindex="-1"></a>    band.set_label(<span class="ss">f"forecast </span><span class="sc">{</span>hdi_label(prob)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb34-43"><a href="#cb34-43" aria-hidden="true" tabindex="-1"></a>    band_handles.append(band)</span>
+<span id="cb34-44"><a href="#cb34-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-45"><a href="#cb34-45" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
+<span id="cb34-46"><a href="#cb34-46" aria-hidden="true" tabindex="-1"></a>(observed_line,) <span class="op">=</span> ax.plot(</span>
+<span id="cb34-47"><a href="#cb34-47" aria-hidden="true" tabindex="-1"></a>    date_num[plot_start:], np.log(y_total[plot_start:]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span>, label<span class="op">=</span><span class="st">"observed"</span></span>
+<span id="cb34-48"><a href="#cb34-48" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb34-49"><a href="#cb34-49" aria-hidden="true" tabindex="-1"></a>ax.axvline(split_date, color<span class="op">=</span><span class="st">"gray"</span>, ls<span class="op">=</span><span class="st">"--"</span>)</span>
+<span id="cb34-50"><a href="#cb34-50" aria-hidden="true" tabindex="-1"></a>ax.xaxis_date()</span>
+<span id="cb34-51"><a href="#cb34-51" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[<span class="op">*</span>band_handles, observed_line], loc<span class="op">=</span><span class="st">"upper left"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">1.01</span>, <span class="fl">1.0</span>))</span>
+<span id="cb34-52"><a href="#cb34-52" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
+<span id="cb34-53"><a href="#cb34-53" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Model 1: in-sample predictive and forecast of the log total sales"</span>,</span>
+<span id="cb34-54"><a href="#cb34-54" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"log total sales"</span>,</span>
+<span id="cb34-55"><a href="#cb34-55" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div class="">
 <figure class="figure">
