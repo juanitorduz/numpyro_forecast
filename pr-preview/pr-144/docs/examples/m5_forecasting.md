@@ -8,12 +8,19 @@ This notebook ports the three models of the [Pyro M5 Starter Kit](https://github
 The three models are three [reconciliation strategies](https://otexts.com/fpp3/hierarchical.html) for the same hierarchy:
 
 - **Model 1, top-down.** A single regression on the log of the total daily sales with a linear trend, weekday effects and day-of-month effects under StudentT noise. Its forecast is split to the items in proportion to their sales over the last 28 days, with Poisson noise at the bottom.
-- **Model 2, bottom-up.** A Gamma regression for every one of the 30,490 series with parameters shared by all items of a department in a store: lagged moving averages, SNAP days and weekday effects. The item forecasts are summed up the hierarchy. Training subsamples 600 series per SVI step, as the kit does.
+- **Model 2, bottom-up.** A Gamma regression for every one of the 30,490 series with parameters shared by all items of a department in a store: lagged moving averages, SNAP days and weekday effects. SNAP is the Supplemental Nutrition Assistance Program (food stamps): every state allows SNAP purchases on ten fixed days of each month, and the M5 calendar flags these days for each of the three states, so they are a known covariate over the horizon. The item forecasts are summed up the hierarchy. Training subsamples 600 series per SVI step, as the kit does.
 - **Model 3, middle-out.** A StudentT regression on the 70 store-by-department series with a trend, weekday effects and 52 yearly Fourier harmonics. Its forecast is split down to the items with the same proportions as model 1 and summed up to the higher levels.
 
 Every model is a plain function on the [Horizon.from_data](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict](../../reference/models.predict.md#numpyro_forecast.models.predict) building blocks, fitted with `AutoNormal` and the kit's optimizer (Adam with gradient clipping and a learning rate that decays by a factor of ten over the run). We do a prior predictive check for each model, look at the posterior with ArviZ summaries and forest plots, forecast the official evaluation window (the last 28 days of the data, which were unknown to the kit at the time), backtest the three models with [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) on three earlier windows, and score everything at all 12 levels with the weighted scaled CRPS of the kit's `m5_backtest`. We also compare the fitting times.
 
-> **Note on fidelity.** The models, priors, optimizer, step counts, moving-average covariates, minibatch size and backtest windows are those of the kit. The deviations are: the weekday of each date comes from the calendar instead of the kit's window-relative [periodic_repeat](../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat) (equivalent when the window length is a multiple of seven, which the kit enforces with a stride of 35 days); model 2 draws its 600-series minibatches uniformly over all series instead of 60 items per store; model 2 uses `AutoNormal` instead of the kit's hand-written mean-field guide (the same family and initial scale); model 3 computes its scale factor on each training window instead of once on the full data; the backtest scores models 1 and 3 at all 12 levels with the kit's submission logic (share split plus Poisson draws) instead of the kit's backtest shortcuts (level 1 only for model 1, a uniform split for model 3); the headline metric is a weighted scaled CRPS instead of the kit's weighted scaled RMSE and pinball loss, and the official pinball loss (WSPL) is reported on the evaluation window.
+> **Note on fidelity.** The models, priors, optimizer, step counts, moving-average covariates, minibatch size and backtest windows are those of the kit. The deviations are:
+>
+> - The weekday of each date comes from the calendar instead of the kit's window-relative [periodic_repeat](../../reference/features.periodic_repeat.md#numpyro_forecast.features.periodic_repeat) (equivalent when the window length is a multiple of seven, which the kit enforces with a stride of 35 days).
+> - Model 2 draws its 600-series minibatches uniformly over all series instead of 60 items per store.
+> - Model 2 uses `AutoNormal` instead of the kit's hand-written mean-field guide (the same family and initial scale).
+> - Model 3 computes its scale factor on each training window instead of once on the full data.
+> - The backtest scores models 1 and 3 at all 12 levels with the kit's submission logic (share split plus Poisson draws) instead of the kit's backtest shortcuts (level 1 only for model 1, a uniform split for model 3).
+> - The headline metric is a weighted scaled CRPS instead of the kit's weighted scaled RMSE and pinball loss; the official pinball loss (WSPL) is reported on the evaluation window.
 
 
 # Prepare notebook
@@ -34,13 +41,14 @@ import numpyro
 import numpyro.distributions as dist
 import optax
 import polars as pl
+import preliz as pz
 import scipy.sparse as sp
 import xarray as xr
+from IPython.display import display
 from jax import random
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.svi import SVIRunResult
-from numpyro.optim import optax_to_numpyro
 
 from numpyro_forecast import (
     Horizon,
@@ -57,7 +65,7 @@ from numpyro_forecast import (
 )
 from numpyro_forecast.datasets import load_m5
 from numpyro_forecast.features import fourier_features
-from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.metrics import crps_empirical, eval_pinball
 from numpyro_forecast.typing import Array, ForecastModel
 
 az.style.use("arviz-darkgrid")
@@ -67,15 +75,10 @@ plt.rcParams["figure.facecolor"] = "white"
 numpyro.set_host_device_count(n=4)
 rng_key = random.PRNGKey(seed=42)
 
-# Render polars tables without truncating string cells, and drop the shape and
-# dtype headers, which are noise in a rendered document.
-pl.Config.set_fmt_str_lengths(100)
-pl.Config.set_tbl_hide_dataframe_shape(True)
-pl.Config.set_tbl_hide_column_data_types(True)
-pl.Config.set_tbl_rows(20)
-
-# `predict` observes a (time, series) array under the series plate of model 2; the
-# time axis is not a plate, so numpyro cannot check it and warns at every trace.
+# The observation site of model 2 sits under the subsampled `series` plate while its time
+# axis, conditionally independent too, is not declared as a plate (`predict` splits it into
+# the observed prefix and the forecast suffix). numpyro's model validation warns about the
+# undeclared batch dimension at every trace; the model 2 section explains why it is harmless.
 warnings.filterwarnings("ignore", message="Missing a plate statement for batch dimension -2")
 # The second `plot_lm` call of an overlay reuses the alpha of the first one.
 warnings.filterwarnings("ignore", message="When multiple credible intervals are plotted")
@@ -104,7 +107,9 @@ N_DAYS = N_DAYS_TRAIN + HORIZON
 sales = m5.sales
 keys_df = m5.keys
 n_series = sales.shape[1]
+
 print(f"sales: {sales.shape} (days, series), {np.isnan(sales).sum()} missing values")
+
 keys_df.head(3)
 ```
 
@@ -112,8 +117,11 @@ keys_df.head(3)
     sales: (1969, 30490) (days, series), 0 missing values
 
 
+shape: (3, 6)
+
 | id                   | item_id         | dept_id     | cat_id    | store_id | state_id |
 |----------------------|-----------------|-------------|-----------|----------|----------|
+| str                  | str             | str         | str       | str      | str      |
 | "HOBBIES_1_001_CA_1" | "HOBBIES_1_001" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
 | "HOBBIES_1_002_CA_1" | "HOBBIES_1_002" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
 | "HOBBIES_1_003_CA_1" | "HOBBIES_1_003" | "HOBBIES_1" | "HOBBIES" | "CA_1"   | "CA"     |
@@ -172,14 +180,17 @@ calendar_df.head(3)
 ```
 
 
+shape: (3, 39)
+
 | t | date | dow | years | christmas | snap_CA | snap_TX | snap_WI | dom_1 | dom_2 | dom_3 | dom_4 | dom_5 | dom_6 | dom_7 | dom_8 | dom_9 | dom_10 | dom_11 | dom_12 | dom_13 | dom_14 | dom_15 | dom_16 | dom_17 | dom_18 | dom_19 | dom_20 | dom_21 | dom_22 | dom_23 | dom_24 | dom_25 | dom_26 | dom_27 | dom_28 | dom_29 | dom_30 | dom_31 |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| u32 | date | i8 | f64 | f32 | i64 | i64 | i64 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 | f32 |
 | 0 | 2011-01-29 | 5 | 0.0 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 0.0 |
 | 1 | 2011-01-30 | 6 | 0.00274 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 |
 | 2 | 2011-01-31 | 0 | 0.005479 | 0.0 | 0 | 0 | 0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 |
 
 
-A missing price means the item was not on the shelf that week; the kit's `saled` flag is "price listed and not Christmas", and it later gates the mean of model 2.
+The competition publishes one shelf price per item, store and Walmart week, only for the weeks in which the item was listed; [load_m5()](../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) repeats these weekly prices over the days and returns them as a float `(days, series)` array with the same layout as the sales, `NaN` on the days without a listing. The prices serve two purposes here. They define the dollar sales that weight the series in the competition metric (the next section). And a missing price means the item was not on the shelf that week, which is information the sales alone do not carry: a zero before the first listing is a product that did not exist yet, not a day without buyers. The kit turns this into the `saled` flag, "price listed and not Christmas" (the one day a year the stores are closed), and model 2 multiplies its mean by the flag so that an unlisted item is forecast at the floor instead of at its department's typical level. About a fifth of the series-days have no listing, most of them before the first listing of an item, when its series is all zeros.
 
 
 ``` python
@@ -187,11 +198,15 @@ price = m5.price
 christmas = calendar_df["christmas"].to_numpy()[:N_DAYS]
 saled = (~np.isnan(price)).astype(np.float32) * (1.0 - christmas[:, None])
 price_filled = np.nan_to_num(price, nan=0.0)
-print(f"price: {price.shape}, share of series-days with a listed price {saled.mean():.3f}")
+
+print(
+    f"price: {price.shape} {price.dtype} (days, series), "
+    f"share of series-days with a listed price {saled.mean():.3f}"
+)
 ```
 
 
-    price: (1969, 30490), share of series-days with a listed price 0.793
+    price: (1969, 30490) float32 (days, series), share of series-days with a listed price 0.793
 
 
 ## The hierarchy
@@ -264,22 +279,29 @@ def aggregation_matrix(
 hierarchy_df = keys_df.pipe(add_level_ids)
 agg_matrix, agg_labels, level_slices = aggregation_matrix(hierarchy_df)
 sales_agg = sales @ agg_matrix
+
 print(f"aggregation matrix: {agg_matrix.shape}, aggregated sales: {sales_agg.shape}")
-pl.DataFrame(
+
+levels_df = pl.DataFrame(
     {
         "level": list(LEVELS),
         "grouping": [" x ".join(columns) or "total" for columns in LEVELS.values()],
         "series": [level_slices[level].stop - level_slices[level].start for level in LEVELS],
     }
 )
+with pl.Config(tbl_rows=len(LEVELS)):
+    display(levels_df)
 ```
 
 
     aggregation matrix: (30490, 42840), aggregated sales: (1969, 42840)
 
 
+shape: (12, 3)
+
 | level     | grouping             | series |
 |-----------|----------------------|--------|
+| str       | str                  | i64    |
 | "Level1"  | "total"              | 1      |
 | "Level2"  | "state_id"           | 3      |
 | "Level3"  | "store_id"           | 10     |
@@ -344,7 +366,7 @@ fig.suptitle("Store CA_1: daily unit sales by department", fontsize=16, fontweig
 </figure>
 
 
-At the bottom level most series are intermittent. Among the days with a listed price, the share of days with zero sales runs from about a half (`FOODS_3`, `HOUSEHOLD_1`) to 85% (`HOBBIES_2`); the food departments are the least intermittent and sell the most units per day.
+At the bottom level most series are intermittent. Among the days with a listed price, the share of days with zero sales runs from about a half (`FOODS_3`, `HOUSEHOLD_1`) to 85\\ (`HOBBIES_2`); the food departments are the least intermittent and sell the most units per day.
 
 
 ``` python
@@ -369,8 +391,11 @@ zero_days = pl.DataFrame(
 ```
 
 
+shape: (7, 4)
+
 | dept_id       | series | zero_share | mean_daily_sales |
 |---------------|--------|------------|------------------|
+| str           | u32    | f32        | f32              |
 | "FOODS_1"     | 2160   | 0.568      | 1.238            |
 | "FOODS_2"     | 3980   | 0.568      | 1.009            |
 | "FOODS_3"     | 8230   | 0.487      | 2.062            |
@@ -417,11 +442,13 @@ fig.suptitle("Best seller of each department in store CA_1", fontsize=16, fontwe
 
 # Scoring at every level
 
-The kit's `m5_backtest` scores a forecast of the 42,840 series with the structure of the competition metrics. For a series s at a level \ell with n\_\ell series, let c_s be the mean CRPS of its 28-day forecast, w_s its share of the dollar sales of the level over the 28 days before the forecast origin (so the weights of a level sum to one), and \sigma_s its scale, the mean absolute lag-one difference of the training series after its first nonzero value (the scale of the competition's pinball loss):
+The kit's `m5_backtest` scores a forecast of the 42,840 series with the structure of the competition metrics. For a series s at a level \ell with n\_\ell series, let c_s be the mean CRPS of its 28-day forecast, w_s its share of the dollar sales of the level over the 28 days before the forecast origin (so the weights of a level sum to one), and \sigma_s its scale, the mean absolute lag-one difference of the training series after its first nonzero value (the scale of the competition's pinball loss). We define:
 
  \text{WS-CRPS} = \frac{1}{12} \sum\_{\ell=1}^{12} \sum\_{s \in \ell} w_s \frac{c_s}{\sigma_s}. 
 
 The dollar sales are the sales times the shelf price; the scale clamps the sum of the absolute differences at one (as the kit does) so a series that never moves does not get an infinite score. The weights depend on the forecast origin, so they are built per window. We check them against the official weights of the evaluation window, which validates the aggregation matrix and the price join in one go.
+
+The weights and scales are NumPy, not JAX, on purpose: they are computed once per window from the training data (a sum over 28 days and a sparse product for the weights, a cumulative sum over the training days for the scales), never inside a fitted model or a gradient, so there is nothing for `jax.jit` to amortize, and the sparse summation matrix has no JAX equivalent on the CPU. Only the CRPS itself, which runs over the `(draws, days, aggregates)` forecast tensor, is a JAX function ([crps_empirical](../../reference/metrics.crps_empirical.md#numpyro_forecast.metrics.crps_empirical) below).
 
 
 ``` python
@@ -461,7 +488,9 @@ weights_check = official_weights.join(
 max_weight_gap = weights_check.select(
     (pl.col("weight") - pl.col("weight_ours")).abs().max()
 ).item()
+
 print(f"{weights_check.height} aggregates matched, largest weight gap {max_weight_gap:.1e}")
+
 assert weights_check.height == len(agg_labels)
 assert max_weight_gap < 1e-4
 ```
@@ -470,7 +499,7 @@ assert max_weight_gap < 1e-4
     42840 aggregates matched, largest weight gap 2.0e-06
 
 
-The scoring functions plug into [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): a `transform` sums the bottom-level draws and the truth to the 42,840 aggregates, and `per_window_metrics` returns one weighted scaled CRPS per level for the window's origin, so every series is sorted once. The headline WS-CRPS is the mean of the 12 level scores.
+The scoring functions plug into [backtest()](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): a `transform` sums the bottom-level draws and the truth to the 42,840 aggregates, and `per_window_metrics` returns one weighted scaled CRPS per level for the window's origin, so every series is sorted once. The headline WS-CRPS is the mean of the 12 level scores. The split between NumPy and JAX follows the cost: `aggregate_transform` is one sparse product per window on the host (where the draws of the three models end up anyway), while `ws_crps_level` runs on the one expensive operation, the sort of the draws of every aggregate inside [crps_empirical](../../reference/metrics.crps_empirical.md#numpyro_forecast.metrics.crps_empirical), which is a compiled JAX kernel.
 
 
 ``` python
@@ -505,29 +534,17 @@ def m5_metrics(t0: int, t1: int, t2: int) -> dict:
         )
         for level, level_slice in level_slices.items()
     }
-
-
-def ws_crps_table(scores: dict[str, dict[str, float]]) -> pl.DataFrame:
-    """Table of the per-level WS-CRPS of several models, with the mean over levels as last row."""
-    table = pl.DataFrame(
-        {"level": list(LEVELS)}
-        | {
-            model: [values[f"ws_crps_{level}"] for level in LEVELS]
-            for model, values in scores.items()
-        }
-    )
-    mean_row = table.select(pl.lit("mean").alias("level"), pl.exclude("level").mean())
-    return pl.concat([table, mean_row]).with_columns(pl.exclude("level").round(3))
 ```
 
 
-The official pinball loss of the uncertainty competition (WSPL) has the same weights and scales, with the mean pinball loss over the nine competition quantiles in place of the CRPS. We compute it on the evaluation window to compare with the published leaderboard.
+The official pinball loss of the uncertainty competition (WSPL) has the same weights and scales, with the mean pinball loss over the nine competition quantiles in place of the CRPS. The nine quantiles are the median and the bounds of the central 50\\, 67\\, 95\\ and 99\\ intervals, so four of them sit in the tails. We compute the WSPL on the evaluation window to compare with the published leaderboard.
 
 
 ``` python
-M5_QUANTILES = np.array(
-    [0.005, 0.025, 0.165, 0.25, 0.5, 0.75, 0.835, 0.975, 0.995], dtype=np.float32
-)
+M5_INTERVALS = np.array([0.5, 0.67, 0.95, 0.99])
+M5_QUANTILES = np.sort(
+    np.concatenate([[0.5], (1 - M5_INTERVALS) / 2, (1 + M5_INTERVALS) / 2])
+).astype(np.float32)
 
 
 def ws_pinball(
@@ -543,7 +560,81 @@ def ws_pinball(
         for level_slice in level_slices.values()
     ]
     return float(np.mean(level_scores))
+
+
+print(f"M5 quantiles: {M5_QUANTILES}")
 ```
+
+
+    M5 quantiles: [0.005 0.025 0.165 0.25  0.5   0.75  0.835 0.975 0.995]
+
+
+The two scores are close relatives: the CRPS is twice the integral of the pinball loss over all quantiles, \text{CRPS} = 2 \int_0^1 \rho\_\tau \\ d\tau, while the WSPL averages the pinball loss over the nine competition quantiles. Both are proper scoring rules, so both are minimized by the true predictive distribution: they penalize a biased location and a wrong spread, in either direction. The figure makes the difference visible on a toy problem, a Normal forecast with location \mu and scale \sigma scored against observations drawn from \text{Normal}(0, 1), so the ideal forecast is \mu = 0, \sigma = 1. The expected CRPS and twice the expected mean pinball loss (the factor two puts the two on the same axis) are plotted against the forecast scale and against the forecast bias.
+
+
+``` python
+key_truth, key_pred = random.split(random.PRNGKey(seed=0))  # a side key: no effect on the fits
+toy_truth = random.normal(key_truth, (4_000,))
+toy_noise = random.normal(key_pred, (500, toy_truth.shape[0]))
+
+
+def toy_scores(mu: float, sigma: float) -> tuple[float, float]:
+    """Score a Normal(mu, sigma) forecast of Normal(0, 1) data: expected CRPS and M5 pinball."""
+    pred = mu + sigma * toy_noise
+    crps = float(crps_empirical(pred, toy_truth).mean())
+    pinball = float(
+        np.mean([eval_pinball(pred, toy_truth, quantile=float(q)) for q in M5_QUANTILES])
+    )
+    return crps, pinball
+
+
+sigma_grid = np.geomspace(0.25, 4.0, 25)
+mu_grid = np.linspace(-3.0, 3.0, 25)
+scores_sigma = np.array([toy_scores(0.0, float(s)) for s in sigma_grid])
+scores_mu = np.array([toy_scores(float(m), 1.0) for m in mu_grid])
+
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4.5), layout="constrained")
+for ax, grid, scores, xlabel in zip(
+    axes,
+    [sigma_grid, mu_grid],
+    [scores_sigma, scores_mu],
+    [r"forecast scale $\sigma$ (truth: 1)", r"forecast location $\mu$ (truth: 0)"],
+    strict=True,
+):
+    ax.plot(grid, scores[:, 0], color="C0", label="CRPS")
+    ax.plot(grid, 2 * scores[:, 1], color="C1", label="2 x mean pinball (M5 quantiles)")
+    ax.set(xlabel=xlabel, ylabel="expected score")
+axes[0].set_xscale("log")
+axes[0].set_xticks([0.25, 0.5, 1.0, 2.0, 4.0], ["0.25", "0.5", "1", "2", "4"])
+axes[0].legend()
+fig.suptitle("CRPS and M5 pinball loss of a Normal forecast of Normal(0, 1) data", fontsize=14);
+```
+
+
+<figure class="figure">
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-14-output-1.png" class="figure-img" width="1211" height="461" /></p>
+</figure>
+
+
+``` python
+crps_ref, pinball_ref = toy_scores(0.0, 1.0)
+for label, (mu, sigma) in {
+    "sigma = 0.25": (0, 0.25),
+    "sigma = 4": (0, 4),
+    "mu = 1": (1, 1),
+}.items():
+    crps, pinball = toy_scores(float(mu), float(sigma))
+
+    print(f"{label}: CRPS +{crps / crps_ref - 1:.0%}, M5 pinball +{pinball / pinball_ref - 1:.0%}")
+```
+
+
+    sigma = 0.25: CRPS +21%, M5 pinball +52%
+    sigma = 4: CRPS +82%, M5 pinball +107%
+    mu = 1: CRPS +47%, M5 pinball +49%
+
+
+Both curves bottom out at the true forecast, \sigma = 1 and \mu = 0, as a proper score must. Relative to its minimum, the pinball loss rises faster than the CRPS when the spread is wrong, and most on the narrow side: a forecast with a quarter of the right spread costs the CRPS about 20\\ and the M5 pinball loss about 50\\, because four of the nine quantiles sit in the tails, where a too-narrow forecast is wrong by the most. Four times the right spread costs about 80\\ and 100\\. A bias of one standard deviation costs both about 50\\: the two scores agree on location errors and differ on spread errors. The two scores rank the three models of this notebook the same way; the CRPS is the headline because it does not depend on a choice of quantiles.
 
 
 ## Reconciliation
@@ -585,12 +676,16 @@ def disaggregate(
 
 
 total_index = np.zeros(n_series, dtype=np.int64)
+
 level9_index = hierarchy_df["Level9"].to_numpy()
+
 level3_index = hierarchy_df["Level3"].to_numpy()
+
 store_ids = [
     label.removeprefix("Level3/").removesuffix("/X")
     for label in agg_labels[level_slices["Level3"]]
 ]
+
 dept_ids = [
     label.removeprefix("Level5/").removesuffix("/X")
     for label in agg_labels[level_slices["Level5"]]
@@ -600,14 +695,16 @@ dept_ids = [
 
 # Shared fitting and plotting helpers
 
-All three models use the kit's optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (`learning_rate_decay=0.1` in Pyro's `Forecaster`). The step counts are the kit's defaults, 1,001 for models 1 and 2 and 2,001 for model 3.
+All three models use the kit's optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (`learning_rate_decay=0.1` in Pyro's `Forecaster`). It is an optax chain handed to `SVI` as is (numpyro wraps optax transformations itself). The step counts are the kit's defaults, 1,001 for models 1 and 2 and 2,001 for model 3.
+
+The plotting helpers take their draws as NumPy or JAX arrays and convert them to NumPy once: [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) and [predict_in_sample()](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) return JAX arrays, the reconciliation returns NumPy (its Poisson draws are NumPy), and ArviZ and matplotlib consume NumPy either way, so there is nothing to gain from keeping the draws on the JAX side for a plot.
 
 
 ``` python
-def kit_optimizer(num_steps: int) -> numpyro.optim._NumPyroOptim:
+def kit_optimizer(num_steps: int) -> optax.GradientTransformation:
     """Build the kit's ClippedAdam: clipped gradients, learning rate decaying tenfold over the run."""
     schedule = optax.exponential_decay(0.1, transition_steps=num_steps, decay_rate=0.1)
-    return optax_to_numpyro(optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule)))
+    return optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
 
 
 def fit_svi(
@@ -646,10 +743,10 @@ def add_date_variable(tree: xr.DataTree, date_num: np.ndarray) -> xr.DataTree:
     return tree
 
 
-def plot_loss(losses: Array, title: str) -> None:
-    """Plot an ELBO loss curve on a symmetric log scale."""
+def plot_loss(losses: Array, title: str, *, skip: int = 0) -> None:
+    """Plot an ELBO loss curve on a symmetric log scale, from step ``skip`` on."""
     _, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(np.asarray(losses), color="C0")
+    ax.plot(np.arange(skip, len(losses)), np.asarray(losses)[skip:], color="C0")
     ax.set_yscale("symlog")
     ax.set(title=title, xlabel="SVI step", ylabel="loss")
 
@@ -755,26 +852,59 @@ Model 1 works on the log of the total daily sales, y_t = \log \sum\_{i} \text{sa
 
  \begin{align\*} \mu_t &= \beta_0 + \beta\_{\text{trend}}\\ \tau_t + s\_{d(t)} + \mathbf{w}^\top \mathbf{x}\_t, \\ y_t &\sim \text{StudentT}(\nu, \mu_t, \sigma), \end{align\*} 
 
-with the kit's priors \beta_0 \sim \text{Normal}(0, 10), \beta\_{\text{trend}} \sim \text{LogNormal}(-2, 1) (sales grow, so the slope is positive), s_d \sim \text{Normal}(0, 5), w_j \sim \text{Normal}(0, 1), \nu \sim \text{Uniform}(1, 10) and \sigma \sim \text{LogNormal}(-2, 1). The heavy tails absorb the Christmas days. The intercept, the seven weekday effects and the 31 day-of-month dummies are collinear (any constant can move between them), as in the kit; the mean-field guide picks one split and the forest plots below should be read for their relative pattern.
+with the kit's priors:
 
-The model has no latent time process, so [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) is the only building block it needs. The forecast covariates are just the calendar of the next 28 days.
+ \begin{align\*} \beta_0 &\sim \text{Normal}(0, 10), \\ \beta\_{\text{trend}} &\sim \text{LogNormal}(-2, 1), \\ s_d &\sim \text{Normal}(0, 5), \quad d = 1, \ldots, 7, \\ w_j &\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\ \nu &\sim \text{Uniform}(1, 10), \\ \sigma &\sim \text{LogNormal}(-2, 1). \end{align\*} 
+
+A word on each prior. The observations live on the log scale, where the total of 30,000 to 55,000 units a day is y_t \approx 10.3 to 10.9, so an intercept with a standard deviation of 10 covers anything from a few units a day to billions: flat in practice. The trend prior is positive by construction (a LogNormal) and encodes that sales grow; its median is e^{-2} \approx 0.14 per year on the log scale (about 15\\ a year) and its 94\\ interval runs from 0.02 to 0.9, so the growth rate is unknown within an order of magnitude but its sign is not. The weekday effects get a standard deviation of 5, a factor of e^{5} \approx 150 on the sales: wide, because the intercept and the weekday effects are collinear and the prior has to leave room for any split between them. The 31 day-of-month weights get the unit standard deviation of a generic regression coefficient. The StudentT degrees of freedom are uniform between 1 (Cauchy tails) and 10 (close to Normal), so the posterior decides how heavy the tails have to be to absorb the Christmas drops. The noise scale has the same LogNormal as the trend: a median of 0.14 on the log scale, a typical day within \pm 14\\ of its mean, which is the right order of magnitude for the residual of a total over 30,490 series. The figure shows the three priors that carry information; the standard normal of the weights needs no plot.
+
+
+``` python
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 4), layout="constrained")
+pz.LogNormal(-2, 1).plot_pdf(ax=axes[0], color="C0")
+axes[0].set(title="trend per year and noise scale (log scale)", xlim=(0, 1.5))
+pz.Normal(0, 5).plot_pdf(ax=axes[1], color="C1")
+axes[1].set(title="weekday effects (log scale)")
+pz.Uniform(1, 10).plot_pdf(ax=axes[2], color="C2")
+axes[2].set(title="StudentT degrees of freedom", ylim=(0, 0.2))
+for ax in axes:
+    ax.legend(loc="upper right", fontsize=9)
+fig.suptitle("Model 1: priors", fontsize=14, fontweight="bold", y=1.08);
+```
+
+
+<figure class="figure">
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-18-output-1.png" class="figure-img" width="1242" height="431" /></p>
+</figure>
+
+
+The intercept, the seven weekday effects and the 31 day-of-month dummies are collinear (any constant can move between them), as in the kit; the mean-field guide picks one split and the forest plots below should be read for their relative pattern.
+
+The model has no latent time process, so [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) is the only building block it needs. The covariates are one row per day over the full 1,969 days (training period plus evaluation window) with 33 columns: the time in years, the weekday index and the 31 day-of-month dummies, in that order, so that the model reads them back by position. The forecast covariates are just the calendar of the next 28 days, and the training slice is the first 1,941 rows.
 
 
 ``` python
 covariates_top = jnp.asarray(
     np.column_stack(
         [
-            calendar_df["years"].to_numpy()[:N_DAYS],
-            calendar_df["dow"].to_numpy()[:N_DAYS],
-            calendar_df.select(pl.col("^dom_.*$")).to_numpy()[:N_DAYS],
+            calendar_df["years"].to_numpy()[:N_DAYS],  # column 0: time in years
+            calendar_df["dow"].to_numpy()[:N_DAYS],  # column 1: weekday, 0 = Monday
+            calendar_df.select(pl.col("^dom_.*$")).to_numpy()[:N_DAYS],  # 2 to 32: dom dummies
         ]
     ).astype(np.float32)
 )
 covariates_top_train = covariates_top[:N_DAYS_TRAIN]
-y_top = jnp.asarray(np.log(y_total)[:, None], dtype=jnp.float32)
+y_top = jnp.asarray(np.log(y_total)[:, None], dtype=jnp.float32)  # (days, 1): one series
 y_top_train = y_top[:N_DAYS_TRAIN]
 
+print(f"covariates: {covariates_top.shape} (days, feature), target: {y_top.shape} (days, obs)")
+```
 
+
+    covariates: (1969, 33) (days, feature), target: (1969, 1) (days, obs)
+
+
+``` python
 def top_down_model(covariates: Array, data: Array | None = None) -> None:
     """Kit model 1: trend, weekday and day-of-month effects on the log of the total sales."""
     h = Horizon.from_data(covariates, data)
@@ -801,7 +931,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-16-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-20-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -857,7 +987,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-17-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-21-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -872,24 +1002,20 @@ guide_top = AutoNormal(top_down_model)
 svi_top, time_top = fit_svi(
     key_fit, top_down_model, guide_top, NUM_STEPS["top-down"], covariates_top_train, y_top_train
 )
-print(
-    f"model 1: {NUM_STEPS['top-down']} steps in {time_top:.1f} s, final loss {float(svi_top.losses[-1]):.1f}"
+plot_loss(
+    svi_top.losses, f"Model 1: ELBO loss ({NUM_STEPS['top-down']:,} steps, {time_top:.1f} s)"
 )
-plot_loss(svi_top.losses, "Model 1: ELBO loss")
 ```
 
 
-    model 1: 1001 steps in 4.1 s, final loss -1402.0
-
-
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-18-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-22-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
 ## Posterior
 
-[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call. The trend is about 0.08 per year on the log scale (8% a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.
+[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call. The trend is about 0.08 per year on the log scale (8\\ a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.
 
 
 ``` python
@@ -919,7 +1045,7 @@ az.summary(tree_top, var_names=["bias", "trend", "dof", "noise_scale"])
 | noise_scale | 0.0781 | 0.0017 | 0.076 | 0.081 | 510 | 518 | nan | 7.5e-05 | 5.1e-05 |
 
 
-The weekday effects show the weekend peak (Saturday and Sunday about 0.33 above the midweek days on the log scale, about 40% more sales) and the day-of-month effects the pay-day pattern: the first days of the month sell more than the last ones.
+The weekday effects show the weekend peak: Saturday and Sunday are about 0.33 above the midweek days on the log scale, about 40\\ more sales, with Friday and Monday in between.
 
 
 ``` python
@@ -931,7 +1057,7 @@ pc.viz["figure"].item().suptitle("Model 1: weekday effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-20-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-24-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
@@ -944,8 +1070,11 @@ pc.viz["figure"].item().suptitle("Model 1: day-of-month effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-21-output-1.png" class="figure-img" width="811" height="911" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-25-output-1.png" class="figure-img" width="811" height="911" /></p>
 </figure>
+
+
+The day-of-month effects are the pay-day and SNAP pattern of the three states. The first half of the month sits 0.1 to 0.15 above the second half on the log scale (10\\ to 15\\ more sales), with the drop after day 15 and the lowest days at the end of the month. Within the first half, the peaks are the days on which all three states allow SNAP purchases (days 3 and 9, and to a lesser extent 5 and 6; California allows them on days 1 to 10, Texas on 1, 3, 5, 6, 7, 9, 11, 12, 13 and 15, Wisconsin on 2, 3, 5, 6, 8, 9, 11, 12, 14 and 15), the dip on day 4 is a California-only day, and days 12 and 15 are the Texas and Wisconsin days. The absolute level of the weights (around 2.3) is not meaningful: it is the share of the intercept that the mean-field guide happened to put on the dummies.
 
 
 ## Forecast
@@ -1001,8 +1130,11 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-22-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-26-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
+
+
+The forecast is the calendar pattern continued: the weekend peaks and the pay-day lift of the first days of June land on the observed days, and the observed log total stays inside the 50\\ band on most days of the evaluation window. The bands are symmetric in log space and about \pm 0.2 wide at 94\\, a factor of e^{0.2} \approx 1.2 on the units. The StudentT with four degrees of freedom is what lets the fit absorb the Christmas drops without widening the bands on ordinary days. The forecast bands are no wider than the in-sample ones, because the model has no latent state to grow uncertain about: a regression on the calendar is as confident about day 28 as about day 1.
 
 
 ## Top-down split and scores
@@ -1029,6 +1161,7 @@ level1_draws = {"top-down": pred_levels[..., level_slices["Level1"]]}
 level3_draws = {"top-down": pred_levels[..., level_slices["Level3"]]}
 del bottom_top, pred_levels
 mean_ws_crps = np.mean(list(scores_holdout["top-down"].values()))
+
 print(
     f"model 1 evaluation window: WS-CRPS {mean_ws_crps:.3f}, WSPL {wspl_holdout['top-down']:.3f}"
 )
@@ -1057,7 +1190,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-24-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-28-output-1.png" class="figure-img" width="1511" height="1443" /></p>
 </figure>
 
 
@@ -1070,9 +1203,55 @@ Model 2 is a regression for every item in every store. For item i in department 
 
  \begin{align\*} \eta^{(h)}\_{i,t} &= \sum\_{k=1}^{3} w^{(h)}\_{r(i), k, d(i)} \log \text{MA}\_{k,i,t} + b^{(h)}\_{r(i), d(i)}\\ \text{snap}\_{r(i), t} + s^{(h)}\_{r(i), d(t), d(i)}, \qquad h \in \\\text{mean}, \text{scale}\\, \\ m\_{i,t} &= \text{bexp}(\eta^{(\text{mean})}\_{i,t})\\ \text{saled}\_{i,t} + 10^{-3}, \qquad v\_{i,t} = \text{bexp}(\eta^{(\text{scale})}\_{i,t})\\ \text{saled}\_{i,t} + 10^{-3}, \\ y\_{i,t} &\sim \text{Gamma}\left(\frac{m\_{i,t}}{v\_{i,t}}, \frac{1}{v\_{i,t}}\right), \end{align\*} 
 
-with all weights \sim \text{Normal}(0, 1), \text{bexp}(x) = 10^3\\ \text{sigmoid}(x - \log 10^3) the kit's bounded exponential (it keeps the early training steps finite), and \text{saled}\_{i,t} the price-listed flag that forces the mean to the floor when the item is not on the shelf. The Gamma with mean m and variance m v is a continuous stand-in for a count likelihood: the kit clamps the sales at 10^{-3} to make the zeros admissible. There are no item-level parameters: an item is described by its department's weights and its own moving averages.
+with \text{bexp}(x) = 10^3\\ \text{sigmoid}(x - \log 10^3) the kit's bounded exponential and \text{saled}\_{i,t} the price-listed flag that forces the mean to the floor when the item is not on the shelf. The Gamma with mean m and variance m v is a continuous stand-in for a count likelihood: the kit clamps the sales at 10^{-3} to make the zeros admissible. There are no item-level parameters: an item is described by its department's weights and its own moving averages.
+
+Every weight has the same prior, w, b, s \sim \text{Normal}(0, 1), so there is no prior to plot; what deserves a look is what the standard normals imply through the bounded exponential. The moving-average weights multiply the log of the item's recent level, so the prior mean of an item is its level raised to a random power, m \approx \text{MA}^{\\w_1 + w_2 + w_3} \times e^{s}, where the exponent has a standard deviation of \sqrt{3} \approx 1.7: for a slow seller at one unit a day (\log \text{MA} = 0) the prior on the mean is a LogNormal around one unit, but for an item at ten units a day it is spread over many orders of magnitude. The bounded exponential is what makes this prior usable. A plain \exp of a draw a few standard deviations out gives means of millions of units and an infinite loss on the first SVI steps; \text{bexp} matches \exp up to a few tens of units, is 10\\ below it at a hundred, and saturates at 1,000 units a day, more than any item sells, so the cap protects the early steps and never binds in the posterior.
+
+
+``` python
+def bounded_exp(x: Array, bound: float = 1e3) -> Array:
+    """Exponential capped at ``bound`` so early training steps cannot blow up (kit helper)."""
+    return jax.nn.sigmoid(x - jnp.log(bound)) * bound
+
+
+key_w, key_s = random.split(random.PRNGKey(seed=1))  # a side key: no effect on the fits
+prior_w = random.normal(key_w, (20_000, 3))
+prior_s = random.normal(key_s, (20_000,))
+x_grid = jnp.linspace(-4.0, 12.0, 400)
+
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 4.5), layout="constrained")
+axes[0].plot(x_grid, jnp.exp(x_grid), color="C0", label=r"$\exp(x)$")
+axes[0].plot(x_grid, bounded_exp(x_grid), color="C1", label=r"$\mathrm{bexp}(x)$, bound 1,000")
+axes[0].set(yscale="log", xlabel="$x$ (linear predictor)", ylabel="mean (units a day)")
+axes[0].legend(loc="upper left")
+for level, color in [(1.0, "C0"), (10.0, "C1")]:
+    prior_mean = bounded_exp(jnp.log(level) * prior_w.sum(axis=1) + prior_s)
+    axes[1].hist(
+        np.log10(np.asarray(prior_mean)),
+        bins=np.linspace(-6, 3, 55),
+        density=True,
+        alpha=0.6,
+        color=color,
+        label=f"item selling {level:.0f} unit(s) a day",
+    )
+axes[1].set(xlabel="prior mean of the Gamma (log10 units a day)", ylabel="density")
+axes[1].legend(loc="upper left")
+fig.suptitle(
+    "Model 2: the bounded exponential and the prior it implies on an item's mean", fontsize=14
+);
+```
+
+
+<figure class="figure">
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-29-output-1.png" class="figure-img" width="1411" height="461" /></p>
+</figure>
+
 
 Training subsamples the series plate. The guide's `create_plates` opens the `series` plate with `subsample_size=600`; under `replay` the model's plate receives the same indices, `numpyro.subsample` picks the matching columns of the data and the covariates, and the observed log density is scaled by 30{,}490 / 600. [Horizon.from_data](../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) is called on the subsampled arrays, so [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) observes the minibatch. [forecast()](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) and `Predictive` run without the guide and see the full plate. The Gamma distribution is not a location family, so it enters [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) through a link that maps the mean to the distribution, after registering it as elementwise for the prefix conditioning.
+
+One consequence of this layout is the warning filtered at the top of the notebook. The observation site must sit inside the `series` plate (that is what scales its log density by the subsampling factor), and its other batch axis, time, is not declared as a plate: the days are conditionally independent given the parameters just like the series, but [predict()](../../reference/models.predict.md#numpyro_forecast.models.predict) splits the time axis into the observed prefix and the forecast suffix, two sites of different lengths that one plate cannot cover. numpyro's model validation flags any batch axis without a plate once a site has at least one plate, so it warns at every trace. The warning is about bookkeeping, not about the model: plates only change the log density through subsampling and enumeration, and we never subsample time, so declaring a time plate would change nothing in the fit.
+
+The moving averages are one-off preprocessing over the whole panel, a float64 cumulative sum of the 60 million cells computed once in NumPy; there is nothing for JAX to compile here, and a float32 cumulative sum over five years would lose precision on the high sellers. The covariate tensor stacks six channels of shape `(days, series)`: the weekday index, the SNAP flag of the store's state, the `saled` flag, and the three log moving averages. The model reads the channels by position and the first channel (the weekday) only from the first series, since it is the same for all.
 
 
 ``` python
@@ -1102,56 +1281,71 @@ def lagged_log_moving_average(y: np.ndarray, window: int, lag: int) -> np.ndarra
 state_index = hierarchy_df["Level2"].to_numpy()
 snap_by_state = calendar_df.select("snap_CA", "snap_TX", "snap_WI").to_numpy()[:N_DAYS]
 covariates_bottom_np = np.empty((3 + len(MA_WINDOWS), N_DAYS, n_series), dtype=np.float32)
-covariates_bottom_np[0] = calendar_df["dow"].to_numpy()[:N_DAYS, None]
-covariates_bottom_np[1] = snap_by_state[:, state_index]
-covariates_bottom_np[2] = saled
-for k, window in enumerate(MA_WINDOWS):
+covariates_bottom_np[0] = calendar_df["dow"].to_numpy()[:N_DAYS, None]  # weekday, 0 = Monday
+covariates_bottom_np[1] = snap_by_state[:, state_index]  # SNAP flag of the store's state
+covariates_bottom_np[2] = saled  # price listed and not Christmas
+for k, window in enumerate(MA_WINDOWS):  # channels 3 to 5: log MA over 28, 56, 84 days
     covariates_bottom_np[3 + k] = lagged_log_moving_average(sales, window, MA_LAG)
 covariates_bottom = jnp.asarray(covariates_bottom_np)
 del covariates_bottom_np
-y_bottom = jnp.asarray(np.maximum(sales, 1e-3))
+y_bottom = jnp.asarray(np.maximum(sales, 1e-3))  # (days, series), zeros clamped at 1e-3
+
 print(
-    f"covariates: {covariates_bottom.shape} (channel, day, series), {covariates_bottom.nbytes / 1e9:.2f} GB"
+    f"covariates: {covariates_bottom.shape} (channel, day, series), "
+    f"{covariates_bottom.nbytes / 1e9:.2f} GB; target: {y_bottom.shape} (day, series)"
 )
 
 store_index = jnp.asarray(hierarchy_df["Level3"].to_numpy(), dtype=jnp.int32)
 dept_index = jnp.asarray(hierarchy_df["Level5"].to_numpy(), dtype=jnp.int32)
+```
 
 
-def bounded_exp(x: Array, bound: float = 1e3) -> Array:
-    """Exponential capped at ``bound`` so early training steps cannot blow up (kit helper)."""
-    return jax.nn.sigmoid(x - jnp.log(bound)) * bound
+    covariates: (6, 1969, 30490) (channel, day, series), 1.44 GB; target: (1969, 30490) (day, series)
 
 
+``` python
 def make_bottom_up_model(store_index: Array, dept_index: Array) -> ForecastModel:
     """Kit model 2 for the series described by ``store_index`` and ``dept_index``."""
     n_series = store_index.shape[0]
 
     def bottom_up_model(covariates: Array, data: Array | None = None) -> None:
-        dow = covariates[0, :, 0].astype(jnp.int32)
+        dow = covariates[0, :, 0].astype(jnp.int32)  # (days,), the same for every series
+        # Department-level weights of every store, with the two heads (mean, scale) and the
+        # departments as event dimensions, as in the kit.
         with numpyro.plate("store", N_STORES):
-            ma_weight = numpyro.sample(
+            ma_weight = numpyro.sample(  # (store, head, lag, dept)
                 "ma_weight", dist.Normal(0.0, 1.0).expand([2, 3, N_DEPTS]).to_event(3)
             )
-            snap_weight = numpyro.sample(
+            snap_weight = numpyro.sample(  # (store, head, dept)
                 "snap_weight", dist.Normal(0.0, 1.0).expand([2, N_DEPTS]).to_event(2)
             )
-            seasonal = numpyro.sample(
+            seasonal = numpyro.sample(  # (store, weekday, head, dept)
                 "seasonal", dist.Normal(0.0, 1.0).expand([7, 2, N_DEPTS]).to_event(3)
             )
         with numpyro.plate("series", n_series):
-            batch = numpyro.subsample(covariates, event_dim=0)
-            y = None if data is None else numpyro.subsample(data, event_dim=0)
-            store = numpyro.subsample(store_index, event_dim=0)
-            dept = numpyro.subsample(dept_index, event_dim=0)
+            # Under the subsampling guide, the plate carries 600 indices and `subsample`
+            # picks those columns; without it the full arrays pass through.
+            batch = numpyro.subsample(covariates, event_dim=0)  # (channel, days, n)
+            y = None if data is None else numpyro.subsample(data, event_dim=0)  # (days, n)
+            store = numpyro.subsample(store_index, event_dim=0)  # (n,)
+            dept = numpyro.subsample(dept_index, event_dim=0)  # (n,)
             h = Horizon.from_data(batch, y)
+            # (days, n), (days, n) and (lag, days, n).
             snap, saled_flag, log_ma = batch[1], batch[2], batch[3:]
+            # Gather the weights of every series' store and department, then contract the
+            # lag axis with its three log moving averages: (n, head, lag) x (lag, days, n)
+            # -> (head, days, n).
             moving_average = jnp.einsum("nhk,ktn->htn", ma_weight[store, :, :, dept], log_ma)
+            # (n, head) -> (head, 1, n), broadcast over the days of the SNAP flag.
             snap_effect = snap_weight[store, :, dept].T[:, None, :] * snap
+            # (n, weekday, head) indexed by the weekday of every day -> (n, days, head),
+            # transposed to (head, days, n).
             seasonal_effect = seasonal[store, :, :, dept][:, dow, :].transpose(2, 1, 0)
+            # Unpack the two heads along the leading axis.
             log_mean, log_scale = moving_average + snap_effect + seasonal_effect
             mean = bounded_exp(log_mean) * saled_flag + 1e-3
             scale = bounded_exp(log_scale) * saled_flag + 1e-3
+            # Gamma(concentration, rate) with mean `m` and variance `m * scale`.
             predict(h, lambda m: dist.Gamma(m / scale, 1.0 / scale), mean)
 
     return bottom_up_model
@@ -1166,9 +1360,6 @@ bottom_up_model = make_bottom_up_model(store_index, dept_index)
 y_bottom_train = y_bottom[T0:N_DAYS_TRAIN]
 covariates_bottom_train = covariates_bottom[:, T0:N_DAYS_TRAIN]
 ```
-
-
-    covariates: (6, 1969, 30490) (channel, day, series), 1.44 GB
 
 
 ## Prior predictive check
@@ -1200,13 +1391,13 @@ del prior_obs_focus
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-26-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-32-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
 ## Fit
 
-Each step evaluates the Gamma likelihood of 600 series over 1,820 days (about 1.1 million cells), so the 1,001 steps take about a minute despite the 55 million cells of the full panel. The loss is noisy because of the subsampling.
+Each step evaluates the Gamma likelihood of 600 series over 1,820 days (about 1.1 million cells), so the 1,001 steps take about a minute despite the 55 million cells of the full panel. The loss is noisy because of the subsampling: every step scores a different random set of 600 series, so the ELBO estimate moves with the minibatch even at fixed parameters.
 
 
 ``` python
@@ -1220,24 +1411,62 @@ svi_bottom, time_bottom = fit_svi(
     covariates_bottom_train,
     y_bottom_train,
 )
-print(
-    f"model 2: {NUM_STEPS['bottom-up']} steps in {time_bottom:.1f} s, final loss {float(svi_bottom.losses[-1]):.4g}"
+plot_loss(
+    svi_bottom.losses,
+    f"Model 2: ELBO loss ({NUM_STEPS['bottom-up']:,} steps, {time_bottom:.0f} s), from step 50",
+    skip=50,
 )
-plot_loss(svi_bottom.losses[50:], "Model 2: ELBO loss (from step 50)")
 ```
 
 
-    model 2: 1001 steps in 56.9 s, final loss -1.102e+08
-
-
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-27-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-33-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
+
+
+A noisy loss curve can also mean a learning rate that is too high, so we check which it is. We hold the parameters fixed at their final values and evaluate the ELBO on twenty fresh minibatches: if the spread of these losses matches the spread of the trace over its last steps, the noise is the subsampling and a smaller learning rate would not remove it.
+
+
+``` python
+key_eval = random.PRNGKey(seed=2)  # a side key: no effect on the fits
+elbo = Trace_ELBO()
+
+
+@jax.jit
+def loss_at_params(rng_key: Array, params: dict, covariates: Array, data: Array) -> Array:
+    """ELBO loss of model 2 on one random minibatch at fixed guide parameters."""
+    return elbo.loss(rng_key, params, bottom_up_model, guide_bottom, covariates, data)
+
+
+losses_fixed = np.array(
+    [
+        float(loss_at_params(key, svi_bottom.params, covariates_bottom_train, y_bottom_train))
+        for key in random.split(key_eval, 20)
+    ]
+)
+losses_tail = np.asarray(svi_bottom.losses[-200:])
+
+print(
+    f"spread of the loss over the last 200 steps: sd {losses_tail.std():.3g} "
+    f"({losses_tail.std() / abs(losses_tail.mean()):.1%} of the mean)"
+)
+print(
+    f"spread over 20 minibatches at the final parameters: sd {losses_fixed.std():.3g} "
+    f"({losses_fixed.std() / abs(losses_fixed.mean()):.1%} of the mean)"
+)
+```
+
+
+    spread of the loss over the last 200 steps: sd 4.23e+06 (3.9% of the mean)
+    spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mean)
+
+
+The two spreads are the same size, about 4\\ of the mean loss along the trace and a little over 3\\ across minibatches at fixed parameters (the trace also carries the small drift of the parameters), so the noise of the curve is the minibatch, not the optimizer. The kit's schedule already decays the learning rate tenfold over the run, and the curve does not get smoother toward the end, which is the other signature of subsampling noise (a step-size effect would shrink with the step size). What would reduce it is a larger minibatch, at a proportional cost per step; we keep the kit's 600.
 
 
 ## Posterior
 
-The posterior has 1,540 parameters: for every store, the two heads times three moving averages times seven departments, the SNAP effect per head and department, and the weekday effects. We export the draws to ArviZ with named coordinates (the full posterior predictive of 30,490 series over 1,820 days would not fit in memory, so this tree carries the posterior only). The SNAP effect on the mean is a food effect: it is largest in the `FOODS_2` and `FOODS_3` departments, where a food-stamp day lifts the expected sales by 5% to 75% depending on the store, and within \pm 0.1 on the log scale for the hobbies and household departments.
+The posterior has 1,540 parameters: for every store, the two heads times three moving averages times seven departments, the SNAP effect per head and department, and the weekday effects. We export the draws to ArviZ with named coordinates (the full posterior predictive of 30,490 series over 1,820 days would not fit in memory, so this tree carries the posterior only) and add the sum of the three moving-average weights as a derived variable, since the sum is the quantity the forecast depends on.
 
 
 ``` python
@@ -1258,6 +1487,12 @@ tree_bottom = az.from_dict(
         "seasonal": ["store", "day_of_week", "head", "dept"],
     },
 )
+posterior_ds = tree_bottom["posterior"].dataset
+tree_bottom["posterior"] = posterior_ds.assign(ma_weight_sum=posterior_ds["ma_weight"].sum("lag"))
+```
+
+
+``` python
 pc = az.plot_forest(
     tree_bottom,
     var_names=["snap_weight"],
@@ -1272,35 +1507,38 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-28-output-1.png" class="figure-img" width="811" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-36-output-1.png" class="figure-img" width="811" height="1211" /></p>
 </figure>
 
 
-The moving-average weights of the mean head in store CA_1 show how the model reads an item's history. The three windows overlap (the 84-day window contains the other two), so the individual weights are weakly identified and change sign from one department to the next; in `HOBBIES_2` the 56-day and 84-day weights nearly cancel at about \mp 1. What is stable is their sum, between 0.25 and 0.4 in every department: an exponent below one on the recent level, which shrinks the high sellers toward their department.
+The SNAP effect on the mean is a food effect that varies a lot by store. In every store the largest coefficient belongs to `FOODS_2` (or `FOODS_3`), where a SNAP day lifts the expected sales by anything from a few percent in `CA_2` to 75\\ in `WI_2` (0.56 on the log scale), while the hobbies and household departments stay within \pm 0.1 everywhere. `WI_2` and `WI_3` stand out, above 0.2 in all three food departments; the Texas stores come next, between 0.2 and 0.3 in `FOODS_2`; `CA_2`, `CA_4` and `WI_1` barely react. The only wide intervals are the negative `HOBBIES_2` coefficients of `CA_2` and `CA_4`: the smallest department, with the most zeros, carries the least information about a ten-day-a-month covariate.
 
 
 ``` python
 pc = az.plot_forest(
     tree_bottom,
-    var_names=["ma_weight"],
+    var_names=["ma_weight", "ma_weight_sum"],
     coords={"head": "mean", "store": "CA_1"},
     combined=True,
-    figure_kwargs={"figsize": (8, 7)},
+    figure_kwargs={"figsize": (8, 9)},
 )
 pc.viz["figure"].item().suptitle(
-    "Model 2: moving-average weights of the log mean, store CA_1", fontsize=14
+    "Model 2: moving-average weights of the log mean and their sum, store CA_1", fontsize=14
 );
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-29-output-1.png" class="figure-img" width="811" height="711" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-37-output-1.png" class="figure-img" width="811" height="911" /></p>
 </figure>
+
+
+The moving-average weights of the mean head in store CA_1 show how the model reads an item's history. The three windows overlap (the 84-day window contains the other two), so the individual weights are weakly identified and change sign from one department to the next; in `HOBBIES_2` the 56-day and 84-day weights nearly cancel at about \mp 1. What is stable is their sum, between 0.28 and 0.41 in every department, with tight intervals: the model raises an item's recent level to a power well below one, which pulls the high sellers down toward the department and the slow sellers up. This shrinkage is the key to the item forecasts below.
 
 
 ## Item forecasts
 
-The posterior predictive of the focus items over the last sixteen training weeks and the evaluation window. The Gamma has its mode at zero whenever its shape m / v is below one, so the 50\\ HDI of an intermittent item sits on the floor while the 94\\ band covers the spikes; for the food best sellers the bands follow the weekly pattern but the model, which has no item-level parameters, underestimates the level of the top seller `FOODS_3_090_CA_1`.
+The posterior predictive of the focus items over the last sixteen training weeks and the evaluation window. The focus items are the best seller of each department in store CA_1, that is, the items farthest from the typical item of their department.
 
 
 ``` python
@@ -1325,13 +1563,52 @@ plot_series_panel(
     ylabel="units sold",
     suptitle="Model 2: in-sample predictive and forecast of the focus items",
 )
-del pp_focus, fc_focus
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-30-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-38-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
+
+
+These fits look poor, and the table below says why. For each focus item it lists the observed mean over the sixteen weeks, the mean and the median of the posterior predictive over the same days, and the mean daily sales of the median item of the same store-department.
+
+
+``` python
+focus_window = sales[plot_start:N_DAYS_TRAIN]
+focus_level_df = pl.DataFrame(
+    {
+        "item": focus_labels,
+        "observed mean": focus_window[:, focus_index].mean(axis=0),
+        "predictive mean": np.asarray(pp_focus).mean(axis=(0, 1)),
+        "predictive median": np.median(np.asarray(pp_focus), axis=0).mean(axis=0),
+        "median item of the department": [
+            np.median(focus_window[:, level9_index == level9_index[n]].mean(axis=0))
+            for n in focus_index
+        ],
+    }
+).with_columns(pl.exclude("item").round(2))
+del pp_focus, fc_focus
+
+focus_level_df
+```
+
+
+shape: (7, 5)
+
+| item | observed mean | predictive mean | predictive median | median item of the department |
+|----|----|----|----|----|
+| str | f32 | f32 | f32 | f32 |
+| "FOODS_1_099_CA_1" | 9.94 | 3.84 | 1.02 | 0.96 |
+| "FOODS_2_197_CA_1" | 18.34 | 3.26 | 0.73 | 0.84 |
+| "FOODS_3_090_CA_1" | 53.5 | 10.79 | 5.76 | 1.33 |
+| "HOBBIES_1_048_CA_1" | 15.74 | 3.5 | 0.82 | 0.59 |
+| "HOBBIES_2_043_CA_1" | 1.83 | 0.55 | 0.04 | 0.2 |
+| "HOUSEHOLD_1_334_CA_1" | 12.19 | 4.0 | 1.74 | 0.91 |
+| "HOUSEHOLD_2_176_CA_1" | 4.66 | 1.0 | 0.16 | 0.3 |
+
+
+Two things are going on. First, the shrinkage of the previous section: the model has no item-level parameters, so an item's mean is its department's regression evaluated at its own moving averages, and with the sum of the moving-average weights at about 0.3 a level of 60 units a day enters as 60^{0.3} \approx 3.4 times a department constant. The regression is fitted to the mass of the department, where the median item sells about one unit a day or less, so the best sellers are forecast at a fraction of their level (the predictive means are a fifth to two fifths of the observed means) while the slow sellers are forecast above theirs. Second, the shape of the Gamma: its mode is at zero whenever the shape m / v is below one, which is the case for most items (the scale head is as free as the mean head), so the predictive median sits far below the mean and the 50\\ HDI of every item lies on the floor while the 94\\ band carries the spikes. The weekly pattern is there (the bands rise on the weekends) but the level is wrong for exactly the items that carry the dollar weight of the competition metric, which is the first reason for the scores of this model.
 
 
 ## Bottom-up aggregation and scores
@@ -1354,7 +1631,9 @@ bottom_bottom = np.asarray(
     ),
     dtype=np.float32,
 )
+
 print(f"forecast of {bottom_bottom.shape} draws in {perf_counter() - start:.0f} s")
+
 pred_levels, truth_levels = aggregate_transform(bottom_bottom, truth_holdout)
 scores_holdout["bottom-up"] = evaluate_forecast(pred_levels, truth_levels, metrics=holdout_metrics)
 wspl_holdout["bottom-up"] = ws_pinball(pred_levels, truth_levels, weights_holdout, scales_holdout)
@@ -1362,17 +1641,18 @@ level1_draws["bottom-up"] = pred_levels[..., level_slices["Level1"]]
 level3_draws["bottom-up"] = pred_levels[..., level_slices["Level3"]]
 del bottom_bottom, pred_levels
 mean_ws_crps = np.mean(list(scores_holdout["bottom-up"].values()))
+
 print(
     f"model 2 evaluation window: WS-CRPS {mean_ws_crps:.3f}, WSPL {wspl_holdout['bottom-up']:.3f}"
 )
 ```
 
 
-    forecast of (500, 28, 30490) draws in 112 s
+    forecast of (500, 28, 30490) draws in 108 s
     model 2 evaluation window: WS-CRPS 0.728, WSPL 0.266
 
 
-Summed to the store level, the bottom-up forecast keeps the weekly pattern of every store, but the bands are narrow: the 3,049 Gamma draws of a store are independent given the parameters, so their sum has far less spread than the store's sales.
+The bottom-up forecast summed to the store level (level 3).
 
 
 ``` python
@@ -1391,8 +1671,11 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-32-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-41-output-1.png" class="figure-img" width="1511" height="1443" /></p>
 </figure>
+
+
+At the store level the picture is better than at the items: the under-forecast of the best sellers and the over-forecast of the slow sellers largely cancel in the sum of 3,049 items, so the level and the weekly pattern of every store are about right. What is wrong is the spread. The 3,049 Gamma draws of a store are independent given the parameters, so their sum has a standard deviation that grows like the square root of the number of items while the level grows linearly, and the 94\\ band ends up a few percent wide: the observed sales leave it on a large share of the days (the Sunday peaks of `CA_1` and `CA_3`, most of the window in `TX_3`). The sum of independent item noise cannot represent the store-wide shocks that move all items together, which is what the store-level bands of models 1 and 3 capture with a single noise term. `WI_2` adds a level shift in June that no model with 28-day-lagged covariates can see.
 
 
 # Model 3: middle-out
@@ -1404,26 +1687,59 @@ Model 3 works on the 70 store-by-department series (level 9). Each series j is d
 
  \begin{align\*} \mu\_{j,t} &= \beta\_{0,j} + \beta\_{\text{trend},j}\\ \tau_t + s\_{j, d(t)} + \mathbf{w}\_j^\top \mathbf{f}\_t, \\ y\_{j,t} &\sim \text{StudentT}(\nu, \mu\_{j,t}, \sigma\_{\text{noise},j}), \end{align\*} 
 
-with \beta\_{0,j} \sim \text{Normal}(0, 10), \beta\_{\text{trend},j} \sim \text{LogNormal}(-1, 1), s\_{j,d} \sim \text{Normal}(0, 1), w\_{j,k} \sim \text{Normal}(0, 1), \sigma\_{\text{noise},j} \sim \text{LogNormal}(-1, 1) and one shared \nu \sim \text{Uniform}(1, 10). The series are independent given \nu: this is a batch of 70 univariate regressions, written with a `series` plate on the observation axis and a `day_of_week` plate for the weekday effects.
+with the kit's priors, per series j:
+
+ \begin{align\*} \beta\_{0,j} &\sim \text{Normal}(0, 10), \\ \beta\_{\text{trend},j} &\sim \text{LogNormal}(-1, 1), \\ s\_{j,d} &\sim \text{Normal}(0, 1), \quad d = 1, \ldots, 7, \\ w\_{j,k} &\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\ \sigma\_{\text{noise},j} &\sim \text{LogNormal}(-1, 1), \end{align\*} 
+
+and one \nu \sim \text{Uniform}(1, 10) shared by the 70 series. The priors read differently from those of model 1 because the data are not on the log scale: a scaled series is in units of a typical daily change, and the 70 training series have medians between 2 and 8 of those units. An intercept with a standard deviation of 10 therefore covers the whole range of the data a couple of times over. The trend prior is a LogNormal with median e^{-1} \approx 0.37 typical daily changes per year and a 94\\ interval from 0.05 to 2.4; on this scale a store-department that grows by one typical daily change per year is growing fast, so the prior says "positive, probably below one". The weekday effects and the 104 Fourier weights get unit standard deviations, each a shift of one typical daily change, which is the size of the weekly swings in the data; the 52 harmonics together can draw a very wiggly yearly curve under this prior, and this is the flexibility that the discussion comes back to. The noise scale has the same LogNormal as the trend, a median of 0.37 with most of the mass below one: the residual of a daily series in units of its own typical change should be below one. The degrees of freedom are uniform between 1 and 10, as in model 1.
+
+The series are independent given \nu: this is a batch of 70 univariate regressions, written with a `series` plate on the observation axis and a `day_of_week` plate for the weekday effects.
+
+
+``` python
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4), layout="constrained")
+pz.LogNormal(-1, 1).plot_pdf(ax=axes[0], color="C0")
+axes[0].set(title="trend per year and noise scale (typical daily changes)", xlim=(0, 4))
+pz.Normal(0, 10).plot_pdf(ax=axes[1], color="C1")
+axes[1].set(title="intercept (typical daily changes)")
+for ax in axes:
+    ax.legend(loc="upper right", fontsize=9)
+fig.suptitle("Model 3: priors", fontsize=14, fontweight="bold", y=1.08);
+```
+
+
+<figure class="figure">
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-42-output-1.png" class="figure-img" width="1045" height="431" /></p>
+</figure>
+
+
+The covariates are again one row per day over the full 1,969 days, now with 106 columns: the time in years, the weekday index and the 104 Fourier terms (a sine and a cosine for each of the 52 harmonics of the yearly cycle, from [fourier_features](../../reference/features.fourier_features.md#numpyro_forecast.features.fourier_features)). The target is the `(days, 70)` matrix of scaled level-9 sales, so the observation axis is the series axis.
 
 
 ``` python
 covariates_mid = jnp.asarray(
     np.column_stack(
         [
-            calendar_df["years"].to_numpy()[:N_DAYS],
-            calendar_df["dow"].to_numpy()[:N_DAYS],
-            np.asarray(fourier_features(N_DAYS, 365.25, 52)),
+            calendar_df["years"].to_numpy()[:N_DAYS],  # column 0: time in years
+            calendar_df["dow"].to_numpy()[:N_DAYS],  # column 1: weekday, 0 = Monday
+            np.asarray(fourier_features(N_DAYS, 365.25, 52)),  # 2 to 105: yearly Fourier terms
         ]
     ).astype(np.float32)
 )
 covariates_mid_train = covariates_mid[:N_DAYS_TRAIN]
 N_MID = len(level9_labels)
-scale_mid = m5_scales(y_level9[:N_DAYS_TRAIN])
-y_mid = jnp.asarray(y_level9 / scale_mid, dtype=jnp.float32)
+scale_mid = m5_scales(y_level9[:N_DAYS_TRAIN])  # (70,), one scale per series
+y_mid = jnp.asarray(y_level9 / scale_mid, dtype=jnp.float32)  # (days, 70)
 y_mid_train = y_mid[:N_DAYS_TRAIN]
 
+print(f"covariates: {covariates_mid.shape} (days, feature), target: {y_mid.shape} (days, series)")
+```
 
+
+    covariates: (1969, 106) (days, feature), target: (1969, 70) (days, series)
+
+
+``` python
 def middle_out_model(covariates: Array, data: Array | None = None) -> None:
     """Kit model 3: per-series trend, weekly and yearly seasonality on scaled level-9 sales."""
     h = Horizon.from_data(covariates, data)
@@ -1451,7 +1767,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-33-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-44-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1482,7 +1798,7 @@ del prior_obs_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-34-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-45-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
 
 
@@ -1500,24 +1816,20 @@ svi_mid, time_mid = fit_svi(
     covariates_mid_train,
     y_mid_train,
 )
-print(
-    f"model 3: {NUM_STEPS['middle-out']} steps in {time_mid:.1f} s, final loss {float(svi_mid.losses[-1]):.1f}"
+plot_loss(
+    svi_mid.losses, f"Model 3: ELBO loss ({NUM_STEPS['middle-out']:,} steps, {time_mid:.1f} s)"
 )
-plot_loss(svi_mid.losses, "Model 3: ELBO loss")
 ```
 
 
-    model 3: 2001 steps in 5.1 s, final loss 219410.7
-
-
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-35-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-46-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
 ## Posterior
 
-The degrees of freedom are shared by the 70 series, about 6.5. The trends are per series: in store CA_1 they range from 0.14 (`FOODS_2`) to 0.88 (`HOUSEHOLD_1`) typical daily changes per year. The noise scales are the residual spread in units of a typical daily change, between 0.55 and 0.9.
+[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior with the series labels as coordinates. We look at the one shared parameter, the degrees of freedom, and at the per-series trends and noise scales of store CA_1.
 
 
 ``` python
@@ -1547,6 +1859,9 @@ az.summary(tree_mid, var_names=["dof"])
 | dof | 6.465 | 0.084 | 6.3      | 6.6      | 443      | 423      | nan   | 0.004     | 0.0028  |
 
 
+The degrees of freedom shared by the 70 series come out at about 6.5, with a tight interval: heavier tails than a Normal (which the Christmas days and the occasional spike require) but far from the Cauchy end of the prior, where model 1 sits with its 4 degrees of freedom on the total. Pooling one \nu across 70 series is what makes it this well determined.
+
+
 ``` python
 pc = az.plot_forest(
     tree_mid,
@@ -1561,8 +1876,11 @@ pc.viz["figure"].item().suptitle("Model 3: trend by department, store CA_1", fon
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-37-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-48-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
+
+
+The trends are per series, in typical daily changes per year: in store CA_1 they range from 0.14 (`FOODS_2`) to 0.88 (`HOUSEHOLD_1`), all with narrow intervals after five years of daily data. The LogNormal prior forces every slope to be positive, so a department that stalls or shrinks can only get a slope near zero, which is what `FOODS_2` and `FOODS_3` show; the kit accepts this because the total grows.
 
 
 ``` python
@@ -1579,8 +1897,11 @@ pc.viz["figure"].item().suptitle("Model 3: noise scale by department, store CA_1
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-38-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-49-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
+
+
+The noise scales are the residual spread in units of a typical daily change of the series, so a value below one means the calendar explains part of the day-to-day movement. The two household departments are the most predictable (0.56 and 0.57: their weekly swings are large and regular, as the forecasts below show), the food departments sit in the middle, and `FOODS_1` and `HOBBIES_2` are the least predictable at 0.89, where most of the daily movement is noise that a trend, a weekday effect and a yearly curve cannot explain.
 
 
 ## Store-department forecasts
@@ -1609,8 +1930,11 @@ del pp_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-39-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-50-output-1.png" class="figure-img" width="1511" height="1035" /></p>
 </figure>
+
+
+The fit follows the weekly pattern of every department and the forecast continues it, with the yearly curve adding the slow drift. The bands have a constant width per series, the noise scale times the series scale, because the model has no latent state: the household departments get the tightest bands relative to their level, `HOBBIES_2` the widest. The observed series stay inside the 94\\ band except for isolated spikes (`FOODS_1` at the end of March, `HOBBIES_2` on the first days of June), which the StudentT tails are there to absorb without inflating the bands. What the plot cannot show is the main weakness of this model for the next month, the 104 Fourier weights per series fitted with unit-variance priors: the yearly curve is drawn through five Junes of history, and the backtest below tells whether it generalizes to a sixth.
 
 
 ## Middle-out split and scores
@@ -1632,6 +1956,7 @@ level1_draws["middle-out"] = pred_levels[..., level_slices["Level1"]]
 level3_draws["middle-out"] = pred_levels[..., level_slices["Level3"]]
 del bottom_mid, pred_levels
 mean_ws_crps = np.mean(list(scores_holdout["middle-out"].values()))
+
 print(
     f"model 3 evaluation window: WS-CRPS {mean_ws_crps:.3f}, WSPL {wspl_holdout['middle-out']:.3f}"
 )
@@ -1751,13 +2076,14 @@ for name, (model, covariates, forecast_fn) in backtest_runs.items():
         forecast_fn=forecast_fn,
         **BACKTEST_OPTIONS,
     )
+
     print(f"{name}: {len(backtest_results[name])} windows in {perf_counter() - start:.0f} s")
 ```
 
 
-    top-down: 3 windows in 56 s
-    bottom-up: 3 windows in 356 s
-    middle-out: 3 windows in 61 s
+    top-down: 3 windows in 58 s
+    bottom-up: 3 windows in 369 s
+    middle-out: 3 windows in 62 s
 
 
 [results_to_dataframe](../../reference/evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe) turns the results into one row per window with a column per metric. The headline WS-CRPS is the mean over the 12 level columns, and `walltime` is the time of the whole `forecast_fn` (fit, draws, forecast and reconciliation).
@@ -1779,17 +2105,20 @@ backtest_df.select("model", "t1", "t2", "walltime", "ws_crps").with_columns(
 ```
 
 
+shape: (9, 5)
+
 | model        | t1   | t2   | walltime | ws_crps |
 |--------------|------|------|----------|---------|
-| "top-down"   | 1843 | 1871 | 9.1      | 0.557   |
-| "top-down"   | 1878 | 1906 | 8.9      | 0.553   |
-| "top-down"   | 1913 | 1941 | 9.0      | 0.581   |
-| "bottom-up"  | 1843 | 1871 | 110.5    | 0.802   |
-| "bottom-up"  | 1878 | 1906 | 100.8    | 0.719   |
-| "bottom-up"  | 1913 | 1941 | 103.8    | 0.763   |
-| "middle-out" | 1843 | 1871 | 11.5     | 0.622   |
-| "middle-out" | 1878 | 1906 | 11.0     | 0.676   |
-| "middle-out" | 1913 | 1941 | 10.8     | 0.746   |
+| str          | i64  | i64  | f64      | f64     |
+| "top-down"   | 1843 | 1871 | 9.6      | 0.557   |
+| "top-down"   | 1878 | 1906 | 9.6      | 0.553   |
+| "top-down"   | 1913 | 1941 | 9.4      | 0.581   |
+| "bottom-up"  | 1843 | 1871 | 111.4    | 0.802   |
+| "bottom-up"  | 1878 | 1906 | 110.3    | 0.719   |
+| "bottom-up"  | 1913 | 1941 | 106.4    | 0.763   |
+| "middle-out" | 1843 | 1871 | 12.3     | 0.622   |
+| "middle-out" | 1878 | 1906 | 11.1     | 0.676   |
+| "middle-out" | 1913 | 1941 | 11.2     | 0.746   |
 
 
 The ranking is the same in every window: the top-down model scores best, the middle-out model second and the bottom-up model last. The top-down score is stable (0.55 to 0.58), the middle-out score degrades from window to window (0.62 to 0.75) and the bottom-up score is the noisiest (0.72 to 0.80). The last window (origin at day 1,913, the four weeks before Memorial Day) is the hardest for the two split models, and the evaluation window is right after it.
@@ -1808,7 +2137,7 @@ ax.legend();
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-43-output-1.png" class="figure-img" width="1011" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-54-output-1.png" class="figure-img" width="1011" height="511" /></p>
 </figure>
 
 
@@ -1838,48 +2167,51 @@ ax.legend();
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-44-output-1.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-55-output-1.png" class="figure-img" width="1211" height="511" /></p>
 </figure>
 
 
 # Evaluation window
 
-The final fits of the three sections forecast the official evaluation window (days 1,942 to 1,969, released after the competition). The per-level WS-CRPS table below repeats the backtest ranking: the top-down model is best at every level except the state level, where the middle-out model is ahead by 0.005. The WSPL row is the competition metric with the official weights: the winner of the uncertainty competition scored 0.154 and the runner-up 0.159 (Makridakis et al., 2022), so the kit's models are baselines, not contenders, but the table shows what the three reconciliation strategies do with the same data.
+The final fits of the three sections forecast the official evaluation window (days 1,942 to 1,969, released after the competition). The left panel is the per-level WS-CRPS of the three models, the right panel the mean over the levels and the WSPL, the competition metric with the official weights.
 
 
 ``` python
-holdout_table = ws_crps_table(scores_holdout)
-holdout_table = pl.concat(
-    [
-        holdout_table,
-        pl.DataFrame(
-            {"level": ["WSPL"]} | {name: [round(value, 3)] for name, value in wspl_holdout.items()}
-        ),
-    ]
+holdout_levels = {
+    name: np.array([scores[f"ws_crps_{level}"] for level in LEVELS])
+    for name, scores in scores_holdout.items()
+}
+
+fig, axes = plt.subplots(
+    nrows=1, ncols=2, figsize=(15, 5), width_ratios=[3, 1], layout="constrained"
 )
-holdout_table
+x = np.arange(len(LEVELS))
+width = 0.27
+for k, (name, values) in enumerate(holdout_levels.items()):
+    axes[0].bar(x + (k - 1) * width, values, width, label=name)
+axes[0].set_xticks(x, list(LEVELS), rotation=45)
+axes[0].set(title="WS-CRPS by level", ylabel="score")
+axes[0].legend(loc="upper left")
+x_summary = np.arange(2)
+for k, name in enumerate(holdout_levels):
+    summary = [holdout_levels[name].mean(), wspl_holdout[name]]
+    bars = axes[1].bar(x_summary + (k - 1) * width, summary, width, label=name)
+    axes[1].bar_label(bars, fmt="%.3f", fontsize=9)
+axes[1].set_xticks(x_summary, ["WS-CRPS (mean)", "WSPL"])
+axes[1].set(title="Summary scores")
+axes[1].margins(y=0.15)
+fig.suptitle("Evaluation window: scores of the three models", fontsize=16, fontweight="bold");
 ```
 
 
-| level     | top-down | bottom-up | middle-out |
-|-----------|----------|-----------|------------|
-| "Level1"  | 0.294    | 0.37      | 0.3        |
-| "Level2"  | 0.39     | 0.438     | 0.385      |
-| "Level3"  | 0.495    | 0.587     | 0.762      |
-| "Level4"  | 0.343    | 0.416     | 0.355      |
-| "Level5"  | 0.462    | 0.559     | 0.498      |
-| "Level6"  | 0.457    | 0.48      | 0.459      |
-| "Level7"  | 0.547    | 0.603     | 0.583      |
-| "Level8"  | 0.55     | 0.605     | 0.766      |
-| "Level9"  | 0.625    | 0.7       | 0.816      |
-| "Level10" | 0.922    | 1.566     | 0.934      |
-| "Level11" | 0.878    | 1.282     | 0.882      |
-| "Level12" | 0.865    | 1.126     | 0.875      |
-| "mean"    | 0.569    | 0.728     | 0.634      |
-| "WSPL"    | 0.197    | 0.266     | 0.222      |
+<figure class="figure">
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-56-output-1.png" class="figure-img" width="1511" height="511" /></p>
+</figure>
 
 
-At the top level the three forecasts are close to the observed total and differ mostly in their spread: the top-down model's StudentT gives the widest bands, the bottom-up sum of independent Gamma draws the narrowest.
+The ranking of the backtest holds: the top-down model is best at every level except the state level, where the middle-out model is ahead by a hair, and the bottom-up model is last everywhere, by a wide margin at the item levels. The WSPL puts the kit's models in context: the winner of the uncertainty competition scored 0.154 and the runner-up 0.159 (Makridakis et al., 2022), so these are baselines, not contenders, but they show what the three reconciliation strategies do with the same data.
+
+The total-level forecasts of the three models over the evaluation window, with their mean WS-CRPS.
 
 
 ``` python
@@ -1911,8 +2243,11 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-46-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-57-output-1.png" class="figure-img" width="1211" height="1211" /></p>
 </figure>
+
+
+At the top level the three forecasts are close to the observed total and differ mostly in their spread, and the spread is what the score rewards. The top-down model forecasts the total directly with a StudentT noise fitted to the total's own day-to-day variation, so its bands are the widest and the observed total sits inside the 50\\ band on most days: a calibrated forecast. The bottom-up bands are the sum of 30,490 independent Gamma draws; the independent noise averages out in the sum, the band is a few percent wide, and the observed total leaves it on most days: a confident forecast that is often wrong, which is the worst case for a proper score. The middle-out model sits in between: its 70 StudentT noises are independent across store-departments, so the band of the total is narrower than the top-down one, but each of them carries the shared shocks of thousands of items, so it is far wider than the bottom-up one. The intuition is that uncertainty does not aggregate like a sum of independent errors when the errors are correlated, and at the total level they are: a hot weekend moves every item. A model that puts its noise at the level it forecasts gets this for free; a model that puts it at the items has to model the correlation explicitly, which model 2 does not.
 
 
 # Fitting times
@@ -1939,20 +2274,12 @@ for bar, steps, ms in zip(bars, fit_times["steps"], fit_times["ms_per_step"], st
         fontsize=10,
     )
 ax.set(title="SVI fitting time of the final fits", ylabel="seconds")
-ax.margins(y=0.2)
-fit_times.with_columns(pl.col("fit_seconds").round(1), pl.col("ms_per_step").round(1))
+ax.margins(y=0.2);
 ```
 
 
-| model        | steps | fit_seconds | ms_per_step |
-|--------------|-------|-------------|-------------|
-| "top-down"   | 1001  | 4.1         | 4.1         |
-| "bottom-up"  | 1001  | 56.9        | 56.9        |
-| "middle-out" | 2001  | 5.1         | 2.6         |
-
-
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-47-output-2.png" class="figure-img" width="811" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-58-output-1.png" class="figure-img" width="811" height="511" /></p>
 </figure>
 
 
@@ -1960,7 +2287,7 @@ fit_times.with_columns(pl.col("fit_seconds").round(1), pl.col("ms_per_step").rou
 
 - **Top-down has the best mean score in this port**, on the evaluation window and on the three backtest windows. Its total-level model has the fewest parameters, uses the most data per parameter, and its StudentT noise gives calibrated bands at the top; the share split carries that quality down as long as the item shares are stable over four weeks.
 - **Middle-out is close behind at the total, state and category levels** and loses ground at the store levels (3, 8, 9): the 70 independent regressions cannot borrow strength across stores, and 104 Fourier weights per series with unit-variance priors fit the training years better than the next month.
-- **Bottom-up is last**, as the kit's authors note in `model2.py`. Its Gamma likelihood on clamped counts puts the mode at zero for most items, it has no item-level parameters, and the sum of independent draws underestimates the uncertainty of every aggregate. The department-level weights are still interpretable (the SNAP effect is a food effect).
+- **Bottom-up is last**, as the kit's authors note in `model2.py`, and the item and store panels show the two reasons. With no item-level parameters and a moving-average exponent of about 0.3, the model shrinks every best seller toward its department, and the best sellers carry the dollar weights of the metric. And the sum of independent Gamma draws has far too little spread at every aggregate, so the model is confidently wrong where the top-down and middle-out noise terms are calibrated. The department-level weights are still interpretable (the SNAP effect is a food effect, strongest in Wisconsin), and the noisy ELBO is the minibatch, not the optimizer.
 - **Item levels 10 to 12 of models 1 and 3 are not model forecasts**: they are the share heuristic with Poisson noise, which is exactly what the kit submits. That the heuristic beats the bottom-up model there says more about model 2 than about the split.
 - The four evaluation windows all lie between February and June 2016; the ranking is consistent across them, but the differences are not tested for significance.
 
@@ -1982,4 +2309,4 @@ fit_times.with_columns(pl.col("fit_seconds").round(1), pl.col("ms_per_step").rou
 - Nixtla. [*m5-forecasts*](https://github.com/Nixtla/m5-forecasts) (the data mirror).
 - Related examples: [hierarchical forecasting I](hierarchical_forecasting_1.md), [forecasting retail demand under stockouts](fresh_retail_stockout.md), [univariate forecasting](forecasting_univariate.md).
 
-[Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`](_src/m5_forecasting-preview.html#47c78a71)
+[Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`](_src/m5_forecasting-preview.html#2bc0e0fe)
