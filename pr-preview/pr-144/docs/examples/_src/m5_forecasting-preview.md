@@ -814,6 +814,17 @@ The kit's priors are wide on the log scale: an intercept with a standard deviati
 HDI_PROBS = (0.94, 0.5)
 HDI_ALPHAS = (0.3, 0.6)
 
+
+def hdi_label(prob: float) -> str:
+    r"""Legend label of an HDI band, for example ``$94\%$ HDI``."""
+    return rf"${prob:.0%}$ HDI".replace("%", r"\%")
+```
+
+
+    In [19]:
+
+
+``` python
 rng_key, key_prior = random.split(rng_key)
 prior_obs_top = Predictive(top_down_model, num_samples=500, return_sites=["obs"])(
     key_prior, covariates_top_train
@@ -849,10 +860,25 @@ pc = az.plot_lm(
 )
 
 ax = pc.viz["figure"].item().axes[0]
-ax.plot(
-    date_num[plot_start:N_DAYS_TRAIN], np.asarray(y_top_train[plot_start:, 0]), color="black", lw=1
+(observed_line,) = ax.plot(
+    date_num[plot_start:N_DAYS_TRAIN],
+    np.asarray(y_top_train[plot_start:, 0]),
+    color="black",
+    lw=1,
+    label="observed",
 )
-ax.xaxis_date()
+locator = mdates.AutoDateLocator()
+ax.xaxis.set_major_locator(locator)
+ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+
+band_handles = []
+
+for prob in HDI_PROBS:
+    band = pc.viz["ci_band"]["t"].sel(prob=prob).item()
+    band.set_label(f"prior {hdi_label(prob)}")
+    band_handles.append(band)
+
+ax.legend(handles=[*band_handles, observed_line], loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(
     title="Model 1: prior predictive check (last 20 training weeks)",
     xlabel="date",
@@ -862,7 +888,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-19-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-20-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -871,7 +897,7 @@ ax.set(
 All three models use the kit's optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (`learning_rate_decay=0.1` in Pyro's `Forecaster`). It is an optax chain handed to `SVI` as is (numpyro wraps optax transformations itself). The step counts are the kit's defaults, 1,001 for models 1 and 2 and 2,001 for model 3. `fit_svi` runs the kit's optimizer for a model and guide and times the run with `jax.block_until_ready`, so the JIT compilation is included, as it is in every backtest window; `plot_loss` draws the ELBO curve on a symmetric log scale, which keeps the negative losses of model 2 readable.
 
 
-    In [19]:
+    In [20]:
 
 
 ``` python
@@ -912,7 +938,7 @@ def plot_loss(losses: Array, title: str, *, skip: int = 0) -> None:
 The final fit uses the full training period.
 
 
-    In [20]:
+    In [21]:
 
 
 ``` python
@@ -929,7 +955,7 @@ plot_loss(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-21-output-1.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-22-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -938,7 +964,7 @@ plot_loss(
 [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call; `add_date_variable` adds a matplotlib date number to the constant data groups, so that the ArviZ plots below can use calendar dates on the x axis. The trend is about 0.08 per year on the log scale (8\\ a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.
 
 
-    In [21]:
+    In [22]:
 
 
 ``` python
@@ -956,7 +982,7 @@ def add_date_variable(tree: xr.DataTree, date_num: np.ndarray) -> xr.DataTree:
 ```
 
 
-    In [22]:
+    In [23]:
 
 
 ``` python
@@ -992,7 +1018,7 @@ az.summary(tree_top, var_names=["bias", "trend", "dof", "noise_scale"])
 The weekday effects show the weekend peak: Saturday and Sunday are about 0.33 above the midweek days on the log scale, about 40\\ more sales, with Friday and Monday in between.
 
 
-    In [23]:
+    In [24]:
 
 
 ``` python
@@ -1004,11 +1030,11 @@ pc.viz["figure"].item().suptitle("Model 1: weekday effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-24-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-25-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
-    In [24]:
+    In [25]:
 
 
 ``` python
@@ -1020,7 +1046,7 @@ pc.viz["figure"].item().suptitle("Model 1: day-of-month effects", fontsize=14);
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-25-output-1.png" class="figure-img" width="811" height="911" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-26-output-1.png" class="figure-img" width="811" height="911" /></p>
 </figure>
 
 
@@ -1030,16 +1056,6 @@ The day-of-month effects are the pay-day and SNAP pattern of the three states. T
 ## Forecast
 
 The in-sample posterior predictive (blue) and the 28-day forecast (orange) on the log scale, over the last twenty training weeks and the evaluation window.
-
-
-    In [25]:
-
-
-``` python
-def hdi_label(prob: float) -> str:
-    r"""Legend label of an HDI band, for example ``$94\%$ HDI``."""
-    return rf"${prob:.0%}$ HDI".replace("%", r"\%")
-```
 
 
     In [26]:
@@ -1245,8 +1261,17 @@ def plot_series_panel(
         figure_kwargs={"figsize": figsize},
     )
 
-    # Second call on the same grid: the forecast bands after the in-sample ones.
+    # The legend handles are the band artists of the first panel; the second `plot_lm` call
+    # replaces them in `pc.viz`, so the in-sample ones are collected before it runs.
+    handles = []
+
     if train_draws is not None:
+        for prob in HDI_PROBS:
+            band = pc.viz["ci_band"]["t"].sel(series=labels[0], prob=prob).item()
+            band.set_label(f"in-sample {hdi_label(prob)}")
+            handles.append(band)
+
+        # Second call on the same grid: the forecast bands after the in-sample ones.
         az.plot_lm(
             predictions_to_datatree(np.asarray(test_draws), x_test, labels, group=group),
             y="obs",
@@ -1259,6 +1284,13 @@ def plot_series_panel(
             smooth=False,
             visuals={**visuals, "ci_band": {"color": "C1"}},
         )
+
+    band_prefix = "forecast " if train_draws is not None else ""
+
+    for prob in HDI_PROBS:
+        band = pc.viz["ci_band"]["t"].sel(series=labels[0], prob=prob).item()
+        band.set_label(f"{band_prefix}{hdi_label(prob)}")
+        handles.append(band)
 
     # The observed series over both windows, mapped onto every facet.
     x_all = np.concatenate([x_train, x_test]) if train_draws is not None else x_test
@@ -1286,20 +1318,15 @@ def plot_series_panel(
         ax.xaxis.set_major_locator(locator)
         ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
-    # One legend for the whole figure, below the panels: the band artists of the first panel
-    # and the observed line.
-    handles = []
-
-    for prob in HDI_PROBS:
-        band = pc.viz["ci_band"]["t"].sel(series=labels[0], prob=prob).item()
-        band.set_label(hdi_label(prob))
-        handles.append(band)
-
+    # One legend for the whole figure, below the panels.
     truth_line = pc.viz["truth"]["t"].sel(series=labels[0]).item()
     truth_line.set_label("observed")
     fig = pc.viz["figure"].item()
     fig.legend(
-        handles=[*handles, truth_line], loc="upper center", bbox_to_anchor=(0.5, 0.0), ncols=3
+        handles=[*handles, truth_line],
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.0),
+        ncols=len(handles) + 1,
     )
     fig.supylabel(ylabel)
     fig.suptitle(suptitle, fontsize=16, fontweight="bold", y=1.02)
@@ -1767,7 +1794,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-41-output-1.png" class="figure-img" width="1511" height="1084" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-41-output-1.png" class="figure-img" width="1511" height="1086" /></p>
 </figure>
 
 
@@ -1859,7 +1886,7 @@ print(
 ```
 
 
-    forecast of (500, 28, 30490) draws in 108 s
+    forecast of (500, 28, 30490) draws in 104 s
     model 2 evaluation window: WS-CRPS 0.728, WSPL 0.266
 
 
@@ -2186,7 +2213,7 @@ del pp_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-53-output-1.png" class="figure-img" width="1511" height="1084" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-53-output-1.png" class="figure-img" width="1511" height="1086" /></p>
 </figure>
 
 
@@ -2368,9 +2395,9 @@ for name, (model, covariates, forecast_fn) in backtest_runs.items():
 ```
 
 
-    top-down: 3 windows in 52 s
-    bottom-up: 3 windows in 369 s
-    middle-out: 3 windows in 60 s
+    top-down: 3 windows in 57 s
+    bottom-up: 3 windows in 375 s
+    middle-out: 3 windows in 66 s
 
 
 [results_to_dataframe](../../../reference/evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe) turns the results into one row per window with a column per metric. The headline WS-CRPS is the mean over the 12 level columns, and `walltime` is the time of the whole `forecast_fn` (fit, draws, forecast and reconciliation).
@@ -2400,15 +2427,15 @@ shape: (9, 5)
 | model        | t1   | t2   | walltime | ws_crps |
 |--------------|------|------|----------|---------|
 | str          | i64  | i64  | f64      | f64     |
-| "top-down"   | 1843 | 1871 | 9.2      | 0.557   |
-| "top-down"   | 1878 | 1906 | 8.8      | 0.553   |
-| "top-down"   | 1913 | 1941 | 8.9      | 0.581   |
-| "bottom-up"  | 1843 | 1871 | 113.6    | 0.802   |
-| "bottom-up"  | 1878 | 1906 | 103.9    | 0.719   |
-| "bottom-up"  | 1913 | 1941 | 107.9    | 0.763   |
-| "middle-out" | 1843 | 1871 | 11.7     | 0.622   |
-| "middle-out" | 1878 | 1906 | 10.8     | 0.676   |
-| "middle-out" | 1913 | 1941 | 10.7     | 0.746   |
+| "top-down"   | 1843 | 1871 | 9.4      | 0.557   |
+| "top-down"   | 1878 | 1906 | 9.3      | 0.553   |
+| "top-down"   | 1913 | 1941 | 9.7      | 0.581   |
+| "bottom-up"  | 1843 | 1871 | 109.2    | 0.802   |
+| "bottom-up"  | 1878 | 1906 | 112.6    | 0.719   |
+| "bottom-up"  | 1913 | 1941 | 112.7    | 0.763   |
+| "middle-out" | 1843 | 1871 | 12.3     | 0.622   |
+| "middle-out" | 1878 | 1906 | 11.3     | 0.676   |
+| "middle-out" | 1913 | 1941 | 11.6     | 0.746   |
 
 
 The ranking is the same in every window: the top-down model scores best, the middle-out model second and the bottom-up model last. The top-down score is stable (0.55 to 0.58), the middle-out score degrades from window to window (0.62 to 0.75) and the bottom-up score is the noisiest (0.72 to 0.80). The last window (origin at day 1,913, the four weeks before Memorial Day) is the hardest for the two split models, and the evaluation window is right after it.

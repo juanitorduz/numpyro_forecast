@@ -402,7 +402,7 @@ window.Quarto = {
 </blockquote>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
-<div id="743fef20" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:16.340576Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:16.340422Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:18.288466Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:18.288002Z&quot;}}" data-execution_count="1">
+<div id="2e06356a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:39.122433Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:39.122212Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:41.473922Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:41.473511Z&quot;}}" data-execution_count="1">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> time <span class="im">import</span> perf_counter</span>
@@ -469,7 +469,7 @@ window.Quarto = {
 <section id="read-data" class="level1">
 <h1>Read data</h1>
 <p><a href="../../reference/datasets.load_m5.html#numpyro_forecast.datasets.load_m5" class="gdls-link gdls-code">load_m5()</a> downloads the <a href="https://github.com/Nixtla/m5-forecasts">Nixtla mirror</a> of the competition files once into <code>~/.cache/numpyro_forecast/m5/</code> (a 50 MB archive checked against its digest) and reads them: the daily sales of the training period (<code>d_1</code> to <code>d_1941</code>) followed by the 28 evaluation days (<code>d_1942</code> to <code>d_1969</code>, released after the competition) as a dense <code>(days, series)</code> array, which is already the layout the models need; the weekly shelf prices repeated over the days of every series (<code>NaN</code> when the item was not on the shelf); the identifiers of the 30,490 series in the order of the sales file; the calendar with the events and the SNAP days; and the official evaluation weights.</p>
-<div id="55b784fa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:18.289995Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:18.289832Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:19.449762Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:19.449235Z&quot;}}" data-execution_count="2">
+<div id="2b7a8cbf" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:41.475489Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:41.475333Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:42.763449Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:42.762963Z&quot;}}" data-execution_count="2">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>m5 <span class="op">=</span> load_m5()</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>KEYS <span class="op">=</span> [<span class="st">"item_id"</span>, <span class="st">"dept_id"</span>, <span class="st">"cat_id"</span>, <span class="st">"store_id"</span>, <span class="st">"state_id"</span>]</span>
@@ -499,7 +499,7 @@ window.Quarto = {
 </div>
 </div>
 <p>The calendar is shaped with small named polars expressions, one per column computation. It gives every day its weekday, its position in years, the SNAP flags of the three states, a Christmas flag (the one day a year the stores are closed) and the 31 day-of-month dummies of model 1.</p>
-<div id="9acc7b33" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:19.450880Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:19.450815Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:19.472086Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:19.471641Z&quot;}}" data-execution_count="3">
+<div id="ee44ca79" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:42.764654Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:42.764571Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:42.791622Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:42.791151Z&quot;}}" data-execution_count="3">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_christmas() <span class="op">-&gt;</span> pl.Expr:</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Flag December 25, the one day a year every Walmart store is closed."""</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pl.col(<span class="st">"date"</span>).dt.month().eq(pl.lit(<span class="dv">12</span>)).and_(pl.col(<span class="st">"date"</span>).dt.day().eq(pl.lit(<span class="dv">25</span>)))</span>
@@ -559,7 +559,7 @@ window.Quarto = {
 </div>
 </div>
 <p>The competition publishes one shelf price per item, store and Walmart week, only for the weeks in which the item was listed; <a href="../../reference/datasets.load_m5.html#numpyro_forecast.datasets.load_m5" class="gdls-link gdls-code">load_m5()</a> repeats these weekly prices over the days and returns them as a float <code>(days, series)</code> array with the same layout as the sales, <code>NaN</code> on the days without a listing. The prices serve two purposes here. They define the dollar sales that weight the series in the competition metric (the next section). And a missing price means the item was not on the shelf that week, which is information the sales alone do not carry: a zero before the first listing is a product that did not exist yet, not a day without buyers. The kit turns this into the <code>saled</code> flag, “price listed and not Christmas” (the one day a year the stores are closed), and model 2 multiplies its mean by the flag so that an unlisted item is forecast at the floor instead of at its department’s typical level. About a fifth of the series-days have no listing, most of them before the first listing of an item, when its series is all zeros.</p>
-<div id="b2147c0c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:19.473166Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:19.473101Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:19.639377Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:19.638992Z&quot;}}" data-execution_count="4">
+<div id="e79c0e4e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:42.792750Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:42.792677Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:42.964746Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:42.964366Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>price <span class="op">=</span> m5.price</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>christmas <span class="op">=</span> calendar_df[<span class="st">"christmas"</span>].to_numpy()[:N_DAYS]</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>saled <span class="op">=</span> (<span class="op">~</span>np.isnan(price)).astype(np.float32) <span class="op">*</span> (<span class="fl">1.0</span> <span class="op">-</span> christmas[:, <span class="va">None</span>])</span>
@@ -576,7 +576,7 @@ window.Quarto = {
 <section id="the-hierarchy" class="level2">
 <h2 class="anchored" data-anchor-id="the-hierarchy">The hierarchy</h2>
 <p>The competition scores 42,840 series: the 30,490 items in stores (level 12) and their sums over the 11 coarser groupings. A label and a dense group id per level turn into a sparse <code>(30,490, 42,840)</code> summation matrix, so any array of bottom-level values (data or forecast draws) is aggregated to every level with one sparse product.</p>
-<div id="6bd0be40" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:19.640629Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:19.640555Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:19.810844Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:19.810446Z&quot;}}" data-execution_count="5">
+<div id="fedcd295" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:42.966035Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:42.965955Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:43.141240Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:43.140855Z&quot;}}" data-execution_count="5">
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>LEVELS: <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">str</span>]] <span class="op">=</span> {</span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Level1"</span>: [],</span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Level2"</span>: [<span class="st">"state_id"</span>],</span>
@@ -675,7 +675,7 @@ window.Quarto = {
 <section id="exploratory-data-analysis" class="level2">
 <h2 class="anchored" data-anchor-id="exploratory-data-analysis">Exploratory data analysis</h2>
 <p>The total daily sales grow over the five years and drop to a few units on every December 25. The kit relies on the StudentT tails of models 1 and 3 to absorb these days (and model 2 gates its mean with the <code>saled</code> flag), so we do the same.</p>
-<div id="7262143a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:19.812084Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:19.811992Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:19.986653Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:19.986268Z&quot;}}" data-execution_count="6">
+<div id="7efe5d28" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:43.142554Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:43.142463Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:43.312768Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:43.312339Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>dates <span class="op">=</span> calendar_df[<span class="st">"date"</span>].to_numpy()[:N_DAYS]</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>date_num <span class="op">=</span> np.asarray(mdates.date2num(dates.astype(<span class="st">"datetime64[s]"</span>).astype(<span class="bu">object</span>)))</span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>split_date <span class="op">=</span> date_num[N_DAYS_TRAIN]</span>
@@ -696,7 +696,7 @@ window.Quarto = {
 </div>
 </div>
 <p>The 70 store-by-department series (level 9) are the data of model 3. The seven departments of the first store show the range of scales and the weekly pattern that the models have to capture.</p>
-<div id="6c4715eb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:19.988142Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:19.988056Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:20.582332Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:20.581773Z&quot;}}" data-execution_count="7">
+<div id="c918ec6a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:43.314303Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:43.314207Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:43.920319Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:43.919928Z&quot;}}" data-execution_count="7">
 <div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>level9_labels <span class="op">=</span> [label.removeprefix(<span class="st">"Level9/"</span>) <span class="cf">for</span> label <span class="kw">in</span> agg_labels[level_slices[<span class="st">"Level9"</span>]]]</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>y_level9 <span class="op">=</span> sales_agg[:, level_slices[<span class="st">"Level9"</span>]]</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>ca1_columns <span class="op">=</span> [k <span class="cf">for</span> k, label <span class="kw">in</span> <span class="bu">enumerate</span>(level9_labels) <span class="cf">if</span> label.startswith(<span class="st">"CA_1/"</span>)]</span>
@@ -721,7 +721,7 @@ window.Quarto = {
 </div>
 </div>
 <p>At the bottom level most series are intermittent. Among the days with a listed price, the share of days with zero sales runs from about a half (<code>FOODS_3</code>, <code>HOUSEHOLD_1</code>) to <span class="math inline">85\%</span> (<code>HOBBIES_2</code>); the food departments are the least intermittent and sell the most units per day.</p>
-<div id="ea441b6b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:20.587084Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:20.586989Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:20.653163Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:20.652827Z&quot;}}" data-execution_count="8">
+<div id="164d7687" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:43.924771Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:43.924676Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:43.997256Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:43.996873Z&quot;}}" data-execution_count="8">
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>zero_days <span class="op">=</span> pl.DataFrame(</span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    {</span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">"dept_id"</span>: hierarchy_df[<span class="st">"dept_id"</span>],</span>
@@ -753,7 +753,7 @@ window.Quarto = {
 </div>
 </div>
 <p>We keep seven items for the item-level plots: the best seller of each department in store CA_1 over the last training year.</p>
-<div id="1a7a509a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:20.654820Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:20.654720Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:21.158759Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:21.158113Z&quot;}}" data-execution_count="9">
+<div id="c9559e12" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:43.998374Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:43.998310Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:44.480082Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:44.479555Z&quot;}}" data-execution_count="9">
 <div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>last_year_sales <span class="op">=</span> sales[N_DAYS_TRAIN <span class="op">-</span> <span class="dv">365</span> : N_DAYS_TRAIN].<span class="bu">sum</span>(<span class="dv">0</span>)</span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>focus_df <span class="op">=</span> (</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    hierarchy_df.with_row_index(<span class="st">"n"</span>)</span>
@@ -798,7 +798,7 @@ window.Quarto = {
 </span></p>
 <p>The dollar sales are the sales times the shelf price; the scale clamps the sum of the absolute differences at one (as the kit does) so a series that never moves does not get an infinite score. The weights depend on the forecast origin, so they are built per window. We check them against the official weights of the evaluation window, which validates the aggregation matrix and the price join in one go.</p>
 <p>The weights and scales are NumPy, not JAX, on purpose: they are computed once per window from the training data (a sum over 28 days and a sparse product for the weights, a cumulative sum over the training days for the scales), never inside a fitted model or a gradient, so there is nothing for <code>jax.jit</code> to amortize, and the sparse summation matrix has no JAX equivalent on the CPU. Only the CRPS itself, which runs over the <code>(draws, days, aggregates)</code> forecast tensor, is a JAX function (<a href="../../reference/metrics.crps_empirical.html#numpyro_forecast.metrics.crps_empirical" class="gdls-link gdls-code">crps_empirical</a> below).</p>
-<div id="e975b3cf" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:21.161236Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:21.161152Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:21.486475Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:21.486002Z&quot;}}" data-execution_count="10">
+<div id="87efaa76" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:44.482456Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:44.482382Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:44.789260Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:44.788778Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> m5_weights(t1: <span class="bu">int</span>) <span class="op">-&gt;</span> np.ndarray:</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Dollar-sales share of every aggregate over the 28 days before ``t1``, normalized per level."""</span></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    dollars <span class="op">=</span> (sales[t1 <span class="op">-</span> <span class="dv">28</span> : t1] <span class="op">*</span> price_filled[t1 <span class="op">-</span> <span class="dv">28</span> : t1]).<span class="bu">sum</span>(<span class="dv">0</span>) <span class="op">@</span> agg_matrix</span>
@@ -850,7 +850,7 @@ window.Quarto = {
 </div>
 </div>
 <p>The scoring functions plug into <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>: a <code>transform</code> sums the bottom-level draws and the truth to the 42,840 aggregates, and <code>per_window_metrics</code> returns one weighted scaled CRPS per level for the window’s origin, so every series is sorted once. The headline WS-CRPS is the mean of the 12 level scores. The split between NumPy and JAX follows the cost: <code>aggregate_transform</code> is one sparse product per window on the host (where the draws of the three models end up anyway), while <code>ws_crps_level</code> runs on the one expensive operation, the sort of the draws of every aggregate inside <a href="../../reference/metrics.crps_empirical.html#numpyro_forecast.metrics.crps_empirical" class="gdls-link gdls-code">crps_empirical</a>, which is a compiled JAX kernel.</p>
-<div id="bb844b6d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:21.487874Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:21.487787Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:21.506607Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:21.506102Z&quot;}}" data-execution_count="11">
+<div id="4afa38a8" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:44.790318Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:44.790250Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:44.808408Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:44.807985Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> aggregate_transform(</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    pred: np.ndarray <span class="op">|</span> Array, truth: np.ndarray <span class="op">|</span> Array</span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[np.ndarray, np.ndarray]:</span>
@@ -884,7 +884,7 @@ window.Quarto = {
 <span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>    }</span></code></pre></div>
 </div>
 <p>The official pinball loss of the uncertainty competition (WSPL) has the same weights and scales, with the mean pinball loss over the nine competition quantiles in place of the CRPS. The nine quantiles are the median and the bounds of the central <span class="math inline">50\%</span>, <span class="math inline">67\%</span>, <span class="math inline">95\%</span> and <span class="math inline">99\%</span> intervals, so four of them sit in the tails. We compute the WSPL on the evaluation window to compare with the published leaderboard.</p>
-<div id="75662328" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:21.507753Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:21.507691Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:21.524632Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:21.524201Z&quot;}}" data-execution_count="12">
+<div id="df0146a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:44.809450Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:44.809389Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:44.824490Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:44.824126Z&quot;}}" data-execution_count="12">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>M5_INTERVALS <span class="op">=</span> np.array([<span class="fl">0.5</span>, <span class="fl">0.67</span>, <span class="fl">0.95</span>, <span class="fl">0.99</span>])</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>M5_QUANTILES <span class="op">=</span> np.sort(</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    np.concatenate([[<span class="fl">0.5</span>], (<span class="dv">1</span> <span class="op">-</span> M5_INTERVALS) <span class="op">/</span> <span class="dv">2</span>, (<span class="dv">1</span> <span class="op">+</span> M5_INTERVALS) <span class="op">/</span> <span class="dv">2</span>])</span>
@@ -912,7 +912,7 @@ window.Quarto = {
 </div>
 </div>
 <p>The two scores are close relatives: the CRPS is twice the integral of the pinball loss over all quantiles, <span class="math inline">\text{CRPS} = 2 \int_0^1 \rho_\tau \, d\tau</span>, while the WSPL averages the pinball loss over the nine competition quantiles. Both are proper scoring rules, so both are minimized by the true predictive distribution: they penalize a biased location and a wrong spread, in either direction. The figure makes the difference visible on a toy problem, a Normal forecast with location <span class="math inline">\mu</span> and scale <span class="math inline">\sigma</span> scored against observations drawn from <span class="math inline">\text{Normal}(0, 1)</span>, so the ideal forecast is <span class="math inline">\mu = 0</span>, <span class="math inline">\sigma = 1</span>. The expected CRPS and twice the expected mean pinball loss (the factor two puts the two on the same axis) are plotted against the forecast scale and against the forecast bias.</p>
-<div id="7bdbf614" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:21.525725Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:21.525661Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:32.352486Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:32.352148Z&quot;}}" data-execution_count="13">
+<div id="b039cd79" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:44.825643Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:44.825582Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:55.918173Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:55.917741Z&quot;}}" data-execution_count="13">
 <div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>key_truth, key_pred <span class="op">=</span> random.split(random.PRNGKey(seed<span class="op">=</span><span class="dv">0</span>))  <span class="co"># a side key: no effect on the fits</span></span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>toy_truth <span class="op">=</span> random.normal(key_truth, (<span class="dv">4_000</span>,))</span>
 <span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>toy_noise <span class="op">=</span> random.normal(key_pred, (<span class="dv">500</span>, toy_truth.shape[<span class="dv">0</span>]))</span>
@@ -959,7 +959,7 @@ window.Quarto = {
 </div>
 </div>
 </div>
-<div id="a9aa59e4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:32.353748Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:32.353661Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:33.200613Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:33.200170Z&quot;}}" data-execution_count="14">
+<div id="310d0f2c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:55.919748Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:55.919653Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:56.773608Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:56.773225Z&quot;}}" data-execution_count="14">
 <div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>crps_ref, pinball_ref <span class="op">=</span> toy_scores(<span class="fl">0.0</span>, <span class="fl">1.0</span>)</span>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label, (mu, sigma) <span class="kw">in</span> {</span>
@@ -1001,7 +1001,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 \end{align*}
 </span></p>
 <p>A word on each prior. The observations live on the log scale, where the total of 30,000 to 55,000 units a day is <span class="math inline">y_t \approx 10.3</span> to <span class="math inline">10.9</span>, so an intercept with a standard deviation of 10 covers anything from a few units a day to billions: flat in practice. The trend prior is positive by construction (a LogNormal) and encodes that sales grow; its median is <span class="math inline">e^{-2} \approx 0.14</span> per year on the log scale (about <span class="math inline">15\%</span> a year) and its <span class="math inline">94\%</span> interval runs from 0.02 to 0.9, so the growth rate is unknown within an order of magnitude but its sign is not. The weekday effects get a standard deviation of 5, a factor of <span class="math inline">e^{5} \approx 150</span> on the sales: wide, because the intercept and the weekday effects are collinear and the prior has to leave room for any split between them. The 31 day-of-month weights get the unit standard deviation of a generic regression coefficient. The StudentT degrees of freedom are uniform between 1 (Cauchy tails) and 10 (close to Normal), so the posterior decides how heavy the tails have to be to absorb the Christmas drops. The noise scale has the same LogNormal as the trend: a median of 0.14 on the log scale, a typical day within <span class="math inline">\pm 14\%</span> of its mean, which is the right order of magnitude for the residual of a total over 30,490 series. The figure shows the three priors that carry information; the standard normal of the weights needs no plot.</p>
-<div id="44e2640c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:33.202053Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:33.201960Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:33.521340Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:33.520837Z&quot;}}" data-execution_count="15">
+<div id="eddb00bf" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:56.775020Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:56.774921Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:57.172233Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:57.171543Z&quot;}}" data-execution_count="15">
 <div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">3</span>, figsize<span class="op">=</span>(<span class="dv">15</span>, <span class="dv">4</span>), layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>pz.LogNormal(<span class="op">-</span><span class="dv">2</span>, <span class="dv">1</span>).plot_pdf(ax<span class="op">=</span>axes[<span class="dv">0</span>], color<span class="op">=</span><span class="st">"C0"</span>, legend<span class="op">=</span><span class="va">None</span>)</span>
 <span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].<span class="bu">set</span>(title<span class="op">=</span><span class="st">"trend per year and noise scale: LogNormal(-2, 1)"</span>, xlim<span class="op">=</span>(<span class="dv">0</span>, <span class="fl">1.5</span>))</span>
@@ -1020,7 +1020,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 </div>
 <p>The intercept, the seven weekday effects and the 31 day-of-month dummies are collinear (any constant can move between them), as in the kit; the mean-field guide picks one split and the forest plots below should be read for their relative pattern.</p>
 <p>The model has no latent time process, so <a href="../../reference/models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> is the only building block it needs. The covariates are one row per day over the full 1,969 days (training period plus evaluation window) with 33 columns: the time in years, the weekday index and the 31 day-of-month dummies, in that order, so that the model reads them back by position. The forecast covariates are just the calendar of the next 28 days, and the training slice is the first 1,941 rows.</p>
-<div id="6044c0b6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:33.522665Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:33.522562Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:33.572254Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:33.571816Z&quot;}}" data-execution_count="16">
+<div id="0d0f8f35" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:57.174076Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:57.173944Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:57.224727Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:57.224195Z&quot;}}" data-execution_count="16">
 <div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>covariates_top <span class="op">=</span> jnp.asarray(</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    np.column_stack(</span>
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>        [</span>
@@ -1039,7 +1039,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <pre><code>covariates: (1969, 33) (days, feature), target: (1969, 1) (days, obs)</code></pre>
 </div>
 </div>
-<div id="7925f56c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:33.573472Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:33.573386Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:33.971927Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:33.971325Z&quot;}}" data-execution_count="17">
+<div id="325483b3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:57.225875Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:57.225794Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:57.430250Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:57.429604Z&quot;}}" data-execution_count="17">
 <div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> top_down_model(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Kit model 1: trend, weekday and day-of-month effects on the log of the total sales."""</span></span>
 <span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
@@ -1074,58 +1074,79 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <section id="prior-predictive-check" class="level2">
 <h2 class="anchored" data-anchor-id="prior-predictive-check">Prior predictive check</h2>
 <p>The kit’s priors are wide on the log scale: an intercept with a standard deviation of 10, weekday effects with a standard deviation of 5 and a unit-variance weight on each of the 31 dummies. The <span class="math inline">94\%</span> prior band spans about <span class="math inline">-20</span> to <span class="math inline">20</span> and the observed log total of about 10.4 sits at the edge of the <span class="math inline">50\%</span> band: weakly informative priors that the 1,941 observations will dominate. The plot shows the last twenty weeks of the training data against the prior bands. Every band plot of the notebook shows the <span class="math inline">94\%</span> and <span class="math inline">50\%</span> HDIs, the wider one lighter.</p>
-<div id="c6b9a855" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:33.973192Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:33.973101Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:35.122618Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:35.122160Z&quot;}}" data-execution_count="18">
+<div id="616a028c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:57.431422Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:57.431342Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:57.450919Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:57.450470Z&quot;}}" data-execution_count="18">
 <div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>HDI_PROBS <span class="op">=</span> (<span class="fl">0.94</span>, <span class="fl">0.5</span>)</span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>HDI_ALPHAS <span class="op">=</span> (<span class="fl">0.3</span>, <span class="fl">0.6</span>)</span>
 <span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>rng_key, key_prior <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>prior_obs_top <span class="op">=</span> Predictive(top_down_model, num_samples<span class="op">=</span><span class="dv">500</span>, return_sites<span class="op">=</span>[<span class="st">"obs"</span>])(</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    key_prior, covariates_top_train</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>)[<span class="st">"obs"</span>][..., <span class="dv">0</span>]</span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>prior_tree_top <span class="op">=</span> predictions_to_datatree(</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    np.asarray(prior_obs_top[:, plot_start:, <span class="va">None</span>]),</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    date_num[plot_start:N_DAYS_TRAIN],</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    [<span class="st">"log total sales"</span>],</span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>    group<span class="op">=</span><span class="st">"prior_predictive"</span>,</span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>    observed<span class="op">=</span>np.asarray(y_top_train[plot_start:]),</span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_lm(</span>
-<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    prior_tree_top,</span>
-<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"t"</span>,</span>
-<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>    plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a>    group<span class="op">=</span><span class="st">"prior_predictive"</span>,</span>
-<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>HDI_PROBS,</span>
-<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{</span>
-<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C0"</span>},</span>
-<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_scatter"</span>: <span class="va">False</span>,</span>
-<span id="cb25-29"><a href="#cb25-29" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pe_line"</span>: <span class="va">False</span>,</span>
-<span id="cb25-30"><a href="#cb25-30" aria-hidden="true" tabindex="-1"></a>        <span class="st">"xlabel"</span>: <span class="va">False</span>,</span>
-<span id="cb25-31"><a href="#cb25-31" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ylabel"</span>: <span class="va">False</span>,</span>
-<span id="cb25-32"><a href="#cb25-32" aria-hidden="true" tabindex="-1"></a>    },</span>
-<span id="cb25-33"><a href="#cb25-33" aria-hidden="true" tabindex="-1"></a>    aes<span class="op">=</span>{<span class="st">"alpha"</span>: [<span class="st">"prob"</span>]},</span>
-<span id="cb25-34"><a href="#cb25-34" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span>HDI_ALPHAS,</span>
-<span id="cb25-35"><a href="#cb25-35" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">6</span>)},</span>
-<span id="cb25-36"><a href="#cb25-36" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb25-37"><a href="#cb25-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-38"><a href="#cb25-38" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
-<span id="cb25-39"><a href="#cb25-39" aria-hidden="true" tabindex="-1"></a>ax.plot(</span>
-<span id="cb25-40"><a href="#cb25-40" aria-hidden="true" tabindex="-1"></a>    date_num[plot_start:N_DAYS_TRAIN], np.asarray(y_top_train[plot_start:, <span class="dv">0</span>]), color<span class="op">=</span><span class="st">"black"</span>, lw<span class="op">=</span><span class="dv">1</span></span>
-<span id="cb25-41"><a href="#cb25-41" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb25-42"><a href="#cb25-42" aria-hidden="true" tabindex="-1"></a>ax.xaxis_date()</span>
-<span id="cb25-43"><a href="#cb25-43" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
-<span id="cb25-44"><a href="#cb25-44" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Model 1: prior predictive check (last 20 training weeks)"</span>,</span>
-<span id="cb25-45"><a href="#cb25-45" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"date"</span>,</span>
-<span id="cb25-46"><a href="#cb25-46" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"log total sales"</span>,</span>
-<span id="cb25-47"><a href="#cb25-47" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hdi_label(prob: <span class="bu">float</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">r"""Legend label of an HDI band, for example ``$94</span><span class="er">\</span><span class="co">%$ HDI``."""</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="vs">rf"</span><span class="dv">$</span><span class="sc">{</span>prob<span class="sc">:.0%}</span><span class="dv">$</span><span class="vs"> HDI"</span>.replace(<span class="st">"%"</span>, <span class="vs">r"</span><span class="ch">\%</span><span class="vs">"</span>)</span></code></pre></div>
+</div>
+<div id="9a51fa94" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:57.452241Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:57.452158Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:58.593188Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:58.592721Z&quot;}}" data-execution_count="19">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_prior <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>prior_obs_top <span class="op">=</span> Predictive(top_down_model, num_samples<span class="op">=</span><span class="dv">500</span>, return_sites<span class="op">=</span>[<span class="st">"obs"</span>])(</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    key_prior, covariates_top_train</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>)[<span class="st">"obs"</span>][..., <span class="dv">0</span>]</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>prior_tree_top <span class="op">=</span> predictions_to_datatree(</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>    np.asarray(prior_obs_top[:, plot_start:, <span class="va">None</span>]),</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    date_num[plot_start:N_DAYS_TRAIN],</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    [<span class="st">"log total sales"</span>],</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    group<span class="op">=</span><span class="st">"prior_predictive"</span>,</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>    observed<span class="op">=</span>np.asarray(y_top_train[plot_start:]),</span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_lm(</span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>    prior_tree_top,</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"t"</span>,</span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>    plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a>    group<span class="op">=</span><span class="st">"prior_predictive"</span>,</span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>    ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>    ci_prob<span class="op">=</span>HDI_PROBS,</span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a>    smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>    visuals<span class="op">=</span>{</span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C0"</span>},</span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>        <span class="st">"observed_scatter"</span>: <span class="va">False</span>,</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pe_line"</span>: <span class="va">False</span>,</span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>        <span class="st">"xlabel"</span>: <span class="va">False</span>,</span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">"ylabel"</span>: <span class="va">False</span>,</span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>    aes<span class="op">=</span>{<span class="st">"alpha"</span>: [<span class="st">"prob"</span>]},</span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span>HDI_ALPHAS,</span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>    figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">12</span>, <span class="dv">6</span>)},</span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item().axes[<span class="dv">0</span>]</span>
+<span id="cb26-36"><a href="#cb26-36" aria-hidden="true" tabindex="-1"></a>(observed_line,) <span class="op">=</span> ax.plot(</span>
+<span id="cb26-37"><a href="#cb26-37" aria-hidden="true" tabindex="-1"></a>    date_num[plot_start:N_DAYS_TRAIN],</span>
+<span id="cb26-38"><a href="#cb26-38" aria-hidden="true" tabindex="-1"></a>    np.asarray(y_top_train[plot_start:, <span class="dv">0</span>]),</span>
+<span id="cb26-39"><a href="#cb26-39" aria-hidden="true" tabindex="-1"></a>    color<span class="op">=</span><span class="st">"black"</span>,</span>
+<span id="cb26-40"><a href="#cb26-40" aria-hidden="true" tabindex="-1"></a>    lw<span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb26-41"><a href="#cb26-41" aria-hidden="true" tabindex="-1"></a>    label<span class="op">=</span><span class="st">"observed"</span>,</span>
+<span id="cb26-42"><a href="#cb26-42" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-43"><a href="#cb26-43" aria-hidden="true" tabindex="-1"></a>locator <span class="op">=</span> mdates.AutoDateLocator()</span>
+<span id="cb26-44"><a href="#cb26-44" aria-hidden="true" tabindex="-1"></a>ax.xaxis.set_major_locator(locator)</span>
+<span id="cb26-45"><a href="#cb26-45" aria-hidden="true" tabindex="-1"></a>ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))</span>
+<span id="cb26-46"><a href="#cb26-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-47"><a href="#cb26-47" aria-hidden="true" tabindex="-1"></a>band_handles <span class="op">=</span> []</span>
+<span id="cb26-48"><a href="#cb26-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-49"><a href="#cb26-49" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
+<span id="cb26-50"><a href="#cb26-50" aria-hidden="true" tabindex="-1"></a>    band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(prob<span class="op">=</span>prob).item()</span>
+<span id="cb26-51"><a href="#cb26-51" aria-hidden="true" tabindex="-1"></a>    band.set_label(<span class="ss">f"prior </span><span class="sc">{</span>hdi_label(prob)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb26-52"><a href="#cb26-52" aria-hidden="true" tabindex="-1"></a>    band_handles.append(band)</span>
+<span id="cb26-53"><a href="#cb26-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-54"><a href="#cb26-54" aria-hidden="true" tabindex="-1"></a>ax.legend(handles<span class="op">=</span>[<span class="op">*</span>band_handles, observed_line], loc<span class="op">=</span><span class="st">"upper left"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">1.01</span>, <span class="fl">1.0</span>))</span>
+<span id="cb26-55"><a href="#cb26-55" aria-hidden="true" tabindex="-1"></a>ax.<span class="bu">set</span>(</span>
+<span id="cb26-56"><a href="#cb26-56" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Model 1: prior predictive check (last 20 training weeks)"</span>,</span>
+<span id="cb26-57"><a href="#cb26-57" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"date"</span>,</span>
+<span id="cb26-58"><a href="#cb26-58" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"log total sales"</span>,</span>
+<span id="cb26-59"><a href="#cb26-59" aria-hidden="true" tabindex="-1"></a>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-19-output-1.png" width="1211" height="611" class="figure-img"></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-20-output-1.png" width="1211" height="611" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -1134,54 +1155,54 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <section id="fit" class="level2">
 <h2 class="anchored" data-anchor-id="fit">Fit</h2>
 <p>All three models use the kit’s optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (<code>learning_rate_decay=0.1</code> in Pyro’s <code>Forecaster</code>). It is an optax chain handed to <code>SVI</code> as is (numpyro wraps optax transformations itself). The step counts are the kit’s defaults, 1,001 for models 1 and 2 and 2,001 for model 3. <code>fit_svi</code> runs the kit’s optimizer for a model and guide and times the run with <code>jax.block_until_ready</code>, so the JIT compilation is included, as it is in every backtest window; <code>plot_loss</code> draws the ELBO curve on a symmetric log scale, which keeps the negative losses of model 2 readable.</p>
-<div id="c01e5e63" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:35.123788Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:35.123692Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:35.143924Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:35.143478Z&quot;}}" data-execution_count="19">
-<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kit_optimizer(num_steps: <span class="bu">int</span>) <span class="op">-&gt;</span> optax.GradientTransformation:</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Build the kit's ClippedAdam: clipped gradients, learning rate decaying tenfold over the run."""</span></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    schedule <span class="op">=</span> optax.exponential_decay(<span class="fl">0.1</span>, transition_steps<span class="op">=</span>num_steps, decay_rate<span class="op">=</span><span class="fl">0.1</span>)</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> optax.chain(optax.clip_by_global_norm(<span class="fl">10.0</span>), optax.adam(schedule))</span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fit_svi(</span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    rng_key: Array,</span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    model: ForecastModel,</span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    guide: AutoNormal,</span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>    num_steps: <span class="bu">int</span>,</span>
-<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>    covariates: Array,</span>
-<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>    data: Array,</span>
-<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[SVIRunResult, <span class="bu">float</span>]:</span>
-<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Run SVI with the kit's optimizer; return the result and the wall time in seconds."""</span></span>
-<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>    svi <span class="op">=</span> SVI(model, guide, kit_optimizer(num_steps), Trace_ELBO())</span>
-<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>    start <span class="op">=</span> perf_counter()</span>
-<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> svi.run(rng_key, num_steps, covariates, data, progress_bar<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a>    jax.block_until_ready(result.losses)</span>
-<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result, perf_counter() <span class="op">-</span> start</span>
-<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>NUM_STEPS <span class="op">=</span> {<span class="st">"top-down"</span>: <span class="dv">1_001</span>, <span class="st">"bottom-up"</span>: <span class="dv">1_001</span>, <span class="st">"middle-out"</span>: <span class="dv">2_001</span>}</span>
-<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> plot_loss(losses: Array, title: <span class="bu">str</span>, <span class="op">*</span>, skip: <span class="bu">int</span> <span class="op">=</span> <span class="dv">0</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
-<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Plot an ELBO loss curve on a symmetric log scale, from step ``skip`` on."""</span></span>
-<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>    _, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">4</span>))</span>
-<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>    ax.plot(np.arange(skip, <span class="bu">len</span>(losses)), np.asarray(losses)[skip:], color<span class="op">=</span><span class="st">"C0"</span>)</span>
-<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>    ax.set_yscale(<span class="st">"symlog"</span>)</span>
-<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>    ax.<span class="bu">set</span>(title<span class="op">=</span>title, xlabel<span class="op">=</span><span class="st">"SVI step"</span>, ylabel<span class="op">=</span><span class="st">"loss"</span>)</span></code></pre></div>
+<div id="dafb7d8f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:58.594313Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:58.594217Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:50:58.613838Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:50:58.613357Z&quot;}}" data-execution_count="20">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> kit_optimizer(num_steps: <span class="bu">int</span>) <span class="op">-&gt;</span> optax.GradientTransformation:</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Build the kit's ClippedAdam: clipped gradients, learning rate decaying tenfold over the run."""</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    schedule <span class="op">=</span> optax.exponential_decay(<span class="fl">0.1</span>, transition_steps<span class="op">=</span>num_steps, decay_rate<span class="op">=</span><span class="fl">0.1</span>)</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> optax.chain(optax.clip_by_global_norm(<span class="fl">10.0</span>), optax.adam(schedule))</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fit_svi(</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    rng_key: Array,</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>    model: ForecastModel,</span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>    guide: AutoNormal,</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>    num_steps: <span class="bu">int</span>,</span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>    covariates: Array,</span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>    data: Array,</span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">tuple</span>[SVIRunResult, <span class="bu">float</span>]:</span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Run SVI with the kit's optimizer; return the result and the wall time in seconds."""</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>    svi <span class="op">=</span> SVI(model, guide, kit_optimizer(num_steps), Trace_ELBO())</span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>    start <span class="op">=</span> perf_counter()</span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> svi.run(rng_key, num_steps, covariates, data, progress_bar<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    jax.block_until_ready(result.losses)</span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result, perf_counter() <span class="op">-</span> start</span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>NUM_STEPS <span class="op">=</span> {<span class="st">"top-down"</span>: <span class="dv">1_001</span>, <span class="st">"bottom-up"</span>: <span class="dv">1_001</span>, <span class="st">"middle-out"</span>: <span class="dv">2_001</span>}</span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> plot_loss(losses: Array, title: <span class="bu">str</span>, <span class="op">*</span>, skip: <span class="bu">int</span> <span class="op">=</span> <span class="dv">0</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
+<span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Plot an ELBO loss curve on a symmetric log scale, from step ``skip`` on."""</span></span>
+<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a>    _, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">4</span>))</span>
+<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>    ax.plot(np.arange(skip, <span class="bu">len</span>(losses)), np.asarray(losses)[skip:], color<span class="op">=</span><span class="st">"C0"</span>)</span>
+<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>    ax.set_yscale(<span class="st">"symlog"</span>)</span>
+<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a>    ax.<span class="bu">set</span>(title<span class="op">=</span>title, xlabel<span class="op">=</span><span class="st">"SVI step"</span>, ylabel<span class="op">=</span><span class="st">"loss"</span>)</span></code></pre></div>
 </div>
 <p>The final fit uses the full training period.</p>
-<div id="a070353f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:35.145141Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:35.145074Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:38.130246Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:38.129828Z&quot;}}" data-execution_count="20">
-<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fit <span class="op">=</span> random.split(rng_key)</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>guide_top <span class="op">=</span> AutoNormal(top_down_model)</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>svi_top, time_top <span class="op">=</span> fit_svi(</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    key_fit, top_down_model, guide_top, NUM_STEPS[<span class="st">"top-down"</span>], covariates_top_train, y_top_train</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>plot_loss(</span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    svi_top.losses, <span class="ss">f"Model 1: ELBO loss (</span><span class="sc">{</span>NUM_STEPS[<span class="st">'top-down'</span>]<span class="sc">:,}</span><span class="ss"> steps, </span><span class="sc">{</span>time_top<span class="sc">:.1f}</span><span class="ss"> s)"</span></span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div id="f8e91606" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:50:58.615105Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:50:58.615028Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:01.748494Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:01.748137Z&quot;}}" data-execution_count="21">
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fit <span class="op">=</span> random.split(rng_key)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>guide_top <span class="op">=</span> AutoNormal(top_down_model)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>svi_top, time_top <span class="op">=</span> fit_svi(</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    key_fit, top_down_model, guide_top, NUM_STEPS[<span class="st">"top-down"</span>], covariates_top_train, y_top_train</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>plot_loss(</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    svi_top.losses, <span class="ss">f"Model 1: ELBO loss (</span><span class="sc">{</span>NUM_STEPS[<span class="st">'top-down'</span>]<span class="sc">:,}</span><span class="ss"> steps, </span><span class="sc">{</span>time_top<span class="sc">:.1f}</span><span class="ss"> s)"</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-21-output-1.png" width="1011" height="411" class="figure-img"></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-22-output-1.png" width="1011" height="411" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -1190,39 +1211,39 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <section id="posterior" class="level2">
 <h2 class="anchored" data-anchor-id="posterior">Posterior</h2>
 <p><a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call; <code>add_date_variable</code> adds a matplotlib date number to the constant data groups, so that the ArviZ plots below can use calendar dates on the x axis. The trend is about 0.08 per year on the log scale (<span class="math inline">8\%</span> a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.</p>
-<div id="6abaf783" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:38.131515Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:38.131420Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:38.148804Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:38.148359Z&quot;}}" data-execution_count="21">
-<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>DOW_LABELS <span class="op">=</span> [<span class="st">"Mon"</span>, <span class="st">"Tue"</span>, <span class="st">"Wed"</span>, <span class="st">"Thu"</span>, <span class="st">"Fri"</span>, <span class="st">"Sat"</span>, <span class="st">"Sun"</span>]</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add_date_variable(tree: xr.DataTree, date_num: np.ndarray) <span class="op">-&gt;</span> xr.DataTree:</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Add a matplotlib date number ``date`` variable to the constant data groups of a tree."""</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> group <span class="kw">in</span> (<span class="st">"constant_data"</span>, <span class="st">"predictions_constant_data"</span>):</span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> group <span class="kw">in</span> tree.children:</span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>            dataset <span class="op">=</span> tree[group].dataset</span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>            tree[group] <span class="op">=</span> dataset.assign(date<span class="op">=</span>(<span class="st">"time"</span>, date_num[dataset[<span class="st">"time"</span>].values]))</span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tree</span></code></pre></div>
-</div>
-<div id="e38f34cc" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:38.150141Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:38.150063Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:39.081633Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:39.081185Z&quot;}}" data-execution_count="22">
-<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_tree <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>posterior_top <span class="op">=</span> draw_posterior(key_post, guide_top, svi_top.params, <span class="dv">500</span>)</span>
+<div id="19fe70b6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:01.749726Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:01.749650Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:01.767518Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:01.767112Z&quot;}}" data-execution_count="22">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>DOW_LABELS <span class="op">=</span> [<span class="st">"Mon"</span>, <span class="st">"Tue"</span>, <span class="st">"Wed"</span>, <span class="st">"Thu"</span>, <span class="st">"Fri"</span>, <span class="st">"Sat"</span>, <span class="st">"Sun"</span>]</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>tree_top <span class="op">=</span> to_datatree(</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    key_tree,</span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    top_down_model,</span>
-<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    posterior_top,</span>
-<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    y_top_train,</span>
-<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>    covariates_top,</span>
-<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"day_of_week"</span>: DOW_LABELS, <span class="st">"day_of_month"</span>: <span class="bu">list</span>(<span class="bu">range</span>(<span class="dv">1</span>, <span class="dv">32</span>))},</span>
-<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    posterior_dims<span class="op">=</span>{<span class="st">"seasonal"</span>: [<span class="st">"day_of_week"</span>], <span class="st">"weight"</span>: [<span class="st">"day_of_month"</span>]},</span>
-<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>tree_top <span class="op">=</span> add_date_variable(tree_top, date_num)</span>
-<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group <span class="kw">in</span> (<span class="st">"posterior_predictive"</span>, <span class="st">"observed_data"</span>, <span class="st">"predictions"</span>):</span>
-<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>    tree_top[group] <span class="op">=</span> tree_top[group].dataset.isel(obs_dim<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>az.summary(tree_top, var_names<span class="op">=</span>[<span class="st">"bias"</span>, <span class="st">"trend"</span>, <span class="st">"dof"</span>, <span class="st">"noise_scale"</span>])</span></code></pre></div>
-<div class="cell-output cell-output-display" data-execution_count="22">
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add_date_variable(tree: xr.DataTree, date_num: np.ndarray) <span class="op">-&gt;</span> xr.DataTree:</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Add a matplotlib date number ``date`` variable to the constant data groups of a tree."""</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> group <span class="kw">in</span> (<span class="st">"constant_data"</span>, <span class="st">"predictions_constant_data"</span>):</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> group <span class="kw">in</span> tree.children:</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>            dataset <span class="op">=</span> tree[group].dataset</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>            tree[group] <span class="op">=</span> dataset.assign(date<span class="op">=</span>(<span class="st">"time"</span>, date_num[dataset[<span class="st">"time"</span>].values]))</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tree</span></code></pre></div>
+</div>
+<div id="4370988e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:01.768560Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:01.768500Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:02.722502Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:02.722093Z&quot;}}" data-execution_count="23">
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_tree <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>posterior_top <span class="op">=</span> draw_posterior(key_post, guide_top, svi_top.params, <span class="dv">500</span>)</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>tree_top <span class="op">=</span> to_datatree(</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    key_tree,</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    top_down_model,</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>    posterior_top,</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>    y_top_train,</span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    covariates_top,</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>    coords<span class="op">=</span>{<span class="st">"day_of_week"</span>: DOW_LABELS, <span class="st">"day_of_month"</span>: <span class="bu">list</span>(<span class="bu">range</span>(<span class="dv">1</span>, <span class="dv">32</span>))},</span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>    posterior_dims<span class="op">=</span>{<span class="st">"seasonal"</span>: [<span class="st">"day_of_week"</span>], <span class="st">"weight"</span>: [<span class="st">"day_of_month"</span>]},</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>tree_top <span class="op">=</span> add_date_variable(tree_top, date_num)</span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group <span class="kw">in</span> (<span class="st">"posterior_predictive"</span>, <span class="st">"observed_data"</span>, <span class="st">"predictions"</span>):</span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>    tree_top[group] <span class="op">=</span> tree_top[group].dataset.isel(obs_dim<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a>az.summary(tree_top, var_names<span class="op">=</span>[<span class="st">"bias"</span>, <span class="st">"trend"</span>, <span class="st">"dof"</span>, <span class="st">"noise_scale"</span>])</span></code></pre></div>
+<div class="cell-output cell-output-display" data-execution_count="23">
 <table class="dataframe table table-sm table-striped small">
   <thead>
     <tr>
@@ -1292,28 +1313,28 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 </div>
 </div>
 <p>The weekday effects show the weekend peak: Saturday and Sunday are about 0.33 above the midweek days on the log scale, about <span class="math inline">40\%</span> more sales, with Friday and Monday in between.</p>
-<div id="c285575b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:39.082692Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:39.082608Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:39.186529Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:39.186073Z&quot;}}" data-execution_count="23">
-<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    tree_top, var_names<span class="op">=</span>[<span class="st">"seasonal"</span>], combined<span class="op">=</span><span class="va">True</span>, figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">8</span>, <span class="dv">4</span>)}</span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(<span class="st">"Model 1: weekday effects"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)<span class="op">;</span></span></code></pre></div>
+<div id="447de8a4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:02.723786Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:02.723699Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:02.835205Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:02.834807Z&quot;}}" data-execution_count="24">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    tree_top, var_names<span class="op">=</span>[<span class="st">"seasonal"</span>], combined<span class="op">=</span><span class="va">True</span>, figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">8</span>, <span class="dv">4</span>)}</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(<span class="st">"Model 1: weekday effects"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-24-output-1.png" width="811" height="411" class="figure-img"></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-25-output-1.png" width="811" height="411" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
-<div id="a4678660" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:39.187688Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:39.187611Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:39.402545Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:39.402154Z&quot;}}" data-execution_count="24">
-<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    tree_top, var_names<span class="op">=</span>[<span class="st">"weight"</span>], combined<span class="op">=</span><span class="va">True</span>, figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">8</span>, <span class="dv">9</span>)}</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(<span class="st">"Model 1: day-of-month effects"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)<span class="op">;</span></span></code></pre></div>
+<div id="713ab91c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:02.836250Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:02.836175Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:03.057556Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:03.056874Z&quot;}}" data-execution_count="25">
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    tree_top, var_names<span class="op">=</span>[<span class="st">"weight"</span>], combined<span class="op">=</span><span class="va">True</span>, figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: (<span class="dv">8</span>, <span class="dv">9</span>)}</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>pc.viz[<span class="st">"figure"</span>].item().suptitle(<span class="st">"Model 1: day-of-month effects"</span>, fontsize<span class="op">=</span><span class="dv">14</span>)<span class="op">;</span></span></code></pre></div>
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-25-output-1.png" width="811" height="911" class="figure-img"></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-26-output-1.png" width="811" height="911" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -1323,12 +1344,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <section id="forecast" class="level2">
 <h2 class="anchored" data-anchor-id="forecast">Forecast</h2>
 <p>The in-sample posterior predictive (blue) and the 28-day forecast (orange) on the log scale, over the last twenty training weeks and the evaluation window.</p>
-<div id="12fda7b6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:39.403927Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:39.403833Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:39.420581Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:39.420102Z&quot;}}" data-execution_count="25">
-<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hdi_label(prob: <span class="bu">float</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">r"""Legend label of an HDI band, for example ``$94</span><span class="er">\</span><span class="co">%$ HDI``."""</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="vs">rf"</span><span class="dv">$</span><span class="sc">{</span>prob<span class="sc">:.0%}</span><span class="dv">$</span><span class="vs"> HDI"</span>.replace(<span class="st">"%"</span>, <span class="vs">r"</span><span class="ch">\%</span><span class="vs">"</span>)</span></code></pre></div>
-</div>
-<div id="2aa2fc2f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:39.421797Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:39.421730Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:39.581443Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:39.581053Z&quot;}}" data-execution_count="26">
+<div id="0ac1f619" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:03.058627Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:03.058549Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:03.219609Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:03.219212Z&quot;}}" data-execution_count="26">
 <div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>tree_top_zoom <span class="op">=</span> tree_top.copy()</span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> group <span class="kw">in</span> (<span class="st">"posterior_predictive"</span>, <span class="st">"observed_data"</span>, <span class="st">"constant_data"</span>):</span>
@@ -1392,7 +1408,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <section id="top-down-split-and-scores" class="level2">
 <h2 class="anchored" data-anchor-id="top-down-split-and-scores">Top-down split and scores</h2>
 <p>Models 1 and 3 forecast an aggregate. The kit’s submission splits such a forecast to the items in proportion to their sales over the last 28 training days and draws Poisson noise at the bottom, so that the item forecasts are integer and their spread at the bottom is not just a scaled copy of the aggregate’s. The Poisson draws use NumPy: <code>jax.random.poisson</code> on the CPU is about 40 times slower for an array of this size. The forecast draws of model 1 go back to units with <code>exp</code> before the split, and the bottom-level draws are then summed to every level and scored. The split does not know anything about the items, so the item levels (10 to 12) measure the share heuristic, not the model.</p>
-<div id="f7e9e022" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:39.583126Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:39.583029Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:13:39.602450Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:13:39.602067Z&quot;}}" data-execution_count="27">
+<div id="f0849fcf" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:03.221310Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:03.221218Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:03.239708Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:03.239423Z&quot;}}" data-execution_count="27">
 <div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> last_28_day_shares(train_sales: np.ndarray, group_index: np.ndarray) <span class="op">-&gt;</span> np.ndarray:</span>
 <span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Share of every series in the sales of its group over the last 28 training days."""</span></span>
 <span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    totals <span class="op">=</span> np.asarray(train_sales[<span class="op">-</span><span class="dv">28</span>:], dtype<span class="op">=</span>np.float64).<span class="bu">sum</span>(<span class="dv">0</span>)</span>
@@ -1429,7 +1445,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <span id="cb34-34"><a href="#cb34-34" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb34-35"><a href="#cb34-35" aria-hidden="true" tabindex="-1"></a>total_index <span class="op">=</span> np.zeros(n_series, dtype<span class="op">=</span>np.int64)  <span class="co"># every series belongs to the one total</span></span></code></pre></div>
 </div>
-<div id="8aee82b4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:13:39.604181Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:13:39.604069Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:13.794487Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:13.793578Z&quot;}}" data-execution_count="28">
+<div id="ee3fb38f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:03.240809Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:03.240745Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:38.676389Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:38.675684Z&quot;}}" data-execution_count="28">
 <div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fc <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>fc_top <span class="op">=</span> np.exp(</span>
 <span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>    np.asarray(forecast(key_fc, top_down_model, posterior_top, y_top_train, covariates_top))</span>
@@ -1463,7 +1479,7 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 </div>
 </div>
 <p>The split forecast at the store level (level 3) shows what top-down means: every store gets the same shape, scaled by its share. <code>plot_series_panel</code> is the faceted band plot we reuse for every model from here on: one panel per series, the in-sample bands in blue, the forecast bands in orange and the observed series in black. It takes its draws as NumPy or JAX arrays and converts them to NumPy once: <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> and <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> return JAX arrays, the reconciliation returns NumPy (its Poisson draws are NumPy), and ArviZ and matplotlib consume NumPy either way, so there is nothing to gain from keeping the draws on the JAX side for a plot.</p>
-<div id="edc40ce6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:13.798373Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:13.798020Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:13.833935Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:13.833436Z&quot;}}" data-execution_count="29">
+<div id="13f22aab" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:38.678880Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:38.678762Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:38.711392Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:38.710498Z&quot;}}" data-execution_count="29">
 <div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> plot_series_panel(</span>
 <span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    train_draws: np.ndarray <span class="op">|</span> Array <span class="op">|</span> <span class="va">None</span>,</span>
 <span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    test_draws: np.ndarray <span class="op">|</span> Array,</span>
@@ -1510,72 +1526,83 @@ w_j &amp;\sim \text{Normal}(0, 1), \quad j = 1, \ldots, 31, \\
 <span id="cb37-44"><a href="#cb37-44" aria-hidden="true" tabindex="-1"></a>        figure_kwargs<span class="op">=</span>{<span class="st">"figsize"</span>: figsize},</span>
 <span id="cb37-45"><a href="#cb37-45" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb37-46"><a href="#cb37-46" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-47"><a href="#cb37-47" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Second call on the same grid: the forecast bands after the in-sample ones.</span></span>
-<span id="cb37-48"><a href="#cb37-48" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> train_draws <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb37-49"><a href="#cb37-49" aria-hidden="true" tabindex="-1"></a>        az.plot_lm(</span>
-<span id="cb37-50"><a href="#cb37-50" aria-hidden="true" tabindex="-1"></a>            predictions_to_datatree(np.asarray(test_draws), x_test, labels, group<span class="op">=</span>group),</span>
-<span id="cb37-51"><a href="#cb37-51" aria-hidden="true" tabindex="-1"></a>            y<span class="op">=</span><span class="st">"obs"</span>,</span>
-<span id="cb37-52"><a href="#cb37-52" aria-hidden="true" tabindex="-1"></a>            x<span class="op">=</span><span class="st">"t"</span>,</span>
-<span id="cb37-53"><a href="#cb37-53" aria-hidden="true" tabindex="-1"></a>            plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
-<span id="cb37-54"><a href="#cb37-54" aria-hidden="true" tabindex="-1"></a>            group<span class="op">=</span>group,</span>
-<span id="cb37-55"><a href="#cb37-55" aria-hidden="true" tabindex="-1"></a>            plot_collection<span class="op">=</span>pc,</span>
-<span id="cb37-56"><a href="#cb37-56" aria-hidden="true" tabindex="-1"></a>            ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
-<span id="cb37-57"><a href="#cb37-57" aria-hidden="true" tabindex="-1"></a>            ci_prob<span class="op">=</span>HDI_PROBS,</span>
-<span id="cb37-58"><a href="#cb37-58" aria-hidden="true" tabindex="-1"></a>            smooth<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb37-59"><a href="#cb37-59" aria-hidden="true" tabindex="-1"></a>            visuals<span class="op">=</span>{<span class="op">**</span>visuals, <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}},</span>
-<span id="cb37-60"><a href="#cb37-60" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb37-61"><a href="#cb37-61" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-62"><a href="#cb37-62" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The observed series over both windows, mapped onto every facet.</span></span>
-<span id="cb37-63"><a href="#cb37-63" aria-hidden="true" tabindex="-1"></a>    x_all <span class="op">=</span> np.concatenate([x_train, x_test]) <span class="cf">if</span> train_draws <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="cf">else</span> x_test</span>
-<span id="cb37-64"><a href="#cb37-64" aria-hidden="true" tabindex="-1"></a>    truth_da <span class="op">=</span> xr.DataArray(</span>
-<span id="cb37-65"><a href="#cb37-65" aria-hidden="true" tabindex="-1"></a>        np.asarray(truth)[<span class="op">-</span><span class="bu">len</span>(x_all) :],</span>
-<span id="cb37-66"><a href="#cb37-66" aria-hidden="true" tabindex="-1"></a>        dims<span class="op">=</span>[<span class="st">"time"</span>, <span class="st">"series"</span>],</span>
-<span id="cb37-67"><a href="#cb37-67" aria-hidden="true" tabindex="-1"></a>        coords<span class="op">=</span>{<span class="st">"time"</span>: x_all, <span class="st">"series"</span>: labels},</span>
-<span id="cb37-68"><a href="#cb37-68" aria-hidden="true" tabindex="-1"></a>    ).rename(<span class="st">"t"</span>)</span>
-<span id="cb37-69"><a href="#cb37-69" aria-hidden="true" tabindex="-1"></a>    x_da <span class="op">=</span> xr.DataArray(x_all, dims<span class="op">=</span>[<span class="st">"time"</span>], coords<span class="op">=</span>{<span class="st">"time"</span>: x_all})</span>
-<span id="cb37-70"><a href="#cb37-70" aria-hidden="true" tabindex="-1"></a>    pc.<span class="bu">map</span>(</span>
-<span id="cb37-71"><a href="#cb37-71" aria-hidden="true" tabindex="-1"></a>        az.visuals.line_xy,</span>
-<span id="cb37-72"><a href="#cb37-72" aria-hidden="true" tabindex="-1"></a>        <span class="st">"truth"</span>,</span>
-<span id="cb37-73"><a href="#cb37-73" aria-hidden="true" tabindex="-1"></a>        data<span class="op">=</span>truth_da,</span>
-<span id="cb37-74"><a href="#cb37-74" aria-hidden="true" tabindex="-1"></a>        x<span class="op">=</span>x_da,</span>
-<span id="cb37-75"><a href="#cb37-75" aria-hidden="true" tabindex="-1"></a>        ignore_aes<span class="op">=</span>pc.aes_set,</span>
-<span id="cb37-76"><a href="#cb37-76" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span><span class="st">"black"</span>,</span>
-<span id="cb37-77"><a href="#cb37-77" aria-hidden="true" tabindex="-1"></a>        lw<span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb37-78"><a href="#cb37-78" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb37-79"><a href="#cb37-79" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-80"><a href="#cb37-80" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Panel titles and compact date ticks.</span></span>
-<span id="cb37-81"><a href="#cb37-81" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label <span class="kw">in</span> labels:</span>
-<span id="cb37-82"><a href="#cb37-82" aria-hidden="true" tabindex="-1"></a>        ax <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: label})</span>
-<span id="cb37-83"><a href="#cb37-83" aria-hidden="true" tabindex="-1"></a>        ax.set_title(label, fontsize<span class="op">=</span><span class="dv">11</span>)</span>
-<span id="cb37-84"><a href="#cb37-84" aria-hidden="true" tabindex="-1"></a>        locator <span class="op">=</span> mdates.AutoDateLocator()</span>
-<span id="cb37-85"><a href="#cb37-85" aria-hidden="true" tabindex="-1"></a>        ax.xaxis.set_major_locator(locator)</span>
-<span id="cb37-86"><a href="#cb37-86" aria-hidden="true" tabindex="-1"></a>        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))</span>
-<span id="cb37-87"><a href="#cb37-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-88"><a href="#cb37-88" aria-hidden="true" tabindex="-1"></a>    <span class="co"># One legend for the whole figure, below the panels: the band artists of the first panel</span></span>
-<span id="cb37-89"><a href="#cb37-89" aria-hidden="true" tabindex="-1"></a>    <span class="co"># and the observed line.</span></span>
-<span id="cb37-90"><a href="#cb37-90" aria-hidden="true" tabindex="-1"></a>    handles <span class="op">=</span> []</span>
-<span id="cb37-91"><a href="#cb37-91" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-92"><a href="#cb37-92" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
-<span id="cb37-93"><a href="#cb37-93" aria-hidden="true" tabindex="-1"></a>        band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>labels[<span class="dv">0</span>], prob<span class="op">=</span>prob).item()</span>
-<span id="cb37-94"><a href="#cb37-94" aria-hidden="true" tabindex="-1"></a>        band.set_label(hdi_label(prob))</span>
-<span id="cb37-95"><a href="#cb37-95" aria-hidden="true" tabindex="-1"></a>        handles.append(band)</span>
-<span id="cb37-96"><a href="#cb37-96" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-97"><a href="#cb37-97" aria-hidden="true" tabindex="-1"></a>    truth_line <span class="op">=</span> pc.viz[<span class="st">"truth"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>labels[<span class="dv">0</span>]).item()</span>
-<span id="cb37-98"><a href="#cb37-98" aria-hidden="true" tabindex="-1"></a>    truth_line.set_label(<span class="st">"observed"</span>)</span>
-<span id="cb37-99"><a href="#cb37-99" aria-hidden="true" tabindex="-1"></a>    fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
-<span id="cb37-100"><a href="#cb37-100" aria-hidden="true" tabindex="-1"></a>    fig.legend(</span>
-<span id="cb37-101"><a href="#cb37-101" aria-hidden="true" tabindex="-1"></a>        handles<span class="op">=</span>[<span class="op">*</span>handles, truth_line], loc<span class="op">=</span><span class="st">"upper center"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.0</span>), ncols<span class="op">=</span><span class="dv">3</span></span>
-<span id="cb37-102"><a href="#cb37-102" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb37-103"><a href="#cb37-103" aria-hidden="true" tabindex="-1"></a>    fig.supylabel(ylabel)</span>
-<span id="cb37-104"><a href="#cb37-104" aria-hidden="true" tabindex="-1"></a>    fig.suptitle(suptitle, fontsize<span class="op">=</span><span class="dv">16</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>, y<span class="op">=</span><span class="fl">1.02</span>)</span>
-<span id="cb37-105"><a href="#cb37-105" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-106"><a href="#cb37-106" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb37-107"><a href="#cb37-107" aria-hidden="true" tabindex="-1"></a>store_ids <span class="op">=</span> [</span>
-<span id="cb37-108"><a href="#cb37-108" aria-hidden="true" tabindex="-1"></a>    label.removeprefix(<span class="st">"Level3/"</span>).removesuffix(<span class="st">"/X"</span>)</span>
-<span id="cb37-109"><a href="#cb37-109" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label <span class="kw">in</span> agg_labels[level_slices[<span class="st">"Level3"</span>]]</span>
-<span id="cb37-110"><a href="#cb37-110" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<span id="cb37-47"><a href="#cb37-47" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The legend handles are the band artists of the first panel; the second `plot_lm` call</span></span>
+<span id="cb37-48"><a href="#cb37-48" aria-hidden="true" tabindex="-1"></a>    <span class="co"># replaces them in `pc.viz`, so the in-sample ones are collected before it runs.</span></span>
+<span id="cb37-49"><a href="#cb37-49" aria-hidden="true" tabindex="-1"></a>    handles <span class="op">=</span> []</span>
+<span id="cb37-50"><a href="#cb37-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-51"><a href="#cb37-51" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> train_draws <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb37-52"><a href="#cb37-52" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
+<span id="cb37-53"><a href="#cb37-53" aria-hidden="true" tabindex="-1"></a>            band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>labels[<span class="dv">0</span>], prob<span class="op">=</span>prob).item()</span>
+<span id="cb37-54"><a href="#cb37-54" aria-hidden="true" tabindex="-1"></a>            band.set_label(<span class="ss">f"in-sample </span><span class="sc">{</span>hdi_label(prob)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb37-55"><a href="#cb37-55" aria-hidden="true" tabindex="-1"></a>            handles.append(band)</span>
+<span id="cb37-56"><a href="#cb37-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-57"><a href="#cb37-57" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Second call on the same grid: the forecast bands after the in-sample ones.</span></span>
+<span id="cb37-58"><a href="#cb37-58" aria-hidden="true" tabindex="-1"></a>        az.plot_lm(</span>
+<span id="cb37-59"><a href="#cb37-59" aria-hidden="true" tabindex="-1"></a>            predictions_to_datatree(np.asarray(test_draws), x_test, labels, group<span class="op">=</span>group),</span>
+<span id="cb37-60"><a href="#cb37-60" aria-hidden="true" tabindex="-1"></a>            y<span class="op">=</span><span class="st">"obs"</span>,</span>
+<span id="cb37-61"><a href="#cb37-61" aria-hidden="true" tabindex="-1"></a>            x<span class="op">=</span><span class="st">"t"</span>,</span>
+<span id="cb37-62"><a href="#cb37-62" aria-hidden="true" tabindex="-1"></a>            plot_dim<span class="op">=</span><span class="st">"time"</span>,</span>
+<span id="cb37-63"><a href="#cb37-63" aria-hidden="true" tabindex="-1"></a>            group<span class="op">=</span>group,</span>
+<span id="cb37-64"><a href="#cb37-64" aria-hidden="true" tabindex="-1"></a>            plot_collection<span class="op">=</span>pc,</span>
+<span id="cb37-65"><a href="#cb37-65" aria-hidden="true" tabindex="-1"></a>            ci_kind<span class="op">=</span><span class="st">"hdi"</span>,</span>
+<span id="cb37-66"><a href="#cb37-66" aria-hidden="true" tabindex="-1"></a>            ci_prob<span class="op">=</span>HDI_PROBS,</span>
+<span id="cb37-67"><a href="#cb37-67" aria-hidden="true" tabindex="-1"></a>            smooth<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb37-68"><a href="#cb37-68" aria-hidden="true" tabindex="-1"></a>            visuals<span class="op">=</span>{<span class="op">**</span>visuals, <span class="st">"ci_band"</span>: {<span class="st">"color"</span>: <span class="st">"C1"</span>}},</span>
+<span id="cb37-69"><a href="#cb37-69" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb37-70"><a href="#cb37-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-71"><a href="#cb37-71" aria-hidden="true" tabindex="-1"></a>    band_prefix <span class="op">=</span> <span class="st">"forecast "</span> <span class="cf">if</span> train_draws <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="cf">else</span> <span class="st">""</span></span>
+<span id="cb37-72"><a href="#cb37-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-73"><a href="#cb37-73" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> prob <span class="kw">in</span> HDI_PROBS:</span>
+<span id="cb37-74"><a href="#cb37-74" aria-hidden="true" tabindex="-1"></a>        band <span class="op">=</span> pc.viz[<span class="st">"ci_band"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>labels[<span class="dv">0</span>], prob<span class="op">=</span>prob).item()</span>
+<span id="cb37-75"><a href="#cb37-75" aria-hidden="true" tabindex="-1"></a>        band.set_label(<span class="ss">f"</span><span class="sc">{</span>band_prefix<span class="sc">}{</span>hdi_label(prob)<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb37-76"><a href="#cb37-76" aria-hidden="true" tabindex="-1"></a>        handles.append(band)</span>
+<span id="cb37-77"><a href="#cb37-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-78"><a href="#cb37-78" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The observed series over both windows, mapped onto every facet.</span></span>
+<span id="cb37-79"><a href="#cb37-79" aria-hidden="true" tabindex="-1"></a>    x_all <span class="op">=</span> np.concatenate([x_train, x_test]) <span class="cf">if</span> train_draws <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="cf">else</span> x_test</span>
+<span id="cb37-80"><a href="#cb37-80" aria-hidden="true" tabindex="-1"></a>    truth_da <span class="op">=</span> xr.DataArray(</span>
+<span id="cb37-81"><a href="#cb37-81" aria-hidden="true" tabindex="-1"></a>        np.asarray(truth)[<span class="op">-</span><span class="bu">len</span>(x_all) :],</span>
+<span id="cb37-82"><a href="#cb37-82" aria-hidden="true" tabindex="-1"></a>        dims<span class="op">=</span>[<span class="st">"time"</span>, <span class="st">"series"</span>],</span>
+<span id="cb37-83"><a href="#cb37-83" aria-hidden="true" tabindex="-1"></a>        coords<span class="op">=</span>{<span class="st">"time"</span>: x_all, <span class="st">"series"</span>: labels},</span>
+<span id="cb37-84"><a href="#cb37-84" aria-hidden="true" tabindex="-1"></a>    ).rename(<span class="st">"t"</span>)</span>
+<span id="cb37-85"><a href="#cb37-85" aria-hidden="true" tabindex="-1"></a>    x_da <span class="op">=</span> xr.DataArray(x_all, dims<span class="op">=</span>[<span class="st">"time"</span>], coords<span class="op">=</span>{<span class="st">"time"</span>: x_all})</span>
+<span id="cb37-86"><a href="#cb37-86" aria-hidden="true" tabindex="-1"></a>    pc.<span class="bu">map</span>(</span>
+<span id="cb37-87"><a href="#cb37-87" aria-hidden="true" tabindex="-1"></a>        az.visuals.line_xy,</span>
+<span id="cb37-88"><a href="#cb37-88" aria-hidden="true" tabindex="-1"></a>        <span class="st">"truth"</span>,</span>
+<span id="cb37-89"><a href="#cb37-89" aria-hidden="true" tabindex="-1"></a>        data<span class="op">=</span>truth_da,</span>
+<span id="cb37-90"><a href="#cb37-90" aria-hidden="true" tabindex="-1"></a>        x<span class="op">=</span>x_da,</span>
+<span id="cb37-91"><a href="#cb37-91" aria-hidden="true" tabindex="-1"></a>        ignore_aes<span class="op">=</span>pc.aes_set,</span>
+<span id="cb37-92"><a href="#cb37-92" aria-hidden="true" tabindex="-1"></a>        color<span class="op">=</span><span class="st">"black"</span>,</span>
+<span id="cb37-93"><a href="#cb37-93" aria-hidden="true" tabindex="-1"></a>        lw<span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb37-94"><a href="#cb37-94" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb37-95"><a href="#cb37-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-96"><a href="#cb37-96" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Panel titles and compact date ticks.</span></span>
+<span id="cb37-97"><a href="#cb37-97" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label <span class="kw">in</span> labels:</span>
+<span id="cb37-98"><a href="#cb37-98" aria-hidden="true" tabindex="-1"></a>        ax <span class="op">=</span> pc.get_target(<span class="st">"t"</span>, {<span class="st">"series"</span>: label})</span>
+<span id="cb37-99"><a href="#cb37-99" aria-hidden="true" tabindex="-1"></a>        ax.set_title(label, fontsize<span class="op">=</span><span class="dv">11</span>)</span>
+<span id="cb37-100"><a href="#cb37-100" aria-hidden="true" tabindex="-1"></a>        locator <span class="op">=</span> mdates.AutoDateLocator()</span>
+<span id="cb37-101"><a href="#cb37-101" aria-hidden="true" tabindex="-1"></a>        ax.xaxis.set_major_locator(locator)</span>
+<span id="cb37-102"><a href="#cb37-102" aria-hidden="true" tabindex="-1"></a>        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))</span>
+<span id="cb37-103"><a href="#cb37-103" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-104"><a href="#cb37-104" aria-hidden="true" tabindex="-1"></a>    <span class="co"># One legend for the whole figure, below the panels.</span></span>
+<span id="cb37-105"><a href="#cb37-105" aria-hidden="true" tabindex="-1"></a>    truth_line <span class="op">=</span> pc.viz[<span class="st">"truth"</span>][<span class="st">"t"</span>].sel(series<span class="op">=</span>labels[<span class="dv">0</span>]).item()</span>
+<span id="cb37-106"><a href="#cb37-106" aria-hidden="true" tabindex="-1"></a>    truth_line.set_label(<span class="st">"observed"</span>)</span>
+<span id="cb37-107"><a href="#cb37-107" aria-hidden="true" tabindex="-1"></a>    fig <span class="op">=</span> pc.viz[<span class="st">"figure"</span>].item()</span>
+<span id="cb37-108"><a href="#cb37-108" aria-hidden="true" tabindex="-1"></a>    fig.legend(</span>
+<span id="cb37-109"><a href="#cb37-109" aria-hidden="true" tabindex="-1"></a>        handles<span class="op">=</span>[<span class="op">*</span>handles, truth_line],</span>
+<span id="cb37-110"><a href="#cb37-110" aria-hidden="true" tabindex="-1"></a>        loc<span class="op">=</span><span class="st">"upper center"</span>,</span>
+<span id="cb37-111"><a href="#cb37-111" aria-hidden="true" tabindex="-1"></a>        bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="fl">0.0</span>),</span>
+<span id="cb37-112"><a href="#cb37-112" aria-hidden="true" tabindex="-1"></a>        ncols<span class="op">=</span><span class="bu">len</span>(handles) <span class="op">+</span> <span class="dv">1</span>,</span>
+<span id="cb37-113"><a href="#cb37-113" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb37-114"><a href="#cb37-114" aria-hidden="true" tabindex="-1"></a>    fig.supylabel(ylabel)</span>
+<span id="cb37-115"><a href="#cb37-115" aria-hidden="true" tabindex="-1"></a>    fig.suptitle(suptitle, fontsize<span class="op">=</span><span class="dv">16</span>, fontweight<span class="op">=</span><span class="st">"bold"</span>, y<span class="op">=</span><span class="fl">1.02</span>)</span>
+<span id="cb37-116"><a href="#cb37-116" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-117"><a href="#cb37-117" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-118"><a href="#cb37-118" aria-hidden="true" tabindex="-1"></a>store_ids <span class="op">=</span> [</span>
+<span id="cb37-119"><a href="#cb37-119" aria-hidden="true" tabindex="-1"></a>    label.removeprefix(<span class="st">"Level3/"</span>).removesuffix(<span class="st">"/X"</span>)</span>
+<span id="cb37-120"><a href="#cb37-120" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label <span class="kw">in</span> agg_labels[level_slices[<span class="st">"Level3"</span>]]</span>
+<span id="cb37-121"><a href="#cb37-121" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
 </div>
-<div id="a1175b99" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:13.835202Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:13.835126Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:14.548167Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:14.547725Z&quot;}}" data-execution_count="30">
+<div id="15c93bf4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:38.712694Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:38.712610Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:39.436291Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:39.435805Z&quot;}}" data-execution_count="30">
 <div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>plot_series_panel(</span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">None</span>,</span>
 <span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>    level3_draws[<span class="st">"top-down"</span>],</span>
@@ -1612,7 +1639,7 @@ y_{i,t} &amp;\sim \text{Gamma}\left(\frac{m_{i,t}}{v_{i,t}}, \frac{1}{v_{i,t}}\r
 </span></p>
 <p>with <span class="math inline">\text{bexp}(x) = 10^3\, \text{sigmoid}(x - \log 10^3)</span> the kit’s bounded exponential and <span class="math inline">\text{saled}_{i,t}</span> the price-listed flag that forces the mean to the floor when the item is not on the shelf. The Gamma with mean <span class="math inline">m</span> and variance <span class="math inline">m v</span> is a continuous stand-in for a count likelihood: the kit clamps the sales at <span class="math inline">10^{-3}</span> to make the zeros admissible. There are no item-level parameters: an item is described by its department’s weights and its own moving averages.</p>
 <p>Every weight has the same prior, <span class="math inline">w, b, s \sim \text{Normal}(0, 1)</span>, so there is no prior to plot; what deserves a look is what the standard normals imply through the bounded exponential. The moving-average weights multiply the log of the item’s recent level, so the prior mean of an item is its level raised to a random power, <span class="math inline">m \approx \text{MA}^{\,w_1 + w_2 + w_3} \times e^{s}</span>, where the exponent has a standard deviation of <span class="math inline">\sqrt{3} \approx 1.7</span>: for a slow seller at one unit a day (<span class="math inline">\log \text{MA} = 0</span>) the prior on the mean is a LogNormal around one unit, but for an item at ten units a day it is spread over many orders of magnitude. The bounded exponential is what makes this prior usable. A plain <span class="math inline">\exp</span> of a draw a few standard deviations out gives means of millions of units and an infinite loss on the first SVI steps; <span class="math inline">\text{bexp}</span> matches <span class="math inline">\exp</span> up to a few tens of units, is <span class="math inline">10\%</span> below it at a hundred, and saturates at 1,000 units a day, more than any item sells, so the cap protects the early steps and never binds in the posterior.</p>
-<div id="845dc1e9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:14.551331Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:14.551243Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:15.093015Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:15.092558Z&quot;}}" data-execution_count="31">
+<div id="1eb3a3a3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:39.440059Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:39.439947Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:39.990896Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:39.990525Z&quot;}}" data-execution_count="31">
 <div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> bounded_exp(x: Array, bound: <span class="bu">float</span> <span class="op">=</span> <span class="fl">1e3</span>) <span class="op">-&gt;</span> Array:</span>
 <span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Exponential capped at ``bound`` so early training steps cannot blow up (kit helper)."""</span></span>
 <span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> jax.nn.sigmoid(x <span class="op">-</span> jnp.log(bound)) <span class="op">*</span> bound</span>
@@ -1656,7 +1683,7 @@ y_{i,t} &amp;\sim \text{Gamma}\left(\frac{m_{i,t}}{v_{i,t}}, \frac{1}{v_{i,t}}\r
 <p>Training subsamples the series plate. The guide’s <code>create_plates</code> opens the <code>series</code> plate with <code>subsample_size=600</code>; under <code>replay</code> the model’s plate receives the same indices, <code>numpyro.subsample</code> picks the matching columns of the data and the covariates, and the observed log density is scaled by <span class="math inline">30{,}490 / 600</span>. <a href="../../reference/models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data</a> is called on the subsampled arrays, so <a href="../../reference/models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> observes the minibatch. <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> and <code>Predictive</code> run without the guide and see the full plate. The Gamma distribution is not a location family, so it enters <a href="../../reference/models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> through a link that maps the mean to the distribution, after registering it as elementwise for the prefix conditioning.</p>
 <p>One consequence of this layout is the warning filtered at the top of the notebook. The observation site must sit inside the <code>series</code> plate (that is what scales its log density by the subsampling factor), and its other batch axis, time, is not declared as a plate: the days are conditionally independent given the parameters just like the series, but <a href="../../reference/models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> splits the time axis into the observed prefix and the forecast suffix, two sites of different lengths that one plate cannot cover. numpyro’s model validation flags any batch axis without a plate once a site has at least one plate, so it warns at every trace. The warning is about bookkeeping, not about the model: plates only change the log density through subsampling and enumeration, and we never subsample time, so declaring a time plate would change nothing in the fit.</p>
 <p>The moving averages are one-off preprocessing over the whole panel, a float64 cumulative sum of the 60 million cells computed once in NumPy; there is nothing for JAX to compile here, and a float32 cumulative sum over five years would lose precision on the high sellers. The covariate tensor stacks six channels of shape <code>(days, series)</code>: the weekday index, the SNAP flag of the store’s state, the <code>saled</code> flag, and the three log moving averages. The model reads the channels by position and the first channel (the weekday) only from the first series, since it is the same for all.</p>
-<div id="aab31f31" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:15.094357Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:15.094276Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:17.326047Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:17.325604Z&quot;}}" data-execution_count="32">
+<div id="c4bb0503" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:39.992183Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:39.992107Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:42.504946Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:42.504331Z&quot;}}" data-execution_count="32">
 <div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>register_elementwise(dist.Gamma)</span>
 <span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>T0 <span class="op">=</span> <span class="dv">121</span>  <span class="co"># kit: 37 + 28 * 3, the first day with the three moving averages defined</span></span>
@@ -1715,7 +1742,7 @@ y_{i,t} &amp;\sim \text{Gamma}\left(\frac{m_{i,t}}{v_{i,t}}, \frac{1}{v_{i,t}}\r
 <pre><code>covariates: (6, 1969, 30490) (channel, day, series), 1.44 GB; target: (1969, 30490) (day, series)</code></pre>
 </div>
 </div>
-<div id="c4b0b1e6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:17.327206Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:17.327138Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:17.397446Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:17.396837Z&quot;}}" data-execution_count="33">
+<div id="8a67ab57" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:42.507180Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:42.507073Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:42.600070Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:42.599515Z&quot;}}" data-execution_count="33">
 <div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> make_bottom_up_model(store_index: Array, dept_index: Array) <span class="op">-&gt;</span> ForecastModel:</span>
 <span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Kit model 2 for the series described by ``store_index`` and ``dept_index``."""</span></span>
 <span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>    n_series <span class="op">=</span> store_index.shape[<span class="dv">0</span>]</span>
@@ -1785,7 +1812,7 @@ y_{i,t} &amp;\sim \text{Gamma}\left(\frac{m_{i,t}}{v_{i,t}}, \frac{1}{v_{i,t}}\r
 <section id="prior-predictive-check-1" class="level2">
 <h2 class="anchored" data-anchor-id="prior-predictive-check-1">Prior predictive check</h2>
 <p>The model has no time latents, so it can be evaluated on any window and any subset of series with the same posterior draws. A second model instance for the seven focus items and the last sixteen training weeks makes the prior and posterior predictive checks cheap. The <span class="math inline">94\%</span> prior bands reach hundreds of units, up to the cap of the bounded exponential for the top seller, while the <span class="math inline">50\%</span> HDI sits at zero: the prior is wide on the log scale and the Gamma is right-skewed. The observations lie inside the bands; the check says the prior is proper and not degenerate, and little more.</p>
-<div id="91f3d75d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:17.398879Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:17.398798Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:14:18.885583Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:14:18.885095Z&quot;}}" data-execution_count="34">
+<div id="7bb6c9d3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:42.601820Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:42.601714Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:51:44.207286Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:51:44.206800Z&quot;}}" data-execution_count="34">
 <div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>focus_model <span class="op">=</span> make_bottom_up_model(store_index[focus_index], dept_index[focus_index])</span>
 <span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>covariates_focus <span class="op">=</span> covariates_bottom[:, :, focus_index]</span>
 <span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1819,7 +1846,7 @@ y_{i,t} &amp;\sim \text{Gamma}\left(\frac{m_{i,t}}{v_{i,t}}, \frac{1}{v_{i,t}}\r
 <section id="fit-1" class="level2">
 <h2 class="anchored" data-anchor-id="fit-1">Fit</h2>
 <p>Each step evaluates the Gamma likelihood of 600 series over 1,820 days (about 1.1 million cells), so the 1,001 steps take about a minute despite the 55 million cells of the full panel. The loss is noisy because of the subsampling: every step scores a different random set of 600 series, so the ELBO estimate moves with the minibatch even at fixed parameters.</p>
-<div id="e2b3c367" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:14:18.887206Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:14:18.887128Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:22.252832Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:22.252305Z&quot;}}" data-execution_count="35">
+<div id="c2f80437" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:51:44.209823Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:51:44.209722Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:44.136634Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:44.135978Z&quot;}}" data-execution_count="35">
 <div class="sourceCode cell-code" id="cb44"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fit <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>guide_bottom <span class="op">=</span> AutoNormal(bottom_up_model, create_plates<span class="op">=</span>create_series_plates)</span>
 <span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>svi_bottom, time_bottom <span class="op">=</span> fit_svi(</span>
@@ -1845,7 +1872,7 @@ y_{i,t} &amp;\sim \text{Gamma}\left(\frac{m_{i,t}}{v_{i,t}}, \frac{1}{v_{i,t}}\r
 </div>
 </div>
 <p>A noisy loss curve can also mean a learning rate that is too high, so we check which it is. We hold the parameters fixed at their final values and evaluate the ELBO on twenty fresh minibatches: if the spread of these losses matches the spread of the trace over its last steps, the noise is the subsampling and a smaller learning rate would not remove it.</p>
-<div id="829a040e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:22.255310Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:22.255210Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:24.322674Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:24.322071Z&quot;}}" data-execution_count="36">
+<div id="73463382" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:44.138983Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:44.138884Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:46.206928Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:46.206478Z&quot;}}" data-execution_count="36">
 <div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>key_eval <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">2</span>)  <span class="co"># a side key: no effect on the fits</span></span>
 <span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>elbo <span class="op">=</span> Trace_ELBO()</span>
 <span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -1882,7 +1909,7 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 <section id="posterior-1" class="level2">
 <h2 class="anchored" data-anchor-id="posterior-1">Posterior</h2>
 <p>The posterior has 1,540 parameters: for every store, the two heads times three moving averages times seven departments, the SNAP effect per head and department, and the weekday effects. We export the draws to ArviZ with named coordinates (the full posterior predictive of 30,490 series over 1,820 days would not fit in memory, so this tree carries the posterior only) and add the sum of the three moving-average weights as a derived variable, since the sum is the quantity the forecast depends on.</p>
-<div id="7a91d842" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:24.323853Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:24.323764Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:25.877690Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:25.877063Z&quot;}}" data-execution_count="37">
+<div id="622dfc50" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:46.208232Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:46.208146Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:47.764313Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:47.763707Z&quot;}}" data-execution_count="37">
 <div class="sourceCode cell-code" id="cb47"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>posterior_bottom <span class="op">=</span> draw_posterior(key_post, guide_bottom, svi_bottom.params, <span class="dv">500</span>)</span>
 <span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>tree_bottom <span class="op">=</span> az.from_dict(</span>
@@ -1905,7 +1932,7 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 <span id="cb47-20"><a href="#cb47-20" aria-hidden="true" tabindex="-1"></a>posterior_ds <span class="op">=</span> tree_bottom[<span class="st">"posterior"</span>].dataset</span>
 <span id="cb47-21"><a href="#cb47-21" aria-hidden="true" tabindex="-1"></a>tree_bottom[<span class="st">"posterior"</span>] <span class="op">=</span> posterior_ds.assign(ma_weight_sum<span class="op">=</span>posterior_ds[<span class="st">"ma_weight"</span>].<span class="bu">sum</span>(<span class="st">"lag"</span>))</span></code></pre></div>
 </div>
-<div id="c07981ef" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:25.878947Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:25.878876Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:26.319075Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:26.318633Z&quot;}}" data-execution_count="38">
+<div id="10c32a7f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:47.765455Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:47.765389Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:48.215323Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:48.214949Z&quot;}}" data-execution_count="38">
 <div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
 <span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>    tree_bottom,</span>
 <span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>[<span class="st">"snap_weight"</span>],</span>
@@ -1925,7 +1952,7 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 </div>
 </div>
 <p>The SNAP effect on the mean is a food effect that varies a lot by store. In every store the largest coefficient belongs to <code>FOODS_2</code> (or <code>FOODS_3</code>), where a SNAP day lifts the expected sales by anything from a few percent in <code>CA_2</code> to <span class="math inline">75\%</span> in <code>WI_2</code> (0.56 on the log scale), while the hobbies and household departments stay within <span class="math inline">\pm 0.1</span> everywhere. <code>WI_2</code> and <code>WI_3</code> stand out, above 0.2 in all three food departments; the Texas stores come next, between 0.2 and 0.3 in <code>FOODS_2</code>; <code>CA_2</code>, <code>CA_4</code> and <code>WI_1</code> barely react. The only wide intervals are the negative <code>HOBBIES_2</code> coefficients of <code>CA_2</code> and <code>CA_4</code>: the smallest department, with the most zeros, carries the least information about a ten-day-a-month covariate.</p>
-<div id="3a326219" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:26.320785Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:26.320692Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:26.542790Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:26.542418Z&quot;}}" data-execution_count="39">
+<div id="5227b71f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:48.217075Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:48.216997Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:48.446413Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:48.445914Z&quot;}}" data-execution_count="39">
 <div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
 <span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>    tree_bottom,</span>
 <span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>[<span class="st">"ma_weight"</span>, <span class="st">"ma_weight_sum"</span>],</span>
@@ -1949,7 +1976,7 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 <section id="item-forecasts" class="level2">
 <h2 class="anchored" data-anchor-id="item-forecasts">Item forecasts</h2>
 <p>The posterior predictive of the focus items over the last sixteen training weeks and the evaluation window. The focus items are the best seller of each department in store CA_1, that is, the items farthest from the typical item of their department.</p>
-<div id="a5f6a4ee" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:26.544103Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:26.544027Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:27.493543Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:27.493059Z&quot;}}" data-execution_count="40">
+<div id="c8a4e935" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:48.447665Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:48.447575Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:49.438489Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:49.437984Z&quot;}}" data-execution_count="40">
 <div class="sourceCode cell-code" id="cb50"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
 <span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>pp_focus <span class="op">=</span> predict_in_sample(</span>
 <span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>    key_pp, focus_model, posterior_bottom, covariates_focus[:, plot_start:N_DAYS_TRAIN]</span>
@@ -1975,13 +2002,13 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-41-output-1.png" width="1511" height="1084" class="figure-img"></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-41-output-1.png" width="1511" height="1086" class="figure-img"></p>
 </figure>
 </div>
 </div>
 </div>
 <p>These fits look poor, and the table below says why. For each focus item it lists the observed mean over the sixteen weeks, the mean and the median of the posterior predictive over the same days, and the mean daily sales of the median item of the same store-department.</p>
-<div id="1cd8f1ed" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:27.496297Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:27.496212Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:15:27.521096Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:15:27.520596Z&quot;}}" data-execution_count="41">
+<div id="66aa6d64" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:49.441553Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:49.441470Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:52:49.468018Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:52:49.467707Z&quot;}}" data-execution_count="41">
 <div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>level9_index <span class="op">=</span> hierarchy_df[<span class="st">"Level9"</span>].to_numpy()  <span class="co"># store-department of every series</span></span>
 <span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>focus_window <span class="op">=</span> sales[plot_start:N_DAYS_TRAIN]</span>
 <span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -2017,7 +2044,7 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 <section id="bottom-up-aggregation-and-scores" class="level2">
 <h2 class="anchored" data-anchor-id="bottom-up-aggregation-and-scores">Bottom-up aggregation and scores</h2>
 <p>The forecast of all 30,490 series takes about two minutes: the Gamma sampler dominates (500 draws of 28 days for every series). As the kit does, only the last week of data is passed to <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>, since the model needs no history beyond its covariates. The draws are summed to every level and scored.</p>
-<div id="dc906e0f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:15:27.522543Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:15:27.522450Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:43.463547Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:43.461926Z&quot;}}" data-execution_count="42">
+<div id="b99e9815" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:52:49.469164Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:52:49.469096Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:01.831274Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:01.826992Z&quot;}}" data-execution_count="42">
 <div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fc <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>start <span class="op">=</span> perf_counter()</span>
 <span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>bottom_bottom <span class="op">=</span> np.asarray(</span>
@@ -2049,12 +2076,12 @@ spread over 20 minibatches at the final parameters: sd 3.65e+06 (3.3% of the mea
 <span id="cb52-29"><a href="#cb52-29" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"model 2 evaluation window: WS-CRPS </span><span class="sc">{</span>mean_ws_crps<span class="sc">:.3f}</span><span class="ss">, WSPL </span><span class="sc">{</span>wspl_holdout[<span class="st">'bottom-up'</span>]<span class="sc">:.3f}</span><span class="ss">"</span></span>
 <span id="cb52-30"><a href="#cb52-30" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>forecast of (500, 28, 30490) draws in 108 s
+<pre><code>forecast of (500, 28, 30490) draws in 104 s
 model 2 evaluation window: WS-CRPS 0.728, WSPL 0.266</code></pre>
 </div>
 </div>
 <p>The bottom-up forecast summed to the store level (level 3).</p>
-<div id="edbb240e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:43.469204Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:43.468594Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:44.848939Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:44.848484Z&quot;}}" data-execution_count="43">
+<div id="60ab9e7a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:01.846360Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:01.845669Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:02.726775Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:02.726184Z&quot;}}" data-execution_count="43">
 <div class="sourceCode cell-code" id="cb54"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a>plot_series_panel(</span>
 <span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">None</span>,</span>
 <span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>    level3_draws[<span class="st">"bottom-up"</span>],</span>
@@ -2100,7 +2127,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 </span></p>
 <p>and one <span class="math inline">\nu \sim \text{Uniform}(1, 10)</span> shared by the 70 series. The priors read differently from those of model 1 because the data are not on the log scale: a scaled series is in units of a typical daily change, and the 70 training series have medians between 2 and 8 of those units. An intercept with a standard deviation of 10 therefore covers the whole range of the data a couple of times over. The trend prior is a LogNormal with median <span class="math inline">e^{-1} \approx 0.37</span> typical daily changes per year and a <span class="math inline">94\%</span> interval from 0.05 to 2.4; on this scale a store-department that grows by one typical daily change per year is growing fast, so the prior says “positive, probably below one”. The weekday effects and the 104 Fourier weights get unit standard deviations, each a shift of one typical daily change, which is the size of the weekly swings in the data; the 52 harmonics together can draw a very wiggly yearly curve under this prior, and this is the flexibility that the discussion comes back to. The noise scale has the same LogNormal as the trend, a median of 0.37 with most of the mass below one: the residual of a daily series in units of its own typical change should be below one. The degrees of freedom are uniform between 1 and 10, as in model 1.</p>
 <p>The series are independent given <span class="math inline">\nu</span>: this is a batch of 70 univariate regressions, written with a <code>series</code> plate on the observation axis and a <code>day_of_week</code> plate for the weekday effects.</p>
-<div id="abfc5590" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:44.854383Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:44.854282Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:44.956763Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:44.956363Z&quot;}}" data-execution_count="44">
+<div id="8ecb46bf" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:02.731841Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:02.731739Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:02.857541Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:02.857062Z&quot;}}" data-execution_count="44">
 <div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(nrows<span class="op">=</span><span class="dv">1</span>, ncols<span class="op">=</span><span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">4</span>), layout<span class="op">=</span><span class="st">"constrained"</span>)</span>
 <span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>pz.LogNormal(<span class="op">-</span><span class="dv">1</span>, <span class="dv">1</span>).plot_pdf(ax<span class="op">=</span>axes[<span class="dv">0</span>], color<span class="op">=</span><span class="st">"C0"</span>, legend<span class="op">=</span><span class="va">None</span>)</span>
 <span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>axes[<span class="dv">0</span>].<span class="bu">set</span>(title<span class="op">=</span><span class="st">"trend per year and noise scale: LogNormal(-1, 1)"</span>, xlim<span class="op">=</span>(<span class="dv">0</span>, <span class="dv">4</span>))</span>
@@ -2116,7 +2143,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 </div>
 </div>
 <p>The covariates are again one row per day over the full 1,969 days, now with 106 columns: the time in years, the weekday index and the 104 Fourier terms (a sine and a cosine for each of the 52 harmonics of the yearly cycle, from <a href="../../reference/features.fourier_features.html#numpyro_forecast.features.fourier_features" class="gdls-link gdls-code">fourier_features</a>). The target is the <code>(days, 70)</code> matrix of scaled level-9 sales, so the observation axis is the series axis.</p>
-<div id="c4a7e31c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:44.959595Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:44.959499Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:45.230711Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:45.230303Z&quot;}}" data-execution_count="45">
+<div id="125eab72" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:02.859852Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:02.859776Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:03.262173Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:03.261742Z&quot;}}" data-execution_count="45">
 <div class="sourceCode cell-code" id="cb56"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a>covariates_mid <span class="op">=</span> jnp.asarray(</span>
 <span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>    np.column_stack(</span>
 <span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a>        [</span>
@@ -2137,7 +2164,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <pre><code>covariates: (1969, 106) (days, feature), target: (1969, 70) (days, series)</code></pre>
 </div>
 </div>
-<div id="c31cb4c2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:45.232517Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:45.232431Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:45.450170Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:45.449612Z&quot;}}" data-execution_count="46">
+<div id="5b6e91dd" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:03.264634Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:03.264540Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:03.483878Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:03.483326Z&quot;}}" data-execution_count="46">
 <div class="sourceCode cell-code" id="cb58"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> middle_out_model(covariates: Array, data: Array <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> <span class="va">None</span>:</span>
 <span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Kit model 3: per-series trend, weekly and yearly seasonality on scaled level-9 sales."""</span></span>
 <span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> Horizon.from_data(covariates, data)</span>
@@ -2185,7 +2212,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <section id="prior-predictive-check-2" class="level2">
 <h2 class="anchored" data-anchor-id="prior-predictive-check-2">Prior predictive check</h2>
 <p>On the scaled axis a store-department sells a few typical daily changes a day: the medians of the 70 training series lie between 2 and 8, and those of the seven departments of store CA_1 between 2 and 6. The prior intercept with a standard deviation of 10 and the 104 Fourier weights with unit variance give <span class="math inline">94\%</span> prior bands of about <span class="math inline">\pm 25</span> and <span class="math inline">50\%</span> bands of about <span class="math inline">\pm 10</span> around a center a little above zero (the positive trend prior over five years): wide, but the data sit inside the <span class="math inline">50\%</span> band.</p>
-<div id="efeb00ef" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:45.451848Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:45.451761Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:48.171134Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:48.170754Z&quot;}}" data-execution_count="47">
+<div id="ef608e4c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:03.485879Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:03.485808Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:06.229465Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:06.228080Z&quot;}}" data-execution_count="47">
 <div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_prior <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>prior_obs_mid <span class="op">=</span> Predictive(middle_out_model, num_samples<span class="op">=</span><span class="dv">500</span>, return_sites<span class="op">=</span>[<span class="st">"obs"</span>])(</span>
 <span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>    key_prior, covariates_mid_train[plot_start:]</span>
@@ -2214,7 +2241,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 </section>
 <section id="fit-2" class="level2">
 <h2 class="anchored" data-anchor-id="fit-2">Fit</h2>
-<div id="63c08200" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:48.174757Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:48.174663Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:17:53.255584Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:17:53.255156Z&quot;}}" data-execution_count="48">
+<div id="abc78f5c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:06.231369Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:06.231285Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:11.272673Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:11.272287Z&quot;}}" data-execution_count="48">
 <div class="sourceCode cell-code" id="cb60"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_fit <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>guide_mid <span class="op">=</span> AutoNormal(middle_out_model)</span>
 <span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>svi_mid, time_mid <span class="op">=</span> fit_svi(</span>
@@ -2241,7 +2268,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <section id="posterior-2" class="level2">
 <h2 class="anchored" data-anchor-id="posterior-2">Posterior</h2>
 <p><a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> exports the posterior with the series labels as coordinates. We look at the one shared parameter, the degrees of freedom, and at the per-series trends and noise scales of store CA_1.</p>
-<div id="1a62b99f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:17:53.257661Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:17:53.257570Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:18:07.595676Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:18:07.595113Z&quot;}}" data-execution_count="49">
+<div id="5e17858d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:11.274956Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:11.274862Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:25.404025Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:25.403492Z&quot;}}" data-execution_count="49">
 <div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_post, key_tree <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
 <span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>posterior_mid <span class="op">=</span> draw_posterior(key_post, guide_mid, svi_mid.params, <span class="dv">500</span>)</span>
 <span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -2296,7 +2323,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 </div>
 </div>
 <p>The degrees of freedom shared by the 70 series come out at about 6.5, with a tight interval: heavier tails than a Normal (which the Christmas days and the occasional spike require) but far from the Cauchy end of the prior, where model 1 sits with its 4 degrees of freedom on the total. Pooling one <span class="math inline">\nu</span> across 70 series is what makes it this well determined.</p>
-<div id="f1d38973" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:18:07.597499Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:18:07.597410Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:18:07.712782Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:18:07.712406Z&quot;}}" data-execution_count="50">
+<div id="acb9d129" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:25.407775Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:25.407673Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:25.554984Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:25.554399Z&quot;}}" data-execution_count="50">
 <div class="sourceCode cell-code" id="cb62"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
 <span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>    tree_mid,</span>
 <span id="cb62-3"><a href="#cb62-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>[<span class="st">"trend"</span>],</span>
@@ -2315,7 +2342,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 </div>
 </div>
 <p>The trends are per series, in typical daily changes per year: in store CA_1 they range from 0.14 (<code>FOODS_2</code>) to 0.88 (<code>HOUSEHOLD_1</code>), all with narrow intervals after five years of daily data. The LogNormal prior forces every slope to be positive, so a department that stalls or shrinks can only get a slope near zero, which is what <code>FOODS_2</code> and <code>FOODS_3</code> show; the kit accepts this because the total grows.</p>
-<div id="2462bd9d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:18:07.714231Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:18:07.714151Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:18:07.823600Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:18:07.822903Z&quot;}}" data-execution_count="51">
+<div id="af5556aa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:25.556676Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:25.556581Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:25.671448Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:25.671030Z&quot;}}" data-execution_count="51">
 <div class="sourceCode cell-code" id="cb63"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a>pc <span class="op">=</span> az.plot_forest(</span>
 <span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>    tree_mid,</span>
 <span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a>    var_names<span class="op">=</span>[<span class="st">"noise_scale"</span>],</span>
@@ -2338,7 +2365,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <section id="store-department-forecasts" class="level2">
 <h2 class="anchored" data-anchor-id="store-department-forecasts">Store-department forecasts</h2>
 <p>The in-sample predictive over the last sixteen training weeks and the forecast for the seven departments of store CA_1, back in units.</p>
-<div id="91f07601" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:18:07.824997Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:18:07.824898Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:18:09.180086Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:18:09.179649Z&quot;}}" data-execution_count="52">
+<div id="0b260932" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:25.673228Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:25.673128Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:55:27.061646Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:55:27.061063Z&quot;}}" data-execution_count="52">
 <div class="sourceCode cell-code" id="cb64"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>rng_key, key_pp, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
 <span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>pp_mid <span class="op">=</span> predict_in_sample(</span>
 <span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a>    key_pp, middle_out_model, posterior_mid, covariates_mid_train[plot_start:]</span>
@@ -2360,7 +2387,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-53-output-1.png" width="1511" height="1084" class="figure-img"></p>
+<p><img src="m5_forecasting_files/figure-html/_src-m5_forecasting-cell-53-output-1.png" width="1511" height="1086" class="figure-img"></p>
 </figure>
 </div>
 </div>
@@ -2370,7 +2397,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <section id="middle-out-split-and-scores" class="level2">
 <h2 class="anchored" data-anchor-id="middle-out-split-and-scores">Middle-out split and scores</h2>
 <p>The forecast draws go back to units (clipped at zero: a StudentT can go negative), are split to the items of each store-department with their last-28-day shares, get Poisson noise, and are summed up to the levels above.</p>
-<div id="7e23efa2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:18:09.184714Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:18:09.184610Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:18:41.009390Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:18:41.008745Z&quot;}}" data-execution_count="53">
+<div id="9d080e1a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:55:27.075494Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:55:27.075388Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:56:00.756811Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:56:00.755974Z&quot;}}" data-execution_count="53">
 <div class="sourceCode cell-code" id="cb65"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a>shares_mid <span class="op">=</span> last_28_day_shares(sales[:N_DAYS_TRAIN], level9_index)</span>
 <span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a>bottom_mid <span class="op">=</span> disaggregate(</span>
 <span id="cb65-3"><a href="#cb65-3" aria-hidden="true" tabindex="-1"></a>    N_DAYS_TRAIN, np.clip(fc_mid, <span class="fl">0.0</span>, <span class="va">None</span>) <span class="op">*</span> scale_mid, shares_mid, level9_index</span>
@@ -2400,7 +2427,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <section id="backtesting" class="level1">
 <h1>Backtesting</h1>
 <p>The kit backtests on three windows of 28 days inside the training period, 35 days apart (origins at days 1,843, 1,878 and 1,913), refitting on all the data before each origin. <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> does the same with <code>min_train_window</code> and <code>stride</code>. It takes the raw bottom-level sales as <code>data</code> for all three models, and each <code>forecast_fn</code> closure builds its own training target from the window (the log of the total, the scaled level-9 sums, or the clamped counts from day 121), fits, forecasts and returns bottom-level draws, so the same <code>transform</code> and <code>per_window_metrics</code> score the three models. The windows use 250 draws to keep the run time of model 2 at about six minutes.</p>
-<div id="8dd64d59" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:18:41.013723Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:18:41.013602Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:18:41.046703Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:18:41.046232Z&quot;}}" data-execution_count="54">
+<div id="65d71c56" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:56:00.761276Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:56:00.761033Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:56:00.813597Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:56:00.813082Z&quot;}}" data-execution_count="54">
 <div class="sourceCode cell-code" id="cb67"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> forecast_fn_top(</span>
 <span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a>    rng_key: Array,</span>
 <span id="cb67-3"><a href="#cb67-3" aria-hidden="true" tabindex="-1"></a>    model: ForecastModel,</span>
@@ -2493,7 +2520,7 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <span id="cb67-90"><a href="#cb67-90" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb67-91"><a href="#cb67-91" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.asarray(draws, dtype<span class="op">=</span>np.float32)</span></code></pre></div>
 </div>
-<div id="31dfe78a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:18:41.047950Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:18:41.047870Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:43.477030Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:43.472177Z&quot;}}" data-execution_count="55">
+<div id="7742cecc" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:56:00.815236Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:56:00.815152Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:20.408095Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:20.404987Z&quot;}}" data-execution_count="55">
 <div class="sourceCode cell-code" id="cb68"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>BACKTEST_OPTIONS <span class="op">=</span> {</span>
 <span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"test_window"</span>: HORIZON,</span>
 <span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">"stride"</span>: <span class="dv">35</span>,</span>
@@ -2525,13 +2552,13 @@ w_{j,k} &amp;\sim \text{Normal}(0, 1), \quad k = 1, \ldots, 104, \\
 <span id="cb68-29"><a href="#cb68-29" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb68-30"><a href="#cb68-30" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span><span class="bu">len</span>(backtest_results[name])<span class="sc">}</span><span class="ss"> windows in </span><span class="sc">{</span>perf_counter() <span class="op">-</span> start<span class="sc">:.0f}</span><span class="ss"> s"</span>)</span></code></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>top-down: 3 windows in 52 s
-bottom-up: 3 windows in 369 s
-middle-out: 3 windows in 60 s</code></pre>
+<pre><code>top-down: 3 windows in 57 s
+bottom-up: 3 windows in 375 s
+middle-out: 3 windows in 66 s</code></pre>
 </div>
 </div>
 <p><a href="../../reference/evaluate.results_to_dataframe.html#numpyro_forecast.evaluate.results_to_dataframe" class="gdls-link gdls-code">results_to_dataframe</a> turns the results into one row per window with a column per metric. The headline WS-CRPS is the mean over the 12 level columns, and <code>walltime</code> is the time of the whole <code>forecast_fn</code> (fit, draws, forecast and reconciliation).</p>
-<div id="48ff9767" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:26:43.484517Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:26:43.484343Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:43.881881Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:43.881513Z&quot;}}" data-execution_count="56">
+<div id="f10bb430" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T20:04:20.416314Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T20:04:20.416165Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:20.636504Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:20.636070Z&quot;}}" data-execution_count="56">
 <div class="sourceCode cell-code" id="cb70"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a>level_columns <span class="op">=</span> [<span class="ss">f"metric_ws_crps_</span><span class="sc">{</span>level<span class="sc">}</span><span class="ss">"</span> <span class="cf">for</span> level <span class="kw">in</span> LEVELS]</span>
 <span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a>backtest_df <span class="op">=</span> pl.concat(</span>
 <span id="cb70-3"><a href="#cb70-3" aria-hidden="true" tabindex="-1"></a>    [</span>
@@ -2552,11 +2579,11 @@ middle-out: 3 windows in 60 s</code></pre>
   white-space: pre-wrap;
 }
 </style>
-<small>shape: (9, 5)</small><table class="dataframe table table-sm table-striped small"><thead><tr><th>model</th><th>t1</th><th>t2</th><th>walltime</th><th>ws_crps</th></tr><tr><td>str</td><td>i64</td><td>i64</td><td>f64</td><td>f64</td></tr></thead><tbody><tr><td>"top-down"</td><td>1843</td><td>1871</td><td>9.2</td><td>0.557</td></tr><tr><td>"top-down"</td><td>1878</td><td>1906</td><td>8.8</td><td>0.553</td></tr><tr><td>"top-down"</td><td>1913</td><td>1941</td><td>8.9</td><td>0.581</td></tr><tr><td>"bottom-up"</td><td>1843</td><td>1871</td><td>113.6</td><td>0.802</td></tr><tr><td>"bottom-up"</td><td>1878</td><td>1906</td><td>103.9</td><td>0.719</td></tr><tr><td>"bottom-up"</td><td>1913</td><td>1941</td><td>107.9</td><td>0.763</td></tr><tr><td>"middle-out"</td><td>1843</td><td>1871</td><td>11.7</td><td>0.622</td></tr><tr><td>"middle-out"</td><td>1878</td><td>1906</td><td>10.8</td><td>0.676</td></tr><tr><td>"middle-out"</td><td>1913</td><td>1941</td><td>10.7</td><td>0.746</td></tr></tbody></table></div>
+<small>shape: (9, 5)</small><table class="dataframe table table-sm table-striped small"><thead><tr><th>model</th><th>t1</th><th>t2</th><th>walltime</th><th>ws_crps</th></tr><tr><td>str</td><td>i64</td><td>i64</td><td>f64</td><td>f64</td></tr></thead><tbody><tr><td>"top-down"</td><td>1843</td><td>1871</td><td>9.4</td><td>0.557</td></tr><tr><td>"top-down"</td><td>1878</td><td>1906</td><td>9.3</td><td>0.553</td></tr><tr><td>"top-down"</td><td>1913</td><td>1941</td><td>9.7</td><td>0.581</td></tr><tr><td>"bottom-up"</td><td>1843</td><td>1871</td><td>109.2</td><td>0.802</td></tr><tr><td>"bottom-up"</td><td>1878</td><td>1906</td><td>112.6</td><td>0.719</td></tr><tr><td>"bottom-up"</td><td>1913</td><td>1941</td><td>112.7</td><td>0.763</td></tr><tr><td>"middle-out"</td><td>1843</td><td>1871</td><td>12.3</td><td>0.622</td></tr><tr><td>"middle-out"</td><td>1878</td><td>1906</td><td>11.3</td><td>0.676</td></tr><tr><td>"middle-out"</td><td>1913</td><td>1941</td><td>11.6</td><td>0.746</td></tr></tbody></table></div>
 </div>
 </div>
 <p>The ranking is the same in every window: the top-down model scores best, the middle-out model second and the bottom-up model last. The top-down score is stable (0.55 to 0.58), the middle-out score degrades from window to window (0.62 to 0.75) and the bottom-up score is the noisiest (0.72 to 0.80). The last window (origin at day 1,913, the four weeks before Memorial Day) is the hardest for the two split models, and the evaluation window is right after it.</p>
-<div id="6adddbc9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:26:43.885972Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:26:43.885874Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:44.025937Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:44.025506Z&quot;}}" data-execution_count="57">
+<div id="526261ce" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T20:04:20.639069Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T20:04:20.638965Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:20.782162Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:20.781650Z&quot;}}" data-execution_count="57">
 <div class="sourceCode cell-code" id="cb71"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="dv">10</span>, <span class="dv">5</span>))</span>
 <span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb71-3"><a href="#cb71-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> name <span class="kw">in</span> backtest_runs:</span>
@@ -2576,7 +2603,7 @@ middle-out: 3 windows in 60 s</code></pre>
 </div>
 </div>
 <p>Averaged over the three windows, the per-level scores show where each strategy pays. The top-down model is best at every level from the total to the store-departments (levels 1 to 9). At the item levels (10 to 12) the top-down and middle-out models are indistinguishable, because both hand the same share split the same Poisson noise, and the bottom-up model is far behind: it has to get every intermittent series right on its own, while the split turns a good aggregate into a serviceable item forecast.</p>
-<div id="466fcaa2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:26:44.027556Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:26:44.027473Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:44.168266Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:44.167901Z&quot;}}" data-execution_count="58">
+<div id="e6cb77a9" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T20:04:20.783162Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T20:04:20.783096Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:20.918772Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:20.918377Z&quot;}}" data-execution_count="58">
 <div class="sourceCode cell-code" id="cb72"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a>backtest_levels <span class="op">=</span> pl.DataFrame(</span>
 <span id="cb72-2"><a href="#cb72-2" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"level"</span>: <span class="bu">list</span>(LEVELS)}</span>
 <span id="cb72-3"><a href="#cb72-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">|</span> {</span>
@@ -2609,7 +2636,7 @@ middle-out: 3 windows in 60 s</code></pre>
 <section id="evaluation-window" class="level1">
 <h1>Evaluation window</h1>
 <p>The final fits of the three sections forecast the official evaluation window (days 1,942 to 1,969, released after the competition). The left panel is the per-level WS-CRPS of the three models, the right panel the mean over the levels and the WSPL, the competition metric with the official weights.</p>
-<div id="493b189c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:26:44.170815Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:26:44.170724Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:44.343591Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:44.343221Z&quot;}}" data-execution_count="59">
+<div id="9366f8c8" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T20:04:20.920080Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T20:04:20.920000Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:21.128059Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:21.127633Z&quot;}}" data-execution_count="59">
 <div class="sourceCode cell-code" id="cb73"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>holdout_levels <span class="op">=</span> {</span>
 <span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a>    name: np.array([scores[<span class="ss">f"ws_crps_</span><span class="sc">{</span>level<span class="sc">}</span><span class="ss">"</span>] <span class="cf">for</span> level <span class="kw">in</span> LEVELS])</span>
 <span id="cb73-3"><a href="#cb73-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, scores <span class="kw">in</span> scores_holdout.items()</span>
@@ -2649,7 +2676,7 @@ middle-out: 3 windows in 60 s</code></pre>
 </div>
 <p>The ranking of the backtest holds: the top-down model is best at every level except the state level, where the middle-out model is ahead by a hair, and the bottom-up model is last everywhere, by a wide margin at the item levels. The WSPL puts the kit’s models in context: the winner of the uncertainty competition scored 0.154 and the runner-up 0.159 (Makridakis et al., 2022), so these are baselines, not contenders, but they show what the three reconciliation strategies do with the same data.</p>
 <p>The total-level forecasts of the three models over the evaluation window, with their mean WS-CRPS.</p>
-<div id="28800c94" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:26:44.347177Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:26:44.347084Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:44.667022Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:44.666519Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="60">
+<div id="ad8e2755" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T20:04:21.130048Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T20:04:21.129939Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:21.458476Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:21.458031Z&quot;}}" data-tags="[&quot;thumbnail&quot;]" data-execution_count="60">
 <div class="sourceCode cell-code" id="cb74"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a>fig, axes <span class="op">=</span> plt.subplots(</span>
 <span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a>    nrows<span class="op">=</span><span class="dv">3</span>, ncols<span class="op">=</span><span class="dv">1</span>, figsize<span class="op">=</span>(<span class="dv">12</span>, <span class="dv">12</span>), sharex<span class="op">=</span><span class="va">True</span>, sharey<span class="op">=</span><span class="va">True</span>, layout<span class="op">=</span><span class="st">"constrained"</span></span>
 <span id="cb74-3"><a href="#cb74-3" aria-hidden="true" tabindex="-1"></a>)</span>
@@ -2692,7 +2719,7 @@ middle-out: 3 windows in 60 s</code></pre>
 <section id="fitting-times" class="level1">
 <h1>Fitting times</h1>
 <p>The wall times of the three final fits, JIT compilation included. Model 2 evaluates 1.1 million Gamma densities per step and gathers its minibatch from a 1.4 GB covariate tensor; model 3 runs twice the steps of the others on 70 series with 104 features; model 1 is a single series. Per step, model 2 costs more than ten times model 1 (the exact ratio moves with the JIT compilation share of these short fits).</p>
-<div id="a3c64864" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T19:26:44.670594Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T19:26:44.670506Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T19:26:44.758857Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T19:26:44.758477Z&quot;}}" data-execution_count="61">
+<div id="0beab642" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-01T20:04:21.462746Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-10-01T20:04:21.462562Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-10-01T20:04:21.551381Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-01T20:04:21.550987Z&quot;}}" data-execution_count="61">
 <div class="sourceCode cell-code" id="cb75"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a>fit_times <span class="op">=</span> pl.DataFrame(</span>
 <span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a>    {</span>
 <span id="cb75-3"><a href="#cb75-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">"model"</span>: <span class="bu">list</span>(NUM_STEPS),</span>
@@ -2753,7 +2780,7 @@ middle-out: 3 windows in 60 s</code></pre>
 <li>Related examples: <a href="hierarchical_forecasting_1.html">hierarchical forecasting I</a>, <a href="fresh_retail_stockout.html">forecasting retail demand under stockouts</a>, <a href="forecasting_univariate.html">univariate forecasting</a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/m5_forecasting-preview.html#80b5cfb4">Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`</a></div>
+<a class="quarto-notebook-link" id="nblink-1" href="_src/m5_forecasting-preview.html#db57b4af">Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`</a></div>
 
 
 

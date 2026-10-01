@@ -1,545 +1,545 @@
 {
-  "build_time": "2026-10-01T19:32:08Z",
-  "total_seconds": 124.262,
+  "build_time": "2026-10-01T20:09:26Z",
+  "total_seconds": 153.001,
   "pages": [
     {
       "page": "skills.qmd",
-      "seconds": 26.675,
+      "seconds": 32.878,
       "frozen": false
     },
     {
       "page": "docs/examples/fresh_retail_stockout.qmd",
-      "seconds": 7.283,
+      "seconds": 7.692,
       "frozen": false
     },
     {
       "page": "docs/examples/m5_forecasting.qmd",
-      "seconds": 5.327,
+      "seconds": 6.548,
       "frozen": false
     },
     {
       "page": "docs/examples/availability_tsb.qmd",
-      "seconds": 3.735,
+      "seconds": 4.418,
       "frozen": false
     },
     {
       "page": "docs/examples/dynestyx_integration.qmd",
-      "seconds": 3.644,
+      "seconds": 4.406,
       "frozen": false
     },
     {
       "page": "docs/examples/var.qmd",
-      "seconds": 3.137,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/inference_methods_comparison.qmd",
-      "seconds": 2.933,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/censored_demand.qmd",
-      "seconds": 2.846,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/croston.qmd",
-      "seconds": 2.801,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/tsb.qmd",
-      "seconds": 2.768,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/forecasting_univariate.qmd",
-      "seconds": 2.697,
-      "frozen": false
-    },
-    {
-      "page": "changelog.qmd",
-      "seconds": 2.478,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/arma.qmd",
-      "seconds": 2.305,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/electricity_forecast_calibration.qmd",
-      "seconds": 2.18,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/electricity_forecast.qmd",
-      "seconds": 2.141,
+      "seconds": 3.871,
       "frozen": false
     },
     {
       "page": "docs/examples/exponential_smoothing_state_space.qmd",
-      "seconds": 1.98,
+      "seconds": 3.745,
       "frozen": false
     },
     {
-      "page": "docs/examples/hierarchical_forecasting_2.qmd",
-      "seconds": 1.634,
+      "page": "docs/examples/tsb.qmd",
+      "seconds": 3.593,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/inference_methods_comparison.qmd",
+      "seconds": 3.553,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/croston.qmd",
+      "seconds": 3.494,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/censored_demand.qmd",
+      "seconds": 3.483,
+      "frozen": false
+    },
+    {
+      "page": "changelog.qmd",
+      "seconds": 3.095,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/forecasting_univariate.qmd",
+      "seconds": 3.027,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/arma.qmd",
+      "seconds": 2.949,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/electricity_forecast.qmd",
+      "seconds": 2.635,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/electricity_forecast_calibration.qmd",
+      "seconds": 2.136,
       "frozen": false
     },
     {
       "page": "docs/examples/hierarchical_forecasting_1.qmd",
-      "seconds": 1.582,
+      "seconds": 1.962,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/hierarchical_forecasting_2.qmd",
+      "seconds": 1.955,
       "frozen": false
     },
     {
       "page": "reference/typing.Array.qmd",
-      "seconds": 0.997,
+      "seconds": 1.304,
       "frozen": false
     },
     {
       "page": "package-info.qmd",
-      "seconds": 0.775,
+      "seconds": 0.986,
       "frozen": false
     },
     {
       "page": "reference/var.var_step.qmd",
-      "seconds": 0.685,
+      "seconds": 0.857,
       "frozen": false
     },
     {
       "page": "reference/index.qmd",
-      "seconds": 0.655,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.ssoe.qmd",
-      "seconds": 0.628,
+      "seconds": 0.833,
       "frozen": false
     },
     {
       "page": "reference/evaluate.backtest.qmd",
-      "seconds": 0.622,
-      "frozen": false
-    },
-    {
-      "page": "reference/convert.to_datatree.qmd",
-      "seconds": 0.615,
-      "frozen": false
-    },
-    {
-      "page": "reference/contrib.blackjax.multipathfinder_samples.qmd",
-      "seconds": 0.571,
-      "frozen": false
-    },
-    {
-      "page": "reference/contrib.blackjax.fit_multipathfinder.qmd",
-      "seconds": 0.569,
-      "frozen": false
-    },
-    {
-      "page": "reference/exceptions.MVNLayoutError.qmd",
-      "seconds": 0.563,
-      "frozen": false
-    },
-    {
-      "page": "reference/typing.Metric.qmd",
-      "seconds": 0.563,
+      "seconds": 0.774,
       "frozen": false
     },
     {
       "page": "index.qmd",
-      "seconds": 0.558,
+      "seconds": 0.751,
       "frozen": false
     },
     {
-      "page": "reference/predictive.forecast.qmd",
-      "seconds": 0.554,
+      "page": "reference/convert.to_datatree.qmd",
+      "seconds": 0.749,
       "frozen": false
     },
     {
-      "page": "reference/contrib.blackjax.BlackjaxMCLMCKernel.qmd",
-      "seconds": 0.55,
+      "page": "reference/models.ssoe.qmd",
+      "seconds": 0.714,
       "frozen": false
     },
     {
-      "page": "reference/predictive.predict_in_sample.qmd",
-      "seconds": 0.544,
-      "frozen": false
-    },
-    {
-      "page": "reference/priors.minnesota_prior.qmd",
-      "seconds": 0.543,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.markov_series.qmd",
-      "seconds": 0.542,
+      "page": "reference/contrib.blackjax.fit_multipathfinder.qmd",
+      "seconds": 0.711,
       "frozen": false
     },
     {
       "page": "reference/evaluate.backtest_vectorized.qmd",
-      "seconds": 0.539,
-      "frozen": false
-    },
-    {
-      "page": "reference/convert.predictions_to_datatree.qmd",
-      "seconds": 0.538,
-      "frozen": false
-    },
-    {
-      "page": "reference/var.impulse_response.qmd",
-      "seconds": 0.534,
-      "frozen": false
-    },
-    {
-      "page": "reference/predictive.draw_posterior.qmd",
-      "seconds": 0.531,
-      "frozen": false
-    },
-    {
-      "page": "reference/datasets.load_victoria_electricity.qmd",
-      "seconds": 0.52,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.Horizon.qmd",
-      "seconds": 0.519,
-      "frozen": false
-    },
-    {
-      "page": "reference/convert.add_forecast_groups.qmd",
-      "seconds": 0.517,
+      "seconds": 0.705,
       "frozen": false
     },
     {
       "page": "reference/contrib.blackjax.fit_pathfinder.qmd",
-      "seconds": 0.516,
+      "seconds": 0.7,
       "frozen": false
     },
     {
-      "page": "reference/contrib.blackjax.PathfinderFit.qmd",
-      "seconds": 0.515,
+      "page": "reference/convert.predictions_to_datatree.qmd",
+      "seconds": 0.694,
       "frozen": false
     },
     {
-      "page": "reference/reparam.time_reparam.qmd",
-      "seconds": 0.515,
+      "page": "reference/contrib.blackjax.multipathfinder_samples.qmd",
+      "seconds": 0.693,
       "frozen": false
     },
     {
-      "page": "reference/acf.pacf.qmd",
-      "seconds": 0.512,
+      "page": "reference/models.markov_series.qmd",
+      "seconds": 0.683,
       "frozen": false
     },
     {
-      "page": "reference/evaluate.eval_coverage.qmd",
-      "seconds": 0.512,
+      "page": "reference/predictive.forecast.qmd",
+      "seconds": 0.679,
       "frozen": false
     },
     {
-      "page": "reference/metrics.eval_pinball.qmd",
-      "seconds": 0.511,
+      "page": "reference/var.impulse_response.qmd",
+      "seconds": 0.675,
       "frozen": false
     },
     {
-      "page": "reference/evaluate.VectorizedBacktestResult.qmd",
-      "seconds": 0.51,
+      "page": "reference/priors.minnesota_prior.qmd",
+      "seconds": 0.669,
       "frozen": false
     },
     {
-      "page": "reference/contrib.blackjax.pathfinder_samples.qmd",
-      "seconds": 0.509,
+      "page": "reference/predictive.predict_in_sample.qmd",
+      "seconds": 0.662,
       "frozen": false
     },
     {
-      "page": "reference/evaluate.BacktestResult.qmd",
-      "seconds": 0.507,
-      "frozen": false
-    },
-    {
-      "page": "reference/datasets.M5Data.qmd",
-      "seconds": 0.502,
-      "frozen": false
-    },
-    {
-      "page": "reference/var.var_mean.qmd",
-      "seconds": 0.501,
-      "frozen": false
-    },
-    {
-      "page": "reference/evaluate.evaluate_forecast.qmd",
-      "seconds": 0.5,
-      "frozen": false
-    },
-    {
-      "page": "reference/var.companion_matrix.qmd",
-      "seconds": 0.498,
-      "frozen": false
-    },
-    {
-      "page": "reference/metrics.eval_interval_score.qmd",
-      "seconds": 0.497,
+      "page": "reference/predictive.draw_posterior.qmd",
+      "seconds": 0.661,
       "frozen": false
     },
     {
       "page": "reference/models.SSOEMean.qmd",
-      "seconds": 0.497,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.predict.qmd",
-      "seconds": 0.497,
-      "frozen": false
-    },
-    {
-      "page": "reference/contrib.blackjax.BlackjaxCustomKernel.qmd",
-      "seconds": 0.496,
-      "frozen": false
-    },
-    {
-      "page": "reference/datasets.load_bart_hierarchical.qmd",
-      "seconds": 0.496,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.SSOEResult.qmd",
-      "seconds": 0.496,
-      "frozen": false
-    },
-    {
-      "page": "reference/arrays.pad_future.qmd",
-      "seconds": 0.495,
-      "frozen": false
-    },
-    {
-      "page": "reference/typing.ModelFactory.qmd",
-      "seconds": 0.495,
-      "frozen": false
-    },
-    {
-      "page": "reference/evaluate.eval_rmse.qmd",
-      "seconds": 0.494,
-      "frozen": false
-    },
-    {
-      "page": "reference/datasets.load_m5.qmd",
-      "seconds": 0.493,
-      "frozen": false
-    },
-    {
-      "page": "reference/metrics.make_mase.qmd",
-      "seconds": 0.492,
-      "frozen": false
-    },
-    {
-      "page": "reference/contrib.blackjax.BlackjaxNUTSKernel.qmd",
-      "seconds": 0.491,
-      "frozen": false
-    },
-    {
-      "page": "reference/contrib.blackjax.MultiPathfinderFit.qmd",
-      "seconds": 0.49,
-      "frozen": false
-    },
-    {
-      "page": "reference/evaluate.eval_crps.qmd",
-      "seconds": 0.49,
-      "frozen": false
-    },
-    {
-      "page": "reference/metrics.crps_empirical.qmd",
-      "seconds": 0.489,
-      "frozen": false
-    },
-    {
-      "page": "reference/acf.acf.qmd",
-      "seconds": 0.488,
-      "frozen": false
-    },
-    {
-      "page": "reference/features.fourier_features.qmd",
-      "seconds": 0.487,
-      "frozen": false
-    },
-    {
-      "page": "reference/surgery.prefix_condition.qmd",
-      "seconds": 0.487,
-      "frozen": false
-    },
-    {
-      "page": "reference/features.periodic_repeat.qmd",
-      "seconds": 0.485,
-      "frozen": false
-    },
-    {
-      "page": "reference/typing.ForecastFn.qmd",
-      "seconds": 0.485,
-      "frozen": false
-    },
-    {
-      "page": "reference/typing.ForecastModel.qmd",
-      "seconds": 0.485,
-      "frozen": false
-    },
-    {
-      "page": "reference/datasets.load_bart_weekly.qmd",
-      "seconds": 0.483,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.PlateName.qmd",
-      "seconds": 0.482,
-      "frozen": false
-    },
-    {
-      "page": "reference/models.innovations.qmd",
-      "seconds": 0.481,
-      "frozen": false
-    },
-    {
-      "page": "reference/optional.require.qmd",
-      "seconds": 0.481,
-      "frozen": false
-    },
-    {
-      "page": "reference/arrays.concat_future.qmd",
-      "seconds": 0.479,
-      "frozen": false
-    },
-    {
-      "page": "reference/surgery.shift_loc.qmd",
-      "seconds": 0.479,
+      "seconds": 0.659,
       "frozen": false
     },
     {
       "page": "reference/evaluate.results_to_dataframe.qmd",
-      "seconds": 0.478,
+      "seconds": 0.658,
       "frozen": false
     },
     {
-      "page": "reference/surgery.register_elementwise.qmd",
-      "seconds": 0.478,
+      "page": "reference/evaluate.eval_coverage.qmd",
+      "seconds": 0.657,
       "frozen": false
     },
     {
-      "page": "reference/evaluate.eval_mae.qmd",
-      "seconds": 0.477,
+      "page": "reference/reparam.time_reparam.qmd",
+      "seconds": 0.655,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.NumpyroForecastError.qmd",
-      "seconds": 0.477,
+      "page": "reference/models.Horizon.qmd",
+      "seconds": 0.651,
       "frozen": false
     },
     {
-      "page": "reference/typing.InSampleFn.qmd",
-      "seconds": 0.476,
+      "page": "reference/evaluate.BacktestResult.qmd",
+      "seconds": 0.648,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.DevicePlatformError.qmd",
-      "seconds": 0.475,
+      "page": "reference/contrib.blackjax.pathfinder_samples.qmd",
+      "seconds": 0.644,
       "frozen": false
     },
     {
-      "page": "reference/models.Transition.qmd",
-      "seconds": 0.475,
+      "page": "reference/datasets.load_bart_hierarchical.qmd",
+      "seconds": 0.642,
       "frozen": false
     },
     {
-      "page": "reference/surgery.slice_time.qmd",
-      "seconds": 0.475,
+      "page": "reference/contrib.blackjax.BlackjaxMCLMCKernel.qmd",
+      "seconds": 0.64,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.KernelConfigError.qmd",
-      "seconds": 0.474,
+      "page": "reference/convert.add_forecast_groups.qmd",
+      "seconds": 0.636,
       "frozen": false
     },
     {
-      "page": "reference/models.SSOEUpdate.qmd",
-      "seconds": 0.474,
+      "page": "reference/var.var_mean.qmd",
+      "seconds": 0.636,
       "frozen": false
     },
     {
-      "page": "reference/typing.Guide.qmd",
-      "seconds": 0.473,
+      "page": "reference/datasets.load_victoria_electricity.qmd",
+      "seconds": 0.635,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.BacktestWindowError.qmd",
-      "seconds": 0.472,
+      "page": "reference/evaluate.eval_crps.qmd",
+      "seconds": 0.631,
       "frozen": false
     },
     {
-      "page": "reference/arrays.zero_data_like.qmd",
-      "seconds": 0.471,
+      "page": "reference/datasets.load_bart_weekly.qmd",
+      "seconds": 0.629,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.DeviceMemoryError.qmd",
-      "seconds": 0.471,
+      "page": "reference/surgery.shift_loc.qmd",
+      "seconds": 0.627,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.VectorizedMetricError.qmd",
-      "seconds": 0.471,
+      "page": "reference/typing.ForecastFn.qmd",
+      "seconds": 0.626,
       "frozen": false
     },
     {
-      "page": "reference/datasets.bart_available.qmd",
-      "seconds": 0.467,
+      "page": "reference/acf.acf.qmd",
+      "seconds": 0.625,
       "frozen": false
     },
     {
-      "page": "reference/evaluate.WindowType.qmd",
-      "seconds": 0.467,
+      "page": "reference/datasets.M5Data.qmd",
+      "seconds": 0.625,
       "frozen": false
     },
     {
-      "page": "reference/exceptions.HostMemoryKindError.qmd",
-      "seconds": 0.467,
+      "page": "reference/evaluate.evaluate_forecast.qmd",
+      "seconds": 0.625,
       "frozen": false
     },
     {
-      "page": "reference/models.Advance.qmd",
-      "seconds": 0.466,
-      "frozen": false
-    },
-    {
-      "page": "reference/evaluate.DEFAULT_METRICS.qmd",
-      "seconds": 0.461,
-      "frozen": false
-    },
-    {
-      "page": "reference/exceptions.CovariateDimsError.qmd",
-      "seconds": 0.461,
-      "frozen": false
-    },
-    {
-      "page": "reference/reparam.TimeTransform.qmd",
-      "seconds": 0.457,
-      "frozen": false
-    },
-    {
-      "page": "docs/examples/index.qmd",
-      "seconds": 0.456,
+      "page": "reference/acf.pacf.qmd",
+      "seconds": 0.622,
       "frozen": false
     },
     {
       "page": "reference/typing.BlackjaxBuildFn.qmd",
-      "seconds": 0.451,
+      "seconds": 0.621,
+      "frozen": false
+    },
+    {
+      "page": "reference/datasets.load_m5.qmd",
+      "seconds": 0.62,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.eval_rmse.qmd",
+      "seconds": 0.62,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.VectorizedBacktestResult.qmd",
+      "seconds": 0.619,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.DeviceMemoryError.qmd",
+      "seconds": 0.619,
+      "frozen": false
+    },
+    {
+      "page": "reference/metrics.make_mase.qmd",
+      "seconds": 0.619,
+      "frozen": false
+    },
+    {
+      "page": "reference/contrib.blackjax.BlackjaxNUTSKernel.qmd",
+      "seconds": 0.618,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.predict.qmd",
+      "seconds": 0.618,
+      "frozen": false
+    },
+    {
+      "page": "reference/contrib.blackjax.MultiPathfinderFit.qmd",
+      "seconds": 0.617,
+      "frozen": false
+    },
+    {
+      "page": "reference/metrics.eval_pinball.qmd",
+      "seconds": 0.614,
+      "frozen": false
+    },
+    {
+      "page": "reference/contrib.blackjax.BlackjaxCustomKernel.qmd",
+      "seconds": 0.61,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.innovations.qmd",
+      "seconds": 0.61,
+      "frozen": false
+    },
+    {
+      "page": "reference/surgery.prefix_condition.qmd",
+      "seconds": 0.607,
+      "frozen": false
+    },
+    {
+      "page": "reference/features.fourier_features.qmd",
+      "seconds": 0.606,
+      "frozen": false
+    },
+    {
+      "page": "reference/surgery.slice_time.qmd",
+      "seconds": 0.606,
+      "frozen": false
+    },
+    {
+      "page": "reference/typing.ForecastModel.qmd",
+      "seconds": 0.605,
+      "frozen": false
+    },
+    {
+      "page": "reference/typing.Guide.qmd",
+      "seconds": 0.605,
+      "frozen": false
+    },
+    {
+      "page": "reference/surgery.register_elementwise.qmd",
+      "seconds": 0.604,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.CovariateDimsError.qmd",
+      "seconds": 0.603,
+      "frozen": false
+    },
+    {
+      "page": "reference/arrays.zero_data_like.qmd",
+      "seconds": 0.602,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.SSOEResult.qmd",
+      "seconds": 0.602,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.eval_mae.qmd",
+      "seconds": 0.601,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.BacktestWindowError.qmd",
+      "seconds": 0.601,
+      "frozen": false
+    },
+    {
+      "page": "reference/optional.require.qmd",
+      "seconds": 0.601,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.DEFAULT_METRICS.qmd",
+      "seconds": 0.6,
+      "frozen": false
+    },
+    {
+      "page": "reference/metrics.eval_interval_score.qmd",
+      "seconds": 0.6,
+      "frozen": false
+    },
+    {
+      "page": "reference/metrics.crps_empirical.qmd",
+      "seconds": 0.598,
+      "frozen": false
+    },
+    {
+      "page": "reference/contrib.blackjax.PathfinderFit.qmd",
+      "seconds": 0.597,
+      "frozen": false
+    },
+    {
+      "page": "reference/arrays.pad_future.qmd",
+      "seconds": 0.596,
+      "frozen": false
+    },
+    {
+      "page": "reference/var.companion_matrix.qmd",
+      "seconds": 0.595,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.PlateName.qmd",
+      "seconds": 0.593,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.SSOEUpdate.qmd",
+      "seconds": 0.593,
+      "frozen": false
+    },
+    {
+      "page": "reference/features.periodic_repeat.qmd",
+      "seconds": 0.591,
+      "frozen": false
+    },
+    {
+      "page": "reference/arrays.concat_future.qmd",
+      "seconds": 0.59,
+      "frozen": false
+    },
+    {
+      "page": "reference/typing.InSampleFn.qmd",
+      "seconds": 0.589,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.DevicePlatformError.qmd",
+      "seconds": 0.588,
+      "frozen": false
+    },
+    {
+      "page": "reference/evaluate.WindowType.qmd",
+      "seconds": 0.587,
+      "frozen": false
+    },
+    {
+      "page": "reference/datasets.bart_available.qmd",
+      "seconds": 0.586,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.Advance.qmd",
+      "seconds": 0.585,
+      "frozen": false
+    },
+    {
+      "page": "reference/models.Transition.qmd",
+      "seconds": 0.585,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.MVNLayoutError.qmd",
+      "seconds": 0.581,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.NumpyroForecastError.qmd",
+      "seconds": 0.581,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.HostMemoryKindError.qmd",
+      "seconds": 0.58,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.KernelConfigError.qmd",
+      "seconds": 0.578,
+      "frozen": false
+    },
+    {
+      "page": "reference/typing.Metric.qmd",
+      "seconds": 0.578,
+      "frozen": false
+    },
+    {
+      "page": "reference/exceptions.VectorizedMetricError.qmd",
+      "seconds": 0.575,
+      "frozen": false
+    },
+    {
+      "page": "reference/reparam.TimeTransform.qmd",
+      "seconds": 0.568,
+      "frozen": false
+    },
+    {
+      "page": "docs/examples/index.qmd",
+      "seconds": 0.56,
+      "frozen": false
+    },
+    {
+      "page": "reference/typing.ModelFactory.qmd",
+      "seconds": 0.557,
       "frozen": false
     },
     {
       "page": "contributing.qmd",
-      "seconds": 0.402,
+      "seconds": 0.513,
       "frozen": false
     },
     {
       "page": "license.qmd",
-      "seconds": 0.394,
+      "seconds": 0.498,
       "frozen": false
     }
   ]
