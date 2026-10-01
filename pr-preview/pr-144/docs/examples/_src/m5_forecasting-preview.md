@@ -189,6 +189,7 @@ calendar_df = (
     )
     .collect(engine="streaming")
 )
+
 calendar_df.head(3)
 ```
 
@@ -276,6 +277,7 @@ def aggregation_matrix(
     """Sparse ``(n_series, n_aggregates)`` sum matrix over the 12 levels, with labels and slices."""
     rows, cols, labels, slices = [], [], [], {}
     offset = 0
+
     for level in LEVELS:
         rows.append(np.arange(hierarchy.height))
         cols.append(offset + hierarchy[level].to_numpy())
@@ -288,10 +290,12 @@ def aggregation_matrix(
         labels += [f"{level}/{label}" for label in level_labels]
         slices[level] = slice(offset, offset + len(level_labels))
         offset += len(level_labels)
+
     values = np.ones(hierarchy.height * len(LEVELS), dtype=np.float32)
     matrix = sp.csr_matrix(
         (values, (np.concatenate(rows), np.concatenate(cols))), shape=(hierarchy.height, offset)
     )
+
     return matrix, labels, slices
 
 
@@ -308,6 +312,7 @@ levels_df = pl.DataFrame(
         "series": [level_slices[level].stop - level_slices[level].start for level in LEVELS],
     }
 )
+
 with pl.Config(tbl_rows=len(LEVELS)):
     display(levels_df)
 ```
@@ -353,7 +358,7 @@ fig, ax = plt.subplots()
 ax.plot(date_num, y_total, color="C0", lw=0.8)
 ax.axvline(split_date, color="gray", ls="--", label="train / evaluation split")
 ax.xaxis_date()
-ax.legend(loc="upper left")
+ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(title="Total daily unit sales of the 30,490 series", xlabel="date", ylabel="units sold");
 ```
 
@@ -377,10 +382,12 @@ ca1_columns = [k for k, label in enumerate(level9_labels) if label.startswith("C
 fig, axes = plt.subplots(
     nrows=len(ca1_columns), ncols=1, figsize=(12, 14), sharex=True, layout="constrained"
 )
+
 for ax, k in zip(axes, ca1_columns, strict=True):
     ax.plot(date_num, y_level9[:, k], color="C0", lw=0.6)
     ax.axvline(split_date, color="gray", ls="--")
     ax.set(ylabel="units", title=level9_labels[k])
+
 axes[-1].xaxis_date()
 fig.suptitle("Store CA_1: daily unit sales by department", fontsize=16, fontweight="bold");
 ```
@@ -406,6 +413,7 @@ zero_days = pl.DataFrame(
         "mean_daily_sales": sales[:N_DAYS_TRAIN].mean(0),
     }
 )
+
 (
     zero_days.group_by("dept_id")
     .agg(
@@ -450,17 +458,20 @@ focus_df = (
     .head(1)
     .sort("dept_id")
 )
+
 focus_index = focus_df["n"].to_numpy()
 focus_labels = focus_df["id"].to_list()
-plot_start = N_DAYS_TRAIN - 16 * 7
+plot_start = N_DAYS_TRAIN - 16 * 7  # the last sixteen training weeks, the window of every zoom
 
 fig, axes = plt.subplots(
     nrows=len(focus_labels), ncols=1, figsize=(12, 14), sharex=True, layout="constrained"
 )
+
 for ax, n, label in zip(axes, focus_index, focus_labels, strict=True):
     ax.plot(date_num[plot_start:], sales[plot_start:, n], color="C0", lw=0.8)
     ax.axvline(split_date, color="gray", ls="--")
     ax.set(ylabel="units", title=label)
+
 axes[-1].xaxis_date()
 fig.suptitle("Best seller of each department in store CA_1", fontsize=16, fontweight="bold");
 ```
@@ -490,8 +501,10 @@ def m5_weights(t1: int) -> np.ndarray:
     """Dollar-sales share of every aggregate over the 28 days before ``t1``, normalized per level."""
     dollars = (sales[t1 - 28 : t1] * price_filled[t1 - 28 : t1]).sum(0) @ agg_matrix
     weights = np.empty_like(dollars)
+
     for level_slice in level_slices.values():
         weights[level_slice] = dollars[level_slice] / dollars[level_slice].sum()
+
     return weights
 
 
@@ -506,11 +519,14 @@ def m5_scales(y: np.ndarray) -> np.ndarray:
     active = np.maximum((np.cumsum(y, axis=0) != 0).sum(0), 2)
     start_value = y[duration - active, np.arange(n_columns)]
     lag1_norm = np.abs(np.diff(y, axis=0, prepend=0.0)).sum(0) - np.abs(start_value)
+
     return np.maximum(lag1_norm, 1.0) / (active - 1)
 
 
 weights_holdout = m5_weights(N_DAYS_TRAIN)
 scales_holdout = m5_scales(sales_agg[:N_DAYS_TRAIN])
+
+# The official weights carry the level and the two aggregation keys; join them on our labels.
 official_weights = m5.weights.with_columns(
     label=pl.concat_str(
         [pl.col("Level_id"), pl.col("Agg_Level_1"), pl.col("Agg_Level_2")], separator="/"
@@ -637,6 +653,7 @@ scores_sigma = np.array([toy_scores(0.0, float(s)) for s in sigma_grid])
 scores_mu = np.array([toy_scores(float(m), 1.0) for m in mu_grid])
 
 fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4.5), layout="constrained")
+
 for ax, grid, scores, xlabel in zip(
     axes,
     [sigma_grid, mu_grid],
@@ -647,15 +664,17 @@ for ax, grid, scores, xlabel in zip(
     ax.plot(grid, scores[:, 0], color="C0", label="CRPS")
     ax.plot(grid, 2 * scores[:, 1], color="C1", label="2 x mean pinball (M5 quantiles)")
     ax.set(xlabel=xlabel, ylabel="expected score")
+
 axes[0].set_xscale("log")
 axes[0].set_xticks([0.25, 0.5, 1.0, 2.0, 4.0], ["0.25", "0.5", "1", "2", "4"])
-axes[0].legend()
+handles, labels = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc="outside lower center", ncols=2)
 fig.suptitle("CRPS and M5 pinball loss of a Normal forecast of Normal(0, 1) data", fontsize=14);
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-14-output-1.png" class="figure-img" width="1211" height="461" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-14-output-1.png" class="figure-img" width="1211" height="456" /></p>
 </figure>
 
 
@@ -664,6 +683,7 @@ fig.suptitle("CRPS and M5 pinball loss of a Normal forecast of Normal(0, 1) data
 
 ``` python
 crps_ref, pinball_ref = toy_scores(0.0, 1.0)
+
 for label, (mu, sigma) in {
     "sigma = 0.25": (0, 0.25),
     "sigma = 4": (0, 4),
@@ -683,218 +703,6 @@ for label, (mu, sigma) in {
 Both curves bottom out at the true forecast, \sigma = 1 and \mu = 0, as a proper score must. Relative to its minimum, the pinball loss rises faster than the CRPS when the spread is wrong, and most on the narrow side: a forecast with a quarter of the right spread costs the CRPS about 20\\ and the M5 pinball loss about 50\\, because four of the nine quantiles sit in the tails, where a too-narrow forecast is wrong by the most. Four times the right spread costs about 80\\ and 100\\. A bias of one standard deviation costs both about 50\\: the two scores agree on location errors and differ on spread errors. The two scores rank the three models of this notebook the same way; the CRPS is the headline because it does not depend on a choice of quantiles.
 
 
-## Reconciliation
-
-Models 1 and 3 forecast an aggregate. The kit's submission splits such a forecast to the items in proportion to their sales over the last 28 training days and draws Poisson noise at the bottom, so that the item forecasts are integer and their spread at the bottom is not just a scaled copy of the aggregate's. The Poisson draws use NumPy: `jax.random.poisson` on the CPU is about 40 times slower for an array of this size.
-
-
-    In [15]:
-
-
-``` python
-def last_28_day_shares(train_sales: np.ndarray, group_index: np.ndarray) -> np.ndarray:
-    """Share of every series in the sales of its group over the last 28 training days."""
-    totals = np.asarray(train_sales[-28:], dtype=np.float64).sum(0)
-    n_groups = int(group_index.max()) + 1
-    group_totals = np.bincount(group_index, weights=totals, minlength=n_groups)
-    group_sizes = np.bincount(group_index, minlength=n_groups)
-    shares = np.where(
-        group_totals[group_index] > 0,
-        totals / group_totals[group_index],
-        1.0 / group_sizes[group_index],
-    )
-    return shares.astype(np.float32)
-
-
-def disaggregate(
-    seed: int,
-    group_draws: np.ndarray,
-    shares: np.ndarray,
-    group_index: np.ndarray,
-    chunk: int = 50,
-    rate_cap: float = 1e9,
-) -> np.ndarray:
-    """Poisson draws at the bottom level with rate ``group draw x share`` (kit submission logic)."""
-    rng = np.random.default_rng(seed)
-    out = np.empty((*group_draws.shape[:-1], shares.shape[0]), dtype=np.float32)
-    for start in range(0, group_draws.shape[0], chunk):
-        rate = np.asarray(group_draws[start : start + chunk], dtype=np.float32)[..., group_index]
-        rate = np.clip(np.nan_to_num(rate * shares, nan=0.0, posinf=rate_cap), 0.0, rate_cap)
-        out[start : start + chunk] = rng.poisson(rate)
-    return out
-
-
-total_index = np.zeros(n_series, dtype=np.int64)
-
-level9_index = hierarchy_df["Level9"].to_numpy()
-
-level3_index = hierarchy_df["Level3"].to_numpy()
-
-store_ids = [
-    label.removeprefix("Level3/").removesuffix("/X")
-    for label in agg_labels[level_slices["Level3"]]
-]
-
-dept_ids = [
-    label.removeprefix("Level5/").removesuffix("/X")
-    for label in agg_labels[level_slices["Level5"]]
-]
-```
-
-
-# Shared fitting and plotting helpers
-
-All three models use the kit's optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (`learning_rate_decay=0.1` in Pyro's `Forecaster`). It is an optax chain handed to `SVI` as is (numpyro wraps optax transformations itself). The step counts are the kit's defaults, 1,001 for models 1 and 2 and 2,001 for model 3.
-
-The plotting helpers take their draws as NumPy or JAX arrays and convert them to NumPy once: [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) and [predict_in_sample()](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) return JAX arrays, the reconciliation returns NumPy (its Poisson draws are NumPy), and ArviZ and matplotlib consume NumPy either way, so there is nothing to gain from keeping the draws on the JAX side for a plot.
-
-
-    In [16]:
-
-
-``` python
-def kit_optimizer(num_steps: int) -> optax.GradientTransformation:
-    """Build the kit's ClippedAdam: clipped gradients, learning rate decaying tenfold over the run."""
-    schedule = optax.exponential_decay(0.1, transition_steps=num_steps, decay_rate=0.1)
-    return optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
-
-
-def fit_svi(
-    rng_key: Array,
-    model: ForecastModel,
-    guide: AutoNormal,
-    num_steps: int,
-    covariates: Array,
-    data: Array,
-) -> tuple[SVIRunResult, float]:
-    """Run SVI with the kit's optimizer; return the result and the wall time in seconds."""
-    svi = SVI(model, guide, kit_optimizer(num_steps), Trace_ELBO())
-    start = perf_counter()
-    result = svi.run(rng_key, num_steps, covariates, data, progress_bar=False)
-    jax.block_until_ready(result.losses)
-    return result, perf_counter() - start
-
-
-NUM_STEPS = {"top-down": 1_001, "bottom-up": 1_001, "middle-out": 2_001}
-HDI_PROBS = (0.94, 0.5)
-HDI_ALPHAS = (0.3, 0.6)
-DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
-
-def hdi_label(prob: float) -> str:
-    r"""Legend label of an HDI band, for example ``$94\%$ HDI``."""
-    return rf"${prob:.0%}$ HDI".replace("%", r"\%")
-
-
-def add_date_variable(tree: xr.DataTree, date_num: np.ndarray) -> xr.DataTree:
-    """Add a matplotlib date number ``date`` variable to the constant data groups of a tree."""
-    for group in ("constant_data", "predictions_constant_data"):
-        if group in tree.children:
-            dataset = tree[group].dataset
-            tree[group] = dataset.assign(date=("time", date_num[dataset["time"].values]))
-    return tree
-
-
-def plot_loss(losses: Array, title: str, *, skip: int = 0) -> None:
-    """Plot an ELBO loss curve on a symmetric log scale, from step ``skip`` on."""
-    _, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(np.arange(skip, len(losses)), np.asarray(losses)[skip:], color="C0")
-    ax.set_yscale("symlog")
-    ax.set(title=title, xlabel="SVI step", ylabel="loss")
-
-
-def plot_series_panel(
-    train_draws: np.ndarray | Array | None,
-    test_draws: np.ndarray | Array,
-    truth: np.ndarray,
-    labels: list[str],
-    x_train: np.ndarray,
-    x_test: np.ndarray,
-    *,
-    ylabel: str,
-    suptitle: str,
-    col_wrap: int = 2,
-    figsize: tuple[float, float] = (15.0, 10.0),
-    group: str = "posterior_predictive",
-) -> None:
-    """Facet the predictive bands of a few series over a window, with the observed series.
-
-    ``train_draws`` (in-sample, blue) may be ``None``; ``test_draws`` (forecast, orange) are
-    always drawn. ``truth`` covers ``x_train`` followed by ``x_test``.
-    """
-    visuals = {
-        "ci_band": {"color": "C0"},
-        "observed_scatter": False,
-        "pe_line": False,
-        "xlabel": False,
-        "ylabel": False,
-    }
-    first_draws, first_x = (test_draws, x_test) if train_draws is None else (train_draws, x_train)
-    pc = az.plot_lm(
-        predictions_to_datatree(np.asarray(first_draws), first_x, labels, group=group),
-        y="obs",
-        x="t",
-        plot_dim="time",
-        group=group,
-        ci_kind="hdi",
-        ci_prob=HDI_PROBS,
-        smooth=False,
-        col_wrap=col_wrap,
-        visuals=visuals if train_draws is not None else {**visuals, "ci_band": {"color": "C1"}},
-        aes={"alpha": ["prob"]},
-        alpha=HDI_ALPHAS,
-        figure_kwargs={"figsize": figsize},
-    )
-    if train_draws is not None:
-        az.plot_lm(
-            predictions_to_datatree(np.asarray(test_draws), x_test, labels, group=group),
-            y="obs",
-            x="t",
-            plot_dim="time",
-            group=group,
-            plot_collection=pc,
-            ci_kind="hdi",
-            ci_prob=HDI_PROBS,
-            smooth=False,
-            visuals={**visuals, "ci_band": {"color": "C1"}},
-        )
-    x_all = np.concatenate([x_train, x_test]) if train_draws is not None else x_test
-    truth_da = xr.DataArray(
-        np.asarray(truth)[-len(x_all) :],
-        dims=["time", "series"],
-        coords={"time": x_all, "series": labels},
-    ).rename("t")
-    x_da = xr.DataArray(x_all, dims=["time"], coords={"time": x_all})
-    pc.map(
-        az.visuals.line_xy,
-        "truth",
-        data=truth_da,
-        x=x_da,
-        ignore_aes=pc.aes_set,
-        color="black",
-        lw=1,
-    )
-    for label in labels:
-        ax = pc.get_target("t", {"series": label})
-        ax.set_title(label, fontsize=11)
-        locator = mdates.AutoDateLocator()
-        ax.xaxis.set_major_locator(locator)
-        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
-    ax0 = pc.get_target("t", {"series": labels[0]})
-    handles = []
-    for prob in HDI_PROBS:
-        band = pc.viz["ci_band"]["t"].sel(series=labels[0], prob=prob).item()
-        band.set_label(hdi_label(prob))
-        handles.append(band)
-    truth_line = pc.viz["truth"]["t"].sel(series=labels[0]).item()
-    truth_line.set_label("observed")
-    ax0.legend(handles=[*handles, truth_line], loc="upper left", fontsize=9)
-    fig = pc.viz["figure"].item()
-    fig.supylabel(ylabel)
-    fig.suptitle(suptitle, fontsize=16, fontweight="bold", y=1.02)
-```
-
-
 # Model 1: top-down
 
 
@@ -911,25 +719,23 @@ with the kit's priors:
 A word on each prior. The observations live on the log scale, where the total of 30,000 to 55,000 units a day is y_t \approx 10.3 to 10.9, so an intercept with a standard deviation of 10 covers anything from a few units a day to billions: flat in practice. The trend prior is positive by construction (a LogNormal) and encodes that sales grow; its median is e^{-2} \approx 0.14 per year on the log scale (about 15\\ a year) and its 94\\ interval runs from 0.02 to 0.9, so the growth rate is unknown within an order of magnitude but its sign is not. The weekday effects get a standard deviation of 5, a factor of e^{5} \approx 150 on the sales: wide, because the intercept and the weekday effects are collinear and the prior has to leave room for any split between them. The 31 day-of-month weights get the unit standard deviation of a generic regression coefficient. The StudentT degrees of freedom are uniform between 1 (Cauchy tails) and 10 (close to Normal), so the posterior decides how heavy the tails have to be to absorb the Christmas drops. The noise scale has the same LogNormal as the trend: a median of 0.14 on the log scale, a typical day within \pm 14\\ of its mean, which is the right order of magnitude for the residual of a total over 30,490 series. The figure shows the three priors that carry information; the standard normal of the weights needs no plot.
 
 
-    In [17]:
+    In [15]:
 
 
 ``` python
 fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 4), layout="constrained")
-pz.LogNormal(-2, 1).plot_pdf(ax=axes[0], color="C0")
-axes[0].set(title="trend per year and noise scale (log scale)", xlim=(0, 1.5))
-pz.Normal(0, 5).plot_pdf(ax=axes[1], color="C1")
-axes[1].set(title="weekday effects (log scale)")
-pz.Uniform(1, 10).plot_pdf(ax=axes[2], color="C2")
-axes[2].set(title="StudentT degrees of freedom", ylim=(0, 0.2))
-for ax in axes:
-    ax.legend(loc="upper right", fontsize=9)
+pz.LogNormal(-2, 1).plot_pdf(ax=axes[0], color="C0", legend=None)
+axes[0].set(title="trend per year and noise scale: LogNormal(-2, 1)", xlim=(0, 1.5))
+pz.Normal(0, 5).plot_pdf(ax=axes[1], color="C1", legend=None)
+axes[1].set(title="weekday effects: Normal(0, 5)")
+pz.Uniform(1, 10).plot_pdf(ax=axes[2], color="C2", legend=None)
+axes[2].set(title="degrees of freedom: Uniform(1, 10)", ylim=(0, 0.2))
 fig.suptitle("Model 1: priors", fontsize=14, fontweight="bold", y=1.08);
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-18-output-1.png" class="figure-img" width="1242" height="431" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-16-output-1.png" class="figure-img" width="1528" height="447" /></p>
 </figure>
 
 
@@ -938,7 +744,7 @@ The intercept, the seven weekday effects and the 31 day-of-month dummies are col
 The model has no latent time process, so [predict()](../../../reference/models.predict.md#numpyro_forecast.models.predict) is the only building block it needs. The covariates are one row per day over the full 1,969 days (training period plus evaluation window) with 33 columns: the time in years, the weekday index and the 31 day-of-month dummies, in that order, so that the model reads them back by position. The forecast covariates are just the calendar of the next 28 days, and the training slice is the first 1,941 rows.
 
 
-    In [18]:
+    In [16]:
 
 
 ``` python
@@ -962,7 +768,7 @@ print(f"covariates: {covariates_top.shape} (days, feature), target: {y_top.shape
     covariates: (1969, 33) (days, feature), target: (1969, 1) (days, obs)
 
 
-    In [19]:
+    In [17]:
 
 
 ``` python
@@ -992,19 +798,22 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-20-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-18-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
 ## Prior predictive check
 
-The kit's priors are wide on the log scale: an intercept with a standard deviation of 10, weekday effects with a standard deviation of 5 and a unit-variance weight on each of the 31 dummies. The 94\\ prior band spans about -20 to 20 and the observed log total of about 10.4 sits at the edge of the 50\\ band: weakly informative priors that the 1,941 observations will dominate. The plot shows the last twenty weeks of the training data against the prior bands.
+The kit's priors are wide on the log scale: an intercept with a standard deviation of 10, weekday effects with a standard deviation of 5 and a unit-variance weight on each of the 31 dummies. The 94\\ prior band spans about -20 to 20 and the observed log total of about 10.4 sits at the edge of the 50\\ band: weakly informative priors that the 1,941 observations will dominate. The plot shows the last twenty weeks of the training data against the prior bands. Every band plot of the notebook shows the 94\\ and 50\\ HDIs, the wider one lighter.
 
 
-    In [20]:
+    In [18]:
 
 
 ``` python
+HDI_PROBS = (0.94, 0.5)
+HDI_ALPHAS = (0.3, 0.6)
+
 rng_key, key_prior = random.split(rng_key)
 prior_obs_top = Predictive(top_down_model, num_samples=500, return_sites=["obs"])(
     key_prior, covariates_top_train
@@ -1017,6 +826,7 @@ prior_tree_top = predictions_to_datatree(
     group="prior_predictive",
     observed=np.asarray(y_top_train[plot_start:]),
 )
+
 pc = az.plot_lm(
     prior_tree_top,
     y="obs",
@@ -1037,6 +847,7 @@ pc = az.plot_lm(
     alpha=HDI_ALPHAS,
     figure_kwargs={"figsize": (12, 6)},
 )
+
 ax = pc.viz["figure"].item().axes[0]
 ax.plot(
     date_num[plot_start:N_DAYS_TRAIN], np.asarray(y_top_train[plot_start:, 0]), color="black", lw=1
@@ -1051,16 +862,57 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-21-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-19-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
 ## Fit
 
-The final fit uses the full training period. We time it with `jax.block_until_ready` so the JIT compilation is included, as it is in every backtest window.
+All three models use the kit's optimizer: Adam with the gradients clipped at a global norm of 10 and a learning rate of 0.1 that decays exponentially to 0.01 over the run (`learning_rate_decay=0.1` in Pyro's `Forecaster`). It is an optax chain handed to `SVI` as is (numpyro wraps optax transformations itself). The step counts are the kit's defaults, 1,001 for models 1 and 2 and 2,001 for model 3. `fit_svi` runs the kit's optimizer for a model and guide and times the run with `jax.block_until_ready`, so the JIT compilation is included, as it is in every backtest window; `plot_loss` draws the ELBO curve on a symmetric log scale, which keeps the negative losses of model 2 readable.
 
 
-    In [21]:
+    In [19]:
+
+
+``` python
+def kit_optimizer(num_steps: int) -> optax.GradientTransformation:
+    """Build the kit's ClippedAdam: clipped gradients, learning rate decaying tenfold over the run."""
+    schedule = optax.exponential_decay(0.1, transition_steps=num_steps, decay_rate=0.1)
+    return optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
+
+
+def fit_svi(
+    rng_key: Array,
+    model: ForecastModel,
+    guide: AutoNormal,
+    num_steps: int,
+    covariates: Array,
+    data: Array,
+) -> tuple[SVIRunResult, float]:
+    """Run SVI with the kit's optimizer; return the result and the wall time in seconds."""
+    svi = SVI(model, guide, kit_optimizer(num_steps), Trace_ELBO())
+    start = perf_counter()
+    result = svi.run(rng_key, num_steps, covariates, data, progress_bar=False)
+    jax.block_until_ready(result.losses)
+    return result, perf_counter() - start
+
+
+NUM_STEPS = {"top-down": 1_001, "bottom-up": 1_001, "middle-out": 2_001}
+
+
+def plot_loss(losses: Array, title: str, *, skip: int = 0) -> None:
+    """Plot an ELBO loss curve on a symmetric log scale, from step ``skip`` on."""
+    _, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(np.arange(skip, len(losses)), np.asarray(losses)[skip:], color="C0")
+    ax.set_yscale("symlog")
+    ax.set(title=title, xlabel="SVI step", ylabel="loss")
+```
+
+
+The final fit uses the full training period.
+
+
+    In [20]:
 
 
 ``` python
@@ -1069,6 +921,7 @@ guide_top = AutoNormal(top_down_model)
 svi_top, time_top = fit_svi(
     key_fit, top_down_model, guide_top, NUM_STEPS["top-down"], covariates_top_train, y_top_train
 )
+
 plot_loss(
     svi_top.losses, f"Model 1: ELBO loss ({NUM_STEPS['top-down']:,} steps, {time_top:.1f} s)"
 )
@@ -1076,13 +929,31 @@ plot_loss(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-22-output-1.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-21-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
 ## Posterior
 
-[to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call. The trend is about 0.08 per year on the log scale (8\\ a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.
+[to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior, the in-sample posterior predictive and the forecast to ArviZ in one call; `add_date_variable` adds a matplotlib date number to the constant data groups, so that the ArviZ plots below can use calendar dates on the x axis. The trend is about 0.08 per year on the log scale (8\\ a year), the StudentT degrees of freedom are around 4, and the noise scale on the log scale is 0.08.
+
+
+    In [21]:
+
+
+``` python
+DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def add_date_variable(tree: xr.DataTree, date_num: np.ndarray) -> xr.DataTree:
+    """Add a matplotlib date number ``date`` variable to the constant data groups of a tree."""
+    for group in ("constant_data", "predictions_constant_data"):
+        if group in tree.children:
+            dataset = tree[group].dataset
+            tree[group] = dataset.assign(date=("time", date_num[dataset["time"].values]))
+
+    return tree
+```
 
 
     In [22]:
@@ -1091,6 +962,7 @@ plot_loss(
 ``` python
 rng_key, key_post, key_tree = random.split(rng_key, 3)
 posterior_top = draw_posterior(key_post, guide_top, svi_top.params, 500)
+
 tree_top = to_datatree(
     key_tree,
     top_down_model,
@@ -1101,8 +973,10 @@ tree_top = to_datatree(
     posterior_dims={"seasonal": ["day_of_week"], "weight": ["day_of_month"]},
 )
 tree_top = add_date_variable(tree_top, date_num)
+
 for group in ("posterior_predictive", "observed_data", "predictions"):
     tree_top[group] = tree_top[group].dataset.isel(obs_dim=0)
+
 az.summary(tree_top, var_names=["bias", "trend", "dof", "noise_scale"])
 ```
 
@@ -1162,9 +1036,21 @@ The in-sample posterior predictive (blue) and the 28-day forecast (orange) on th
 
 
 ``` python
+def hdi_label(prob: float) -> str:
+    r"""Legend label of an HDI band, for example ``$94\%$ HDI``."""
+    return rf"${prob:.0%}$ HDI".replace("%", r"\%")
+```
+
+
+    In [26]:
+
+
+``` python
 tree_top_zoom = tree_top.copy()
+
 for group in ("posterior_predictive", "observed_data", "constant_data"):
     tree_top_zoom[group] = tree_top[group].dataset.isel(time=slice(plot_start, None))
+
 pc = az.plot_lm(
     tree_top_zoom,
     y="obs",
@@ -1178,6 +1064,7 @@ pc = az.plot_lm(
     alpha=HDI_ALPHAS,
     figure_kwargs={"figsize": (12, 6)},
 )
+
 az.plot_lm(
     tree_top_zoom,
     y="obs",
@@ -1189,18 +1076,22 @@ az.plot_lm(
     smooth=False,
     visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
 )
+
 ax = pc.viz["figure"].item().axes[0]
 (observed_line,) = ax.plot(
     date_num[plot_start:], np.log(y_total[plot_start:]), color="black", lw=1, label="observed"
 )
 ax.axvline(split_date, color="gray", ls="--")
 ax.xaxis_date()
+
 band_handles = []
+
 for prob in HDI_PROBS:
     band = pc.viz["ci_band"]["date"].sel(prob=prob).item()
     band.set_label(f"forecast {hdi_label(prob)}")
     band_handles.append(band)
-ax.legend(handles=[*band_handles, observed_line], loc="upper left")
+
+ax.legend(handles=[*band_handles, observed_line], loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(
     title="Model 1: in-sample predictive and forecast of the log total sales",
     ylabel="log total sales",
@@ -1209,7 +1100,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-26-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-27-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -1218,10 +1109,52 @@ The forecast is the calendar pattern continued: the weekend peaks and the pay-da
 
 ## Top-down split and scores
 
-The forecast draws go back to units with `exp`, are split to the items with their last-28-day shares and get Poisson noise. The bottom-level draws are then summed to every level and scored. The split does not know anything about the items, so the item levels (10 to 12) measure the share heuristic, not the model.
+Models 1 and 3 forecast an aggregate. The kit's submission splits such a forecast to the items in proportion to their sales over the last 28 training days and draws Poisson noise at the bottom, so that the item forecasts are integer and their spread at the bottom is not just a scaled copy of the aggregate's. The Poisson draws use NumPy: `jax.random.poisson` on the CPU is about 40 times slower for an array of this size. The forecast draws of model 1 go back to units with `exp` before the split, and the bottom-level draws are then summed to every level and scored. The split does not know anything about the items, so the item levels (10 to 12) measure the share heuristic, not the model.
 
 
-    In [26]:
+    In [27]:
+
+
+``` python
+def last_28_day_shares(train_sales: np.ndarray, group_index: np.ndarray) -> np.ndarray:
+    """Share of every series in the sales of its group over the last 28 training days."""
+    totals = np.asarray(train_sales[-28:], dtype=np.float64).sum(0)
+    n_groups = int(group_index.max()) + 1
+    group_totals = np.bincount(group_index, weights=totals, minlength=n_groups)
+    group_sizes = np.bincount(group_index, minlength=n_groups)
+    shares = np.where(
+        group_totals[group_index] > 0,
+        totals / group_totals[group_index],
+        1.0 / group_sizes[group_index],
+    )
+    return shares.astype(np.float32)
+
+
+def disaggregate(
+    seed: int,
+    group_draws: np.ndarray,
+    shares: np.ndarray,
+    group_index: np.ndarray,
+    chunk: int = 50,
+    rate_cap: float = 1e9,
+) -> np.ndarray:
+    """Poisson draws at the bottom level with rate ``group draw x share`` (kit submission logic)."""
+    rng = np.random.default_rng(seed)
+    out = np.empty((*group_draws.shape[:-1], shares.shape[0]), dtype=np.float32)
+
+    for start in range(0, group_draws.shape[0], chunk):
+        rate = np.asarray(group_draws[start : start + chunk], dtype=np.float32)[..., group_index]
+        rate = np.clip(np.nan_to_num(rate * shares, nan=0.0, posinf=rate_cap), 0.0, rate_cap)
+        out[start : start + chunk] = rng.poisson(rate)
+
+    return out
+
+
+total_index = np.zeros(n_series, dtype=np.int64)  # every series belongs to the one total
+```
+
+
+    In [28]:
 
 
 ``` python
@@ -1229,19 +1162,25 @@ rng_key, key_fc = random.split(rng_key)
 fc_top = np.exp(
     np.asarray(forecast(key_fc, top_down_model, posterior_top, y_top_train, covariates_top))
 )
+
+# Split to the items and add the Poisson noise.
 shares_top = last_28_day_shares(sales[:N_DAYS_TRAIN], total_index)
 bottom_top = disaggregate(N_DAYS_TRAIN, fc_top, shares_top, total_index)
+
+# Sum to the 12 levels and score against the evaluation window.
 truth_holdout = sales[N_DAYS_TRAIN:N_DAYS]
 holdout_metrics = m5_metrics(0, N_DAYS_TRAIN, N_DAYS)
-
 pred_levels, truth_levels = aggregate_transform(bottom_top, truth_holdout)
 scores_holdout = {
     "top-down": evaluate_forecast(pred_levels, truth_levels, metrics=holdout_metrics)
 }
 wspl_holdout = {"top-down": ws_pinball(pred_levels, truth_levels, weights_holdout, scales_holdout)}
+
+# Keep the total and store-level draws for the plots, drop the rest.
 level1_draws = {"top-down": pred_levels[..., level_slices["Level1"]]}
 level3_draws = {"top-down": pred_levels[..., level_slices["Level3"]]}
 del bottom_top, pred_levels
+
 mean_ws_crps = np.mean(list(scores_holdout["top-down"].values()))
 
 print(
@@ -1253,10 +1192,127 @@ print(
     model 1 evaluation window: WS-CRPS 0.569, WSPL 0.197
 
 
-The split forecast at the store level (level 3) shows what top-down means: every store gets the same shape, scaled by its share.
+The split forecast at the store level (level 3) shows what top-down means: every store gets the same shape, scaled by its share. `plot_series_panel` is the faceted band plot we reuse for every model from here on: one panel per series, the in-sample bands in blue, the forecast bands in orange and the observed series in black. It takes its draws as NumPy or JAX arrays and converts them to NumPy once: [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) and [predict_in_sample()](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) return JAX arrays, the reconciliation returns NumPy (its Poisson draws are NumPy), and ArviZ and matplotlib consume NumPy either way, so there is nothing to gain from keeping the draws on the JAX side for a plot.
 
 
-    In [27]:
+    In [29]:
+
+
+``` python
+def plot_series_panel(
+    train_draws: np.ndarray | Array | None,
+    test_draws: np.ndarray | Array,
+    truth: np.ndarray,
+    labels: list[str],
+    x_train: np.ndarray,
+    x_test: np.ndarray,
+    *,
+    ylabel: str,
+    suptitle: str,
+    col_wrap: int = 2,
+    figsize: tuple[float, float] = (15.0, 10.0),
+    group: str = "posterior_predictive",
+) -> None:
+    """Facet the predictive bands of a few series over a window, with the observed series.
+
+    ``train_draws`` (in-sample, blue) may be ``None``; ``test_draws`` (forecast, orange) are
+    always drawn. ``truth`` covers ``x_train`` followed by ``x_test``.
+    """
+    visuals = {
+        "ci_band": {"color": "C0"},
+        "observed_scatter": False,
+        "pe_line": False,
+        "xlabel": False,
+        "ylabel": False,
+    }
+
+    # First `plot_lm` call: the in-sample bands (blue), or the forecast bands (orange) when
+    # there is no in-sample window. It creates the facet grid.
+    first_draws, first_x = (test_draws, x_test) if train_draws is None else (train_draws, x_train)
+    pc = az.plot_lm(
+        predictions_to_datatree(np.asarray(first_draws), first_x, labels, group=group),
+        y="obs",
+        x="t",
+        plot_dim="time",
+        group=group,
+        ci_kind="hdi",
+        ci_prob=HDI_PROBS,
+        smooth=False,
+        col_wrap=col_wrap,
+        visuals=visuals if train_draws is not None else {**visuals, "ci_band": {"color": "C1"}},
+        aes={"alpha": ["prob"]},
+        alpha=HDI_ALPHAS,
+        figure_kwargs={"figsize": figsize},
+    )
+
+    # Second call on the same grid: the forecast bands after the in-sample ones.
+    if train_draws is not None:
+        az.plot_lm(
+            predictions_to_datatree(np.asarray(test_draws), x_test, labels, group=group),
+            y="obs",
+            x="t",
+            plot_dim="time",
+            group=group,
+            plot_collection=pc,
+            ci_kind="hdi",
+            ci_prob=HDI_PROBS,
+            smooth=False,
+            visuals={**visuals, "ci_band": {"color": "C1"}},
+        )
+
+    # The observed series over both windows, mapped onto every facet.
+    x_all = np.concatenate([x_train, x_test]) if train_draws is not None else x_test
+    truth_da = xr.DataArray(
+        np.asarray(truth)[-len(x_all) :],
+        dims=["time", "series"],
+        coords={"time": x_all, "series": labels},
+    ).rename("t")
+    x_da = xr.DataArray(x_all, dims=["time"], coords={"time": x_all})
+    pc.map(
+        az.visuals.line_xy,
+        "truth",
+        data=truth_da,
+        x=x_da,
+        ignore_aes=pc.aes_set,
+        color="black",
+        lw=1,
+    )
+
+    # Panel titles and compact date ticks.
+    for label in labels:
+        ax = pc.get_target("t", {"series": label})
+        ax.set_title(label, fontsize=11)
+        locator = mdates.AutoDateLocator()
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+
+    # One legend for the whole figure, below the panels: the band artists of the first panel
+    # and the observed line.
+    handles = []
+
+    for prob in HDI_PROBS:
+        band = pc.viz["ci_band"]["t"].sel(series=labels[0], prob=prob).item()
+        band.set_label(hdi_label(prob))
+        handles.append(band)
+
+    truth_line = pc.viz["truth"]["t"].sel(series=labels[0]).item()
+    truth_line.set_label("observed")
+    fig = pc.viz["figure"].item()
+    fig.legend(
+        handles=[*handles, truth_line], loc="upper center", bbox_to_anchor=(0.5, 0.0), ncols=3
+    )
+    fig.supylabel(ylabel)
+    fig.suptitle(suptitle, fontsize=16, fontweight="bold", y=1.02)
+
+
+store_ids = [
+    label.removeprefix("Level3/").removesuffix("/X")
+    for label in agg_labels[level_slices["Level3"]]
+]
+```
+
+
+    In [30]:
 
 
 ``` python
@@ -1275,7 +1331,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-28-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-31-output-1.png" class="figure-img" width="1511" height="1492" /></p>
 </figure>
 
 
@@ -1293,7 +1349,7 @@ with \text{bexp}(x) = 10^3\\ \text{sigmoid}(x - \log 10^3) the kit's bounded exp
 Every weight has the same prior, w, b, s \sim \text{Normal}(0, 1), so there is no prior to plot; what deserves a look is what the standard normals imply through the bounded exponential. The moving-average weights multiply the log of the item's recent level, so the prior mean of an item is its level raised to a random power, m \approx \text{MA}^{\\w_1 + w_2 + w_3} \times e^{s}, where the exponent has a standard deviation of \sqrt{3} \approx 1.7: for a slow seller at one unit a day (\log \text{MA} = 0) the prior on the mean is a LogNormal around one unit, but for an item at ten units a day it is spread over many orders of magnitude. The bounded exponential is what makes this prior usable. A plain \exp of a draw a few standard deviations out gives means of millions of units and an infinite loss on the first SVI steps; \text{bexp} matches \exp up to a few tens of units, is 10\\ below it at a hundred, and saturates at 1,000 units a day, more than any item sells, so the cap protects the early steps and never binds in the posterior.
 
 
-    In [28]:
+    In [31]:
 
 
 ``` python
@@ -1311,7 +1367,8 @@ fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 4.5), layout="constraine
 axes[0].plot(x_grid, jnp.exp(x_grid), color="C0", label=r"$\exp(x)$")
 axes[0].plot(x_grid, bounded_exp(x_grid), color="C1", label=r"$\mathrm{bexp}(x)$, bound 1,000")
 axes[0].set(yscale="log", xlabel="$x$ (linear predictor)", ylabel="mean (units a day)")
-axes[0].legend(loc="upper left")
+axes[0].legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncols=2)
+
 for level, color in [(1.0, "C0"), (10.0, "C1")]:
     prior_mean = bounded_exp(jnp.log(level) * prior_w.sum(axis=1) + prior_s)
     axes[1].hist(
@@ -1322,8 +1379,9 @@ for level, color in [(1.0, "C0"), (10.0, "C1")]:
         color=color,
         label=f"item selling {level:.0f} unit(s) a day",
     )
+
 axes[1].set(xlabel="prior mean of the Gamma (log10 units a day)", ylabel="density")
-axes[1].legend(loc="upper left")
+axes[1].legend(loc="upper center", bbox_to_anchor=(0.5, -0.18), ncols=2)
 fig.suptitle(
     "Model 2: the bounded exponential and the prior it implies on an item's mean", fontsize=14
 );
@@ -1331,7 +1389,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-29-output-1.png" class="figure-img" width="1411" height="461" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-32-output-1.png" class="figure-img" width="1409" height="461" /></p>
 </figure>
 
 
@@ -1342,17 +1400,23 @@ One consequence of this layout is the warning filtered at the top of the noteboo
 The moving averages are one-off preprocessing over the whole panel, a float64 cumulative sum of the 60 million cells computed once in NumPy; there is nothing for JAX to compile here, and a float32 cumulative sum over five years would lose precision on the high sellers. The covariate tensor stacks six channels of shape `(days, series)`: the weekday index, the SNAP flag of the store's state, the `saled` flag, and the three log moving averages. The model reads the channels by position and the first channel (the weekday) only from the first series, since it is the same for all.
 
 
-    In [29]:
+    In [32]:
 
 
 ``` python
 register_elementwise(dist.Gamma)
+
 T0 = 121  # kit: 37 + 28 * 3, the first day with the three moving averages defined
 MA_WINDOWS = (28, 56, 84)
 MA_LAG = 28
-N_STORES, N_DEPTS = len(store_ids), len(dept_ids)
 SUBSAMPLE_SIZE = 600
 TAIL = 7  # days of history passed to forecast(); the model needs none, a week keeps the plots readable
+
+dept_ids = [
+    label.removeprefix("Level5/").removesuffix("/X")
+    for label in agg_labels[level_slices["Level5"]]
+]
+N_STORES, N_DEPTS = len(store_ids), len(dept_ids)
 
 
 def lagged_log_moving_average(y: np.ndarray, window: int, lag: int) -> np.ndarray:
@@ -1361,22 +1425,28 @@ def lagged_log_moving_average(y: np.ndarray, window: int, lag: int) -> np.ndarra
     Days without a full window are set to ``log(1e-3)``, the kit's clamp floor.
     """
     padded = np.concatenate([np.zeros((1, y.shape[1])), np.cumsum(y, axis=0, dtype=np.float64)])
+
+    # The window of day t covers the days t - lag - window + 1 to t - lag, inclusive.
     t = np.arange(y.shape[0])
     stop = np.clip(t - lag + 1, 0, None)
     start = np.clip(stop - window, 0, None)
     mean = (padded[stop] - padded[start]) / window
     mean[t - lag + 1 - window < 0] = 0.0
+
     return np.log(np.maximum(mean, 1e-3)).astype(np.float32)
 
 
 state_index = hierarchy_df["Level2"].to_numpy()
 snap_by_state = calendar_df.select("snap_CA", "snap_TX", "snap_WI").to_numpy()[:N_DAYS]
+
 covariates_bottom_np = np.empty((3 + len(MA_WINDOWS), N_DAYS, n_series), dtype=np.float32)
 covariates_bottom_np[0] = calendar_df["dow"].to_numpy()[:N_DAYS, None]  # weekday, 0 = Monday
 covariates_bottom_np[1] = snap_by_state[:, state_index]  # SNAP flag of the store's state
 covariates_bottom_np[2] = saled  # price listed and not Christmas
+
 for k, window in enumerate(MA_WINDOWS):  # channels 3 to 5: log MA over 28, 56, 84 days
     covariates_bottom_np[3 + k] = lagged_log_moving_average(sales, window, MA_LAG)
+
 covariates_bottom = jnp.asarray(covariates_bottom_np)
 del covariates_bottom_np
 y_bottom = jnp.asarray(np.maximum(sales, 1e-3))  # (days, series), zeros clamped at 1e-3
@@ -1394,7 +1464,7 @@ dept_index = jnp.asarray(hierarchy_df["Level5"].to_numpy(), dtype=jnp.int32)
     covariates: (6, 1969, 30490) (channel, day, series), 1.44 GB; target: (1969, 30490) (day, series)
 
 
-    In [30]:
+    In [33]:
 
 
 ``` python
@@ -1404,6 +1474,7 @@ def make_bottom_up_model(store_index: Array, dept_index: Array) -> ForecastModel
 
     def bottom_up_model(covariates: Array, data: Array | None = None) -> None:
         dow = covariates[0, :, 0].astype(jnp.int32)  # (days,), the same for every series
+
         # Department-level weights of every store, with the two heads (mean, scale) and the
         # departments as event dimensions, as in the kit.
         with numpyro.plate("store", N_STORES):
@@ -1416,6 +1487,7 @@ def make_bottom_up_model(store_index: Array, dept_index: Array) -> ForecastModel
             seasonal = numpyro.sample(  # (store, weekday, head, dept)
                 "seasonal", dist.Normal(0.0, 1.0).expand([7, 2, N_DEPTS]).to_event(3)
             )
+
         with numpyro.plate("series", n_series):
             # Under the subsampling guide, the plate carries 600 indices and `subsample`
             # picks those columns; without it the full arrays pass through.
@@ -1424,21 +1496,28 @@ def make_bottom_up_model(store_index: Array, dept_index: Array) -> ForecastModel
             store = numpyro.subsample(store_index, event_dim=0)  # (n,)
             dept = numpyro.subsample(dept_index, event_dim=0)  # (n,)
             h = Horizon.from_data(batch, y)
+
             # (days, n), (days, n) and (lag, days, n).
             snap, saled_flag, log_ma = batch[1], batch[2], batch[3:]
+
             # Gather the weights of every series' store and department, then contract the
             # lag axis with its three log moving averages: (n, head, lag) x (lag, days, n)
             # -> (head, days, n).
             moving_average = jnp.einsum("nhk,ktn->htn", ma_weight[store, :, :, dept], log_ma)
+
             # (n, head) -> (head, 1, n), broadcast over the days of the SNAP flag.
             snap_effect = snap_weight[store, :, dept].T[:, None, :] * snap
+
             # (n, weekday, head) indexed by the weekday of every day -> (n, days, head),
             # transposed to (head, days, n).
             seasonal_effect = seasonal[store, :, :, dept][:, dow, :].transpose(2, 1, 0)
-            # Unpack the two heads along the leading axis.
+
+            # Unpack the two heads along the leading axis and apply the bounded exponential
+            # and the `saled` gate.
             log_mean, log_scale = moving_average + snap_effect + seasonal_effect
             mean = bounded_exp(log_mean) * saled_flag + 1e-3
             scale = bounded_exp(log_scale) * saled_flag + 1e-3
+
             # Gamma(concentration, rate) with mean `m` and variance `m * scale`.
             predict(h, lambda m: dist.Gamma(m / scale, 1.0 / scale), mean)
 
@@ -1461,7 +1540,7 @@ covariates_bottom_train = covariates_bottom[:, T0:N_DAYS_TRAIN]
 The model has no time latents, so it can be evaluated on any window and any subset of series with the same posterior draws. A second model instance for the seven focus items and the last sixteen training weeks makes the prior and posterior predictive checks cheap. The 94\\ prior bands reach hundreds of units, up to the cap of the bounded exponential for the top seller, while the 50\\ HDI sits at zero: the prior is wide on the log scale and the Gamma is right-skewed. The observations lie inside the bands; the check says the prior is proper and not degenerate, and little more.
 
 
-    In [31]:
+    In [34]:
 
 
 ``` python
@@ -1472,6 +1551,7 @@ rng_key, key_prior = random.split(rng_key)
 prior_obs_focus = Predictive(focus_model, num_samples=500, return_sites=["obs"])(
     key_prior, covariates_focus[:, plot_start:N_DAYS_TRAIN]
 )["obs"]
+
 plot_series_panel(
     None,
     prior_obs_focus,
@@ -1483,12 +1563,13 @@ plot_series_panel(
     suptitle="Model 2: prior predictive check (last 16 training weeks)",
     group="prior_predictive",
 )
+
 del prior_obs_focus
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-32-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-35-output-1.png" class="figure-img" width="1511" height="1084" /></p>
 </figure>
 
 
@@ -1497,7 +1578,7 @@ del prior_obs_focus
 Each step evaluates the Gamma likelihood of 600 series over 1,820 days (about 1.1 million cells), so the 1,001 steps take about a minute despite the 55 million cells of the full panel. The loss is noisy because of the subsampling: every step scores a different random set of 600 series, so the ELBO estimate moves with the minibatch even at fixed parameters.
 
 
-    In [32]:
+    In [35]:
 
 
 ``` python
@@ -1511,6 +1592,7 @@ svi_bottom, time_bottom = fit_svi(
     covariates_bottom_train,
     y_bottom_train,
 )
+
 plot_loss(
     svi_bottom.losses,
     f"Model 2: ELBO loss ({NUM_STEPS['bottom-up']:,} steps, {time_bottom:.0f} s), from step 50",
@@ -1520,14 +1602,14 @@ plot_loss(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-33-output-1.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-36-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
 A noisy loss curve can also mean a learning rate that is too high, so we check which it is. We hold the parameters fixed at their final values and evaluate the ELBO on twenty fresh minibatches: if the spread of these losses matches the spread of the trace over its last steps, the noise is the subsampling and a smaller learning rate would not remove it.
 
 
-    In [33]:
+    In [36]:
 
 
 ``` python
@@ -1572,7 +1654,7 @@ The two spreads are the same size, about 4\\ of the mean loss along the trace an
 The posterior has 1,540 parameters: for every store, the two heads times three moving averages times seven departments, the SNAP effect per head and department, and the weekday effects. We export the draws to ArviZ with named coordinates (the full posterior predictive of 30,490 series over 1,820 days would not fit in memory, so this tree carries the posterior only) and add the sum of the three moving-average weights as a derived variable, since the sum is the quantity the forecast depends on.
 
 
-    In [34]:
+    In [37]:
 
 
 ``` python
@@ -1593,12 +1675,14 @@ tree_bottom = az.from_dict(
         "seasonal": ["store", "day_of_week", "head", "dept"],
     },
 )
+
+# The sum of the three moving-average weights, the quantity the forecast depends on.
 posterior_ds = tree_bottom["posterior"].dataset
 tree_bottom["posterior"] = posterior_ds.assign(ma_weight_sum=posterior_ds["ma_weight"].sum("lag"))
 ```
 
 
-    In [35]:
+    In [38]:
 
 
 ``` python
@@ -1616,14 +1700,14 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-36-output-1.png" class="figure-img" width="811" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-39-output-1.png" class="figure-img" width="811" height="1211" /></p>
 </figure>
 
 
 The SNAP effect on the mean is a food effect that varies a lot by store. In every store the largest coefficient belongs to `FOODS_2` (or `FOODS_3`), where a SNAP day lifts the expected sales by anything from a few percent in `CA_2` to 75\\ in `WI_2` (0.56 on the log scale), while the hobbies and household departments stay within \pm 0.1 everywhere. `WI_2` and `WI_3` stand out, above 0.2 in all three food departments; the Texas stores come next, between 0.2 and 0.3 in `FOODS_2`; `CA_2`, `CA_4` and `WI_1` barely react. The only wide intervals are the negative `HOBBIES_2` coefficients of `CA_2` and `CA_4`: the smallest department, with the most zeros, carries the least information about a ten-day-a-month covariate.
 
 
-    In [36]:
+    In [39]:
 
 
 ``` python
@@ -1641,7 +1725,7 @@ pc.viz["figure"].item().suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-37-output-1.png" class="figure-img" width="811" height="911" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-40-output-1.png" class="figure-img" width="811" height="911" /></p>
 </figure>
 
 
@@ -1653,7 +1737,7 @@ The moving-average weights of the mean head in store CA_1 show how the model rea
 The posterior predictive of the focus items over the last sixteen training weeks and the evaluation window. The focus items are the best seller of each department in store CA_1, that is, the items farthest from the typical item of their department.
 
 
-    In [37]:
+    In [40]:
 
 
 ``` python
@@ -1668,6 +1752,7 @@ fc_focus = forecast(
     y_bottom[N_DAYS_TRAIN - TAIL : N_DAYS_TRAIN, focus_index],
     covariates_focus[:, N_DAYS_TRAIN - TAIL :],
 )
+
 plot_series_panel(
     pp_focus,
     fc_focus,
@@ -1682,18 +1767,20 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-38-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-41-output-1.png" class="figure-img" width="1511" height="1084" /></p>
 </figure>
 
 
 These fits look poor, and the table below says why. For each focus item it lists the observed mean over the sixteen weeks, the mean and the median of the posterior predictive over the same days, and the mean daily sales of the median item of the same store-department.
 
 
-    In [38]:
+    In [41]:
 
 
 ``` python
+level9_index = hierarchy_df["Level9"].to_numpy()  # store-department of every series
 focus_window = sales[plot_start:N_DAYS_TRAIN]
+
 focus_level_df = pl.DataFrame(
     {
         "item": focus_labels,
@@ -1706,6 +1793,7 @@ focus_level_df = pl.DataFrame(
         ],
     }
 ).with_columns(pl.exclude("item").round(2))
+
 del pp_focus, fc_focus
 
 focus_level_df
@@ -1734,7 +1822,7 @@ Two things are going on. First, the shrinkage of the previous section: the model
 The forecast of all 30,490 series takes about two minutes: the Gamma sampler dominates (500 draws of 28 days for every series). As the kit does, only the last week of data is passed to [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), since the model needs no history beyond its covariates. The draws are summed to every level and scored.
 
 
-    In [39]:
+    In [42]:
 
 
 ``` python
@@ -1758,9 +1846,11 @@ print(f"forecast of {bottom_bottom.shape} draws in {perf_counter() - start:.0f} 
 pred_levels, truth_levels = aggregate_transform(bottom_bottom, truth_holdout)
 scores_holdout["bottom-up"] = evaluate_forecast(pred_levels, truth_levels, metrics=holdout_metrics)
 wspl_holdout["bottom-up"] = ws_pinball(pred_levels, truth_levels, weights_holdout, scales_holdout)
+
 level1_draws["bottom-up"] = pred_levels[..., level_slices["Level1"]]
 level3_draws["bottom-up"] = pred_levels[..., level_slices["Level3"]]
 del bottom_bottom, pred_levels
+
 mean_ws_crps = np.mean(list(scores_holdout["bottom-up"].values()))
 
 print(
@@ -1776,7 +1866,7 @@ print(
 The bottom-up forecast summed to the store level (level 3).
 
 
-    In [40]:
+    In [43]:
 
 
 ``` python
@@ -1795,7 +1885,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-41-output-1.png" class="figure-img" width="1511" height="1443" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-44-output-1.png" class="figure-img" width="1511" height="1492" /></p>
 </figure>
 
 
@@ -1820,30 +1910,28 @@ and one \nu \sim \text{Uniform}(1, 10) shared by the 70 series. The priors read 
 The series are independent given \nu: this is a batch of 70 univariate regressions, written with a `series` plate on the observation axis and a `day_of_week` plate for the weekday effects.
 
 
-    In [41]:
+    In [44]:
 
 
 ``` python
 fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 4), layout="constrained")
-pz.LogNormal(-1, 1).plot_pdf(ax=axes[0], color="C0")
-axes[0].set(title="trend per year and noise scale (typical daily changes)", xlim=(0, 4))
-pz.Normal(0, 10).plot_pdf(ax=axes[1], color="C1")
-axes[1].set(title="intercept (typical daily changes)")
-for ax in axes:
-    ax.legend(loc="upper right", fontsize=9)
-fig.suptitle("Model 3: priors", fontsize=14, fontweight="bold", y=1.08);
+pz.LogNormal(-1, 1).plot_pdf(ax=axes[0], color="C0", legend=None)
+axes[0].set(title="trend per year and noise scale: LogNormal(-1, 1)", xlim=(0, 4))
+pz.Normal(0, 10).plot_pdf(ax=axes[1], color="C1", legend=None)
+axes[1].set(title="intercept: Normal(0, 10)")
+fig.suptitle("Model 3: priors (in typical daily changes)", fontsize=14, fontweight="bold", y=1.08);
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-42-output-1.png" class="figure-img" width="1045" height="431" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-45-output-1.png" class="figure-img" width="1211" height="447" /></p>
 </figure>
 
 
 The covariates are again one row per day over the full 1,969 days, now with 106 columns: the time in years, the weekday index and the 104 Fourier terms (a sine and a cosine for each of the 52 harmonics of the yearly cycle, from [fourier_features](../../../reference/features.fourier_features.md#numpyro_forecast.features.fourier_features)). The target is the `(days, 70)` matrix of scaled level-9 sales, so the observation axis is the series axis.
 
 
-    In [42]:
+    In [45]:
 
 
 ``` python
@@ -1869,26 +1957,38 @@ print(f"covariates: {covariates_mid.shape} (days, feature), target: {y_mid.shape
     covariates: (1969, 106) (days, feature), target: (1969, 70) (days, series)
 
 
-    In [43]:
+    In [46]:
 
 
 ``` python
 def middle_out_model(covariates: Array, data: Array | None = None) -> None:
     """Kit model 3: per-series trend, weekly and yearly seasonality on scaled level-9 sales."""
     h = Horizon.from_data(covariates, data)
-    time = covariates[:, :1]
-    dow = covariates[:, 1].astype(jnp.int32)
-    feature = covariates[:, 2:]
+    time = covariates[:, :1]  # (days, 1): broadcasts against the per-series trend
+    dow = covariates[:, 1].astype(jnp.int32)  # (days,)
+    feature = covariates[:, 2:]  # (days, 104) Fourier terms
+
+    # One regression per store-department: the plate puts the series on the last axis, so
+    # every site below gets a batch shape of (70,) (or (7, 70) for the weekday effects).
     with numpyro.plate("series", N_MID):
         bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
         trend = numpyro.sample("trend", dist.LogNormal(-1.0, 1.0))
+        # The 104 Fourier weights of a series are one event of the site: (70, 104).
         weight = numpyro.sample(
             "weight", dist.Normal(0.0, 1.0).expand([feature.shape[-1]]).to_event(1)
         )
+
+        # The weekday plate sits at axis -2, above the series axis: (7, 70).
         with numpyro.plate("day_of_week", 7, dim=-2):
             seasonal = numpyro.sample("seasonal", dist.Normal(0.0, 1.0))
+
         noise_scale = numpyro.sample("noise_scale", dist.LogNormal(-1.0, 1.0))
+
+    # The degrees of freedom are the one parameter shared by the 70 series.
     dof = numpyro.sample("dof", dist.Uniform(1.0, 10.0))
+    # (days, 70): intercept + trend x time + weekday effect of each day + yearly curve, with
+    # `seasonal[dow]` gathering the row of the weekday of every day and the Fourier terms
+    # contracted against the (70, 104) weights.
     prediction = bias + trend * time + seasonal[dow] + feature @ weight.T
     predict(h, dist.StudentT(dof, 0.0, noise_scale), prediction)
 
@@ -1900,7 +2000,7 @@ numpyro.render_model(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-44-output-1.svg" class="img-fluid figure-img" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-47-output-1.svg" class="img-fluid figure-img" /></p>
 </figure>
 
 
@@ -1909,7 +2009,7 @@ numpyro.render_model(
 On the scaled axis a store-department sells a few typical daily changes a day: the medians of the 70 training series lie between 2 and 8, and those of the seven departments of store CA_1 between 2 and 6. The prior intercept with a standard deviation of 10 and the 104 Fourier weights with unit variance give 94\\ prior bands of about \pm 25 and 50\\ bands of about \pm 10 around a center a little above zero (the positive trend prior over five years): wide, but the data sit inside the 50\\ band.
 
 
-    In [44]:
+    In [47]:
 
 
 ``` python
@@ -1934,14 +2034,14 @@ del prior_obs_mid
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-45-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-48-output-1.png" class="figure-img" width="1511" height="1084" /></p>
 </figure>
 
 
 ## Fit
 
 
-    In [45]:
+    In [48]:
 
 
 ``` python
@@ -1955,6 +2055,7 @@ svi_mid, time_mid = fit_svi(
     covariates_mid_train,
     y_mid_train,
 )
+
 plot_loss(
     svi_mid.losses, f"Model 3: ELBO loss ({NUM_STEPS['middle-out']:,} steps, {time_mid:.1f} s)"
 )
@@ -1962,7 +2063,7 @@ plot_loss(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-46-output-1.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-49-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
@@ -1971,12 +2072,13 @@ plot_loss(
 [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) exports the posterior with the series labels as coordinates. We look at the one shared parameter, the degrees of freedom, and at the per-series trends and noise scales of store CA_1.
 
 
-    In [46]:
+    In [49]:
 
 
 ``` python
 rng_key, key_post, key_tree = random.split(rng_key, 3)
 posterior_mid = draw_posterior(key_post, guide_mid, svi_mid.params, 500)
+
 tree_mid = to_datatree(
     key_tree,
     middle_out_model,
@@ -1992,6 +2094,7 @@ tree_mid = to_datatree(
         "weight": ["series", "fourier"],
     },
 )
+
 az.summary(tree_mid, var_names=["dof"])
 ```
 
@@ -2004,7 +2107,7 @@ az.summary(tree_mid, var_names=["dof"])
 The degrees of freedom shared by the 70 series come out at about 6.5, with a tight interval: heavier tails than a Normal (which the Christmas days and the occasional spike require) but far from the Cauchy end of the prior, where model 1 sits with its 4 degrees of freedom on the total. Pooling one \nu across 70 series is what makes it this well determined.
 
 
-    In [47]:
+    In [50]:
 
 
 ``` python
@@ -2021,14 +2124,14 @@ pc.viz["figure"].item().suptitle("Model 3: trend by department, store CA_1", fon
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-48-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-51-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
 The trends are per series, in typical daily changes per year: in store CA_1 they range from 0.14 (`FOODS_2`) to 0.88 (`HOUSEHOLD_1`), all with narrow intervals after five years of daily data. The LogNormal prior forces every slope to be positive, so a department that stalls or shrinks can only get a slope near zero, which is what `FOODS_2` and `FOODS_3` show; the kit accepts this because the total grows.
 
 
-    In [48]:
+    In [51]:
 
 
 ``` python
@@ -2045,7 +2148,7 @@ pc.viz["figure"].item().suptitle("Model 3: noise scale by department, store CA_1
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-49-output-1.png" class="figure-img" width="811" height="411" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-52-output-1.png" class="figure-img" width="811" height="411" /></p>
 </figure>
 
 
@@ -2057,7 +2160,7 @@ The noise scales are the residual spread in units of a typical daily change of t
 The in-sample predictive over the last sixteen training weeks and the forecast for the seven departments of store CA_1, back in units.
 
 
-    In [49]:
+    In [52]:
 
 
 ``` python
@@ -2066,6 +2169,7 @@ pp_mid = predict_in_sample(
     key_pp, middle_out_model, posterior_mid, covariates_mid_train[plot_start:]
 )
 fc_mid = np.asarray(forecast(key_fc, middle_out_model, posterior_mid, y_mid_train, covariates_mid))
+
 plot_series_panel(
     np.asarray(pp_mid)[:, :, ca1_columns] * scale_mid[ca1_columns],
     fc_mid[:, :, ca1_columns] * scale_mid[ca1_columns],
@@ -2076,12 +2180,13 @@ plot_series_panel(
     ylabel="units sold",
     suptitle="Model 3: in-sample predictive and forecast, store CA_1",
 )
+
 del pp_mid
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-50-output-1.png" class="figure-img" width="1511" height="1035" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-53-output-1.png" class="figure-img" width="1511" height="1084" /></p>
 </figure>
 
 
@@ -2093,7 +2198,7 @@ The fit follows the weekly pattern of every department and the forecast continue
 The forecast draws go back to units (clipped at zero: a StudentT can go negative), are split to the items of each store-department with their last-28-day shares, get Poisson noise, and are summed up to the levels above.
 
 
-    In [50]:
+    In [53]:
 
 
 ``` python
@@ -2101,14 +2206,17 @@ shares_mid = last_28_day_shares(sales[:N_DAYS_TRAIN], level9_index)
 bottom_mid = disaggregate(
     N_DAYS_TRAIN, np.clip(fc_mid, 0.0, None) * scale_mid, shares_mid, level9_index
 )
+
 pred_levels, truth_levels = aggregate_transform(bottom_mid, truth_holdout)
 scores_holdout["middle-out"] = evaluate_forecast(
     pred_levels, truth_levels, metrics=holdout_metrics
 )
 wspl_holdout["middle-out"] = ws_pinball(pred_levels, truth_levels, weights_holdout, scales_holdout)
+
 level1_draws["middle-out"] = pred_levels[..., level_slices["Level1"]]
 level3_draws["middle-out"] = pred_levels[..., level_slices["Level3"]]
 del bottom_mid, pred_levels
+
 mean_ws_crps = np.mean(list(scores_holdout["middle-out"].values()))
 
 print(
@@ -2125,7 +2233,7 @@ print(
 The kit backtests on three windows of 28 days inside the training period, 35 days apart (origins at days 1,843, 1,878 and 1,913), refitting on all the data before each origin. [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) does the same with `min_train_window` and `stride`. It takes the raw bottom-level sales as `data` for all three models, and each `forecast_fn` closure builds its own training target from the window (the log of the total, the scaled level-9 sums, or the clamped counts from day 121), fits, forecasts and returns bottom-level draws, so the same `transform` and `per_window_metrics` score the three models. The windows use 250 draws to keep the run time of model 2 at about six minutes.
 
 
-    In [51]:
+    In [54]:
 
 
 ``` python
@@ -2141,12 +2249,17 @@ def forecast_fn_top(
 ) -> np.ndarray:
     """Fit the top-down model on the log of the total and split its forecast to the bottom."""
     key_fit, key_post, key_fc = random.split(rng_key, 3)
+
+    # Fit on the log of the total of the window.
     y = jnp.log(train_data.sum(-1, keepdims=True))
     guide = AutoNormal(model)
     result, _ = fit_svi(key_fit, model, guide, NUM_STEPS["top-down"], train_covariates, y)
+
+    # Forecast in units and split to the items with the shares of the window's last 28 days.
     posterior = draw_posterior(key_post, guide, result.params, num_samples)
     draws = np.exp(np.asarray(forecast(key_fc, model, posterior, y, full_covariates)))
     shares = last_28_day_shares(np.asarray(train_data[-28:]), total_index)
+
     return disaggregate(int(train_data.shape[0]), draws, shares, total_index)
 
 
@@ -2165,14 +2278,19 @@ def forecast_fn_mid(
 ) -> np.ndarray:
     """Fit the middle-out model on scaled level-9 sales and split its forecast to the bottom."""
     key_fit, key_post, key_fc = random.split(rng_key, 3)
+
+    # Sum the window to the 70 store-departments and scale each series by its own window.
     y_raw = np.asarray(train_data) @ level9_matrix
     scale = m5_scales(y_raw)
     y = jnp.asarray(y_raw / scale, dtype=jnp.float32)
     guide = AutoNormal(model)
     result, _ = fit_svi(key_fit, model, guide, NUM_STEPS["middle-out"], train_covariates, y)
+
+    # Forecast, back to units, split to the items of each store-department.
     posterior = draw_posterior(key_post, guide, result.params, num_samples)
     draws = np.asarray(forecast(key_fc, model, posterior, y, full_covariates))
     shares = last_28_day_shares(np.asarray(train_data[-28:]), level9_index)
+
     return disaggregate(
         int(train_data.shape[0]), np.clip(draws, 0.0, None) * scale, shares, level9_index
     )
@@ -2191,9 +2309,13 @@ def forecast_fn_bottom(
     """Fit the bottom-up model with subsampled SVI and forecast every series from its last week."""
     key_fit, key_post, key_fc = random.split(rng_key, 3)
     t1 = train_data.shape[0]
+
+    # Fit on the clamped counts from day T0, with the subsampling guide.
     y = jnp.maximum(train_data[T0:], 1e-3)
     guide = AutoNormal(model, create_plates=create_series_plates)
     result, _ = fit_svi(key_fit, model, guide, NUM_STEPS["bottom-up"], train_covariates[:, T0:], y)
+
+    # Forecast every series from its last week of data (the model needs no more history).
     posterior = draw_posterior(key_post, guide, result.params, num_samples)
     draws = forecast(
         key_fc,
@@ -2204,9 +2326,15 @@ def forecast_fn_bottom(
         batch_size=50,
         device="host",
     )
+
     return np.asarray(draws, dtype=np.float32)
+```
 
 
+    In [55]:
+
+
+``` python
 BACKTEST_OPTIONS = {
     "test_window": HORIZON,
     "stride": 35,
@@ -2215,6 +2343,7 @@ BACKTEST_OPTIONS = {
     "transform": aggregate_transform,
     "per_window_metrics": m5_metrics,
 }
+
 sales_train = jnp.asarray(sales[:N_DAYS_TRAIN])
 backtest_runs = {
     "top-down": (top_down_model, covariates_top_train, forecast_fn_top),
@@ -2222,6 +2351,7 @@ backtest_runs = {
     "middle-out": (middle_out_model, covariates_mid_train, forecast_fn_mid),
 }
 backtest_results = {}
+
 for name, (model, covariates, forecast_fn) in backtest_runs.items():
     rng_key, key_bt = random.split(rng_key)
     start = perf_counter()
@@ -2238,15 +2368,15 @@ for name, (model, covariates, forecast_fn) in backtest_runs.items():
 ```
 
 
-    top-down: 3 windows in 58 s
+    top-down: 3 windows in 52 s
     bottom-up: 3 windows in 369 s
-    middle-out: 3 windows in 62 s
+    middle-out: 3 windows in 60 s
 
 
 [results_to_dataframe](../../../reference/evaluate.results_to_dataframe.md#numpyro_forecast.evaluate.results_to_dataframe) turns the results into one row per window with a column per metric. The headline WS-CRPS is the mean over the 12 level columns, and `walltime` is the time of the whole `forecast_fn` (fit, draws, forecast and reconciliation).
 
 
-    In [52]:
+    In [56]:
 
 
 ``` python
@@ -2270,44 +2400,46 @@ shape: (9, 5)
 | model        | t1   | t2   | walltime | ws_crps |
 |--------------|------|------|----------|---------|
 | str          | i64  | i64  | f64      | f64     |
-| "top-down"   | 1843 | 1871 | 9.6      | 0.557   |
-| "top-down"   | 1878 | 1906 | 9.6      | 0.553   |
-| "top-down"   | 1913 | 1941 | 9.4      | 0.581   |
-| "bottom-up"  | 1843 | 1871 | 111.4    | 0.802   |
-| "bottom-up"  | 1878 | 1906 | 110.3    | 0.719   |
-| "bottom-up"  | 1913 | 1941 | 106.4    | 0.763   |
-| "middle-out" | 1843 | 1871 | 12.3     | 0.622   |
-| "middle-out" | 1878 | 1906 | 11.1     | 0.676   |
-| "middle-out" | 1913 | 1941 | 11.2     | 0.746   |
+| "top-down"   | 1843 | 1871 | 9.2      | 0.557   |
+| "top-down"   | 1878 | 1906 | 8.8      | 0.553   |
+| "top-down"   | 1913 | 1941 | 8.9      | 0.581   |
+| "bottom-up"  | 1843 | 1871 | 113.6    | 0.802   |
+| "bottom-up"  | 1878 | 1906 | 103.9    | 0.719   |
+| "bottom-up"  | 1913 | 1941 | 107.9    | 0.763   |
+| "middle-out" | 1843 | 1871 | 11.7     | 0.622   |
+| "middle-out" | 1878 | 1906 | 10.8     | 0.676   |
+| "middle-out" | 1913 | 1941 | 10.7     | 0.746   |
 
 
 The ranking is the same in every window: the top-down model scores best, the middle-out model second and the bottom-up model last. The top-down score is stable (0.55 to 0.58), the middle-out score degrades from window to window (0.62 to 0.75) and the bottom-up score is the noisiest (0.72 to 0.80). The last window (origin at day 1,913, the four weeks before Memorial Day) is the hardest for the two split models, and the evaluation window is right after it.
 
 
-    In [53]:
+    In [57]:
 
 
 ``` python
 fig, ax = plt.subplots(figsize=(10, 5))
+
 for name in backtest_runs:
     rows = backtest_df.filter(pl.col("model").eq(pl.lit(name))).sort("t1")
     ax.plot(rows["t1"], rows["ws_crps"], marker="o", label=name)
+
 ax.set(
     title="Backtest: WS-CRPS by forecast origin", xlabel="forecast origin (day)", ylabel="WS-CRPS"
 )
-ax.legend();
+ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0));
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-54-output-1.png" class="figure-img" width="1011" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-58-output-1.png" class="figure-img" width="1011" height="511" /></p>
 </figure>
 
 
 Averaged over the three windows, the per-level scores show where each strategy pays. The top-down model is best at every level from the total to the store-departments (levels 1 to 9). At the item levels (10 to 12) the top-down and middle-out models are indistinguishable, because both hand the same share split the same Poisson noise, and the bottom-up model is far behind: it has to get every intermittent series right on its own, while the split turns a good aggregate into a serviceable item forecast.
 
 
-    In [54]:
+    In [58]:
 
 
 ``` python
@@ -2324,16 +2456,18 @@ backtest_levels = pl.DataFrame(
 fig, ax = plt.subplots(figsize=(12, 5))
 x = np.arange(len(LEVELS))
 width = 0.27
+
 for k, name in enumerate(backtest_runs):
     ax.bar(x + (k - 1) * width, backtest_levels[name].to_numpy(), width, label=name)
+
 ax.set_xticks(x, list(LEVELS), rotation=45)
 ax.set(title="Backtest: WS-CRPS by level (mean over the three windows)", ylabel="WS-CRPS")
-ax.legend();
+ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0));
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-55-output-1.png" class="figure-img" width="1211" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-59-output-1.png" class="figure-img" width="1211" height="511" /></p>
 </figure>
 
 
@@ -2342,7 +2476,7 @@ ax.legend();
 The final fits of the three sections forecast the official evaluation window (days 1,942 to 1,969, released after the competition). The left panel is the per-level WS-CRPS of the three models, the right panel the mean over the levels and the WSPL, the competition metric with the official weights.
 
 
-    In [55]:
+    In [59]:
 
 
 ``` python
@@ -2356,25 +2490,30 @@ fig, axes = plt.subplots(
 )
 x = np.arange(len(LEVELS))
 width = 0.27
+
 for k, (name, values) in enumerate(holdout_levels.items()):
     axes[0].bar(x + (k - 1) * width, values, width, label=name)
+
 axes[0].set_xticks(x, list(LEVELS), rotation=45)
 axes[0].set(title="WS-CRPS by level", ylabel="score")
-axes[0].legend(loc="upper left")
 x_summary = np.arange(2)
+
 for k, name in enumerate(holdout_levels):
     summary = [holdout_levels[name].mean(), wspl_holdout[name]]
     bars = axes[1].bar(x_summary + (k - 1) * width, summary, width, label=name)
-    axes[1].bar_label(bars, fmt="%.3f", fontsize=9)
+    axes[1].bar_label(bars, fmt="%.3f", fontsize=10)
+
 axes[1].set_xticks(x_summary, ["WS-CRPS (mean)", "WSPL"])
 axes[1].set(title="Summary scores")
 axes[1].margins(y=0.15)
+handles, labels = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc="outside lower center", ncols=3)
 fig.suptitle("Evaluation window: scores of the three models", fontsize=16, fontweight="bold");
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-56-output-1.png" class="figure-img" width="1511" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-60-output-1.png" class="figure-img" width="1511" height="506" /></p>
 </figure>
 
 
@@ -2384,7 +2523,7 @@ The ranking of the backtest holds: the top-down model is best at every level exc
 The total-level forecasts of the three models over the evaluation window, with their mean WS-CRPS.
 
 
-    In [56]:
+    In [60]:
 
 
 ``` python
@@ -2393,13 +2532,16 @@ fig, axes = plt.subplots(
 )
 x_hist = date_num[plot_start:N_DAYS_TRAIN]
 x_test = date_num[N_DAYS_TRAIN:N_DAYS]
+
 for ax, (name, draws) in zip(axes, level1_draws.items(), strict=True):
     total_draws = draws[..., 0]
+
     for prob, alpha in zip(HDI_PROBS, HDI_ALPHAS, strict=True):
         hdi = az.hdi(total_draws.T, prob=prob)
         ax.fill_between(
             x_test, hdi[:, 0], hdi[:, 1], color="C1", alpha=alpha, label=hdi_label(prob)
         )
+
     ax.plot(x_hist, y_total[plot_start:N_DAYS_TRAIN], color="black", lw=1, label="observed")
     ax.plot(x_test, y_total[N_DAYS_TRAIN:N_DAYS], color="black", lw=1)
     ax.axvline(split_date, color="gray", ls="--")
@@ -2407,8 +2549,10 @@ for ax, (name, draws) in zip(axes, level1_draws.items(), strict=True):
         title=f"{name}: WS-CRPS {np.mean(list(scores_holdout[name].values())):.3f}",
         ylabel="units sold",
     )
-axes[0].legend(loc="upper left")
+
 axes[-1].xaxis_date()
+handles, labels = axes[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc="outside lower center", ncols=3)
 fig.suptitle(
     "Total daily sales: forecasts of the evaluation window", fontsize=16, fontweight="bold"
 );
@@ -2416,7 +2560,7 @@ fig.suptitle(
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-57-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-61-output-1.png" class="figure-img" width="1211" height="1206" /></p>
 </figure>
 
 
@@ -2428,7 +2572,7 @@ At the top level the three forecasts are close to the observed total and differ 
 The wall times of the three final fits, JIT compilation included. Model 2 evaluates 1.1 million Gamma densities per step and gathers its minibatch from a 1.4 GB covariate tensor; model 3 runs twice the steps of the others on 70 series with 104 features; model 1 is a single series. Per step, model 2 costs more than ten times model 1 (the exact ratio moves with the JIT compilation share of these short fits).
 
 
-    In [57]:
+    In [61]:
 
 
 ``` python
@@ -2441,6 +2585,7 @@ fit_times = pl.DataFrame(
 ).with_columns(ms_per_step=pl.col("fit_seconds").truediv(pl.col("steps")).mul(pl.lit(1_000.0)))
 fig, ax = plt.subplots(figsize=(8, 5))
 bars = ax.bar(fit_times["model"], fit_times["fit_seconds"], color=["C0", "C1", "C2"])
+
 for bar, steps, ms in zip(bars, fit_times["steps"], fit_times["ms_per_step"], strict=True):
     ax.annotate(
         f"{steps:,} steps\n{ms:.1f} ms/step",
@@ -2449,13 +2594,14 @@ for bar, steps, ms in zip(bars, fit_times["steps"], fit_times["ms_per_step"], st
         va="bottom",
         fontsize=10,
     )
+
 ax.set(title="SVI fitting time of the final fits", ylabel="seconds")
 ax.margins(y=0.2);
 ```
 
 
 <figure class="figure">
-<p><img src="m5_forecasting_files/figure-html/cell-58-output-1.png" class="figure-img" width="811" height="511" /></p>
+<p><img src="m5_forecasting_files/figure-html/cell-62-output-1.png" class="figure-img" width="811" height="511" /></p>
 </figure>
 
 
