@@ -3,7 +3,16 @@
 
 This notebook continues the [M5 baselines notebook](m5_forecasting.md), the port of the three [Pyro M5 Starter Kit](https://github.com/pyro-ppl/Pyro-M5-Starter-Kit) models to `numpyro_forecast`, and asks what a real hierarchical model adds on the same task: the 30,490 daily unit-sales series of the M5 competition (3,049 items in 10 Walmart stores of 3 states), a 28-day horizon, and the weighted scaled CRPS over the 42,840 series of the 12-level hierarchy. On the evaluation window the kit's top-down model scored a WS-CRPS of 0.569, the middle-out model 0.634 and the bottom-up model 0.728, so the top-down model is the one to beat.
 
-The candidate is a single **hierarchical count state space model** of every item in every store, fitted with minibatch SVI: a negative binomial likelihood with item-level dispersion, an item intercept centered on the series' level at the forecast origin, an end-anchored random walk of the item level over 28-day blocks, daily store shocks that sum to zero within every week, zero-sum weekday effects per store-department with zero-sum item deviations, SNAP and calendar-event effects and yearly seasonality, all partially pooled across the hierarchy. It is compared with the top-down baseline in the same harness on the three backtest windows of the baselines notebook and on the evaluation window, at every level, with the calibration of the bands alongside the score.
+The candidate is a single **hierarchical count state space model** of every item in every store, fitted with minibatch SVI. The candidate model has the following components:
+
+- a negative binomial likelihood with item-level dispersion;
+- an item intercept centered on the series' level at the forecast origin;
+- an end-anchored random walk of the item level over 28-day blocks;
+- daily store shocks that sum to zero within every week;
+- zero-sum weekday effects per store-department with zero-sum item deviations;
+- SNAP and calendar-event effects and yearly seasonality;
+
+all partially pooled across the hierarchy. It is compared with the top-down baseline in the same harness on the three backtest windows of the baselines notebook and on the evaluation window, at every level, with the calibration of the bands alongside the score.
 
 This is the second of the two M5 notebooks; the data loader, the hierarchy, the scoring functions and the baseline are described in the first one and only summarized here.
 
@@ -84,7 +93,7 @@ warnings.filterwarnings("ignore", message="When multiple credible intervals are 
 
 # Read data
 
-[load_m5()](../../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) downloads the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files once and reads them: the daily sales over the training period (`d_1` to `d_1941`) followed by the 28 evaluation days (`d_1942` to `d_1969`), the weekly shelf price of every series repeated over its days (`NaN` when the item was not on the shelf), the series identifiers, the calendar and the official evaluation weights. The calendar carries two event columns; the second one is rare, but one of its five days (Father's Day 2016) falls inside the evaluation window, so both are indexed.
+[load_m5()](../../../reference/datasets.load_m5.md#numpyro_forecast.datasets.load_m5) downloads the [Nixtla mirror](https://github.com/Nixtla/m5-forecasts) of the competition files once and reads them: the daily sales over the training period (`d_1` to `d_1941`) followed by the 28 evaluation days (`d_1942` to `d_1969`), the weekly shelf price of every series repeated over its days (`NaN` when the item was not on the shelf), the series identifiers, the calendar and the official evaluation weights. The [baselines notebook](m5_forecasting.md) describes the files, the hierarchy and the exploratory plots in detail; here the data cells are kept to what the model needs. The calendar carries two event columns; the second one is rare, but one of its five days (Father's Day 2016) falls inside the evaluation window, so both are indexed.
 
 
     In [2]:
@@ -360,7 +369,9 @@ def m5_metrics(t0: int, t1: int, t2: int) -> dict:
 
 # Features
 
-The model sees two per-series channels stacked with time at axis -2: the day index, through which the calendar tables are looked up inside the model, and the `saled` flag, which gates the mean as in the kit. The calendar tables (weekday, SNAP by state, the two event indices and four yearly Fourier harmonics) live outside the tensor, one row per day, so that a subsampled minibatch does not have to carry them. Sixty nonzero sales on days without a listed price or on a closed Christmas are set to zero in the training counts, since the model puts the mean at its floor on those days. The shelf price is not a feature: a department price elasticity was tried during development and changed nothing (see the ablation below), and a per-item elasticity is unidentified for the many items whose price never moves.
+The model reads two kinds of inputs. The per-series covariate tensor has two channels stacked with time at axis -2: the day index, through which the calendar tables are looked up inside the model, and the `saled` flag, which gates the mean as in the kit. The calendar tables (weekday, SNAP by state, the two event indices and four yearly Fourier harmonics) live outside the tensor, one row per day, so that a subsampled minibatch does not have to carry them. The shelf price is not a feature: a department price elasticity was tried during development and changed nothing (see the model selection below), and a per-item elasticity is unidentified for the many items whose price never moves.
+
+Three constants fix the time bookkeeping: the first backtest origin (day 1,843, the reference day of the windows), the block length of the item random walk (28 days, the competition horizon) and the number of blocks the walk spans (13, one year).
 
 
     In [5]:
@@ -370,15 +381,36 @@ The model sees two per-series channels stacked with time at axis -2: the day ind
 REFERENCE_DAYS = N_DAYS_TRAIN - HORIZON - 2 * 35  # 1,843: the first backtest origin
 BLOCK = 28
 N_BLOCKS = 13  # one year of 28-day blocks before the origin
+```
 
-# (channel, day, series): the day index and the saled flag.
+
+The covariate tensor is `(channel, day, series)`: channel 0 the day index (the same for every series), channel 1 the `saled` flag of every series-day.
+
+
+    In [6]:
+
+
+``` python
 covariates_np = np.empty((2, N_DAYS, n_series), dtype=np.float32)
-covariates_np[0] = np.arange(N_DAYS, dtype=np.float32)[:, None]
-covariates_np[1] = saled
+covariates_np[0] = np.arange(N_DAYS, dtype=np.float32)[:, None]  # the day index
+covariates_np[1] = saled  # price listed and not Christmas
 covariates = jnp.asarray(covariates_np)
 del covariates_np
 
-# Calendar tables, one row per day, indexed by the day channel inside the model.
+print(f"covariates {covariates.shape} (channel, day, series), {covariates.nbytes / 1e9:.2f} GB")
+```
+
+
+    covariates (2, 1969, 30490) (channel, day, series), 0.48 GB
+
+
+The calendar tables are one row per day and are indexed by the day channel inside the model: the weekday, the SNAP flag of each of the three states, the two event indices (0 for "no event", then the position of the event name) and the yearly Fourier terms. `state_of_store` maps every store to its state, so that the model can pick the SNAP flag of a series' store.
+
+
+    In [7]:
+
+
+``` python
 dow_table = jnp.asarray(calendar_df["dow"].to_numpy()[:N_DAYS], dtype=jnp.int32)  # (days,)
 snap_table = jnp.asarray(  # (days, state)
     calendar_df.select("snap_CA", "snap_TX", "snap_WI").to_numpy()[:N_DAYS], dtype=jnp.float32
@@ -388,25 +420,33 @@ event_tables = (  # two (days,) event indices, 0 for no event
     jnp.asarray(calendar_df["event_2"].to_numpy()[:N_DAYS], dtype=jnp.int32),
 )
 N_EVENTS = len(event_names) + 1  # the event names plus "none"
+
 N_HARMONICS = 4
 fourier_table = jnp.asarray(  # (days, 2 * harmonics)
     fourier_features(N_DAYS, 365.25, N_HARMONICS), dtype=jnp.float32
 )
+
 state_of_store = jnp.asarray(  # (store,): the state of every store, for the SNAP flag
     [state_index[np.argmax(np.asarray(store_index) == s)] for s in range(N_STORES)],
     dtype=jnp.int32,
 )
-
-n_zeroed = int((sales * (1 - saled) > 0).sum())
-
-print(
-    f"covariates {covariates.shape}, {covariates.nbytes / 1e9:.2f} GB; "
-    f"{n_zeroed} nonzero sales on unlisted or closed days set to 0"
-)
 ```
 
 
-    covariates (2, 1969, 30490), 0.48 GB; 60 nonzero sales on unlisted or closed days set to 0
+The training counts are the sales times the `saled` flag: the model puts its mean at the floor on the days without a listed price and on Christmas, so the few nonzero sales recorded on such days are set to zero rather than left for the likelihood to explain.
+
+
+    In [8]:
+
+
+``` python
+n_zeroed = int((sales * (1 - saled) > 0).sum())
+
+print(f"{n_zeroed} nonzero sales on unlisted or closed days are set to 0 in the training counts")
+```
+
+
+    60 nonzero sales on unlisted or closed days are set to 0 in the training counts
 
 
 # The model
@@ -432,12 +472,13 @@ The item-level parameters are partially pooled, so the priors that matter are th
 Everything lives on the log scale of the sales, where 0.3 is a factor of e^{0.3} \approx 1.35. The half-normal scales are weakly informative in that unit: the intercept deviations \sigma^{\alpha} get a prior standard deviation of 0.5 (the last-28-day level can be off by a factor of two for an item, but not routinely by ten), the dispersion spread \tau a standard deviation of 1 (item dispersions within a store-department can differ by a factor of e), the block-walk innovations 0.3 per 28 days, the item weekday deviations 0.2 (small next to the store-department pattern they refine), the event effects 0.3 (a holiday can halve or double a department) and the store shocks 0.2 (a common daily shock of \pm 20\\ is large for a store total). The shared effects have fixed scales because the hierarchy already pools them: a store-department intercept shift of 0.3, a weekday effect of 0.3, a SNAP lift of 0.3, Fourier weights of 0.3 per harmonic and a group log dispersion of 1 around zero (a dispersion of 1 is a geometric Poisson-Gamma mixture with variance m + m^2). The prior predictive check of the focus items below shows what these priors allow before the data speak. The figure shows the half-normal scales, with the fixed Normal(0, 0.3) of the shared effects for comparison.
 
 
-    In [6]:
+    In [9]:
 
 
 ``` python
-fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 4.5), layout="constrained")
+fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(12, 9), layout="constrained")
 
+# Top: the half-normal priors of the population scales, one color per scale.
 for scale, color, label in [
     (0.2, "C0", "item weekday deviations, store shocks"),
     (0.3, "C1", "block-walk innovations, event effects"),
@@ -448,32 +489,36 @@ for scale, color, label in [
     axes[0].lines[-1].set_label(f"HalfNormal({scale}): {label}")
 
 axes[0].set(title="population scales (log scale)", xlim=(0, 2.5))
-pz.Normal(0, 0.3).plot_pdf(ax=axes[1], color="C0", legend=None)
+axes[0].legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncols=2)
+
+# Bottom: the fixed priors of the shared effects.
+pz.Normal(0, 0.3).plot_pdf(ax=axes[1], color="C4", legend=None)
 axes[1].lines[-1].set_label("Normal(0, 0.3): group intercept, weekday, SNAP, Fourier weights")
-pz.Normal(0, 1).plot_pdf(ax=axes[1], color="C3", legend=None)
+pz.Normal(0, 1).plot_pdf(ax=axes[1], color="C5", legend=None)
 axes[1].lines[-1].set_label("Normal(0, 1): group log dispersion")
 axes[1].set(title="shared effects (log scale)", xlim=(-3, 3))
-handles = [*axes[0].get_legend_handles_labels()[0], *axes[1].get_legend_handles_labels()[0]]
-fig.legend(handles=handles, loc="outside lower center", ncols=2)
-fig.suptitle("Priors of the population scales and the shared effects", fontsize=14);
+axes[1].legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncols=2)
+fig.suptitle(
+    "Priors of the population scales and the shared effects", fontsize=18, fontweight="bold"
+);
 ```
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-7-output-1.png" class="figure-img" width="1411" height="456" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-10-output-1.png" class="figure-img" width="1211" height="911" /></p>
 </figure>
 
 
 ## Why these components
 
-The model was built up one component at a time during development, with the same code, on a selection window whose forecast origin is day 1,878 (250 draws; a second SVI seed of one variant moved the score by 0.002). The figure is the ablation that chose the components, from the literal scores of those runs; it is not re-run in this notebook. The last rung is the model of this notebook. Two details were changed afterwards without moving its score: the event effects are now the lift over an ordinary day (the ablation runs carried a free "no event" effect per department, which acted as a department intercept; that role now belongs to the explicit store-department intercept a_j, and the score on this window is 0.514 either way), and the store-shock prior was widened from a half-normal scale of 0.05 to 0.2 (the posterior scales do not move, 0.07 to 0.11 under both).
+The model was built up one component at a time during development, with the same code, on a selection window whose forecast origin is day 1,878 (250 draws; a second SVI seed of one variant moved the score by 0.002). The figure is the model selection ladder that chose the components, from the literal scores of those runs; it is not re-run in this notebook. The last rung is the model of this notebook. Two details were changed afterwards without moving its score: the event effects are now the lift over an ordinary day (the selection runs carried a free "no event" effect per department, which acted as a department intercept; that role now belongs to the explicit store-department intercept a_j, and the score on this window is 0.514 either way), and the store-shock prior was widened from a half-normal scale of 0.05 to 0.2 (the posterior scales do not move, 0.07 to 0.11 under both).
 
 
-    In [7]:
+    In [10]:
 
 
 ``` python
-ablation = pl.DataFrame(
+ladder = pl.DataFrame(
     {
         "model": [
             "top-down (kit)",
@@ -492,27 +537,30 @@ ablation = pl.DataFrame(
 )
 
 fig, ax = plt.subplots(figsize=(14, 6), layout="constrained")
-y = np.arange(ablation.height)
+y = np.arange(ladder.height)
 height = 0.27
 
 for k, column in enumerate(["all levels", "levels 1 to 9", "levels 10 to 12"]):
-    bars = ax.barh(y + (k - 1) * height, ablation[column].to_numpy(), height, label=column)
-    ax.bar_label(bars, fmt="%.3f", fontsize=10, padding=2)
+    ax.barh(y + (k - 1) * height, ladder[column].to_numpy(), height, label=column)
 
-ax.set_yticks(y, ablation["model"].to_list())
+ax.set_yticks(y, ladder["model"].to_list())
 ax.invert_yaxis()
 ax.axvline(0.553, color="gray", ls="--", lw=1)
-ax.set(title="Ablation on the selection window (origin day 1,878): WS-CRPS", xlim=(0, 1.1))
+ax.set(title="Model selection on the selection window (origin day 1,878): WS-CRPS", xlim=(0, 1.0))
 ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0));
 ```
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-8-output-1.png" class="figure-img" width="1411" height="611" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-11-output-1.png" class="figure-img" width="1411" height="611" /></p>
 </figure>
 
 
-Three readings. Without a level process, a two-year intercept is the wrong level for most items and the model loses to the baseline (the dashed line) by a wide margin: the block walk is the component that makes the item model work. Yearly seasonality, events and item weekday deviations buy the next 0.024, almost all at the aggregate levels. The price elasticity changes nothing, and shared block walks at the store and store-department level cost 0.007: what a store's level does over 13 blocks is already in its items. The weekly shocks do not move the CRPS, but they change the calibration: on the selection window the 94\\ coverage at level 1 went from 0.54 to 0.68, at level 3 from 0.70 to 0.95 and at level 9 from 0.81 to 0.90, with the items unchanged. They are kept because a hierarchical forecast that is right on average but wrong about its own uncertainty at the store level is not a state space model, and the backtest below reports the coverage so the reader can judge.
+Here are three observations:
+
+- **The block walk is the component that makes the item model work.** Without a level process, a two-year intercept is the wrong level for most items and the model loses to the baseline (the dashed line) by a wide margin. Yearly seasonality, events and item weekday deviations buy the next 0.024, almost all at the aggregate levels.
+- **Shared level processes and the price add nothing.** The price elasticity changes nothing, and shared block walks at the store and store-department level cost 0.007: what a store's level does over 13 blocks is already in its items.
+- **The weekly shocks are for calibration.** They do not move the CRPS, but on the selection window the 94\\ coverage at level 1 went from 0.54 to 0.68, at level 3 from 0.70 to 0.95 and at level 9 from 0.81 to 0.90, with the items unchanged. They are kept because a hierarchical forecast that is right on average but wrong about its own uncertainty at the store level is not a state space model, and the backtest below reports the coverage so the reader can judge.
 
 
 ## The model function
@@ -522,7 +570,7 @@ The model is one function of `(covariates, data)` on [Horizon.from_data](../../.
 Two helpers hold the state space components. `block_walk` samples the 12 innovations of the training blocks under a `blocks` plate, accumulates them backwards so that the last training block is zero, and adds one fresh innovation for the horizon block when the horizon is open. `weekly_shocks` samples one `ZeroSumNormal` week per row under a `weeks` plate, with the weeks counted back from the origin so that the last training week ends there, and fresh weeks for the horizon.
 
 
-    In [8]:
+    In [11]:
 
 
 ``` python
@@ -706,19 +754,15 @@ def create_series_plates(covariates: Array, data: Array | None = None) -> numpyr
 ```
 
 
-# Fitting and forecasting
+# Prior predictive check
 
-`recent_level` computes the prior center of the item intercepts, \log m_i: the mean sales of every series over its listed days of the last 28 training days, with the fallbacks described above. `fit_model` runs `AutoNormal` with the median initialization (the uniform default overflows the exponential of a sum of ten log-scale terms) and a one-cycle Adam schedule peaking at 0.03 with clipped gradients, 3,000 steps over the last two years of training data. Two years, rather than the five of the baselines, halve the cost of a step and let every series be visited about 150 times; a walk anchored at the origin has no use for older history, and the yearly terms see two cycles.
+Before any fit, we check what the priors allow. The check needs the one input the model takes besides the data, the origin levels \log m_i: `recent_level` computes them as the mean sales of every series over its listed days of the last 28 training days, with the fallbacks described above.
 
 
-    In [9]:
+    In [12]:
 
 
 ``` python
-NUM_STEPS = 3_000
-PEAK_LR = 0.03
-
-
 def recent_level(train_counts: Array, train_saled: Array, days: int = BLOCK) -> Array:
     """Log of the mean sales of every series over its listed days of the last ``days`` days.
 
@@ -732,205 +776,16 @@ def recent_level(train_counts: Array, train_saled: Array, days: int = BLOCK) -> 
     mean = jnp.where(listed_recent > 0, mean_recent, jnp.where(listed_year > 0, mean_year, 0.0))
 
     return jnp.log(mean + 0.05)
-
-
-def fit_model(
-    rng_key: Array,
-    model: ForecastModel,
-    train_covariates: Array,
-    train_counts: Array,
-    *,
-    num_steps: int = NUM_STEPS,
-) -> tuple[AutoNormal, SVIRunResult, float]:
-    """Fit the model with subsampled SVI; return the guide, the result and the wall time."""
-    guide = AutoNormal(model, init_loc_fn=init_to_median, create_plates=create_series_plates)
-    schedule = optax.linear_onecycle_schedule(
-        transition_steps=num_steps,
-        peak_value=PEAK_LR,
-        pct_start=0.2,
-        pct_final=0.8,
-        div_factor=10,
-        final_div_factor=10,
-    )
-    optimizer = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
-    svi = SVI(model, guide, optimizer, Trace_ELBO())
-
-    start = perf_counter()
-    result = svi.run(rng_key, num_steps, train_covariates, train_counts, progress_bar=False)
-    jax.block_until_ready(result.losses)
-
-    return guide, result, perf_counter() - start
 ```
 
 
-`forecast_bottom_level` draws the bottom-level forecast of all 30,490 series: 50 posterior draws at a time from the guide, run through the forecast-only instance of the model for the horizon mean and dispersion of every series, sampled with NumPy's negative binomial (parametrized by the number of successes \phi and the probability \phi / (\phi + m), which is the `NegativeBinomial2` of the model), then discarded. The draws are what the scoring `transform` sums up the hierarchy.
+The arrays of the evaluation window are built here, because the prior predictive check and, later, the final fit and the backtest all use them: the last two years of training data, their counts, the origin levels of the last 28 training days and the model instance centered on them.
 
 
-    In [10]:
-
-
-``` python
-def forecast_bottom_level(
-    rng_key: Array,
-    guide: AutoNormal,
-    params: dict,
-    train_counts: Array,
-    full_covariates: Array,
-    num_samples: int,
-    *,
-    chunk: int = 50,
-) -> np.ndarray:
-    """Draw ``num_samples`` bottom-level forecasts of every series, ``chunk`` posterior draws at a time.
-
-    Each chunk draws the posterior, runs the forecast-only model for the horizon mean and
-    dispersion of every series, and samples the negative binomial counts with NumPy.
-    """
-    model_fc = make_model(
-        recent_level(train_counts, full_covariates[1][: train_counts.shape[0]]),
-        forecast_only=True,
-    )
-    n_days = full_covariates.shape[1] - train_counts.shape[0]
-    draws = np.empty((num_samples, n_days, train_counts.shape[1]), dtype=np.float32)
-    generator = np.random.default_rng(int(rng_key[1]))
-
-    for start in range(0, num_samples, chunk):
-        key_post, key_pred = random.split(random.fold_in(rng_key, start))
-        posterior = draw_posterior(key_post, guide, params, min(chunk, num_samples - start))
-        pred = Predictive(model_fc, posterior, return_sites=["mean_future", "concentration"])(
-            key_pred, full_covariates, train_counts
-        )
-        mean = np.asarray(pred["mean_future"], dtype=np.float64)  # (chunk, horizon, series)
-        concentration = np.asarray(pred["concentration"], dtype=np.float64)[:, None, :]
-        draws[start : start + mean.shape[0]] = generator.negative_binomial(
-            concentration, concentration / (concentration + mean)
-        )
-
-    return draws
-```
-
-
-# The baseline in the same harness
-
-The kit's top-down model (a StudentT regression on the log of the total with a trend, weekday and day-of-month effects, split to the items with their last-28-day shares and Poisson noise) is re-run in this notebook with the same windows and the same number of draws, so the comparison is exact; the other two baselines are quoted from the baselines notebook. Its covariates are the ones of the baselines notebook: the time in years, the weekday index and the 31 day-of-month dummies, one row per day.
-
-
-    In [11]:
+    In [13]:
 
 
 ``` python
-day_of_month = calendar_df["date"].dt.day().to_numpy()[:N_DAYS]
-covariates_top = jnp.asarray(  # (days, 33)
-    np.column_stack(
-        [
-            np.arange(N_DAYS, dtype=np.float32) / 365.0,  # column 0: time in years
-            calendar_df["dow"].to_numpy()[:N_DAYS].astype(np.float32),  # column 1: weekday
-            np.stack([(day_of_month == day).astype(np.float32) for day in range(1, 32)], axis=-1),
-        ]
-    )
-)
-
-
-def top_down_model(covariates: Array, data: Array | None = None) -> None:
-    """Kit model 1: trend, weekday and day-of-month effects on the log of the total sales."""
-    h = Horizon.from_data(covariates, data)
-    time = covariates[:, 0]
-    dow = covariates[:, 1].astype(jnp.int32)
-    feature = covariates[:, 2:]
-
-    bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
-    trend = numpyro.sample("trend", dist.LogNormal(-2.0, 1.0))
-    weight = numpyro.sample(
-        "weight", dist.Normal(0.0, 1.0).expand([feature.shape[-1]]).to_event(1)
-    )
-
-    with numpyro.plate("day_of_week", 7):
-        seasonal = numpyro.sample("seasonal", dist.Normal(0.0, 5.0))
-
-    prediction = bias + trend * time + seasonal[dow] + feature @ weight
-    dof = numpyro.sample("dof", dist.Uniform(1.0, 10.0))
-    noise_scale = numpyro.sample("noise_scale", dist.LogNormal(-2.0, 1.0))
-    predict(h, dist.StudentT(dof, 0.0, noise_scale), prediction[:, None])
-
-
-def forecast_fn_top_down(
-    rng_key: Array,
-    model: ForecastModel,
-    train_data: Array,
-    train_covariates: Array,
-    full_covariates: Array,
-    num_samples: int,
-    *,
-    batch_size: int | None = None,
-) -> np.ndarray:
-    """Fit the kit's top-down model and split its forecast to the items with Poisson noise."""
-    key_fit, key_post, key_fc = random.split(rng_key, 3)
-
-    # The kit's fit: 1,001 steps of clipped Adam with a tenfold learning-rate decay.
-    y = jnp.log(train_data.sum(-1, keepdims=True))
-    guide = AutoNormal(model)
-    schedule = optax.exponential_decay(0.1, transition_steps=1_001, decay_rate=0.1)
-    optimizer = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
-    svi = SVI(model, guide, optimizer, Trace_ELBO())
-    result = svi.run(key_fit, 1_001, train_covariates, y, progress_bar=False)
-
-    # Forecast the total in units and split it to the items with their last-28-day shares.
-    posterior = draw_posterior(key_post, guide, result.params, num_samples)
-    total = np.exp(np.asarray(forecast(key_fc, model, posterior, y, full_covariates)))
-    last_28 = np.asarray(train_data[-28:]).sum(0)
-    shares = (last_28 / last_28.sum()).astype(np.float32)
-    generator = np.random.default_rng(int(train_data.shape[0]))
-    draws = np.empty((num_samples, total.shape[1], shares.size), dtype=np.float32)
-
-    for start in range(0, num_samples, 50):
-        draws[start : start + 50] = generator.poisson(total[start : start + 50] * shares)
-
-    return draws
-```
-
-
-# Backtest against the baseline
-
-Both models are backtested on the three windows of the baselines notebook (forecast origins on days 1,843, 1,878 and 1,913, 28 days each, 250 draws) with [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): it slices the windows, times the closures, sums the draws up the hierarchy and scores every level. The closure of the state space model, `forecast_fn_item`, receives the raw bottom-level sales of the window, keeps the last two years, builds the training counts and the origin levels, fits and forecasts; the `model` argument that [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) passes is not used, because the intercept centers depend on the window, so each window rebuilds its own model instance. The instance of the evaluation window is built here as well, with the levels of the last 28 training days, since [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) needs a model factory.
-
-Besides the mean over the 12 levels, `summarize_backtest` reports the means over levels 1 to 9 (the aggregates) and 10 to 12 (the items), because the two halves reward different things: calibrated common uncertainty at the top, a sharp level per item at the bottom.
-
-
-    In [12]:
-
-
-``` python
-def forecast_fn_item(
-    rng_key: Array,
-    model: ForecastModel,
-    train_data: Array,
-    train_covariates: Array,
-    full_covariates: Array,
-    num_samples: int,
-    *,
-    batch_size: int | None = None,
-) -> np.ndarray:
-    """`backtest` closure of the item model: build the counts and the levels, fit, forecast."""
-    key_fit, key_fc = random.split(rng_key)
-    t1 = train_data.shape[0]
-
-    # The last two years of the window: covariates (2, 730, series) and counts (730, series).
-    train_covariates = train_covariates[:, -HISTORY_DAYS:]
-    train_counts = jnp.rint(train_data[-HISTORY_DAYS:] * train_covariates[1]).astype(jnp.int32)
-
-    model = make_model(recent_level(train_counts, train_covariates[1]))
-    guide, result, _ = fit_model(key_fit, model, train_covariates, train_counts)
-
-    return forecast_bottom_level(
-        key_fc,
-        guide,
-        result.params,
-        train_counts,
-        full_covariates[:, t1 - HISTORY_DAYS :],
-        num_samples,
-    )
-
-
-# The evaluation window's model: the last two years of training data and their origin levels.
 sales_train = jnp.asarray(sales[:N_DAYS_TRAIN])
 covariates_final = covariates[:, N_DAYS_TRAIN - HISTORY_DAYS :]
 counts_final = jnp.rint(sales_train[-HISTORY_DAYS:] * covariates_final[1, :HISTORY_DAYS]).astype(
@@ -941,346 +796,10 @@ final_model = make_model(level_final)
 ```
 
 
-    In [13]:
-
-
-``` python
-NUM_SAMPLES_WINDOW = 250
-BACKTEST_ORIGINS = [REFERENCE_DAYS + 35 * k for k in range(3)]  # 1,843, 1,878 and 1,913
-LEVEL_COLUMNS = [f"metric_ws_crps_{level}" for level in LEVELS]
-TOP_LEVELS = LEVEL_COLUMNS[:9]
-ITEM_LEVELS = LEVEL_COLUMNS[9:]
-COVERAGE_COLUMNS = [f"metric_coverage_{level}" for level in COVERAGE_LEVELS]
-
-
-def summarize_backtest(results: list, name: str) -> pl.DataFrame:
-    """One row per window with the mean WS-CRPS over all levels, levels 1 to 9 and levels 10 to 12."""
-    return (
-        pl.from_pandas(results_to_dataframe(results))
-        .with_columns(
-            model=pl.lit(name),
-            ws_crps=pl.mean_horizontal(LEVEL_COLUMNS),
-            ws_crps_1_9=pl.mean_horizontal(TOP_LEVELS),
-            ws_crps_10_12=pl.mean_horizontal(ITEM_LEVELS),
-        )
-        .select(
-            "model",
-            "t1",
-            "t2",
-            "walltime",
-            "ws_crps",
-            "ws_crps_1_9",
-            "ws_crps_10_12",
-            *LEVEL_COLUMNS,
-            *COVERAGE_COLUMNS,
-        )
-    )
-
-
-def run_backtest(
-    rng_key: Array,
-    name: str,
-    model: ForecastModel,
-    covariates_model: Array,
-    forecast_fn: ForecastFn,
-) -> pl.DataFrame:
-    """Backtest a model on the kit's three windows (forecast origins 1,843, 1,878 and 1,913)."""
-    results = backtest(
-        rng_key,
-        lambda: model,
-        sales_train,
-        covariates_model[..., :N_DAYS_TRAIN, :],
-        forecast_fn=forecast_fn,
-        test_window=HORIZON,
-        stride=35,
-        min_train_window=REFERENCE_DAYS,
-        num_samples=NUM_SAMPLES_WINDOW,
-        transform=aggregate_transform,
-        per_window_metrics=m5_metrics,
-    )
-
-    return summarize_backtest(results, name)
-
-
-rng_key, key_top, key_item = random.split(rng_key, 3)
-backtest_df = pl.concat(
-    [
-        run_backtest(
-            key_top, "top-down (kit)", top_down_model, covariates_top, forecast_fn_top_down
-        ),
-        run_backtest(key_item, "state space (NB)", final_model, covariates, forecast_fn_item),
-    ]
-).sort("t1", "model")
-
-for name in ["top-down (kit)", "state space (NB)"]:
-    rows = backtest_df.filter(pl.col("model").eq(pl.lit(name))).sort("t1")
-    means = rows.select("ws_crps", "ws_crps_1_9", "ws_crps_10_12").mean().row(0)
-    coverage = rows.select(COVERAGE_COLUMNS).to_numpy()
-
-    print(
-        f"{name:17s} WS-CRPS per window {rows['ws_crps'].round(3).to_list()}; mean over the "
-        f"windows {means[0]:.3f} (levels 1 to 9 {means[1]:.3f}, levels 10 to 12 {means[2]:.3f}); "
-        f"coverage at levels 1, 3, 9, 12 from {coverage.min(axis=0).round(2).tolist()} "
-        f"to {coverage.max(axis=0).round(2).tolist()}"
-    )
-```
-
-
-    top-down (kit)    WS-CRPS per window [0.553, 0.553, 0.57]; mean over the windows 0.558 (levels 1 to 9 0.486, levels 10 to 12 0.776); coverage at levels 1, 3, 9, 12 from [1.0, 0.96, 0.79, 0.93] to [1.0, 0.96, 0.81, 0.94]
-    state space (NB)  WS-CRPS per window [0.504, 0.513, 0.502]; mean over the windows 0.506 (levels 1 to 9 0.414, levels 10 to 12 0.784); coverage at levels 1, 3, 9, 12 from [0.68, 0.95, 0.87, 0.98] to [0.82, 0.96, 0.9, 0.98]
-
-
-The figure reads the backtest: the WS-CRPS per window, the per-level scores averaged over the three windows, and the 94\\ coverage at the four levels, window by window, against the nominal 0.94.
+The check is run on seven focus items, the best seller of each department in store CA_1 over the last training year: the same seven as in the baselines notebook, where the kit's bottom-up model missed their level. A seven-series instance of the model (the model is built from the group ids and origin levels of the series it covers, so any subset is an instance) gives the prior predictive through `Predictive`.
 
 
     In [14]:
-
-
-``` python
-MODELS = ["top-down (kit)", "state space (NB)"]
-backtest_mean = backtest_df.group_by("model", maintain_order=True).agg(
-    pl.col("ws_crps", "ws_crps_1_9", "ws_crps_10_12", *LEVEL_COLUMNS, *COVERAGE_COLUMNS).mean()
-)
-
-fig, axes = plt.subplots(
-    nrows=1, ncols=3, figsize=(18, 5), width_ratios=[1, 2, 1.3], layout="constrained"
-)
-width = 0.4
-
-# Left: the headline score per window.
-x = np.arange(len(BACKTEST_ORIGINS))
-
-for k, name in enumerate(MODELS):
-    rows = backtest_df.filter(pl.col("model").eq(pl.lit(name))).sort("t1")
-    bars = axes[0].bar(x + (k - 0.5) * width, rows["ws_crps"].to_numpy(), width, label=name)
-    axes[0].bar_label(bars, fmt="%.3f", fontsize=10)
-
-axes[0].set_xticks(x, [f"origin {origin:,}" for origin in BACKTEST_ORIGINS])
-axes[0].set(title="WS-CRPS per window", ylabel="WS-CRPS")
-axes[0].margins(y=0.15)
-
-# Middle: the per-level scores, mean over the windows.
-x = np.arange(len(LEVELS))
-
-for k, name in enumerate(MODELS):
-    row = backtest_mean.filter(pl.col("model").eq(pl.lit(name)))
-    axes[1].bar(x + (k - 0.5) * width, row.select(LEVEL_COLUMNS).to_numpy()[0], width, label=name)
-
-axes[1].set_xticks(x, list(LEVELS), rotation=45)
-axes[1].set(title="WS-CRPS by level, mean over the three windows")
-
-# Right: the coverage of the central 94% interval at four levels, one marker per window.
-x = np.arange(len(COVERAGE_LEVELS))
-
-for k, name in enumerate(MODELS):
-    rows = backtest_df.filter(pl.col("model").eq(pl.lit(name))).sort("t1")
-
-    for j in range(rows.height):
-        axes[2].scatter(
-            x + (k - 0.5) * width + (j - 1) * 0.1,
-            rows[j].select(COVERAGE_COLUMNS).to_numpy()[0],
-            color=f"C{k}",
-            label=name if j == 0 else None,
-            zorder=3,
-        )
-
-axes[2].axhline(0.94, color="gray", ls="--", lw=1, label="nominal 0.94")
-axes[2].set_xticks(x, [level.replace("Level", "level ") for level in COVERAGE_LEVELS])
-axes[2].set(title=r"$94\%$ coverage per window", ylim=(0.4, 1.02))
-handles, labels = axes[2].get_legend_handles_labels()
-fig.legend(handles, labels, loc="outside lower center", ncols=3)
-fig.suptitle(
-    "Backtest on the three windows of the baselines notebook", fontsize=16, fontweight="bold"
-);
-```
-
-
-<figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-15-output-1.png" class="figure-img" width="1811" height="506" /></p>
-</figure>
-
-
-The state space model is ahead on every window (0.504, 0.513 and 0.502 against 0.553, 0.553 and 0.570), and the gain is at the aggregate levels: 0.414 against 0.486 on average over levels 1 to 9, with the item levels a draw (0.784 against 0.776). The coverage panel reads the calibration. At the store level both models are at the nominal 0.95; at the store-department level the state space model is at 0.87 to 0.90 where the baseline is at 0.80; at the item level the negative binomial is a little wide at 0.98 where the baseline is at 0.93; and at the total level the baseline covers every day of every window (a band that wide pays in the CRPS) while the state space model covers 68 to 82 percent of the days, too narrow. The evaluation window below tells the same story.
-
-
-# The final fit
-
-The model is now fitted once on the last two years before the evaluation window.
-
-
-    In [15]:
-
-
-``` python
-rng_key, key_fit = random.split(rng_key)
-guide_final, svi_final, time_final = fit_model(
-    key_fit, final_model, covariates_final[:, :HISTORY_DAYS], counts_final
-)
-
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(np.arange(100, NUM_STEPS), np.asarray(svi_final.losses[100:]), color="C0")
-ax.set(
-    title=f"Final model: ELBO loss ({NUM_STEPS:,} steps, {time_final:.0f} s), from step 100",
-    xlabel="SVI step",
-    ylabel="loss",
-);
-```
-
-
-<figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-16-output-1.png" class="figure-img" width="1011" height="411" /></p>
-</figure>
-
-
-The loss rises during the warm-up of the one-cycle schedule (the peak learning rate is reached at step 600) and then falls for the rest of the run; it is still going down slowly at step 3,000, so a longer run would buy a little more, at a cost that the timing section puts in context. The curve is noisy for the same reason as the bottom-up model of the baselines notebook: every step scores a different random set of 1,500 series.
-
-
-## Posterior of the shared parameters
-
-The item-level sites are too many to look at one by one, so we export the shared sites (the population scales and the pooled effects) to ArviZ with named coordinates. The first forest plot shows the five population scales by department (or by store for the shock scale): how much each component moves on the log scale.
-
-
-    In [16]:
-
-
-``` python
-rng_key, key_post = random.split(rng_key)
-posterior_final = draw_posterior(key_post, guide_final, svi_final.params, 500)
-
-DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-SHARED_DIMS = {
-    "sigma_alpha": ["dept"],
-    "tau_phi": ["dept"],
-    "sigma_walk": ["dept"],
-    "sigma_item_dow": ["dept"],
-    "sigma_event": ["dept"],
-    "w_fourier": ["dept", "harmonic"],
-    "gamma_event": ["dept", "event"],
-    "store_shock_scale": ["store"],
-    "log_phi_group": ["group"],
-    "seasonal_group": ["group", "day_of_week"],
-    "snap_group": ["group"],
-    "alpha_group": ["group"],
-}
-tree_final = az.from_dict(
-    {"posterior": {name: np.asarray(posterior_final[name])[None] for name in SHARED_DIMS}},
-    coords={
-        "dept": dept_ids,
-        "group": group_ids,
-        "store": store_ids,
-        "day_of_week": DOW_LABELS,
-        "event": event_names,
-        "harmonic": [f"{f}{k}" for f in ("sin", "cos") for k in range(1, N_HARMONICS + 1)],
-    },
-    dims=SHARED_DIMS,
-)
-```
-
-
-    In [17]:
-
-
-``` python
-pc = az.plot_forest(
-    tree_final,
-    var_names=["sigma_alpha", "tau_phi", "sigma_walk", "sigma_item_dow", "store_shock_scale"],
-    combined=True,
-    figure_kwargs={"figsize": (11, 12)},
-)
-pc.viz["figure"].item().suptitle("Population scales (log scale)", fontsize=14);
-```
-
-
-<figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-18-output-1.png" class="figure-img" width="1111" height="1211" /></p>
-</figure>
-
-
-The population scales tell how much each component moves. The intercept deviations \sigma^{\alpha} are 0.09 to 0.22 on the log scale by department: the prior center, the last-28-day level, is close for most items. The item dispersion spreads \tau are 0.58 to 0.85, large: item-level dispersion matters, two items of the same store-department can differ by a factor of two in dispersion. The block-walk innovation scales \sigma^{u} are 0.13 to 0.22 per 28-day block, larger for the FOODS departments than for HOBBIES and HOUSEHOLD, so a food item's level moves by 15\\ to 20\\ from one block to the next. The item weekday deviations are 0.03 to 0.08, small next to the store-department pattern they refine, and the store shock scales are 0.06 to 0.11, highest for the Wisconsin stores and TX_2. The intervals are tiny: with 30,490 series behind each population parameter and a mean-field guide, these are effectively point estimates.
-
-
-    In [18]:
-
-
-``` python
-ca1_groups = [label for label in group_ids if label.startswith("CA_1/")]
-pc = az.plot_forest(
-    tree_final,
-    var_names=["seasonal_group"],
-    coords={"group": ca1_groups},
-    combined=True,
-    labels=["group", "day_of_week"],
-    figure_kwargs={"figsize": (8, 12)},
-)
-pc.viz["figure"].item().suptitle(
-    "Weekday effects of the departments of store CA_1 (log scale)", fontsize=14
-);
-```
-
-
-<figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-19-output-1.png" class="figure-img" width="811" height="1211" /></p>
-</figure>
-
-
-The weekday effects of the departments of store CA_1 show the weekend peak of every department (Saturday and Sunday +0.1 to +0.3 on the log scale, Tuesday to Thursday -0.05 to -0.2), with the shape varying by department: the food departments peak on Sunday, the household departments on Saturday, and HOBBIES_2 is the flattest. These are the store-department patterns; the item deviations around them are an order of magnitude smaller.
-
-
-    In [19]:
-
-
-``` python
-pc = az.plot_forest(
-    tree_final,
-    var_names=["snap_group"],
-    combined=True,
-    labels=["group"],
-    figure_kwargs={"figsize": (8, 14)},
-)
-pc.viz["figure"].item().suptitle("SNAP effect by store-department (log scale)", fontsize=14);
-```
-
-
-<figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-20-output-1.png" class="figure-img" width="811" height="1411" /></p>
-</figure>
-
-
-The SNAP effect is strongest for the FOODS departments of the Wisconsin and Texas stores (up to +0.6 for WI_2/FOODS_2, that is \times 1.8 on SNAP days) and close to zero for HOBBIES and HOUSEHOLD, as expected of a food-stamp program; the pattern is the one the kit's bottom-up model found in the baselines notebook, now with a store-department resolution and intervals narrow enough to rank the stores.
-
-
-    In [20]:
-
-
-``` python
-pc = az.plot_forest(
-    tree_final,
-    var_names=["gamma_event"],
-    coords={"dept": ["FOODS_3", "HOBBIES_1"]},
-    combined=True,
-    labels=["dept", "event"],
-    figure_kwargs={"figsize": (9, 12)},
-)
-pc.viz["figure"].item().suptitle(
-    "Calendar event effects of FOODS_3 and HOBBIES_1 (log scale)", fontsize=14
-);
-```
-
-
-<figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-21-output-1.png" class="figure-img" width="911" height="1211" /></p>
-</figure>
-
-
-The calendar events read as expected: every effect is the lift of the event over an ordinary day of the department. Thanksgiving is about -0.4 for FOODS_3 and -0.8 for HOBBIES_1 (the stores close early), Mother's Day and New Year are negative, Labor Day, Presidents' Day and Columbus Day are positive for FOODS_3. Christmas is the one event with a wide posterior: the stores are closed, `saled` is zero and the effect only sees its prior.
-
-
-## Focus items
-
-Seven items of store CA_1, the best seller of each department over the last training year, are the items of the plots: the same seven as in the baselines notebook, where the kit's bottom-up model missed their level. A seven-series instance of the model, built with the item-level draws of these series (`subset_posterior` picks their columns out of the posterior), gives the prior predictive check, the in-sample predictive and the forecast through `Predictive`, [predict_in_sample()](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast).
-
-
-    In [21]:
 
 
 ``` python
@@ -1302,31 +821,12 @@ focus_df = (
 focus_index = focus_df["n"].to_numpy()
 focus_labels = focus_df["id"].to_list()
 
-# The item-level sites and the axis of their series dimension.
-ITEM_SITES = {"alpha": -1, "log_phi": -1, "item_walk": -1, "item_dow": -2}
-
-
-def subset_posterior(posterior: dict, index: np.ndarray) -> dict:
-    """Keep the draws of the series in ``index`` for the item-level sites, everything else as is."""
-    out = {}
-
-    for name, value in posterior.items():
-        if name in ITEM_SITES:
-            axis = ITEM_SITES[name] % value.ndim
-            out[name] = jnp.take(value, jnp.asarray(index), axis=axis)
-        else:
-            out[name] = value
-
-    return out
-
-
 focus_model = make_model(
     level_final[focus_index],
     store_index=store_index[focus_index],
     group_index=group_index[focus_index],
     dept_index=dept_index[focus_index],
 )
-posterior_focus = subset_posterior(posterior_final, focus_index)
 covariates_focus = covariates_final[:, :, focus_index]
 ```
 
@@ -1334,7 +834,7 @@ covariates_focus = covariates_final[:, :, focus_index]
 `plot_series_panel` is the faceted band plot of the baselines notebook: one panel per series, the in-sample bands in blue, the forecast bands in orange and the observed series in black, with the 94\\ and 50\\ HDIs.
 
 
-    In [22]:
+    In [15]:
 
 
 ``` python
@@ -1469,11 +969,11 @@ def plot_series_panel(
 ```
 
 
-    In [23]:
+    In [16]:
 
 
 ``` python
-rng_key, key_prior = random.split(rng_key)
+key_prior = random.PRNGKey(seed=0)  # a side key: the fits below keep their own stream
 prior_focus = Predictive(focus_model, num_samples=500, return_sites=["obs"])(
     key_prior, covariates_focus[:, :HISTORY_DAYS]
 )["obs"]
@@ -1495,14 +995,590 @@ del prior_focus
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-24-output-1.png" class="figure-img" width="1511" height="1084" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-17-output-1.png" class="figure-img" width="1511" height="1084" /></p>
 </figure>
 
 
 The prior predictive check shows what the priors allow before seeing the data: 94\\ bands that reach 10 to 20 times the observed level, with the 50\\ band around the observed level itself. Wide, but not absurd for a count model whose intercept is centered on the recent level: the prior knows where each item is and does not know how much it moves.
 
 
+# Fitting and forecasting
+
+`fit_model` runs `AutoNormal` with the median initialization (the uniform default overflows the exponential of a sum of ten log-scale terms) and a one-cycle Adam schedule peaking at 0.03 with clipped gradients, 3,000 steps over the last two years of training data. Two years, rather than the five of the baselines, halve the cost of a step and let every series be visited about 150 times; a walk anchored at the origin has no use for older history, and the yearly terms see two cycles.
+
+
+    In [17]:
+
+
+``` python
+NUM_STEPS = 3_000
+PEAK_LR = 0.03
+
+
+def fit_model(
+    rng_key: Array,
+    model: ForecastModel,
+    train_covariates: Array,
+    train_counts: Array,
+    *,
+    num_steps: int = NUM_STEPS,
+) -> tuple[AutoNormal, SVIRunResult, float]:
+    """Fit the model with subsampled SVI; return the guide, the result and the wall time."""
+    guide = AutoNormal(model, init_loc_fn=init_to_median, create_plates=create_series_plates)
+    schedule = optax.linear_onecycle_schedule(
+        transition_steps=num_steps,
+        peak_value=PEAK_LR,
+        pct_start=0.2,
+        pct_final=0.8,
+        div_factor=10,
+        final_div_factor=10,
+    )
+    optimizer = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
+    svi = SVI(model, guide, optimizer, Trace_ELBO())
+
+    start = perf_counter()
+    result = svi.run(rng_key, num_steps, train_covariates, train_counts, progress_bar=False)
+    jax.block_until_ready(result.losses)
+
+    return guide, result, perf_counter() - start
+```
+
+
+`forecast_bottom_level` draws the bottom-level forecast of all 30,490 series: 50 posterior draws at a time from the guide, run through the forecast-only instance of the model for the horizon mean and dispersion of every series, sampled with NumPy's negative binomial (parametrized by the number of successes \phi and the probability \phi / (\phi + m), which is the `NegativeBinomial2` of the model), then discarded. The draws are what the scoring `transform` sums up the hierarchy.
+
+
+    In [18]:
+
+
+``` python
+def forecast_bottom_level(
+    rng_key: Array,
+    guide: AutoNormal,
+    params: dict,
+    train_counts: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    chunk: int = 50,
+) -> np.ndarray:
+    """Draw ``num_samples`` bottom-level forecasts of every series, ``chunk`` posterior draws at a time.
+
+    Each chunk draws the posterior, runs the forecast-only model for the horizon mean and
+    dispersion of every series, and samples the negative binomial counts with NumPy.
+    """
+    model_fc = make_model(
+        recent_level(train_counts, full_covariates[1][: train_counts.shape[0]]),
+        forecast_only=True,
+    )
+    n_days = full_covariates.shape[1] - train_counts.shape[0]
+    draws = np.empty((num_samples, n_days, train_counts.shape[1]), dtype=np.float32)
+    generator = np.random.default_rng(int(rng_key[1]))
+
+    for start in range(0, num_samples, chunk):
+        key_post, key_pred = random.split(random.fold_in(rng_key, start))
+        posterior = draw_posterior(key_post, guide, params, min(chunk, num_samples - start))
+        pred = Predictive(model_fc, posterior, return_sites=["mean_future", "concentration"])(
+            key_pred, full_covariates, train_counts
+        )
+        mean = np.asarray(pred["mean_future"], dtype=np.float64)  # (chunk, horizon, series)
+        concentration = np.asarray(pred["concentration"], dtype=np.float64)[:, None, :]
+        draws[start : start + mean.shape[0]] = generator.negative_binomial(
+            concentration, concentration / (concentration + mean)
+        )
+
+    return draws
+```
+
+
+# The baseline in the same harness
+
+The kit's top-down model (a StudentT regression on the log of the total with a trend, weekday and day-of-month effects, split to the items with their last-28-day shares and Poisson noise) is re-run in this notebook with the same windows and the same number of draws, so the comparison is exact; the other two baselines are quoted from the baselines notebook. Its covariates are the ones of the baselines notebook: the time in years, the weekday index and the 31 day-of-month dummies, one row per day.
+
+
+    In [19]:
+
+
+``` python
+day_of_month = calendar_df["date"].dt.day().to_numpy()[:N_DAYS]
+covariates_top = jnp.asarray(  # (days, 33)
+    np.column_stack(
+        [
+            np.arange(N_DAYS, dtype=np.float32) / 365.0,  # column 0: time in years
+            calendar_df["dow"].to_numpy()[:N_DAYS].astype(np.float32),  # column 1: weekday
+            np.stack([(day_of_month == day).astype(np.float32) for day in range(1, 32)], axis=-1),
+        ]
+    )
+)
+
+
+def top_down_model(covariates: Array, data: Array | None = None) -> None:
+    """Kit model 1: trend, weekday and day-of-month effects on the log of the total sales."""
+    h = Horizon.from_data(covariates, data)
+    time = covariates[:, 0]
+    dow = covariates[:, 1].astype(jnp.int32)
+    feature = covariates[:, 2:]
+
+    bias = numpyro.sample("bias", dist.Normal(0.0, 10.0))
+    trend = numpyro.sample("trend", dist.LogNormal(-2.0, 1.0))
+    weight = numpyro.sample(
+        "weight", dist.Normal(0.0, 1.0).expand([feature.shape[-1]]).to_event(1)
+    )
+
+    with numpyro.plate("day_of_week", 7):
+        seasonal = numpyro.sample("seasonal", dist.Normal(0.0, 5.0))
+
+    prediction = bias + trend * time + seasonal[dow] + feature @ weight
+    dof = numpyro.sample("dof", dist.Uniform(1.0, 10.0))
+    noise_scale = numpyro.sample("noise_scale", dist.LogNormal(-2.0, 1.0))
+    predict(h, dist.StudentT(dof, 0.0, noise_scale), prediction[:, None])
+
+
+def forecast_fn_top_down(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> np.ndarray:
+    """Fit the kit's top-down model and split its forecast to the items with Poisson noise."""
+    key_fit, key_post, key_fc = random.split(rng_key, 3)
+
+    # The kit's fit: 1,001 steps of clipped Adam with a tenfold learning-rate decay.
+    y = jnp.log(train_data.sum(-1, keepdims=True))
+    guide = AutoNormal(model)
+    schedule = optax.exponential_decay(0.1, transition_steps=1_001, decay_rate=0.1)
+    optimizer = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(schedule))
+    svi = SVI(model, guide, optimizer, Trace_ELBO())
+    result = svi.run(key_fit, 1_001, train_covariates, y, progress_bar=False)
+
+    # Forecast the total in units and split it to the items with their last-28-day shares.
+    posterior = draw_posterior(key_post, guide, result.params, num_samples)
+    total = np.exp(np.asarray(forecast(key_fc, model, posterior, y, full_covariates)))
+    last_28 = np.asarray(train_data[-28:]).sum(0)
+    shares = (last_28 / last_28.sum()).astype(np.float32)
+    generator = np.random.default_rng(int(train_data.shape[0]))
+    draws = np.empty((num_samples, total.shape[1], shares.size), dtype=np.float32)
+
+    for start in range(0, num_samples, 50):
+        draws[start : start + 50] = generator.poisson(total[start : start + 50] * shares)
+
+    return draws
+```
+
+
+# Backtest against the baseline
+
+Both models are backtested on the three windows of the baselines notebook (forecast origins on days 1,843, 1,878 and 1,913, 28 days each, 250 draws) with [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest): it slices the windows, times the closures, sums the draws up the hierarchy and scores every level. The closure of the state space model, `forecast_fn_item`, receives the raw bottom-level sales of the window, keeps the last two years, builds the training counts and the origin levels, fits and forecasts; the `model` argument that [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) passes is not used, because the intercept centers depend on the window, so each window rebuilds its own model instance ([backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) still needs a model factory, which returns the evaluation window's instance).
+
+Besides the mean over the 12 levels, `summarize_backtest` reports the means over levels 1 to 9 (the aggregates) and 10 to 12 (the items), because the two halves reward different things: calibrated common uncertainty at the top, a sharp level per item at the bottom.
+
+
+    In [20]:
+
+
+``` python
+def forecast_fn_item(
+    rng_key: Array,
+    model: ForecastModel,
+    train_data: Array,
+    train_covariates: Array,
+    full_covariates: Array,
+    num_samples: int,
+    *,
+    batch_size: int | None = None,
+) -> np.ndarray:
+    """`backtest` closure of the item model: build the counts and the levels, fit, forecast."""
+    key_fit, key_fc = random.split(rng_key)
+    t1 = train_data.shape[0]
+
+    # The last two years of the window: covariates (2, 730, series) and counts (730, series).
+    train_covariates = train_covariates[:, -HISTORY_DAYS:]
+    train_counts = jnp.rint(train_data[-HISTORY_DAYS:] * train_covariates[1]).astype(jnp.int32)
+
+    model = make_model(recent_level(train_counts, train_covariates[1]))
+    guide, result, _ = fit_model(key_fit, model, train_covariates, train_counts)
+
+    return forecast_bottom_level(
+        key_fc,
+        guide,
+        result.params,
+        train_counts,
+        full_covariates[:, t1 - HISTORY_DAYS :],
+        num_samples,
+    )
+```
+
+
+    In [21]:
+
+
+``` python
+NUM_SAMPLES_WINDOW = 250
+BACKTEST_ORIGINS = [REFERENCE_DAYS + 35 * k for k in range(3)]  # 1,843, 1,878 and 1,913
+LEVEL_COLUMNS = [f"metric_ws_crps_{level}" for level in LEVELS]
+TOP_LEVELS = LEVEL_COLUMNS[:9]
+ITEM_LEVELS = LEVEL_COLUMNS[9:]
+COVERAGE_COLUMNS = [f"metric_coverage_{level}" for level in COVERAGE_LEVELS]
+
+
+def summarize_backtest(results: list, name: str) -> pl.DataFrame:
+    """One row per window with the mean WS-CRPS over all levels, levels 1 to 9 and levels 10 to 12."""
+    return (
+        pl.from_pandas(results_to_dataframe(results))
+        .with_columns(
+            model=pl.lit(name),
+            ws_crps=pl.mean_horizontal(LEVEL_COLUMNS),
+            ws_crps_1_9=pl.mean_horizontal(TOP_LEVELS),
+            ws_crps_10_12=pl.mean_horizontal(ITEM_LEVELS),
+        )
+        .select(
+            "model",
+            "t1",
+            "t2",
+            "walltime",
+            "ws_crps",
+            "ws_crps_1_9",
+            "ws_crps_10_12",
+            *LEVEL_COLUMNS,
+            *COVERAGE_COLUMNS,
+        )
+    )
+
+
+def run_backtest(
+    rng_key: Array,
+    name: str,
+    model: ForecastModel,
+    covariates_model: Array,
+    forecast_fn: ForecastFn,
+) -> pl.DataFrame:
+    """Backtest a model on the kit's three windows (forecast origins 1,843, 1,878 and 1,913)."""
+    results = backtest(
+        rng_key,
+        lambda: model,
+        sales_train,
+        covariates_model[..., :N_DAYS_TRAIN, :],
+        forecast_fn=forecast_fn,
+        test_window=HORIZON,
+        stride=35,
+        min_train_window=REFERENCE_DAYS,
+        num_samples=NUM_SAMPLES_WINDOW,
+        transform=aggregate_transform,
+        per_window_metrics=m5_metrics,
+    )
+
+    return summarize_backtest(results, name)
+
+
+rng_key, key_top, key_item = random.split(rng_key, 3)
+backtest_df = pl.concat(
+    [
+        run_backtest(
+            key_top, "top-down (kit)", top_down_model, covariates_top, forecast_fn_top_down
+        ),
+        run_backtest(key_item, "state space (NB)", final_model, covariates, forecast_fn_item),
+    ]
+).sort("t1", "model")
+```
+
+
+The figure reads the backtest: the WS-CRPS per window, the means over the three windows for all levels and the two halves of the hierarchy, the per-level scores averaged over the windows, and the 94\\ coverage at the four levels, window by window, against the nominal 0.94.
+
+
+    In [22]:
+
+
+``` python
+MODELS = ["top-down (kit)", "state space (NB)"]
+SUMMARY_COLUMNS = {
+    "ws_crps": "all levels",
+    "ws_crps_1_9": "levels 1 to 9",
+    "ws_crps_10_12": "levels 10 to 12",
+}
+backtest_mean = backtest_df.group_by("model", maintain_order=True).agg(
+    pl.col(*SUMMARY_COLUMNS, *LEVEL_COLUMNS, *COVERAGE_COLUMNS).mean()
+)
+
+fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 10), layout="constrained")
+width = 0.4
+
+# Top left: the headline score per window.
+x = np.arange(len(BACKTEST_ORIGINS))
+
+for k, name in enumerate(MODELS):
+    rows = backtest_df.filter(pl.col("model").eq(pl.lit(name))).sort("t1")
+    bars = axes[0, 0].bar(x + (k - 0.5) * width, rows["ws_crps"].to_numpy(), width, label=name)
+    axes[0, 0].bar_label(bars, fmt="%.3f", fontsize=10)
+
+axes[0, 0].set_xticks(x, [f"origin {origin:,}" for origin in BACKTEST_ORIGINS])
+axes[0, 0].set(title="WS-CRPS per window", ylabel="WS-CRPS")
+axes[0, 0].margins(y=0.15)
+
+# Top right: the means over the three windows, all levels and the two halves.
+x = np.arange(len(SUMMARY_COLUMNS))
+
+for k, name in enumerate(MODELS):
+    row = backtest_mean.filter(pl.col("model").eq(pl.lit(name)))
+    values = row.select(list(SUMMARY_COLUMNS)).to_numpy()[0]
+    bars = axes[0, 1].bar(x + (k - 0.5) * width, values, width, label=name)
+    axes[0, 1].bar_label(bars, fmt="%.3f", fontsize=10)
+
+axes[0, 1].set_xticks(x, list(SUMMARY_COLUMNS.values()))
+axes[0, 1].set(title="WS-CRPS, mean over the three windows")
+axes[0, 1].margins(y=0.15)
+
+# Bottom left: the per-level scores, mean over the windows.
+x = np.arange(len(LEVELS))
+
+for k, name in enumerate(MODELS):
+    row = backtest_mean.filter(pl.col("model").eq(pl.lit(name)))
+    values = row.select(LEVEL_COLUMNS).to_numpy()[0]
+    axes[1, 0].bar(x + (k - 0.5) * width, values, width, label=name)
+
+axes[1, 0].set_xticks(x, list(LEVELS), rotation=45)
+axes[1, 0].set(title="WS-CRPS by level, mean over the three windows", ylabel="WS-CRPS")
+
+# Bottom right: the coverage of the central 94% interval at four levels, one marker per window.
+x = np.arange(len(COVERAGE_LEVELS))
+
+for k, name in enumerate(MODELS):
+    rows = backtest_df.filter(pl.col("model").eq(pl.lit(name))).sort("t1")
+
+    for j in range(rows.height):
+        axes[1, 1].scatter(
+            x + (k - 0.5) * width + (j - 1) * 0.1,
+            rows[j].select(COVERAGE_COLUMNS).to_numpy()[0],
+            color=f"C{k}",
+            label=name if j == 0 else None,
+            zorder=3,
+        )
+
+axes[1, 1].axhline(0.94, color="gray", ls="--", lw=1, label="nominal 0.94")
+axes[1, 1].set_xticks(x, [level.replace("Level", "level ") for level in COVERAGE_LEVELS])
+axes[1, 1].set(title=r"$94\%$ coverage per window", ylim=(0.4, 1.02))
+handles, labels = axes[1, 1].get_legend_handles_labels()
+fig.legend(handles, labels, loc="outside lower center", ncols=3)
+fig.suptitle(
+    "Backtest on the three windows of the baselines notebook", fontsize=18, fontweight="bold"
+);
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-23-output-1.png" class="figure-img" width="1611" height="1006" /></p>
+</figure>
+
+
+The state space model is ahead on every window (0.504, 0.513 and 0.502 against 0.553, 0.553 and 0.570), and the gain is at the aggregate levels: 0.414 against 0.486 on average over levels 1 to 9, with the item levels a draw (0.784 against 0.776). The coverage panel reads the calibration. At the store level both models are at the nominal 0.95; at the store-department level the state space model is at 0.87 to 0.90 where the baseline is at 0.80; at the item level the negative binomial is a little wide at 0.98 where the baseline is at 0.93; and at the total level the baseline covers every day of every window (a band that wide pays in the CRPS) while the state space model covers 68 to 82 percent of the days, too narrow. The evaluation window below tells the same story.
+
+
+# The final fit
+
+The model is now fitted once on the last two years before the evaluation window.
+
+
+    In [23]:
+
+
+``` python
+rng_key, key_fit = random.split(rng_key)
+guide_final, svi_final, time_final = fit_model(
+    key_fit, final_model, covariates_final[:, :HISTORY_DAYS], counts_final
+)
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(np.arange(100, NUM_STEPS), np.asarray(svi_final.losses[100:]), color="C0")
+ax.set(
+    title=f"Final model: ELBO loss ({NUM_STEPS:,} steps, {time_final:.0f} s), from step 100",
+    xlabel="SVI step",
+    ylabel="loss",
+);
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-24-output-1.png" class="figure-img" width="1011" height="411" /></p>
+</figure>
+
+
+The loss rises during the warm-up of the one-cycle schedule (the peak learning rate is reached at step 600) and then falls for the rest of the run; it is still going down slowly at step 3,000, so a longer run would buy a little more, at a cost that the timing section puts in context. The curve is noisy for the same reason as the bottom-up model of the baselines notebook: every step scores a different random set of 1,500 series.
+
+
+## Posterior of the shared parameters
+
+The item-level sites are too many to look at one by one, so we export the shared sites (the population scales and the pooled effects) to ArviZ with named coordinates. The first forest plot shows the five population scales by department (or by store for the shock scale): how much each component moves on the log scale.
+
+
     In [24]:
+
+
+``` python
+rng_key, key_post = random.split(rng_key)
+posterior_final = draw_posterior(key_post, guide_final, svi_final.params, 500)
+
+DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+SHARED_DIMS = {
+    "sigma_alpha": ["dept"],
+    "tau_phi": ["dept"],
+    "sigma_walk": ["dept"],
+    "sigma_item_dow": ["dept"],
+    "sigma_event": ["dept"],
+    "w_fourier": ["dept", "harmonic"],
+    "gamma_event": ["dept", "event"],
+    "store_shock_scale": ["store"],
+    "log_phi_group": ["group"],
+    "seasonal_group": ["group", "day_of_week"],
+    "snap_group": ["group"],
+    "alpha_group": ["group"],
+}
+tree_final = az.from_dict(
+    {"posterior": {name: np.asarray(posterior_final[name])[None] for name in SHARED_DIMS}},
+    coords={
+        "dept": dept_ids,
+        "group": group_ids,
+        "store": store_ids,
+        "day_of_week": DOW_LABELS,
+        "event": event_names,
+        "harmonic": [f"{f}{k}" for f in ("sin", "cos") for k in range(1, N_HARMONICS + 1)],
+    },
+    dims=SHARED_DIMS,
+)
+```
+
+
+    In [25]:
+
+
+``` python
+pc = az.plot_forest(
+    tree_final,
+    var_names=["sigma_alpha", "tau_phi", "sigma_walk", "sigma_item_dow", "store_shock_scale"],
+    combined=True,
+    figure_kwargs={"figsize": (11, 12)},
+)
+pc.viz["figure"].item().suptitle("Population scales (log scale)", fontsize=14);
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-26-output-1.png" class="figure-img" width="1111" height="1211" /></p>
+</figure>
+
+
+The population scales tell how much each component moves. The intercept deviations \sigma^{\alpha} are 0.09 to 0.22 on the log scale by department: the prior center, the last-28-day level, is close for most items. The item dispersion spreads \tau are 0.58 to 0.85, large: item-level dispersion matters, two items of the same store-department can differ by a factor of two in dispersion. The block-walk innovation scales \sigma^{u} are 0.13 to 0.22 per 28-day block, larger for the FOODS departments than for HOBBIES and HOUSEHOLD, so a food item's level moves by 15\\ to 20\\ from one block to the next. The item weekday deviations are 0.03 to 0.08, small next to the store-department pattern they refine, and the store shock scales are 0.06 to 0.11, highest for the Wisconsin stores and TX_2. The intervals are tiny: with 30,490 series behind each population parameter and a mean-field guide, these are effectively point estimates.
+
+
+    In [26]:
+
+
+``` python
+ca1_groups = [label for label in group_ids if label.startswith("CA_1/")]
+pc = az.plot_forest(
+    tree_final,
+    var_names=["seasonal_group"],
+    coords={"group": ca1_groups},
+    combined=True,
+    labels=["group", "day_of_week"],
+    figure_kwargs={"figsize": (8, 12)},
+)
+pc.viz["figure"].item().suptitle(
+    "Weekday effects of the departments of store CA_1 (log scale)", fontsize=14
+);
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-27-output-1.png" class="figure-img" width="811" height="1211" /></p>
+</figure>
+
+
+The weekday effects of the departments of store CA_1 show the weekend peak of every department (Saturday and Sunday +0.1 to +0.3 on the log scale, Tuesday to Thursday -0.05 to -0.2), with the shape varying by department: the food departments peak on Sunday, the household departments on Saturday, and HOBBIES_2 is the flattest. These are the store-department patterns; the item deviations around them are an order of magnitude smaller.
+
+
+    In [27]:
+
+
+``` python
+pc = az.plot_forest(
+    tree_final,
+    var_names=["snap_group"],
+    combined=True,
+    labels=["group"],
+    figure_kwargs={"figsize": (8, 14)},
+)
+pc.viz["figure"].item().suptitle("SNAP effect by store-department (log scale)", fontsize=14);
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-28-output-1.png" class="figure-img" width="811" height="1411" /></p>
+</figure>
+
+
+The SNAP effect is strongest for the FOODS departments of the Wisconsin and Texas stores (up to +0.6 for WI_2/FOODS_2, that is \times 1.8 on SNAP days) and close to zero for HOBBIES and HOUSEHOLD, as expected of a food-stamp program; the pattern is the one the kit's bottom-up model found in the baselines notebook, now with a store-department resolution and intervals narrow enough to rank the stores.
+
+
+    In [28]:
+
+
+``` python
+pc = az.plot_forest(
+    tree_final,
+    var_names=["gamma_event"],
+    coords={"dept": ["FOODS_3", "HOBBIES_1"]},
+    combined=True,
+    labels=["dept", "event"],
+    figure_kwargs={"figsize": (9, 12)},
+)
+pc.viz["figure"].item().suptitle(
+    "Calendar event effects of FOODS_3 and HOBBIES_1 (log scale)", fontsize=14
+);
+```
+
+
+<figure class="figure">
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-29-output-1.png" class="figure-img" width="911" height="1211" /></p>
+</figure>
+
+
+The calendar events read as expected: every effect is the lift of the event over an ordinary day of the department. Thanksgiving is about -0.4 for FOODS_3 and -0.8 for HOBBIES_1 (the stores close early), Mother's Day and New Year are negative, Labor Day, Presidents' Day and Columbus Day are positive for FOODS_3. Christmas is the one event with a wide posterior: the stores are closed, `saled` is zero and the effect only sees its prior.
+
+
+## In-sample fit and forecast of the focus items
+
+The seven focus items of the prior predictive check, now with the posterior: `subset_posterior` picks the columns of these series out of the item-level draws, and the seven-series instance of the model gives the in-sample predictive and the forecast through [predict_in_sample()](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast).
+
+
+    In [29]:
+
+
+``` python
+# The item-level sites and the axis of their series dimension.
+ITEM_SITES = {"alpha": -1, "log_phi": -1, "item_walk": -1, "item_dow": -2}
+
+
+def subset_posterior(posterior: dict, index: np.ndarray) -> dict:
+    """Keep the draws of the series in ``index`` for the item-level sites, everything else as is."""
+    out = {}
+
+    for name, value in posterior.items():
+        if name in ITEM_SITES:
+            axis = ITEM_SITES[name] % value.ndim
+            out[name] = jnp.take(value, jnp.asarray(index), axis=axis)
+        else:
+            out[name] = value
+
+    return out
+
+
+posterior_focus = subset_posterior(posterior_final, focus_index)
+```
+
+
+    In [30]:
 
 
 ``` python
@@ -1530,7 +1606,7 @@ del pp_focus
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-25-output-1.png" class="figure-img" width="1511" height="1086" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-31-output-1.png" class="figure-img" width="1511" height="1086" /></p>
 </figure>
 
 
@@ -1542,7 +1618,7 @@ Compared with the kit's bottom-up model on the same seven items, the level is ri
 The final model forecasts the 28 evaluation days (`d_1942` to `d_1969`) with 500 draws and is scored against the top-down baseline, re-run here with 500 draws as well; the middle-out and bottom-up baselines scored 0.634 and 0.728 on this window in the baselines notebook. The competition's own metric, the weighted scaled pinball loss (WSPL) at the nine competition quantiles, is computed here too, to place both models on the published leaderboard.
 
 
-    In [25]:
+    In [31]:
 
 
 ``` python
@@ -1574,7 +1650,7 @@ def ws_crps_mean(scores: dict) -> float:
 ```
 
 
-    In [26]:
+    In [32]:
 
 
 ``` python
@@ -1611,92 +1687,84 @@ scores_top = evaluate_forecast(pred_levels, truth_levels, metrics=holdout_metric
 wspl_top = ws_pinball(pred_levels, truth_levels, weights_holdout, scales_holdout)
 level1_top = pred_levels[..., 0]
 del bottom_top, pred_levels
-
-print(
-    f"bottom-level forecast of the state space model in {time_fc_final:.0f} s; "
-    f"WS-CRPS {ws_crps_mean(scores_final):.3f} against {ws_crps_mean(scores_top):.3f}, "
-    f"WSPL {wspl_final:.3f} against {wspl_top:.3f}"
-)
-print(
-    "gain over the baseline by level: "
-    + ", ".join(
-        f"{level} {float(scores_top[f'ws_crps_{level}'] - scores_final[f'ws_crps_{level}']):+.3f}"
-        for level in LEVELS
-    )
-)
 ```
 
 
-    bottom-level forecast of the state space model in 39 s; WS-CRPS 0.548 against 0.605, WSPL 0.188 against 0.208
-    gain over the baseline by level: Level1 +0.054, Level2 +0.079, Level3 +0.093, Level4 +0.005, Level5 +0.062, Level6 +0.057, Level7 +0.085, Level8 +0.085, Level9 +0.098, Level10 +0.022, Level11 +0.022, Level12 +0.017
-
-
-    In [27]:
+    In [33]:
 
 
 ``` python
 scores = {"top-down (kit)": (scores_top, wspl_top), "state space (NB)": (scores_final, wspl_final)}
 
-fig, axes = plt.subplots(
-    nrows=1, ncols=3, figsize=(18, 5), width_ratios=[2, 1, 1.2], layout="constrained"
-)
+fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 10), layout="constrained")
 width = 0.4
 
-# Left: the per-level scores.
+# Top left: the per-level scores.
 x = np.arange(len(LEVELS))
 
 for k, (name, (level_scores, _)) in enumerate(scores.items()):
     values = [level_scores[f"ws_crps_{level}"] for level in LEVELS]
-    axes[0].bar(x + (k - 0.5) * width, values, width, label=name)
+    axes[0, 0].bar(x + (k - 0.5) * width, values, width, label=name)
 
-axes[0].set_xticks(x, list(LEVELS), rotation=45)
-axes[0].set(title="WS-CRPS by level", ylabel="score")
+axes[0, 0].set_xticks(x, list(LEVELS), rotation=45)
+axes[0, 0].set(title="WS-CRPS by level", ylabel="WS-CRPS")
 
-# Middle: the mean over the levels and the competition's pinball loss.
+# Top right: the gain of the state space model over the baseline, level by level.
+gains = [
+    float(scores_top[f"ws_crps_{level}"] - scores_final[f"ws_crps_{level}"]) for level in LEVELS
+]
+bars = axes[0, 1].bar(x, gains, 0.6, color="C2")
+axes[0, 1].bar_label(bars, fmt="%+.3f", fontsize=10)
+axes[0, 1].axhline(0.0, color="gray", lw=1)
+axes[0, 1].set_xticks(x, list(LEVELS), rotation=45)
+axes[0, 1].set(title="Gain over the baseline by level (positive is better)", ylabel="WS-CRPS")
+axes[0, 1].margins(y=0.15)
+
+# Bottom left: the mean over the levels and the competition's pinball loss.
 x = np.arange(2)
 
 for k, (name, (level_scores, wspl)) in enumerate(scores.items()):
-    bars = axes[1].bar(
+    bars = axes[1, 0].bar(
         x + (k - 0.5) * width, [ws_crps_mean(level_scores), wspl], width, label=name
     )
-    axes[1].bar_label(bars, fmt="%.3f", fontsize=10)
+    axes[1, 0].bar_label(bars, fmt="%.3f", fontsize=10)
 
-axes[1].set_xticks(x, ["WS-CRPS (mean)", "WSPL"])
-axes[1].set(title="Summary scores")
-axes[1].margins(y=0.15)
+axes[1, 0].set_xticks(x, ["WS-CRPS (mean over the levels)", "WSPL"])
+axes[1, 0].set(title="Summary scores")
+axes[1, 0].margins(y=0.15)
 
-# Right: the coverage of the central 94% interval at four levels.
+# Bottom right: the coverage of the central 94% interval at four levels.
 x = np.arange(len(COVERAGE_LEVELS))
 
 for k, (name, (level_scores, _)) in enumerate(scores.items()):
     values = [level_scores[f"coverage_{level}"] for level in COVERAGE_LEVELS]
-    bars = axes[2].bar(x + (k - 0.5) * width, values, width, label=name)
-    axes[2].bar_label(bars, fmt="%.2f", fontsize=10)
+    bars = axes[1, 1].bar(x + (k - 0.5) * width, values, width, label=name)
+    axes[1, 1].bar_label(bars, fmt="%.2f", fontsize=10)
 
-axes[2].axhline(0.94, color="gray", ls="--", lw=1, label="nominal 0.94")
-axes[2].set_xticks(x, [level.replace("Level", "level ") for level in COVERAGE_LEVELS])
-axes[2].set(title=r"$94\%$ coverage", ylim=(0.0, 1.12))
-handles, labels = axes[2].get_legend_handles_labels()
+axes[1, 1].axhline(0.94, color="gray", ls="--", lw=1, label="nominal 0.94")
+axes[1, 1].set_xticks(x, [level.replace("Level", "level ") for level in COVERAGE_LEVELS])
+axes[1, 1].set(title=r"$94\%$ coverage", ylim=(0.0, 1.12))
+handles, labels = axes[1, 1].get_legend_handles_labels()
 fig.legend(handles, labels, loc="outside lower center", ncols=3)
-fig.suptitle("Evaluation window: scores of the two models", fontsize=16, fontweight="bold");
+fig.suptitle("Evaluation window: scores of the two models", fontsize=18, fontweight="bold");
 ```
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-28-output-1.png" class="figure-img" width="1811" height="506" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-34-output-1.png" class="figure-img" width="1611" height="1006" /></p>
 </figure>
 
 
 ## Reading the comparison
 
-A caveat first: the top-down baseline scores 0.605 here and 0.569 in the baselines notebook. The kit's model fits one 1,941-day series with a StudentT likelihood in 1,001 SVI steps, and its noise scale and degrees of freedom vary with the SVI seed; the backtest windows above (0.553, 0.553 and 0.570) agree with the baselines notebook (0.557, 0.553 and 0.581) within that noise. The evaluation window happens to draw a worse seed for the baseline, so the fairest summary is the mean over the three backtest windows: 0.506 against 0.558, about 10\\ better, and 0.548 against 0.605 on the evaluation window.
+The evaluation window is one window, and the kit's model is sensitive to its SVI seed: it fits one 1,941-day series with a StudentT likelihood in 1,001 steps, and its noise scale and degrees of freedom move from seed to seed (it scored 0.569 in the baselines notebook, 0.563 here, and 0.605 in an earlier run of this notebook with a different key stream). The backtest windows are the robust evidence: 0.504, 0.513 and 0.502 against 0.553, 0.553 and 0.570, a mean of 0.506 against 0.558, about 10\\ better on every window. On the evaluation window the state space model is ahead by less, 0.550 against 0.563, and the competition's WSPL follows, 0.188 against 0.195 (the winner of the uncertainty competition scored 0.154).
 
-Where the gain comes from is the same on every window: the aggregate levels. On the evaluation window the state space model wins at every level, by 0.05 to 0.10 at levels 1 to 3 and 5 to 9, by 0.005 at the category level 4 and by 0.02 at the item levels; on the backtest windows the item levels are a draw (0.784 against 0.776 on average, the top-down model's Poisson split of a well-fitted total is hard to beat for a single item) and the aggregates are 0.07 better (0.414 against 0.486). The WSPL of the competition follows: 0.188 against 0.208 (the winner of the uncertainty competition scored 0.154).
+The gain by level tells where each model is strong. On the backtest windows the state space model wins every aggregate level (0.414 against 0.486 over levels 1 to 9) and the item levels are a draw (0.784 against 0.776: the top-down model's Poisson split of a well-fitted total is hard to beat for a single item). On the evaluation window the picture is mixed at the top: the baseline's total happens to be very good on these 28 days, so it wins the total (level 1, by 0.033) and the category level (level 4, by 0.070), while the state space model wins the store, store-category and store-department levels (3, 8 and 9, by 0.04 to 0.07) and all three item levels (by 0.02). The levels where the hierarchy is wide are the state space model's; the levels with one or three series depend on how well a single StudentT regression happens to land.
 
-The calibration is the other half of the story, and the coverage panel tells it. The top-down model's total is right on average but its 94\\ band at level 1 covers every day of every window: it is too wide, which the CRPS pays for. The state space model's level-1 band covers 68 to 82 percent of the days: too narrow, because the only common uncertainty of the 30,490 items is the weekly store shocks and one block innovation, and a mean-field guide understates the posterior uncertainty of the origin level. At the store level (3) both are at 0.95, at the store-department level (9) the state space model is at 0.87 to 0.90 where the baseline is at 0.80, and at the item level (12) the negative binomial is a little wide at 0.98. The total-sales figure shows both bands on the evaluation window.
+The calibration is the other half of the story, and the coverage panel tells it. The top-down model's total is right on average but its 94\\ band at level 1 covers every day of every window: it is too wide, which the CRPS pays for on the backtest windows. The state space model's level-1 band covers 68 to 82 percent of the days on the backtest windows and 75 percent here: too narrow, because the only common uncertainty of the 30,490 items is the weekly store shocks and one block innovation, and a mean-field guide understates the posterior uncertainty of the origin level. At the store level (3) both are at 0.95 to 0.97, at the store-department level (9) the state space model is at 0.87 to 0.90 where the baseline is at 0.80 to 0.84, and at the item level (12) the negative binomial is a little wide at 0.98. The total-sales figure shows both bands on the evaluation window.
 
 
-    In [28]:
+    In [34]:
 
 
 ``` python
@@ -1726,7 +1794,7 @@ ax.axvline(split_date, color="gray", ls="--")
 locator = mdates.AutoDateLocator()
 ax.xaxis.set_major_locator(locator)
 ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
-ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncols=3)
 ax.set(
     title=rf"Total daily sales: {hdi_label(0.94)} bands of the two forecasts",
     xlabel="date",
@@ -1736,14 +1804,14 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-29-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-35-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
-At the total level both bands follow the observed weekly pattern; the difference is their width. The top-down band is the StudentT noise of a single series fitted over five years, wide enough to hold every day with room to spare. The state space band is the sum of 30,490 negative binomial draws whose only common components are the store shocks and the block innovations, and it is too narrow: the observed total touches or leaves it on several days. A proper score rewards the narrower band when it is nearly right, which is why the state space model wins the level-1 CRPS, but a user of the total-level forecast should read its 94\\ band as something closer to a 75\\ band until a total-level shock is added.
+At the total level both bands follow the observed weekly pattern; the difference is their width. The top-down band is the StudentT noise of a single series fitted over five years, wide enough to hold every day with room to spare. The state space band is the sum of 30,490 negative binomial draws whose only common components are the store shocks and the block innovations, and it is too narrow: the observed total leaves it on the first days of the window and around the mid-June peak. A proper score rewards a narrow band only when it is right, and on this window the observed total sits far enough from the center of the narrow band for the wide band to win the level-1 CRPS by 0.03. A user of the total-level forecast should read the state space model's 94\\ band as something closer to a 75\\ band until a total-level shock is added.
 
 
-    In [29]:
+    In [35]:
 
 
 ``` python
@@ -1762,7 +1830,7 @@ plot_series_panel(
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-30-output-1.png" class="figure-img" width="1511" height="1492" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-36-output-1.png" class="figure-img" width="1511" height="1492" /></p>
 </figure>
 
 
@@ -1774,7 +1842,7 @@ At the store level the bands are calibrated, which the coverage of 0.95 at level
 The state space model costs about two and a half minutes per window on a 14-core M4 Pro CPU: 110 seconds for 3,000 SVI steps over 1,500-series minibatches of two years of daily data (the number a full-batch model of 30,490 series would not reach) and 25 to 40 seconds to draw 250 to 500 bottom-level forecasts, against about ten seconds for the top-down model. The figure compares the wall times of a fit plus forecast on a backtest window (mean over the three) and on the evaluation window. The whole notebook runs in about 12 minutes.
 
 
-    In [30]:
+    In [36]:
 
 
 ``` python
@@ -1800,20 +1868,20 @@ for k, column in enumerate(["backtest window", "evaluation window"]):
 ax.set_xticks(x, MODELS)
 ax.set(title="Wall time of a fit and forecast", ylabel="seconds")
 ax.margins(y=0.15)
-ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0));
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncols=2);
 ```
 
 
 <figure class="figure">
-<p><img src="m5_hierarchical_state_space_files/figure-html/cell-31-output-1.png" class="figure-img" width="811" height="511" /></p>
+<p><img src="m5_hierarchical_state_space_files/figure-html/cell-37-output-1.png" class="figure-img" width="811" height="511" /></p>
 </figure>
 
 
 # Discussion
 
-The result is a single hierarchical model of all 30,490 M5 series that beats the best starter-kit baseline by about 10\\ in WS-CRPS on every window, improves the competition's pinball loss from 0.208 to 0.188 and, unlike the baseline, carries calibrated uncertainty at the store and store-department levels. It does so with plain NumPyro and the `numpyro_forecast` building blocks: [Horizon.from_data](../../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict()](../../../reference/models.predict.md#numpyro_forecast.models.predict) for the train-and-forecast bookkeeping, explicit block and week plates for the state space components, `AutoNormal` with `create_plates` and `numpyro.subsample` for the minibatching, [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) with a `transform` and `per_window_metrics` for the hierarchy-wide score, and [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample()](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [predictions_to_datatree()](../../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree) for the plots.
+The result is a single hierarchical model of all 30,490 M5 series that beats the best starter-kit baseline by about 10\\ in WS-CRPS on each of the three backtest windows, is ahead on the evaluation window (0.550 against 0.563, where the baseline draws a favorable SVI seed), improves the competition's pinball loss from 0.195 to 0.188 and, unlike the baseline, carries calibrated uncertainty at the store and store-department levels. It does so with plain NumPyro and the `numpyro_forecast` building blocks: [Horizon.from_data](../../../reference/models.Horizon.md#numpyro_forecast.models.Horizon.from_data) and [predict()](../../../reference/models.predict.md#numpyro_forecast.models.predict) for the train-and-forecast bookkeeping, explicit block and week plates for the state space components, `AutoNormal` with `create_plates` and `numpyro.subsample` for the minibatching, [backtest()](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) with a `transform` and `per_window_metrics` for the hierarchy-wide score, and [forecast()](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample()](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [predictions_to_datatree()](../../../reference/convert.predictions_to_datatree.md#numpyro_forecast.convert.predictions_to_datatree) for the plots.
 
-What the ablation and the backtest say about modeling this kind of data:
+What the model selection and the backtest say about modeling this kind of data:
 
 - **The level process is the model.** Centering the intercepts on the last-28-day level and letting an end-anchored block walk explain the past is what makes 30,490 independent item models competitive; every other component is a refinement. The block resolution matters: daily item walks and daily shared walks were tried during development and lost to the baseline, because a mean-field SVI fit lets a daily latent absorb noise as level and then projects it over the horizon.
 - **Common shocks are for calibration, not for the score.** The weekly store shocks leave the CRPS unchanged and move the store-level 94\\ coverage from 0.70 to 0.95. A score that mixes twelve levels does not reward them much; a user of store-level forecasts does.
