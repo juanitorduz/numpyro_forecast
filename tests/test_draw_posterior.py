@@ -1,5 +1,7 @@
 """Tests for drawing posterior samples from a fitted guide (``numpyro_forecast.predictive``)."""
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -8,7 +10,7 @@ import pytest
 from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
 from jax import random
 from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoDelta
+from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
 from numpyro_forecast.exceptions import DeviceMemoryError
 from numpyro_forecast.predictive import _jitted_sample_posterior, draw_posterior
@@ -113,29 +115,21 @@ def test_draw_posterior_chunked_calls_guide_per_fixed_size_chunk(
     assert len(set(raw)) == len(raw)  # one distinct subkey per chunk
 
 
-def test_draw_posterior_chunked_single_compile(count_compilations) -> None:
-    """The jitted guide sampling compiles once per (guide, chunk shape) and is reused.
+def test_draw_posterior_chunked_single_compile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One chunked draw builds one jitted sampler and compiles it once for all chunks."""
+    import numpyro_forecast.predictive as predictive_mod
 
-    Every chunk shares the fixed ``batch_size`` shape, and the jitted
-    ``sample_posterior`` is cached per guide instance, so a repeat of the same
-    chunked draw (and any later draw with the same batch size, regardless of
-    ``num_samples``) must compile nothing.
-    """
+    built: list[Callable[..., dict[str, Array]]] = []
+
+    def spy(guide: AutoGuide) -> Callable[..., dict[str, Array]]:
+        built.append(_jitted_sample_posterior(guide))
+        return built[-1]
+
+    monkeypatch.setattr(predictive_mod, "_jitted_sample_posterior", spy)
     guide, params = svi_guide_params(t=30)
-    jax.block_until_ready(
-        draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
-    )  # warm-up
-
-    with count_compilations() as tally:
-        jax.block_until_ready(draw_posterior(random.PRNGKey(3), guide, params, 10, batch_size=4))
-    assert tally.count == 0
-
-    # A different num_samples with the same batch size reuses the sampling
-    # executable (the chunk shape, not the total, keys the compilation); only
-    # trivial stitching kernels differ, so the jitted sampler stays at one entry.
-    jax.block_until_ready(draw_posterior(random.PRNGKey(4), guide, params, 7, batch_size=4))
-    sample = _jitted_sample_posterior(guide)
-    assert sample._cache_size() == 1  # ty: ignore[unresolved-attribute]
+    jax.block_until_ready(draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4))
+    assert len(built) == 1
+    assert built[0]._cache_size() == 1  # ty: ignore[unresolved-attribute]
 
 
 def test_draw_posterior_rejects_non_positive_batch_size() -> None:

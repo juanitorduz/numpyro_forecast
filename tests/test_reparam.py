@@ -6,11 +6,6 @@ drivers consume the auxiliary site, and that the reparameterized model runs end
 to end under SVI and NUTS.
 """
 
-from collections.abc import Callable
-from contextlib import AbstractContextManager
-from types import SimpleNamespace
-
-import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -237,29 +232,6 @@ def test_predictive_reads_the_auxiliary_and_ignores_a_stale_deterministic() -> N
 
     stale = {**posterior, "drift": jnp.zeros((num_samples, T_OBS, 1))}
     assert jnp.allclose(predict_in_sample(random.PRNGKey(2), model, stale, train), draws)
-
-
-def test_wrapped_model_is_a_stable_jit_static_argument(
-    count_compilations: Callable[[], AbstractContextManager[SimpleNamespace]],
-) -> None:
-    """One wrapped object compiles ``forecast`` once; rewrapping is a new static arg."""
-    model, data, covariates = _split(time_reparam(rw_model, "dct"))
-    num_samples = 2
-    posterior = {
-        "drift_scale": jnp.ones((num_samples,)),
-        "sigma": jnp.ones((num_samples,)),
-        "drift_dct": jnp.zeros((num_samples, T_OBS, 1)),
-    }
-    jax.block_until_ready(forecast(random.PRNGKey(0), model, posterior, data, covariates))
-
-    with count_compilations() as tally:
-        jax.block_until_ready(forecast(random.PRNGKey(0), model, posterior, data, covariates))
-    assert tally.count == 0
-
-    with count_compilations() as tally:
-        rewrapped = time_reparam(rw_model, "dct")
-        jax.block_until_ready(forecast(random.PRNGKey(0), rewrapped, posterior, data, covariates))
-    assert tally.count >= 1
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])
