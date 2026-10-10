@@ -67,7 +67,7 @@ def _repeat(params: dict[str, Array], n: int) -> dict[str, Array]:
 
 
 def _smoothed_moments() -> tuple[Array, Array]:
-    """Smoothed state mean and variance at ``PARAMS``, ``(t_obs, 1)`` each, from dynestyx's sites."""
+    """Smoothed state mean and variance at ``PARAMS``, ``(t_obs, 1)`` each, from the sites."""
     with smoother:
         tr = numpyro.handlers.trace(
             numpyro.handlers.substitute(
@@ -123,7 +123,7 @@ def test_in_sample_predictive_replays_the_latent_path() -> None:
 
 
 def test_forecast_rolls_the_smoothed_state_forward() -> None:
-    """``forecast`` reads the Simulator rollout: ``(sample, future, obs)`` with the random walk law."""
+    """``forecast`` reads the Simulator rollout: ``(sample, future, obs)``, random walk law."""
     n = 2_000
     with DiscreteTimeSimulator(n_simulations=1), smoother:
         draws = forecast(random.PRNGKey(2), local_level, _repeat(PARAMS, n), TRAIN, COVARIATES)
@@ -147,7 +147,7 @@ def test_to_datatree_exports_both_predictive_groups() -> None:
 
 
 def test_missing_observations_widen_the_in_sample_band() -> None:
-    """NaN rows are skipped by the cuthbert smoother and the predictive is widest inside the gap."""
+    """NaN rows are skipped by the cuthbert smoother; the predictive is widest inside the gap."""
     gap = slice(8, 14)
     train = TRAIN.at[gap].set(jnp.nan)
     with smoother:
@@ -166,6 +166,16 @@ def test_in_sample_predictive_rejects_a_filter() -> None:
         predict_in_sample(random.PRNGKey(5), local_level, _repeat(PARAMS, 2), TRAIN)
 
 
+def test_forecast_rejects_a_filter_with_a_clear_message() -> None:
+    """A Filter's rollout segments on the host, which the jitted driver cannot provide."""
+    with (
+        DiscreteTimeSimulator(n_simulations=1),
+        Filter(filter_config=KFConfig(filter_source="cuthbert")),
+        pytest.raises(ValueError, match="Smoother or a LatentPathBuilder"),
+    ):
+        forecast(random.PRNGKey(5), local_level, _repeat(PARAMS, 2), TRAIN, COVARIATES)
+
+
 def test_forecast_requires_a_single_simulation() -> None:
     """``n_simulations != 1`` is rejected: the package's forecast site has no simulation axis."""
     with (
@@ -174,6 +184,53 @@ def test_forecast_requires_a_single_simulation() -> None:
         pytest.raises(ValueError, match="n_simulations=1"),
     ):
         forecast(random.PRNGKey(6), local_level, _repeat(PARAMS, 2), TRAIN, COVARIATES)
+
+
+def test_forecast_rolls_the_latent_path_forward() -> None:
+    """Under a LatentPathBuilder the forecast starts from the final path state and random walks."""
+    n = 2_000
+    path = jnp.linspace(-1.0, 1.0, T_OBS)[:, None]
+    posterior = _repeat({**PARAMS, "f_state_path_params": path}, n)
+    builder = LatentPathBuilder()
+    with builder:
+        numpyro.handlers.trace(numpyro.handlers.seed(local_level, random.PRNGKey(0))).get_trace(
+            TRAIN, TRAIN
+        )
+    with DiscreteTimeSimulator(n_simulations=1), builder:
+        draws = forecast(random.PRNGKey(2), local_level, posterior, TRAIN, COVARIATES)
+    expected_var = Q_TRUE**2 * jnp.arange(1, FUTURE + 1)[:, None] + R_TRUE**2
+    assert draws.shape == (n, FUTURE, 1)
+    assert jnp.allclose(draws.mean(axis=0), path[-1], atol=4 * jnp.sqrt(expected_var / n).max())
+    assert jnp.allclose(draws.var(axis=0), expected_var, rtol=0.15)
+
+
+def test_controls_are_aligned_with_their_time_steps() -> None:
+    """``u_t = 100 t`` enters through ``D = 1``: any misalignment is a 100-unit error."""
+    u = 100.0 * jnp.arange(T_OBS + FUTURE, dtype=jnp.float32)[:, None]
+    covariates = jnp.concatenate([SERIES + u, u], axis=-1)  # column 0 series, column 1 control
+
+    def with_controls(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        dynamics = DynamicalModel(
+            initial_condition=dist.MultivariateNormal(jnp.zeros(1), P0 * jnp.eye(1)),
+            state_evolution=LinearGaussianStateEvolution(A=jnp.eye(1), cov=Q_TRUE**2 * jnp.eye(1)),
+            observation_model=LinearGaussianObservation(
+                H=jnp.eye(1), R=R_TRUE**2 * jnp.eye(1), D=jnp.eye(1)
+            ),
+            control_dim=1,
+        )
+        state_space(h, "f", covariates[..., : h.t_obs, :1], dynamics, controls=covariates[..., 1:])
+
+    posterior = {"unused": jnp.zeros(400)}
+    with DiscreteTimeSimulator(n_simulations=1), smoother:
+        in_sample = predict_in_sample(
+            random.PRNGKey(8), with_controls, posterior, covariates[:T_OBS]
+        )
+        ahead = forecast(
+            random.PRNGKey(9), with_controls, posterior, covariates[:T_OBS, :1], covariates
+        )
+    assert jnp.abs(in_sample.mean(axis=0) - covariates[:T_OBS, :1]).max() < 1.0
+    assert jnp.abs(ahead.mean(axis=0) - covariates[T_OBS:, :1]).max() < 3.0
 
 
 def test_window_shapes_are_validated() -> None:
@@ -189,7 +246,7 @@ def test_window_shapes_are_validated() -> None:
 
 
 def test_backtest_scores_in_sample_under_one_handler_stack() -> None:
-    """``backtest(eval_train=True)`` runs ``predict_in_sample`` and ``forecast`` through the block."""
+    """``backtest(eval_train=True)`` scores in-sample and out-of-sample through the block."""
 
     def forecast_fn(
         rng_key: Array,

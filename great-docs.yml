@@ -284,6 +284,8 @@ skill:
       use: "time_reparam(model, \"dct\") or time_reparam(model, \"haar\"), created once and reused"
     - need: "BlackJAX samplers or Pathfinder"
       use: "contrib.blackjax.BlackjaxNUTSKernel / BlackjaxMCLMCKernel with MCMC; fit_multipathfinder + multipathfinder_samples"
+    - need: "A dynestyx DynamicalModel (Kalman filter or smoother, latent path) as the series model"
+      use: "contrib.dynestyx.state_space(h, name, y, dynamics, controls=...) with y read from the covariates; the dynestyx handler goes around the driver call"
   gotchas:
     - "Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,)."
     - "There is no horizon argument. The forecast horizon is covariates.shape[-2] - data.shape[-2]: fit with covariates[:t_obs] and forecast with the full-horizon covariates, using the same model function."
