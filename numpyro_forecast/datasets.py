@@ -4,7 +4,9 @@ The BART loaders are thin wrappers around
 `numpyro.examples.datasets.load_bart_od()`; `load_victoria_electricity()`
 reads a small bundled CSV; `load_m5()` downloads the M5 competition files once
 into a cache directory and reads them into dense arrays. All return arrays in
-the package convention (time at axis ``-2``).
+the package convention (time at axis ``-2``). `load_breakfast_at_the_frat()`
+downloads the dunnhumby scanner panel once and returns its three sheets as polars
+frames.
 """
 
 import hashlib
@@ -26,6 +28,17 @@ if TYPE_CHECKING:
     import polars
 
 HOURS_PER_WEEK = 24 * 7
+BREAKFAST_AT_THE_FRAT_URL = "https://ndownloader.figshare.com/files/57937129"
+"""The figshare copy of the dunnhumby *Breakfast at the Frat* workbook."""
+BREAKFAST_AT_THE_FRAT_SHA256 = "61b1d77dd6d9298fed204cc231f2b853a4c7f79376cfc30231646e1e51d0daba"
+"""SHA-256 digest of the workbook, checked on every load."""
+DOWNLOAD_TIMEOUT = 60.0
+"""Seconds a single socket read may block before a dataset download is abandoned."""
+_BREAKFAST_SHEETS = {
+    "transactions": "dh Transaction Data",
+    "products": "dh Products Lookup",
+    "stores": "dh Store Lookup",
+}
 
 
 def bart_available() -> bool:
@@ -148,6 +161,67 @@ def load_victoria_electricity() -> tuple[Float[Array, " time 1"], Float[Array, "
     return demand, temperature
 
 
+class BreakfastAtTheFrat(NamedTuple):
+    """The three sheets of the dunnhumby *Breakfast at the Frat* workbook as polars frames.
+
+    Column names and string values are lowercase (see `load_breakfast_at_the_frat()`).
+
+    Attributes
+    ----------
+    transactions
+        One row per store, product and week: units, visits, households, spend, the
+        shelf and base prices, and the promotion flags ``feature``, ``display`` and
+        ``tpr_only``.
+    products
+        The product lookup keyed by ``upc``: description, manufacturer, category,
+        sub-category and size.
+    stores
+        The store lookup keyed by ``store_id``, exactly as in the workbook: two store
+        ids appear twice with different price-segment labels.
+    """
+
+    transactions: "polars.DataFrame"
+    products: "polars.DataFrame"
+    stores: "polars.DataFrame"
+
+
+def load_breakfast_at_the_frat(cache_dir: str | Path | None = None) -> BreakfastAtTheFrat:
+    """Load the dunnhumby *Breakfast at the Frat* scanner panel as polars frames.
+
+    The panel holds 156 weeks of weekly unit sales, prices and promotion mechanics
+    for 55 products (58 lookup rows) in 77 stores (79 lookup rows). The loader downloads the
+    [figshare copy](https://doi.org/10.6084/m9.figshare.30121060) of the workbook
+    (about 31 MB) into ``cache_dir`` on first use, verifies its SHA-256 digest on
+    every call, reads the transaction, product and store sheets with polars'
+    calamine engine (every sheet carries a title row above the header), and
+    lowercases every column name and every string value, so the examples work with
+    one case. The figshare record declares a CC BY 4.0 license for the copy;
+    dunnhumby's own terms govern the data.
+
+    Parameters
+    ----------
+    cache_dir
+        Directory that holds the cached workbook. Defaults to
+        ``~/.cache/numpyro_forecast``.
+
+    Returns
+    -------
+    BreakfastAtTheFrat
+        The three sheets as polars frames with lowercase column names and string
+        values.
+
+    Raises
+    ------
+    ValueError
+        If the digest of the cached workbook does not match the recorded one.
+    ImportError
+        If ``polars`` or ``fastexcel`` is not installed
+        (``pip install numpyro_forecast[dataframes]``).
+    """
+    workbook = _ensure_breakfast_workbook(cache_dir)
+    return _read_breakfast_workbook(workbook)
+
+
 M5_URL = (
     "https://github.com/Nixtla/m5-forecasts/raw/"
     "72b8e7fd3b565b3c538adcb1d1a05117d8562d7e/datasets/m5.zip"
@@ -164,8 +238,6 @@ M5_FILES = (
 M5_KEYS = ("item_id", "dept_id", "cat_id", "store_id", "state_id")
 M5_DAYS = 1_969
 """Training days 1 to 1,941 followed by the 28 evaluation days."""
-DOWNLOAD_TIMEOUT = 60.0
-"""Seconds a single socket read may block before a dataset download is abandoned."""
 
 
 class M5Data(NamedTuple):
@@ -207,6 +279,58 @@ def _default_cache_dir() -> Path:
 def _sha256(path: Path) -> str:
     """Return the SHA-256 digest of a file as a hex string."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _ensure_breakfast_workbook(cache_dir: str | Path | None) -> Path:
+    """Return the cached workbook path, downloading the file once and checking its digest."""
+    directory = _default_cache_dir() if cache_dir is None else Path(cache_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+    workbook = directory / "breakfast_at_the_frat.xlsx"
+    if not workbook.exists():
+        # Download next to the target and move it into place only when the digest matches,
+        # so an interrupted download never poisons the cache. The timeout bounds each socket
+        # read, not the whole transfer, so a stalled connection raises instead of blocking.
+        partial = workbook.with_name(workbook.name + ".part")
+        with (
+            urllib.request.urlopen(
+                BREAKFAST_AT_THE_FRAT_URL, timeout=DOWNLOAD_TIMEOUT
+            ) as response,
+            partial.open("wb") as target,
+        ):
+            shutil.copyfileobj(response, target)
+        digest = _sha256(partial)
+        if digest != BREAKFAST_AT_THE_FRAT_SHA256:
+            partial.unlink()
+            msg = f"unexpected digest {digest} of the downloaded workbook; the file was discarded"
+            raise ValueError(msg)
+        partial.replace(workbook)
+    digest = _sha256(workbook)
+    if digest != BREAKFAST_AT_THE_FRAT_SHA256:
+        msg = (
+            f"unexpected workbook digest {digest} for {workbook}; delete the file to download "
+            "it again"
+        )
+        raise ValueError(msg)
+    return workbook
+
+
+def _read_breakfast_workbook(workbook: Path) -> BreakfastAtTheFrat:
+    """Read the three sheets and lowercase their column names and string values."""
+    polars = require("polars", extra="dataframes")
+    require("fastexcel", extra="dataframes")
+    sheets = polars.read_excel(
+        workbook,
+        sheet_name=list(_BREAKFAST_SHEETS.values()),
+        engine="calamine",
+        read_options={"header_row": 1},
+    )
+    frames = {
+        key: sheets[name]
+        .rename(str.lower)
+        .with_columns(polars.col(polars.String).str.to_lowercase())
+        for key, name in _BREAKFAST_SHEETS.items()
+    }
+    return BreakfastAtTheFrat(**frames)
 
 
 def _ensure_m5_files(cache_dir: str | Path | None, url: str, digest: str) -> Path:
