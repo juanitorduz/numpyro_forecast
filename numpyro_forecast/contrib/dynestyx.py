@@ -218,8 +218,11 @@ def state_space(
     path. The ``LatentPathBuilder`` draws are joint; the builder around a driver
     call must be the instance that fitted the model, because it caches the
     observation missingness layout from the concrete observations of the fit
-    and the jitted drivers hand it traced arrays. The block has no batch dims:
-    a panel is one call per series under ``handlers.scope``.
+    and the jitted drivers hand it traced arrays (for the same reason a fresh
+    builder needs its first model run eager, e.g. ``MCMC`` with
+    ``chain_method="sequential"``, not inside a ``pmap`` of parallel chains).
+    The block has no batch dims: a panel is one call per series under
+    ``handlers.scope``.
 
     Examples
     --------
