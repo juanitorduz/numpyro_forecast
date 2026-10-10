@@ -147,7 +147,7 @@ reference:
       - convert.predictions_to_datatree
 
   - title: Extensions (contrib)
-    desc: Optional backends behind pyproject extras (never imported by default).
+    desc: "Optional backends behind pyproject extras (never imported by default): BlackJAX kernels and Pathfinder, the dynestyx state space building block."
     contents:
       - contrib.blackjax.BlackjaxNUTSKernel
       - contrib.blackjax.BlackjaxMCLMCKernel
@@ -158,6 +158,7 @@ reference:
       - contrib.blackjax.MultiPathfinderFit
       - contrib.blackjax.fit_multipathfinder
       - contrib.blackjax.multipathfinder_samples
+      - contrib.dynestyx.state_space
 
   - title: Typing
     desc: Public type contracts.

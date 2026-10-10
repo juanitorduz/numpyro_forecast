@@ -5,6 +5,10 @@ from importlib.metadata import PackageNotFoundError, version
 from jaxtyping import install_import_hook
 
 with install_import_hook("numpyro_forecast", "beartype.beartype"):
+    # Bound here so great-docs can resolve the `contrib.dynestyx.*` reference entries by
+    # attribute walk (API reference, llms-full.txt) and so the block is runtime
+    # type-checked like the other building blocks; the module imports no optional extra.
+    import numpyro_forecast.contrib.dynestyx
     from numpyro_forecast import (  # noqa: F401
         acf,
         arrays,
