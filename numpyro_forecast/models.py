@@ -619,6 +619,13 @@ def ssoe[Carry](
     shape ``(future, 1)`` is indistinguishable from time and is consumed as
     such: per-step error scales, if that is what you meant.
 
+    **Missing values.** A NaN entry of a floating ``y`` is a missing
+    observation: the filter treats it as ``y_t = mu_t``, so ``update`` sees a
+    zero error and the state carries its prediction forward (the Kalman
+    prediction step). Mask the same entries out of the likelihood with
+    ``numpyro.handlers.mask(mask=~jnp.isnan(y))`` around the ``"obs"`` site
+    (``y``, not ``h.data``, which is ``None`` under the in-sample predictive).
+
     **Composition.** Two channels are two calls sharing the same ``Horizon``;
     each opens its own ``time_future`` plate. Scoping a helper that contains the
     call is fine (``handlers.scope`` prefixes the error site and the plate; use
@@ -697,7 +704,8 @@ def ssoe[Carry](
     >>> def update(carry, y_t, eps_t, _):
     ...     return y_t, eps_t
     >>> r = ssoe(h, "eps", y, (mu[None], jnp.zeros((1,))), mean, update, dist.Normal(0.0, sigma))
-    >>> numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
+    >>> with numpyro.handlers.mask(mask=~jnp.isnan(y)):  # NaN entries of y are missing
+    ...     numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     >>> if h.future > 0:
     ...     numpyro.deterministic("forecast", r.y_future)
 
@@ -722,6 +730,8 @@ def ssoe[Carry](
         y_t, x_t = inputs
         mu_t = jnp.asarray(mean(carry, x_t))
         _validate_ssoe_mean(mu_t, y_t)
+        if jnp.issubdtype(y_t.dtype, jnp.floating):  # missing: carry the mean on, zero error
+            y_t = jnp.where(jnp.isnan(y_t), mu_t.astype(y_t.dtype), y_t)
         new_carry = _validate_ssoe_carry(carry, update(carry, y_t, y_t - mu_t, x_t))
         return new_carry, mu_t
 
@@ -777,6 +787,19 @@ def _has_discrete_support(d: dist.Distribution) -> bool:
         return False
 
 
+def _observed(obs_dist: dist.Distribution, data: Array | None) -> Array | bool:
+    """Mask of the observed (non-NaN) events of ``data``; an MVN row is missing if any entry is.
+
+    NumPyro's masked log density substitutes a feasible value for masked entries,
+    so the NaNs never reach the log density or its gradient.
+    """
+    if data is None or not jnp.issubdtype(data.dtype, jnp.floating):
+        return True
+    missing = jnp.isnan(data)
+    event_axes = tuple(range(-len(obs_dist.event_shape), 0))
+    return ~(missing.any(axis=event_axes) if event_axes else missing)
+
+
 def predict(
     h: Horizon,
     obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
@@ -800,6 +823,13 @@ def predict(
     (`~~numpyro_forecast.surgery.slice_time()` /
     `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
     family or a registered one.
+
+    Missing observations are ``NaN`` entries of a floating ``h.data``: they are
+    masked out of the ``"obs"`` likelihood (a multivariate-normal row is dropped
+    when any of its entries is missing), so the latents are fit on the observed
+    entries only and the forecast is unchanged for elementwise families. The
+    multivariate-normal forecast conditions on the whole prefix, so a missing
+    entry there makes the forecast ``NaN``.
 
     Parameters
     ----------
@@ -845,13 +875,15 @@ def predict(
             )
             raise ValueError(msg)
     if h.future == 0:
-        numpyro.sample("obs", full_dist, obs=h.data)
+        with numpyro.handlers.mask(mask=_observed(full_dist, h.data)):
+            numpyro.sample("obs", full_dist, obs=h.data)
         return
     data = h.data
     if data is None:
         msg = "forecasting requires observed data"
         raise RuntimeError(msg)
     prefix = slice_time(full_dist, slice(None, h.t_obs))
-    numpyro.sample("obs", prefix, obs=data)
+    with numpyro.handlers.mask(mask=_observed(prefix, data)):
+        numpyro.sample("obs", prefix, obs=data)
     forecast = numpyro.sample("obs_future", prefix_condition(full_dist, data))
     numpyro.deterministic("forecast", forecast)

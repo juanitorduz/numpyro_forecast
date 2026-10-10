@@ -1,5 +1,7 @@
 """Tests for the model building blocks (``numpyro_forecast.models``)."""
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -319,3 +321,37 @@ def test_horizon_unflattens_with_host_leaves() -> None:
     assert (host.t_obs, host.future, host.duration) == (20, 5, 25)
     with pytest.raises(TypeError):
         Horizon(data=np.ones((20, 1)), t_obs=20, future=5, duration=25)  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.parametrize(
+    "obs_dist",
+    [dist.Normal(0.0, 0.5), lambda m: dist.LogNormal(m, 0.5)],
+    ids=["normal", "lognormal"],
+)
+def test_predict_masks_missing_observations(
+    obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
+) -> None:
+    """NaN entries of ``data`` drop out of ``"obs"``: the density ignores them, gradients stay finite.
+
+    ``LogNormal`` checks the positive-support case (NumPyro substitutes a feasible
+    value for masked entries, so a NaN never reaches the log density).
+    """
+    t = 6
+    data = jnp.array([[1.0], [jnp.nan], [2.0], [jnp.nan], [1.5], [0.5]])
+    observed = ~jnp.isnan(data[:, 0])
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        mu = numpyro.sample("mu", dist.Normal(0.0, 1.0))
+        predict(Horizon.from_data(covariates, data), obs_dist, jnp.full((t, 1), mu))
+
+    def log_joint(mu: Array) -> Array:
+        log_density, _ = numpyro.infer.util.log_density(
+            model, (empty_covariates(t), data), {}, {"mu": mu}
+        )
+        return log_density
+
+    mu = jnp.asarray(0.3)
+    family = shift_loc(obs_dist, mu) if isinstance(obs_dist, dist.Distribution) else obs_dist(mu)
+    expected = dist.Normal(0.0, 1.0).log_prob(mu) + jnp.sum(family.log_prob(data[observed]))
+    assert jnp.allclose(log_joint(mu), expected)
+    assert jnp.isfinite(jax.grad(log_joint)(mu))

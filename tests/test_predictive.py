@@ -10,6 +10,7 @@ from unittest import mock
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
 import pytest
 from conftest import (
     assert_host_resident,
@@ -45,7 +46,6 @@ from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, 
 from numpyro_forecast.predictive import (
     _chunk_indices,
     _chunked_draws,
-    _predict,
     _sample_axis_size,
     draw_posterior,
     forecast,
@@ -110,12 +110,11 @@ def test_forecast_parallel_matches_serial_batched() -> None:
     # lax.map), so the chunked-vmap path must match the chunked-serial path.
     model, data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
-    kwargs = {"batch_size": 3}
     serial = forecast(
-        random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=False, **kwargs
+        random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=False, batch_size=3
     )
     vmapped = forecast(
-        random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=True, **kwargs
+        random.PRNGKey(3), model, post, data, empty_covariates(36), parallel=True, batch_size=3
     )
     assert jnp.allclose(vmapped, serial, atol=1e-4)
 
@@ -259,37 +258,50 @@ def test_forecast_chunked_close_to_unchunked() -> None:
     )
 
 
-def test_single_compile_while_chunking(count_compilations) -> None:
-    """Invariant I3: fixed shapes ⇒ fixed compile counts for chunked forecasts.
+def _counting(model: ForecastModel) -> tuple[ForecastModel, list[None]]:
+    """Wrap ``model`` so every trace of it appends to the returned list."""
+    traces: list[None] = []
 
-    Padding makes every chunk share the ``(batch_size, future, obs)`` shape, so
-    the forecast kernel (`_predict`) compiles a single variant across the whole
-    ``num_samples`` sweep. The compile-count harness (roadmap §4.5) then proves
-    that replaying the sweep triggers zero further backend compilations once
-    every shape has been seen, and the ``_predict`` cache introspection pins the
-    forecast kernel specifically to one variant.
+    def counted(covariates: Array, data: Array | None = None) -> None:
+        traces.append(None)
+        model(covariates, data)
+
+    return counted, traces
+
+
+@pytest.mark.parametrize("device", [None, "cpu", "host"])
+def test_single_trace_per_chunked_call(device: str | None) -> None:
+    """Invariant I3: every chunk of one call shares one compiled predictive kernel.
+
+    Padding makes every chunk share the ``(batch_size, future, obs)`` shape, so a
+    chunked `forecast()` traces the model exactly once per call whatever the
+    ``num_samples`` (2 and 3 chunks here) and wherever the chunks are moved.
     """
     model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
-    # Pre-build posteriors OUTSIDE the counted block (draw/JIT would compile).
-    posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
-    jax.block_until_ready(posteriors)
+    for n in (5, 12):
+        post = draw_posterior(random.PRNGKey(2), guide, params, n)
+        counted, traces = _counting(model)
+        forecast(random.PRNGKey(3), counted, post, data, covariates, batch_size=4, device=device)
+        assert len(traces) == 1
 
-    def _sweep() -> None:
-        for post in posteriors:
-            jax.block_until_ready(
-                forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
-            )
 
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+def test_handlers_around_a_driver_call_apply_after_an_earlier_compile() -> None:
+    """A handler around `forecast()` is honored even if the same model compiled without it.
 
-    # Replaying the sweep hits every cached shape, so nothing recompiles.
-    with count_compilations() as tally:
-        _sweep()
-    assert tally.count == 0
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+    The predictive kernel is built per call, so it never replays a trace compiled
+    under different (or no) effect handlers: the regression this pins is a
+    model-keyed cache silently ignoring ``numpyro.handlers`` (and dynestyx's
+    handlers) wrapped around the second call.
+    """
+    model, data, guide, params = _fit_data()
+    covariates = empty_covariates(36)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 8)
+    plain = forecast(random.PRNGKey(3), model, post, data, covariates)
+    shift = {"drift_future": jnp.full((covariates.shape[-2] - data.shape[-2], 1), 100.0)}
+    with numpyro.handlers.substitute(data=shift):
+        shifted = forecast(random.PRNGKey(3), model, post, data, covariates)
+    assert float(shifted.mean()) > float(plain.mean()) + 50.0
 
 
 # --- P6: host offloading (issue #64) ------------------------------------------
@@ -397,32 +409,6 @@ def test_forecast_unchunked_device_commits_result() -> None:
     assert isinstance(hosted, jax.Array)
     assert hosted.devices() == {_cpu()}
     assert jnp.array_equal(plain, hosted)
-
-
-@pytest.mark.parametrize("device", ["cpu", "host"])
-def test_single_compile_while_chunking_with_device(count_compilations, device: str) -> None:
-    """Off-accelerator transfers must not break the fixed-shape single-compile invariant."""
-    model, data, guide, params = _fit_data()
-    covariates = empty_covariates(36)
-    posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
-    jax.block_until_ready(posteriors)
-
-    def _sweep() -> None:
-        for post in posteriors:
-            jax.block_until_ready(
-                forecast(
-                    random.PRNGKey(3), model, post, data, covariates, batch_size=4, device=device
-                )
-            )
-
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
-
-    with count_compilations() as tally:
-        _sweep()
-    assert tally.count == 0
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
 
 
 # --- P7: host offloading (``device="host"``: CPU device, NumPy fallback, explicit pinned)
@@ -1210,3 +1196,17 @@ def test_forecast_unchunked_host_is_host_resident() -> None:
     hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="host")
     assert_host_resident(hosted)
     assert np.array_equal(np.asarray(plain), np.asarray(hosted))
+
+
+def test_forecast_reads_any_named_site() -> None:
+    """``site`` selects the forecast site: ``predict``'s ``"obs_future"`` equals its ``"forecast"``.
+
+    This is how a library that registers its own forecast site (dynestyx's
+    ``"f_predicted_observations"`` under a ``Simulator``) plugs into the drivers.
+    """
+    model, data, guide, params = _fit_data()
+    covariates = empty_covariates(36)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 6)
+    default = forecast(random.PRNGKey(3), model, post, data, covariates)
+    named = forecast(random.PRNGKey(3), model, post, data, covariates, site="obs_future")
+    assert jnp.array_equal(default, named)

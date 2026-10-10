@@ -795,3 +795,69 @@ def test_ar1_round_trip_closed_form(fitter: str, rng_key: Array) -> None:
     preds = forecast(random.PRNGKey(2), AR1_SSOE, post, data, series, batch_size=100)
     mean_fc = preds.mean(axis=0)[:, 0]
     assert jnp.allclose(mean_fc, closed, rtol=0.05, atol=0.03)
+
+
+def _ses_model(alpha_fixed: float | None = None) -> ForecastModel:
+    """Simple exponential smoothing on ``ssoe``, the series riding in covariates."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        y = covariates[..., : h.t_obs, :]
+        alpha = (
+            numpyro.sample("alpha", dist.Beta(2.0, 2.0)) if alpha_fixed is None else alpha_fixed
+        )
+        sigma = numpyro.sample("sigma", dist.HalfNormal(1.0))
+        r = ssoe(
+            h,
+            "eps",
+            y,
+            jnp.zeros((1,)),
+            lambda level, _: level,
+            lambda level, _, eps_t, __: level + alpha * eps_t,
+            dist.Normal(0.0, sigma),
+        )
+        numpyro.deterministic("mu", r.mu)
+        with numpyro.handlers.mask(mask=~jnp.isnan(y)):
+            numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
+        if h.future > 0:
+            numpyro.deterministic("forecast", r.y_future)
+
+    return model
+
+
+def test_missing_values_carry_the_mean_with_zero_error() -> None:
+    """A NaN row leaves the state unchanged (zero error); later rows update from it."""
+    y = jnp.array([[1.0], [2.0], [jnp.nan], [jnp.nan], [4.0], [3.0]])
+    tr = numpyro.handlers.trace(
+        substitute(_ses_model(0.5), data={"sigma": jnp.asarray(1.0)})
+    ).get_trace(y, y)
+    mu = tr["mu"]["value"][:, 0]
+    assert jnp.isfinite(mu).all()
+    assert mu[3] == mu[2] == mu[4]  # no update at the two missing rows
+    assert mu[5] != mu[4]  # the next observed row updates the level again
+
+
+def test_missing_values_drop_out_of_the_likelihood_and_fit() -> None:
+    """A masked obs site drops the NaN rows: finite log density and gradient, NUTS recovers alpha."""
+    t, alpha_true = 150, 0.4
+    eps = 0.3 * random.normal(random.PRNGKey(0), (t,))
+
+    def step(level: Array, e: Array) -> tuple[Array, Array]:
+        return level + alpha_true * e, level + e
+
+    _, y = jax.lax.scan(step, jnp.asarray(0.0), eps)
+    missing = jnp.zeros(t, bool).at[jnp.arange(10, t, 7)].set(True).at[60:70].set(True)
+    y = jnp.where(missing, jnp.nan, y)[:, None]
+    model = _ses_model()
+
+    def log_joint(params: dict[str, Array]) -> Array:
+        return numpyro.infer.util.log_density(model, (y, y), {}, params)[0]
+
+    params = {"alpha": jnp.asarray(0.4), "sigma": jnp.asarray(0.3)}
+    grads = jax.grad(log_joint)(params)
+    assert jnp.isfinite(log_joint(params))
+    assert all(jnp.isfinite(g) for g in grads.values())
+
+    mcmc = MCMC(NUTS(model), num_warmup=200, num_samples=200, progress_bar=False)
+    mcmc.run(random.PRNGKey(1), y, y)
+    assert abs(float(mcmc.get_samples()["alpha"].mean()) - alpha_true) < 0.15

@@ -28,7 +28,7 @@ Optional extras:
 - `optax`: optax optimizers for SVI, wrapped with `numpyro.optim.optax_to_numpyro`.
 - `blackjax`: the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`.
 - `cuda`: the CUDA jax plugin (Linux only), see [Scaling to GPU](#scaling-to-gpu).
-- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The `docs` extra also installs `dynestyx` for the [dynestyx state space model integration example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html); without it, that one notebook needs `pip install "dynestyx>=0.5.1"`.
+- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The `docs` extra also installs `dynestyx` for the [dynestyx state space model integration example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html); without it, that one notebook needs `pip install "dynestyx>=0.6.0"`.
 
 ## Quickstart
 
