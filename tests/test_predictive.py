@@ -1196,17 +1196,3 @@ def test_forecast_unchunked_host_is_host_resident() -> None:
     hosted = forecast(random.PRNGKey(3), model, post, data, empty_covariates(36), device="host")
     assert_host_resident(hosted)
     assert np.array_equal(np.asarray(plain), np.asarray(hosted))
-
-
-def test_forecast_reads_any_named_site() -> None:
-    """``site`` selects the forecast site: ``predict``'s ``"obs_future"`` equals its ``"forecast"``.
-
-    This is how a library that registers its own forecast site (dynestyx's
-    ``"f_predicted_observations"`` under a ``Simulator``) plugs into the drivers.
-    """
-    model, data, guide, params = _fit_data()
-    covariates = empty_covariates(36)
-    post = draw_posterior(random.PRNGKey(2), guide, params, 6)
-    default = forecast(random.PRNGKey(3), model, post, data, covariates)
-    named = forecast(random.PRNGKey(3), model, post, data, covariates, site="obs_future")
-    assert jnp.array_equal(default, named)

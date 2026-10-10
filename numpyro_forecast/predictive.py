@@ -402,14 +402,13 @@ def forecast(
     batch_size: int | None = None,
     parallel: bool = True,
     device: jax.Device | str | None = None,
-    site: str = "forecast",
 ) -> Num[Array | np.ndarray, " sample *batch future obs"]:
     """Sample forecasts for the steps in ``[t, duration)`` from a posterior.
 
     Runs ``Predictive`` with full-horizon ``covariates`` and the in-sample
     ``data``: the in-sample latent sites are drawn from ``posterior`` while the
-    ``_future`` suffix is drawn from the prior, and the draws at ``site``
-    (``"forecast"`` by default) are returned. The number of forecast samples equals the leading (sample) axis of
+    ``_future`` suffix is drawn from the prior, and the ``"forecast"`` site is
+    returned. The number of forecast samples equals the leading (sample) axis of
     ``posterior`` (see `~~numpyro_forecast.predictive.draw_posterior()`).
 
     Parameters
@@ -452,12 +451,6 @@ def forecast(
         The result feeds straight into `~~numpyro_forecast.convert.to_datatree()`
         and the ``batch_size``-chunked evaluation metrics in
         `~~numpyro_forecast.evaluate`, which accept host-resident draws.
-    site
-        The site holding the forecast draws: ``"forecast"`` for the
-        package's building blocks, or a site another library registers, such as
-        dynestyx's ``"f_predicted_observations"`` under a ``Simulator`` (shape
-        ``(sample, n_simulations, future, obs)``; merge the two draw axes with
-        ``dynestyx.flatten_draws``).
 
     Returns
     -------
@@ -497,7 +490,7 @@ def forecast(
     """
     _require_covariates_extend_data(data, covariates)
 
-    kernel = _predictive_kernel(model, site, parallel)
+    kernel = _predictive_kernel(model, "forecast", parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return kernel(key, post, covariates, data)
