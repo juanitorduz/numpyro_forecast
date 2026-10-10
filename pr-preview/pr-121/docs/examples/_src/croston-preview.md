@@ -9,9 +9,9 @@ This notebook ports the blog post [**Croston's Method for Intermittent Time Seri
 
 which reads as the expected demand *per period*: how much arrives, divided by how often. The classical method uses one shared smoothing parameter; the "Croston optimized" variant (as implemented, for example, by [statsforecast](https://nixtlaverse.nixtla.io/statsforecast/src/core/models.html#crostonoptimized)) estimates a separate smoothing parameter for each component, typically restricted to a range like \[0.1, 0.3\], since values near 1 make the forecast jump reactively after every demand. We follow the blog post and build a **Bayesian** version of the optimized variant, where the smoothing parameters, initial levels, and noise scales all get priors and posteriors, so the forecast comes with genuine uncertainty bands instead of the symmetric conformal intervals of the classical implementations (which can happily cover negative demand).
 
-Two practical notes on the port, in the same spirit as the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html):
+Two practical notes on the port, in the same spirit as the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html):
 
-- The blog post models the two *derived* series directly, each with the level model from [its exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/) (the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation treats the richer state space variant of the same idea). Here we implement the *same* likelihood on the **raw calendar timeline**: each level recursion is one call to the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, frozen outside demand events by a gate, and the likelihood terms are **masked** so that only demand events contribute. The two formulations are mathematically identical, but the calendar-time version plugs straight into the package's machinery: plain NumPyro NUTS, [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and, crucially, [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which slices calendar time when it moves the train/test split forward.
+- The blog post models the two *derived* series directly, each with the level model from [its exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/) (the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html) in this documentation treats the richer state space variant of the same idea). Here we implement the *same* likelihood on the **raw calendar timeline**: each level recursion is one call to the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, frozen outside demand events by a gate, and the likelihood terms are **masked** so that only demand events contribute. The two formulations are mathematically identical, but the calendar-time version plugs straight into the package's machinery: plain NumPyro NUTS, [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and, crucially, [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest), which slices calendar time when it moves the train/test split forward.
 - As in the ARMA example, the observed series itself plays the role of the covariates: [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series (values *and* timing) as an argument, and the package's [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`, which spans the full horizon at prediction time. The model only ever reads the first `t_obs` rows (the block checks this), so no future information leaks into a forecast.
 
 
@@ -224,7 +224,7 @@ Each component gets its own priors,
 
 One transparency note on the priors: \text{Normal}(0, 1) on the initial levels allows negative values for two quantities that are strictly positive (a demand size and an inverse interval). We keep the blog post's choice for comparability; centering the inits on the data or switching to positive priors is the natural refinement, in the same spirit as the truncated or log-normal component likelihoods mentioned in the forecast section.
 
-Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis with the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, whose job is precisely a recursion driven by the observed series: it takes the driving series, an initial carry, a `step` function returning the one-step-ahead mean and the carry update, and the innovation distribution, and it owns both the in-sample filter and the forecast scan. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, and `noise`) and hands [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) a `step` that emits the *pre-update* level (the one-step-ahead mean) and a `carry_fn` that applies the gated update above. The gate travels as an `xs` input, padded with zeros over the forecast horizon by [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html): with the gate off, the level is frozen there, so the forecast is the final level plus the component's iid innovation noise at every horizon step, which is exactly the level model's flat forecast distribution \text{Normal}(\ell_T, \sigma). Padding the gate ourselves also matters for the cross-validation below, where [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows of the series that must not update the levels. Rows carry the observation axis, so the scalar level is `init[None]`. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_inv_eps_future` that the block registers only when forecasting.
+Since both components run the *same* level model, we write it once and compose, exactly as the blog post does: there `croston_model` is built from two `level_model` calls wrapped in NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, which prepends a prefix to every sample site inside the wrapped function so the two copies get distinct parameter names. We mirror that structure on the calendar axis with the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, whose job is precisely a recursion driven by the observed series: it takes the driving series, an initial carry, a [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function returning the one-step-ahead mean, an `update` function returning the next carry, and the innovation distribution, and it owns both the in-sample filter and the forecast scan. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, and `noise`) and hands [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) a [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) that emits the *pre-update* level (the one-step-ahead mean) and an `update` that applies the gated update above. The gate travels as an `xs` input, padded with zeros over the forecast horizon by [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html): with the gate off, the level is frozen there, so the forecast is the final level plus the component's iid innovation noise at every horizon step, which is exactly the level model's flat forecast distribution \text{Normal}(\ell_T, \sigma). Padding the gate ourselves also matters for the cross-validation below, where [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows of the series that must not update the levels. Rows carry the observation axis, so the scalar level is `init[None]`. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p_inv", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_inv_eps_future` that the block registers only when forecasting.
 
 The `croston` body then only does what is specific to Croston's method:
 
@@ -264,22 +264,24 @@ def level_channel(h: Horizon, values: Array, gate: Array) -> tuple[SSOEResult, A
         sampled future values) and the observation noise scale.
     """
     smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    init = jnp.asarray(numpyro.sample("init", dist.Normal(loc=0, scale=1)))
-    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
+    init = numpyro.sample("init", dist.Normal(loc=0, scale=1))
+    noise = numpyro.sample("noise", dist.HalfNormal(scale=1))
 
-    def step(level, gate_t):
-        # Emit the pre-update level (the one-step-ahead mean); update only at events.
-        return level, lambda y_t, _: jnp.where(
-            gate_t, smoothing * y_t + (1 - smoothing) * level, level
-        )
+    def mean(level, _):
+        # Emit the pre-update level (the one-step-ahead mean).
+        return level
+
+    def update(level, y_t, _, gate_t):
+        # Update only at events; the gate is frozen over the horizon.
+        return jnp.where(gate_t, smoothing * y_t + (1 - smoothing) * level, level)
 
     result = ssoe(
         h,
         "eps",
         values,
         init[None],
-        step,
+        mean,
+        update,
         dist.Normal(loc=0, scale=noise),
         xs=pad_future(gate, h.future),
     )
@@ -916,17 +918,17 @@ Group: /
 │         * time             (time) int64 544B 0 1 2 3 4 5 6 7 ... 61 62 63 64 65 66 67
 │         * obs_dim          (obs_dim) int64 8B 0
 │       Data variables:
-│           p_inv_init       (chain, draw) float32 16kB 0.3968 0.5238 ... 0.6935 0.1668
-│           p_inv_noise      (chain, draw) float32 16kB 0.3601 0.3621 ... 0.455 0.4824
-│           p_inv_smoothing  (chain, draw) float32 16kB 0.03843 0.07998 ... 0.1539
-│           rate             (chain, draw, time, obs_dim) float32 1MB 0.3456 ... 0.7844
-│           z_init           (chain, draw) float32 16kB 0.8709 1.202 ... 1.126 1.271
-│           z_noise          (chain, draw) float32 16kB 0.431 0.6101 ... 0.5139 0.6101
-│           z_smoothing      (chain, draw) float32 16kB 0.0827 0.04026 ... 0.04315
+│           p_inv_init       (chain, draw) float32 16kB 0.552 0.5349 ... 0.6918 0.1973
+│           p_inv_noise      (chain, draw) float32 16kB 0.4664 0.4535 ... 0.4596 0.4934
+│           p_inv_smoothing  (chain, draw) float32 16kB 0.09848 0.1402 ... 0.1503
+│           rate             (chain, draw, time, obs_dim) float32 1MB 0.4796 ... 0.7795
+│           z_init           (chain, draw) float32 16kB 0.8688 0.7756 ... 1.025 1.276
+│           z_noise          (chain, draw) float32 16kB 0.6172 0.6034 ... 0.5056 0.6082
+│           z_smoothing      (chain, draw) float32 16kB 0.1455 0.1518 ... 0.04899
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:48.726862+00:00
+│           created_at:                 2026-09-29T20:17:54.164989+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -937,11 +939,11 @@ Group: /
 │         * time     (time) int64 544B 0 1 2 3 4 5 6 7 8 ... 59 60 61 62 63 64 65 66 67
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 1MB 0.3385 1.062 ... 1.935
+│           obs      (chain, draw, time, obs_dim) float32 1MB 0.1063 1.143 ... 1.928
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:48.906985+00:00
+│           created_at:                 2026-09-29T20:17:54.377998+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -952,9 +954,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 272B 0.0 0.0 0.0 0.0 ... 1.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:48.907279+00:00
+│           created_at:                 2026-09-29T20:17:54.378268+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -965,9 +967,9 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 272B 0.0 0.0 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:48.907475+00:00
+│           created_at:                 2026-09-29T20:17:54.378460+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -978,11 +980,11 @@ Group: /
 │         * time     (time) int64 96B 68 69 70 71 72 73 74 75 76 77 78 79
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 192kB 0.1277 0.4071 ... 0.3087
+│           obs      (chain, draw, time, obs_dim) float32 192kB 0.1404 0.3312 ... 0.3052
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:49.540496+00:00
+│           created_at:                 2026-09-29T20:17:55.155833+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -993,9 +995,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 48B 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-08-27T12:29:49.540742+00:00
+            created_at:                 2026-09-29T20:17:55.156077+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.2.0
+            creation_library_version:   1.3.1
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1110,7 +1112,7 @@ p_inv_init
 float32
 
 
-0.3968 0.5238 ... 0.6935 0.1668
+0.552 0.5349 ... 0.6918 0.1973
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1118,7 +1120,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.3967991 , 0.52377546, 0.5721769 , ..., 0.8434627 , 0.5250554 ,0.55832946],[0.3733826 , 0.52322114, 0.5554772 , ..., 0.58045024, 0.435351  ,0.44791895],[0.6426725 , 0.46545908, 0.53292084, ..., 0.42312962, 0.26612112,0.56087804],[0.50213873, 0.234565  , 0.7130643 , ..., 0.30552757, 0.69348556,0.16678834]], shape=(4, 1000), dtype=float32)
+    array([[0.55200535, 0.5348894 , 0.63651603, ..., 0.3084669 , 0.5220848 ,0.5491861 ],[0.60586965, 0.437177  , 0.54459286, ..., 0.5970669 , 0.43331975,0.44735792],[0.6391032 , 0.43811017, 0.5293396 , ..., 0.22088066, 0.38324678,0.5247054 ],[0.6003306 , 0.19927633, 0.7319657 , ..., 0.38768315, 0.691793  ,0.19732551]], shape=(4, 1000), dtype=float32)
 
 
 p_inv_noise
@@ -1130,7 +1132,7 @@ p_inv_noise
 float32
 
 
-0.3601 0.3621 ... 0.455 0.4824
+0.4664 0.4535 ... 0.4596 0.4934
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1138,7 +1140,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.36009234, 0.36212033, 0.33964825, ..., 0.57272637, 0.5530915 ,0.4184525 ],[0.3674066 , 0.32325557, 0.39601713, ..., 0.4257998 , 0.29711035,0.44426942],[0.3449012 , 0.49216822, 0.40045667, ..., 0.4218717 , 0.33237666,0.37773907],[0.3705583 , 0.35225433, 0.35757434, ..., 0.348536  , 0.45495906,0.48237777]], shape=(4, 1000), dtype=float32)
+    array([[0.46636656, 0.45346838, 0.2879719 , ..., 0.26631686, 0.26858622,0.24044721],[0.34409046, 0.32567137, 0.38828212, ..., 0.4240382 , 0.30131018,0.4359119 ],[0.36297065, 0.5041925 , 0.2666724 , ..., 0.4089895 , 0.34608498,0.36222726],[0.40545964, 0.32168695, 0.38385552, ..., 0.34373084, 0.45963678,0.49342814]], shape=(4, 1000), dtype=float32)
 
 
 p_inv_smoothing
@@ -1150,7 +1152,7 @@ p_inv_smoothing
 float32
 
 
-0.03843 0.07998 ... 0.05922 0.1539
+0.09848 0.1402 ... 0.06406 0.1503
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1158,7 +1160,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.03842643, 0.07997623, 0.05211684, ..., 0.16375609, 0.05191627,0.03288611],[0.06755384, 0.11697324, 0.09526826, ..., 0.061797  , 0.10809939,0.06154307],[0.03039076, 0.03915325, 0.05231623, ..., 0.16335008, 0.0909709 ,0.06527878],[0.1296507 , 0.16052231, 0.06226639, ..., 0.1874417 , 0.05921761,0.15390773]], shape=(4, 1000), dtype=float32)
+    array([[0.09848263, 0.14019096, 0.02434728, ..., 0.05153314, 0.09640952,0.03850724],[0.03036934, 0.1487113 , 0.11114854, ..., 0.05899967, 0.10564284,0.05253364],[0.09292535, 0.05410115, 0.11131836, ..., 0.06590056, 0.12355703,0.04574066],[0.14236613, 0.15015215, 0.0780057 , ..., 0.18311597, 0.06405789,0.15033028]], shape=(4, 1000), dtype=float32)
 
 
 rate
@@ -1170,7 +1172,7 @@ rate
 float32
 
 
-0.3456 0.3456 ... 0.7844 0.7844
+0.4796 0.4796 ... 0.7795 0.7795
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1178,7 +1180,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.3455843 ],[0.3455843 ],[0.3455843 ],...,[0.55803466],[0.55803466],[0.55803466]],[[0.6297312 ],[0.6297312 ],[0.6297312 ],...,[0.7156346 ],[0.7156346 ],[0.7156346 ]],[[0.5013675 ],[0.5013675 ],[0.5013675 ],...,......,[0.77900624],[0.77900624],[0.77900624]],[[0.78063726],[0.78063726],[0.78063726],...,[0.72857785],[0.72857785],[0.72857785]],[[0.21206847],[0.21206847],[0.21206847],...,[0.78442574],[0.78442574],[0.78442574]]]], shape=(4, 1000, 68, 1), dtype=float32)
+    array([[[[0.4796035 ],[0.4796035 ],[0.4796035 ],...,[0.7055405 ],[0.7055405 ],[0.7055405 ]],[[0.414885  ],[0.414885  ],[0.414885  ],...,[0.73378587],[0.73378587],[0.73378587]],[[0.6324925 ],[0.6324925 ],[0.6324925 ],...,......,[0.7976634 ],[0.7976634 ],[0.7976634 ]],[[0.70909584],[0.70909584],[0.70909584],...,[0.71335196],[0.71335196],[0.71335196]],[[0.25173756],[0.25173756],[0.25173756],...,[0.7794979 ],[0.7794979 ],[0.7794979 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
 
 
 z_init
@@ -1190,7 +1192,7 @@ z_init
 float32
 
 
-0.8709 1.202 0.8762 ... 1.126 1.271
+0.8688 0.7756 ... 1.025 1.276
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1198,7 +1200,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.8709302 , 1.2022922 , 0.8762457 , ..., 0.9058968 , 0.97167814,1.0455995 ],[0.98087215, 1.1942167 , 1.0772512 , ..., 0.8704563 , 1.2564032 ,0.82434726],[0.5995016 , 0.7690508 , 0.9487507 , ..., 1.076296  , 1.1286334 ,1.1343081 ],[0.71193147, 1.1777287 , 1.2749109 , ..., 1.2368429 , 1.125672  ,1.2714826 ]], shape=(4, 1000), dtype=float32)
+    array([[0.8688385 , 0.7756463 , 0.99367875, ..., 1.2754182 , 1.2493949 ,1.2288815 ],[0.84027123, 1.2348804 , 1.1085099 , ..., 0.94559133, 1.2558272 ,0.7936894 ],[0.75072646, 0.9158649 , 1.1567416 , ..., 1.1357847 , 0.9880064 ,1.1434374 ],[0.79846674, 1.1345255 , 1.281188  , ..., 1.225075  , 1.0250115 ,1.2757477 ]], shape=(4, 1000), dtype=float32)
 
 
 z_noise
@@ -1210,7 +1212,7 @@ z_noise
 float32
 
 
-0.431 0.6101 ... 0.5139 0.6101
+0.6172 0.6034 ... 0.5056 0.6082
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1218,7 +1220,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.4309867 , 0.61010087, 0.4415785 , ..., 0.4724818 , 0.46835226,0.5573257 ],[0.6373869 , 0.4365739 , 0.5162299 , ..., 0.5708642 , 0.519083  ,0.543277  ],[0.58225775, 0.6231716 , 0.5158983 , ..., 0.45144928, 0.4817635 ,0.6580692 ],[0.45316494, 0.8497127 , 0.4457125 , ..., 0.42120862, 0.51389134,0.61012495]], shape=(4, 1000), dtype=float32)
+    array([[0.6172489 , 0.6034245 , 0.5547627 , ..., 0.56916434, 0.5834163 ,0.70371395],[0.55735564, 0.478876  , 0.5097655 , ..., 0.52534705, 0.53895354,0.5171613 ],[0.6041717 , 0.58953   , 0.43696603, ..., 0.44190982, 0.51381904,0.59548014],[0.53231096, 0.7770979 , 0.4764189 , ..., 0.39197007, 0.50558174,0.6081548 ]], shape=(4, 1000), dtype=float32)
 
 
 z_smoothing
@@ -1230,7 +1232,7 @@ z_smoothing
 float32
 
 
-0.0827 0.04026 ... 0.04339 0.04315
+0.1455 0.1518 ... 0.06313 0.04899
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1238,20 +1240,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.08270474, 0.04026299, 0.15980688, ..., 0.14034852, 0.09369831,0.06658857],[0.10732704, 0.03302876, 0.10353453, ..., 0.17563666, 0.03114169,0.10663848],[0.11499771, 0.12552364, 0.10296799, ..., 0.03235157, 0.05163483,0.05938447],[0.12520996, 0.06682938, 0.07502852, ..., 0.12053035, 0.04338872,0.04315292]], shape=(4, 1000), dtype=float32)
+    array([[0.14553162, 0.1518492 , 0.09486819, ..., 0.04148353, 0.04241811,0.03337542],[0.1109233 , 0.0434327 , 0.09879242, ..., 0.14289793, 0.04676861,0.13367212],[0.10628486, 0.0994112 , 0.04633227, ..., 0.02605157, 0.0705827 ,0.08141381],[0.11468165, 0.0780057 , 0.06096253, ..., 0.05315582, 0.06313314,0.04898545]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:48.726862+00:00
+2026-09-29T20:17:54.164989+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1366,7 +1368,7 @@ obs
 float32
 
 
-0.3385 1.062 0.7683 ... 2.018 1.935
+0.1063 1.143 0.7219 ... 2.011 1.928
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1374,20 +1376,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.33850092],[ 1.0621904 ],[ 0.7683196 ],...,[ 0.99580103],[ 1.0891179 ],[ 0.8175309 ]],[[ 0.5748841 ],[ 1.6346726 ],[ 1.5742061 ],...,[ 0.51255316],[ 0.17686263],[ 1.3185672 ]],[[ 0.8430811 ],[ 0.4630199 ],[ 1.1885171 ],...,......,[ 1.5836004 ],[ 1.2724812 ],[ 0.72360283]],[[ 0.32956636],[ 1.1658125 ],[ 2.0226429 ],...,[ 0.80747837],[ 0.81200546],[ 0.7073547 ]],[[ 1.4159282 ],[ 1.7379392 ],[ 1.1507263 ],...,[ 1.5715965 ],[ 2.017602  ],[ 1.9347404 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
+    array([[[[ 0.1063059 ],[ 1.1427569 ],[ 0.72188205],...,[ 0.96904767],[ 1.1026939 ],[ 0.7137334 ]],[[ 0.155104  ],[ 1.2032952 ],[ 1.1434904 ],...,[ 0.4609725 ],[ 0.12895544],[ 1.2581662 ]],[[ 0.9520135 ],[ 0.4745361 ],[ 1.3859906 ],...,......,[ 1.5825063 ],[ 1.2929837 ],[ 0.78220606]],[[ 0.24177894],[ 1.064503  ],[ 1.9074783 ],...,[ 0.78937477],[ 0.79382867],[ 0.6908701 ]],[[ 1.4197268 ],[ 1.7406981 ],[ 1.1553813 ],...,[ 1.5664753 ],[ 2.0110404 ],[ 1.9284465 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:48.906985+00:00
+2026-09-29T20:17:54.377998+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1475,13 +1477,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:48.907279+00:00
+2026-09-29T20:17:54.378268+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1569,13 +1571,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:48.907475+00:00
+2026-09-29T20:17:54.378460+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1690,7 +1692,7 @@ obs
 float32
 
 
-0.1277 0.4071 ... 0.7325 0.3087
+0.1404 0.3312 ... 0.7256 0.3052
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1698,20 +1700,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.12767878],[ 0.4071138 ],[-0.0329942 ],...,[ 0.30218592],[ 0.38212195],[ 0.6327927 ]],[[ 0.0747042 ],[ 0.89378333],[ 1.1241379 ],...,[ 0.31796184],[ 0.46663618],[ 0.5858309 ]],[[-0.0424359 ],[ 0.4770053 ],[ 0.24551892],...,......,[ 0.5644004 ],[ 0.857647  ],[ 1.129244  ]],[[ 2.2049959 ],[ 0.8973079 ],[ 0.55362725],...,[ 0.3509267 ],[ 0.56247175],[ 0.9309611 ]],[[ 1.378028  ],[ 1.0172944 ],[ 0.23216878],...,[ 0.37439618],[ 0.73248935],[ 0.30873507]]]], shape=(4, 1000, 12, 1), dtype=float32)
+    array([[[[ 0.14037295],[ 0.3312143 ],[ 0.03731233],...,[ 0.17908627],[ 0.2523858 ],[ 0.80920196]],[[ 0.03907819],[ 0.9623469 ],[ 1.1784393 ],...,[ 0.30386344],[ 0.47348395],[ 0.6098299 ]],[[ 0.03556831],[ 0.5043108 ],[ 0.24833544],...,......,[ 0.6546179 ],[ 0.8766938 ],[ 1.1303053 ]],[[ 2.174323  ],[ 0.8777379 ],[ 0.5415553 ],...,[ 0.34167618],[ 0.54814607],[ 0.91389453]],[[ 1.3835043 ],[ 1.0101535 ],[ 0.21723035],...,[ 0.35376662],[ 0.725593  ],[ 0.30522627]]]], shape=(4, 1000, 12, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:49.540496+00:00
+2026-09-29T20:17:55.155833+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1799,13 +1801,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:49.540742+00:00
+2026-09-29T20:17:55.156077+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1850,12 +1852,12 @@ az.summary(tree, var_names=scalar_vars, ci_kind="hdi", ci_prob=0.94)
 
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| z_smoothing | 0.087 | 0.056 | 0.012 | 0.22 | 3357 | 2301 | 1.00 | 0.00091 | 0.00091 |
-| z_init | 1.067 | 0.226 | 0.59 | 1.5 | 3100 | 2317 | 1.00 | 0.0042 | 0.0037 |
-| z_noise | 0.536 | 0.091 | 0.39 | 0.74 | 4392 | 2770 | 1.00 | 0.0015 | 0.0014 |
-| p_inv_smoothing | 0.098 | 0.059 | 0.013 | 0.23 | 3424 | 2219 | 1.00 | 0.00096 | 0.00074 |
-| p_inv_init | 0.479 | 0.179 | 0.11 | 0.78 | 3072 | 2006 | 1.00 | 0.0033 | 0.0027 |
-| p_inv_noise | 0.383 | 0.068 | 0.28 | 0.54 | 4154 | 2581 | 1.00 | 0.0012 | 0.0011 |
+| z_smoothing | 0.087 | 0.056 | 0.0036 | 0.19 | 3215 | 1994 | 1.00 | 0.00092 | 0.001 |
+| z_init | 1.066 | 0.23 | 0.62 | 1.5 | 2977 | 2255 | 1.00 | 0.0044 | 0.0052 |
+| z_noise | 0.538 | 0.094 | 0.37 | 0.71 | 3995 | 2891 | 1.00 | 0.0015 | 0.002 |
+| p_inv_smoothing | 0.099 | 0.059 | 0.0037 | 0.2 | 3602 | 2433 | 1.00 | 0.00094 | 0.00092 |
+| p_inv_init | 0.477 | 0.178 | 0.12 | 0.79 | 3196 | 2300 | 1.00 | 0.0033 | 0.0035 |
+| p_inv_noise | 0.382 | 0.067 | 0.27 | 0.51 | 5020 | 2644 | 1.00 | 0.001 | 0.0014 |
 
 
 The chains mix well: the \hat{R} values are essentially 1 and the effective sample sizes are healthy. The two smoothing posteriors barely move from the \text{Beta}(2, 20) prior (mean \approx 0.09), which is what we should expect: with only 20 demand events, the data carries little information about how fast the levels should adapt, so the prior's "smooth slowly" preference dominates, exactly as intended. The parameters the data *does* pin down are the component-specific ones: the initial demand-size level concentrates near the typical demand size of about 1, the initial inverse-interval level lands just below one half, and the two noise scales come out clearly different. So even under a shared prior the two components learn genuinely distinct level models, which is the point of the optimized variant. The trace plots confirm the picture.
@@ -2216,9 +2218,9 @@ metrics = {
 rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
+    lambda: croston,
     data_full,
     data_full,  # the series doubles as the covariates, sliced per fold by backtest
-    lambda: croston,
     forecast_fn=forecast_fn,
     metrics=metrics,
     test_window=1,  # one-step-ahead forecasts
@@ -2330,8 +2332,8 @@ print(f"empirical 94% coverage: {cov_94:.2f}  (nominal 0.94)")
 ```
 
 
-    one-step-ahead CRPS over the test span: 0.3427
-    fixed-origin CRPS over the test span:   0.3761
+    one-step-ahead CRPS over the test span: 0.3425
+    fixed-origin CRPS over the test span:   0.3766
     empirical 50% coverage: 0.08  (nominal 0.50)
     empirical 94% coverage: 1.00  (nominal 0.94)
 
@@ -2348,5 +2350,5 @@ The numbers complete the picture, and they are instructive rather than flatterin
 - Syntetos, A. A., & Boylan, J. E. (2005). *The accuracy of intermittent demand estimates*. International Journal of Forecasting, 21(2), 303-314. The bias analysis behind the (1 - \alpha/2) correction quantified above.
 - Morgan, P. [*Croston's Method*](https://www.pmorgan.com.au/tutorials/crostons-method/). A succinct tutorial on the classical method.
 - statsforecast documentation: [`CrostonOptimized`](https://nixtlaverse.nixtla.io/statsforecast/src/core/models.html#crostonoptimized), the classical baseline the blog post compares against.
-- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for the damped Holt-Winters state space model.
-- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
+- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for the damped Holt-Winters state space model.
+- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.

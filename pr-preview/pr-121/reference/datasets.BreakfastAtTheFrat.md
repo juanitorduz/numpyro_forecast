@@ -7,11 +7,7 @@ The three sheets of the dunnhumby *Breakfast at the Frat* workbook as polars fra
 Usage
 
 ``` python
-datasets.BreakfastAtTheFrat(
-    transactions,
-    products,
-    stores,
-)
+datasets.BreakfastAtTheFrat()
 ```
 
 

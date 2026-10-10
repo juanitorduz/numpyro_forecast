@@ -13,8 +13,6 @@ This notebook ports the blog post [**Hierarchical forecasting with NumPyro (part
 
 
 ``` python
-from typing import cast
-
 import arviz as az
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -163,7 +161,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             drift = innovations(
                 h,
                 "drift",
-                lambda: dist.Normal(0.0, drift_scale),
+                dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=destin_centered),
             )
         level = jnp.cumsum(drift, axis=-2)
@@ -177,8 +175,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             destin_scale = numpyro.sample("destin_scale", dist.LogNormal(-5.0, 5.0))
         scale = origin_scale + destin_scale
 
-        # The sum of two raw sample results needs a cast for the type checker.
-        seasonal = cast("Array", origin_seasonal + destin_seasonal)
+        seasonal = origin_seasonal + destin_seasonal
         seasonal_repeat = periodic_repeat(seasonal, duration, axis=-2)
         prediction = level + seasonal_repeat + pairwise
 
@@ -323,7 +320,7 @@ fig.tight_layout();
     prior band shape: (500, 8, 504)
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_7782/1283448653.py:97: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_74686/1283448653.py:97: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
@@ -390,8 +387,8 @@ print(f"Test CRPS:  {crps_test:.4f}")
 ```
 
 
-    Train CRPS: 0.2388
-    Test CRPS:  0.2808
+    Train CRPS: 0.2363
+    Test CRPS:  0.2759
 
 
 # Forecast visualization
@@ -514,7 +511,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_7782/2823254455.py:108: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_74686/2823254455.py:108: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 

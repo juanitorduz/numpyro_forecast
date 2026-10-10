@@ -198,10 +198,10 @@ with the coefficient map \beta = \beta^{\*} \alpha and \gamma = \gamma^{\*} (1 -
 
 # The model
 
-The model is a plain NumPyro function `(covariates, data=None)`. Its first line derives the per-call [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) from the shapes (the observed data `h.data`, the number of in-sample steps `h.t_obs`, and the forecast length `h.future`), and the recursion goes to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block takes the driving series `y` (sliced from the covariates, see the design note above), the initial state, a `step` function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:
+The model is a plain NumPyro function `(covariates, data=None)`. Its first line derives the per-call [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) from the shapes (the observed data `h.data`, the number of in-sample steps `h.t_obs`, and the forecast length `h.future`), and the recursion goes to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block takes the driving series `y` (sliced from the covariates, see the design note above), the initial state, a [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:
 
-1.  **In sample.** A deterministic filter consumes the observed series: at each step `step(carry, x_t)` returns the one-step-ahead mean \mu_t and a `carry_fn(y_t, eps_t)` that advances the state with the innovation \varepsilon_t = y_t - \mu_t. The means come back as `r.mu`; the whole in-sample likelihood is then a single `Normal` observation site `"obs"` against them, and we also expose \mu_t as the deterministic site `"mu"` for the in-sample fit plot.
-2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), rolls the state forward from the final in-sample state feeding those innovations back through `carry_fn`, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, exactly like the built-in `_future` sites.
+1.  **In sample.** A deterministic filter consumes the observed series: at each step `mean(carry, x_t)` returns the one-step-ahead mean \mu_t and `update(carry, y_t, eps_t, x_t)` advances the state with the innovation \varepsilon_t = y_t - \mu_t. The means come back as `r.mu`; the whole in-sample likelihood is then a single `Normal` observation site `"obs"` against them, and we also expose \mu_t as the deterministic site `"mu"` for the in-sample fit plot.
+2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), rolls the state forward from the final in-sample state feeding those innovations back through `update`, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, exactly like the built-in `_future` sites.
 
 The state update `advance` is shared by both scans and is the SSOE update above, one innovation driving level, trend, and seasonality. One shape convention to know: rows carry the observation axis, so the scalar state emits a `(1,)` mean (`mu[None]`) and reads the scalar innovation back out of the `(1,)` error (`eps_t[0]`); the block checks these shapes so a mismatch fails loudly instead of broadcasting silently.
 
@@ -251,14 +251,17 @@ def exponential_smoothing_ssm(covariates: Array, data: Array | None = None) -> N
         seasonality = jnp.concatenate([seasonality[1:], new_season[None]])
         return (level, trend, seasonality)
 
-    def step(carry, _):
+    def mean(carry, _):
         level, trend, seasonality = carry
-        mu = level + phi * trend + seasonality[0]
-        # Rows carry the observation axis: emit a (1,) mean, read the scalar error back.
-        return mu[None], lambda y_t, eps_t: advance(carry, eps_t[0])
+        # Rows carry the observation axis: emit a (1,) mean.
+        return (level + phi * trend + seasonality[0])[None]
+
+    def update(carry, y_t, eps_t, _):
+        # Read the scalar error back from the (1,) row.
+        return advance(carry, eps_t[0])
 
     init_state = (level_init, trend_init, seasonality_init)
-    r = ssoe(h, "eps", y, init_state, step, dist.Normal(0, noise))
+    r = ssoe(h, "eps", y, init_state, mean, update, dist.Normal(0, noise))
 
     numpyro.deterministic("mu", r.mu)
     numpyro.sample("obs", dist.Normal(r.mu, noise), obs=h.data)
@@ -889,17 +892,17 @@ Group: /
 │         * obs_dim                 (obs_dim) int64 8B 0
 │         * seasonality_init_dim_0  (seasonality_init_dim_0) int64 120B 0 1 2 ... 13 14
 │       Data variables:
-│           level_init              (chain, draw) float32 32kB 0.3102 0.4143 ... 0.5364
-│           level_smoothing         (chain, draw) float32 32kB 0.2118 0.207 ... 0.212
-│           mu                      (chain, draw, time, obs_dim) float32 6MB 0.9767 ....
-│           noise                   (chain, draw) float32 32kB 0.233 0.2251 ... 0.2407
-│           phi                     (chain, draw) float32 32kB 0.3755 0.3285 ... 0.3153
+│           level_init              (chain, draw) float32 32kB 0.1042 0.2372 ... 0.5154
+│           level_smoothing         (chain, draw) float32 32kB 0.2262 0.2147 ... 0.2145
+│           mu                      (chain, draw, time, obs_dim) float32 6MB 0.9221 ....
+│           noise                   (chain, draw) float32 32kB 0.2476 0.2276 ... 0.2401
+│           phi                     (chain, draw) float32 32kB 0.3645 0.2896 ... 0.288
 │           seasonality_init        (chain, draw, seasonality_init_dim_0) float32 480kB ...
-│           seasonality_smoothing   (chain, draw) float32 32kB 0.2746 0.1679 ... 0.3157
-│           trend_init              (chain, draw) float32 32kB 0.09367 ... -0.05799
-│           trend_smoothing         (chain, draw) float32 32kB 0.5881 0.5905 ... 0.3572
+│           seasonality_smoothing   (chain, draw) float32 32kB 0.2684 0.1636 ... 0.3114
+│           trend_init              (chain, draw) float32 32kB 0.1338 ... -0.06602
+│           trend_smoothing         (chain, draw) float32 32kB 0.52 0.549 ... 0.3691
 │       Attributes:
-│           created_at:                 2026-08-27T12:31:44.375000+00:00
+│           created_at:                 2026-09-29T18:38:34.452157+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -912,9 +915,9 @@ Group: /
 │         * time     (time) int64 2kB 0 1 2 3 4 5 6 7 ... 185 186 187 188 189 190 191
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 6MB 0.689 1.007 ... 2.481
+│           obs      (chain, draw, time, obs_dim) float32 6MB 0.6162 1.077 ... 2.481
 │       Attributes:
-│           created_at:                 2026-08-27T12:31:44.558858+00:00
+│           created_at:                 2026-09-29T18:38:34.615487+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -927,7 +930,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 768B 1.121 1.137 0.6104 ... 2.527 2.841
 │       Attributes:
-│           created_at:                 2026-08-27T12:31:44.559207+00:00
+│           created_at:                 2026-09-29T18:38:34.615766+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -940,7 +943,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 768B 1.121 1.137 ... 2.841
 │       Attributes:
-│           created_at:                 2026-08-27T12:31:44.559518+00:00
+│           created_at:                 2026-09-29T18:38:34.615949+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -953,9 +956,9 @@ Group: /
 │         * time     (time) int64 384B 192 193 194 195 196 197 ... 235 236 237 238 239
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB 3.364 3.11 ... 3.689 4.017
+│           obs      (chain, draw, time, obs_dim) float32 2MB 3.382 3.099 ... 4.016
 │       Attributes:
-│           created_at:                 2026-08-27T12:31:44.758220+00:00
+│           created_at:                 2026-09-29T18:38:34.818801+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -968,7 +971,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 192B 0.0 0.0 0.0 ... 0.0 0.0
         Attributes:
-            created_at:                 2026-08-27T12:31:44.758641+00:00
+            created_at:                 2026-09-29T18:38:34.819034+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1106,7 +1109,7 @@ level_init
 float32
 
 
-0.3102 0.4143 ... 0.6464 0.5364
+0.1042 0.2372 ... 0.6006 0.5154
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1114,7 +1117,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[ 0.3102441 ,  0.4143369 ,  0.6325664 , ...,  0.428628  ,0.5188503 ,  0.44129032],[ 0.23185168,  0.26650435, -0.37129322, ...,  0.16399278,0.239105  , -0.00179972],[ 0.38834456,  0.5037876 ,  0.84100366, ...,  0.38611057,0.2578325 ,  0.23527595],[-0.18569404, -0.28162962, -0.1490242 , ...,  0.523722  ,0.64644605,  0.536389  ]], shape=(4, 2000), dtype=float32)
+    array([[ 0.10419866,  0.23723318,  0.4159305 , ...,  0.38825178,0.01595362,  0.34321716],[-0.00274092,  0.14366099,  0.15499333, ...,  0.25324833,0.45404178,  0.09265403],[ 0.36121386,  0.25289512,  0.6647955 , ...,  0.49127114,0.12309081,  0.09964179],[-0.0728039 ,  0.00129045, -0.20990974, ...,  0.54472375,0.6005941 ,  0.51536757]], shape=(4, 2000), dtype=float32)
 
 
 level_smoothing
@@ -1126,7 +1129,7 @@ level_smoothing
 float32
 
 
-0.2118 0.207 ... 0.2118 0.212
+0.2262 0.2147 ... 0.2143 0.2145
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1134,7 +1137,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.21180885, 0.20700541, 0.20735084, ..., 0.15499593, 0.21554367,0.2452756 ],[0.15743446, 0.1563927 , 0.16128917, ..., 0.17726235, 0.2528454 ,0.15303738],[0.29045674, 0.17839259, 0.17678964, ..., 0.30907997, 0.20649406,0.20125927],[0.23124462, 0.21992955, 0.22099063, ..., 0.2672789 , 0.21176444,0.21197107]], shape=(4, 2000), dtype=float32)
+    array([[0.22624171, 0.21470328, 0.2660817 , ..., 0.16232786, 0.17668948,0.22966792],[0.15618388, 0.3592594 , 0.3393285 , ..., 0.2553746 , 0.22751172,0.16329992],[0.2611294 , 0.16206685, 0.16251494, ..., 0.31208825, 0.16539477,0.1609887 ],[0.28040612, 0.28333038, 0.26458067, ..., 0.26773453, 0.2143182 ,0.21445972]], shape=(4, 2000), dtype=float32)
 
 
 mu
@@ -1146,7 +1149,7 @@ mu
 float32
 
 
-0.9767 0.9038 ... 2.108 2.628
+0.9221 0.9667 ... 2.106 2.628
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1154,7 +1157,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.97674537],[0.9037795 ],[0.7298924 ],...,[1.6078115 ],[2.116275  ],[2.635385  ]],[[1.2524488 ],[0.9502721 ],[0.8070518 ],...,[1.5674657 ],[2.0896082 ],[2.6750996 ]],[[1.460968  ],[1.2301044 ],[0.9015404 ],...,......,[1.5880554 ],[2.117119  ],[2.646013  ]],[[1.2054992 ],[0.9732424 ],[0.929857  ],...,[1.60047   ],[2.1053421 ],[2.6341052 ]],[[0.9961096 ],[1.1050782 ],[0.8551133 ],...,[1.6048017 ],[2.107566  ],[2.6277716 ]]]], shape=(4, 2000, 192, 1), dtype=float32)
+    array([[[[0.9220529 ],[0.9667024 ],[0.7625237 ],...,[1.6081431 ],[2.1148975 ],[2.6381013 ]],[[1.2196057 ],[1.0338279 ],[0.7646363 ],...,[1.5784531 ],[2.0995333 ],[2.6718802 ]],[[1.0701003 ],[0.9431573 ],[0.7200458 ],...,......,[1.5881068 ],[2.1150856 ],[2.6450348 ]],[[1.1869941 ],[0.91616917],[0.91862464],...,[1.6005028 ],[2.1049044 ],[2.6346605 ]],[[0.9921522 ],[1.0696038 ],[0.8507924 ],...,[1.604358  ],[2.1064298 ],[2.6281335 ]]]], shape=(4, 2000, 192, 1), dtype=float32)
 
 
 noise
@@ -1166,7 +1169,7 @@ noise
 float32
 
 
-0.233 0.2251 ... 0.2333 0.2407
+0.2476 0.2276 ... 0.2327 0.2401
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1174,7 +1177,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.23295596, 0.2250819 , 0.2368775 , ..., 0.2707622 , 0.22862327,0.21895857],[0.23950501, 0.2183373 , 0.21666214, ..., 0.20968458, 0.23674776,0.2454313 ],[0.20722628, 0.22318353, 0.22304565, ..., 0.24168764, 0.2678586 ,0.2648568 ],[0.24556258, 0.23259634, 0.23021604, ..., 0.23836681, 0.23333827,0.24066891]], shape=(4, 2000), dtype=float32)
+    array([[0.24760577, 0.22757246, 0.23447123, ..., 0.26424727, 0.24297984,0.22624843],[0.24174379, 0.24331711, 0.23262066, ..., 0.24136879, 0.22960313,0.24420048],[0.2099352 , 0.22936922, 0.22941123, ..., 0.24278316, 0.20342404,0.20337866],[0.24996549, 0.24944374, 0.23631328, ..., 0.23824202, 0.23274848,0.2400895 ]], shape=(4, 2000), dtype=float32)
 
 
 phi
@@ -1186,7 +1189,7 @@ phi
 float32
 
 
-0.3755 0.3285 ... 0.2849 0.3153
+0.3645 0.2896 ... 0.2591 0.288
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1194,7 +1197,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.3755373 , 0.32846394, 0.22724172, ..., 0.23776004, 0.4451672 ,0.16674133],[0.4246999 , 0.3532729 , 0.34437832, ..., 0.36900154, 0.23214853,0.43913049],[0.07934931, 0.05168606, 0.02625992, ..., 0.10842285, 0.24650073,0.29173326],[0.07110062, 0.4732713 , 0.16116785, ..., 0.06381722, 0.2849329 ,0.31532416]], shape=(4, 2000), dtype=float32)
+    array([[0.36446515, 0.28956103, 0.23259558, ..., 0.28556445, 0.47843373,0.18105975],[0.39809066, 0.08358195, 0.12337512, ..., 0.14110307, 0.17085293,0.5510389 ],[0.18778245, 0.0940506 , 0.04929074, ..., 0.10497456, 0.37408975,0.4272081 ],[0.0769428 , 0.06880829, 0.0742364 , ..., 0.05830554, 0.25911584,0.28797135]], shape=(4, 2000), dtype=float32)
 
 
 seasonality_init
@@ -1206,7 +1209,7 @@ seasonality_init
 float32
 
 
-0.6313 0.5078 0.266 ... 0.5299 0.81
+0.7691 0.7424 ... 0.5333 0.7794
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1214,7 +1217,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[ 0.63132477,  0.5078063 ,  0.26599875, ..., -0.00247833,0.45693517,  0.575393  ],[ 0.82355404,  0.54904604,  0.3597271 , ...,  0.4279541 ,0.6529156 ,  0.8680943 ],[ 0.8047464 ,  0.6471148 ,  0.34061605, ...,  0.06205944,0.48821434,  0.81348497],...,[ 0.63374007,  0.7369648 ,  0.302432  , ...,  0.3795026 ,0.34037435,  0.7106715 ],[ 0.61370116,  0.40098652,  0.2513078 , ...,  0.08412582,0.588745  ,  0.5920451 ],[ 0.7206711 ,  0.27203247,  0.1894665 , ...,  0.2789006 ,0.31283894,  0.88871574]],[[ 0.96456546,  0.93327475,  0.3684165 , ...,  0.632422  ,0.79877055,  0.9758999 ],[ 0.9407794 ,  1.0736065 ,  0.56424934, ...,  0.52303416,0.8610957 ,  1.1943538 ],[ 1.0912931 ,  1.1844621 ,  0.70343727, ...,  0.7682459 ,0.81798065,  1.2376496 ],...[ 0.59521157,  0.73905504,  0.31363192, ...,  0.24442632,0.46798927,  0.9713884 ],[ 1.0893528 ,  0.7957339 ,  0.64128464, ...,  0.58853436,0.85764366,  0.75745505],[ 1.1496885 ,  0.71419543,  0.61484206, ...,  0.5831527 ,0.88147783,  0.914384  ]],[[ 1.406563  ,  1.364231  ,  1.3505374 , ...,  1.0180956 ,1.1907846 ,  1.5561029 ],[ 1.2795255 ,  1.3756386 ,  0.88317853, ...,  0.81733286,1.4390804 ,  1.1839983 ],[ 1.3795034 ,  1.1911049 ,  1.0726407 , ...,  0.99758416,0.9708299 ,  1.6331786 ],...,[ 0.49653697,  0.5532248 ,  0.0899976 , ...,  0.20212635,0.32169744,  0.5954196 ],[ 0.5956105 ,  0.39341512,  0.3152626 , ...,  0.08289178,0.52967566,  0.66843176],[ 0.47800586,  0.56324923,  0.3065285 , ...,  0.18145472,0.52994084,  0.8100125 ]]], shape=(4, 2000, 15), dtype=float32)
+    array([[[0.7690977 , 0.7423962 , 0.48268154, ..., 0.17750677,0.60482   , 0.8651934 ],[0.97234535, 0.80816233, 0.5133209 , ..., 0.66336286,0.8345956 , 1.0314555 ],[0.65797466, 0.51701146, 0.23707618, ..., 0.4230631 ,0.56319827, 0.6827384 ],...,[0.9675257 , 0.9212727 , 0.7016902 , ..., 0.47644156,0.82938576, 0.9455309 ],[0.62027717, 0.84675044, 0.41220933, ..., 0.66492724,0.5823811 , 0.7575279 ],[1.079485  , 0.37168446, 0.48320892, ..., 0.40553328,0.6471511 , 1.1545092 ]],[[1.020512  , 0.9204883 , 0.45346698, ..., 0.7121212 ,0.8844024 , 1.0034366 ],[1.1039293 , 1.1254457 , 0.57052124, ..., 0.78920054,1.047892  , 1.2724224 ],[1.1238862 , 1.0006001 , 0.6613307 , ..., 0.660245  ,1.1096838 , 1.1712556 ],...[0.6079955 , 0.64003414, 0.28757003, ..., 0.33240077,0.5583231 , 0.8702638 ],[0.999418  , 0.9290164 , 0.6641747 , ..., 0.67095464,1.0940216 , 1.3097427 ],[1.0867814 , 0.844012  , 0.65076435, ..., 0.668195  ,1.095214  , 1.4083985 ]],[[1.2985042 , 1.2902628 , 0.62111026, ..., 0.61751497,1.2478014 , 1.4559258 ],[1.2429271 , 1.3439109 , 0.6987881 , ..., 0.5927794 ,1.3236308 , 1.3063539 ],[1.3101493 , 1.020987  , 1.0945846 , ..., 1.0620263 ,0.9038289 , 1.4255853 ],...,[0.49432114, 0.5656797 , 0.08171522, ..., 0.1875057 ,0.31611827, 0.62714475],[0.6208315 , 0.3743747 , 0.32757807, ..., 0.10014091,0.5356124 , 0.6185468 ],[0.49579635, 0.54811656, 0.31394035, ..., 0.1840206 ,0.53331816, 0.77944636]]], shape=(4, 2000, 15), dtype=float32)
 
 
 seasonality_smoothing
@@ -1226,7 +1229,7 @@ seasonality_smoothing
 float32
 
 
-0.2746 0.1679 ... 0.2785 0.3157
+0.2684 0.1636 ... 0.2743 0.3114
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1234,7 +1237,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.2745696 , 0.1679367 , 0.23027821, ..., 0.42047608, 0.25508708,0.19790621],[0.23300436, 0.19097768, 0.25639692, ..., 0.12793216, 0.2969641 ,0.17143218],[0.19962682, 0.23564851, 0.21722025, ..., 0.2075097 , 0.23786122,0.26215643],[0.16842502, 0.30570108, 0.21334799, ..., 0.2795805 , 0.27852777,0.31565687]], shape=(4, 2000), dtype=float32)
+    array([[0.26841366, 0.1636042 , 0.3275245 , ..., 0.39006045, 0.36041015,0.22131774],[0.23869939, 0.26719034, 0.26048726, ..., 0.25659588, 0.3151462 ,0.16643165],[0.35547313, 0.29899967, 0.27875587, ..., 0.22429663, 0.2924037 ,0.31231588],[0.18488838, 0.19805086, 0.23869461, ..., 0.27799624, 0.27426144,0.31144494]], shape=(4, 2000), dtype=float32)
 
 
 trend_init
@@ -1246,7 +1249,7 @@ trend_init
 float32
 
 
-0.09367 0.04432 ... -0.05799
+0.1338 0.03463 ... -0.1329 -0.06602
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1254,7 +1257,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[ 0.09366985,  0.04432118,  0.10409731, ..., -0.03882837,0.08496471, -0.0477034 ],[ 0.09536485, -0.25388274,  0.19554064, ..., -0.05217663,0.04778647,  0.0881134 ],[-0.16613765, -0.0596179 , -0.02964345, ...,  0.00174198,0.07353854,  0.1108966 ],[ 0.14057688, -0.02974648, -0.01118814, ..., -0.05722304,-0.12830149, -0.05798854]], shape=(4, 2000), dtype=float32)
+    array([[ 0.13377564,  0.03462896, -0.01635815, ...,  0.03220195,0.08328503, -0.05337352],[ 0.08519433,  0.1680065 ,  0.23231424, ..., -0.06383547,0.05015887,  0.08788078],[ 0.10370061,  0.07952344,  0.09260137, ..., -0.00105917,-0.01138956,  0.02945486],[ 0.03098879,  0.03413826,  0.00725304, ..., -0.0540663 ,-0.13288099, -0.06601943]], shape=(4, 2000), dtype=float32)
 
 
 trend_smoothing
@@ -1266,7 +1269,7 @@ trend_smoothing
 float32
 
 
-0.5881 0.5905 ... 0.3505 0.3572
+0.52 0.549 0.4181 ... 0.3652 0.3691
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1274,14 +1277,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.588146  , 0.5904923 , 0.50878656, ..., 0.5717677 , 0.44782993,0.6288765 ],[0.5159084 , 0.4802067 , 0.47103935, ..., 0.41554493, 0.6417081 ,0.6008914 ],[0.7153275 , 0.67368335, 0.7855745 , ..., 0.4263487 , 0.2496242 ,0.2690621 ],[0.5558435 , 0.4393846 , 0.5796549 , ..., 0.7138077 , 0.3504516 ,0.35721207]], shape=(4, 2000), dtype=float32)
+    array([[0.51995736, 0.54897714, 0.41810217, ..., 0.51259893, 0.49682853,0.683832  ],[0.49396294, 0.51195127, 0.5175259 , ..., 0.5915873 , 0.50900275,0.595831  ],[0.6272169 , 0.61239886, 0.7523629 , ..., 0.44114438, 0.66640556,0.6754959 ],[0.72191775, 0.72342455, 0.7026536 , ..., 0.70629436, 0.36519745,0.36912572]], shape=(4, 2000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:31:44.375000+00:00
+2026-09-29T18:38:34.452157+00:00
 
 creation_library :  
 ArviZ
@@ -1402,7 +1405,7 @@ obs
 float32
 
 
-0.689 1.007 0.6744 ... 1.955 2.481
+0.6162 1.077 0.7036 ... 1.954 2.481
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1410,14 +1413,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[0.68895787],[1.0071591 ],[0.67442954],...,[1.7267246 ],[2.2576191 ],[2.5051014 ]],[[1.0209818 ],[1.1097883 ],[0.9442604 ],...,[1.3690847 ],[2.154669  ],[2.002819  ]],[[1.4431775 ],[1.0084363 ],[1.0690532 ],...,......,[1.8580503 ],[2.2101762 ],[2.9321227 ]],[[1.0313734 ],[0.9196002 ],[1.1770512 ],...,[1.4583066 ],[2.1498528 ],[2.760774  ]],[[0.9746825 ],[1.146706  ],[0.9472305 ],...,[1.5435624 ],[1.9549606 ],[2.480648  ]]]], shape=(4, 2000, 192, 1), dtype=float32)
+    array([[[[0.6161675 ],[1.0765831 ],[0.703573  ],...,[1.7345343 ],[2.2651303 ],[2.4996247 ]],[[0.98557746],[1.1951092 ],[0.9033631 ],...,[1.377877  ],[2.1653142 ],[1.9921607 ]],[[1.0524905 ],[0.72374094],[0.885857  ],...,......,[1.8579603 ],[2.208094  ],[2.9309947 ]],[[1.0133085 ],[0.86266255],[1.1651939 ],...,[1.4586989 ],[2.1493025 ],[2.761009  ]],[[0.9707767 ],[1.1111313 ],[0.9426878 ],...,[1.5432662 ],[1.9541917 ],[2.4813643 ]]]], shape=(4, 2000, 192, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:31:44.558858+00:00
+2026-09-29T18:38:34.615487+00:00
 
 creation_library :  
 ArviZ
@@ -1511,7 +1514,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:31:44.559207+00:00
+2026-09-29T18:38:34.615766+00:00
 
 creation_library :  
 ArviZ
@@ -1605,7 +1608,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:31:44.559518+00:00
+2026-09-29T18:38:34.615949+00:00
 
 creation_library :  
 ArviZ
@@ -1726,7 +1729,7 @@ obs
 float32
 
 
-3.364 3.11 3.152 ... 3.689 4.017
+3.382 3.099 3.126 ... 3.688 4.016
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1734,14 +1737,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[3.3638828],[3.1097145],[3.1518757],...,[2.9554002],[2.390232 ],[2.9109173]],[[2.7011962],[3.1653354],[3.771706 ],...,[2.0777855],[2.6018271],[2.671361 ]],[[2.8148594],[3.181801 ],[3.3359663],...,......,[2.5725627],[3.1331372],[3.293423 ]],[[2.690995 ],[3.6425638],[3.8258421],...,[2.8313189],[3.0710776],[3.5152655]],[[2.7133482],[3.363191 ],[3.7255483],...,[3.4982908],[3.6888971],[4.0173273]]]], shape=(4, 2000, 48, 1), dtype=float32)
+    array([[[[3.3820145],[3.099333 ],[3.1263812],...,[2.9227772],[2.3228955],[2.861484 ]],[[2.7037864],[3.1599677],[3.761728 ],...,[2.0886521],[2.600681 ],[2.658366 ]],[[2.8767614],[3.2048326],[3.3531222],...,......,[2.5722287],[3.1317437],[3.294363 ]],[[2.6926036],[3.643505 ],[3.8255873],...,[2.8328743],[3.0727634],[3.514503 ]],[[2.7136898],[3.363443 ],[3.726202 ],...,[3.4968035],[3.6884425],[4.015752 ]]]], shape=(4, 2000, 48, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:31:44.758220+00:00
+2026-09-29T18:38:34.818801+00:00
 
 creation_library :  
 ArviZ
@@ -1835,7 +1838,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:31:44.758641+00:00
+2026-09-29T18:38:34.819034+00:00
 
 creation_library :  
 ArviZ
@@ -1898,13 +1901,13 @@ diagnostics.round({"r_hat": 3, "ess_bulk": 0, "ess_tail": 0})
 
 |                       | r_hat | ess_bulk | ess_tail |
 |-----------------------|-------|----------|----------|
-| level_smoothing       | 1.001 | 3880.0   | 3947.0   |
-| trend_smoothing       | 1.001 | 4702.0   | 4784.0   |
-| seasonality_smoothing | 1.001 | 2849.0   | 3518.0   |
-| phi                   | 1.002 | 3594.0   | 3534.0   |
-| noise                 | 1.001 | 3586.0   | 4176.0   |
-| level_init            | 1.005 | 855.0    | 1586.0   |
-| trend_init            | 1.000 | 4391.0   | 4760.0   |
+| level_smoothing       | 1.001 | 3309.0   | 3644.0   |
+| trend_smoothing       | 1.001 | 4573.0   | 4570.0   |
+| seasonality_smoothing | 1.000 | 2706.0   | 3398.0   |
+| phi                   | 1.002 | 3449.0   | 3634.0   |
+| noise                 | 1.001 | 3417.0   | 4104.0   |
+| level_init            | 1.008 | 825.0    | 1547.0   |
+| trend_init            | 1.001 | 4043.0   | 4609.0   |
 
 
 The \hat{R} values are close to 1 and the effective sample sizes are healthy, which indicates that the chains have mixed well. This is the payoff of the state space parameterization together with the tuned priors: the posterior geometry is well behaved and the sampler explores it without trouble. The trace plots below confirm the good mixing.
@@ -2066,13 +2069,13 @@ for name, value in metrics.items():
 ```
 
 
-                 MAE: 0.2436
-                RMSE: 0.2821
+                 MAE: 0.2432
+                RMSE: 0.2820
                 CRPS: 0.1657
       coverage (90%): 0.9583
 
 
-The coverage of the central 90\\ interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for `numpyro_forecast.backtest`, which refits the model on a moving window (the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) does exactly that with the same building block); we omit it here because it retrains the full sampler for every window.
+The coverage of the central 90\\ interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for `numpyro_forecast.backtest`, which refits the model on a moving window (the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) does exactly that with the same building block); we omit it here because it retrains the full sampler for every window.
 
 
 # References

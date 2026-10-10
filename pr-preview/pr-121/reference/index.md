@@ -11,7 +11,10 @@ Plain model functions that register the train/forecast sites for you.
 The train/forecast split for a single model call.
 
 [models.Transition](models.Transition.md#numpyro_forecast.models.Transition)  
-`(carry, x_t) -> (dist_t, carry_fn)` where `carry_fn(z_t)` builds the next
+`(carry, x_t) -> dist_t`: the distribution of the next latent given the carry.
+
+[models.Advance](models.Advance.md#numpyro_forecast.models.Advance)  
+`(carry, z_t, x_t) -> carry`: the next carry from the current carry, the
 
 [models.innovations()](models.innovations.md#numpyro_forecast.models.innovations)  
 Sample conditionally iid per-step innovations over the full horizon.
@@ -22,8 +25,11 @@ Sample a Markov (state-space) latent over the full horizon.
 [models.ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe)  
 Run a single-source-of-error recursion over the full horizon.
 
-[models.SSOEStep](models.SSOEStep.md#numpyro_forecast.models.SSOEStep)  
-`(carry, x_t) -> (mu_t, carry_fn)` where `mu_t` is the one-step-ahead mean
+[models.SSOEMean](models.SSOEMean.md#numpyro_forecast.models.SSOEMean)  
+`(carry, x_t) -> mu_t`: the one-step-ahead mean of the current row, shape
+
+[models.SSOEUpdate](models.SSOEUpdate.md#numpyro_forecast.models.SSOEUpdate)  
+`(carry, y_t, eps_t, x_t) -> carry`: the next carry from the row's value and
 
 [models.SSOEResult](models.SSOEResult.md#numpyro_forecast.models.SSOEResult)  
 The means and sampled future values produced by `ssoe()`.
@@ -45,7 +51,7 @@ VAR components that compose with `ssoe` and `markov_series`: conditional mean, s
 Compute the VAR conditional mean of the next row from a lag window.
 
 [var.var_step()](var.var_step.md#numpyro_forecast.var.var_step)  
-Build the `~~numpyro_forecast.models.ssoe()` step of a VAR from its coefficients.
+Build the `~~numpyro_forecast.models.ssoe()` mean and update of a VAR.
 
 [var.companion_matrix()](var.companion_matrix.md#numpyro_forecast.var.companion_matrix)  
 Stack the VAR coefficients into the companion form of a VAR(1).
@@ -92,6 +98,9 @@ Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `ti
 [reparam.time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam)  
 Reparameterize every in-sample time latent of `model` along the time axis.
 
+[reparam.TimeTransform](reparam.TimeTransform.md#numpyro_forecast.reparam.TimeTransform)  
+The time-axis transform applied by `time_reparam()`: `"haar"` or `"dct"`.
+
 
 ## Producing draws
 
@@ -126,6 +135,12 @@ Per-window result of a `backtest()` run.
 
 [evaluate.VectorizedBacktestResult](evaluate.VectorizedBacktestResult.md#numpyro_forecast.evaluate.VectorizedBacktestResult)  
 Result of a `backtest_vectorized()` run (all windows at once).
+
+[evaluate.WindowType](evaluate.WindowType.md#numpyro_forecast.evaluate.WindowType)  
+Backtest windowing strategy: an expanding (`t0=0`) or fixed-size rolling window.
+
+[evaluate.DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS)  
+Default metrics used by `backtest()` and `backtest_vectorized()`.
 
 [evaluate.evaluate_forecast()](evaluate.evaluate_forecast.md#numpyro_forecast.evaluate.evaluate_forecast)  
 Evaluate forecast samples against ground truth for several metrics at once.
@@ -232,6 +247,12 @@ A metric maps `(pred, truth)` forecast samples and ground truth to a scalar arra
 [typing.ModelFactory](typing.ModelFactory.md#numpyro_forecast.typing.ModelFactory)  
 A zero-argument callable returning a fresh `ForecastModel` instance.
 
+[typing.Array](typing.Array.md#numpyro_forecast.typing.Array)  
+A JAX array (alias of `jax.Array`).
+
+[typing.BlackjaxBuildFn](typing.BlackjaxBuildFn.md#numpyro_forecast.typing.BlackjaxBuildFn)  
+A blackjax sampler build function `(rng_key, logdensity_fn, position, num_warmup)`.
+
 
 ## Autocorrelation
 
@@ -298,6 +319,12 @@ Load the dunnhumby *Breakfast at the Frat* scanner panel as polars frames.
 
 [datasets.BreakfastAtTheFrat](datasets.BreakfastAtTheFrat.md#numpyro_forecast.datasets.BreakfastAtTheFrat)  
 The three sheets of the dunnhumby *Breakfast at the Frat* workbook as polars frames.
+
+[datasets.load_m5()](datasets.load_m5.md#numpyro_forecast.datasets.load_m5)  
+Load the M5 competition data (download and cache once, then read the files).
+
+[datasets.M5Data](datasets.M5Data.md#numpyro_forecast.datasets.M5Data)  
+The M5 competition data as dense arrays plus the identifier and calendar tables.
 
 
 ## Optional dependencies

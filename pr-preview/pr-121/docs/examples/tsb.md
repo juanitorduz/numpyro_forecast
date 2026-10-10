@@ -3,7 +3,7 @@
 
 TSB Method for Intermittent Demand with `numpyro_forecast`
 
-This notebook ports the blog post [**TSB Method for Intermittent Time Series Forecasting in NumPyro**](https://juanitorduz.github.io/tsb_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It is the direct follow-up to the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html), and rather than re-deriving intermittent demand from scratch, we focus on the one thing the **Teunter-Syntetos-Babai (TSB)** method changes and why that change matters.
+This notebook ports the blog post [**TSB Method for Intermittent Time Series Forecasting in NumPyro**](https://juanitorduz.github.io/tsb_numpyro/) to the [`numpyro_forecast`](https://github.com/juanitorduz/numpyro_forecast) package. It is the direct follow-up to the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html), and rather than re-deriving intermittent demand from scratch, we focus on the one thing the **Teunter-Syntetos-Babai (TSB)** method changes and why that change matters.
 
 The setup is the same. **Intermittent demand** series are dominated by zeros, with the occasional non-zero demand arriving at irregular times (spare parts, slow-moving SKUs). [Croston's method](https://juanitorduz.github.io/croston_numpyro/) splits the series y_t into **demand sizes** z_t (the non-zero values) and **demand intervals** p_t (the gaps between demands), smooths each with simple exponential smoothing, and forecasts the ratio \hat{z}\_t / \hat{p}\_t: the expected demand per period. Its well-known weakness is that both components update **only at demand events**. Once demand stops, a Croston forecast never moves again: it stays frozen at the last level no matter how long the drought runs, so it cannot express that a slow item is going obsolete.
 
@@ -13,7 +13,7 @@ TSB fixes exactly this. It keeps the demand-size channel unchanged, but replaces
 
 the expected demand size times the probability that a demand occurs. Because the probability is updated on every zero as well as every demand, it **decays geometrically through a run of zeros** and jumps back up at the next demand, so the forecast responds to the *recency* of demand. That single structural change, one smoothing recursion that runs every period instead of only at events, is the whole story, and it is what this notebook makes concrete. As a side benefit, TSB smooths a probability directly instead of an inverse interval, so it sidesteps the inversion (Jensen) bias and the Syntetos-Boylan correction that the Croston notebook has to reckon with.
 
-Two practical notes on the port, unchanged from the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html):
+Two practical notes on the port, unchanged from the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html):
 
 - We reuse the *same* reusable `level_channel` (the simple exponential smoothing level model from the blog's [exponential smoothing predecessor](https://juanitorduz.github.io/exponential_smoothing_numpyro/)) on the **raw calendar timeline**: each level recursion is one call to the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, with a boolean gate deciding when the level updates. The only difference from Croston lives in *which gate is passed*: Croston freezes the level (and masks the likelihood) outside demand events, while TSB's probability channel updates on every period. Everything plugs straight into plain NumPyro NUTS, [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), and [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest).
 - The observed series itself plays the role of the covariates: [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series as an argument, and the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`, which spans the full horizon at prediction time. The model only ever reads the first `t_obs` rows (the block checks this), so no future information leaks into a forecast.
@@ -73,7 +73,7 @@ rng_key = random.PRNGKey(seed=42)
 
 # Generate data
 
-We use exactly the same data as the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) so the two notebooks are directly comparable: T = 80 periods of intermittent demand drawn from a Poisson distribution with a small rate, y_t \sim \text{Poisson}(0.3), so roughly three quarters of the periods are zero and the non-zero demands are small counts. We hold out the last 15\\ of the series as a test window for the fixed-origin forecast (the rolling-origin evaluation at the end refits over this window step by step).
+We use exactly the same data as the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) so the two notebooks are directly comparable: T = 80 periods of intermittent demand drawn from a Poisson distribution with a small rate, y_t \sim \text{Poisson}(0.3), so roughly three quarters of the periods are zero and the non-zero demands are small counts. We hold out the last 15\\ of the series as a test window for the fixed-origin forecast (the rolling-origin evaluation at the end refits over this window step by step).
 
 
 ``` python
@@ -213,7 +213,7 @@ Each component gets its own priors,
 
 One transparency note on the priors, sharper than in the Croston notebook: \text{Normal}(0, 1) on the initial levels allows negative values, which is looser still for the probability channel, whose level is meant to live in \[0, 1\]. We keep the loose prior for comparability with the blog post and the Croston notebook; centering the probability init near the base demand rate, using a \text{Beta} init, or replacing the Gaussian `obs_prob` likelihood with a \text{Bernoulli} one (the indicator is, after all, a Bernoulli outcome) are the natural refinements.
 
-Because both components run the *same* level model, we write it once and compose with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, exactly as the Croston notebook does. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, `noise`) and hands the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block a `step` that emits the *pre-update* level (the one-step-ahead mean) and a `carry_fn` that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an `xs` input padded with zeros over the horizon by [pad_future](../../reference/arrays.pad_future.md#numpyro_forecast.arrays.pad_future), so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model's flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_eps_future`. **This is the identical helper used in the Croston notebook**; the entire difference between the two methods is in the `tsb` body below, in a single argument.
+Because both components run the *same* level model, we write it once and compose with NumPyro's [`scope`](https://num.pyro.ai/en/stable/handlers.html#scope) handler, exactly as the Croston notebook does. The reusable `level_channel` samples the three component priors (sites `smoothing`, `init`, `noise`) and hands the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block a [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) that emits the *pre-update* level (the one-step-ahead mean) and an `update` that applies the gated update; the block owns the in-sample filter and, when forecasting, the innovation site and the forecast scan. The gate is an `xs` input padded with zeros over the horizon by [pad_future](../../reference/arrays.pad_future.md#numpyro_forecast.arrays.pad_future), so the level is frozen there and the forecast is the final level plus iid innovation noise, the level model's flat forecast distribution; that explicit freeze is also what keeps the cross-validation below leak-free, since [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) hands the model real future rows. Calling the helper under `scope(level_channel, "z", divider="_")` and `scope(level_channel, "p", divider="_")` yields the parameter names `z_smoothing`, `z_init`, …, and the innovation sites `z_eps_future` and `p_eps_future`. **This is the identical helper used in the Croston notebook**; the entire difference between the two methods is in the `tsb` body below, in a single argument.
 
 The `tsb` body then does what is specific to TSB:
 
@@ -252,22 +252,24 @@ def level_channel(h: Horizon, values: Array, gate: Array) -> tuple[SSOEResult, A
         sampled future values) and the observation noise scale.
     """
     smoothing = numpyro.sample("smoothing", dist.Beta(concentration1=2, concentration0=20))
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    init = jnp.asarray(numpyro.sample("init", dist.Normal(loc=0, scale=1)))
-    noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(scale=1)))
+    init = numpyro.sample("init", dist.Normal(loc=0, scale=1))
+    noise = numpyro.sample("noise", dist.HalfNormal(scale=1))
 
-    def step(level, gate_t):
-        # Emit the pre-update level (the one-step-ahead mean); update only where gated.
-        return level, lambda y_t, _: jnp.where(
-            gate_t, smoothing * y_t + (1 - smoothing) * level, level
-        )
+    def mean(level, _):
+        # Emit the pre-update level (the one-step-ahead mean).
+        return level
+
+    def update(level, y_t, _, gate_t):
+        # Update only where gated; the gate is frozen over the horizon.
+        return jnp.where(gate_t, smoothing * y_t + (1 - smoothing) * level, level)
 
     result = ssoe(
         h,
         "eps",
         values,
         init[None],
-        step,
+        mean,
+        update,
         dist.Normal(loc=0, scale=noise),
         xs=pad_future(gate, h.future),
     )
@@ -903,18 +905,18 @@ Group: /
 │         * time         (time) int64 544B 0 1 2 3 4 5 6 7 8 ... 60 61 62 63 64 65 66 67
 │         * obs_dim      (obs_dim) int64 8B 0
 │       Data variables:
-│           p_init       (chain, draw) float32 16kB -0.003375 0.1119 ... 0.4061 -0.2237
-│           p_noise      (chain, draw) float32 16kB 0.4995 0.4072 ... 0.517 0.5237
-│           p_smoothing  (chain, draw) float32 16kB 0.05509 0.103 ... 0.08918 0.1302
-│           prob         (chain, draw, time, obs_dim) float32 1MB -0.003375 ... 0.4051
-│           rate         (chain, draw, time, obs_dim) float32 1MB -0.002591 ... 0.4869
-│           z_init       (chain, draw) float32 16kB 0.7678 1.256 0.8319 ... 1.074 1.281
-│           z_noise      (chain, draw) float32 16kB 0.4392 0.572 ... 0.5041 0.6103
-│           z_smoothing  (chain, draw) float32 16kB 0.1112 0.03419 ... 0.05288 0.04834
+│           p_init       (chain, draw) float32 16kB -0.02821 0.1137 ... 0.4218 -0.302
+│           p_noise      (chain, draw) float32 16kB 0.4906 0.4161 ... 0.5131 0.5222
+│           p_smoothing  (chain, draw) float32 16kB 0.07957 0.05959 ... 0.07303 0.1344
+│           prob         (chain, draw, time, obs_dim) float32 1MB -0.02821 ... 0.4029
+│           rate         (chain, draw, time, obs_dim) float32 1MB -0.02113 ... 0.4846
+│           z_init       (chain, draw) float32 16kB 0.749 1.313 0.7566 ... 1.072 1.283
+│           z_noise      (chain, draw) float32 16kB 0.4465 0.5467 ... 0.518 0.6125
+│           z_smoothing  (chain, draw) float32 16kB 0.1301 0.03448 ... 0.0557 0.04838
 │       Attributes:
-│           created_at:                 2026-08-27T12:46:28.243527+00:00
+│           created_at:                 2026-09-29T20:17:54.149498+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -925,11 +927,11 @@ Group: /
 │         * time     (time) int64 544B 0 1 2 3 4 5 6 7 8 ... 59 60 61 62 63 64 65 66 67
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 1MB 0.2252 0.9627 ... 1.933
+│           obs      (chain, draw, time, obs_dim) float32 1MB 0.1974 0.9471 ... 1.937
 │       Attributes:
-│           created_at:                 2026-08-27T12:46:28.417049+00:00
+│           created_at:                 2026-09-29T20:17:54.362161+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -940,9 +942,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 272B 0.0 0.0 0.0 0.0 ... 1.0 0.0 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-27T12:46:28.417319+00:00
+│           created_at:                 2026-09-29T20:17:54.362440+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /constant_data
@@ -953,9 +955,9 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 272B 0.0 0.0 0.0 ... 0.0 0.0
 │       Attributes:
-│           created_at:                 2026-08-27T12:46:28.417512+00:00
+│           created_at:                 2026-09-29T20:17:54.362637+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 ├── Group: /predictions
@@ -966,11 +968,11 @@ Group: /
 │         * time     (time) int64 96B 68 69 70 71 72 73 74 75 76 77 78 79
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 192kB -0.3526 ... 0.1337
+│           obs      (chain, draw, time, obs_dim) float32 192kB -0.3298 ... 0.1315
 │       Attributes:
-│           created_at:                 2026-08-27T12:46:29.008385+00:00
+│           created_at:                 2026-09-29T20:17:55.116098+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 └── Group: /predictions_constant_data
@@ -981,9 +983,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 48B 0.0 0.0 0.0 ... 0.0 0.0 0.0
         Attributes:
-            created_at:                 2026-08-27T12:46:29.008631+00:00
+            created_at:                 2026-09-29T20:17:55.116344+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.2.0
+            creation_library_version:   1.3.1
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1098,7 +1100,7 @@ p_init
 float32
 
 
--0.003375 0.1119 ... 0.4061 -0.2237
+-0.02821 0.1137 ... 0.4218 -0.302
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1106,7 +1108,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[-0.00337488,  0.11193931,  0.2611283 , ..., -0.32502338,-0.03158325,  0.13504533],[ 0.32684717,  0.2898132 ,  0.321546  , ...,  0.22997677,0.01430536,  0.10046102],[ 0.3117127 ,  0.04318209,  0.1073186 , ..., -0.05761271,-0.0625007 ,  0.16203345],[-0.13800001, -0.02486379,  0.23270689, ..., -0.03283919,0.4061292 , -0.22366259]], shape=(4, 1000), dtype=float32)
+    array([[-0.02821141,  0.11365081,  0.1298233 , ...,  0.09144936,0.3067913 ,  0.15201902],[-0.0626729 ,  0.1631593 ,  0.00546916, ...,  0.16418366,0.01621247, -0.02123281],[ 0.30244556,  0.02290768,  0.11303955, ..., -0.14987631,0.01125471,  0.12378627],[-0.09348643,  0.07287078,  0.1375276 , ..., -0.08197068,0.42184815, -0.3020105 ]], shape=(4, 1000), dtype=float32)
 
 
 p_noise
@@ -1118,7 +1120,7 @@ p_noise
 float32
 
 
-0.4995 0.4072 ... 0.517 0.5237
+0.4906 0.4161 ... 0.5131 0.5222
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1126,7 +1128,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.49945828, 0.40721852, 0.4891899 , ..., 0.36906958, 0.37375987,0.35937053],[0.4718914 , 0.45373183, 0.47872174, ..., 0.48272392, 0.41390347,0.49163336],[0.44681337, 0.533599  , 0.47672486, ..., 0.48022854, 0.43530765,0.45367947],[0.4265591 , 0.4730852 , 0.4184682 , ..., 0.441585  , 0.516957  ,0.52371246]], shape=(4, 1000), dtype=float32)
+    array([[0.49056584, 0.41609848, 0.45440373, ..., 0.43367052, 0.4224978 ,0.36901772],[0.45073   , 0.42976737, 0.42909175, ..., 0.4981915 , 0.4009913 ,0.5084383 ],[0.45327556, 0.53647745, 0.46375632, ..., 0.49821922, 0.42223042,0.47879854],[0.41428405, 0.48176885, 0.41212678, ..., 0.44169185, 0.51314527,0.52223927]], shape=(4, 1000), dtype=float32)
 
 
 p_smoothing
@@ -1138,7 +1140,7 @@ p_smoothing
 float32
 
 
-0.05509 0.103 ... 0.08918 0.1302
+0.07957 0.05959 ... 0.07303 0.1344
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1146,7 +1148,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.05509308, 0.10300456, 0.06897476, ..., 0.07528948, 0.12271615,0.05869345],[0.19108135, 0.18272142, 0.10213879, ..., 0.06091232, 0.10866315,0.06533083],[0.0908245 , 0.06802763, 0.07531428, ..., 0.09649836, 0.11901625,0.06578826],[0.13576022, 0.08457588, 0.07796199, ..., 0.17138754, 0.08917564,0.13023184]], shape=(4, 1000), dtype=float32)
+    array([[0.07956515, 0.05959447, 0.1415262 , ..., 0.16139628, 0.13267933,0.05170437],[0.09031466, 0.08364233, 0.04979686, ..., 0.06907681, 0.10377692,0.08792331],[0.11847045, 0.06573263, 0.07610637, ..., 0.08740651, 0.12970628,0.05271677],[0.1000889 , 0.08719739, 0.08003341, ..., 0.14616156, 0.07302517,0.13437478]], shape=(4, 1000), dtype=float32)
 
 
 prob
@@ -1158,7 +1160,7 @@ prob
 float32
 
 
--0.003375 -0.003189 ... 0.4051
+-0.02821 -0.02597 ... 0.4654 0.4029
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1166,7 +1168,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.00337488],[-0.00318895],[-0.00301326],...,[ 0.45291007],[ 0.42795783],[ 0.4043803 ]],[[ 0.11193931],[ 0.10040905],[ 0.09006646],...,[ 0.5185195 ],[ 0.46510965],[ 0.41720122]],[[ 0.2611283 ],[ 0.24311705],[ 0.22634812],...,......,[ 0.55694693],[ 0.46149316],[ 0.382399  ]],[[ 0.4061292 ],[ 0.3699124 ],[ 0.3369252 ],...,[ 0.507742  ],[ 0.46246377],[ 0.42122325]],[[-0.22366259],[-0.19453458],[-0.16919999],...,[ 0.53543544],[ 0.46570468],[ 0.4050551 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
+    array([[[[-0.02821141],[-0.02596677],[-0.02390072],...,[ 0.4962729 ],[ 0.45678684],[ 0.42044252]],[[ 0.11365081],[ 0.10687785],[ 0.10050852],...,[ 0.4657247 ],[ 0.4379701 ],[ 0.41186953]],[[ 0.1298233 ],[ 0.1114499 ],[ 0.09567682],...,......,[ 0.54395545],[ 0.46445006],[ 0.39656532]],[[ 0.42184815],[ 0.39104262],[ 0.36248666],...,[ 0.49074632],[ 0.45490947],[ 0.42168963]],[[-0.3020105 ],[-0.2614279 ],[-0.22629859],...,[ 0.53769845],[ 0.46544534],[ 0.4029012 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
 
 
 rate
@@ -1178,7 +1180,7 @@ rate
 float32
 
 
--0.002591 -0.002448 ... 0.4869
+-0.02113 -0.01945 ... 0.5599 0.4846
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1186,7 +1188,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.00259126],[-0.0024485 ],[-0.0023136 ],...,[ 0.502655  ],[ 0.47496217],[ 0.44879502]],[[ 0.14055012],[ 0.12607282],[ 0.11308675],...,[ 0.6249243 ],[ 0.5605542 ],[ 0.5028146 ]],[[ 0.21723036],[ 0.20224696],[ 0.18829703],...,......,[ 0.6409241 ],[ 0.5310777 ],[ 0.4400576 ]],[[ 0.43627936],[ 0.39737388],[ 0.3619378 ],...,[ 0.5727716 ],[ 0.5216943 ],[ 0.47517186]],[[-0.28647256],[-0.2491647 ],[-0.21671551],...,[ 0.6436244 ],[ 0.559804  ],[ 0.4868997 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
+    array([[[[-0.02113041],[-0.01944916],[-0.01790169],...,[ 0.55341053],[ 0.5093783 ],[ 0.46884954]],[[ 0.1492178 ],[ 0.14032525],[ 0.13196264],...,[ 0.5744055 ],[ 0.54017407],[ 0.50798273]],[[ 0.09822462],[ 0.08432326],[ 0.07238931],...,......,[ 0.6284945 ],[ 0.5366328 ],[ 0.45819768]],[[ 0.45205608],[ 0.4190446 ],[ 0.3884438 ],...,[ 0.5539356 ],[ 0.5134843 ],[ 0.47598702]],[[-0.3875334 ],[-0.3354587 ],[-0.2903815 ],...,[ 0.6467912 ],[ 0.55987877],[ 0.48464516]]]], shape=(4, 1000, 68, 1), dtype=float32)
 
 
 z_init
@@ -1198,7 +1200,7 @@ z_init
 float32
 
 
-0.7678 1.256 0.8319 ... 1.074 1.281
+0.749 1.313 0.7566 ... 1.072 1.283
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1206,7 +1208,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.7678068 , 1.2555922 , 0.8318913 , ..., 1.253468  , 1.2231438 ,1.2047294 ],[0.79582256, 0.88163954, 1.2049006 , ..., 0.8357662 , 1.2273527 ,0.84056103],[0.6636926 , 0.7613248 , 1.042637  , ..., 1.0962901 , 1.0424803 ,1.1319655 ],[0.75158143, 1.1960534 , 1.1121751 , ..., 1.1407818 , 1.0742378 ,1.2808247 ]], shape=(4, 1000), dtype=float32)
+    array([[0.74900216, 1.3129498 , 0.7566024 , ..., 1.3598754 , 1.1418049 ,1.183131  ],[1.2084572 , 1.0812216 , 1.0725157 , ..., 0.9192397 , 1.2494518 ,0.91988367],[0.6882838 , 0.8516219 , 1.0890558 , ..., 1.1640165 , 0.9782232 ,1.1196525 ],[0.71885693, 1.1521267 , 1.1393367 , ..., 1.1609896 , 1.0716085 ,1.2831786 ]], shape=(4, 1000), dtype=float32)
 
 
 z_noise
@@ -1218,7 +1220,7 @@ z_noise
 float32
 
 
-0.4392 0.572 ... 0.5041 0.6103
+0.4465 0.5467 ... 0.518 0.6125
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1226,7 +1228,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.43919504, 0.57198125, 0.4352125 , ..., 0.5771863 , 0.5910706 ,0.7169503 ],[0.54958713, 0.5413899 , 0.51979995, ..., 0.56446207, 0.523711  ,0.5353063 ],[0.6078669 , 0.6158346 , 0.51839924, ..., 0.4461279 , 0.47942233,0.668784  ],[0.6092846 , 0.7014924 , 0.4499771 , ..., 0.42756215, 0.5040995 ,0.61027867]], shape=(4, 1000), dtype=float32)
+    array([[0.44650054, 0.54665446, 0.45092398, ..., 0.59691626, 0.584649  ,0.71307117],[0.42366934, 0.56721795, 0.5110486 , ..., 0.57647175, 0.48218015,0.6088175 ],[0.62359256, 0.5987275 , 0.48799118, ..., 0.4423338 , 0.5136822 ,0.59851366],[0.489354  , 0.7764175 , 0.41707647, ..., 0.42367405, 0.5180048 ,0.6125046 ]], shape=(4, 1000), dtype=float32)
 
 
 z_smoothing
@@ -1238,7 +1240,7 @@ z_smoothing
 float32
 
 
-0.1112 0.03419 ... 0.05288 0.04834
+0.1301 0.03448 ... 0.0557 0.04838
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1246,20 +1248,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.11122232, 0.03419169, 0.16526943, ..., 0.04590787, 0.04736822,0.03651649],[0.03920032, 0.03148066, 0.12357301, ..., 0.1821058 , 0.03786204,0.13591751],[0.19890115, 0.07157315, 0.09367631, ..., 0.02773026, 0.07324251,0.07678521],[0.08192971, 0.08931478, 0.06590208, ..., 0.07784644, 0.05288423,0.04833701]], shape=(4, 1000), dtype=float32)
+    array([[0.1300531 , 0.03447578, 0.1374393 , ..., 0.05646612, 0.06945501,0.04259   ],[0.01325397, 0.03940268, 0.04030551, ..., 0.16031893, 0.03320736,0.08911917],[0.13086466, 0.09750573, 0.087102  , ..., 0.02466823, 0.0688647 ,0.07948425],[0.17038521, 0.03965827, 0.09665574, ..., 0.07345589, 0.05570356,0.0483797 ]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:46:28.243527+00:00
+2026-09-29T20:17:54.149498+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1374,7 +1376,7 @@ obs
 float32
 
 
-0.2252 0.9627 ... 2.016 1.933
+0.1974 0.9471 0.6427 ... 2.02 1.937
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1382,20 +1384,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.22523718],[ 0.9627097 ],[ 0.663242  ],...,[ 1.0012392 ],[ 1.0963333 ],[ 0.81957376]],[[ 0.6673851 ],[ 1.6609572 ],[ 1.6042687 ],...,[ 0.58319753],[ 0.26848122],[ 1.3388511 ]],[[ 0.7992048 ],[ 0.4246228 ],[ 1.1396608 ],...,......,[ 1.5911248 ],[ 1.2753127 ],[ 0.7181549 ]],[[ 0.29330143],[ 1.1136135 ],[ 1.9541174 ],...,[ 0.7987336 ],[ 0.80317444],[ 0.7005177 ]],[[ 1.4253067 ],[ 1.7473989 ],[ 1.160038  ],...,[ 1.570248  ],[ 2.016366  ],[ 1.9334835 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
+    array([[[[ 0.19740745],[ 0.9471471 ],[ 0.642698  ],...,[ 1.0047323 ],[ 1.1014081 ],[ 0.82004505]],[[ 0.7507879 ],[ 1.7003655 ],[ 1.6461872 ],...,[ 0.6388892 ],[ 0.33810824],[ 1.3610831 ]],[[ 0.72273594],[ 0.3346312 ],[ 1.0754826 ],...,......,[ 1.5917546 ],[ 1.2788143 ],[ 0.7267232 ]],[[ 0.26913053],[ 1.1120704 ],[ 1.975759  ],...,[ 0.79033434],[ 0.7948977 ],[ 0.68940926]],[[ 1.4281876 ],[ 1.7514546 ],[ 1.1619513 ],...,[ 1.5724214 ],[ 2.0201664 ],[ 1.9369817 ]]]], shape=(4, 1000, 68, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:46:28.417049+00:00
+2026-09-29T20:17:54.362161+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1483,13 +1485,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:46:28.417319+00:00
+2026-09-29T20:17:54.362440+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1577,13 +1579,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:46:28.417512+00:00
+2026-09-29T20:17:54.362637+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1698,7 +1700,7 @@ obs
 float32
 
 
--0.3526 0.3767 ... 0.3471 0.1337
+-0.3298 0.3745 ... 0.3432 0.1315
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1706,20 +1708,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.35264733],[ 0.37673286],[-0.10691138],...,[ 0.26414594],[ 0.36601537],[ 0.52231437]],[[ 0.12014717],[ 0.7783301 ],[ 0.7202482 ],...,[ 0.17734997],[ 0.35059983],[ 0.48435348]],[[-0.38736433],[ 0.22096573],[ 0.02263583],...,......,[ 0.4571126 ],[ 0.4601234 ],[ 0.6251928 ]],[[ 1.9928504 ],[ 0.42222857],[ 0.36887497],...,[ 0.16462843],[ 0.18652876],[ 0.6968243 ]],[[ 1.0417153 ],[ 0.5333987 ],[-0.1586145 ],...,[-0.18306707],[ 0.34710366],[ 0.13367909]]]], shape=(4, 1000, 12, 1), dtype=float32)
+    array([[[[-0.32979473],[ 0.37452057],[-0.09756747],...,[ 0.26198238],[ 0.36178866],[ 0.5288439 ]],[[ 0.17280309],[ 0.83576363],[ 0.7464692 ],...,[ 0.19809932],[ 0.38674903],[ 0.5309258 ]],[[-0.36582896],[ 0.18441847],[ 0.00656083],...,......,[ 0.4784052 ],[ 0.4872511 ],[ 0.65845406]],[[ 2.003885  ],[ 0.4405781 ],[ 0.36870512],...,[ 0.16726464],[ 0.19910416],[ 0.70040214]],[[ 1.0364225 ],[ 0.5285602 ],[-0.16120686],...,[-0.18706411],[ 0.34319815],[ 0.13151355]]]], shape=(4, 1000, 12, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:46:29.008385+00:00
+2026-09-29T20:17:55.116098+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1807,13 +1809,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:46:29.008631+00:00
+2026-09-29T20:17:55.116344+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1855,12 +1857,12 @@ az.summary(tree, var_names=scalar_vars, ci_kind="hdi", ci_prob=0.94)
 
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| z_smoothing | 0.086 | 0.056 | 0.012 | 0.22 | 3655 | 2549 | 1.00 | 0.00092 | 0.0009 |
-| z_init | 1.065 | 0.234 | 0.57 | 1.5 | 3180 | 2178 | 1.00 | 0.0043 | 0.0037 |
-| z_noise | 0.537 | 0.091 | 0.39 | 0.74 | 4248 | 2529 | 1.00 | 0.0015 | 0.0013 |
-| p_smoothing | 0.094 | 0.039 | 0.033 | 0.18 | 3787 | 2438 | 1.00 | 0.0006 | 0.00049 |
-| p_init | 0.091 | 0.197 | -0.3 | 0.44 | 3674 | 2484 | 1.00 | 0.0033 | 0.0023 |
-| p_noise | 0.459 | 0.0416 | 0.39 | 0.54 | 5695 | 2923 | 1.00 | 0.00056 | 0.00042 |
+| z_smoothing | 0.086 | 0.057 | 0.0015 | 0.19 | 2923 | 2186 | 1.00 | 0.00098 | 0.00098 |
+| z_init | 1.061 | 0.234 | 0.62 | 1.5 | 3207 | 2147 | 1.00 | 0.0044 | 0.005 |
+| z_noise | 0.537 | 0.093 | 0.39 | 0.72 | 3958 | 2647 | 1.00 | 0.0016 | 0.0019 |
+| p_smoothing | 0.094 | 0.039 | 0.029 | 0.17 | 3921 | 2649 | 1.00 | 0.0006 | 0.00064 |
+| p_init | 0.095 | 0.194 | -0.28 | 0.44 | 4057 | 2808 | 1.00 | 0.003 | 0.0034 |
+| p_noise | 0.459 | 0.041 | 0.39 | 0.54 | 5278 | 2729 | 1.00 | 0.00057 | 0.00074 |
 
 
 The chains mix well: the \hat{R} values are essentially 1 and the effective sample sizes are healthy. The demand-size parameters (`z_smoothing`, `z_init`, `z_noise`) reproduce the Croston picture, because that channel is unchanged: the smoothing posterior barely moves from the \text{Beta}(2, 20) prior, while the initial level concentrates near the typical demand size of about 1. The probability channel tells the more interesting story. Its smoothing posterior also stays low, which is the correct answer for this *stationary* series: an i.i.d. demand process has no genuine trend in its occurrence rate, so smoothing slowly and tracking the base rate is exactly right. Its initial level and noise scale come out slightly tighter than their demand-size counterparts (`p_init` and `p_noise` have smaller standard deviations than `z_init` and `z_noise`), because the indicator gives the probability channel one observation on every one of the 68 periods, against the 20 demand events the size channel sees. The trace plots confirm the picture.
@@ -2206,9 +2208,9 @@ metrics = {
 rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
+    lambda: tsb,
     data_full,
     data_full,  # the series doubles as the covariates, sliced per fold by backtest
-    lambda: tsb,
     forecast_fn=forecast_fn,
     metrics=metrics,
     test_window=1,  # one-step-ahead forecasts
@@ -2232,7 +2234,7 @@ print(f"folds: {len(results)} (split points: {split_points})")
 
 Because the folds tile the test span, we can concatenate the per-fold forecast samples into a single array of one-step-ahead predictive draws and plot them in one go.
 
-This is the mirror image of the Croston plot. The [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) shows its one-step-ahead forecast **barely moving while zeros accumulate**, because Croston's levels only update at demand events. TSB, updating its probability every period, does the opposite: through a run of zeros the one-step-ahead forecast **slides downward**, and it steps back up when a demand lands. Even on this stationary series, where the true occurrence rate is constant and so the swings are modest, the qualitative behavior is unmistakably different: TSB's forecast tracks the recency of demand, which is precisely Croston's structural blind spot.
+This is the mirror image of the Croston plot. The [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) shows its one-step-ahead forecast **barely moving while zeros accumulate**, because Croston's levels only update at demand events. TSB, updating its probability every period, does the opposite: through a run of zeros the one-step-ahead forecast **slides downward**, and it steps back up when a demand lands. Even on this stationary series, where the true occurrence rate is constant and so the swings are modest, the qualitative behavior is unmistakably different: TSB's forecast tracks the recency of demand, which is precisely Croston's structural blind spot.
 
 
 ``` python
@@ -2307,29 +2309,29 @@ print(f"empirical 94% coverage: {cov_94:.2f}  (nominal 0.94)")
 ```
 
 
-    one-step-ahead CRPS over the test span: 0.2265
-    fixed-origin CRPS over the test span:   0.2467
-    empirical 50% coverage: 0.50  (nominal 0.50)
+    one-step-ahead CRPS over the test span: 0.2263
+    fixed-origin CRPS over the test span:   0.2461
+    empirical 50% coverage: 0.58  (nominal 0.50)
     empirical 94% coverage: 1.00  (nominal 0.94)
 
 
-On this series TSB actually comes out **ahead** of Croston, and for an instructive reason. Its one-step-ahead and fixed-origin CRPS (0.23 and 0.25) are lower than the Croston notebook's (0.34 and 0.38), and its central 50\\ interval covers exactly at nominal (0.50) where Croston's covered almost nothing (0.08). Two things drive this. First, TSB smooths a probability directly, so it avoids the upward inversion bias that inflates the Croston rate; its fitted rate sits lower, much closer to the zero-heavy realizations. Second, the forecast's spread reaches down across zero (partly, it must be said, because the Gaussian probability channel spills below zero, which a \text{Bernoulli} channel would achieve more honestly), so the interval actually contains the zeros that dominate the series. The one structural weakness both methods share, a predictive of a *rate* rather than a *count*, is what still keeps the 94\\ interval over-covering (it contains every held-out point). And the headline advantage, a forecast that decays when demand truly stops, does not show up in the aggregate score on i.i.d. data at all: it stays latent here, waiting for a series that genuinely goes obsolete to turn it into a decisive difference.
+On this series TSB actually comes out **ahead** of Croston, and for an instructive reason. Its one-step-ahead and fixed-origin CRPS (0.23 and 0.25) are lower than the Croston notebook's (0.34 and 0.38), and its central 50\\ interval covers close to nominal (0.58 against 0.50) where Croston's covered almost nothing (0.08). Two things drive this. First, TSB smooths a probability directly, so it avoids the upward inversion bias that inflates the Croston rate; its fitted rate sits lower, much closer to the zero-heavy realizations. Second, the forecast's spread reaches down across zero (partly, it must be said, because the Gaussian probability channel spills below zero, which a \text{Bernoulli} channel would achieve more honestly), so the interval actually contains the zeros that dominate the series. The one structural weakness both methods share, a predictive of a *rate* rather than a *count*, is what still keeps the 94\\ interval over-covering (it contains every held-out point). And the headline advantage, a forecast that decays when demand truly stops, does not show up in the aggregate score on i.i.d. data at all: it stays latent here, waiting for a series that genuinely goes obsolete to turn it into a decisive difference.
 
 
 # A final note: TSB versus ARMA
 
-It is worth being explicit about why a classical ARMA model is not the tool here. ARMA (and ARIMA) describe a continuous, autocorrelated series fluctuating around a stable mean with additive noise, and they forecast by extrapolating that autocorrelation. Intermittent demand breaks every one of those assumptions: the series is mostly exact zeros with a spike-at-zero marginal, the per-period mean is a tiny rate rather than a level to revert to, and an ARMA fit would smear a smooth continuous prediction across the zeros while never separating *how much* is demanded from *whether* a demand occurs. TSB (like Croston) instead decomposes the series into a demand size and a demand probability, which is the structurally correct representation for this kind of data. What the notebook does share with the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) is only the mechanical scaffolding, the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block, the series-as-covariates carrier and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) loop, not the modeling assumptions.
+It is worth being explicit about why a classical ARMA model is not the tool here. ARMA (and ARIMA) describe a continuous, autocorrelated series fluctuating around a stable mean with additive noise, and they forecast by extrapolating that autocorrelation. Intermittent demand breaks every one of those assumptions: the series is mostly exact zeros with a spike-at-zero marginal, the per-period mean is a tiny rate rather than a level to revert to, and an ARMA fit would smear a smooth continuous prediction across the zeros while never separating *how much* is demanded from *whether* a demand occurs. TSB (like Croston) instead decomposes the series into a demand size and a demand probability, which is the structurally correct representation for this kind of data. What the notebook does share with the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) is only the mechanical scaffolding, the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block, the series-as-covariates carrier and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) loop, not the modeling assumptions.
 
 
 # References
 
 - Orduz, J. [*TSB Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/tsb_numpyro/). The blog post this notebook ports.
-- Orduz, J. [*Croston's Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/croston_numpyro/), and the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html) in this documentation. The predecessor method this notebook is contrasted against.
+- Orduz, J. [*Croston's Method for Intermittent Time Series Forecasting in NumPyro*](https://juanitorduz.github.io/croston_numpyro/), and the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html) in this documentation. The predecessor method this notebook is contrasted against.
 - Orduz, J. [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/). The predecessor post whose level model both notebooks reuse.
 - Teunter, R. H., Syntetos, A. A., & Babai, M. Z. (2011). *Intermittent demand: Linking forecasting to inventory obsolescence*. European Journal of Operational Research, 214(3), 606-615. The paper that introduces the TSB method.
 - Croston, J. D. (1972). *Forecasting and stock control for intermittent demands*. Operational Research Quarterly, 23(3), 289-303.
 - Morgan, P. [*Adaptations of Croston's Method*](https://www.pmorgan.com.au/tutorials/adaptations-of-crostons-method/). A tutorial covering TSB alongside the other Croston variants.
 - statsforecast documentation: [`TSB`](https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html), the classical baseline the blog post compares against.
-- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
+- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
 
 [Source: TSB Method for Intermittent Demand with `numpyro_forecast`](_src/tsb-preview.html#df433ad4)

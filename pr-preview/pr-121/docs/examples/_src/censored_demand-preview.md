@@ -5,7 +5,7 @@ This notebook ports the blog post [**Demand Forecasting with Censored Likelihood
 
 We simulate a demand series from an AR(2) process with weekly seasonality, corrupt it into observed sales through random stockouts and a hard capacity cap, and then fit an AR(2) model with Fourier seasonality **whose likelihood knows about the censoring**: below the cap an observation contributes the usual \text{Normal} density, and at the cap it contributes the *survival mass* P(\text{demand} \geq \text{cap}), the probability that latent demand was at least as large as the recorded bound. Days with the product off the shelf are masked out of the likelihood entirely. Because the data are simulated, the true demand is known and the claim "the censored likelihood recovers demand" can be checked against ground truth rather than asserted.
 
-This example completes a trio of availability mechanisms in this documentation. The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/examples/availability_tsb.html) freezes its recursion updates when the product is off the shelf, and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) scales the mean by a saturating availability factor; its next-steps list asks for precisely the model built here. The closing section compares the three mechanisms side by side.
+This example completes a trio of availability mechanisms in this documentation. The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html) freezes its recursion updates when the product is off the shelf, and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) scales the mean by a saturating availability factor; its next-steps list asks for precisely the model built here. The closing section compares the three mechanisms side by side.
 
 
 # Prepare notebook
@@ -346,12 +346,12 @@ where \Phi is the standard \text{Normal} CDF, and the whole term is masked out o
 
 Clean on-shelf days pass the observation through; capped days floor the lag at the model's own prediction, since the truth is at least the cap; off-shelf days carry the prediction itself, the model's best estimate of the demand nobody could express. This is the same one-step-ahead logic a state space filter applies to missing observations, done with a plug-in mean instead of a full state distribution.
 
-The model is a plain NumPyro function `(covariates, data=None)` that derives its train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) and hands the recursion to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, the single-source-of-error recursion shared with the [ARMA](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) and [exponential smoothing](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) examples. [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series, an initial carry, a `step` function, and the innovation distribution. `step(carry, x_t)` returns the one-step-ahead mean \hat{y}\_t and a `carry_fn(y_t, eps_t)` that builds the next carry from the day's value and its error; closing `carry_fn` over the prediction is what lets the lag filter above floor capped days at \hat{y}\_t. Rows carry the observation axis, so the two placeholder lags are `y[0]` with shape `(1,)`, the mean has shape `(1,)`, and a scalar state would emit `mu[None]`; the block checks these shapes. The block owns two scans, neither containing a sample site:
+The model is a plain NumPyro function `(covariates, data=None)` that derives its train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) and hands the recursion to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, the single-source-of-error recursion shared with the [ARMA](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) and [exponential smoothing](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html) examples. [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series, an initial carry, a [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution. `mean(carry, x_t)` returns the one-step-ahead mean \hat{y}\_t and `update(carry, y_t, eps_t, x_t)` builds the next carry from the day's value and its error; calling [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) again inside `update` (the same expression on the same inputs, so exactly the filter's prediction) is what lets the lag filter above floor capped days at \hat{y}\_t. Rows carry the observation axis, so the two placeholder lags are `y[0]` with shape `(1,)`, the mean has shape `(1,)`, and a scalar state would emit `mu[None]`; the block checks these shapes. The block owns two scans, neither containing a sample site:
 
-1.  **In sample.** A deterministic `jax.lax.scan` runs `step` over the observed history, feeding each observation and its error \varepsilon_t = y_t - \hat{y}\_t through `carry_fn`, and returns the one-step-ahead means as `r.mu` (exposed as the deterministic site `"pred_mean"`); the `"obs"` site conditions the data on them through the censored likelihood. The AR(2) needs two lags, so the first two steps run on placeholder lags and are masked out of the likelihood.
-2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations at the `"eps_future"` site (under its own `time_future` plate), rolls the recursion forward from the final filtered lags with each *sampled* value \hat{y}\_t + \varepsilon_t fed back through `carry_fn`, and returns the trajectory as `r.y_future`, which we register (clipped at zero, since demand is nonnegative) as the deterministic `"forecast"` site the package reads. Since `"eps_future"` does not exist during training, `Predictive` draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html) (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.
+1.  **In sample.** A deterministic `jax.lax.scan` runs [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) over the observed history, feeding each observation and its error \varepsilon_t = y_t - \hat{y}\_t through `update`, and returns the one-step-ahead means as `r.mu` (exposed as the deterministic site `"pred_mean"`); the `"obs"` site conditions the data on them through the censored likelihood. The AR(2) needs two lags, so the first two steps run on placeholder lags and are masked out of the likelihood.
+2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations at the `"eps_future"` site (under its own `time_future` plate), rolls the recursion forward from the final filtered lags with each *sampled* value \hat{y}\_t + \varepsilon_t fed back through `update`, and returns the trajectory as `r.y_future`, which we register (clipped at zero, since demand is nonnegative) as the deterministic `"forecast"` site the package reads. Since `"eps_future"` does not exist during training, `Predictive` draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html) (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.
 
-One small difference from the blog post's hand-rolled scans: the same `carry_fn` serves both scans, so the clip at zero now applies to the filtered lag in sample as well, which only matters on stockout days whose prediction is negative.
+One small difference from the blog post's hand-rolled scans: the same `update` serves both scans, so the clip at zero now applies to the filtered lag in sample as well, which only matters on stockout days whose prediction is negative.
 
 
     In [5]:
@@ -384,28 +384,29 @@ def ar2_seasonal(covariates: Array, data: Array | None = None) -> None:
     phi_2 = numpyro.sample("phi_2", dist.Normal(loc=0, scale=1))
     sigma = numpyro.sample("sigma", dist.HalfNormal(scale=1))
     with numpyro.plate("fourier_modes", fourier.shape[-1]):
-        # jnp.asarray only narrows numpyro's union return type for the type checker.
-        beta_seasonal = jnp.asarray(numpyro.sample("beta_seasonal", dist.Normal(loc=0, scale=1)))
+        beta_seasonal = numpyro.sample("beta_seasonal", dist.Normal(loc=0, scale=1))
     seasonal = (fourier @ beta_seasonal)[..., None]
 
-    def step(carry, x_t):
-        seasonal_t, available_t, censored_t = x_t
+    def mean(carry, x_t):
+        seasonal_t, _, _ = x_t
         lag_1, lag_2 = carry
-        pred = mu + phi_1 * lag_1 + phi_2 * lag_2 + seasonal_t
+        return mu + phi_1 * lag_1 + phi_2 * lag_2 + seasonal_t
 
-        def carry_fn(y_t, _):
-            # The filtered lag: pass clean observations through, floor capped days at the
-            # prediction, and substitute the prediction on stockout days.
-            on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
-            y_filtered = jnp.where(available_t == 1, on_shelf, pred)
-            return jnp.clip(y_filtered, min=0.0), lag_1
-
-        return pred, carry_fn
+    def update(carry, y_t, eps_t, x_t):
+        _, available_t, censored_t = x_t
+        lag_1, _ = carry
+        # The filtered lag: pass clean observations through, floor capped days at the
+        # prediction, and substitute the prediction on stockout days. Calling mean again
+        # reproduces the filter's prediction exactly (same expression, same inputs).
+        pred = mean(carry, x_t)
+        on_shelf = jnp.where(censored_t == 1, jnp.maximum(y_t, pred), y_t)
+        y_filtered = jnp.where(available_t == 1, on_shelf, pred)
+        return jnp.clip(y_filtered, min=0.0), lag_1
 
     # Over the horizon the product is available and uncensored: no gate, no cap.
     xs = (seasonal, pad_future(available, h.future, value=1.0), pad_future(censored, h.future))
     init_carry = (y[0], y[0])  # placeholder lags; the first two steps are masked below
-    r = ssoe(h, "eps", y, init_carry, step, dist.Normal(loc=0, scale=sigma), xs=xs)
+    r = ssoe(h, "eps", y, init_carry, mean, update, dist.Normal(loc=0, scale=sigma), xs=xs)
     pred_mean = numpyro.deterministic("pred_mean", r.mu)
 
     valid = (jnp.arange(h.t_obs)[:, None] >= 2) & (available == 1)
@@ -1011,14 +1012,14 @@ Group: /
 │         * time                 (time) int64 1kB 0 1 2 3 4 5 ... 145 146 147 148 149
 │         * obs_dim              (obs_dim) int64 8B 0
 │       Data variables:
-│           beta_seasonal        (chain, draw, beta_seasonal_dim_0) float32 64kB 0.58...
-│           mu                   (chain, draw) float32 16kB 0.3005 0.1796 ... 0.5165
-│           phi_1                (chain, draw) float32 16kB 0.4918 0.5269 ... 0.55
-│           phi_2                (chain, draw) float32 16kB 0.3845 0.4196 ... 0.2187
-│           pred_mean            (chain, draw, time, obs_dim) float32 2MB 0.04996 ......
-│           sigma                (chain, draw) float32 16kB 0.4969 0.521 ... 0.5858
+│           beta_seasonal        (chain, draw, beta_seasonal_dim_0) float32 64kB 0.55...
+│           mu                   (chain, draw) float32 16kB 0.3071 0.1814 ... 0.47
+│           phi_1                (chain, draw) float32 16kB 0.5045 0.551 ... 0.4947
+│           phi_2                (chain, draw) float32 16kB 0.3653 0.3969 ... 0.304
+│           pred_mean            (chain, draw, time, obs_dim) float32 2MB 0.2106 ... ...
+│           sigma                (chain, draw) float32 16kB 0.4931 0.5094 ... 0.5975
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:31.496876+00:00
+│           created_at:                 2026-09-29T18:38:24.653214+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1031,9 +1032,9 @@ Group: /
 │         * time     (time) int64 1kB 0 1 2 3 4 5 6 7 ... 143 144 145 146 147 148 149
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB -0.5638 0.9075 ... 2.377
+│           obs      (chain, draw, time, obs_dim) float32 2MB -0.3986 1.011 ... 2.352
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:31.670375+00:00
+│           created_at:                 2026-09-29T18:38:24.841588+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1046,7 +1047,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 600B 0.0 2.2 0.0 2.2 ... 0.0 0.0 0.0 2.2
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:31.670670+00:00
+│           created_at:                 2026-09-29T18:38:24.841858+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1059,7 +1060,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 4kB 0.0 0.0 ... -0.2225 -0.901
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:31.670875+00:00
+│           created_at:                 2026-09-29T18:38:24.842051+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1072,9 +1073,9 @@ Group: /
 │         * time     (time) int64 240B 150 151 152 153 154 155 ... 175 176 177 178 179
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 480kB 2.964 1.631 ... 3.133
+│           obs      (chain, draw, time, obs_dim) float32 480kB 2.935 1.728 ... 2.956
 │       Attributes:
-│           created_at:                 2026-08-27T12:29:31.888683+00:00
+│           created_at:                 2026-09-29T18:38:25.072903+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.2.0
 │           creation_library_language:  Python
@@ -1087,7 +1088,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 840B 0.0 1.0 ... -0.901 0.6235
         Attributes:
-            created_at:                 2026-08-27T12:29:31.888968+00:00
+            created_at:                 2026-09-29T18:38:25.073158+00:00
             creation_library:           ArviZ
             creation_library_version:   1.2.0
             creation_library_language:  Python
@@ -1225,7 +1226,7 @@ beta_seasonal
 float32
 
 
-0.5878 -0.1143 ... -0.2805 -0.0281
+0.5591 -0.04451 ... -0.104 0.08106
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1233,7 +1234,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[ 0.5877775 , -0.1143292 , -0.04959118, -0.20096998],[ 0.5172468 ,  0.0164526 , -0.11988105, -0.15640548],[ 0.533765  , -0.02726647, -0.04149077, -0.05606794],...,[ 0.60432607,  0.10783991, -0.1643648 , -0.20965652],[ 0.4257433 , -0.06949724, -0.17280164,  0.01156274],[ 0.62580293, -0.0176768 , -0.08620638, -0.16691032]],[[ 0.5532976 ,  0.02557152, -0.15372463, -0.13737015],[ 0.38739598,  0.02509622, -0.10607919, -0.05265014],[ 0.56311333, -0.00498741, -0.12259886, -0.08252534],...,[ 0.5063434 , -0.02951515, -0.22261068,  0.00641944],[ 0.4848208 , -0.00070125, -0.13820937, -0.12730493],[ 0.5439957 , -0.02986783, -0.12937737, -0.06744491]],[[ 0.4686972 ,  0.03307745, -0.23404755, -0.2114593 ],[ 0.5240969 , -0.09298711, -0.18993509,  0.08681404],[ 0.53218395, -0.10823598, -0.19317123,  0.09210631],...,[ 0.48143065,  0.09987203, -0.24147166, -0.04674615],[ 0.5635341 , -0.11461761, -0.13289775, -0.13683403],[ 0.5428524 , -0.07295474, -0.16645983, -0.2004323 ]],[[ 0.41759187,  0.03075888, -0.19506693,  0.05755039],[ 0.6037597 ,  0.056598  , -0.2548871 , -0.04732277],[ 0.49468625,  0.04638384, -0.09064213, -0.1588028 ],...,[ 0.60427064, -0.00246303, -0.34020603, -0.21144538],[ 0.34428352, -0.0900771 , -0.1988242 , -0.06354729],[ 0.48445782,  0.09542131, -0.28054726, -0.02810108]]],shape=(4, 1000, 4), dtype=float32)
+    array([[[ 0.5591447 , -0.04451339, -0.0435505 , -0.05296631],[ 0.50053763,  0.02363414, -0.11516415, -0.12392239],[ 0.52372295, -0.02785258, -0.03731854, -0.03956132],...,[ 0.5538658 ,  0.16943866, -0.147026  , -0.11494731],[ 0.44866744, -0.13500886, -0.17105387, -0.04619906],[ 0.60577625,  0.01823926, -0.10054317, -0.10063499]],[[ 0.6205467 ,  0.01782155, -0.18363437, -0.14535704],[ 0.57380253,  0.06064026, -0.1871667 , -0.13565852],[ 0.42232248, -0.06123746, -0.21855116, -0.06765711],...,[ 0.4812488 , -0.02617146, -0.19471568,  0.0187237 ],[ 0.5069468 , -0.0204498 , -0.18748449, -0.13136683],[ 0.43057382,  0.00127634, -0.13999394, -0.04048444]],[[ 0.4361102 ,  0.03546958, -0.2600437 , -0.19619665],[ 0.5608652 , -0.15059811, -0.17698061,  0.0708751 ],[ 0.56642526, -0.15753235, -0.17939986,  0.07767019],...,[ 0.46088463,  0.07546823, -0.18841942, -0.08627583],[ 0.5765393 , -0.0761444 , -0.18463863, -0.10120564],[ 0.4873596 , -0.07105602, -0.13299415,  0.07869115]],[[ 0.5853917 ,  0.01217251, -0.23374048, -0.17007391],[ 0.43343633, -0.0648467 , -0.13560477, -0.07640368],[ 0.49266383, -0.09396556, -0.26622376,  0.02199454],...,[ 0.5637018 , -0.01471817, -0.3504508 , -0.14122047],[ 0.45757222, -0.09071962, -0.38600525, -0.19014944],[ 0.39729753,  0.06511508, -0.10400075,  0.08106254]]],shape=(4, 1000, 4), dtype=float32)
 
 
 mu
@@ -1245,7 +1246,7 @@ mu
 float32
 
 
-0.3005 0.1796 ... 0.478 0.5165
+0.3071 0.1814 ... 0.4997 0.47
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1253,7 +1254,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.30051747, 0.1796015 , 0.0202827 , ..., 0.17196618, 0.37141296,0.23191845],[0.40631694, 0.22796667, 0.2429428 , ..., 0.3658261 , 0.23599382,0.23829997],[0.27432102, 0.27268335, 0.20438346, ..., 0.30810297, 0.25225592,0.13323534],[0.26475957, 0.09690974, 0.1847963 , ..., 0.47579208, 0.47802567,0.5164883 ]], shape=(4, 1000), dtype=float32)
+    array([[0.30709398, 0.1813979 , 0.0294814 , ..., 0.2054264 , 0.36257753,0.24456458],[0.29377237, 0.28215963, 0.27413657, ..., 0.36178887, 0.25161844,0.33355546],[0.30191213, 0.18754052, 0.12328263, ..., 0.25756016, 0.29162434,0.4906252 ],[0.20203269, 0.44792038, 0.454789  , ..., 0.43671784, 0.49966422,0.46999785]], shape=(4, 1000), dtype=float32)
 
 
 phi_1
@@ -1265,7 +1266,7 @@ phi_1
 float32
 
 
-0.4918 0.5269 ... 0.2762 0.55
+0.5045 0.551 ... 0.3272 0.4947
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1273,7 +1274,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.49184254, 0.5269202 , 0.51713324, ..., 0.4730961 , 0.36441606,0.59565246],[0.62055737, 0.55409855, 0.64899373, ..., 0.22566238, 0.57679707,0.4060376 ],[0.48012358, 0.4428366 , 0.41411713, ..., 0.36856565, 0.5730042 ,0.59599334],[0.31955916, 0.42662713, 0.4804987 , ..., 0.3497478 , 0.27618262,0.5500004 ]], shape=(4, 1000), dtype=float32)
+    array([[0.50453156, 0.5509679 , 0.5215353 , ..., 0.5630168 , 0.35437065,0.6180924 ],[0.5481041 , 0.58149683, 0.3149006 , ..., 0.24707673, 0.55200005,0.49419814],[0.47505814, 0.45960435, 0.42674872, ..., 0.42347756, 0.52024734,0.40309146],[0.4526161 , 0.35811916, 0.3625146 , ..., 0.3941012 , 0.32724807,0.49469966]], shape=(4, 1000), dtype=float32)
 
 
 phi_2
@@ -1285,7 +1286,7 @@ phi_2
 float32
 
 
-0.3845 0.4196 ... 0.5093 0.2187
+0.3653 0.3969 ... 0.435 0.304
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1293,7 +1294,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.38452867, 0.41959047, 0.5074362 , ..., 0.46251848, 0.45872128,0.32701215],[0.17345604, 0.36379325, 0.22898307, ..., 0.6111715 , 0.31326795,0.5039987 ],[0.40185478, 0.4369382 , 0.4940844 , ..., 0.5216075 , 0.33407688,0.36307395],[0.5461431 , 0.5334703 , 0.44491032, ..., 0.42683768, 0.5092842 ,0.21867183]], shape=(4, 1000), dtype=float32)
+    array([[0.36528105, 0.3969317 , 0.4856398 , ..., 0.35383826, 0.48157853,0.30446592],[0.32242957, 0.30507368, 0.54730034, ..., 0.5704784 , 0.3435947 ,0.33521488],[0.36143845, 0.4606942 , 0.5201615 , ..., 0.43138513, 0.3654835 ,0.369668  ],[0.46915537, 0.39259803, 0.4560692 , ..., 0.41066253, 0.43504438,0.30397215]], shape=(4, 1000), dtype=float32)
 
 
 pred_mean
@@ -1305,7 +1306,7 @@ pred_mean
 float32
 
 
-0.04996 0.687 2.217 ... 1.533 2.086
+0.2106 0.7917 2.116 ... 1.753 2.054
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1313,7 +1314,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[ 0.04995632],[ 0.6869688 ],[ 2.2165298 ],...,[ 1.0758754 ],[ 1.6341335 ],[ 2.3327074 ]],[[-0.09668504],[ 0.5601003 ],[ 2.0035582 ],...,[ 0.932141  ],[ 1.4709679 ],[ 2.0105326 ]],[[-0.07727601],[ 0.3976214 ],[ 1.7499367 ],...,......,[ 0.75673014],[ 1.4385967 ],[ 2.1583366 ]],[[ 0.2156542 ],[ 0.6091144 ],[ 1.6716881 ],...,[ 1.1857035 ],[ 1.5427574 ],[ 1.9842018 ]],[[ 0.20783997],[ 0.9339284 ],[ 2.2905936 ],...,[ 0.94948137],[ 1.5327313 ],[ 2.0857713 ]]]], shape=(4, 1000, 150, 1), dtype=float32)
+    array([[[[ 0.21057716],[ 0.7917292 ],[ 2.1158345 ],...,[ 1.1862314 ],[ 1.6740947 ],[ 2.2068863 ]],[[-0.05768864],[ 0.5515472 ],[ 2.0085375 ],...,[ 0.9665399 ],[ 1.4799981 ],[ 1.9954886 ]],[[-0.04739846],[ 0.39732575],[ 1.7434835 ],...,......,[ 0.8032944 ],[ 1.3751795 ],[ 2.069734  ]],[[-0.07649049],[ 0.57060546],[ 1.9622847 ],...,[ 0.80315465],[ 1.3112259 ],[ 2.0208454 ]],[[ 0.44705963],[ 0.98237884],[ 2.0034225 ],...,[ 1.3429445 ],[ 1.7526968 ],[ 2.0544653 ]]]], shape=(4, 1000, 150, 1), dtype=float32)
 
 
 sigma
@@ -1325,7 +1326,7 @@ sigma
 float32
 
 
-0.4969 0.521 ... 0.4687 0.5858
+0.4931 0.5094 ... 0.4832 0.5975
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1333,14 +1334,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.49685836, 0.5209827 , 0.4714759 , ..., 0.549867  , 0.48994067,0.6115085 ],[0.57605654, 0.5067748 , 0.5240017 , ..., 0.57335997, 0.49524623,0.5516442 ],[0.47463617, 0.57408786, 0.5835301 , ..., 0.5435066 , 0.52834415,0.49740773],[0.52205014, 0.50877076, 0.48977005, ..., 0.5916976 , 0.4687183 ,0.58578   ]], shape=(4, 1000), dtype=float32)
+    array([[0.49308538, 0.5094279 , 0.46797103, ..., 0.5567375 , 0.4820939 ,0.61383414],[0.56280285, 0.5348111 , 0.5499795 , ..., 0.58857095, 0.48579007,0.50594354],[0.4769226 , 0.56439877, 0.57691705, ..., 0.5203696 , 0.5623889 ,0.59324354],[0.5233938 , 0.55117965, 0.57999796, ..., 0.55965006, 0.48323324,0.59746796]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:31.496876+00:00
+2026-09-29T18:38:24.653214+00:00
 
 creation_library :  
 ArviZ
@@ -1461,7 +1462,7 @@ obs
 float32
 
 
--0.5638 0.9075 ... 0.793 2.377
+-0.3986 1.011 ... 0.9982 2.352
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1469,14 +1470,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.56384903],[ 0.90746117],[ 2.0982363 ],...,[ 1.1153297 ],[ 1.230031  ],[ 1.7082863 ]],[[-0.6324469 ],[ 0.9293224 ],[ 2.3211462 ],...,[ 1.6520592 ],[ 1.4729671 ],[ 1.4536469 ]],[[-0.11268602],[-0.04358211],[ 2.0833507 ],...,......,[-0.01989453],[ 1.5288619 ],[ 2.410868  ]],[[-0.5104706 ],[ 0.64572644],[ 2.4898117 ],...,[ 1.650604  ],[ 1.6519582 ],[ 1.9656909 ]],[[ 0.346522  ],[ 1.3817728 ],[ 2.1746557 ],...,[-0.02579677],[ 0.79298997],[ 2.3770835 ]]]], shape=(4, 1000, 150, 1), dtype=float32)
+    array([[[[-0.39856717],[ 1.0105472 ],[ 1.9984392 ],...,[ 1.2253861 ],[ 1.2730609 ],[ 1.5872067 ]],[[-0.58156794],[ 0.91258043],[ 2.3190818 ],...,[ 1.6704911 ],[ 1.481953  ],[ 1.450954  ]],[[-0.08254524],[-0.0405979 ],[ 2.074419  ],...,......,[ 0.06873332],[ 1.4605557 ],[ 2.3085876 ]],[[-0.82510144],[ 0.60835123],[ 2.8057435 ],...,[ 1.2824519 ],[ 1.4238085 ],[ 2.0017612 ]],[[ 0.5885088 ],[ 1.4391588 ],[ 1.8851713 ],...,[ 0.34820682],[ 0.99819535],[ 2.35159   ]]]], shape=(4, 1000, 150, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:31.670375+00:00
+2026-09-29T18:38:24.841588+00:00
 
 creation_library :  
 ArviZ
@@ -1570,7 +1571,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:31.670670+00:00
+2026-09-29T18:38:24.841858+00:00
 
 creation_library :  
 ArviZ
@@ -1664,7 +1665,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:31.670875+00:00
+2026-09-29T18:38:24.842051+00:00
 
 creation_library :  
 ArviZ
@@ -1785,7 +1786,7 @@ obs
 float32
 
 
-2.964 1.631 0.7798 ... 3.035 3.133
+2.935 1.728 0.7197 ... 2.969 2.956
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1793,14 +1794,14 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[2.9638138e+00],[1.6306732e+00],[7.7976346e-01],...,[2.7350135e+00],[2.6988101e+00],[2.6338310e+00]],[[1.2485070e+00],[1.2938356e+00],[1.5419497e+00],...,[6.5825272e-01],[1.8479526e-01],[1.2264848e-03]],[[1.7008276e+00],[1.6336308e+00],[8.1614351e-01],...,......,[2.9813080e+00],[2.2399497e+00],[1.8494477e+00]],[[2.4832451e+00],[2.7439547e+00],[1.8713605e+00],...,[1.7120955e+00],[2.6574101e+00],[3.0433273e+00]],[[2.5016246e+00],[2.8594217e+00],[2.2477312e+00],...,[1.9697182e+00],[3.0351925e+00],[3.1333187e+00]]]], shape=(4, 1000, 30, 1), dtype=float32)
+    array([[[[2.934748  ],[1.7277291 ],[0.71968544],...,[2.580685  ],[2.6530724 ],[2.6935244 ]],[[1.2972183 ],[1.3374043 ],[1.5682148 ],...,[0.61445415],[0.19393057],[0.01684931]],[[1.6828265 ],[1.6043894 ],[0.7684723 ],...,......,[2.9057727 ],[2.3267024 ],[1.9578154 ]],[[2.5491533 ],[2.8074162 ],[1.932171  ],...,[1.6900384 ],[2.6519265 ],[3.1344223 ]],[[2.4273353 ],[2.7563295 ],[2.1162052 ],...,[1.8705219 ],[2.969018  ],[2.9555528 ]]]], shape=(4, 1000, 30, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:31.888683+00:00
+2026-09-29T18:38:25.072903+00:00
 
 creation_library :  
 ArviZ
@@ -1894,7 +1895,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:29:31.888968+00:00
+2026-09-29T18:38:25.073158+00:00
 
 creation_library :  
 ArviZ
@@ -1940,14 +1941,14 @@ az.summary(tree, var_names=scalar_vars, ci_kind="hdi", ci_prob=0.94)
 
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| mu | 0.292 | 0.137 | 0.049 | 0.56 | 2722 | 2113 | 1.00 | 0.0027 | 0.002 |
-| phi_1 | 0.449 | 0.112 | 0.24 | 0.66 | 1860 | 1991 | 1.00 | 0.0026 | 0.0018 |
-| phi_2 | 0.419 | 0.111 | 0.21 | 0.62 | 2155 | 2030 | 1.00 | 0.0024 | 0.0016 |
-| sigma | 0.544 | 0.046 | 0.47 | 0.64 | 2787 | 2606 | 1.00 | 0.0009 | 0.0007 |
-| beta_seasonal\[0\] | 0.507 | 0.082 | 0.35 | 0.66 | 3131 | 2318 | 1.00 | 0.0015 | 0.0011 |
-| beta_seasonal\[1\] | -0.019 | 0.085 | -0.18 | 0.14 | 3509 | 2755 | 1.00 | 0.0014 | 0.001 |
-| beta_seasonal\[2\] | -0.184 | 0.084 | -0.34 | -0.034 | 2268 | 2384 | 1.00 | 0.0018 | 0.0013 |
-| beta_seasonal\[3\] | -0.073 | 0.086 | -0.23 | 0.09 | 2911 | 2515 | 1.00 | 0.0016 | 0.0012 |
+| mu | 0.294 | 0.133 | 0.059 | 0.56 | 2762 | 2353 | 1.00 | 0.0026 | 0.0019 |
+| phi_1 | 0.447 | 0.112 | 0.24 | 0.66 | 1909 | 1815 | 1.00 | 0.0025 | 0.0017 |
+| phi_2 | 0.419 | 0.112 | 0.21 | 0.62 | 2129 | 2416 | 1.00 | 0.0024 | 0.0017 |
+| sigma | 0.543 | 0.046 | 0.47 | 0.64 | 3217 | 2743 | 1.00 | 0.00081 | 0.00059 |
+| beta_seasonal\[0\] | 0.506 | 0.081 | 0.36 | 0.66 | 3447 | 2594 | 1.00 | 0.0014 | 0.001 |
+| beta_seasonal\[1\] | -0.021 | 0.086 | -0.18 | 0.14 | 3794 | 2479 | 1.00 | 0.0014 | 0.00098 |
+| beta_seasonal\[2\] | -0.184 | 0.084 | -0.35 | -0.028 | 2432 | 2694 | 1.00 | 0.0017 | 0.0012 |
+| beta_seasonal\[3\] | -0.074 | 0.085 | -0.23 | 0.087 | 3420 | 2752 | 1.00 | 0.0015 | 0.001 |
 
 
     In [8]:
@@ -2202,14 +2203,14 @@ az.summary(tree_naive, var_names=scalar_vars, ci_kind="hdi", ci_prob=0.94)
 
 |  | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|
-| mu | 0.449 | 0.131 | 0.21 | 0.7 | 2842 | 2741 | 1.00 | 0.0024 | 0.0017 |
-| phi_1 | 0.406 | 0.096 | 0.23 | 0.59 | 2364 | 2559 | 1.00 | 0.002 | 0.0014 |
-| phi_2 | 0.317 | 0.099 | 0.13 | 0.5 | 2531 | 2764 | 1.00 | 0.002 | 0.0014 |
-| sigma | 0.4346 | 0.0293 | 0.38 | 0.49 | 3563 | 2815 | 1.00 | 0.00049 | 0.00036 |
-| beta_seasonal\[0\] | 0.344 | 0.061 | 0.23 | 0.46 | 3560 | 2979 | 1.00 | 0.001 | 0.00074 |
-| beta_seasonal\[1\] | 0.014 | 0.061 | -0.1 | 0.13 | 4508 | 2883 | 1.00 | 0.0009 | 0.00066 |
-| beta_seasonal\[2\] | -0.157 | 0.063 | -0.27 | -0.039 | 3236 | 2899 | 1.00 | 0.0011 | 0.00078 |
-| beta_seasonal\[3\] | -0.085 | 0.063 | -0.2 | 0.032 | 4084 | 3013 | 1.00 | 0.00098 | 0.00071 |
+| mu | 0.452 | 0.13 | 0.22 | 0.7 | 2957 | 2801 | 1.00 | 0.0024 | 0.0016 |
+| phi_1 | 0.405 | 0.097 | 0.23 | 0.59 | 2226 | 2419 | 1.00 | 0.0021 | 0.0015 |
+| phi_2 | 0.316 | 0.098 | 0.13 | 0.49 | 2765 | 2849 | 1.00 | 0.0019 | 0.0013 |
+| sigma | 0.434 | 0.0294 | 0.38 | 0.49 | 3495 | 2923 | 1.00 | 0.0005 | 0.00038 |
+| beta_seasonal\[0\] | 0.344 | 0.061 | 0.23 | 0.46 | 3397 | 2782 | 1.00 | 0.001 | 0.00076 |
+| beta_seasonal\[1\] | 0.013 | 0.062 | -0.11 | 0.13 | 4445 | 2790 | 1.00 | 0.00093 | 0.00066 |
+| beta_seasonal\[2\] | -0.157 | 0.063 | -0.28 | -0.036 | 2895 | 2563 | 1.00 | 0.0012 | 0.00083 |
+| beta_seasonal\[3\] | -0.086 | 0.063 | -0.2 | 0.033 | 4459 | 2820 | 1.00 | 0.00094 | 0.00068 |
 
 
 Side by side, the two forecasts tell the whole story. The censored model tracks the latent demand above the cap; the naive model, trained to believe demand *was* 2.2 on every capped day, pulls its level down toward the cap and undershoots the demand it is supposed to inform.
@@ -2309,10 +2310,10 @@ results_df
 |  |  | mae | rmse | crps | coverage_50 | coverage_94 |
 |----|----|----|----|----|----|----|
 | model | truth |  |  |  |  |  |
-| censored likelihood | latent demand | 0.491 | 0.642 | 0.371 | 0.567 | 1.000 |
-| plain Normal likelihood | latent demand | 0.488 | 0.566 | 0.328 | 0.467 | 0.967 |
-| censored likelihood | observed sales | 1.340 | 1.630 | 1.001 | 0.267 | 0.600 |
-| plain Normal likelihood | observed sales | 0.995 | 1.205 | 0.775 | 0.300 | 0.467 |
+| censored likelihood | latent demand | 0.487 | 0.636 | 0.369 | 0.567 | 1.000 |
+| plain Normal likelihood | latent demand | 0.488 | 0.566 | 0.329 | 0.467 | 0.967 |
+| censored likelihood | observed sales | 1.334 | 1.620 | 0.996 | 0.267 | 0.600 |
+| plain Normal likelihood | observed sales | 0.995 | 1.204 | 0.774 | 0.300 | 0.467 |
 
 
 Two readings, one per truth:
@@ -2350,8 +2351,8 @@ peak_df
 |                         | mae   | rmse  | crps  | coverage_50 | coverage_94 |
 |-------------------------|-------|-------|-------|-------------|-------------|
 | model                   |       |       |       |             |             |
-| censored likelihood     | 0.319 | 0.341 | 0.273 | 0.8         | 1.0         |
-| plain Normal likelihood | 0.674 | 0.733 | 0.448 | 0.3         | 0.9         |
+| censored likelihood     | 0.317 | 0.343 | 0.273 | 0.8         | 1.0         |
+| plain Normal likelihood | 0.673 | 0.734 | 0.450 | 0.3         | 0.9         |
 
 
 On the peak days the ambiguity disappears: the censored model roughly halves the point errors and its central 50\\ interval covers most of the peak-day demand, while the naive model's forecast mean tops out below the cap it mistook for data (visible in the side-by-side plot above), so its errors there are structural, not noise. The censored model's advantage is exactly where the money is: the days when there was more demand than shelf.
@@ -2367,8 +2368,8 @@ This notebook is that item made concrete, on a synthetic process where the recov
 
 | Example | Censoring pattern | Mechanism | Demand forecast |
 |----|----|----|----|
-| [Availability TSB](https://juanitorduz.github.io/numpyro_forecast/examples/availability_tsb.html) | Binary: off-shelf days record zero | Freeze the probability-recursion updates where the product is off the shelf | Feed a full-availability scenario input |
-| [Fresh retail stockouts](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) | Fractional: noisy within-day availability | Multiplicative availability factor on the mean, with a learned floor | Pin availability to one over the horizon |
+| [Availability TSB](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html) | Binary: off-shelf days record zero | Freeze the probability-recursion updates where the product is off the shelf | Feed a full-availability scenario input |
+| [Fresh retail stockouts](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) | Fractional: noisy within-day availability | Multiplicative availability factor on the mean, with a learned floor | Pin availability to one over the horizon |
 | This notebook | Hard capacity cap plus stockout mask | Censored likelihood: density below the cap, survival mass at it | The generative recursion, unconstrained by the cap |
 
 The choice between them is driven by what the data records and how the censoring operates:
@@ -2385,7 +2386,7 @@ In practice the mechanisms compose: a retailer with hourly stockout labels *and*
 - Replace the capped-day plug-in \max(y_t, \hat{y}\_t) in the lag filter with the censored conditional mean \hat{y}\_t + \sigma \\ \varphi(z_t) / \left(1 - \Phi(z_t)\right) with z_t = (y_t - \hat{y}\_t) / \sigma, the exact expectation of the latent value given that it exceeds the cap.
 - Let the capacity cap vary by day, read from inventory snapshots, instead of a single constant. `RightCensoredDistribution` censors at each *recorded* value, so only the data preparation changes, not the model.
 - Swap the \text{Normal} base for a strictly nonnegative observation model (for example a truncated \text{Normal}), removing the predictive mass on negative sales visible in the in-sample bands.
-- Replace the fixed train-test split with rolling-origin evaluation via the package's [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper, as in the [Croston example](https://juanitorduz.github.io/numpyro_forecast/examples/croston.html).
+- Replace the fixed train-test split with rolling-origin evaluation via the package's [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper, as in the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html).
 
 
 # References
@@ -2393,5 +2394,5 @@ In practice the mechanisms compose: a retailer with hourly stockout labels *and*
 - Orduz, J. [*Demand Forecasting with Censored Likelihood*](https://juanitorduz.github.io/demand/). The blog post this notebook ports.
 - NumPyro documentation: [Censored distributions](https://num.pyro.ai/en/stable/distributions.html#censored-distributions) (`RightCensoredDistribution` and friends, available from NumPyro `0.20.0`).
 - Tobin, J. (1958). [*Estimation of Relationships for Limited Dependent Variables*](https://doi.org/10.2307/1907382). Econometrica, 26(1), 24-36. The classic censored-regression (Tobit) model.
-- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/examples/arma.html) in this documentation, which introduces the [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for AR-on-observations models.
-- The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/examples/availability_tsb.html) and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/examples/fresh_retail_stockout.html) in this documentation: the sibling availability mechanisms compared above.
+- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) in this documentation, which introduces the [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for AR-on-observations models.
+- The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html) and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) in this documentation: the sibling availability mechanisms compared above.

@@ -29,9 +29,8 @@ We load the necessary libraries and set the notebook's configuration.
 import time
 from collections.abc import Callable, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
 from functools import partial
-from typing import Any
+from typing import Any, NamedTuple
 
 import arviz as az
 import dynestyx as dsx
@@ -93,7 +92,7 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 ```
 
 
-    dynestyx 0.5.1, numpyro 0.22.0, jax 0.11.2
+    dynestyx 0.6.0, numpyro 0.22.0, jax 0.11.2
 
 
 # The Building Block
@@ -127,8 +126,7 @@ StateSpaceHandler = Filter | Smoother | LatentPathBuilder | Discretizer
 _CONDITIONING_HANDLERS = (Filter, Smoother, LatentPathBuilder)
 
 
-@dataclass(frozen=True)
-class StateSpaceResult:
+class StateSpaceResult(NamedTuple):
     """Draws produced by `state_space_series` (size-0 time axes when not applicable).
 
     Each field is filled in the mode that produces it and has a size-0 time axis
@@ -209,7 +207,7 @@ def _in_sample_states(
         mean = jnp.stack([d.mean for d in dists])
         cov = jnp.stack([d.covariance_matrix for d in dists])
         state_dist = dist.MultivariateNormal(mean, covariance_matrix=cov).to_event(1)
-        return jnp.asarray(numpyro.sample(f"{name}_smoothed_states", state_dist))
+        return numpyro.sample(f"{name}_smoothed_states", state_dist)
     msg = (
         "the in-sample predictive (a model call with data=None, as made by predict_in_sample "
         "and to_datatree) needs a Smoother or a LatentPathBuilder conditioner; a Filter only "
@@ -438,9 +436,8 @@ For a state space model the prior predictive is a forward simulation. We write a
 ``` python
 def local_level_prior(predict_times: Array) -> None:
     """Sample the scales from their priors and simulate a path from the local level model."""
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-    r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+    q = numpyro.sample("q", dist.HalfNormal(1.0))
+    r = numpyro.sample("r", dist.HalfNormal(1.0))
     dsx.sample("f", local_level_dynamics(q, r), predict_times=predict_times)
 
 
@@ -485,10 +482,10 @@ Every model registers a `level` deterministic site when it is called without dat
 def local_level_direct(covariates: Array, data: Array | None = None) -> None:
     """Local level model with the innovations sampled explicitly."""
     h = Horizon.from_data(covariates, data)
-    q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-    r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
-    x0 = jnp.asarray(numpyro.sample("x0", dist.Normal(0.0, 10.0)))
-    drift = innovations(h, "drift", lambda: dist.Normal(0.0, q), reparam=LocScaleReparam(0))
+    q = numpyro.sample("q", dist.HalfNormal(1.0))
+    r = numpyro.sample("r", dist.HalfNormal(1.0))
+    x0 = numpyro.sample("x0", dist.Normal(0.0, 10.0))
+    drift = innovations(h, "drift", dist.Normal(0.0, q), reparam=LocScaleReparam(0))
     level = x0 + jnp.cumsum(drift, axis=-2)
     if h.data is None:
         numpyro.deterministic("level", level)
@@ -501,8 +498,8 @@ def local_level_state_space(conditioner: StateSpaceHandler) -> ForecastModel:
     def model(covariates: Array, data: Array | None = None) -> None:
         h = Horizon.from_data(covariates, data)
         y = covariates[..., : h.t_obs, :]  # the observed window travels in the covariates
-        q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-        r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
+        q = numpyro.sample("q", dist.HalfNormal(1.0))
+        r = numpyro.sample("r", dist.HalfNormal(1.0))
         result = state_space_series(h, "f", y, local_level_dynamics(q, r), conditioner=conditioner)
         if h.data is None:
             numpyro.deterministic("level", result.x_in_sample)
@@ -564,9 +561,9 @@ posteriors = {label: mcmc.get_samples() for label, (mcmc, _) in fits.items()}
 ```
 
 
-          direct (innovations):   16.0 s
-       dynestyx, explicit path:   10.0 s
-     dynestyx, Kalman smoother:   15.2 s
+          direct (innovations):   11.3 s
+       dynestyx, explicit path:    7.7 s
+     dynestyx, Kalman smoother:   11.7 s
 
 
 ## Model Diagnostics
@@ -623,9 +620,9 @@ comparison.round(
 
 |  | q mean | q sd | r mean | r sd | ess_bulk q | ess_bulk r | r_hat q | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.389 | 0.061 | 0.441 | 0.051 | 726.0 | 763.0 | 1.009 | 1.008 | 1013890 | 16.0 |
-| dynestyx, explicit path | 0.389 | 0.064 | 0.441 | 0.053 | 564.0 | 974.0 | 1.013 | 1.005 | 66528 | 10.0 |
-| dynestyx, Kalman smoother | 0.387 | 0.061 | 0.440 | 0.051 | 1590.0 | 1694.0 | 1.003 | 1.004 | 17992 | 15.2 |
+| direct (innovations) | 0.389 | 0.061 | 0.441 | 0.051 | 726.0 | 763.0 | 1.009 | 1.008 | 1013890 | 11.3 |
+| dynestyx, explicit path | 0.389 | 0.063 | 0.440 | 0.053 | 630.0 | 985.0 | 1.011 | 1.005 | 66512 | 7.7 |
+| dynestyx, Kalman smoother | 0.387 | 0.061 | 0.440 | 0.051 | 1590.0 | 1694.0 | 1.003 | 1.004 | 17992 | 11.7 |
 
 
 The three posterior means agree closely and the \hat{R} values are close to 1. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
@@ -688,8 +685,8 @@ pd.DataFrame(
 
 |          | evaluation (ms) | gradient (ms) |
 |----------|-----------------|---------------|
-| Filter   | 0.056           | 0.171         |
-| Smoother | 0.088           | 0.175         |
+| Filter   | 0.050           | 0.154         |
+| Smoother | 0.077           | 0.155         |
 
 
 The full evaluation is more expensive under the `Smoother`, which is the backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient.
@@ -822,9 +819,9 @@ pd.DataFrame(
 
 |  | direct (innovations) | dynestyx, explicit path | dynestyx, Kalman smoother |
 |----|----|----|----|
-| MAE | 0.445 | 0.448 | 0.448 |
-| RMSE | 0.590 | 0.585 | 0.591 |
-| CRPS | 0.439 | 0.440 | 0.439 |
+| MAE | 0.445 | 0.447 | 0.448 |
+| RMSE | 0.590 | 0.586 | 0.591 |
+| CRPS | 0.439 | 0.441 | 0.439 |
 | coverage (50%) | 0.833 | 0.833 | 0.833 |
 | coverage (94%) | 1.000 | 1.000 | 1.000 |
 
@@ -1415,7 +1412,7 @@ Group: /
 │           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
 │           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:38.437707+00:00
+│           created_at:                 2026-09-29T20:43:10.389684+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1430,7 +1427,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -12.35 -11.79 ... -9.208
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.106196+00:00
+│           created_at:                 2026-09-29T20:43:10.888287+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1443,7 +1440,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.106436+00:00
+│           created_at:                 2026-09-29T20:43:10.888508+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1456,7 +1453,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.106614+00:00
+│           created_at:                 2026-09-29T20:43:10.888669+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1471,7 +1468,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
 │       Attributes:
-│           created_at:                 2026-09-25T16:05:39.137370+00:00
+│           created_at:                 2026-09-29T20:43:10.915566+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1484,7 +1481,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-09-25T16:05:39.137602+00:00
+            created_at:                 2026-09-29T20:43:10.915757+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1821,7 +1818,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:38.437707+00:00
+2026-09-29T20:43:10.389684+00:00
 
 creation_library :  
 ArviZ
@@ -1957,7 +1954,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.106196+00:00
+2026-09-29T20:43:10.888287+00:00
 
 creation_library :  
 ArviZ
@@ -2051,7 +2048,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.106436+00:00
+2026-09-29T20:43:10.888508+00:00
 
 creation_library :  
 ArviZ
@@ -2145,7 +2142,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.106614+00:00
+2026-09-29T20:43:10.888669+00:00
 
 creation_library :  
 ArviZ
@@ -2281,7 +2278,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.137370+00:00
+2026-09-29T20:43:10.915566+00:00
 
 creation_library :  
 ArviZ
@@ -2375,7 +2372,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-09-25T16:05:39.137602+00:00
+2026-09-29T20:43:10.915757+00:00
 
 creation_library :  
 ArviZ
@@ -2659,10 +2656,10 @@ def seasonal_level_state_space(conditioner: StateSpaceHandler) -> ForecastModel:
         h = Horizon.from_data(covariates, data)
         y = covariates[..., : h.t_obs, :1]  # the observed series is the first column
         controls = covariates[..., 1:]  # the Fourier features span the full horizon
-        q = jnp.asarray(numpyro.sample("q", dist.HalfNormal(1.0)))
-        r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
-        beta = jnp.asarray(
-            numpyro.sample("beta", dist.Normal(0.0, 1.0).expand([controls.shape[-1]]).to_event(1))
+        q = numpyro.sample("q", dist.HalfNormal(1.0))
+        r = numpyro.sample("r", dist.HalfNormal(1.0))
+        beta = numpyro.sample(
+            "beta", dist.Normal(0.0, 1.0).expand([controls.shape[-1]]).to_event(1)
         )
         state_space_series(
             h,
@@ -2715,7 +2712,7 @@ ax.set(title="SVI loss (negative ELBO)", xlabel="step", ylabel="loss");
 ```
 
 
-    SVI: 3.4 s, final loss 147.32
+    SVI: 2.6 s, final loss 147.32
     posterior mean of beta: [ 1.68  0.54 -0.38  0.23]
     truth:                  [ 1.5  0.5 -0.4  0.3]
 
@@ -2852,9 +2849,9 @@ rng_key, rng_subkey = random.split(rng_key)
 start = time.perf_counter()
 results = backtest(
     rng_subkey,
+    lambda: seasonal_level_smoothed,
     y_seasonal,
     covariates_seasonal,
-    lambda: seasonal_level_smoothed,
     forecast_fn=forecast_fn,
     in_sample_fn=in_sample_fn,
     metrics=backtest_metrics,
@@ -2870,17 +2867,17 @@ results_to_dataframe(results).round(3)
 ```
 
 
-    backtest: 6 folds in 120.5 s
+    backtest: 6 folds in 79.7 s
 
 
 |  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 7.358 | 0.691 | 0.250 | 1.000 | 0.217 | 0.708 | 1.000 |
-| 1 | 0 | 84 | 96 | 1000 | 14.058 | 0.922 | 0.333 | 0.917 | 0.208 | 0.714 | 1.000 |
-| 2 | 0 | 96 | 108 | 1000 | 8.922 | 0.408 | 0.917 | 1.000 | 0.213 | 0.740 | 1.000 |
-| 3 | 0 | 108 | 120 | 1000 | 10.206 | 0.440 | 0.667 | 1.000 | 0.211 | 0.759 | 1.000 |
-| 4 | 0 | 120 | 132 | 1000 | 10.044 | 0.657 | 0.667 | 1.000 | 0.203 | 0.767 | 1.000 |
-| 5 | 0 | 132 | 144 | 1000 | 9.109 | 0.767 | 0.250 | 1.000 | 0.241 | 0.712 | 0.992 |
+| 0 | 0 | 72 | 84 | 1000 | 6.161 | 0.691 | 0.250 | 1.000 | 0.217 | 0.708 | 1.000 |
+| 1 | 0 | 84 | 96 | 1000 | 6.003 | 0.922 | 0.333 | 0.917 | 0.208 | 0.714 | 1.000 |
+| 2 | 0 | 96 | 108 | 1000 | 6.537 | 0.408 | 0.917 | 1.000 | 0.213 | 0.740 | 1.000 |
+| 3 | 0 | 108 | 120 | 1000 | 6.862 | 0.440 | 0.667 | 1.000 | 0.211 | 0.759 | 1.000 |
+| 4 | 0 | 120 | 132 | 1000 | 7.355 | 0.657 | 0.667 | 1.000 | 0.203 | 0.767 | 1.000 |
+| 5 | 0 | 132 | 144 | 1000 | 7.948 | 0.767 | 0.250 | 1.000 | 0.241 | 0.712 | 0.992 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.

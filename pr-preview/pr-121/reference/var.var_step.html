@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.18">
+<meta name="generator" content="quarto-1.10.19">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../site_libs/bootstrap/bootstrap-c4d708d4e441993890320f2eab87994c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -124,7 +124,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
   <link rel="alternate" type="text/markdown" href="var.var_step.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html">
-  <meta name="description" content="Build the ssoe() step of a VAR from its coefficients.">
+  <meta name="description" content="Build the ssoe() mean and update of a VAR.">
   <script type="application/ld+json">
 [
   {
@@ -155,12 +155,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="var.var_step() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Build the ssoe() step of a VAR from its coefficients.">
+  <meta property="og:description" content="Build the ssoe() mean and update of a VAR.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="var.var_step() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Build the ssoe() step of a VAR from its coefficients.">
+  <meta name="twitter:description" content="Build the ssoe() mean and update of a VAR.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -171,7 +171,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-08-27">v0.3.0</span></span>
+    <span class="navbar-title">numpyro_forecast</span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -188,15 +188,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="../changelog.html"> 
-<span class="menu-text">Changelog</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="37" data-forks="1"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
     </span>
   </li>  
 </ul>
@@ -248,6 +244,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../reference/models.Advance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.Advance</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../reference/models.innovations.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">models.innovations</span></a>
   </div>
@@ -266,8 +268,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../reference/models.SSOEStep.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">models.SSOEStep</span></a>
+  <a href="../reference/models.SSOEMean.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEMean</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/models.SSOEUpdate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">models.SSOEUpdate</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -380,6 +388,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">reparam.time_reparam</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/reparam.TimeTransform.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">reparam.TimeTransform</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -436,6 +450,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/evaluate.VectorizedBacktestResult.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">evaluate.VectorizedBacktestResult</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.WindowType.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.WindowType</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/evaluate.DEFAULT_METRICS.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">evaluate.DEFAULT_METRICS</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -630,6 +656,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">typing.ModelFactory</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.Array.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.Array</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxBuildFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxBuildFn</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -738,6 +776,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="../reference/datasets.BreakfastAtTheFrat.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">datasets.BreakfastAtTheFrat</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/datasets.load_m5.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">datasets.load_m5</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/datasets.M5Data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">datasets.M5Data</span></a>
   </div>
 </li>
       </ul>
@@ -858,11 +908,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Build the <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a> step of a VAR from its coefficients.</p>
+<p>Build the <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a> mean and update of a VAR.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/var.py#L82-L179" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/var.py#L83-L185" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">var</span><span class="op">.</span><span class="sig-name">var_step</span>(
@@ -871,14 +921,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The carry is the lag window <code>(*batch, lags, obs)</code>. Each step emits <a href="var.var_mean.html#numpyro_forecast.var.var_mean" class="gdls-link gdls-code">var_mean()</a> of the window as the one-step-ahead mean and, given the row’s value, drops the oldest row and appends the new one. The step ignores its exogenous input <code>x_t</code>; add regressors by wrapping it (a VARX):</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>base <span class="op">=</span> var_step(phi, intercept)</span>
+<p>The carry is the lag window <code>(*batch, lags, obs)</code>. <a href="typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> emits <a href="var.var_mean.html#numpyro_forecast.var.var_mean" class="gdls-link gdls-code">var_mean()</a> of the window as the one-step-ahead mean and, given the row’s value, <code>update</code> drops the oldest row and appends the new one. Both ignore their exogenous input <code>x_t</code>; add regressors by wrapping <a href="typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> (a VARX):</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>mean, update <span class="op">=</span> var_step(phi, intercept)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> step(carry, x_t):</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    mu, carry_fn <span class="op">=</span> base(carry, x_t)</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> mu <span class="op">+</span> beta <span class="op">@</span> x_t, carry_fn</span></code></pre></div>
-<p>The step knows nothing about priors: <code>phi</code> and <code>intercept</code> are whatever the model sampled (a weakly informative <code>Normal</code>, the moments of <a href="priors.minnesota_prior.html#numpyro_forecast.priors.minnesota_prior" class="gdls-link gdls-code">minnesota_prior()</a>, a hierarchical prior, …), so changing the prior never touches the recursion.</p>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mean_x(carry, x_t):</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> mean(carry, x_t) <span class="op">+</span> beta <span class="op">@</span> x_t</span></code></pre></div>
+<p>The pair knows nothing about priors: <code>phi</code> and <code>intercept</code> are whatever the model sampled (a weakly informative <code>Normal</code>, the moments of <a href="priors.minnesota_prior.html#numpyro_forecast.priors.minnesota_prior" class="gdls-link gdls-code">minnesota_prior()</a>, a hierarchical prior, …), so changing the prior never touches the recursion.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -899,9 +948,9 @@ Optional intercept of shape <code>(*batch, obs)</code>.
 <h2 class="doc-returns">Returns</h2>
 <div class="doc-definition-items">
 <dl>
-<dt><code> <span class="doc-parameter-annotation">SSOEStep[Float[Array, <span class="st">"*batch lags obs"</span>]]</span></code></dt>
+<dt><code> <span class="doc-parameter-annotation">tuple[<br>&nbsp;&nbsp;&nbsp;&nbsp;SSOEMean[Float[Array, <span class="st">"*batch lags obs"</span>]],<br>&nbsp;&nbsp;&nbsp;&nbsp;SSOEUpdate[Float[Array, <span class="st">"*batch lags obs"</span>]],<br>]</span></code></dt>
 <dd>
-A <code>(carry, x_t) -&gt; (mu_t, carry_fn)</code> callable for <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>.
+A <code>(mean, update)</code> pair for <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>: <code>mean(carry, x_t)</code> is <a href="var.var_mean.html#numpyro_forecast.var.var_mean" class="gdls-link gdls-code">var_mean()</a> of the window and <code>update(carry, y_t, eps_t, x_t)</code> drops the oldest row and appends <code>y_t</code>.
 </dd>
 </dl>
 </div>
@@ -933,10 +982,11 @@ At step time, if the carry does not hold exactly <code>phi.shape[-3]</code> rows
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    scale_tril <span class="op">=</span> sigma[..., :, <span class="va">None</span>] <span class="op">*</span> l_omega</span>
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    noise <span class="op">=</span> dist.MultivariateNormal(jnp.zeros(k), scale_tril<span class="op">=</span>scale_tril)</span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, y_init, var_step(phi, intercept), noise)</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(<span class="st">"obs"</span>, dist.MultivariateNormal(r.mu, scale_tril<span class="op">=</span>scale_tril), obs<span class="op">=</span>h.data)</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    mean, update <span class="op">=</span> var_step(phi, intercept)</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> ssoe(h, <span class="st">"eps"</span>, y, y_init, mean, update, noise)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    numpyro.sample(<span class="st">"obs"</span>, dist.MultivariateNormal(r.mu, scale_tril<span class="op">=</span>scale_tril), obs<span class="op">=</span>h.data)</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> h.future <span class="op">&gt;</span> <span class="dv">0</span>:</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>        numpyro.deterministic(<span class="st">"forecast"</span>, r.y_future)</span></code></pre></div>
 <p>Closing over <code>y_init</code> is right for a single fit but wrong under <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a>, which slices <code>covariates</code> per window: for a backtest, ship the seed rows inside <code>covariates</code> and slice the carry from them in the model.</p>
 
 

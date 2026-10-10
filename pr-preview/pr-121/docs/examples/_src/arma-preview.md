@@ -5,10 +5,10 @@ This notebook ports the blog post [**Notes on an ARMA(1,1) Model with NumPyro**]
 
 Two deliberate changes from the blog post are worth calling out:
 
-- Instead of a single train-test split, we evaluate with **expanding-window time-slice cross-validation** via `numpyro_forecast.backtest`, scoring every fold with the continuous ranked probability score (CRPS) and the empirical coverage of the central 50\\ and 94\\ intervals, both in-sample and out-of-sample, exactly as in the [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html).
+- Instead of a single train-test split, we evaluate with **expanding-window time-slice cross-validation** via `numpyro_forecast.backtest`, scoring every fold with the continuous ranked probability score (CRPS) and the empirical coverage of the central 50\\ and 94\\ intervals, both in-sample and out-of-sample, exactly as in the [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html).
 - The forecast path is fully **generative**: over the horizon we sample future innovations and feed them back into the ARMA recursion, so the forecast uncertainty compounds correctly step by step. The blog post instead zeroed the future errors inside its prediction loop, which understates the multi-step uncertainty.
 
-A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html): the [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) and [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) building blocks assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. The package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block (single source of error) is made for exactly this shape of model: it runs the in-sample error-feedback filter and the generative forecast recursion, and we register the `"obs"` and `"forecast"` sites ourselves while reusing everything downstream: [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), and [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series as an argument, and the package's [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`, which spans the full horizon and is available at prediction time. The model only ever reads the first `t_obs` rows (the block checks this), so no future information leaks into a forecast.
+A practical note on the design, in the same spirit as the [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html): the [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) and [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) building blocks assume a deterministic mean plus independent per-step noise, which cannot express ARMA's recursive dependence on past observations and errors. The package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block (single source of error) is made for exactly this shape of model: it runs the in-sample error-feedback filter and the generative forecast recursion, and we register the `"obs"` and `"forecast"` sites ourselves while reusing everything downstream: [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample), and [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest). And since an ARMA model is, at heart, a regression on the *lagged series itself*, the observed series plays the role of the covariates: [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series as an argument, and the package's [predict_in_sample](../../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, so the history has to travel through `covariates`, which spans the full horizon and is available at prediction time. The model only ever reads the first `t_obs` rows (the block checks this), so no future information leaks into a forecast.
 
 
 # Prepare notebook
@@ -70,7 +70,7 @@ The ARMA(1,1) process is defined by the recursion
 
 y_t = \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, \sigma),
 
-where \phi is the autoregressive coefficient, \theta the moving average coefficient, and \sigma the innovation scale. We simulate T = 100 observations with \phi = 0.4, \theta = 0.7, and \sigma = 0.5 (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom the [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) block uses inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide `Array` type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
+where \phi is the autoregressive coefficient, \theta the moving average coefficient, and \sigma the innovation scale. We simulate T = 100 observations with \phi = 0.4, \theta = 0.7, and \sigma = 0.5 (one extra step initializes the recursion and is dropped). As in the blog post, we write the simulation twice: first as a transparent Python loop, then with [`jax.lax.scan`](https://docs.jax.dev/en/latest/_autosummary/jax.lax.scan.html), which compiles the recursion into a single efficient operation and is the idiom the [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) block uses inside the model. Compared to the blog we tighten the type hints: the key takes the package-wide [Array](../../../reference/typing.Array.md#numpyro_forecast.typing.Array) type and the return shape is spelled out with a [jaxtyping](https://docs.kidger.site/jaxtyping/) annotation.
 
 
     In [2]:
@@ -253,7 +253,7 @@ y_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} + \varepsilon_t, \qq
 
 The key insight (from the blog post, and the same one behind the innovations state space form of exponential smoothing) is that *in sample the errors are deterministic* given the parameters and the observed data: running the recursion forward, the one-step-ahead prediction at time t is \hat{y}\_t = \mu + \phi \\ y\_{t-1} + \theta \\ \varepsilon\_{t-1} and the error is simply \varepsilon_t = y_t - \hat{y}\_t, initialized with y\_{-1} = \mu and \varepsilon\_{-1} = 0. The whole in-sample likelihood is then a single Gaussian observation site: conditioning y_t \sim \text{Normal}(\hat{y}\_t, \sigma) is exactly the blog post's "condition on the errors" trick, \varepsilon_t \sim \text{Normal}(0, \sigma), since the two differ only by a location shift.
 
-The model is a plain NumPyro function `(covariates, data=None)`: its first line derives the train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), and the recursion is one [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) call. The block takes the driving series `y`, the initial carry (y\_{-1}, \varepsilon\_{-1}), a `step` function, and the innovation distribution; `step(carry, x_t)` returns the one-step-ahead mean and a `carry_fn(y_t, eps_t)` that builds the next carry, here simply the day's value and error. Rows carry the observation axis, so the carry is `(mu[None], zeros((1,)))` and the mean has shape `(1,)`; the block checks these shapes. It then owns the two scans:
+The model is a plain NumPyro function `(covariates, data=None)`: its first line derives the train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html), and the recursion is one [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) call. The block takes the driving series `y`, the initial carry (y\_{-1}, \varepsilon\_{-1}), a [mean](../../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution; `mean(carry, x_t)` returns the one-step-ahead mean and `update(carry, y_t, eps_t, x_t)` builds the next carry, here simply the day's value and error. Rows carry the observation axis, so the carry is `(mu[None], zeros((1,)))` and the mean has shape `(1,)`; the block checks these shapes. It then owns the two scans:
 
 1.  **In sample.** A deterministic `jax.lax.scan` filters the observed series into one-step-ahead means \hat{y}\_t, returned as `r.mu` (exposed as the deterministic site `"mu_t"`), and the `"obs"` site conditions the data on them.
 2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), then rolls the recursion forward feeding the *sampled* observation and innovation back into the carry, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, so the forecast uncertainty compounds over the horizon exactly as the generative process says it should.
@@ -280,19 +280,20 @@ def arma_1_1(covariates: Array, data: Array | None = None) -> None:
     h = Horizon.from_data(covariates, data)
     y = covariates[..., : h.t_obs, :]  # observed history only; never reads beyond t_obs
 
-    # jnp.asarray only narrows numpyro's union return type for the type checker.
-    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(loc=0, scale=1)))
+    mu = numpyro.sample("mu", dist.Normal(loc=0, scale=1))
     phi = numpyro.sample("phi", dist.Uniform(low=-1, high=1))
     theta = numpyro.sample("theta", dist.Uniform(low=-1, high=1))
     sigma = numpyro.sample("sigma", dist.HalfNormal(scale=1))
 
-    def step(carry, _):
+    def mean(carry, _):
         y_prev, error_prev = carry
-        pred = mu + phi * y_prev + theta * error_prev
-        return pred, lambda y_t, eps_t: (y_t, eps_t)
+        return mu + phi * y_prev + theta * error_prev
+
+    def update(carry, y_t, eps_t, _):
+        return y_t, eps_t
 
     init_carry = (mu[None], jnp.zeros((1,)))  # y_{-1} = mu and eps_{-1} = 0 seed the recursion
-    r = ssoe(h, "eps", y, init_carry, step, dist.Normal(loc=0, scale=sigma))
+    r = ssoe(h, "eps", y, init_carry, mean, update, dist.Normal(loc=0, scale=sigma))
 
     numpyro.deterministic("mu_t", r.mu)
     numpyro.sample("obs", dist.Normal(loc=r.mu, scale=sigma), obs=h.data)
@@ -889,15 +890,15 @@ Group: /
 │         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           mu       (chain, draw) float32 16kB -0.09647 -0.02102 ... 0.0329 0.04597
-│           mu_t     (chain, draw, time, obs_dim) float32 2MB -0.1546 0.5496 ... -0.4146
-│           phi      (chain, draw) float32 16kB 0.6022 0.408 0.4649 ... 0.3659 0.1668
-│           sigma    (chain, draw) float32 16kB 0.4242 0.4562 0.3988 ... 0.501 0.408
-│           theta    (chain, draw) float32 16kB 0.3627 0.5471 0.3764 ... 0.5953 0.6119
+│           mu       (chain, draw) float32 16kB -0.1104 -0.03331 ... 0.04116 -0.1309
+│           mu_t     (chain, draw, time, obs_dim) float32 2MB -0.1609 0.5396 ... -0.6737
+│           phi      (chain, draw) float32 16kB 0.4568 0.4767 0.513 ... 0.3879 0.4803
+│           sigma    (chain, draw) float32 16kB 0.4142 0.4574 0.4017 ... 0.4904 0.4828
+│           theta    (chain, draw) float32 16kB 0.48 0.4315 0.3439 ... 0.5847 0.5859
 │       Attributes:
-│           created_at:                 2026-08-27T12:28:19.105676+00:00
+│           created_at:                 2026-09-29T20:17:47.491006+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /posterior_predictive
@@ -908,11 +909,11 @@ Group: /
 │         * time     (time) int64 800B 0 1 2 3 4 5 6 7 8 ... 91 92 93 94 95 96 97 98 99
 │         * obs_dim  (obs_dim) int64 8B 0
 │       Data variables:
-│           obs      (chain, draw, time, obs_dim) float32 2MB -1.017 0.3373 ... -0.6977
+│           obs      (chain, draw, time, obs_dim) float32 2MB -1.003 0.3323 ... -1.009
 │       Attributes:
-│           created_at:                 2026-08-27T12:28:19.258163+00:00
+│           created_at:                 2026-09-29T20:17:47.770604+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                ['chain', 'draw']
 ├── Group: /observed_data
@@ -923,9 +924,9 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 400B 0.6115 0.06982 ... -0.1484 -0.1441
 │       Attributes:
-│           created_at:                 2026-08-27T12:28:19.258431+00:00
+│           created_at:                 2026-09-29T20:17:47.780642+00:00
 │           creation_library:           ArviZ
-│           creation_library_version:   1.2.0
+│           creation_library_version:   1.3.1
 │           creation_library_language:  Python
 │           sample_dims:                []
 └── Group: /constant_data
@@ -936,9 +937,9 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 400B 0.6115 0.06982 ... -0.1441
         Attributes:
-            created_at:                 2026-08-27T12:28:19.258608+00:00
+            created_at:                 2026-09-29T20:17:47.784479+00:00
             creation_library:           ArviZ
-            creation_library_version:   1.2.0
+            creation_library_version:   1.3.1
             creation_library_language:  Python
             sample_dims:                []
 ```
@@ -1053,7 +1054,7 @@ mu
 float32
 
 
--0.09647 -0.02102 ... 0.04597
+-0.1104 -0.03331 ... -0.1309
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1061,7 +1062,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[-0.09646773, -0.02101522, -0.07238156, ...,  0.11212269,-0.00052988, -0.00798731],[-0.07251706, -0.07538717, -0.02875393, ..., -0.12315954,-0.07018185, -0.07903112],[ 0.02153392, -0.07431991, -0.04518985, ..., -0.10758153,-0.10836137, -0.07513384],[-0.06687693, -0.03768033, -0.08406789, ..., -0.0970888 ,0.03289504,  0.04597342]], shape=(4, 1000), dtype=float32)
+    array([[-0.110439  , -0.03330788, -0.06882153, ..., -0.08767319,-0.14461307, -0.13386378],[-0.05986451, -0.0832267 , -0.03073976, ..., -0.1145784 ,-0.08920883, -0.05720294],[-0.09291687, -0.04907572, -0.03478966, ..., -0.12966867,-0.11755072, -0.07619633],[-0.16082111, -0.15901926, -0.06771498, ..., -0.09814797,0.04115792, -0.13090898]], shape=(4, 1000), dtype=float32)
 
 
 mu_t
@@ -1073,7 +1074,7 @@ mu_t
 float32
 
 
--0.1546 0.5496 ... 0.5639 -0.4146
+-0.1609 0.5396 ... 0.6562 -0.6737
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1081,7 +1082,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-0.15455699],[ 0.5496475 ],[-0.22846411],...,[ 0.04035873],[ 0.6136581 ],[-0.4622672 ]],[[-0.02958961],[ 0.5792373 ],[-0.27121457],...,[ 0.07765268],[ 0.65390897],[-0.5205126 ]],[[-0.10603137],[ 0.48198977],[-0.19505152],...,......,[ 0.04807812],[ 0.6310429 ],[-0.64130867]],[[ 0.04493116],[ 0.5939707 ],[-0.2536009 ],...,[ 0.11755434],[ 0.68493474],[-0.51754355]],[[ 0.05364065],[ 0.48932704],[-0.19906978],...,[ 0.10942935],[ 0.5639006 ],[-0.41464213]]]], shape=(4, 1000, 100, 1), dtype=float32)
+    array([[[[-0.16088453],[ 0.5396328 ],[-0.3040434 ],...,[ 0.01526661],[ 0.58586663],[-0.53068024]],[[-0.04918578],[ 0.5433373 ],[-0.2043645 ],...,[ 0.06866773],[ 0.61928034],[-0.4353609 ]],[[-0.10412882],[ 0.49103886],[-0.17786464],...,......,[ 0.03159465],[ 0.59153426],[-0.5838965 ]],[[ 0.05712366],[ 0.6025735 ],[-0.24328421],...,[ 0.12249096],[ 0.7001456 ],[-0.51262426]],[[-0.19378372],[ 0.6346609 ],[-0.4283265 ],...,[ 0.02343505],[ 0.6562452 ],[-0.67367655]]]], shape=(4, 1000, 100, 1), dtype=float32)
 
 
 phi
@@ -1093,7 +1094,7 @@ phi
 float32
 
 
-0.6022 0.408 ... 0.3659 0.1668
+0.4568 0.4767 ... 0.3879 0.4803
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1101,7 +1102,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.6021626 , 0.40800858, 0.4648949 , ..., 0.5031756 , 0.5679749 ,0.26459742],[0.576758  , 0.2835461 , 0.3803724 , ..., 0.37069368, 0.24272537,0.5902207 ],[0.4283185 , 0.67807937, 0.50356376, ..., 0.52087355, 0.23761964,0.11487448],[0.1969738 , 0.29357028, 0.2519021 , ..., 0.38436627, 0.3658948 ,0.16677523]], shape=(4, 1000), dtype=float32)
+    array([[0.4567728 , 0.47670066, 0.51302683, ..., 0.10357678, 0.17014897,0.00433981],[0.57210124, 0.29573107, 0.39360058, ..., 0.4446528 , 0.34498274,0.5362284 ],[0.5218499 , 0.6766372 , 0.51069117, ..., 0.4814092 , 0.25298727,0.13161123],[0.43577933, 0.19993246, 0.1839521 , ..., 0.35815632, 0.38791406,0.4802935 ]], shape=(4, 1000), dtype=float32)
 
 
 sigma
@@ -1113,7 +1114,7 @@ sigma
 float32
 
 
-0.4242 0.4562 ... 0.501 0.408
+0.4142 0.4574 ... 0.4904 0.4828
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1121,7 +1122,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.42417994, 0.4562234 , 0.39884937, ..., 0.4779843 , 0.44065925,0.40929258],[0.4311424 , 0.4428815 , 0.47394285, ..., 0.45420346, 0.42864746,0.42506742],[0.43986347, 0.41962373, 0.4243214 , ..., 0.46540776, 0.45097387,0.44440666],[0.42705545, 0.41944715, 0.41231525, ..., 0.4772875 , 0.500982  ,0.40796116]], shape=(4, 1000), dtype=float32)
+    array([[0.4142354 , 0.45741022, 0.40172112, ..., 0.49380147, 0.4533659 ,0.4367306 ],[0.43074155, 0.44144627, 0.47271657, ..., 0.41483814, 0.4257638 ,0.42999935],[0.38495427, 0.41515097, 0.4216983 , ..., 0.4743789 , 0.45152962,0.44353727],[0.4734685 , 0.43989536, 0.40955257, ..., 0.47857416, 0.49038443,0.48278224]], shape=(4, 1000), dtype=float32)
 
 
 theta
@@ -1133,7 +1134,7 @@ theta
 float32
 
 
-0.3627 0.5471 ... 0.5953 0.6119
+0.48 0.4315 ... 0.5847 0.5859
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1141,20 +1142,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[0.36270773, 0.5470649 , 0.37636673, ..., 0.44055176, 0.4442067 ,0.49163032],[0.29103065, 0.61470795, 0.5654199 , ..., 0.46207082, 0.6839458 ,0.2747228 ],[0.3634448 , 0.34727144, 0.35864997, ..., 0.43632984, 0.5381683 ,0.7571629 ],[0.5067898 , 0.5136883 , 0.70493054, ..., 0.6249902 , 0.59532595,0.61187446]], shape=(4, 1000), dtype=float32)
+    array([[0.47996593, 0.4315318 , 0.3439083 , ..., 0.86434555, 0.8265569 ,0.8268708 ],[0.3261099 , 0.5872469 , 0.5620252 , ..., 0.4215424 , 0.5748724 ,0.39306974],[0.19257104, 0.3917718 , 0.37049234, ..., 0.42659843, 0.57259035,0.7682388 ],[0.49893832, 0.66668785, 0.7498714 , ..., 0.5845989 , 0.58474326,0.5859157 ]], shape=(4, 1000), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.105676+00:00
+2026-09-29T20:17:47.491006+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1269,7 +1270,7 @@ obs
 float32
 
 
--1.017 0.3373 ... 0.3093 -0.6977
+-1.003 0.3323 ... 0.3549 -1.009
 
 
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWZpbGUtdGV4dDIiPjx1c2UgaHJlZj0iI2ljb24tZmlsZS10ZXh0MiIgLz48L3N2Zz4=" class="icon xr-icon-file-text2" />
@@ -1277,20 +1278,20 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-    array([[[[-1.0169957 ],[ 0.33730668],[-1.0464648 ],...,[-0.64169127],[ 0.50451714],[-0.92574334]],[[ 0.02451567],[ 0.31905827],[-0.15904397],...,[-1.1264307 ],[ 0.06864069],[-0.00616606]],[[-0.46010378],[ 0.7067954 ],[-1.003775  ],...,......,[-0.4517897 ],[ 0.7969543 ],[-0.6166142 ]],[[ 0.2246039 ],[ 0.82003504],[ 0.05850028],...,[ 0.87950796],[ 0.82522213],[-0.35609692]],[[ 0.07195892],[ 0.78940415],[ 0.03490523],...,[-0.33626258],[ 0.30929595],[-0.6976971 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
+    array([[[[-1.0031041 ],[ 0.3322701 ],[-1.1028668 ],...,[-0.6507934 ],[ 0.4792844 ],[-0.9832906 ]],[[ 0.00506026],[ 0.28248143],[-0.09190209],...,[-1.138548  ],[ 0.03248955],[ 0.08032363]],[[-0.46075058],[ 0.71746314],[-0.992411  ],...,......,[-0.4696207 ],[ 0.7578929 ],[-0.55913556]],[[ 0.2329957 ],[ 0.82385576],[ 0.06221492],...,[ 0.8683266 ],[ 0.8374654 ],[-0.3545928 ]],[[-0.17210582],[ 0.9897729 ],[-0.15143986],...,[-0.5039979 ],[ 0.35494542],[-1.0086445 ]]]], shape=(4, 1000, 100, 1), dtype=float32)
 
 
 Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.258163+00:00
+2026-09-29T20:17:47.770604+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1378,13 +1379,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.258431+00:00
+2026-09-29T20:17:47.780642+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1472,13 +1473,13 @@ Attributes: (5)
 
 
 created_at :  
-2026-08-27T12:28:19.258608+00:00
+2026-09-29T20:17:47.784479+00:00
 
 creation_library :  
 ArviZ
 
 creation_library_version :  
-1.2.0
+1.3.1
 
 creation_library_language :  
 Python
@@ -1520,10 +1521,10 @@ recovery
 
 |  | true_value | mean | sd | hdi94_lb | hdi94_ub | ess_bulk | ess_tail | r_hat | mcse_mean | mcse_sd |
 |----|----|----|----|----|----|----|----|----|----|----|
-| mu | 0.0 | -0.081 | 0.07 | -0.22 | 0.046 | 2796 | 2133 | 1.00 | 0.0013 | 0.00095 |
-| phi | 0.4 | 0.369 | 0.144 | 0.083 | 0.62 | 2016 | 2108 | 1.00 | 0.0033 | 0.0023 |
-| theta | 0.7 | 0.532 | 0.15 | 0.25 | 0.8 | 1994 | 1819 | 1.00 | 0.0033 | 0.0021 |
-| sigma | 0.5 | 0.436 | 0.0314 | 0.38 | 0.5 | 3077 | 2811 | 1.00 | 0.00057 | 0.00041 |
+| mu | 0.0 | -0.08 | 0.069 | -0.21 | 0.05 | 2576 | 2262 | 1.00 | 0.0014 | 0.0011 |
+| phi | 0.4 | 0.372 | 0.145 | 0.12 | 0.65 | 2042 | 2409 | 1.00 | 0.0032 | 0.0022 |
+| theta | 0.7 | 0.53 | 0.149 | 0.25 | 0.8 | 2153 | 2006 | 1.00 | 0.0032 | 0.0021 |
+| sigma | 0.5 | 0.436 | 0.032 | 0.38 | 0.5 | 3126 | 2411 | 1.00 | 0.00058 | 0.00056 |
 
 
 The sampler recovers the parameters well: every true value lies within about two posterior standard deviations of its posterior mean, the \hat{R} values are essentially 1, and the effective sample sizes are healthy. The point estimates for \theta and \sigma come in somewhat low, and this is a feature of the particular realization rather than of the model: the innovations drawn for this seed happen to have a sample standard deviation of 0.43 (against the population value 0.5; we printed the realized value right after generating the data), and the posterior mean of \sigma matches that realized scale almost exactly. The moving average coefficient is in turn the hardest parameter to pin down with T = 100 observations, because \phi and \theta can partially substitute for each other in an ARMA likelihood (a well-known feature), so its posterior is wide. The trace plots make the recovery visual: the dashed black lines mark the true values, and the chains mix well around them.
@@ -1689,9 +1690,9 @@ metrics = {
 rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
+    lambda: arma_1_1,
     data,  # full dataset, no train/test split
     covariates,  # the series itself, sliced per fold by backtest
-    lambda: arma_1_1,
     forecast_fn=forecast_fn,
     in_sample_fn=in_sample_fn,
     metrics=metrics,
@@ -1719,7 +1720,7 @@ print(f"mean out-of-sample 94% coverage: {np.mean(test_cov_94):.2f}  (nominal 0.
 
     folds: 5 (split points: [50, 60, 70, 80, 90])
     mean in-sample CRPS:     0.2399
-    mean out-of-sample CRPS: 0.2914
+    mean out-of-sample CRPS: 0.2915
     mean out-of-sample 50% coverage: 0.58  (nominal 0.50)
     mean out-of-sample 94% coverage: 1.00  (nominal 0.94)
 
@@ -1871,6 +1872,5 @@ ax.set(
 - Orduz, J. [*Notes on an ARMA(1,1) Model with NumPyro*](https://juanitorduz.github.io/arma_numpyro/). The blog post this notebook ports.
 - Hyndman, R. J., & Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/), 3rd edition. Chapter 9: ARIMA models.
 - NumPyro documentation: [Example: AR(2) process](https://num.pyro.ai/en/stable/examples/ar2.html).
-- Pyro forum: [Lax.scan to implement ARMA(1,1)](https://forum.pyro.ai/t/lax-scan-to-implement-arma-1-1/2518).
-- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for an error-feedback model.
-- The [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/examples/forecasting_univariate.html) in this documentation, which introduces [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
+- The [exponential smoothing example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html) in this documentation, which uses the same [ssoe](../../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for an error-feedback model.
+- The [univariate forecasting example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html) in this documentation, which introduces [backtest](../../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.

@@ -118,13 +118,22 @@ Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC
 Fit the same weekly BART ridership model with NUTS, SVI, Pathfinder, and MCLMC without touching the model code, and compare their forecasts with CRPS.
 
 
+<a href="../../docs/examples/m5_forecasting.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/m5_forecasting.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
+
+
+M5 forecasting: top-down, bottom-up and middle-out
+
+
+Port the three models of the Pyro M5 starter kit (top-down, bottom-up and middle-out) to the full M5 Walmart data, fit them with SVI, backtest them at the twelve hierarchy levels with a weighted scaled CRPS and compare their fitting times.
+
+
 <a href="../../docs/examples/promotion_pricing_decisions.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/promotion_pricing_decisions.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
 
 
-From forecasts to promotion decisions
+Promotion pricing decisions
 
 
-Fit a hierarchical negative binomial demand model with own and cross price elasticities to the dunnhumby Breakfast at the Frat cereal panel using NUTS, forecast counterfactual promotions by editing the horizon covariates, and turn the posterior into funding, mechanics, risk and order-quantity decisions.
+Fit a hierarchical negative binomial demand model with own and cross price elasticities to the dunnhumby Breakfast at the Frat cereal panel with NUTS, forecast counterfactual promotions by editing the horizon covariates, and turn the posterior into funding, mechanics, risk and order-quantity decisions.
 
 
 <a href="../../docs/examples/tsb.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/tsb.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>

@@ -191,7 +191,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     drift = innovations(
         h,
         "drift",
-        lambda: dist.Normal(0.0, drift_scale),
+        dist.Normal(0.0, drift_scale),
         reparam=LocScaleReparam(centered=centered),
     )
     level = jnp.cumsum(drift, axis=-2)
@@ -300,7 +300,11 @@ ax.set(title="ELBO loss", xlabel="SVI step", ylabel="loss");
 </figure>
 
 
-## Time-axis reparameterizationThe `drift` increments live under the `time` plate, and after the `LocScaleReparam` the site the guide actually sees is `drift_decentered`, a vector of `417` coordinates, one per training week. Their prior is independent, but their posterior is not: the level is the cumulative sum of the increments and the observations pin down the level, so the data constrain sums of neighboring increments far more tightly than any single one. Raising one increment and lowering the next moves the level at a single week and leaves every later week where it was, so the likelihood barely notices; raising both shifts the whole remaining path and every later observation pushes back. The posterior over the block is therefore a long thin ellipse: strong negative correlation between neighbors, tight along some directions and loose along others. A mean-field `AutoNormal` fits one independent Normal per coordinate, so it can only represent an axis-aligned ellipse and has to compromise between the tight and the loose directions.`time_reparam(univariate_model, "dct")` changes the coordinates rather than the model. The discrete cosine transform re-expresses the `417` increments as `417` coefficients of cosine waves of increasing frequency: the first coefficient is the average increment, the next few capture slow trends, and the last ones capture week-to-week wiggles. These waves are exactly the directions the data treat differently (low frequencies move the level and are tightly constrained, high frequencies mostly cancel out and are loose), so in the new coordinates the posterior ellipse is close to axis-aligned and a diagonal guide can cover it. The wrapped model samples an auxiliary site `drift_decentered_dct` and turns `drift_decentered` (and hence `drift`) into deterministic sites. The rotation is orthonormal, so the log density is identical and only the coordinates the mean-field guide has to cover change. We fit the wrapped model with the same guide class, optimizer, seed, and step budget and compare the two ELBO trajectories.
+## Time-axis reparameterization
+
+The `drift` increments live under the `time` plate, and after the `LocScaleReparam` the site the guide actually sees is `drift_decentered`, a vector of `417` coordinates, one per training week. Their prior is independent, but their posterior is not: the level is the cumulative sum of the increments and the observations pin down the level, so the data constrain sums of neighboring increments far more tightly than any single one. Raising one increment and lowering the next moves the level at a single week and leaves every later week where it was, so the likelihood barely notices; raising both shifts the whole remaining path and every later observation pushes back. The posterior over the block is therefore a long thin ellipse: strong negative correlation between neighbors, tight along some directions and loose along others. A mean-field `AutoNormal` fits one independent Normal per coordinate, so it can only represent an axis-aligned ellipse and has to compromise between the tight and the loose directions.
+
+`time_reparam(univariate_model, "dct")` changes the coordinates rather than the model. The discrete cosine transform re-expresses the `417` increments as `417` coefficients of cosine waves of increasing frequency: the first coefficient is the average increment, the next few capture slow trends, and the last ones capture week-to-week wiggles. These waves are exactly the directions the data treat differently (low frequencies move the level and are tightly constrained, high frequencies mostly cancel out and are loose), so in the new coordinates the posterior ellipse is close to axis-aligned and a diagonal guide can cover it. The wrapped model samples an auxiliary site `drift_decentered_dct` and turns `drift_decentered` (and hence `drift`) into deterministic sites. The rotation is orthonormal, so the log density is identical and only the coordinates the mean-field guide has to cover change. We fit the wrapped model with the same guide class, optimizer, seed, and step budget and compare the two ELBO trajectories.
 
 
     In [9]:
@@ -337,8 +341,8 @@ print(f"DCT fit wall time: {dct_fit_seconds:.1f} s")
 
 
     AutoNormal            mean of last 200 losses: -422.42
-    AutoNormal + DCT      mean of last 200 losses: -460.37
-    DCT fit wall time: 1.7 s
+    AutoNormal + DCT      mean of last 200 losses: -460.38
+    DCT fit wall time: 1.2 s
 
 
 <figure class="figure">
@@ -545,9 +549,9 @@ metrics = {
 rng_key, rng_subkey = random.split(rng_key)
 results = backtest(
     rng_subkey,
+    lambda: univariate_model,
     data,  # full dataset, no train/test split
     covariates,  # full covariates
-    lambda: univariate_model,
     forecast_fn=forecast_fn,
     in_sample_fn=in_sample_fn,
     metrics=metrics,
@@ -722,9 +726,9 @@ The run above expanded the training window fold by fold. Switching to a **rollin
 rng_key, rng_subkey = random.split(rng_key)
 rolling_results = backtest(
     rng_subkey,
+    lambda: univariate_model,
     data,
     covariates,
-    lambda: univariate_model,
     forecast_fn=forecast_fn,
     metrics=metrics,
     window_type="rolling",  # fixed-size training window instead of expanding
@@ -800,9 +804,9 @@ rng_key, rng_subkey = random.split(rng_key)
 start_seconds = perf_counter()
 vectorized_results = backtest_vectorized(
     rng_subkey,
+    lambda: univariate_model,
     data,
     covariates,
-    lambda: univariate_model,
     train_window=104,  # same rolling configuration as the loop run above
     test_window=52,
     stride=52,
@@ -832,7 +836,7 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 14.9s (incl. compile)  |  loop 22.3s
+    wall-clock: vectorized 2.0s (incl. compile)  |  loop 16.4s
     vectorized mean out-of-sample CRPS: 0.0444
     loop       mean out-of-sample CRPS: 0.0432
     vectorized mean 50% coverage: 0.47  (nominal 0.50)

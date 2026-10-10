@@ -154,12 +154,11 @@ def make_multi_series_model(period: int = 24 * 7) -> ForecastModel:
             drift = innovations(
                 h,
                 "drift",
-                lambda: dist.Normal(0.0, drift_scale),
+                dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=centered),
             )
             with numpyro.plate("hour_of_week", period, dim=-2):
-                # asarray narrows numpyro's union return type for the type checker.
-                seasonal = jnp.asarray(numpyro.sample("seasonal", dist.Normal(0.0, 5.0)))
+                seasonal = numpyro.sample("seasonal", dist.Normal(0.0, 5.0))
 
         level = jnp.cumsum(drift, axis=-2)
         prediction = level + periodic_repeat(seasonal, duration, axis=-2)
@@ -283,7 +282,7 @@ fig.tight_layout();
 ```
 
 
-    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_7688/757652965.py:78: UserWarning: The figure layout has changed to tight
+    /var/folders/cm/3dzy9rdd5s3672z0s1brjkvh0000gn/T/ipykernel_75801/757652965.py:78: UserWarning: The figure layout has changed to tight
       fig.tight_layout();
 
 
