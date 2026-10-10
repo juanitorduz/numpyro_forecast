@@ -120,7 +120,7 @@ def test_base_import_no_extras() -> None:
     """
     code = (
         "import sys; import numpyro_forecast; "
-        "leaked = [m for m in ('optax', 'blackjax') if m in sys.modules]; "
+        "leaked = [m for m in ('optax', 'blackjax', 'dynestyx') if m in sys.modules]; "
         "assert not leaked, leaked; print('OK')"
     )
     result = subprocess.run(  # noqa: S603 - fixed argv, no shell, trusted input

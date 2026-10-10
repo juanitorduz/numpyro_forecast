@@ -73,13 +73,16 @@ dev = [
 ]
 docs = [
     "great-docs==0.17.0",
-    "dynestyx>=0.6.0",
+    "numpyro_forecast[dynestyx]",
+]
+dynestyx = [
+    "dynestyx>=0.7.0",
 ]
 # jax-cuda12-plugin ships no darwin wheel; the marker keeps `uv workspace metadata`
 # (called by the ty pre-commit hook) working on macOS while `all_cuda` on Linux is unchanged.
 cuda = ["jax[cuda12]; sys_platform == 'linux'"]
-all = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs]"]
-all_cuda = ["numpyro_forecast[dataframes,optax,blackjax,dev,docs,cuda]"]
+all = ["numpyro_forecast[dataframes,optax,blackjax,dynestyx,dev,docs]"]
+all_cuda = ["numpyro_forecast[dataframes,optax,blackjax,dynestyx,dev,docs,cuda]"]
 
 [project.urls]
 Homepage = "https://juanitorduz.github.io"
