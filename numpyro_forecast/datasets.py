@@ -14,7 +14,6 @@ import importlib.resources
 import shutil
 import urllib.request
 import zipfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -162,8 +161,7 @@ def load_victoria_electricity() -> tuple[Float[Array, " time 1"], Float[Array, "
     return demand, temperature
 
 
-@dataclass(frozen=True)
-class BreakfastAtTheFrat:
+class BreakfastAtTheFrat(NamedTuple):
     """The three sheets of the dunnhumby *Breakfast at the Frat* workbook as polars frames.
 
     Column names and string values are lowercase (see `load_breakfast_at_the_frat()`).
