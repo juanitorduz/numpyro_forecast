@@ -9,10 +9,12 @@ import jax.numpy as jnp
 import numpyro_forecast
 from numpyro_forecast import (
     DEFAULT_METRICS,
+    Advance,
     BacktestResult,
     Horizon,
+    SSOEMean,
     SSOEResult,
-    SSOEStep,
+    SSOEUpdate,
     Transition,
     backtest,
     draw_posterior,
@@ -39,10 +41,12 @@ def test_public_api_is_importable() -> None:
     # The curated top-level surface re-exported in ``__init__``.
     assert DEFAULT_METRICS  # the metrics mapping, a dict (unhashable, kept out of the set below)
     exported = {
+        Advance,
         BacktestResult,
         Horizon,
+        SSOEMean,
         SSOEResult,
-        SSOEStep,
+        SSOEUpdate,
         Transition,
         backtest,
         draw_posterior,
@@ -65,6 +69,7 @@ def test_all_matches_exported_names() -> None:
     names = set(numpyro_forecast.__all__)
     assert names == {
         "DEFAULT_METRICS",
+        "Advance",
         "BacktestResult",
         "BacktestWindowError",
         "CovariateDimsError",
@@ -75,8 +80,9 @@ def test_all_matches_exported_names() -> None:
         "KernelConfigError",
         "MVNLayoutError",
         "NumpyroForecastError",
+        "SSOEMean",
         "SSOEResult",
-        "SSOEStep",
+        "SSOEUpdate",
         "Transition",
         "VectorizedBacktestResult",
         "VectorizedMetricError",

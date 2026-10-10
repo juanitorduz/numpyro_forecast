@@ -430,7 +430,7 @@ def _resolve_window_type(window_type: WindowType | None, train_window: int | Non
 
     Raises
     ------
-    ValueError
+    BacktestWindowError
         If ``window_type="rolling"`` but ``train_window`` is ``None``, or
         ``window_type="expanding"`` but ``train_window`` is set.
     """
@@ -438,10 +438,10 @@ def _resolve_window_type(window_type: WindowType | None, train_window: int | Non
         return "rolling" if train_window is not None else "expanding"
     if window_type == "rolling" and train_window is None:
         msg = "window_type='rolling' requires a fixed train_window"
-        raise ValueError(msg)
+        raise BacktestWindowError(msg)
     if window_type == "expanding" and train_window is not None:
         msg = "window_type='expanding' is incompatible with train_window (t0 is always 0)"
-        raise ValueError(msg)
+        raise BacktestWindowError(msg)
     return window_type
 
 
@@ -558,13 +558,13 @@ def _iter_windows(
 
     Raises
     ------
-    ValueError
+    BacktestWindowError
         If ``window_type="rolling"`` but ``train_window`` is ``None``.
     """
     if window_type == "rolling":
         if train_window is None:
             msg = "rolling windows require train_window"
-            raise ValueError(msg)
+            raise BacktestWindowError(msg)
         return _rolling_windows(
             duration,
             train_window=train_window,
@@ -696,9 +696,9 @@ def _run_window(
 
 def backtest(
     rng_key: Array,
+    model_fn: ModelFactory,
     data: Array,
     covariates: Array,
-    model_fn: ModelFactory,
     *,
     forecast_fn: ForecastFn,
     in_sample_fn: InSampleFn | None = None,
@@ -789,12 +789,12 @@ def backtest(
     ----------
     rng_key
         Base PRNG key (used for every window, matching Pyro).
+    model_fn
+        Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
     data
         Dataset with time at axis ``-2``.
     covariates
         Covariates with time at axis ``-2`` (same duration as ``data``).
-    model_fn
-        Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
     forecast_fn
         Closure that fits ``model`` on the training window and forecasts the
         test horizon (see `~~numpyro_forecast.typing.ForecastFn` and the
@@ -872,6 +872,9 @@ def backtest(
     ValueError
         If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
         but ``in_sample_fn`` is ``None``.
+    BacktestWindowError
+        If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
+        ``train_window``, or ``"expanding"`` with one).
     """
     if eval_train and in_sample_fn is None:
         msg = "eval_train=True requires in_sample_fn to be set"
@@ -1011,9 +1014,9 @@ def _window_key_streams(rng_key: Array, num_windows: int) -> tuple[Array, Array,
 
 def backtest_vectorized(
     rng_key: Array,
+    model_fn: ModelFactory,
     data: Array,
     covariates: Array,
-    model_fn: ModelFactory,
     *,
     train_window: int,
     test_window: int,
@@ -1042,14 +1045,14 @@ def backtest_vectorized(
     ----------
     rng_key
         Base PRNG key.
-    data
-        Dataset with time at axis ``-2``.
-    covariates
-        Covariates with time at axis ``-2`` (same duration as ``data``).
     model_fn
         Factory returning a fresh model; called exactly once (per-window model
         variation is unsupported here, use `backtest()`). Must return the
         same model object ``guide`` was built on (see ``guide`` below).
+    data
+        Dataset with time at axis ``-2``.
+    covariates
+        Covariates with time at axis ``-2`` (same duration as ``data``).
     train_window
         Fixed training-window length (``>= 1``).
     test_window

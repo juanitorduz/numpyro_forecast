@@ -234,6 +234,15 @@ uv.lock
 /docs/examples/*.qmd
 /docs/examples/_src/
 /docs/examples/thumbnails/
+# LaTeX build artifacts (e.g. a local paper/ draft)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+*.out
 .DS_Store
 
 # Local plan-execution scratch (never committed)

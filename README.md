@@ -1,31 +1,20 @@
-# NumPyro Forecast
+<h1 align='center'>NumPyro Forecast</h1>
 
 [![PyPI version](https://img.shields.io/pypi/v/numpyro_forecast.svg)](https://pypi.org/project/numpyro_forecast/) [![ci](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/ci.yml?query=branch%3Amain) [![docs](https://github.com/juanitorduz/numpyro_forecast/actions/workflows/docs.yml/badge.svg?branch=main)](https://juanitorduz.github.io/numpyro_forecast/) [![codecov](https://codecov.io/gh/juanitorduz/numpyro_forecast/branch/main/graph/badge.svg)](https://codecov.io/gh/juanitorduz/numpyro_forecast) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A JAX/NumPyro port of the ideas in Pyro's forecasting module.
+**Bayesian time series forecasting with plain NumPyro models.** `numpyro_forecast` is a functional, JAX-native port of the ideas in Pyro's [`pyro.contrib.forecast`](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast): you write the generative model as a NumPyro function `(covariates, data=None)` from a few building blocks, and the package handles the train/forecast split, prediction, backtesting and scoring. Inference is whatever NumPyro (`SVI`, `MCMC`) or BlackJAX you write, and the same code runs on CPU or GPU with one `numpyro.set_platform` call.
 
 📖 **Documentation:** <https://juanitorduz.github.io/numpyro_forecast/>
 
-This is a **conceptual** port of [`pyro.contrib.forecast`](https://github.com/pyro-ppl/pyro/tree/dev/pyro/contrib/forecast), not a line-by-line one. Pyro's module is class-based (`ForecastingModel`, `Forecaster`, `HMCForecaster`), while JAX and NumPyro follow the functional paradigm: pure functions, explicit `PRNGKey`s, no global parameter store. So `numpyro_forecast` keeps Pyro's ideas (the `_future`-site trick, horizon bookkeeping derived from shapes, prefix conditioning, backtesting) and expresses them as plain functions: a model is a function `(covariates, data=None)` built from model building blocks, and inference is whatever NumPyro (`SVI`, `MCMC`) or BlackJAX you write.
+📚 **Examples:** many worked notebooks, from univariate and hierarchical forecasting to intermittent demand, state space models and VAR: <https://juanitorduz.github.io/numpyro_forecast/docs/examples/>
 
-**Related project:** [PyMC-Forecast](https://github.com/pymc-labs/pymc-forecast) carries the same ideas (train/forecast plumbing, backtesting, evaluation) over to PyMC with a class-based API (`Forecaster`, `HMCForecaster`, `StatespaceForecaster`). It is in early development; pick it when your models live in PyMC.
+Arrays follow Pyro's layout: time at axis `-2`, the observation dimension at `-1`, batch dimensions to the left. Univariate, multivariate and hierarchical models all fit that layout. It is not an AutoML library: there is no model zoo, you define the model and the package gives you a clean path from model to forecasts and scores.
 
-## Scope
-
-You write the generative model as a plain NumPyro model function; the package handles the train/forecast plumbing, memory-bounded prediction, and evaluation. Inference is plain NumPyro.
-
-- **A single model both trains and forecasts.** In-sample time latents use a fixed site name (`drift`); the forecast horizon uses a separate `drift_future` site that the guide never sees, because fitting always happens at `future == 0`, so `Predictive` draws the suffix from the prior. The horizon itself is derived from shapes: `covariates` longer than `data`. The drivers (`forecast`, `predict_in_sample`, `to_datatree` and the `backtest` closures) read the `"forecast"` and `"obs"` sites by name, and nothing in the package matches on the `_future` suffix, which is why those two names must stay unscoped.
-- **Inference is yours.** `SVI` with any autoguide, `MCMC` with any kernel (including the BlackJAX kernels in `numpyro_forecast.contrib.blackjax`, which are plain `MCMCKernel`s you hand to `MCMC`), or Pathfinder via `fit_multipathfinder` plus `multipathfinder_samples`. Nothing in the package wraps `svi.run` or `mcmc.run`.
-- **Backtesting** over rolling and expanding windows, plus probabilistic and point metrics. Windows are embarrassingly parallel at the process level; the package ships no joblib or multiprocessing layer of its own.
-- **Univariate, multivariate and hierarchical** models.
-
-Arrays follow Pyro's layout: **time at axis `-2`**, the observation/event dimension at `-1`, and batch dimensions to the left.
-
-It is **not** an AutoML or "fit-any-series" library: there is no model zoo and no automatic feature pipeline. You define the NumPyro model; the package gives you a clean path from model to forecasts and scores.
+**Related project:** [PyMC-Forecast](https://github.com/pymc-labs/pymc-forecast) carries the same ideas over to PyMC with a class-based API. Pick it when your models live in PyMC.
 
 ## Installation
 
-Requires Python >= 3.12. Install from PyPI:
+Requires Python >= 3.12.
 
 ```bash
 uv add numpyro_forecast
@@ -33,21 +22,13 @@ uv add numpyro_forecast
 pip install numpyro_forecast
 ```
 
-To install the latest development version from source:
+Optional extras:
 
-```bash
-uv add "numpyro_forecast @ git+https://github.com/juanitorduz/numpyro_forecast"
-# or, with pip:
-pip install "numpyro_forecast @ git+https://github.com/juanitorduz/numpyro_forecast"
-```
-
-For a local checkout:
-
-```bash
-uv sync --extra all
-```
-
-The optional extras are `dataframes` (pandas and polars, so `results_to_dataframe` can flatten backtest results), `optax` (optax optimizers, wrapped for SVI with `numpyro.optim.optax_to_numpyro`) and `blackjax` (the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`). `all` (used above) pulls those three in along with the `dev` and `docs` tooling; `cuda` adds the CUDA jax plugin, and `all_cuda` is `all` plus `cuda`. The `docs` extra also installs [dynestyx](https://github.com/BasisResearch/dynestyx) (`>=0.5.1`) for the [state space example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html), which writes a `dynestyx` model as a `numpyro_forecast` model and chooses the inference strategy (Kalman smoother or explicit latent path) with a `dynestyx` handler; outside a checkout, `pip install "dynestyx>=0.5.1"` next to the package is all the example needs.
+- `dataframes`: pandas and polars, so `results_to_dataframe` can flatten backtest results.
+- `optax`: optax optimizers for SVI, wrapped with `numpyro.optim.optax_to_numpyro`.
+- `blackjax`: the BlackJAX kernels and Pathfinder in `numpyro_forecast.contrib.blackjax`.
+- `cuda`: the CUDA jax plugin (Linux only), see [Scaling to GPU](#scaling-to-gpu).
+- `all`: the three above plus the `dev` and `docs` tooling (`all_cuda` adds `cuda`). The `docs` extra also installs `dynestyx` for the [dynestyx state space model integration example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html); without it, that one notebook needs `pip install "dynestyx>=0.5.1"`.
 
 ## Quickstart
 
@@ -79,9 +60,7 @@ Define a model, fit it with SVI, and draw probabilistic forecasts:
 ...     sigma = numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0))
 ...     nu = numpyro.sample("nu", dist.Gamma(10.0, 2.0))
 ...     # In-sample innovations at "drift", the forecast suffix at "drift_future".
-...     drift = innovations(
-...         h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0)
-...     )
+...     drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0))
 ...     level = jnp.cumsum(drift, axis=-2)  # random-walk level
 ...     regression = (weight * covariates).sum(axis=-1, keepdims=True)
 ...     prediction = level + bias + regression
@@ -108,49 +87,33 @@ True
 
 ```
 
-`samples` holds the forecast draws over the held-out horizon, shaped `(sample, *batch, future, obs)`: one row per posterior draw, ready for `eval_crps` and the rest of the evaluation helpers.
+`samples` holds the forecast draws over the held-out horizon, shaped `(sample, *batch, future, obs)`: one row per posterior draw, ready for `eval_crps` and the rest of the evaluation helpers. The horizon is whatever `covariates` has beyond `data`.
 
 The examples on this page are executed by the test suite (`pytest --doctest-glob=README.md`), so they are always current.
 
 ## Model building blocks
 
-A model is a plain NumPyro function `(covariates, data=None)` whose first line derives its `Horizon` from the shapes. The building blocks below are ordinary Python functions that call `numpyro.sample` and `numpyro.deterministic` on your behalf against that horizon.
+A model is a plain NumPyro function `(covariates, data=None)` whose first line derives its `Horizon` from the shapes. The building blocks are ordinary functions that call `numpyro.sample` and `numpyro.deterministic` for you against that horizon:
 
-| Building block | What it replaces in raw NumPyro | Sites it registers |
-| --- | --- | --- |
-| `Horizon.from_data(covariates, data)` | Deriving the train/forecast split by hand and carrying `t_obs`, `future` and `duration` around | none |
-| `innovations(h, name, dist_fn)` | Two `numpyro.sample` calls under two time plates, plus the concatenation of prefix and suffix | `<name>`, `<name>_future` |
-| `markov_series(h, name, init_carry, transition)` | Two `numpyro.contrib.control_flow.scan` calls, the second seeded by the first's final carry | `<name>`, `<name>_future` |
-| `ssoe(h, name, y, init_carry, step, noise_dist)` | An in-sample error-feedback `lax.scan` filter, plus a generative forecast scan driven by iid future errors | `<name>_future` only |
-| `predict(h, obs_dist, prediction)` | Slicing the observation distribution along time, conditioning it on the observed prefix and sampling the suffix | `obs` while training; also `obs_future` and the `forecast` deterministic when `h.future > 0` |
+| Building block | What it does |
+| --- | --- |
+| `Horizon.from_data(covariates, data)` | Derives the train/forecast split (`t_obs`, `future`, `duration`) from the shapes |
+| `innovations(h, name, prior)` | Samples iid per-step innovations outside any loop; you build the series from them (a random walk is `jnp.cumsum(drift, axis=-2)`) |
+| `markov_series(h, name, init_carry, transition)` | Samples one step at a time inside `scan`, for per-step distributions that depend on the previous state |
+| `ssoe(h, name, y, init_carry, mean, update, noise_dist)` | Single-source-of-error recursion (ARMA, exponential smoothing, Croston, TSB): an iid error plate driving a deterministic filter |
+| `predict(h, obs_dist, prediction)` | Conditions the observation distribution on the training window (`obs`) and samples the horizon (`forecast`) |
 
-`ssoe` is the one block that does not close the loop for you: it registers only the error site, and the caller writes the likelihood against `r.mu` and registers `numpyro.deterministic("forecast", r.y_future)` when `h.future > 0`. In every block the observed data flows in through the `Horizon`, so `predict` has no `obs=` argument of its own.
+One model both trains and forecasts. In-sample latents live at `<name>` and the forecast horizon at a separate `<name>_future` site that the guide never sees, so `AutoNormal` never resizes and `Predictive` draws the suffix from the prior. A vector autoregression is an `ssoe` recursion with the mean/update pair from `numpyro_forecast.var` and the Minnesota prior moments from `numpyro_forecast.priors`; see the [VAR example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/var.html).
 
-A vector autoregression is an `ssoe` recursion with a lag-window carry and shocks correlated across series: `numpyro_forecast.var` supplies the step factory (`var_step`), the conditional mean, the companion matrix and `impulse_response`, and `numpyro_forecast.priors.minnesota_prior` the moments of the Minnesota shrinkage prior, decoupled from the recursion; see the [VAR example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/var.html).
+## Inference
 
-The three latent blocks differ in where the sampling happens. `innovations` samples conditionally iid per-step innovations outside any loop, and you build the series arithmetically from them (a random walk is `jnp.cumsum(drift, axis=-2)`). `ssoe` is an iid error plate plus a deterministic scan that consumes those errors, the single-source-of-error form behind ARMA, exponential smoothing and Croston/TSB. `markov_series` samples inside `numpyro.contrib.control_flow.scan`, one step at a time, which is what you need when the per-step distribution depends on the previous state.
+Nothing in the package wraps `svi.run` or `mcmc.run`. Fit the model with any of:
 
-Reuse a group of sites across channels with NumPyro's `handlers.scope`, with one caveat: `scope` prefixes every site inside it, `obs`, `obs_future` and `forecast` included, after which the drivers can no longer find `"forecast"` and `"obs"`. Scope the latent helpers and register the observation and forecast sites outside the scope, by calling `predict` there or, as the Croston and TSB examples do, by writing `obs` and `forecast` yourself. `scope` is the composition tool; it is not a replacement for the `_future` suffix, which is what keeps the guide's shape fixed.
+- **SVI** with any NumPyro autoguide (`AutoNormal`, `AutoMultivariateNormal`, ...) and any NumPyro or optax optimizer.
+- **MCMC** with any kernel: NumPyro's `NUTS`, or the BlackJAX kernels `BlackjaxNUTSKernel`, `BlackjaxMCLMCKernel` and `BlackjaxCustomKernel` from `numpyro_forecast.contrib.blackjax`, plain `MCMCKernel`s you hand to `MCMC`.
+- **Pathfinder** via `fit_multipathfinder` and `multipathfinder_samples`, also in `numpyro_forecast.contrib.blackjax`.
 
-Dimensions beyond `(time, obs)` stack leftward, and the two loop-shaped blocks take opposite approaches to plates. `innovations` is called inside the plates you open yourself: the [multi-series example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_1.html) wraps it in `plate("n_series", n_series, dim=-1)`, and the [hierarchical origin-destination example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_2.html) opens `origin` at `dim=-3` and `destin` at `dim=-1` and puts the call inside the latter. `markov_series` flips the idiom: it rejects an enclosing plate and takes `plates=[(name, size)]`, which it opens inside the scan body, the only placement NumPyro supports for scan plus plate.
-
-`time_reparam(model, "haar" | "dct")` is the port of the `time_reparam` option of Pyro's `Forecaster`: it wraps the model with `handlers.reparam` so every in-sample `innovations` site under the `time` plate is sampled in a Haar wavelet or discrete cosine basis (a new `<name>_haar` / `<name>_dct` site; `<name>` becomes deterministic). The rotation has unit Jacobian, so the model is unchanged and only the geometry the guide or sampler sees changes; on a random-walk level a mean-field `AutoNormal` reaches a markedly better ELBO in fewer steps, while for NUTS the gain is model dependent. Create the wrapped model once and hand that same object to the guide, `SVI`/`MCMC`, `forecast`, `predict_in_sample` and `to_datatree`; see the [univariate example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html) for the ELBO comparison.
-
-## Producing draws and scoring
-
-`draw_posterior(rng_key, guide, params, num_samples)` draws posterior samples of the latent sites from a fitted variational guide and its learned parameters. It is guide-only on purpose: MCMC users already hold their draws through `mcmc.get_samples()`, and the BlackJAX Pathfinder backend has its own analogous entry points, `pathfinder_samples` and `multipathfinder_samples`.
-
-`forecast(rng_key, model, posterior, data, covariates)` runs `Predictive` over the full horizon and returns the `"forecast"` site, shaped `(sample, *batch, future, obs)`. The horizon is whatever `covariates` has beyond `data`.
-
-`predict_in_sample(rng_key, model, posterior, covariates)` samples the in-sample posterior predictive of the `"obs"` site. It calls the model with `data=None`, so anything the model needs at prediction time has to travel through `covariates`.
-
-`to_datatree(rng_key, model, posterior, data, covariates)` converts an already-drawn posterior into an ArviZ-schema `xarray.DataTree`: posterior, in-sample posterior predictive, observed data and covariates in one object, plus the forecast groups when `covariates` extends past `data`. It is posterior-first and never draws a posterior of its own.
-
-`backtest(rng_key, data, covariates, model_fn, *, forecast_fn)` runs the moving-window loop and scores every window. Fitting and forecasting are delegated to closures you write, so `backtest` itself has no dependency on how a model is fit; `backtest_vectorized` is the estimator-equivalent shortcut that fits every rolling window in one vmapped SVI run.
-
-On an accelerator, the draws are usually the largest allocation of the workflow, so every driver that materializes them takes `batch_size` (chunk the sample axis) and `device` (move each chunk off the accelerator as it is drawn, `device="host"` being the useful setting). This is spelled `batch_size`/`device` on `draw_posterior`, `forecast`, `predict_in_sample` and the Pathfinder samplers, `predictive_batch_size`/`predictive_device` on `to_datatree`, and `batch_size` on `backtest`, which forwards it to your closures. The [stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) walks through a panel where this matters.
-
-The same model, fitted with NUTS instead of SVI:
+Every driver (`forecast`, `predict_in_sample`, `to_datatree`, `backtest`) takes a plain dict of posterior draws, so `mcmc.get_samples()`, `draw_posterior` for a variational guide and the Pathfinder samplers are interchangeable. The [inference methods comparison](https://juanitorduz.github.io/numpyro_forecast/docs/examples/inference_methods_comparison.html) fits one model with NUTS, SVI, Pathfinder and MCLMC and scores their forecasts side by side. The quickstart model, fitted with NUTS instead of SVI:
 
 ```python
 >>> from numpyro.infer import MCMC, NUTS
@@ -165,6 +128,41 @@ The same model, fitted with NUTS instead of SVI:
 
 ```
 
+### Time-axis reparameterization
+
+`time_reparam(model, "haar" | "dct")` is the port of the `time_reparam` option of Pyro's `Forecaster`. It wraps the model with `handlers.reparam` so every in-sample `innovations` site is sampled in a Haar wavelet or discrete cosine basis. The rotation has unit Jacobian, so the model and its posterior are unchanged; only the geometry the guide or sampler sees changes, from strongly correlated increments to nearly independent coefficients. Create the wrapped model once and hand that same object to the guide, to `SVI` or `MCMC` and to the drivers. On the random-walk level of the [univariate example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html), a mean-field `AutoNormal` reaches a lower ELBO loss in the DCT coordinates:
+
+![ELBO loss of AutoNormal with and without the DCT time_reparam](https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/svi_elbo_time_reparam.png)
+
+## Backtesting and evaluation
+
+`backtest(rng_key, model_fn, data, covariates, forecast_fn=...)` runs the rolling or expanding window loop and scores every window. Fitting and forecasting are closures you write, so `backtest` does not depend on how a model is fit; `backtest_vectorized` fits every rolling window in one vmapped SVI run. The metrics are `eval_crps`, `eval_mae`, `eval_rmse` and `eval_coverage`, plus `crps_empirical`, `eval_pinball`, `eval_interval_score` and `make_mase` in `numpyro_forecast.metrics`; `evaluate_forecast` bundles them. `to_datatree` exports a posterior with its in-sample predictive, forecasts and observed data as an ArviZ-schema `xarray.DataTree` for diagnostics and plotting.
+
+![Rolling-origin backtest forecasts on weekly BART ridership](https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/backtest_univariate.png)
+
+Rolling-origin backtest from the [univariate example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html): every window refits the model and forecasts the next block, shown with its $50\%$ and $94\%$ HDI bands.
+
+## Scaling to GPU
+
+Everything is plain JAX. Install the `cuda` extra and select the platform before fitting; the model, the inference code and the drivers do not change:
+
+```python
+import numpyro
+
+numpyro.set_platform("cuda")
+```
+
+On an accelerator the posterior draws are usually the largest allocation, so `draw_posterior`, `forecast`, `predict_in_sample` and `to_datatree` take `batch_size` to chunk the sample axis and `device="host"` to move each chunk off the accelerator as it is drawn (`to_datatree` defaults to `"host"`; `backtest` forwards `batch_size` to your closures). The [stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) fits a 1,000-series retail panel with SVI and a custom optax optimizer; the [same model on the full 50,000-series dataset](https://juanitorduz.github.io/fresh_retail_stockout/) runs end to end in about 10 minutes on a GPU.
+
+## Examples
+
+All notebooks are on the [examples page](https://juanitorduz.github.io/numpyro_forecast/docs/examples/):
+
+- **Univariate and inference:** [univariate forecasting](https://juanitorduz.github.io/numpyro_forecast/docs/examples/forecasting_univariate.html), [comparing inference methods](https://juanitorduz.github.io/numpyro_forecast/docs/examples/inference_methods_comparison.html) (NUTS, SVI, Pathfinder, MCLMC).
+- **Hierarchical and panel:** [hierarchical forecasting I](https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_1.html) and [II](https://juanitorduz.github.io/numpyro_forecast/docs/examples/hierarchical_forecasting_2.html), [electricity demand](https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast.html) with an HSGP temperature effect and its [prior calibration](https://juanitorduz.github.io/numpyro_forecast/docs/examples/electricity_forecast_calibration.html), [retail demand under stockouts](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html), [M5 top-down, bottom-up and middle-out](https://juanitorduz.github.io/numpyro_forecast/docs/examples/m5_forecasting.html) (the Pyro M5 starter kit on the full competition data).
+- **Intermittent demand:** [Croston](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html), [TSB](https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html), [TSB with availability constraints](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html), [censored demand](https://juanitorduz.github.io/numpyro_forecast/docs/examples/censored_demand.html).
+- **State space and multivariate:** [exponential smoothing](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html), [ARMA](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html), [VAR](https://juanitorduz.github.io/numpyro_forecast/docs/examples/var.html), [state space models with dynestyx](https://juanitorduz.github.io/numpyro_forecast/docs/examples/dynestyx_integration.html).
+
 ## Development
 
 This project uses [uv](https://docs.astral.sh/uv/) for environment management, [ruff](https://docs.astral.sh/ruff/) for linting/formatting, [ty](https://github.com/astral-sh/ty) for type checking, and [prek](https://github.com/j178/prek) to run the pre-commit hooks.
@@ -176,7 +174,7 @@ prek run --all-files       # lint + format + type check
 uv run pytest              # run the tests (README examples included)
 ```
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow and guidelines.
+To use the development version without a checkout, `uv add "numpyro_forecast @ git+https://github.com/juanitorduz/numpyro_forecast"` (or the same spec with `pip install`). See [`CONTRIBUTING.md`](https://github.com/juanitorduz/numpyro_forecast/blob/main/CONTRIBUTING.md) for the full workflow and guidelines.
 
 ## License
 

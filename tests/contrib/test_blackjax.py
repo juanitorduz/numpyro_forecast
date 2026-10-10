@@ -60,9 +60,7 @@ def reparam_model(covariates: Array, data: Array | None = None) -> None:
     h = Horizon.from_data(covariates, data)
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = innovations(
-        h, "drift", lambda: dist.Normal(0.0, drift_scale), reparam=LocScaleReparam()
-    )
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam())
     level = jnp.cumsum(drift, axis=-2)
     predict(h, dist.Normal(0.0, sigma), level)
 
@@ -954,10 +952,10 @@ def test_multipathfinder_samples_all_paths_failed_falls_back_to_uniform(
     assert bool(jnp.all(post["sigma"] > 0.0))
 
 
-def test_fit_multipathfinder_uses_supplied_initial_positions(
+def test_fit_multipathfinder_uses_supplied_init_params(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Valid ``initial_positions`` seed the paths as given, skipping the per-path init loop.
+    """Valid ``init_params`` seed the paths as given, skipping the per-path init loop.
 
     The stacked unconstrained positions must reach ``multi_approximate``
     unchanged (a spy captures its ``position`` argument), and the fit still
@@ -993,7 +991,7 @@ def test_fit_multipathfinder_uses_supplied_initial_positions(
             num_paths=2,
             num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
             maxiter=_MULTIPATH_MAXITER,
-            initial_positions=stacked,
+            init_params=stacked,
         )
 
     assert len(captured) == 1
@@ -1003,8 +1001,8 @@ def test_fit_multipathfinder_uses_supplied_initial_positions(
     assert len(fit.elbos) == 2
 
 
-def test_fit_multipathfinder_empty_initial_positions_raises() -> None:
-    """An empty ``initial_positions`` pytree has no leading axis to check and is rejected."""
+def test_fit_multipathfinder_empty_init_params_raises() -> None:
+    """An empty ``init_params`` pytree has no leading axis to check and is rejected."""
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
     with pytest.raises(ValueError, match="leading axis of size num_paths=2"):
         fit_multipathfinder(
@@ -1013,7 +1011,7 @@ def test_fit_multipathfinder_empty_initial_positions_raises() -> None:
             data,
             _empty_covariates(_MULTIPATH_T),
             num_paths=2,
-            initial_positions={},
+            init_params={},
         )
 
 
@@ -1030,7 +1028,7 @@ def test_fit_multipathfinder_invalid_num_paths_raises() -> None:
 
 
 def test_fit_multipathfinder_zero_dim_initial_position_raises() -> None:
-    """A scalar (0-d) leaf in ``initial_positions`` raises the documented ``ValueError``.
+    """A scalar (0-d) leaf in ``init_params`` raises the documented ``ValueError``.
 
     Before the ``jnp.ndim`` guard, ``leaf.shape[0]`` on a 0-d leaf raised a bare
     ``IndexError`` instead of the documented "leading axis of size num_paths"
@@ -1044,7 +1042,7 @@ def test_fit_multipathfinder_zero_dim_initial_position_raises() -> None:
             data,
             _empty_covariates(_MULTIPATH_T),
             num_paths=2,
-            initial_positions={"sigma": jnp.asarray(1.0)},
+            init_params={"sigma": jnp.asarray(1.0)},
         )
 
 
@@ -1127,9 +1125,9 @@ def test_backtest_accepts_a_forecast_fn_closure() -> None:
 
     results = backtest(
         random.PRNGKey(1),
+        rw_model_factory,
         data,
         covariates,
-        rw_model_factory,
         forecast_fn=forecast_fn,
         test_window=4,
         min_train_window=12,

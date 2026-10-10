@@ -92,7 +92,7 @@ def test_plate_axes_from_time_rightward_join_the_auxiliary_event(
 
     def body(h: Horizon, covariates: Array) -> None:
         with numpyro.plate("group", n, dim=plate_dim):
-            drift = innovations(h, "drift", lambda: dist.Normal(0.0, 1.0))
+            drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
         predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
 
     model = time_reparam(as_model(body), "dct")
@@ -127,7 +127,7 @@ def test_discrete_site_under_time_plate_is_skipped() -> None:
     def body(h: Horizon, covariates: Array) -> None:
         with numpyro.plate("time", h.t_obs, dim=-2):
             numpyro.sample("regime", dist.Bernoulli(0.3), infer={"enumerate": "parallel"})
-        drift = innovations(h, "drift", lambda: dist.Normal(0.0, 1.0))
+        drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
         predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
 
     model, data, covariates = _split(time_reparam(as_model(body), "haar"))
@@ -142,10 +142,8 @@ def test_markov_series_sites_are_outside_the_time_plate() -> None:
     """Scan sites carry no ``time`` plate, so the reparam is a no-op on them (documented boundary)."""
 
     def body(h: Horizon, covariates: Array) -> None:
-        def transition(
-            carry: Array, _: object
-        ) -> tuple[dist.Distribution, Callable[[Array], Array]]:
-            return dist.Normal(carry, 1.0).to_event(1), lambda z: z
+        def transition(carry: Array, _: object) -> dist.Distribution:
+            return dist.Normal(carry, 1.0).to_event(1)
 
         level = markov_series(h, "level", jnp.zeros((1,)), transition)
         predict(h, dist.Normal(0.0, 1.0), level)

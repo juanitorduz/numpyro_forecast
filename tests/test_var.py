@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from functools import partial
-from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -76,10 +75,11 @@ def test_var_mean_rejects_mismatched_lag_count() -> None:
 
 def test_var_step_mean_and_window_shift() -> None:
     phi, lags, c = _phi(), _lags(), jnp.array([0.1, 0.2])
-    mu, carry_fn = var_step(phi, c)(lags, None)
+    mean, update = var_step(phi, c)
+    mu = mean(lags, None)
     assert jnp.allclose(mu, var_mean(phi, lags, c))
     y_t = jnp.array([1.0, 2.0])
-    new = carry_fn(y_t, y_t - mu)
+    new = update(lags, y_t, y_t - mu, None)
     assert new.shape == lags.shape
     assert new.dtype == lags.dtype
     assert jnp.array_equal(new[:-1], lags[1:])
@@ -88,28 +88,25 @@ def test_var_step_mean_and_window_shift() -> None:
 
 def test_var_step_ignores_exogenous_input() -> None:
     phi, lags = _phi(), _lags()
-    step = var_step(phi)
-    mu_none, _ = step(lags, None)
-    mu_x, _ = step(lags, jnp.ones((4,)))
-    assert jnp.array_equal(mu_none, mu_x)
+    mean, _ = var_step(phi)
+    assert jnp.array_equal(mean(lags, None), mean(lags, jnp.ones((4,))))
 
 
 def test_var_step_varx_by_wrapping() -> None:
     phi, lags, beta = _phi(), _lags(), jnp.array([[1.0, 0.0], [0.0, 2.0]])
-    base = var_step(phi)
+    mean, _ = var_step(phi)
 
-    def step(carry: Array, x_t: Array) -> tuple[Array, Any]:
-        mu, carry_fn = base(carry, x_t)
-        return mu + beta @ x_t, carry_fn
+    def mean_x(carry: Array, x_t: Array) -> Array:
+        return mean(carry, x_t) + beta @ x_t
 
     x_t = jnp.array([0.5, -1.0])
-    mu, _ = step(lags, x_t)
-    assert jnp.allclose(mu, var_mean(phi, lags) + beta @ x_t)
+    assert jnp.allclose(mean_x(lags, x_t), var_mean(phi, lags) + beta @ x_t)
 
 
 def test_var_step_rejects_wrong_lag_count_with_guidance() -> None:
+    mean, _ = var_step(_phi())
     with pytest.raises(ValueError, match=r"lags=2.*init_carry=y\[\.\.\., :2, :\]"):
-        var_step(_phi())(jnp.zeros((P + 1, K)), None)
+        mean(jnp.zeros((P + 1, K)), None)
 
 
 def _var_series(t: int, phi: Array, c: Array, scale_tril: Array, key: int = 3) -> Array:
@@ -139,7 +136,8 @@ def _make_var_model(y_init: Array) -> tuple[ForecastModel, list[SSOEResult]]:
             numpyro.sample("phi", dist.Normal(0.0, 0.5).expand([P, K, K]).to_event(3))
         )
         noise = dist.MultivariateNormal(jnp.zeros(K), scale_tril=scale_tril)
-        r = ssoe(h, "eps", y, y_init, var_step(phi, intercept), noise)
+        mean, update = var_step(phi, intercept)
+        r = ssoe(h, "eps", y, y_init, mean, update, noise)
         box[:] = [r]
         numpyro.deterministic("mu_t", r.mu)
         numpyro.sample("obs", dist.MultivariateNormal(r.mu, scale_tril=scale_tril), obs=h.data)

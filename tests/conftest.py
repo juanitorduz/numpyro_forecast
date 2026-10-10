@@ -209,7 +209,7 @@ def rw_body(h: Horizon, covariates: Array) -> None:
     """Random-walk model body using the model building blocks (shared test helper)."""
     drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
-    drift = innovations(h, "drift", lambda: dist.Normal(0.0, drift_scale))
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale))
     predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
 
 
@@ -250,10 +250,6 @@ def as_model(body: Callable[[Horizon, Array], None]) -> ForecastModel:
     return model
 
 
-CarryFn = Callable[[Array, Array], Any]
-"""The ``carry_fn(y_t, eps_t)`` callable an ``ssoe`` step returns (test alias)."""
-
-
 def get_trace(
     model: ForecastModel,
     covariates: Array,
@@ -273,9 +269,14 @@ def plate_frames(site: dict[str, Any]) -> list[tuple[str, int, int]]:
     return [(f.name, f.dim, f.size) for f in site["cond_indep_stack"]]
 
 
-def identity_step(carry: Array, _: object) -> tuple[Array, CarryFn]:
-    """An ``ssoe`` step whose mean is the carry and whose carry never changes."""
-    return carry, lambda y_t, eps_t: carry
+def identity_mean(carry: Array, _: object) -> Array:
+    """An ``ssoe`` mean that emits the carry unchanged."""
+    return carry
+
+
+def keep_carry(carry: Array, y_t: Array, eps_t: Array, _: object) -> Array:
+    """An ``ssoe`` update that never changes the carry."""
+    return carry
 
 
 def run_horizon_body(

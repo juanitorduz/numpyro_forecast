@@ -6,9 +6,6 @@ mirror the example notebooks under ``docs/examples/`` and act as a regression
 target for the full fit-draw-forecast path.
 """
 
-from collections.abc import Callable
-from typing import cast
-
 import jax
 import jax.numpy as jnp
 import numpyro
@@ -51,7 +48,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
     drift = innovations(
         h,
         "drift",
-        lambda: dist.Normal(0.0, drift_scale),
+        dist.Normal(0.0, drift_scale),
         reparam=LocScaleReparam(centered=centered),
     )
     # Cumulative sum over time is the random-walk level (= the tutorials' scan).
@@ -110,7 +107,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             drift = innovations(
                 h,
                 "drift",
-                lambda: dist.Normal(0.0, drift_scale),
+                dist.Normal(0.0, drift_scale),
                 reparam=LocScaleReparam(centered=destin_centered),
             )
         level = jnp.cumsum(drift, axis=-2)
@@ -124,7 +121,7 @@ def make_hierarchical_model(period: int = 24 * 7) -> ForecastModel:
             destin_scale = numpyro.sample("destin_scale", dist.LogNormal(-5.0, 5.0))
         scale = origin_scale + destin_scale
 
-        seasonal = cast("Array", origin_seasonal + destin_seasonal)
+        seasonal = jnp.asarray(origin_seasonal + destin_seasonal)
         seasonal_repeat = periodic_repeat(seasonal, duration, axis=-2)
         prediction = level + seasonal_repeat + pairwise
 
@@ -164,16 +161,22 @@ def _level_channel(h: Horizon, name: str, values: Array, gate: Array) -> tuple[S
     init = jnp.asarray(numpyro.sample("init", dist.Normal(0.0, 1.0)))
     noise = jnp.asarray(numpyro.sample("noise", dist.HalfNormal(1.0)))
 
-    def step(level: Array, gate_t: Array | None) -> tuple[Array, Callable[[Array, Array], Array]]:
+    def mean(level: Array, _: Array | None) -> Array:
+        return level
+
+    def update(level: Array, y_t: Array, _: Array, gate_t: Array | None) -> Array:
         assert gate_t is not None  # xs is always passed here
-
-        def carry_fn(y_t: Array, _: Array) -> Array:
-            return jnp.where(gate_t, smoothing * y_t + (1.0 - smoothing) * level, level)
-
-        return level, carry_fn
+        return jnp.where(gate_t, smoothing * y_t + (1.0 - smoothing) * level, level)
 
     result = ssoe(
-        h, name, values, init[None], step, dist.Normal(0.0, noise), xs=pad_future(gate, h.future)
+        h,
+        name,
+        values,
+        init[None],
+        mean,
+        update,
+        dist.Normal(0.0, noise),
+        xs=pad_future(gate, h.future),
     )
     return result, noise
 

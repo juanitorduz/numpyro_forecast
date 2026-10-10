@@ -20,13 +20,11 @@ series seed the recursion without any reversal. Batch axes broadcast: a shared
 windows, or posterior draws ``(S, lags, obs, obs)`` against a single window.
 """
 
-from collections.abc import Callable
-
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float, PyTree
 
-from numpyro_forecast.models import SSOEStep
+from numpyro_forecast.models import SSOEMean, SSOEUpdate
 from numpyro_forecast.typing import Array
 
 
@@ -63,16 +61,19 @@ def var_mean(
     Examples
     --------
     A latent VAR under `~~numpyro_forecast.models.markov_series()`: the transition
-    returns the next-row distribution and the window update, with ``phi`` and the
-    Cholesky factor ``scale_tril`` sampled outside:
+    returns the next-row distribution and ``advance`` shifts the lag window, with
+    ``phi`` and the Cholesky factor ``scale_tril`` sampled outside:
 
     ```python
-    def transition(carry, _):
-        dist_t = dist.MultivariateNormal(var_mean(phi, carry), scale_tril=scale_tril)
-        return dist_t, lambda z: jnp.concatenate([carry[..., 1:, :], z[..., None, :]], axis=-2)
+    def transition(window, _):
+        return dist.MultivariateNormal(var_mean(phi, window), scale_tril=scale_tril)
 
 
-    z = markov_series(h, "z", init_carry=jnp.zeros((n_lags, n_obs)), transition=transition)
+    def advance(window, z_t, _):
+        return jnp.concatenate([window[..., 1:, :], z_t[..., None, :]], axis=-2)
+
+
+    z = markov_series(h, "z", jnp.zeros((n_lags, n_obs)), transition, advance=advance)
     ```
     """
     mu = jnp.einsum("...lij,...lj->...i", phi, lags[..., ::-1, :])
@@ -82,24 +83,25 @@ def var_mean(
 def var_step(
     phi: Float[Array, " *#batch lags obs obs"],
     intercept: Float[Array, " *#batch obs"] | None = None,
-) -> SSOEStep[Float[Array, " *batch lags obs"]]:
-    r"""Build the `~~numpyro_forecast.models.ssoe()` step of a VAR from its coefficients.
+) -> tuple[
+    SSOEMean[Float[Array, " *batch lags obs"]], SSOEUpdate[Float[Array, " *batch lags obs"]]
+]:
+    r"""Build the `~~numpyro_forecast.models.ssoe()` mean and update of a VAR.
 
-    The carry is the lag window ``(*batch, lags, obs)``. Each step emits
+    The carry is the lag window ``(*batch, lags, obs)``. ``mean`` emits
     `var_mean()` of the window as the one-step-ahead mean and, given the row's
-    value, drops the oldest row and appends the new one. The step ignores its
-    exogenous input ``x_t``; add regressors by wrapping it (a VARX):
+    value, ``update`` drops the oldest row and appends the new one. Both ignore
+    their exogenous input ``x_t``; add regressors by wrapping ``mean`` (a VARX):
 
     ```python
-    base = var_step(phi, intercept)
+    mean, update = var_step(phi, intercept)
 
 
-    def step(carry, x_t):
-        mu, carry_fn = base(carry, x_t)
-        return mu + beta @ x_t, carry_fn
+    def mean_x(carry, x_t):
+        return mean(carry, x_t) + beta @ x_t
     ```
 
-    The step knows nothing about priors: ``phi`` and ``intercept`` are whatever
+    The pair knows nothing about priors: ``phi`` and ``intercept`` are whatever
     the model sampled (a weakly informative ``Normal``, the moments of
     `~~numpyro_forecast.priors.minnesota_prior()`, a hierarchical prior, ...), so
     changing the prior never touches the recursion.
@@ -113,8 +115,11 @@ def var_step(
 
     Returns
     -------
-    SSOEStep[Float[Array, "*batch lags obs"]]
-        A ``(carry, x_t) -> (mu_t, carry_fn)`` callable for `~~numpyro_forecast.models.ssoe()`.
+    tuple[SSOEMean[Float[Array, "*batch lags obs"]], SSOEUpdate[Float[Array, "*batch lags obs"]]]
+        A ``(mean, update)`` pair for `~~numpyro_forecast.models.ssoe()`:
+        ``mean(carry, x_t)`` is `var_mean()` of the window and
+        ``update(carry, y_t, eps_t, x_t)`` drops the oldest row and appends
+        ``y_t``.
 
     Raises
     ------
@@ -143,7 +148,8 @@ def var_step(
         )
         scale_tril = sigma[..., :, None] * l_omega
         noise = dist.MultivariateNormal(jnp.zeros(k), scale_tril=scale_tril)
-        r = ssoe(h, "eps", y, y_init, var_step(phi, intercept), noise)
+        mean, update = var_step(phi, intercept)
+        r = ssoe(h, "eps", y, y_init, mean, update, noise)
         numpyro.sample("obs", dist.MultivariateNormal(r.mu, scale_tril=scale_tril), obs=h.data)
         if h.future > 0:
             numpyro.deterministic("forecast", r.y_future)
@@ -156,11 +162,9 @@ def var_step(
     """
     n_lags, n_obs = phi.shape[-3], phi.shape[-1]
 
-    def step(
+    def mean(
         carry: Float[Array, " *batch lags obs"], x_t: PyTree[Array] | None
-    ) -> tuple[
-        Float[Array, " *batch obs"], Callable[[Array, Array], Float[Array, " *batch lags obs"]]
-    ]:
+    ) -> Float[Array, " *batch obs"]:
         if carry.shape[-2] != n_lags:
             msg = (
                 f"var_step expects a carry of shape (*batch, lags={n_lags}, obs={n_obs}) holding "
@@ -168,15 +172,17 @@ def var_step(
                 f"init_carry=y[..., :{n_lags}, :] and drive it with y[..., {n_lags}:, :]."
             )
             raise ValueError(msg)
+        return var_mean(phi, carry, intercept)
 
-        def carry_fn(
-            y_t: Float[Array, " *batch obs"], eps_t: Float[Array, " *batch obs"]
-        ) -> Float[Array, " *batch lags obs"]:
-            return jnp.concatenate([carry[..., 1:, :], y_t[..., None, :]], axis=-2)
+    def update(
+        carry: Float[Array, " *batch lags obs"],
+        y_t: Float[Array, " *batch obs"],
+        eps_t: Float[Array, " *batch obs"],
+        x_t: PyTree[Array] | None,
+    ) -> Float[Array, " *batch lags obs"]:
+        return jnp.concatenate([carry[..., 1:, :], y_t[..., None, :]], axis=-2)
 
-        return var_mean(phi, carry, intercept), carry_fn
-
-    return step
+    return mean, update
 
 
 def companion_matrix(

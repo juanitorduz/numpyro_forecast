@@ -50,9 +50,9 @@ def test_window_indices_match_loop_backtest() -> None:
     stride = 3
     loop = backtest(
         random.PRNGKey(0),
+        lambda: rw_model,
         data,
         cov,
-        lambda: rw_model,
         forecast_fn=svi_forecast_fn(num_steps=50),
         train_window=TRAIN,
         test_window=TEST,
@@ -62,9 +62,9 @@ def test_window_indices_match_loop_backtest() -> None:
     model = rw_model
     vec = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),
@@ -83,9 +83,9 @@ def test_metrics_statistically_close_to_loop() -> None:
     data, cov = _series(duration)
     loop = backtest(
         random.PRNGKey(3),
+        lambda: rw_model,
         data,
         cov,
-        lambda: rw_model,
         forecast_fn=svi_forecast_fn(num_steps=800),
         train_window=TRAIN,
         test_window=TEST,
@@ -95,9 +95,9 @@ def test_metrics_statistically_close_to_loop() -> None:
     model = rw_model
     vec = backtest_vectorized(
         random.PRNGKey(3),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),
@@ -130,9 +130,9 @@ def test_window_size_validators(
     with pytest.raises(BacktestWindowError, match=message):
         backtest_vectorized(
             random.PRNGKey(0),
+            lambda: model,
             data,
             cov,
-            lambda: model,
             train_window=train_window,
             test_window=test_window,
             guide=AutoNormal(model),
@@ -171,9 +171,9 @@ def test_handwritten_guide_runs_and_matches_autoguide_shapes() -> None:
     data, cov = _series(50)
     hand = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: rw_model,
         data,
         cov,
-        lambda: rw_model,
         train_window=TRAIN,
         test_window=TEST,
         guide=_rw_mean_field_guide,
@@ -184,9 +184,9 @@ def test_handwritten_guide_runs_and_matches_autoguide_shapes() -> None:
     )
     auto = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: rw_model,
         data,
         cov,
-        lambda: rw_model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(rw_model),
@@ -215,9 +215,9 @@ def test_duration_too_short_rejected() -> None:
     with pytest.raises(BacktestWindowError, match="no window fits"):
         backtest_vectorized(
             random.PRNGKey(0),
+            lambda: model,
             data,
             cov,
-            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
             guide=AutoNormal(model),
@@ -233,9 +233,9 @@ def test_covariate_length_mismatch_rejected() -> None:
     with pytest.raises(ValueError, match="share the time axis"):
         backtest_vectorized(
             random.PRNGKey(0),
+            lambda: model,
             data,
             cov,
-            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
             guide=AutoNormal(model),
@@ -258,9 +258,9 @@ def test_window_count_matches_formula(duration: int, train: int, test: int, stri
     model = rw_model
     result = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=train,
         test_window=test,
         guide=AutoNormal(model),
@@ -304,9 +304,9 @@ def test_single_svi_compilation(
     def run() -> None:
         result = backtest_vectorized(
             random.PRNGKey(0),
+            lambda: model,
             data,
             cov,
-            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
             guide=AutoNormal(model),
@@ -348,9 +348,9 @@ def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
     model = rw_model
     backtest_vectorized(
         random.PRNGKey(1),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),
@@ -377,9 +377,9 @@ def test_keep_predictions_shape() -> None:
     model = rw_model
     result = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),
@@ -424,9 +424,9 @@ def test_result_schema_and_dataframe_row_shape() -> None:
     model = rw_model
     result = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),
@@ -466,9 +466,9 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
     model_default = rw_model
     vec_default = backtest_vectorized(
         random.PRNGKey(5),
+        lambda: model_default,
         data,
         cov,
-        lambda: model_default,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model_default),
@@ -480,9 +480,9 @@ def test_custom_coverage_alpha_stays_vectorized() -> None:
     model_50 = rw_model
     vec_50 = backtest_vectorized(
         random.PRNGKey(5),
+        lambda: model_50,
         data,
         cov,
-        lambda: model_50,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model_50),
@@ -522,9 +522,9 @@ def test_chunked_metric_raises_actionable_error() -> None:
     with pytest.raises(VectorizedMetricError):
         backtest_vectorized(
             random.PRNGKey(0),
+            lambda: model,
             data,
             cov,
-            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
             guide=AutoNormal(model),
@@ -546,9 +546,9 @@ def test_host_metric_raises_actionable_error() -> None:
     with pytest.raises(VectorizedMetricError):
         backtest_vectorized(
             random.PRNGKey(0),
+            lambda: model,
             data,
             cov,
-            lambda: model,
             train_window=TRAIN,
             test_window=TEST,
             guide=AutoNormal(model),
@@ -594,9 +594,9 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
 
     result = backtest_vectorized(
         random.PRNGKey(0),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),
@@ -613,9 +613,9 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
     recorded_optims.clear()
     backtest_vectorized(
         random.PRNGKey(0),
+        lambda: model,
         data,
         cov,
-        lambda: model,
         train_window=TRAIN,
         test_window=TEST,
         guide=AutoNormal(model),

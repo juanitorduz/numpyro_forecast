@@ -25,9 +25,12 @@ class NumpyroForecastError(Exception):
 class BacktestWindowError(NumpyroForecastError, ValueError):
     """A backtest window configuration is invalid.
 
-    Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when
-    ``train_window``, ``test_window``, or ``stride`` is below 1, or when the
-    series has no room for a single window.
+    Raised by `~~numpyro_forecast.evaluate.backtest()` when ``window_type`` and
+    ``train_window`` disagree (``"rolling"`` without a ``train_window``, or
+    ``"expanding"`` with one), and by
+    `~~numpyro_forecast.evaluate.backtest_vectorized()` when ``train_window``,
+    ``test_window``, or ``stride`` is below 1, or when the series has no room
+    for a single window.
     """
 
 

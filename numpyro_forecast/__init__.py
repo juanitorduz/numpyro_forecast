@@ -23,6 +23,9 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         var,
     )
 
+# Bound here so great-docs can resolve the `contrib.blackjax.*` reference entries by
+# attribute walk (API reference, llms-full.txt); the module imports no optional extra.
+import numpyro_forecast.contrib.blackjax  # noqa: F401
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
@@ -49,9 +52,11 @@ from numpyro_forecast.exceptions import (
     VectorizedMetricError,
 )
 from numpyro_forecast.models import (
+    Advance,
     Horizon,
+    SSOEMean,
     SSOEResult,
-    SSOEStep,
+    SSOEUpdate,
     Transition,
     innovations,
     markov_series,
@@ -69,6 +74,7 @@ except PackageNotFoundError:  # pragma: no cover - package not installed
 
 __all__ = [
     "DEFAULT_METRICS",
+    "Advance",
     "BacktestResult",
     "BacktestWindowError",
     "CovariateDimsError",
@@ -79,8 +85,9 @@ __all__ = [
     "KernelConfigError",
     "MVNLayoutError",
     "NumpyroForecastError",
+    "SSOEMean",
     "SSOEResult",
-    "SSOEStep",
+    "SSOEUpdate",
     "Transition",
     "VectorizedBacktestResult",
     "VectorizedMetricError",

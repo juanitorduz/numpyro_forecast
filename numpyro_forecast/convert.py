@@ -234,8 +234,8 @@ def to_datatree(
     covariates: Array,
     *,
     num_chains: int = 1,
-    predictive_batch_size: int | None = None,
-    predictive_device: jax.Device | str | None = "host",
+    batch_size: int | None = None,
+    device: jax.Device | str | None = "host",
     coords: Mapping[str, Sequence[Any]] | None = None,
     time_coord: Sequence[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
@@ -279,11 +279,11 @@ def to_datatree(
         SVI or Pathfinder draws). For an MCMC posterior, pass the
         ``num_chains`` the sampler was run with; see `_reshape_chains()`
         for the reshape contract and its divisibility requirement.
-    predictive_batch_size
+    batch_size
         Optional chunk size that bounds how many draws touch the accelerator
         at once, across both the in-sample and forecast predictive sampling.
         When set, sampling runs in chunks of this many draws, each chunk moved
-        to ``predictive_device`` before the next is drawn. The per-chunk
+        to ``device`` before the next is drawn. The per-chunk
         accelerator footprint is a handful of ``(batch_size, time, series)``
         buffers, so it scales linearly with this value times the panel width:
         on wide panels lower it until a chunk fits. The batch size must be
@@ -291,10 +291,10 @@ def to_datatree(
         sampling falls back to the single-shot path and the full array is
         materialized on the default device before the single transfer.
         Chunking changes the PRNG stream layout of the predictive draws, so
-        results are reproducible per ``(rng_key, predictive_batch_size)``.
+        results are reproducible per ``(rng_key, batch_size)``.
         ``None`` (default) samples everything in one shot (the results are
-        still moved to ``predictive_device``).
-    predictive_device
+        still moved to ``device``).
+    device
         Where the predictive draws are moved as they are sampled, forwarded to
         the ``device`` argument of
         `~~numpyro_forecast.predictive.predict_in_sample()` and
@@ -304,7 +304,7 @@ def to_datatree(
         warns once per export. The default ``"host"`` keeps the predictive
         draws in pageable host memory (jax Arrays the tree views as NumPy
         without a copy, or NumPy arrays when no CPU backend is initialized),
-        which is what bounds accelerator memory when ``predictive_batch_size``
+        which is what bounds accelerator memory when ``batch_size``
         is set; pass ``None`` to keep the draws on the default device (chunked
         compute without per-chunk host transfers, for when the draws fit on
         the accelerator and transfers would dominate runtime).
@@ -356,33 +356,26 @@ def to_datatree(
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError
-        If ``predictive_device="pinned_host"`` is requested on a device that
+        If ``device="pinned_host"`` is requested on a device that
         exposes no host memory kind (see
         `~~numpyro_forecast._offload._host_memory_kind()`).
     DevicePlatformError
-        If ``predictive_device`` names a platform whose backend is not
+        If ``device`` names a platform whose backend is not
         initialized (see `~~numpyro_forecast._offload._resolve_device()`).
 
     Warns
     -----
     UserWarning
-        If ``predictive_device="cpu"`` is requested and the JAX CPU backend is
+        If ``device="cpu"`` is requested and the JAX CPU backend is
         not initialized, so the predictive draws take the NumPy path of
         ``"host"`` instead (once per call).
 
     Notes
     -----
-    ``to_datatree`` no longer accepts a fit object or draws a posterior itself
-    (no ``num_predictive_samples``, no internal
-    `~~numpyro_forecast.predictive.draw_posterior()` call): callers
-    draw the posterior first and pass it in. The ``variational``/``is_mcmc``
-    attrs previously stamped on the ``posterior`` group are gone too, since a
-    fit type is no longer knowable from a plain posterior dict; use
-    ``num_chains`` (``1`` vs. ``> 1``) to tell the two apart if needed.
     When a forecast horizon is present, ``rng_key`` is split internally into a
     predictive subkey and a forecast subkey, so passing the same key twice
     never correlates the two sample sets. When there is no horizon, ``rng_key``
-    is used unsplit for the in-sample predictive draw. ``predictive_batch_size``
+    is used unsplit for the in-sample predictive draw. ``batch_size``
     is the built-in route to memory-bounded predictive sampling; for fully
     manual control over the forecast draws, build the in-sample tree with
     matching-length covariates and attach the horizon with
@@ -430,13 +423,13 @@ def to_datatree(
     covariates_insample = covariates[..., :n_time, :]
     # Resolve once so the two predictive drivers share one placement (and an
     # unmet explicit "cpu" request warns once per export).
-    resolved_device = _resolve_device(predictive_device)
+    resolved_device = _resolve_device(device)
     predictive = predict_in_sample(
         key_pred,
         model,
         posterior,
         covariates_insample,
-        batch_size=predictive_batch_size,
+        batch_size=batch_size,
         device=resolved_device,
     )
     pp_ds = arviz_base.dict_to_dataset(
@@ -472,7 +465,7 @@ def to_datatree(
             posterior,
             data,
             covariates,
-            batch_size=predictive_batch_size,
+            batch_size=batch_size,
             device=resolved_device,
         )
         predictions_ds, predictions_constant_ds = _forecast_group_datasets(

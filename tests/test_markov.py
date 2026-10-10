@@ -1,7 +1,6 @@
 """Tests for `markov_series()` (roadmap §7.5)."""
 
-from collections.abc import Callable
-
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -20,10 +19,8 @@ PHI = 0.85
 DRIFT = 0.08
 
 
-def _ar1_transition(
-    carry: Array, _: Array | None
-) -> tuple[dist.Distribution, Callable[[Array], Array]]:
-    return dist.Normal(PHI * carry, DRIFT), lambda z: z
+def _ar1_transition(carry: Array, _: Array | None) -> dist.Distribution:
+    return dist.Normal(PHI * carry, DRIFT)
 
 
 def _ar1_body(h: Horizon, covariates: Array) -> None:
@@ -88,8 +85,8 @@ def test_batched_plates_argument() -> None:
     """A ``(B,)`` plate yields scan storage ``(t, B, obs)``."""
     h = Horizon.from_data(empty_covariates(10), jnp.zeros((6, 1)))
 
-    def trans(carry: Array, _: Array | None) -> tuple[dist.Distribution, Callable[[Array], Array]]:
-        return dist.Normal(PHI * carry, DRIFT), lambda z: z
+    def trans(carry: Array, _: Array | None) -> dist.Distribution:
+        return dist.Normal(PHI * carry, DRIFT)
 
     def body(h_: Horizon) -> None:
         markov_series(
@@ -107,10 +104,8 @@ def test_batched_plates_argument() -> None:
 def test_missing_obs_dim_raises_with_guidance() -> None:
     """C7: a scalar per-step distribution raises with actionable guidance."""
 
-    def bad_trans(
-        carry: Array, _: Array | None
-    ) -> tuple[dist.Distribution, Callable[[Array], Array]]:
-        return dist.Normal(PHI * carry, DRIFT), lambda z: z
+    def bad_trans(carry: Array, _: Array | None) -> dist.Distribution:
+        return dist.Normal(PHI * carry, DRIFT)
 
     h = Horizon.from_data(empty_covariates(5), jnp.zeros((5, 1)))
     with pytest.raises(ValueError, match="observation dimension"):
@@ -121,7 +116,7 @@ def test_forecast_without_data_rejected_for_hand_built_horizon() -> None:
     """A hand-built ``Horizon`` with ``future > 0`` and no data is rejected.
 
     ``Horizon.from_data`` never produces this combination, so the guard is only
-    reachable by constructing the dataclass directly.
+    reachable by constructing ``Horizon`` directly.
     """
     h = Horizon(data=None, t_obs=5, future=3, duration=8)
 
@@ -173,11 +168,9 @@ def test_xs_threading() -> None:
     h = Horizon.from_data(empty_covariates(8), jnp.zeros((8, 1)))
     xs = jnp.arange(8.0)[:, None]
 
-    def driven(
-        carry: Array, x_t: Array | None
-    ) -> tuple[dist.Distribution, Callable[[Array], Array]]:
+    def driven(carry: Array, x_t: Array | None) -> dist.Distribution:
         exog = jnp.zeros((1,)) if x_t is None else x_t
-        return dist.Normal(PHI * carry + exog, DRIFT), lambda z: z
+        return dist.Normal(PHI * carry + exog, DRIFT)
 
     tr = trace(
         seed(
@@ -199,3 +192,42 @@ def test_ar1_model_end_to_end_shape() -> None:
     post = draw_posterior(key_draw, guide, state.params, 20)
     preds = forecast(random.PRNGKey(2), _ar1_model, post, data, cov)
     assert preds.shape == (20, 4, 1)
+
+
+def test_advance_builds_a_window_carry() -> None:
+    """A two-lag carry: the sample enters the window and the oldest row leaves."""
+
+    def transition(window: Array, _: Array | None) -> dist.Distribution:
+        return dist.Normal(0.5 * window[0] + 0.25 * window[1], DRIFT)
+
+    def advance(window: Array, z_t: Array, _: Array | None) -> Array:
+        return jnp.concatenate([z_t[None], window[:1]], axis=0)
+
+    covariates = empty_covariates(8)
+    h = Horizon.from_data(covariates, jnp.zeros((5, 1)))
+
+    def body() -> None:
+        markov_series(h, "z", jnp.zeros((2, 1)), transition, advance=advance)
+
+    tr = trace(seed(body, random.PRNGKey(0))).get_trace()
+    assert tr["z"]["value"].shape == (5, 1)
+    assert tr["z_future"]["value"].shape == (3, 1)
+
+
+@pytest.mark.parametrize(
+    "init_carry", [jnp.zeros((2, 1)), (jnp.zeros((1,)),)], ids=["window", "single_leaf_tuple"]
+)
+def test_missing_advance_with_structured_carry_is_rejected(init_carry: object) -> None:
+    """Without ``advance`` a carry that is not one draw-shaped array raises guided ``ValueError``."""
+
+    def transition(carry: object, _: Array | None) -> dist.Distribution:
+        return dist.Normal(jax.tree.leaves(carry)[0][:1], DRIFT)
+
+    covariates = empty_covariates(5)
+    h = Horizon.from_data(covariates, jnp.zeros((5, 1)))
+
+    def body() -> None:
+        markov_series(h, "z", init_carry, transition)
+
+    with pytest.raises(ValueError, match="pass advance="):
+        trace(seed(body, random.PRNGKey(0))).get_trace()

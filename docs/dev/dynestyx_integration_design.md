@@ -109,8 +109,7 @@ This is the code the notebook defines and the code proposed for `contrib/dynesty
 ```python
 from collections.abc import Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 import dynestyx as dsx
 import jax
@@ -132,8 +131,7 @@ StateSpaceHandler = Filter | Smoother | LatentPathBuilder | Discretizer
 _CONDITIONING_HANDLERS = (Filter, Smoother, LatentPathBuilder)
 
 
-@dataclass(frozen=True)
-class StateSpaceResult:
+class StateSpaceResult(NamedTuple):
     """Draws produced by `state_space_series` (size-0 time axes when not applicable).
 
     Each field is filled in the mode that produces it and has a size-0 time axis
@@ -361,6 +359,8 @@ def state_space_series(
     )
 ```
 
+It is a `NamedTuple`, like `SSOEResult`, so it is a JAX pytree.
+
 Why each non-obvious line is there:
 
 - `_handler_stack` normalizes one handler or a sequence to a tuple and validates it: exactly one conditioning handler, first. dsx handlers are entered outermost first (`with Simulator, Smoother, Discretizer`), and a `Discretizer` must be inside the conditioner because it rewrites the dynamics and forwards outward; a `Discretizer` first would hand continuous dynamics to a discrete smoother.
@@ -488,7 +488,9 @@ def ou_level(covariates: Array, data: Array | None = None) -> None:
     theta = jnp.asarray(numpyro.sample("theta", dist.LogNormal(-1.5, 0.7)))
     sigma = jnp.asarray(numpyro.sample("sigma", dist.HalfNormal(1.0)))
     r = jnp.asarray(numpyro.sample("r", dist.HalfNormal(1.0)))
-    state_space_series(h, "f", y, ou_dynamics(theta, sigma, r), conditioner=conditioner, times=times)
+    state_space_series(
+        h, "f", y, ou_dynamics(theta, sigma, r), conditioner=conditioner, times=times
+    )
 ```
 
 with `times` the irregular observation grid closed over by the model. The same model under `Smoother(smoother_config=ContinuousTimeKFSmootherConfig())` alone, without the `Discretizer`, is the continuous-discrete Kalman smoother: the same posterior at 50 times the cost per gradient (A.11). The robustness caveats of the discretized form are in Section 8.
