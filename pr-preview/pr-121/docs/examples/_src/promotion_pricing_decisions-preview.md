@@ -22,11 +22,11 @@ Every question depends on how demand responds to a price cut and to each mechani
 
 ## What we do
 
-1.  **Data.** Select six cereals of one substitution group and 18 stores with complete series, and build a weekly panel of units, prices and promotion flags.
-2.  **Model.** Fit a hierarchical negative binomial demand model with a random-walk level per series, annual seasonality, own and cross price elasticities, and feature and display effects, with NUTS. Validate it on the last quarter of the panel.
-3.  **Counterfactual promotions.** For every candidate promotion (a mechanics and a depth), forecast the event weeks by changing the horizon inputs and reusing the posterior. Nothing is refit.
-4.  **Economics.** Turn the forecast units of every posterior draw into an event profit with the retailer's margin, the manufacturer's funding share and the cost of a feature or display slot.
-5.  **Decisions.** Answer each question with a rule that uses the whole posterior, and compare with what a point estimate would decide.
+1.  **Data:** Select six cereals of one substitution group and 18 stores with complete series, and build a weekly panel of units, prices and promotion flags.
+2.  **Model:** Fit a hierarchical negative binomial demand model with a random-walk level per series, annual seasonality, own and cross price elasticities, and feature and display effects, with NUTS. Validate it on the last quarter of the panel.
+3.  **Counterfactual promotions:** For every candidate promotion (a mechanics and a depth), forecast the event weeks by changing the horizon inputs and reusing the posterior, without a refit.
+4.  **Economics:** Turn the forecast units of every posterior draw into an event profit with the retailer's margin, the manufacturer's funding share and the cost of a feature or display slot.
+5.  **Decisions:** Answer each question with a rule that uses the whole posterior, and compare with what a point estimate would decide.
 
 
 # Prepare notebook
@@ -164,7 +164,7 @@ The transactions sheet has 524{,}950 rows, one per store (`store_num`), product 
 
 ## Price and unit quirks
 
-A discount is the shelf price relative to the base price, so rows without one of the two prices, rows with non-positive units and rows whose shelf price is above the base price need a rule. The helper of the next cell defines the price ratio, and the cell after it counts the four cases.
+A discount is the shelf price relative to the base price, so rows without one of the two prices, rows with non-positive units and rows whose shelf price is above the base price need a rule. We define the price ratio in a helper and then count the four cases.
 
 
     In [3]:
@@ -211,7 +211,7 @@ The counts are small: 185 rows without a base price, 23 without a shelf price, f
 
 ## Duplicated store rows
 
-The store lookup has more rows than stores: two store ids appear twice, with a different price segment on each row. A join on the store id would match every transaction of these two stores twice. The next cell lists them and keeps the first row of each.
+The store lookup has more rows than stores: two store ids appear twice, with a different price segment on each row. A join on the store id would match every transaction of these two stores twice. We list them and keep the first row of each.
 
 
     In [5]:
@@ -246,7 +246,7 @@ The lookup has 79 rows for 77 stores. Both duplicated stores are listed as `main
 
 ## Which products we keep
 
-Cross-price effects only make sense inside one substitution group, so we work with cold cereal, the category of Honey Nut Cheerios. The workbook records a row only when the product sold, so a missing store-product-week is an absent row, and the model below carries a random-walk level per series, which needs every week observed. The helper of the next cell counts the weeks of a series; the cell after it counts, for each cold cereal, the stores that carry it at all and the stores that carry it in every one of the 156 weeks.
+Cross-price effects only make sense inside one substitution group, so we work with cold cereal, the category of Honey Nut Cheerios. The workbook records a row only when the product sold, so a missing store-product-week is an absent row, and the model below has a random-walk level per series, which needs every week observed. A helper counts the weeks of a series; with it we count, for each cold cereal, the stores that carry it at all and the stores that carry it in every one of the 156 weeks.
 
 
     In [6]:
@@ -292,7 +292,7 @@ print(
     cold cereal: 15 products in 3 sub-categories, 1 row with zero units
 
 
-The category has 15 products in three sub-categories and a single row with zero units. In the following plot we show both counts per product, with the six products we keep in a different color.
+The category has 15 products in three sub-categories and a single row with zero units. The bars below give both counts per product, with the six products we keep in a different color.
 
 
     In [8]:
@@ -361,7 +361,7 @@ ax.set(
 
 The Post and Quaker products are complete in no store: they were delisted and relisted, and a delisted product has no demand to model. The six products of the `all family cereal` sub-category from General Mills, Kellogg and the private label are carried in all 77 stores and complete in 62 to 75 of them. We keep these six: Honey Nut Cheerios (`hnc`, the focal product), two sizes of Cheerios, Kellogg's Mini Wheats, and two private-label products, one of which is the private-label twin of the focal product.
 
-The next cell defines the steps that build the cereal frame every later section uses: keep the six products and give them short labels, join the product and store lookups, compute the price ratio and the discount depth, and label the mechanics of every store-week as `none`, `tpr-only`, `display`, `feature` or `feature + display`.
+We write the steps that build the cereal frame every later section uses as small functions: keep the six products and give them short labels, join the product and store lookups, compute the price ratio and the discount depth, and label the mechanics of every store-week as `none`, `tpr-only`, `display`, `feature` or `feature + display`.
 
 
     In [9]:
@@ -425,7 +425,7 @@ def add_promotion_columns(cereal: pl.DataFrame) -> pl.DataFrame:
 ```
 
 
-The next cell builds the frame, drops the rows with a missing price or non-positive units, and checks two facts: that the drop removes no row of the six products, and that the workbook's `tpr_only` flag agrees exactly with our own definition (a cut of more than 2\\ without a feature or a display).
+We then build the frame, drop the rows with a missing price or non-positive units, and check two facts: that the drop removes no row of the six products, and that the workbook's `tpr_only` flag agrees exactly with our own definition (a cut of more than 2\\ without a feature or a display).
 
 
     In [10]:
@@ -487,7 +487,7 @@ The frame keeps all 71{,}774 six-product rows, one per store, product and week, 
 
 ## Missing store-product-weeks
 
-The model section keeps only stores in which all six series are observed in every week. Before we apply that filter we should know what the missing weeks are, because two treatments are possible: fill the missing weeks with zero units and no price, or drop the store. Filling with zero is right only if a missing week is a week without sales. The next cell defines the helpers that measure the length of every run of missing weeks.
+The model section keeps only stores in which all six series are observed in every week. Before we apply that filter we should know what the missing weeks are, because two treatments are possible: fill the missing weeks with zero units and no price, or drop the store. Filling with zero is right only if a missing week is a week without sales. The helpers below measure the length of every run of missing weeks.
 
 
     In [11]:
@@ -543,7 +543,7 @@ def run_length_bucket(column: str) -> pl.Expr:
 ```
 
 
-In the following plot we count the runs of missing weeks by their length and the stores by their longest run, over the six products and all 77 stores.
+We count the runs of missing weeks by their length and the stores by their longest run, over the six products and all 77 stores.
 
 
     In [12]:
@@ -595,7 +595,7 @@ fig.suptitle("Missing store-product-weeks of the six products", fontsize=16, fon
 </figure>
 
 
-Nearly every run is one week long, and in most of the affected stores the longest run is one or two weeks. The next cell lists the runs longer than two weeks and the calendar week that the one-week runs share most often.
+Nearly every run is one week long, and in most of the affected stores the longest run is one or two weeks. We list the runs longer than two weeks and the calendar week that the one-week runs share most often.
 
 
     In [13]:
@@ -640,12 +640,12 @@ We keep only the stores in which all six series are complete. This costs informa
 
 # Exploratory data analysis
 
-Two facts about the promotions decide what the model must carry and where the counterfactual event goes: whether cuts and mechanics arrive together, and what ran in the holdout quarter.
+Two facts about the promotions decide which terms the model needs and where the counterfactual event goes: whether cuts and mechanics arrive together, and what ran in the holdout quarter.
 
 
 ## Do price cuts and mechanics arrive together?
 
-If a deep cut almost always comes with a feature or a display, a regression of units on price alone credits the mechanics uplift to the price, and the model needs the mechanics as their own terms. The helper of the next cell reads the cut depth with a lagged base price as no cut; the cell after it computes, per mechanics and over all 77 stores, the number of store-weeks, the share of those weeks with a cut, the mean cut depth and the mean units, and the following plot shows the four as bars.
+If a deep cut almost always comes with a feature or a display, a regression of units on price alone credits the mechanics uplift to the price, and the model needs the mechanics as their own terms. A helper reads the cut depth with a lagged base price as no cut. With it we compute, per mechanics and over all 77 stores, the number of store-weeks, the share of those weeks with a cut, the mean cut depth and the mean units, and plot the four as bars.
 
 
     In [14]:
@@ -728,12 +728,12 @@ grid.figure.suptitle(
 </figure>
 
 
-Store-weeks without any promotion average 31 units; a shelf-tag cut alone brings the average to 40, a display to 73, a feature to 74 and a feature with display to 135, at mean cut depths of 18\\ to 26\\. So the mechanics move units far more than the cut does, which matches the first two empirical generalizations of [Blattberg, Briesch and Fox (1995)](https://doi.org/10.1287/mksc.14.3.G122). And 97\\ of the feature-with-display weeks carry a cut, so cuts and mechanics arrive together. The model must carry the mechanics as their own terms, next to the price.
+Store-weeks without any promotion average 31 units; a shelf-tag cut alone brings the average to 40, a display to 73, a feature to 74 and a feature with display to 135, at mean cut depths of 18\\ to 26\\. So the mechanics move units far more than the cut does, which matches the first two empirical generalizations of [Blattberg, Briesch and Fox (1995)](https://doi.org/10.1287/mksc.14.3.G122). And 97\\ of the feature-with-display weeks have a cut, so cuts and mechanics arrive together. The model needs the mechanics as their own terms, next to the price.
 
 
 ## What ran in the holdout quarter
 
-The last 13 weeks of the panel, from October 2011 to the first week of January 2012, are the holdout of the forecast evaluation and the horizon on which we place the counterfactual promotions. The holdout evaluation uses the realized promotions as inputs, and the counterfactual event takes the slot of the realized Thanksgiving event, so we need to know what ran. In the following plot we show, for the focal product and every horizon week, the share of stores with a feature, a display or a shelf-tag cut, and the mean cut depth.
+The last 13 weeks of the panel, from October 2011 to the first week of January 2012, are the holdout of the forecast evaluation and the horizon on which we place the counterfactual promotions. The holdout evaluation uses the realized promotions as inputs, and the counterfactual event takes the slot of the realized Thanksgiving event, so we need to know what ran. For the focal product and every horizon week, we plot the share of stores with a feature, a display or a shelf-tag cut, and the mean cut depth.
 
 
     In [17]:
@@ -809,7 +809,7 @@ This section builds the arrays the model reads: the stores, the long frame with 
 
 ## Store selection
 
-The model needs a block of complete series, and the fit should stay at a few minutes on a laptop. So we keep the stores in which all six series are complete over the 156 weeks and take `N_STORES_PER_SEGMENT = 6` stores per price segment (`mainstream`, `upscale` and `value`), the largest by average weekly baskets, which keeps the three segments represented. Six products in 18 stores give 108 series, each identified as `store::product`. The cost of the fit grows about linearly with the number of series, so all 52 complete stores (312 series) would take about three times as long. The next cell defines the completeness rule.
+The model needs a block of complete series, and the fit should stay at a few minutes on a laptop. So we keep the stores in which all six series are complete over the 156 weeks and take `N_STORES_PER_SEGMENT = 6` stores per price segment (`mainstream`, `upscale` and `value`), the largest by average weekly baskets, which keeps the three segments represented. Six products in 18 stores give 108 series, each identified as `store::product`. The cost of the fit grows about linearly with the number of series, so all 52 complete stores (312 series) would take about three times as long. We first write down the completeness rule.
 
 
     In [18]:
@@ -847,7 +847,7 @@ def complete_stores_by_segment(
 ```
 
 
-The next cell applies the rule, selects the six largest stores of each segment, and plots the average weekly baskets of the selected stores.
+We apply the rule, select the six largest stores of each segment, and count the complete stores per segment.
 
 
     In [19]:
@@ -876,7 +876,7 @@ print(f"stores with all six series complete, per segment: {complete_per_segment}
     stores with all six series complete, per segment: {'mainstream': 32, 'upscale': 11, 'value': 9}
 
 
-All six series are complete in 52 stores: 32 mainstream, 11 upscale and 9 value. In the following plot we show the average weekly baskets of the 18 selected stores by segment.
+All six series are complete in 52 stores: 32 mainstream, 11 upscale and 9 value. The bar chart shows the average weekly baskets of the 18 selected stores, colored by segment.
 
 
     In [20]:
@@ -912,7 +912,7 @@ The 18 selected stores are the six largest of each segment by weekly baskets, so
 
 ## The long frame and the model inputs
 
-The model reads an inputs tensor with one channel per input. The inputs of a series are its own log price ratio x, its feature and display flags, two sibling flags (any other product of the panel featured or displayed at the same store-week), and the log price ratios of all six products at its store. The sibling flags and the six prices are there because a promotion of the focal product reaches its siblings through their inputs: their cross-price channel and their sibling flags change. The seasonal controls of the exploratory regressions below are an annual Fourier basis with `N_MODES = 2` harmonics and a linear trend. The next cell defines one small expression per input.
+The model reads an inputs tensor with one channel per input. The inputs of a series are its own log price ratio x, its feature and display flags, two sibling flags (any other product of the panel featured or displayed at the same store-week), and the log price ratios of all six products at its store. The sibling flags and the six prices are there because a promotion of the focal product reaches its siblings through their inputs: their cross-price channel and their sibling flags change. The seasonal controls of the exploratory regressions below are an annual Fourier basis with `N_MODES = 2` harmonics and a linear trend. We define one small expression per input.
 
 
     In [21]:
@@ -953,7 +953,7 @@ def add_depth_slopes() -> list[pl.Expr]:
 ```
 
 
-The next cell builds the long frame of the 18 stores, one row per store-product-week, sorted by week and series. The last 13 weeks are the holdout.
+We build the long frame of the 18 stores, one row per store-product-week, sorted by week and series. The last 13 weeks are the holdout.
 
 
     In [22]:
@@ -1013,7 +1013,7 @@ shape: (5, 9)
 | "25027::pl honey nut oats" | 0 | 50 | 0.0 | 0.0 | 0.0 | 1.0 | 0.0 | 0.0 |
 
 
-Every row carries its own inputs and the price of every product at its store (`price hnc` is the focal product's log price ratio, equal to `x` on the focal rows). The helper of the next cell pivots one column of the long frame into a dense `(week, series)` matrix with one column per series; the cell after it pivots every input, the units and the base price, stacks the eleven inputs into the tensor and splits the training window from the holdout. The base price of the last training week is the reference price of every currency number below.
+Every row holds its own inputs and the price of every product at its store (`price hnc` is the focal product's log price ratio, equal to `x` on the focal rows). A helper pivots one column of the long frame into a dense `(week, series)` matrix with one column per series. With it we pivot every input, the units and the base price, stack the eleven inputs into the tensor and split the training window from the holdout. The base price of the last training week is the reference price of every currency number below.
 
 
     In [23]:
@@ -1092,7 +1092,7 @@ The tensor has shape (11, 156, 108): eleven input channels, 156 weeks and 108 se
 
 ## Nine focus stores
 
-In the following plot we look at the focal product's weekly units in nine of the selected stores, three per segment (one column per segment), with the discount depth on a second axis and the feature and display weeks shaded, to see the pattern the model must reproduce.
+We plot the focal product's weekly units in nine of the selected stores, three per segment (one column per segment), with the discount depth on a second axis and the feature and display weeks shaded.
 
 
     In [25]:
@@ -1193,7 +1193,7 @@ This section states what we estimate and under which assumption, runs the least-
 
 The quantity we want is the expected weekly units of the focal product under a discount d and a mechanics m, with the other inputs at their factual values. This is a promotional elasticity: the response to a temporary cut below the base price, not the response to a change in the base price itself, which the level of each series absorbs. A regular-price elasticity would need a different design, and this notebook cannot answer regular-price questions. [Bijmolt, van Heerde and Pieters (2005)](https://doi.org/10.1509/jmkr.42.2.141.62296) document that promotional elasticities exceed regular-price ones.
 
-Prices were not randomized. The retailer and the manufacturers set the promotion calendar through trade deals, and the same deal sets the cut, the feature and the display together. The causal graph in the next cell draws the identifying assumption: conditional on the mechanics flags, the sibling flags, the competitor prices and the seasonal and level terms, the depth of the cut is as good as random with respect to the unobserved demand shocks. The second cluster shows what would break it: a demand shock (a coupon drop, a competitor's promotion in another retailer) that moves both the deal calendar and the units. We cannot test the assumption with these data; the holdout below validates the forecasting engine under the realized calendar, not the counterfactual ones.
+Prices were not randomized. The retailer and the manufacturers set the promotion calendar through trade deals, and the same deal sets the cut, the feature and the display together. The causal graph draws the identifying assumption: conditional on the mechanics flags, the sibling flags, the competitor prices and the seasonal and level terms, the depth of the cut is as good as random with respect to the unobserved demand shocks. The second cluster shows what would break it: a demand shock (a coupon drop, a competitor's promotion in another retailer) that moves both the deal calendar and the units. We cannot test the assumption with these data; the holdout below validates the forecasts under the realized promotion calendar, not under the counterfactual ones.
 
 
     In [26]:
@@ -1319,7 +1319,7 @@ The mechanics figure showed that cuts and mechanics arrive together. Here we mea
 
 \begin{align\*} \text{naive:} \quad & \log y\_{t,i} = a_i + \varepsilon\\ x\_{t,i} + c(t) + e\_{t,i} \\ \text{with flags:} \quad & \log y\_{t,i} = a_i + \varepsilon\\ x\_{t,i} + b^\top z^{\text{flags}}\_{t,i} + c(t) + e\_{t,i} \\ \text{with depth slopes:} \quad & \log y\_{t,i} = a_i + \varepsilon\\ x\_{t,i} + b^\top z\_{t,i} + c(t) + e\_{t,i} \end{align\*}
 
-with z^{\text{flags}} = (F, D, FD, F^{\text{sib}}, D^{\text{sib}}) and z the full mechanics vector with the depth slopes. The naive \varepsilon is the elasticity a price-only regression reports; the third is the one the Bayesian model carries. The next cell fits the three specifications on the training weeks, and the following plot shows the price coefficient of each.
+with z^{\text{flags}} = (F, D, FD, F^{\text{sib}}, D^{\text{sib}}) and z the full mechanics vector with the depth slopes. The naive \varepsilon is the elasticity a price-only regression reports; the third is the one the Bayesian model uses. We fit the three specifications on the training weeks and plot the price coefficient of each.
 
 
     In [28]:
@@ -1400,7 +1400,7 @@ ax.set(
 
 For the focal product the naive elasticity is -2.60; with the flags it is -1.33, and with the depth slopes -1.08. Pooled over the six products the gap is -1.86 against -0.95: the flags absorb about half of the naive price effect, because the largest cuts come with a feature or a display and the naive regression credits their uplift to the price.
 
-The helper of the next cell lists the price columns of the other five products; the cell after it fits the focal product's full regression, the depth-slope specification plus the five other prices, \sum\_{k \ne \text{H}} \gamma_k\\ x\_{k,t,s}. Its coefficients are the reference markers of the forest plots in the results section and the point-estimate planner of the decision section.
+A helper lists the price columns of the other five products. With it we fit the focal product's full regression: the depth-slope specification plus the five other prices, \sum\_{k \ne \text{H}} \gamma_k\\ x\_{k,t,s}. Its coefficients are the reference markers of the forest plots in the results section and the point-estimate planner of the decision section.
 
 
     In [31]:
@@ -1428,7 +1428,7 @@ hnc_ols_terms = dict(
 
 ## Cross-price terms
 
-Cross-price terms need one regression per product, each with the other five prices. In the following heatmap we show them as a matrix: rows are the product whose units respond, columns the product whose price moves, and a positive cell means the two products are substitutes (a cut on the column product takes units from the row product). The diagonal holds the own elasticity of each product.
+Cross-price terms need one regression per product, each with the other five prices. The heatmap shows them as a matrix: rows are the product whose units respond, columns the product whose price moves, and a positive cell means the two products are substitutes (a cut on the column product takes units from the row product). The diagonal holds the own elasticity of each product.
 
 
     In [33]:
@@ -1480,16 +1480,16 @@ ax.set(
 </figure>
 
 
-The two national-brand-to-twin cells are the largest positive ones: the focal product's price on the private-label honey nut oats, +0.65, and Mini Wheats' price on the private-label frosted wheat, +0.50. When Honey Nut Cheerios is cheaper, its twin sells less. Several cells are negative, which the results section examines with the posterior. The model needs a cross-price matrix, not a single cross term.
+The two national-brand-to-twin cells are the largest positive ones: the focal product's price on the private-label honey nut oats, +0.65, and Mini Wheats' price on the private-label frosted wheat, +0.50. When Honey Nut Cheerios is cheaper, its twin sells less. Several cells are negative, which the results section examines with the posterior. So the model needs one cross-price term per ordered pair of products.
 
 
 ## Is the price response log-linear?
 
-The model below uses a log-linear price term, \varepsilon\\ x\_{t,i}. The next cell replaces it by one indicator per discount bin,
+The model below uses a log-linear price term, \varepsilon\\ x\_{t,i}. To check that form, we replace it by one indicator per discount bin,
 
  \log y\_{t,i} = a_i + \sum\_{b=1}^{4} \beta_b\\ \mathbb{1}\\d\_{t,i} \in B_b\\ + b^\top z^{\text{flags}}\_{t,i} + c(t) + e\_{t,i}, 
 
-with the bins B_b at (2\\, 10\\\], (10\\, 20\\\], (20\\, 30\\\] and above 30\\, so \beta_b is the log uplift of a cut in bin b against no cut. In the following plot we compare the binned estimates with the log-linear curve \varepsilon \log(1 - d) of the with-flags specification.
+with the bins B_b at (2\\, 10\\\], (10\\, 20\\\], (20\\, 30\\\] and above 30\\, so \beta_b is the log uplift of a cut in bin b against no cut. We plot the binned estimates against the log-linear curve \varepsilon \log(1 - d) of the with-flags specification.
 
 
     In [34]:
@@ -1567,7 +1567,7 @@ The binned estimates rise with depth, from +0.08 for cuts up to 10\\ to +0.67 ab
 
 ## Is there a post-promotion dip?
 
-When a product is on promotion, some households buy more than they need that week and store it at home, and buy less in the following weeks. This is the post-promotion dip of [van Heerde, Leeflang and Wittink (2000)](https://doi.org/10.1509/jmkr.37.3.383.18782). If the dip were large, the weeks after the event would lose sales, the timing of the event would matter, and the decision space would have to include the calendar. The next cell measures the dip over all 77 stores with the regression
+When a product is on promotion, some households buy more than they need that week and store it at home, and buy less in the following weeks. This is the post-promotion dip of [van Heerde, Leeflang and Wittink (2000)](https://doi.org/10.1509/jmkr.37.3.383.18782). If the dip were large, the weeks after the event would lose sales, the timing of the event would matter, and the decision space would have to include the calendar. We measure the dip over all 77 stores with the regression
 
  \log y\_{t,i} = a_i + \varepsilon\\ x\_{t,i} + b^\top z^{\text{flags}}\_{t,i} + \psi_1 P\_{t-1,i} + \psi_2 P\_{t-2,i} + c(t) + e\_{t,i}, 
 
@@ -1639,12 +1639,12 @@ ax.set(
 </figure>
 
 
-The first week after a promotion carries +0.008 (a small rise, not a dip) and the second -0.016, against feature and display effects of +0.51 and +0.46 on the log scale. The dip is statistically visible and economically negligible, so the calendar is not a lever in this notebook and the event weeks are fixed.
+The coefficient of the first week after a promotion is +0.008 (a small rise, not a dip) and that of the second -0.016, against feature and display effects of +0.51 and +0.46 on the log scale. The dip is statistically visible and economically negligible, so the calendar is not a lever in this notebook and the event weeks are fixed.
 
 
 ## Which weeks identify the elasticity
 
-The own elasticity of a product is identified by the weeks in which its price moved without a feature or a display, the `tpr_only` weeks, plus the variation of the cut inside feature and display weeks. A product with few such weeks gets its elasticity mostly from the prior and from the partial pooling across stores. The counterfactual promotions below also vary the depth of the cut from 0 to 40\\ under each mechanics, and a depth the retailer never ran under a mechanics is an extrapolation that the figures should flag. In the following plot we count, per product over the training panel, the store-weeks with a shelf-tag cut, a feature and a display, and, for the focal product over all 77 stores, the store-weeks within \pm 2.5 points of every grid depth under each mechanics; cells with fewer than 20 store-weeks are framed in red and shaded as thin support in the later figures.
+The own elasticity of a product is identified by the weeks in which its price moved without a feature or a display, the `tpr_only` weeks, plus the variation of the cut inside feature and display weeks. A product with few such weeks gets its elasticity mostly from the prior and from the partial pooling across stores. The counterfactual promotions below also vary the depth of the cut from 0 to 40\\ under each mechanics, and a depth the retailer never ran under a mechanics is an extrapolation that the figures should flag. Two panels count, per product over the training panel, the store-weeks with a shelf-tag cut, a feature and a display, and, for the focal product over all 77 stores, the store-weeks within \pm 2.5 points of every grid depth under each mechanics; cells with fewer than 20 store-weeks are framed in red and shaded as thin support in the later figures.
 
 
     In [38]:
@@ -1740,7 +1740,7 @@ fig.suptitle("What identifies the own elasticity", fontsize=16, fontweight="bold
 
 The focal product has 212 shelf-tag-only store-weeks in the training panel. Cheerios 18 oz has 23, so its own elasticity will come from the depth variation inside its feature and display weeks and from the prior. The thin cells of the depth grid are a display at 10\\, 15\\, 35\\ and 40\\, a feature at 5\\, and a shelf-tag cut at 5\\ or 40\\.
 
-The cross-price terms are identified only if the six prices do not move in lockstep within a store, and the sibling-mechanics effects only if a sibling is not always featured when the focal product is. The next cell checks both.
+The cross-price terms are identified only if the six prices do not move in lockstep within a store, and the sibling-mechanics effects only if a sibling is not always featured when the focal product is. We check both.
 
 
     In [39]:
@@ -1780,7 +1780,7 @@ The largest price correlation is 0.30, so the six prices do not move together, a
 
 ## The demand equation
 
-The checks gave the list of effects the model must carry: a level per series that does not absorb the promotion spikes, annual seasonality, an own price elasticity per series, a cross-price matrix, mechanics uplifts with depth slopes, sibling-mechanics effects, and overdispersed counts. The model keeps the notation of the exploratory regressions and replaces the fixed effect and the trend by a random-walk level per series, the single elasticity by one per series, partially pooled around a product mean, and the single cross vector by a matrix \gamma\_{k,p}, the response of product p's units to product k's price, zero on the diagonal. For series i with product p = p(i) and store s = s(i), the log of the conditional mean is the sum of five terms:
+The checks gave the list of effects the model needs: a level per series that does not absorb the promotion spikes, annual seasonality, an own price elasticity per series, a cross-price matrix, mechanics uplifts with depth slopes, sibling-mechanics effects, and overdispersed counts. The model keeps the notation of the exploratory regressions and replaces the fixed effect and the trend by a random-walk level per series, the single elasticity by one per series, partially pooled around a product mean, and the single cross vector by a matrix \gamma\_{k,p}, the response of product p's units to product k's price, zero on the diagonal. For series i with product p = p(i) and store s = s(i), the log of the conditional mean is the sum of five terms:
 
 \begin{align\*} \log \mu\_{t,i} &= \ell\_{t,i} && \text{level} \\ &\quad + f(t)^\top \beta_p && \text{seasonality} \\ &\quad + \varepsilon_i\\ x\_{t,i} && \text{own price} \\ &\quad + \sum\_{k \ne p} \gamma\_{k,p}\\ x\_{k,t,s} && \text{cross prices} \\ &\quad + b_p^\top z\_{t,i} && \text{mechanics} \end{align\*}
 
@@ -1805,7 +1805,7 @@ Every decision threshold below uses \varepsilon_m, never the bare \varepsilon. T
 
 ## Model components in code
 
-Each of the five terms of \log \mu is a function that samples its own sites and returns its contribution, the pattern of the NumPyro [Hilbert space Gaussian process example](https://num.pyro.ai/en/stable/examples/hsgp.html). The level innovations, the store-level elasticities and the cross terms are hierarchical, and NumPyro's [`LocScaleReparam`](https://num.pyro.ai/en/stable/reparam.html) lets us choose between their centered (1) and non-centered (0) parameterization with a value in \[0, 1\], the idiom of the [hierarchical forecasting example](hierarchical_forecasting_1.md). We sample that value as a site. A reparameterization does not change the posterior, so NUTS cannot learn it: its posterior would be its prior. Variational inference can, because the ELBO depends on the parameterization, so the model fit section learns the three values with a short SVI pass and hands them to NUTS as constants, the recipe of [Gorinova, Moore and Hoffman (2020)](https://arxiv.org/abs/1906.03028). The next cell defines the prior hyperparameters and the five components.
+Each of the five terms of \log \mu is a function that samples its own sites and returns its contribution, the pattern of the NumPyro [Hilbert space Gaussian process example](https://num.pyro.ai/en/stable/examples/hsgp.html). The level innovations, the store-level elasticities and the cross terms are hierarchical, and NumPyro's [`LocScaleReparam`](https://num.pyro.ai/en/stable/reparam.html) lets us choose between their centered (1) and non-centered (0) parameterization with a value in \[0, 1\], the idiom of the [hierarchical forecasting example](hierarchical_forecasting_1.md). We sample that value as a site. A reparameterization does not change the posterior, so NUTS cannot learn it: its posterior would be its prior. Variational inference can, because the ELBO depends on the parameterization, so the model fit section learns the three values with a short SVI pass and hands them to NUTS as constants, the procedure of [Gorinova, Moore and Hoffman (2020)](https://arxiv.org/abs/1906.03028). We define the prior hyperparameters and the five components.
 
 
     In [40]:
@@ -2067,7 +2067,7 @@ def make_cereal_model(
 ```
 
 
-The next cell builds the Fourier basis over the full duration and the labels of the cross-price pairs and of the Fourier coefficients, which the ArviZ coordinates below use.
+We build the Fourier basis over the full duration and the labels of the cross-price pairs and of the Fourier coefficients, which the ArviZ coordinates below use.
 
 
     In [42]:
@@ -2097,7 +2097,7 @@ Each prior of the block above has a reason:
 - The cross terms share a \text{HalfNormal}(0.5) scale that shrinks the 30 cells toward zero. The seasonal coefficients have a \text{Normal}(0, 0.2) prior and the initial level a \text{Normal}(3, 2) prior on the log scale.
 - The three centering values have a \text{Uniform}(0, 1) prior, which the SVI pass of the model fit section turns into a choice of parameterization.
 
-The next cell builds the prior object and prints the two implied quantities the bullets quote.
+We build the prior object and print the two implied quantities the bullets quote.
 
 
     In [43]:
@@ -2146,7 +2146,7 @@ print(
     drift_scale prior: LogNormal(mu=-3.3, sigma=0.488), median weekly innovation 3.7%; feature and display multiplier prior: median 1.65, 94% HDI 0.64 to 4.22
 
 
-`preliz.maxent` returns \text{LogNormal}(-3.3, 0.49) for the innovation scale, a median weekly innovation of 3.7\\, and the mechanics prior allows multipliers from 0.6 to 4.2. In the following plot we show the density of the six main priors.
+`preliz.maxent` returns \text{LogNormal}(-3.3, 0.49) for the innovation scale, a median weekly innovation of 3.7\\, and the mechanics prior allows multipliers from 0.6 to 4.2. We plot the density of the six main priors.
 
 
     In [44]:
@@ -2168,7 +2168,7 @@ fig.suptitle("Prior distributions", fontsize=16, fontweight="bold");
 </figure>
 
 
-The elasticity prior covers -3.5 to 0.5, the innovation scale sits below 0.1, and the level prior spans several orders of magnitude of units: wide where the data are rich, tight only where the level must not absorb the spikes. The next cell builds the model with these priors and renders its graph.
+The elasticity prior covers -3.5 to 0.5, the innovation scale sits below 0.1, and the level prior spans several orders of magnitude of units. The priors are wide where the data are rich; only the innovation scale is tight, so that the level cannot absorb the promotion spikes. We build the model with these priors and render its graph.
 
 
     In [45]:
@@ -2185,7 +2185,7 @@ numpyro.render_model(model, model_args=(covariates_train, y_train), render_distr
 </figure>
 
 
-The graph shows the four plates (product, fourier, pair, series with its time plate) and the sites the components sample; the three centering sites sit outside every plate. In the following plot we draw 500 datasets from the prior predictive and show their 50\\ and 94\\ HDI bands on the nine focus series, against the observed units, to check that the priors put the units in a plausible range without pinning them. The two helpers of the next cell draw HDI bands with a legend label and are reused by every band plot below.
+The graph shows the four plates (product, fourier, pair, series with its time plate) and the sites the components sample; the three centering sites sit outside every plate. We draw 500 datasets from the prior predictive and plot their 50\\ and 94\\ HDI bands on the nine focus series, against the observed units, to check that the priors put the units in a plausible range without pinning them. Two helpers draw HDI bands with a legend label; every band plot below reuses them.
 
 
     In [46]:
@@ -2266,7 +2266,7 @@ fig.suptitle("Prior predictive check on the training window", fontsize=16, fontw
 </figure>
 
 
-The prior predictive bands cover the observed units of every focus series with room to spare, from a few units to about ten thousand. One more prior check concerns the quantity the decisions turn on. In the following plot we draw, from the prior, the multiplier of the focal product's units at a 35\\ cut under feature with display, e^{b_m} (1 - d)^{\varepsilon_m}, and show its distribution on a log scale with its median and 94\\ HDI.
+The prior predictive bands cover the observed units of every focus series with room to spare, from a few units to about ten thousand. One more prior check concerns the quantity the decisions turn on: we draw, from the prior, the multiplier of the focal product's units at a 35\\ cut under feature with display, e^{b_m} (1 - d)^{\varepsilon_m}, and plot its distribution on a log scale with its median and 94\\ HDI.
 
 
     In [48]:
@@ -2328,9 +2328,9 @@ The inference has two steps: a short SVI pass that chooses the parameterization,
 
 ## Choosing the parameterization with SVI
 
-The three centering values decide how the sampler sees the hierarchy, and NUTS cannot learn them. A mean-field variational approximation can: the ELBO of an `AutoNormal` guide depends on the parameterization, because a diagonal Gaussian fits one geometry better than the other. So we run a short SVI pass first, read the fitted centering values from the guide, and hand them to NUTS through `handlers.condition`, which fixes the three sites at those values. The guide's draws are used for nothing else.
+The three centering values decide how the sampler sees the hierarchy. NUTS cannot learn them, but the ELBO of an `AutoNormal` guide, a mean-field variational approximation, depends on the parameterization, because a diagonal Gaussian fits one geometry better than the other. So we run a short SVI pass first, read the fitted centering values from the guide, and hand them to NUTS through `handlers.condition`, which fixes the three sites at those values. The guide's draws are used for nothing else.
 
-The level is a random walk, so the posterior of its innovations is a long thin ellipse along the time axis, which a diagonal guide represents badly and a diagonal mass matrix explores slowly. [`time_reparam`](https://juanitorduz.github.io/numpyro_forecast/reference/reparam.time_reparam.html) (the port of Pyro's [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) option) rotates the in-sample innovations into a discrete cosine basis, where that posterior is closer to diagonal; the model's density does not change, only the coordinates inference sees. The next cell runs the same SVI pass on the plain model and on the rotated one, with the same key, so the loss plot shows what the rotation buys.
+The level is a random walk, so the posterior of its innovations is a long thin ellipse along the time axis, which a diagonal guide represents badly and a diagonal mass matrix explores slowly. [`time_reparam`](https://juanitorduz.github.io/numpyro_forecast/reference/reparam.time_reparam.html) (the port of Pyro's [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) option) rotates the in-sample innovations into a discrete cosine basis, where that posterior is closer to diagonal; the model's density does not change, only the coordinates inference sees. We run the same SVI pass on the plain model and on the rotated one, with the same key, so that the loss plot isolates the effect of the rotation.
 
 
     In [49]:
@@ -2358,7 +2358,7 @@ for name, svi_model in svi_models.items():
 ```
 
 
-In the following plot we show the loss of both passes, the negative ELBO, with the mean of the last 500 steps of each as the flatness check.
+We plot the loss of both passes, the negative ELBO, with the mean of the last 500 steps of each as the flatness check.
 
 
     In [50]:
@@ -2390,7 +2390,7 @@ ax.set(
 </figure>
 
 
-Both losses are flat over the second half of the run, and the rotated model reaches a better optimum: a negative ELBO of 62{,}449 against 63{,}502 over the last 500 steps, about 1{,}050 nats lower, in less wall time. The next cell reads the learned centering values and their 90\\ intervals from both guides.
+Both losses are flat over the second half of the run, and the rotated model reaches a better optimum: a negative ELBO of 62{,}449 against 63{,}502 over the last 500 steps, about 1{,}050 nats lower, in less wall time. We read the learned centering values and their 90\\ intervals from both guides.
 
 
     In [51]:
@@ -2414,7 +2414,7 @@ for name, guide in guides.items():
     dct: centered_drift 0.34 (0.33 to 0.34), centered_eps 0.67 (0.65 to 0.69), centered_gamma 0.42 (0.38 to 0.45)
 
 
-The learned values are nearly the same under both parameterizations: 0.34 for the level innovations and 0.40 to 0.42 for the cross terms (the non-centered form fits a mean-field Gaussian best), and 0.67 to 0.68 for the store elasticities (the centered form), with 90\\ intervals a few hundredths wide. We keep the rotated model: its ELBO is better, and the package documents cheaper NUTS trajectories on the rotated coordinates. The next cell conditions it on its learned centering values; this wrapped and conditioned model is the single object every later driver receives.
+The learned values are nearly the same under both parameterizations: 0.34 for the level innovations and 0.40 to 0.42 for the cross terms (the non-centered form fits a mean-field Gaussian best), and 0.67 to 0.68 for the store elasticities (the centered form), with 90\\ intervals a few hundredths wide. We keep the rotated model: its ELBO is better, and the package documents cheaper NUTS trajectories on the rotated coordinates. We condition it on its learned centering values; this wrapped and conditioned model is the single object every later driver receives.
 
 
     In [52]:
@@ -2431,7 +2431,7 @@ nuts_model = handlers.condition(model_dct, data=learned_centering)
 
 ## Sampling with NUTS
 
-We sample the posterior with NUTS: four chains of 1{,}000 warmup and 1{,}000 draws each, in parallel on four host devices. Two settings matter. The initialization is `init_to_median`, because NumPyro's default uniform initialization in the unconstrained space can put the cumulative level of a series far outside the range where the negative binomial mean is finite. And we ask NUTS for the number of leapfrog steps of every iteration, which gives the tree depth: a sampler stuck at the depth cap of 10 is the sign of a badly conditioned posterior. The next cell fits the model and prints the sampler checks.
+We sample the posterior with NUTS: four chains of 1{,}000 warmup and 1{,}000 draws each, in parallel on four host devices. Two settings matter. The initialization is `init_to_median`, because NumPyro's default uniform initialization in the unconstrained space can put the cumulative level of a series far outside the range where the negative binomial mean is finite. And we ask NUTS for the number of leapfrog steps of every iteration, which gives the tree depth: a sampler stuck at the depth cap of 10 is the sign of a badly conditioned posterior. We fit the model and print the sampler checks.
 
 
     In [53]:
@@ -2468,12 +2468,12 @@ print(
     4000 draws in 4.4 min, 0 divergences, tree depth 7 to 7 (share at the depth-10 cap 0.000)
 
 
-The fit takes about 5 minutes of wall time, with no divergences and every iteration at tree depth 7 (127 leapfrog steps), so the depth cap is never reached. The previous revision of this notebook sampled the plain model, without [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam), at tree depth 8 in about 9 minutes; that run is not repeated here.
+The fit takes about 5 minutes of wall time, with no divergences and every iteration at tree depth 7 (127 leapfrog steps), so the depth cap is never reached. An earlier run of the plain model, without [time_reparam](../../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam), sampled at tree depth 8 in about 9 minutes; this notebook does not repeat it.
 
 
 ## Convergence diagnostics
 
-The next cell exports the posterior, the in-sample predictive and the holdout forecast into one ArviZ tree with named coordinates, so that the ArviZ diagnostics and plots below work with product and series labels. The rotated innovations appear as the site `drift_decentered_dct`, with `drift_decentered` and `drift` deterministic. The centering values are constants of the NUTS run, so they do not appear.
+We export the posterior, the in-sample predictive and the holdout forecast into one ArviZ tree with named coordinates, so that the ArviZ diagnostics and plots below work with product and series labels. The rotated innovations appear as the site `drift_decentered_dct`, with `drift_decentered` and `drift` deterministic. The centering values are constants of the NUTS run, so they do not appear.
 
 
     In [54]:
@@ -2561,7 +2561,7 @@ print(
     15878 sampled sites: max r_hat 1.018 (drift_scale[4259::pl honey nut oats]), min ess_bulk 328 (drift_scale[4259::pl honey nut oats])
 
 
-Over all 15{,}878 sampled sites, the 15{,}444 rotated innovations included, the worst values are \hat R = 1.02 and a bulk effective sample size of 328, both on the level innovation scale of a single series, the parameter with the least information per site. In the following plot we show the trace plots of the six hyperparameters.
+Over all 15{,}878 sampled sites, the 15{,}444 rotated innovations included, the worst values are \hat R = 1.02 and a bulk effective sample size of 328, both on the level innovation scale of a single series, the parameter with the least information per site. Next are the trace plots of the six hyperparameters.
 
 
     In [56]:
@@ -2593,7 +2593,7 @@ This section reads the posterior that the decisions use and checks that the mode
 
 ## Elasticities and promotion effects
 
-We read the effects that drive the decisions and check them against the least-squares estimates. The check matters for one specific failure: a model whose random-walk level absorbs the promotion spikes would show feature and display effects far below the least-squares ones. Every posterior interval below is a forest plot: the dot is the posterior median, the thick line the 50\\ HDI and the thin line the 94\\ HDI; a red marker is a least-squares estimate. The three helpers of the next cell wrap `az.plot_forest` for flat draws, add the reference markers, and format a median with its 94\\ HDI for the row labels.
+We read the effects that drive the decisions and check them against the least-squares estimates. The check matters for one specific failure: a model whose random-walk level absorbs the promotion spikes would show feature and display effects far below the least-squares ones. Every posterior interval below is a forest plot: the dot is the posterior median, the thick line the 50\\ HDI and the thin line the 94\\ HDI; a red marker is a least-squares estimate. Three helpers wrap `az.plot_forest` for flat draws, add the reference markers, and format a median with its 94\\ HDI for the row labels.
 
 
     In [57]:
@@ -2673,7 +2673,7 @@ def hdi_text(draws: Float[np.ndarray, " sample"], digits: int = 2) -> str:
 ```
 
 
-In the following forest plot we show the posterior of each product's own elasticity next to the two least-squares estimates that control for the mechanics. The row labels carry the number of identifying shelf-tag weeks, the posterior median and the 94\\ HDI.
+The first forest plot sets the posterior of each product's own elasticity next to the two least-squares estimates that control for the mechanics. The row labels give the number of identifying shelf-tag weeks, the posterior median and the 94\\ HDI.
 
 
     In [58]:
@@ -2713,7 +2713,7 @@ ax.figure.suptitle("Own promotional elasticity by product", fontsize=16, fontwei
 
 The focal product's elasticity has a posterior median of -1.08 (94\\ HDI -1.28 to -0.87), on top of the least-squares estimate with depth slopes. Cheerios 18 oz, with 23 identifying store-weeks, still gets a median of -1.92 (HDI -2.21 to -1.62), because its cut depth varies inside its feature and display weeks.
 
-The next cell fits the pooled least-squares regression with flags, whose feature and display multipliers are the reference markers of the following forest plot: the feature and display multipliers e^{b^{\text{feat}}\_p} and e^{b^{\text{disp}}\_p} of every product next to the pooled values (the same value for every product, since the pooled regression has one coefficient).
+We fit the pooled least-squares regression with flags, whose feature and display multipliers are the reference markers of the second forest plot: the feature and display multipliers e^{b^{\text{feat}}\_p} and e^{b^{\text{disp}}\_p} of every product next to the pooled values (the same value for every product, since the pooled regression has one coefficient).
 
 
     In [59]:
@@ -2774,7 +2774,7 @@ ax.figure.suptitle("Feature and display multipliers by product", fontsize=16, fo
 </figure>
 
 
-The feature multiplier of the focal product is 2.13 (HDI 1.97 to 2.32) and the display multiplier 1.41 (HDI 1.27 to 1.55), above and near the pooled least-squares multipliers of 1.65 and 1.49. The level is not absorbing the promotion spikes. In the following forest plot we show all seven mechanics coefficients of the focal product against its own full least-squares regression.
+The feature multiplier of the focal product is 2.13 (HDI 1.97 to 2.32) and the display multiplier 1.41 (HDI 1.27 to 1.55), above and near the pooled least-squares multipliers of 1.65 and 1.49. The level is not absorbing the promotion spikes. A third forest plot compares all seven mechanics coefficients of the focal product with its own full least-squares regression.
 
 
     In [61]:
@@ -2831,7 +2831,7 @@ The depth slopes under feature and display of the focal product are centered nea
 
 ## Do the cross elasticities make sense?
 
-In the following heatmap we show the posterior mean of every cross elasticity \gamma\_{k,p} (rows: the product whose units respond; columns: the product whose price moves), annotated with the posterior probability that it is positive. Three things should hold if the estimates make sense. Products of one substitution group are substitutes, so the cells should be positive. Switching is asymmetric, another generalization of [Blattberg, Briesch and Fox (1995)](https://doi.org/10.1287/mksc.14.3.G122): a national brand's promotion draws more from its private-label twin than the reverse. And cross elasticities should be smaller in magnitude than the own elasticities.
+The heatmap shows the posterior mean of every cross elasticity \gamma\_{k,p} (rows: the product whose units respond; columns: the product whose price moves), annotated with the posterior probability that it is positive. Three things should hold if the estimates make sense. Products of one substitution group are substitutes, so the cells should be positive. Switching is asymmetric, another generalization of [Blattberg, Briesch and Fox (1995)](https://doi.org/10.1287/mksc.14.3.G122): a national brand's promotion draws more from its private-label twin than the reverse. And cross elasticities should be smaller in magnitude than the own elasticities.
 
 
     In [62]:
@@ -2874,7 +2874,7 @@ ax.set(xlabel="price of", ylabel="units of", title="Posterior mean cross-price e
 </figure>
 
 
-The next cell counts the cells whose sign is credibly negative (posterior probability of a positive value below 0.10) and checks, per product, whether the own elasticity dominates every cross term of its row.
+We count the cells whose sign is credibly negative (posterior probability of a positive value below 0.10) and check, per product, whether the own elasticity dominates every cross term of its row.
 
 
     In [63]:
@@ -2904,9 +2904,9 @@ print(
 
 The two national-brand-to-twin cells are the largest and are certain: the focal product's price on the private-label honey nut oats, +0.69, and Mini Wheats' price on the private-label frosted wheat, +0.53, both with a posterior probability of 1.00 of being positive, while the reverse cells are -0.07 and +0.09. The asymmetry holds: a promotion of Honey Nut Cheerios takes units from its private-label twin, not the other way round. The two private-label products substitute for each other in both directions (+0.37 and +0.28), and so do the two Cheerios pack sizes (+0.22 and +0.15).
 
-Seven cells have a posterior probability of a negative value above 0.90. The four large ones concentrate in the General Mills family (a cut on either Cheerios pack raises Honey Nut Cheerios units, -0.25 and -0.31) and in the Cheerios 12 oz row (-0.70 for the private-label twin's price and -0.20 for Mini Wheats); the other three are within 0.15 of zero. A negative cell would mean complements, which two cereals are not. The likely mechanism is co-promotion inside a brand family: a family feature recorded on one UPC lifts the others beyond their own flags, which the average sibling-flag terms only partly absorb. In every row but Cheerios 12 oz the own elasticity dominates every cross term. The decisions below use only the focal product's column, which has the expected sign; the no-promotion baseline of the siblings carries the negative cells, which the limitations state.
+Seven cells have a posterior probability of a negative value above 0.90. The four large ones concentrate in the General Mills family (a cut on either Cheerios pack raises Honey Nut Cheerios units, -0.25 and -0.31) and in the Cheerios 12 oz row (-0.70 for the private-label twin's price and -0.20 for Mini Wheats); the other three are within 0.15 of zero. A negative cell would mean complements, which two cereals are not. The likely mechanism is co-promotion inside a brand family: a family feature recorded on one UPC lifts the others beyond their own flags, which the average sibling-flag terms only partly absorb. In every row but Cheerios 12 oz the own elasticity dominates every cross term. The decisions below use only the focal product's column, which has the expected sign; the negative cells enter the no-promotion baseline of the siblings, as the limitations state.
 
-The next cell fits the within-store least-squares elasticity of the focal product in each of the 18 stores and counts each store's identifying weeks; the following forest plot shows the store-level posterior elasticities against those estimates, ordered by the number of identifying weeks of the store.
+We fit the within-store least-squares elasticity of the focal product in each of the 18 stores and count each store's identifying weeks. The forest plot then sets the store-level posterior elasticities against those estimates, ordered by the number of identifying weeks of the store.
 
 
     In [64]:
@@ -2976,9 +2976,9 @@ ax.figure.suptitle(
 </figure>
 
 
-The store-level elasticities of the focal product have a least-squares spread of 0.37 across stores and a posterior-median spread of 0.31: the posterior medians shrink toward the product mean where the within-store estimates are noisy. This shrinkage is what the planner comparison of the decision section is about.
+The store-level elasticities of the focal product have a least-squares spread of 0.37 across stores and a posterior-median spread of 0.31: the posterior medians shrink toward the product mean where the within-store estimates are noisy. The planner comparison of the decision section measures what ignoring this shrinkage costs.
 
-In the following plot we show the posterior-mean seasonal component of every product over the horizon quarter, because the timing question of the promotion reduces, under a multiplicative model, to the week in which the seasonal profile peaks.
+Under a multiplicative model the timing question of the promotion reduces to the week in which the seasonal profile peaks, so we plot the posterior-mean seasonal component of every product over the horizon quarter.
 
 
     In [66]:
@@ -3030,7 +3030,7 @@ The posterior-mean seasonal component of the focal product peaks in horizon week
 
 ## In-sample fit and holdout forecast
 
-Before we use the model for decisions, we check that it forecasts. We draw the in-sample posterior predictive and the holdout forecast with the realized inputs and score them with the continuous ranked probability score (CRPS), the mean absolute error, and the coverage of the central 94\\ interval (the only central interval of this notebook; the figures draw HDI bands). The comparator is a seasonal naive forecast, the two-member ensemble of the units 52 and 104 weeks earlier. The next cell draws the predictives.
+Before we use the model for decisions, we check that it forecasts. We draw the in-sample posterior predictive and the holdout forecast with the realized inputs and score them with the continuous ranked probability score (CRPS), the mean absolute error, and the coverage of the central 94\\ interval (the only central interval of this notebook; the figures draw HDI bands). The comparator is a seasonal naive forecast, the two-member ensemble of the units 52 and 104 weeks earlier.
 
 
     In [67]:
@@ -3052,7 +3052,7 @@ naive_test = np.stack(
 ```
 
 
-The helper of the next cell scores an ensemble against the truth.
+A helper scores an ensemble against the truth.
 
 
     In [68]:
@@ -3071,7 +3071,7 @@ def score(
 ```
 
 
-In the following plot we compare the model with the seasonal naive per product on CRPS and on MASE (whose scale is computed per product on its training block, because a pooled scale would be dominated by the high-volume products), and show the 94\\ coverage per product; the title carries the scores over all products.
+We compare the model with the seasonal naive per product on CRPS and on MASE (whose scale is computed per product on its training block, because a pooled scale would be dominated by the high-volume products), and plot the 94\\ coverage per product; the title gives the scores over all products.
 
 
     In [69]:
@@ -3158,7 +3158,7 @@ fig.suptitle(
 
 Over all products the holdout CRPS is 12.97 against 22.13 for the seasonal naive ensemble and the mean absolute error 17.63 against 26.57; the central 94\\ interval covers 92\\ of the 1{,}404 holdout cells (96\\ in sample). Per product the model's MASE is below the naive one and below one everywhere, with the focal product the hardest at 0.95 against 1.56 and a 94\\ coverage of 0.84 in its promotion-heavy quarter.
 
-We read calibration the way [Gneiting and Katzfuss (2014)](https://doi.org/10.1146/annurev-statistics-062713-085831) frame it: sharpness subject to calibration. The check is the randomized probability integral transform (PIT) for counts of [Czado, Gneiting and Held (2009)](https://doi.org/10.1111/j.1541-0420.2009.01191.x). For a count y with predictive CDF G, u = G(y - 1) + v\\(G(y) - G(y - 1)) with v \sim \text{Uniform}(0, 1) is uniform for a calibrated forecast, U-shaped for an under-dispersed one and hump-shaped for an over-dispersed one. Two cautions: the holdout is the holiday quarter, with only two earlier Decembers in the training window; and the holdout cells of one series share a level path, so the effective sample size behind the histogram is below the cell count. In the following plot we show the CRPS by horizon week and the PIT histogram.
+We read calibration the way [Gneiting and Katzfuss (2014)](https://doi.org/10.1146/annurev-statistics-062713-085831) frame it: sharpness subject to calibration. The check is the randomized probability integral transform (PIT) for counts of [Czado, Gneiting and Held (2009)](https://doi.org/10.1111/j.1541-0420.2009.01191.x). For a count y with predictive CDF G, u = G(y - 1) + v\\(G(y) - G(y - 1)) with v \sim \text{Uniform}(0, 1) is uniform for a calibrated forecast, U-shaped for an under-dispersed one and hump-shaped for an over-dispersed one. Two cautions: the holdout is the holiday quarter, with only two earlier Decembers in the training window; and the holdout cells of one series share a level path, so the effective sample size behind the histogram is below the cell count. We plot the CRPS by horizon week and the PIT histogram.
 
 
     In [70]:
@@ -3211,7 +3211,7 @@ fig.suptitle("Holdout accuracy and calibration", fontsize=16, fontweight="bold")
 </figure>
 
 
-The model beats the naive forecast in every horizon week except week 12, the middle one of the three Christmas weeks with a feature at a 31\\ cut. The PIT histogram slopes downward, with 16\\ of the cells in the lowest decile and 4\\ in the highest: the holdout forecasts run high on average, so the calibration is good but not perfect. The helper of the next cell facets the in-sample fit and the holdout forecast of a list of series, and the following plot shows the focal product and its private-label twin in four stores.
+The model beats the naive forecast in every horizon week except week 12, the middle one of the three Christmas weeks with a feature at a 31\\ cut. The PIT histogram slopes downward, with 16\\ of the cells in the lowest decile and 4\\ in the highest: the holdout forecasts run high on average. A helper facets the in-sample fit and the holdout forecast of a list of series; we use it for the focal product and its private-label twin in four stores.
 
 
     In [71]:
@@ -3307,7 +3307,7 @@ The forecast bands follow the promotion spikes of the holdout quarter in every s
 
 # Counterfactual promotions
 
-A counterfactual promotion is a change of the horizon inputs, nothing else: the posterior draws stay fixed, the same PRNG key is reused, and the model is run again through NumPyro's `Predictive`. Nothing is refit. This is the covariate-swap pattern of the [fresh retail stockout example](fresh_retail_stockout.md) and the scenario covariates of the [availability TSB example](availability_tsb.md). The decision layer needs three things from every run: the sampled units, the conditional mean \mu over the horizon, and the future level innovations. The helper of the next cell wraps `Predictive` to return the three; the cell after it asserts that it reproduces the [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) draws of the previous section under the same key.
+A counterfactual promotion changes only the horizon inputs: the posterior draws stay fixed, the same PRNG key is reused, and NumPyro's `Predictive` runs the model again without a refit. This is the covariate-swap pattern of the [fresh retail stockout example](fresh_retail_stockout.md) and the scenario covariates of the [availability TSB example](availability_tsb.md). The decision layer needs three things from every run: the sampled units, the conditional mean \mu over the horizon, and the future level innovations. A helper wraps `Predictive` to return the three, and an assertion checks that it reproduces the [forecast](../../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) draws of the previous section under the same key.
 
 
     In [73]:
@@ -3344,7 +3344,7 @@ assert engine_gap == 0.0, "the scenario wrapper must reproduce the forecast() dr
 ```
 
 
-A policy is a discount depth d and a mechanics m for the focal product in every panel store during one contiguous two-week event, horizon weeks 7 and 8, the realized Thanksgiving slot. Every other product stays at its base price with no promotion over the whole horizon. The calendar is not a lever here for two reasons shown earlier: the post-promotion dip is economically negligible, and under a multiplicative model the timing question reduces to the seasonal peak. The helper of the next cell builds the horizon inputs of a policy. In the event rows it sets the focal product's own price and flags, writes the focal product's price into the `price hnc` channel of every series at the store, and sets the sibling flags of the other five series; the training rows are left untouched.
+A policy is a discount depth d and a mechanics m for the focal product in every panel store during one contiguous two-week event, horizon weeks 7 and 8, the realized Thanksgiving slot. Every other product stays at its base price with no promotion over the whole horizon. The calendar is not a lever here for two reasons shown earlier: the post-promotion dip is economically negligible, and under a multiplicative model the timing question reduces to the seasonal peak. A helper builds the horizon inputs of a policy. In the event rows it sets the focal product's own price and flags, writes the focal product's price into the `price hnc` channel of every series at the store, and sets the sibling flags of the other five series; the training rows are left untouched.
 
 
     In [75]:
@@ -3375,7 +3375,7 @@ def policy_covariates(depth: float, feature_flag: float, display_flag: float) ->
 ```
 
 
-Two policies forecast under one key share the future level innovations and differ only where the inputs differ; the sampled units are coupled but not identical, which is what common random numbers mean here. The next cell checks this on two policies: the training rows are untouched, the future innovations are identical, the conditional means outside the event weeks are identical, and the focal product's event draws are strongly correlated across the two policies.
+Two policies forecast under one key share the future level innovations and differ only where the inputs differ; the sampled units are coupled but not identical, which is what common random numbers mean here. We check this on two policies: the training rows are untouched, the future innovations are identical, the conditional means outside the event weeks are identical, and the focal product's event draws are strongly correlated across the two policies.
 
 
     In [76]:
@@ -3408,7 +3408,7 @@ print(
 
 The checks pass and the focal product's event draws have a correlation of 0.99 across the two policies.
 
-The grid of policies runs from no cut to a 40\\ cut in steps of five points for each of the four mechanics; for the shelf-tag-only mechanics the zero-depth cell is the no-promotion baseline itself. The grid is a response surface for the break-even and risk analyses, not a search space. The next cell forecasts every policy and stores, per policy, the event units of every series, their conditional means, and the zone-level paths of the focal product and its twin.
+The grid of policies runs from no cut to a 40\\ cut in steps of five points for each of the four mechanics; for the shelf-tag-only mechanics the zero-depth cell is the no-promotion baseline itself. The break-even and risk analyses read the grid as a response surface. We forecast every policy and store, per policy, the event units of every series, their conditional means, and the zone-level paths of the focal product and its twin.
 
 
     In [77]:
@@ -3452,7 +3452,7 @@ print(f"{len(policies)} policies forecast on {n_draws} draws in {perf_counter() 
     36 policies forecast on 4000 draws in 34 s
 
 
-The 36 policies take under a minute. The helper of the next cell plots zone-level weekly units (the sum over the 18 stores) of a policy against no promotion, with the median path and the 94\\ HDI band of each and the event weeks shaded, one panel per product and policy.
+The 36 policies take under a minute. A helper plots zone-level weekly units (the sum over the 18 stores) of a policy against no promotion, with the median path and the 94\\ HDI band of each and the event weeks shaded, one panel per product and policy.
 
 
     In [78]:
@@ -3525,7 +3525,7 @@ def plot_zone_policies(
 ```
 
 
-In the following plot we show what the committed policy, feature with display at a 15\\ cut, does to the focal product at the zone level.
+We start with what the committed policy, feature with display at a 15\\ cut, does to the focal product at the zone level.
 
 
     In [79]:
@@ -3541,7 +3541,7 @@ plot_zone_policies([("feature + display", 0.15)], [FOCAL], figsize=(12.0, 6.0), 
 </figure>
 
 
-The feature-with-display event lifts the focal product's zone-level units to more than three times the no-promotion level in the event weeks, and the two bands separate completely. In the following plot we compare three mechanics at the same 15\\ depth, one column per mechanics and one row per product, with the private-label twin in the second row.
+The feature-with-display event lifts the focal product's zone-level units to more than three times the no-promotion level in the event weeks, and the two bands separate completely. Next we compare three mechanics at the same 15\\ depth, one column per mechanics and one row per product, with the private-label twin in the second row.
 
 
     In [80]:
@@ -3566,7 +3566,7 @@ A shelf-tag cut of the same depth moves the focal product far less than a featur
 
 # Decision making and optimization
 
-The model forecasts units, and the decisions need money. This section states the economics once and turns the forecast units of every draw into an event profit; the break-even, slot, store, risk, planner and order subsections then work on that profit. The economics are simple and explicit: a gross margin per product, a per-unit allowance from the manufacturer, and a slot cost per mechanics that we solve for rather than assume.
+The model forecasts units, and the decisions need money. This section states the economics once and turns the forecast units of every draw into an event profit; the break-even, slot, store, risk, planner and order subsections then work on that profit. The economics have three inputs: a gross margin per product, a per-unit allowance from the manufacturer, and a slot cost per mechanics that we solve for rather than assume.
 
 
 ## The margin of a promoted unit
@@ -3575,7 +3575,7 @@ Take product j at store s. Let p\_{j,s} be its base price at the last training w
 
  c\_{j,s} = (1 - g_j)\\ p\_{j,s}. 
 
-Now cut the price of the focal product \text{H} by a fraction d of its base price. The manufacturer refunds a share \alpha of the discount on every unit sold in a promotion week. We call this refund the allowance. Three flows set the margin of one promoted unit. The retailer sells the unit at the cut price. The retailer pays the unit cost. The retailer receives the allowance. The sum of the three flows is the promo-week unit margin:
+Now cut the price of the focal product \text{H} by a fraction d of its base price. The manufacturer refunds a share \alpha of the discount on every unit sold in a promotion week. We call this refund the allowance. Three flows set the margin of one promoted unit: the retailer sells the unit at the cut price, pays the unit cost and receives the allowance. Their sum is the promo-week unit margin:
 
 \begin{align\*} m\_{\text{H},s}(d) &= p\_{\text{H},s}\\(1 - d) - c\_{\text{H},s} + \alpha\\ d\\ p\_{\text{H},s} \\ &= p\_{\text{H},s}\\ \big( g\_{\text{H}} - (1 - \alpha)\\ d \big). \end{align\*}
 
@@ -3583,7 +3583,7 @@ Each point of depth costs the retailer (1 - \alpha) points of margin rate, and t
 
  m\_{k,s} = g_k\\ p\_{k,s}. 
 
-A feature or a display also uses a slot. Its cost S_m per store-week is one number per mechanics, and under feature with display it covers both slots. We never assume a value for S_m; a later subsection solves for it. The next cell builds the per-series margins and prints the economics of the focal product.
+A feature or a display also uses a slot. Its cost S_m per store-week is one number per mechanics, and under feature with display it covers both slots. We never assume a value for S_m; a later subsection solves for it. We build the per-series margins and print the economics of the focal product.
 
 
     In [81]:
@@ -3612,7 +3612,7 @@ print(
     hnc: gross margin 0.28, base price 2.61 to 3.07 (median 3.02), unit cost at the median 2.17; private label gross margin 0.38
 
 
-The unit margin of a promoted unit is a straight line in the depth whose slope is -(1 - \alpha)\\ p\_{\text{H},s}. In the following plot we draw it at the median focal base price for three funding shares, with the margin at 0\\, 15\\ and 30\\ marked for the nominal share \alpha = 0.5.
+The unit margin of a promoted unit is a straight line in the depth whose slope is -(1 - \alpha)\\ p\_{\text{H},s}. We draw it at the median focal base price for three funding shares, with the margin at 0\\, 15\\ and 30\\ marked for the nominal share \alpha = 0.5.
 
 
     In [82]:
@@ -3684,7 +3684,7 @@ The average of \Pi^\mu_r(a) over the draws estimates the estimand without any ob
 
  \text{E}\[\Pi(a)\] = \text{E}\big\[\text{E}\[\Pi(a) \mid \theta\]\big\] \approx \frac{1}{R} \sum\_{r=1}^{R} \Pi^\mu_r(a). 
 
-The bands of \Pi^\mu in the break-even subsection still carry the sampled level path. The sampled counts return in the risk and order subsections, where the demand noise matters. The next cell defines the two parts, at the zone level and per store.
+The bands of \Pi^\mu in the break-even subsection still include the sampled level path. The sampled counts return in the risk and order subsections, where the demand noise matters. We define the two parts, at the zone level and per store.
 
 
     In [83]:
@@ -3731,7 +3731,7 @@ def event_profit(
 ```
 
 
-The next cell summarizes the no-promotion event profit over the 18 stores, with and without the demand noise.
+We summarize the no-promotion event profit over the 18 stores, with and without the demand noise.
 
 
     In [84]:
@@ -3793,7 +3793,7 @@ A negative value means the event beats no promotion even if the retailer funds t
 
 ## Who funds the discount: the break-even funding share
 
-This is the second business question. The manufacturer's funding share is negotiated, so the useful output is not a profit at one share but the share at which the promotion stops paying, with its uncertainty. The next cell defines the mechanics-specific elasticity draws and the secant share.
+This is the second business question. The manufacturer's funding share is negotiated, so the useful output is the share at which the promotion stops paying, with its uncertainty. We define the mechanics-specific elasticity draws and the secant share.
 
 
     In [85]:
@@ -3825,7 +3825,7 @@ def marginal_secant(mechanics_name: str, brand_only: bool) -> Float[np.ndarray, 
 ```
 
 
-In the following forest plot we show, per mechanics, the posterior of the three break-even shares of the rule of thumb (the brand-only secant, the category secant with the cannibalization included, and the brand-only tangent \alpha^\star_m) and of the cannibalization itself, the difference between the category and the brand-only secant. The posterior median of the category share of feature with display becomes \tilde\alpha, the reference share of every later figure, drawn as the dashed line.
+Per mechanics, the forest plot shows the posterior of the three break-even shares of the rule of thumb (the brand-only secant, the category secant with the cannibalization included, and the brand-only tangent \alpha^\star_m) and of the cannibalization itself, the difference between the category and the brand-only secant. The posterior median of the category share of feature with display becomes \tilde\alpha, the reference share of every later figure, drawn as the dashed line.
 
 
     In [86]:
@@ -3883,7 +3883,7 @@ ax.figure.suptitle("Break-even funding share by mechanics", fontsize=16, fontwei
 
 The brand-only shares are between 0.68 and 0.70 for the four mechanics with 94\\ HDIs about 0.1 wide, and the cannibalization rows add 0.03 under feature with display and 0.09 under a shelf-tag cut. The posterior median of the category break-even share of feature with display is 0.71, which becomes \tilde\alpha.
 
-In the following plot we turn the same posterior into decision probabilities as a function of the funding share: on the left, the probability that the mechanics-specific elasticity is below the threshold \varepsilon^\star(\alpha) (the brand-only tangent), with the threshold marked at three shares; on the right, the probability that the category break-even share is below \alpha (the category secant). The vertical lines are the nominal share and \tilde\alpha.
+We turn the same posterior into decision probabilities as a function of the funding share: on the left, the probability that the mechanics-specific elasticity is below the threshold \varepsilon^\star(\alpha) (the brand-only tangent), with the threshold marked at three shares; on the right, the probability that the category break-even share is below \alpha (the category secant). The vertical lines are the nominal share and \tilde\alpha.
 
 
     In [87]:
@@ -3951,7 +3951,7 @@ fig.suptitle(
 
 At the nominal share the threshold elasticity is 1.79 and the probability that a cut pays is zero under every mechanics. Both probabilities cross one half near \tilde\alpha (the category one exactly at \tilde\alpha for feature with display, by construction, since \tilde\alpha is the median of that distribution) and reach one by a share of 0.9.
 
-In the following plot we show the expected event profit of the category against the depth of the focal product's cut, one row per mechanics and one column per funding share: the nominal 0.5, \tilde\alpha, and \tilde\alpha + 0.15. The bands are the 50\\ and 94\\ HDIs across draws of \Pi^\mu, so they carry the parameter and level-path uncertainty and not the demand noise; shaded depths have thin support.
+We plot the expected event profit of the category against the depth of the focal product's cut, one row per mechanics and one column per funding share: the nominal 0.5, \tilde\alpha, and \tilde\alpha + 0.15. The bands are the 50\\ and 94\\ HDIs across draws of \Pi^\mu, so they include the parameter and level-path uncertainty and not the demand noise; shaded depths have thin support.
 
 
     In [88]:
@@ -4036,7 +4036,7 @@ fig.suptitle(
 </figure>
 
 
-At the nominal share every curve falls with depth. At \tilde\alpha the feature and feature-with-display curves are flat, while the shelf-tag and display curves still fall a little (by about 0.3 and 0.2 thousand between no cut and a 40\\ cut). At \tilde\alpha + 0.15 every curve rises. In the following plot we quantify the first two columns: per mechanics and share, the posterior probability that no promotion or the shallowest cell is the best choice, and the probability that the deepest cell is.
+At the nominal share every curve falls with depth. At \tilde\alpha the feature and feature-with-display curves are flat, while the shelf-tag and display curves still fall a little (by about 0.3 and 0.2 thousand between no cut and a 40\\ cut). At \tilde\alpha + 0.15 every curve rises. We quantify the first two columns in a bar chart: per mechanics and share, the posterior probability that no promotion or the shallowest cell is the best choice, and the probability that the deepest cell is.
 
 
     In [90]:
@@ -4102,7 +4102,7 @@ grid.figure.suptitle(
 
 At the nominal share the probability that no promotion or the shallowest cell is optimal is 1.00 for all four mechanics. At \tilde\alpha the deepest cell is optimal in 63\\ of the draws for feature with display, so the depth decision is a corner at the nominal share and a toss-up near the break-even share.
 
-The last figure of this subsection answers a different question: not whether a deeper cut pays against a shallower one, but whether an event pays against no promotion at all. In the following forest plot we show the event-level share \alpha^{\text{ev}} of a 5\\, a 15\\ and a 30\\ cut under each mechanics, with the posterior probability that the cell beats no promotion when the retailer funds the whole cut in the row label.
+The last figure of this subsection compares an event with no promotion at all, where the previous figures compared a deeper cut with a shallower one. The forest plot shows the event-level share \alpha^{\text{ev}} of a 5\\, a 15\\ and a 30\\ cut under each mechanics, with the posterior probability that the cell beats no promotion when the retailer funds the whole cut in the row label.
 
 
     In [91]:
@@ -4148,12 +4148,12 @@ ax.figure.suptitle(
 </figure>
 
 
-A feature-with-display event at a 15\\ cut beats no promotion even if the retailer funds the whole cut (event-level share -0.32), and so does a feature alone (-0.12). The mechanics uplift carries both, not the cut: against the same mechanics at base price the cut itself needs the category secant of the break-even figure (0.71 at zone level), and the store-by-store subsection below returns to this decision. The same cut under a shelf tag needs a share of 0.79, and a 30\\ cut under feature with display needs 0.30.
+A feature-with-display event at a 15\\ cut beats no promotion even if the retailer funds the whole cut (event-level share -0.32), and so does a feature alone (-0.12). The mechanics uplift pays for both events: against the same mechanics at base price, the cut itself needs the category secant of the break-even figure (0.71 at zone level), and the store-by-store subsection below returns to this decision. The same cut under a shelf tag needs a share of 0.79, and a 30\\ cut under feature with display needs 0.30.
 
 
 ## The break-even cost of a feature or display slot
 
-A feature or a display uses a slot in the circular or on the floor, and the data contain no price for it. So we solve for the price: the break-even slot cost of a mechanics at a depth is the incremental gross event profit it adds over a shelf-tag-only cut of the same depth, divided by the number of store-weeks it occupies. At zero depth the comparison is against no promotion at all, a pure mechanics uplift. In the following forest plot we show these break-even slot costs at three depths and at the nominal and the break-even funding share, with the median and the 94\\ HDI in the row labels.
+A feature or a display uses a slot in the circular or on the floor, and the data contain no price for it. So we solve for the price: the break-even slot cost of a mechanics at a depth is the incremental gross event profit it adds over a shelf-tag-only cut of the same depth, divided by the number of store-weeks it occupies. At zero depth the comparison is against no promotion at all, a pure mechanics uplift. A forest plot gives these break-even slot costs at three depths and at the nominal and the break-even funding share, with the median and the 94\\ HDI in the row labels.
 
 
     In [92]:
@@ -4208,7 +4208,7 @@ ax.figure.suptitle(
 
 At a 15\\ cut and the break-even share, a display is worth 29 currency units per store-week over the same cut with a shelf tag alone (94\\ HDI 20 to 39), a feature 87 (73 to 101) and the pair 145 (124 to 167). At the nominal share the same values are lower, because the margin lost on the extra units counts against the slot.
 
-In the following plot we assume a cost per slot and store-week, the same for a feature and for a display (the pair costs twice as much), and show the posterior probability that each option is the best choice over the whole grid as that cost rises, at both funding shares.
+Next we assume a cost per slot and store-week, the same for a feature and for a display (the pair costs twice as much), and plot the posterior probability that each option is the best choice over the whole grid as that cost rises, at both funding shares.
 
 
     In [93]:
@@ -4299,7 +4299,7 @@ With slots at 25 per store-week, feature with display is the best choice with pr
 
 ## Store-by-store decisions
 
-The zone-level shares above pool the 18 stores. The model has no cross-store terms, so the same break-even shares can be computed per store, and the per-store decisions are separable. This matters because the funding share is negotiated once, but the decision to add the cut can be taken store by store. In the following forest plot we show the per-store category break-even share under feature with display against the nominal share and the zone-level \tilde\alpha, with the stores ordered by their number of identifying weeks and the brand-only and category medians in the row labels.
+The zone-level shares above pool the 18 stores. The model has no cross-store terms, so the same break-even shares can be computed per store, and the per-store decisions are separable. This matters because the funding share is negotiated once, but the decision to add the cut can be taken store by store. We plot the per-store category break-even share under feature with display against the nominal share and the zone-level \tilde\alpha, with the stores ordered by their number of identifying weeks and the brand-only and category medians in the row labels.
 
 
     In [94]:
@@ -4345,7 +4345,7 @@ ax.figure.suptitle(
 </figure>
 
 
-The next cell counts, at both shares, the stores in which the cut pays with posterior probability above one half (the mechanics-specific elasticity below the threshold).
+We count, at both shares, the stores in which the cut pays with posterior probability above one half (the mechanics-specific elasticity below the threshold).
 
 
     In [95]:
@@ -4369,12 +4369,12 @@ for alpha_value, probabilities in cut_pays.items():
     funding share 0.71: P(the cut pays) above 0.5 in 14 of 18 stores (range 0.00 to 1.00)
 
 
-The store-level break-even shares (brand-only medians from 0.53 to 0.87, category medians from 0.57 to 0.89) line up by segment more than by the number of identifying weeks, and their 94\\ HDIs are about twice as wide as the zone-level one. At the nominal share the cut pays with probability above one half in no store; at the break-even share in 14 of the 18, with the per-store probabilities ranging from 0.00 to 1.00. Where the intervals are wide, the store's decision is uncertain, and it is the partial pooling of the store-level elasticities that keeps them from being prior-dominated.
+The store-level break-even shares (brand-only medians from 0.53 to 0.87, category medians from 0.57 to 0.89) line up by segment more than by the number of identifying weeks, and their 94\\ HDIs are about twice as wide as the zone-level one. At the nominal share the cut pays with probability above one half in no store; at the break-even share in 14 of the 18, with the per-store probabilities ranging from 0.00 to 1.00. Where the intervals are wide, the store's decision is uncertain; the partial pooling of the store-level elasticities keeps them from being prior-dominated.
 
 
 ## Go or no-go: the downside risk
 
-Expected profit is not the whole decision: a category manager also wants to know how bad the promotion can turn out. The incremental profit of a policy against no promotion, \Delta\Pi_r(a) = \Pi_r(a) - \Pi_r(a_0), is computed here on the sampled event paths, so it carries the demand noise as well as the parameter and level-path uncertainty, draw by draw under common random numbers (the same posterior draw, the same level path, coupled demand draws). That coupling is an assumption the data cannot identify: the potential outcomes of the same week under two policies are never observed together. We summarize the downside with the conditional value at risk at the 10\\ level, \text{CVaR}\_{0.10}, the mean of the worst tenth of the draws ([Rockafellar and Uryasev, 2000](https://doi.org/10.21314/JOR.2000.038)), and report two standard errors of it: an iid bootstrap over the draws, and the spread of the per-chain values, which also reflects the autocorrelation of the chains. The next cell defines the four helpers.
+Besides the expected profit, a category manager wants to know how bad the promotion can turn out. The incremental profit of a policy against no promotion, \Delta\Pi_r(a) = \Pi_r(a) - \Pi_r(a_0), is computed here on the sampled event paths, so it includes the demand noise as well as the parameter and level-path uncertainty, draw by draw under common random numbers (the same posterior draw, the same level path, coupled demand draws). That coupling is an assumption the data cannot identify: the potential outcomes of the same week under two policies are never observed together. We summarize the downside with the conditional value at risk at the 10\\ level, \text{CVaR}\_{0.10}, the mean of the worst tenth of the draws ([Rockafellar and Uryasev, 2000](https://doi.org/10.21314/JOR.2000.038)), and report two standard errors of it: an iid bootstrap over the draws, and the spread of the per-chain values, which also reflects the autocorrelation of the chains. Four helpers compute the increment, the CVaR and its two standard errors.
 
 
     In [96]:
@@ -4415,7 +4415,7 @@ def cvar_chain_se(draws: Float[np.ndarray, " sample"], level: float = 0.10) -> f
 ```
 
 
-The next cell computes the expected increment, the probability of a loss and the CVaR of every policy of the grid at \tilde\alpha, and prints the three policies with the highest expected increment with both standard errors of their CVaR.
+We compute the expected increment, the probability of a loss and the CVaR of every policy of the grid at \tilde\alpha, and print the three policies with the highest expected increment with both standard errors of their CVaR.
 
 
     In [97]:
@@ -4461,7 +4461,7 @@ for policy in top_policies:
 
 The three deepest feature-with-display cells have the highest expected increments, 5{,}260 for the deepest, and \text{CVaR}\_{0.10} values of 4{,}366 to 4{,}378 with standard errors of 8 to 14, so the risk measure does not separate them either; the earlier figure gave the deepest cell a 63\\ chance of being the best cell.
 
-The common random numbers are an assumption, so the next cell computes a sensitivity: the CVaR of the committed policy against a baseline whose level path and demand noise are redrawn under a different key while the parameters are shared.
+The common random numbers are an assumption, so we compute a sensitivity: the CVaR of the committed policy against a baseline whose level path and demand noise are redrawn under a different key while the parameters are shared.
 
 
     In [98]:
@@ -4492,7 +4492,7 @@ print(
     feature + display at 15%: CVaR10 4,343 under common random numbers (P(loss) 0.00), 3,953 with a redrawn baseline (P(loss) 0.00)
 
 
-The coupling matters for the downside number: the committed policy has a \text{CVaR}\_{0.10} of 4{,}343 under common random numbers and 3{,}953 with a redrawn baseline, a difference the data cannot arbitrate. In the following plot we add the slot cost to the committed policy and show the probability of loss and the CVaR along the slot-cost ladder, at both funding shares.
+The coupling matters for the downside number: the committed policy has a \text{CVaR}\_{0.10} of 4{,}343 under common random numbers and 3{,}953 with a redrawn baseline, a difference the data cannot arbitrate. We then add the slot cost to the committed policy and plot the probability of loss and the CVaR along the slot-cost ladder, at both funding shares.
 
 
     In [99]:
@@ -4561,7 +4561,7 @@ fig.suptitle(
 </figure>
 
 
-With slots at 25 per store-week the committed event still has a probability of loss of 0.00 at both shares; at 50 the probability is 0.11 at the nominal share and 0.00 at the break-even share; at 75 it is 1.00 and 0.73. The go turns into a no-go between 50 and 75 per slot and store-week. In the following plot we show the histograms of the incremental profit of the top three policies, and the expected increment against the CVaR of every policy of the grid.
+With slots at 25 per store-week the committed event still has a probability of loss of 0.00 at both shares; at 50 the probability is 0.11 at the nominal share and 0.00 at the break-even share; at 75 it is 1.00 and 0.73. The go turns into a no-go between 50 and 75 per slot and store-week. The next figure has two panels: the histograms of the incremental profit of the top three policies, and the expected increment against the CVaR of every policy of the grid.
 
 
     In [100]:
@@ -4655,7 +4655,7 @@ The histograms of the three deepest feature-with-display cells overlap almost co
 
 ## Point-estimate planners against the posterior
 
-For the depth decision, a comparison with a point forecast is trivial: profit is linear in units, so a planner that replaces the random units by their expectation ranks every policy exactly as the posterior does, and the value of the stochastic solution for the pricing lever alone is zero, by construction. The comparison that matters is with planners that use point estimates of the parameters:
+For the depth decision, a comparison with a point forecast is trivial: profit is linear in units, so a planner that replaces the random units by their expectation ranks every policy exactly as the posterior does, and the value of the stochastic solution for the pricing lever alone is zero, by construction. We therefore compare the posterior with planners that use point estimates of the parameters:
 
 | planner | inputs | what it ignores | comparison shown |
 |----|----|----|----|
@@ -4664,7 +4664,7 @@ For the depth decision, a comparison with a point forecast is trivial: profit is
 | store least-squares plug-in | within-store least-squares elasticity, pooled least-squares mechanics multipliers | shrinkage across stores, the selection effect of choosing on noisy estimates | store-by-store decisions and the postdecision disappointment |
 | posterior | the partially pooled posterior | nothing the model does not | store-by-store decisions |
 
-The next cell computes the Jensen gap, which is small whenever the elasticity posterior is tight.
+We compute the Jensen gap, which is small whenever the elasticity posterior is tight.
 
 
     In [101]:
@@ -4691,7 +4691,7 @@ print(
 
 The Jensen ratio is at most 1.002 across the grid, so the posterior-mean plug-in and the posterior planner agree.
 
-The store least-squares planner is the one that differs from the posterior. It faces two store-level decisions about the committed event, feature with display at 15\\: whether to run the event at all against no promotion, and whether to add the cut against the same mechanics at base price. It decides each with the store's own within-store elasticity (the specification with flags, plus the focal product's least-squares depth slopes), the focal product's least-squares mechanics multipliers and the least-squares cross terms, applied to the same reference units and margins as the posterior planner. Both plans are evaluated under the posterior, which is the evaluation measure: the posterior planner is optimal under it by construction, so the gap measures what the unpooled point estimates cost. The disappointment of the least-squares plan is the gain it predicts for its chosen stores minus the gain the posterior expects for them, the postdecision surprise of [Smith and Winkler (2006)](https://doi.org/10.1287/mnsc.1050.0451). The helper of the next cell predicts the event units of the committed policy with the least-squares planner.
+Only the store least-squares planner differs from the posterior. It faces two store-level decisions about the committed event, feature with display at 15\\: whether to run the event at all against no promotion, and whether to add the cut against the same mechanics at base price. It decides each with the store's own within-store elasticity (the specification with flags, plus the focal product's least-squares depth slopes), the focal product's least-squares mechanics multipliers and the least-squares cross terms, applied to the same reference units and margins as the posterior planner. Both plans are evaluated under the posterior, which is the evaluation measure: the posterior planner is optimal under it by construction, so the gap measures what the unpooled point estimates cost. The disappointment of the least-squares plan is the gain it predicts for its chosen stores minus the gain the posterior expects for them, the postdecision surprise of [Smith and Winkler (2006)](https://doi.org/10.1287/mnsc.1050.0451). A helper predicts the event units of the committed policy with the least-squares planner.
 
 
     In [102]:
@@ -4743,7 +4743,7 @@ def least_squares_units(
 ```
 
 
-The next cell takes both decisions with both planners at both funding shares, plots the number of stores each planner chooses, and prints the value of each plan under the posterior and the disappointment of the least-squares plan.
+We take both decisions with both planners at both funding shares, plot the number of stores each planner chooses, and print the value of each plan under the posterior and the disappointment of the least-squares plan.
 
 
     In [103]:
@@ -4841,7 +4841,7 @@ grid.figure.suptitle(
 </figure>
 
 
-For the decision to run the event, both planners choose all 18 stores at both shares; the least-squares planner's disappointment is negative (-724 and -703), because its own mechanics multipliers under-predict the uplift the posterior expects. For the decision to add the cut at the nominal share, the posterior planner adds it in no store and the least-squares planner in 3; that plan is worth -109 under the posterior, a disappointment of 222. At the break-even share the least-squares planner adds the cut in all 18 stores and the posterior planner in 9; the least-squares plan is worth 10 under the posterior against 162 for the posterior plan, and the disappointment is 862. In the following plot we show, per store, the gain of the cut predicted by the least-squares planner against the gain the posterior expects.
+For the decision to run the event, both planners choose all 18 stores at both shares; the least-squares planner's disappointment is negative (-724 and -703), because its own mechanics multipliers under-predict the uplift the posterior expects. For the decision to add the cut at the nominal share, the posterior planner adds it in no store and the least-squares planner in 3; that plan is worth -109 under the posterior, a disappointment of 222. At the break-even share the least-squares planner adds the cut in all 18 stores and the posterior planner in 9; the least-squares plan is worth 10 under the posterior against 162 for the posterior plan, and the disappointment is 862. Per store, we plot the gain of the cut predicted by the least-squares planner against the gain the posterior expects.
 
 
     In [104]:
@@ -4889,12 +4889,12 @@ fig.suptitle(
 </figure>
 
 
-At the break-even share nearly every store is on or below the identity line, and the store with the largest predicted gain keeps a small part of it. The stores with the most extreme least-squares elasticities are the ones the planner picks, and they are the ones whose estimates the posterior shrinks the most.
+At the break-even share nearly every store is on or below the identity line, and the store with the largest predicted gain keeps a small part of it. The planner picks the stores with the most extreme least-squares elasticities, and the posterior shrinks their estimates the most.
 
 
 ## How much to order: the newsvendor problem
 
-This is the third business question. The order belongs to the replenishment planner, who takes the promotion as committed: feature with display at a 15\\ cut, the grid cell nearest the realized Thanksgiving event, under the nominal funding share of 0.5. The question is a newsvendor problem: one order per store for the two event weeks, an underage cost for every unit short and an overage cost for every unit left over. What the posterior adds is the joint distribution of the two event weeks, which a per-week forecast does not have.
+This is the third business question. The order belongs to the replenishment planner, who takes the promotion as committed: feature with display at a 15\\ cut, the grid cell nearest the realized Thanksgiving event, under the nominal funding share of 0.5. The question is a newsvendor problem: one order per store for the two event weeks, an underage cost for every unit short and an overage cost for every unit left over. The posterior adds the joint distribution of the two event weeks, which a per-week forecast does not have.
 
 
 ### Event demand, costs and the critical fractile
@@ -4938,7 +4938,7 @@ The vocabulary follows [Birge and Louveaux (2011)](https://doi.org/10.1007/978-1
 - \text{WS} is the wait-and-see value, the profit of ordering after seeing the demand, so \text{EVPI}\_W is the value of perfect information about the demand: a loose ceiling, because it includes the irreducible demand noise, which no model removes.
 - \text{EVPI}\_\theta is the tighter ceiling, the value of knowing the parameters and the level path, computed with inner negative binomial draws per posterior draw.
 
-Two caveats. The inner order q\_\theta is chosen and evaluated on the same inner draws, so the value is optimistic in sample; a held-out version keeps the same q\_\theta but evaluates it, with RP, on fresh inner draws, and the gap between the two is the optimism. And RP, VSS and both ceilings are maxima on the evaluation draws, so we also compute a split-half VSS: the rule is chosen on one half of the draws and evaluated on the other. The next cell computes the event demand and the costs and defines the newsvendor profit and the three order rules.
+Two caveats. The inner order q\_\theta is chosen and evaluated on the same inner draws, so the value is optimistic in sample; a held-out version keeps the same q\_\theta but evaluates it, with RP, on fresh inner draws, and the gap between the two is the optimism. And RP, VSS and both ceilings are maxima on the evaluation draws, so we also compute a split-half VSS: the rule is chosen on one half of the draws and evaluated on the other. We compute the event demand and the costs and define the newsvendor profit and the three order rules.
 
 
     In [105]:
@@ -5022,7 +5022,7 @@ def order_rules(eta: float) -> dict[str, float | np.ndarray]:
 ```
 
 
-The next cell evaluates the three rules at a holding share of 0.1 and prints the values the prose quotes.
+We evaluate the three rules at a holding share of 0.1 and print the values the prose quotes.
 
 
     In [106]:
@@ -5053,7 +5053,7 @@ print(
     paths order: fill rate 0.94, expected leftover 2,211 units over 18 stores
 
 
-With a holding share of 0.1 the critical fractile is 0.74, the underage cost is 0.54 to 0.63 per unit across stores, and the two event weeks of a store have a correlation of 0.26 across draws in the median store. The recourse value is 5{,}936; the mean order loses 112 against it, a value of the stochastic solution of 1.9\\ of RP (109 on the split-half check); the marginal rule loses only 4. The paths rule has a fill rate of 0.94 and an expected leftover of 2{,}211 units over the 18 stores. In the following plot we show the three orders of every store against its expected event demand.
+With a holding share of 0.1 the critical fractile is 0.74, the underage cost is 0.54 to 0.63 per unit across stores, and the two event weeks of a store have a correlation of 0.26 across draws in the median store. The recourse value is 5{,}936; the mean order loses 112 against it, a value of the stochastic solution of 1.9\\ of RP (109 on the split-half check); the marginal rule loses only 4. The paths rule has a fill rate of 0.94 and an expected leftover of 2{,}211 units over the 18 stores. We plot the three orders of every store against its expected event demand.
 
 
     In [107]:
@@ -5103,7 +5103,7 @@ ax.set(
 </figure>
 
 
-The marginal rule's per-week quantiles add up to an order above the joint quantile in every store, and over-ordering is cheap at a fractile of 0.74, which is why it loses little; the mean order sits below both. The next cell computes \text{EVPI}\_\theta with inner negative binomial draws per posterior draw, in sample and held out, with the draws broadcast through xarray so each dimension is named.
+The marginal rule's per-week quantiles add up to an order above the joint quantile in every store, and over-ordering is cheap at a fractile of 0.74, which is why it loses little; the mean order sits below both. We compute \text{EVPI}\_\theta with inner negative binomial draws per posterior draw, in sample and held out, with the draws broadcast through xarray so each dimension is named.
 
 
     In [108]:
@@ -5181,7 +5181,7 @@ print(
 
 Perfect information about the demand itself would be worth 14.5\\ of RP; about the parameters and the level path 5.6\\ from 300 inner draws, and 5.5\\ on 100 held-out draws, so the in-sample optimism of the inner argmax is 0.06\\ of RP.
 
-Finally, the holding share \eta is an assumption, so the next cell sweeps it and plots the value of the stochastic solution, the marginal-rule loss and the two information ceilings against the holding share, with the critical fractile \kappa that each holding share implies under its tick, and the holding share at which \kappa equals the probability that demand falls below its mean (the fractile at which the mean order is optimal) as the dashed line.
+Finally, the holding share \eta is an assumption, so we sweep it and plot the value of the stochastic solution, the marginal-rule loss and the two information ceilings against the holding share, with the critical fractile \kappa that each holding share implies under its tick, and the holding share at which \kappa equals the probability that demand falls below its mean (the fractile at which the mean order is optimal) as the dashed line.
 
 
     In [110]:
@@ -5266,18 +5266,18 @@ The value of the stochastic solution is smallest, 0.1\\ of RP, at a holding shar
 
 # Conclusions
 
-We set out to answer three questions for the Thanksgiving promotion of Honey Nut Cheerios. The answers, from the figures above:
+The answers to the three questions about the Thanksgiving promotion of Honey Nut Cheerios, from the figures above:
 
 1.  **Which promotion?** Feature with display, at the shallowest cut the manufacturer will fund. At the nominal funding share of 0.5 the posterior puts probability 1.00 on a falling profit curve for every mechanics, so the depth decision is a corner; near the break-even share the profit curves are flat and the three deepest cells have downside values within their standard errors of each other. Feature with display is the best mechanics with probability 1.00 while a slot costs 25 per store-week, and no promotion wins at 100.
 2.  **Who pays?** The category break-even funding share of feature with display is 0.71, with a 94\\ HDI about 0.1 wide at zone level and about twice that per store. A feature-with-display event at a 15\\ cut beats no promotion even if the retailer funds the whole cut, because the mechanics uplift pays for it; the go turns into a no-go between 50 and 75 per slot and store-week.
 3.  **How much to order?** The newsvendor order from the joint demand paths. Its value over the mean order is 1.9\\ of the recourse value at the nominal holding share, smallest (0.1\\) where the critical fractile meets the probability that demand falls below its mean, and up to 15\\ at low fractiles. The marginal-quantile rule over-orders in every store but loses below 1\\ everywhere, because the two event weeks are only weakly correlated (0.26).
 
-Where the posterior changed the answer relative to a point estimate: the store least-squares planner, which is not pooled, adds the cut in 3 stores at the nominal share where the posterior adds it in none, and in all 18 at the break-even share where the posterior adds it in 9, with a postdecision disappointment of 222 and 862; the break-even share comes with an interval instead of a single number; the go/no-go has a downside; and the order uses the joint distribution of the event weeks.
+Where the posterior changed the answer relative to a point estimate: the store least-squares planner, which is not pooled, adds the cut in 3 stores at the nominal share where the posterior adds it in none, and in all 18 at the break-even share where the posterior adds it in 9, with a postdecision disappointment of 222 and 862; the break-even share comes with an interval instead of a single number; the go/no-go decision comes with a downside measure, the CVaR; and the order uses the joint distribution of the event weeks.
 
 
 # Limitations
 
-- No experiment. Every elasticity rests on the selection-on-observables assumption drawn in the causal graph; the holdout validates the forecasting engine under the realized calendar, not the counterfactual ones.
+- There was no experiment, so every elasticity rests on the selection-on-observables assumption drawn in the causal graph; the holdout validates the forecasts under the realized promotion calendar, not under the counterfactual ones.
 - Seven cross elasticities are credibly negative; the four large ones sit inside the General Mills family or in the Cheerios 12 oz row, whose own elasticity is smaller than the effect of the price of Honey Nut Cheerios' private-label twin. We read them as co-promotion recorded on one UPC, not as complementarity; the decisions use only the focal product's column, which has the expected sign, but the no-promotion baseline of the siblings carries them.
 - The panel keeps six products and only stores with complete series: Post, Quaker, the products of other sub-categories and other retailers are omitted competitors, and a masked likelihood would use the 23 near-complete stores as well.
 - The joint no-promotion baseline over a holiday quarter is never observed; its units rest on the log-additivity of the model. Common random numbers are a coupling assumption; the different-key baseline is a sensitivity, not a bound.
