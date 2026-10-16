@@ -1148,7 +1148,7 @@ with dag.subgraph(name="cluster_assumption") as cluster:
     cluster.edge("Z", "Y")
     cluster.edge("Z", "U")
 with dag.subgraph(name="cluster_violation") as cluster:
-    cluster.attr(label="What would break it", color="gray")
+    cluster.attr(label="Violation of the assumption", color="gray")
     cluster.node(
         "V", label="demand shock or coupons\n(unobserved)", color="lightgray", style="filled"
     )
@@ -1617,7 +1617,7 @@ axes[1].set(
     ylabel="",
     title=f"{FOCAL} store-weeks near each grid depth, 77 stores (red: fewer than {THIN_SUPPORT})",
 )
-fig.suptitle("What identifies the own elasticity", fontsize=16, fontweight="bold");
+fig.suptitle("Identifying variation of the own elasticity", fontsize=16, fontweight="bold");
 ```
 
 
@@ -2308,10 +2308,10 @@ print(
 ```
 
 
-    4000 draws in 4.4 min, 0 divergences, tree depth 7 to 7 (share at the depth-10 cap 0.000)
+    4000 draws in 4.2 min, 0 divergences, tree depth 7 to 7 (share at the depth-10 cap 0.000)
 
 
-The fit takes about 5 minutes of wall time, with no divergences and every iteration at tree depth 7 (127 leapfrog steps), so the depth cap is never reached. An earlier run of the plain model, without [time_reparam](../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam), sampled at tree depth 8 in about 9 minutes; this notebook does not repeat it.
+The fit takes about 4 minutes of wall time, with no divergences and every iteration at tree depth 7 (127 leapfrog steps), so the depth cap is never reached. An earlier run of the plain model, without [time_reparam](../../reference/reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam), sampled at tree depth 8 in about 9 minutes; this notebook does not repeat it.
 
 
 ## Convergence diagnostics
@@ -3220,7 +3220,7 @@ print(f"{len(policies)} policies forecast on {n_draws} draws in {perf_counter() 
 ```
 
 
-    36 policies forecast on 4000 draws in 34 s
+    36 policies forecast on 4000 draws in 30 s
 
 
 The 36 policies take under a minute. A helper plots zone-level weekly units (the sum over the 18 stores) of a policy against no promotion, with the median path and the 94\\ HDI band of each and the event weeks shaded, one panel per product and policy.
@@ -3680,7 +3680,7 @@ fig.legend(handles, labels, loc="outside lower center", ncols=6)
 axes[0].set(title="P(the cut pays): elasticity below the threshold")
 axes[1].set(title="P(category break-even share below the funding share)")
 fig.suptitle(
-    "Does a deeper cut pay? Probability by funding share", fontsize=16, fontweight="bold"
+    "Probability that a deeper cut pays, by funding share", fontsize=16, fontweight="bold"
 );
 ```
 
@@ -3822,7 +3822,7 @@ for ax in grid.axes.flat:
         ax.bar_label(container, fmt="{:.2f}")
 
 grid.figure.suptitle(
-    "Which depth is best? Probability of the two corners", fontsize=16, fontweight="bold", y=1.03
+    "Probability that each depth corner is best", fontsize=16, fontweight="bold", y=1.03
 );
 ```
 
@@ -4008,7 +4008,7 @@ for ax in axes:
 
 fig.legend(handles, labels, loc="outside lower center", ncols=5)
 axes[0].set(ylabel="P(option is the best choice)")
-fig.suptitle("Which mechanics is best as the slot cost rises", fontsize=16, fontweight="bold");
+fig.suptitle("Probability that each option is best, by slot cost", fontsize=16, fontweight="bold");
 ```
 
 
@@ -4923,7 +4923,7 @@ ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
 ax.set(
     xlabel="holding share eta (log scale; critical fractile kappa under each value)",
     ylabel="share of the recourse value RP",
-    title="What the joint predictive is worth for the promotion order",
+    title="Value of the joint predictive for the promotion order",
 );
 ```
 

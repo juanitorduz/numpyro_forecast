@@ -16,7 +16,7 @@
 <g id="clust2" class="cluster">
 <title>cluster_violation</title>
 <polygon fill="none" stroke="gray" points="8,-287 8,-406 762.39,-406 762.39,-287 8,-287"/>
-<text xml:space="preserve" text-anchor="middle" x="385.19" y="-388.7" font-family="Times,serif" font-size="14.00">What would break it</text>
+<text xml:space="preserve" text-anchor="middle" x="385.19" y="-388.7" font-family="Times,serif" font-size="14.00">Violation of the assumption</text>
 </g>
 <!-- U -->
 <g id="node1" class="node">
