@@ -73,7 +73,7 @@ dev = [
 ]
 docs = [
     "great-docs==0.17.0",
-    "dynestyx>=0.5.1",
+    "dynestyx>=0.6.0",
 ]
 # jax-cuda12-plugin ships no darwin wheel; the marker keeps `uv workspace metadata`
 # (called by the ty pre-commit hook) working on macOS while `all_cuda` on Linux is unchanged.

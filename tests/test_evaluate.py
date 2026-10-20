@@ -1,5 +1,6 @@
 """Tests for backtesting and evaluation metrics."""
 
+from collections.abc import Callable
 from functools import partial
 from typing import Any, cast
 
@@ -28,7 +29,7 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, DeviceMemoryError
-from numpyro_forecast.typing import ForecastFn
+from numpyro_forecast.typing import ForecastFn, ForecastModel
 
 
 def _canned_forecast_fn(
@@ -1099,40 +1100,45 @@ def test_results_to_dataframe_missing_pandas(monkeypatch: pytest.MonkeyPatch) ->
         results_to_dataframe([_make_result(0)])
 
 
-def test_rolling_backtest_reuse_model_predict_cache(
-    count_compilations,
-    rng_key: Array,
-) -> None:
-    """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
-    import jax
+def test_rolling_backtest_reuse_model_calls_model_fn_once(rng_key: Array) -> None:
+    """``reuse_model=True`` builds the model once for every rolling window."""
+    calls: list[None] = []
 
-    from numpyro_forecast.predictive import _predict
+    def factory() -> ForecastModel:
+        calls.append(None)
+        return rw_model_factory()
 
-    duration = 80
-    train, test, stride = 25, 5, 5
-    data = jnp.sin(jnp.linspace(0, 6, duration))[:, None]
-    cov = jnp.zeros((duration, 0))
+    duration, train, test, stride = 80, 25, 5, 5
     num_windows = (duration - train - test) // stride + 1
+    data = jnp.sin(jnp.linspace(0, 6, duration))[:, None]
+    for reuse, expected in ((True, 1), (False, num_windows)):
+        calls.clear()
+        backtest(
+            rng_key,
+            factory,
+            data,
+            jnp.zeros((duration, 0)),
+            forecast_fn=svi_forecast_fn(num_steps=30),
+            train_window=train,
+            test_window=test,
+            stride=stride,
+            num_samples=10,
+            reuse_model=reuse,
+        )
+        assert len(calls) == expected
 
-    def run(reuse: bool) -> int:
-        _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-        with count_compilations() as tally:  # type: ignore[operator]
-            backtest(
-                rng_key,
-                rw_model_factory,
-                data,
-                cov,
-                forecast_fn=svi_forecast_fn(num_steps=30),
-                train_window=train,
-                test_window=test,
-                stride=stride,
-                num_samples=10,
-                reuse_model=reuse,
-            )
-            jax.block_until_ready(data)
-        return int(tally.count)  # type: ignore[attr-defined]
 
-    without_reuse = run(False)
-    with_reuse = run(True)
-    assert with_reuse <= without_reuse
-    assert _predict._cache_size() <= num_windows  # ty: ignore[unresolved-attribute]
+@pytest.mark.parametrize("batch_size", [None, 3], ids=["single_pass", "chunked"])
+@pytest.mark.parametrize("metric", [eval_mae, eval_rmse, eval_crps, eval_coverage])
+def test_metrics_skip_missing_truth(metric: Callable[..., Array], batch_size: int | None) -> None:
+    """A NaN truth cell is missing: the metric equals the metric on the observed cells only."""
+    pred = random.normal(random.PRNGKey(0), (50, 8, 1))
+    truth = random.normal(random.PRNGKey(1), (8, 1))
+    missing = jnp.array([1, 4, 5])
+    observed = jnp.setdiff1d(jnp.arange(8), missing)
+    truth_nan = truth.at[missing].set(jnp.nan)
+    kwargs = {} if metric in (eval_mae, eval_rmse) else {"batch_size": batch_size}
+    got = metric(pred, truth_nan, **kwargs)
+    expected = metric(pred[:, observed], truth[observed])
+    assert jnp.isfinite(got)
+    assert jnp.allclose(got, expected, atol=1e-6)

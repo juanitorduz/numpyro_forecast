@@ -48,10 +48,20 @@ _DEFAULT_COVERAGE_ALPHA = 0.9
 """Default nominal level for the central coverage interval."""
 
 
+def _observed_mean(values: Array, truth: Array) -> Array:
+    """Mean of per-cell ``values`` over the cells whose ``truth`` is observed.
+
+    A NaN truth is a missing observation, so its cell drops out of the mean; a
+    NaN in the forecast draws still propagates.
+    """
+    observed = ~jnp.isnan(truth)
+    return jnp.sum(jnp.where(observed, values, 0.0)) / jnp.sum(observed)
+
+
 @jax.jit
 def _eval_mae(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
     """Jitted MAE core; the host-committed-input handling lives in `eval_mae()`."""
-    return jnp.abs(jnp.median(pred, axis=0) - truth).mean()
+    return _observed_mean(jnp.abs(jnp.median(pred, axis=0) - truth), truth)
 
 
 def eval_mae(
@@ -69,7 +79,8 @@ def eval_mae(
     pred
         Forecast samples with the sample axis first.
     truth
-        Ground-truth values (matching ``pred`` without the sample axis).
+        Ground-truth values (matching ``pred`` without the sample axis); NaN entries are
+        missing observations and are left out of the mean.
 
     Returns
     -------
@@ -82,7 +93,7 @@ def eval_mae(
 @jax.jit
 def _eval_rmse(pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]) -> Array:
     """Jitted RMSE core; the host-committed-input handling lives in `eval_rmse()`."""
-    return jnp.sqrt(jnp.square(pred.mean(axis=0) - truth).mean())
+    return jnp.sqrt(_observed_mean(jnp.square(pred.mean(axis=0) - truth), truth))
 
 
 def eval_rmse(
@@ -100,7 +111,8 @@ def eval_rmse(
     pred
         Forecast samples with the sample axis first.
     truth
-        Ground-truth values (matching ``pred`` without the sample axis).
+        Ground-truth values (matching ``pred`` without the sample axis); NaN entries are
+        missing observations and are left out of the mean.
 
     Returns
     -------
@@ -119,7 +131,7 @@ def _eval_crps_single_pass(
     pred: Float[Array, " sample *batch"], truth: Float[Array, " *batch"]
 ) -> Array:
     """Whole-panel CRPS mean as one fused kernel (the pre-chunking eval_crps graph)."""
-    return crps_empirical(pred, truth).mean()
+    return _observed_mean(crps_empirical(pred, truth), truth)
 
 
 def _chunked_cell_metric(
@@ -149,7 +161,8 @@ def _chunked_cell_metric(
     pred
         Forecast samples with the sample axis first.
     truth
-        Ground-truth values (matching ``pred`` without the sample axis).
+        Ground-truth values (matching ``pred`` without the sample axis); NaN entries are
+        missing observations and are left out of the mean.
     batch_size
         Number of flattened data cells per device pass.
 
@@ -168,7 +181,7 @@ def _chunked_cell_metric(
     with _oom_advice("metric evaluation", batch_size):
         chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
     values = np.concatenate(chunks, axis=0)[:n_cells]
-    return jnp.asarray(values.mean())
+    return jnp.asarray(values[~np.isnan(np.asarray(truth_flat))].mean())  # skip missing truth
 
 
 def eval_crps(
@@ -186,7 +199,8 @@ def eval_crps(
     pred
         Forecast samples with the sample axis first.
     truth
-        Ground-truth values (matching ``pred`` without the sample axis).
+        Ground-truth values (matching ``pred`` without the sample axis); NaN entries are
+        missing observations and are left out of the mean.
     batch_size
         Optional number of flattened data cells (the product of the batch
         shape, e.g. time times series) evaluated on the accelerator per pass;
@@ -248,7 +262,8 @@ def eval_coverage(
     pred
         Forecast samples with the sample axis first.
     truth
-        Ground-truth values (matching ``pred`` without the sample axis).
+        Ground-truth values (matching ``pred`` without the sample axis); NaN entries are
+        missing observations and are left out of the mean.
     alpha
         Nominal interval level in ``(0, 1)``; defaults to ``0.9``.
     batch_size
@@ -276,7 +291,10 @@ def eval_coverage(
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= np.size(truth):
-        return _coverage_indicator(_device_view(pred), _device_view(truth), alpha=alpha).mean()
+        truth_dev = _device_view(truth)
+        return _observed_mean(
+            _coverage_indicator(_device_view(pred), truth_dev, alpha=alpha), truth_dev
+        )
     kernel = partial(_coverage_indicator, alpha=alpha)
     return _chunked_cell_metric(
         kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
@@ -857,8 +875,8 @@ def backtest(
     reuse_model
         When ``True`` (default) and the windowing strategy is rolling, the model
         instance returned by the first ``model_fn()`` call is reused for every
-        window so forecast/predict kernels can cache across windows. SVI still
-        recompiles per window; for a single fused fit over all windows use
+        window (``model_fn`` is called once). The forecast and predict kernels
+        and SVI still compile per window; for a single fused fit over all windows use
         `backtest_vectorized()`. Ignored for expanding windows and when
         ``False``.
 
