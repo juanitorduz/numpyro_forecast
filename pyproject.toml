@@ -36,7 +36,7 @@ dependencies = [
     "equinox>=0.13",
     # Upper bound: pin the newest jax minor CI has run against; bump it (dependabot
     # does) once the suite is green on the next one.
-    "jax>=0.10.0,<0.11.3",
+    "jax>=0.10.0,<0.12.1",
     "jaxtyping>=0.3.11",
     "numpyro>=0.22.0",
 ]
