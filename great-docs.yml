@@ -197,6 +197,8 @@ reference:
       - datasets.load_bart_hierarchical
       - datasets.load_victoria_electricity
       - datasets.bart_available
+      - datasets.load_breakfast_at_the_frat
+      - datasets.BreakfastAtTheFrat
       - datasets.load_m5
       - datasets.M5Data
 
