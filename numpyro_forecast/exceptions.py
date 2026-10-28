@@ -138,3 +138,26 @@ class DevicePlatformError(NumpyroForecastError, ValueError):
     never raise this: they degrade to the NumPy path when the CPU backend is
     missing (see `~~numpyro_forecast.predictive.draw_posterior()`).
     """
+
+
+class DensitySiteError(NumpyroForecastError, ValueError):
+    """A traced model pass has no forecast density site to read.
+
+    Raised by `~~numpyro_forecast.predictive.predict_density()` when the trace has no
+    ``obs_future`` site (the model registers ``forecast`` by hand, typically on top of
+    `~~numpyro_forecast.models.ssoe()`), and by
+    `~~numpyro_forecast.predictive.ssoe_density()` when the ``{name}_future`` error site
+    or the ``{name}_mu_future`` deterministic is missing. The message names the reader
+    to use, or the one-line deterministic the model has to register.
+    """
+
+
+class StackingShapeError(NumpyroForecastError, ValueError):
+    """Stacking inputs disagree in layout, windows, or reduction.
+
+    Raised by `~~numpyro_forecast.stacking.stacking_cells()` when the per-model backtests
+    did not run on the same ``(t0, t1, t2)`` windows, hold different reductions, or lack
+    log densities; by the solvers when ``log_density`` has fewer than two models; and by
+    `~~numpyro_forecast.stacking.stack_forecasts()` when ``weights`` are negative, do not
+    sum to one, or do not broadcast against the draws.
+    """

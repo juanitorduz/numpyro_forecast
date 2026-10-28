@@ -528,6 +528,8 @@ def test_backtest_result_to_dict() -> None:
     assert flat["metrics"] == {"mae": 1.0}
     assert flat["train_metrics"] == {}
     assert flat["prediction"] is None
+    assert flat["log_density"] is None
+    assert flat["log_density_reduction"] is None
     assert set(flat) == {
         "t0",
         "t1",
@@ -537,6 +539,8 @@ def test_backtest_result_to_dict() -> None:
         "metrics",
         "train_metrics",
         "prediction",
+        "log_density",
+        "log_density_reduction",
     }
 
 

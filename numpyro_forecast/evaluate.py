@@ -28,15 +28,23 @@ from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
-from numpyro_forecast.predictive import _chunk_indices
+from numpyro_forecast.predictive import (
+    _chunk_indices,
+    forecast_log_density,
+    predict_density,
+    reduce_log_density,
+)
 from numpyro_forecast.typing import (
     Array,
+    DensityReader,
     ForecastFn,
     ForecastModel,
+    ForecastOutput,
     Guide,
     InSampleFn,
     Metric,
     ModelFactory,
+    Reduction,
 )
 
 if TYPE_CHECKING:
@@ -369,6 +377,17 @@ class BacktestResult:
     prediction
         Out-of-sample forecast samples for the window (sample axis leading), or
         ``None`` unless ``backtest`` was called with ``keep_predictions=True``.
+    log_density
+        Per-cell forecast log densities of the realized test block, shape
+        ``(*batch, t2 - t1, obs)`` for the ``"marginal"`` reduction or
+        ``(*batch, 1, obs)`` for ``"joint"``, or ``None`` unless ``backtest`` was
+        called with ``log_density`` set. Scored on the model's own observation
+        scale, before any ``transform``. The input of
+        `~~numpyro_forecast.stacking.stacking_cells()`.
+    log_density_reduction
+        Which `~~numpyro_forecast.typing.Reduction` ``log_density`` holds, or
+        ``None`` when it is absent; recorded by ``backtest`` itself so cells from
+        different reductions are never stacked together.
     """
 
     t0: int
@@ -379,6 +398,8 @@ class BacktestResult:
     metrics: dict[str, float]
     train_metrics: dict[str, float] = field(default_factory=dict)
     prediction: Array | np.ndarray | None = None
+    log_density: Array | np.ndarray | None = None
+    log_density_reduction: Reduction | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
@@ -639,6 +660,8 @@ def _run_window(
     transform: Callable[[Array, Array], tuple[Array, Array]] | None,
     eval_train: bool,
     keep_predictions: bool,
+    log_density: Reduction | None = None,
+    density_reader: DensityReader = predict_density,
 ) -> BacktestResult:
     """Fit, forecast, and score a single backtest window into a `BacktestResult`."""
     train_data, train_covariates, full_covariates, truth = _slice_window(
@@ -648,7 +671,7 @@ def _run_window(
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
 
     model = shared_model if shared_model is not None else model_fn()
-    pred, walltime = _timed(
+    output, walltime = _timed(
         lambda: forecast_fn(
             rng_key,
             model,
@@ -659,6 +682,27 @@ def _run_window(
             batch_size=batch_size,
         )
     )
+    pred, posterior = _unpack_forecast_output(output, log_density)
+
+    density: Array | np.ndarray | None = None
+    if log_density is not None and posterior is not None:
+        # Scored on the untransformed truth (the model's own observation scale) with an
+        # independent key substream (fold_in 3; eval_train uses 2), so requesting the
+        # density never shifts the forecast key or changes any other field. The truth
+        # block never reaches the closure: backtest computes the density itself.
+        density = reduce_log_density(
+            forecast_log_density(
+                random.fold_in(rng_key, 3),
+                model,
+                posterior,
+                train_data,
+                full_covariates,
+                truth,
+                reader=density_reader,
+                batch_size=batch_size,
+            ),
+            log_density,
+        )
 
     if transform is not None:
         pred, truth = transform(cast("Array", pred), truth)
@@ -691,7 +735,32 @@ def _run_window(
         metrics=evaluate_forecast(pred, truth, metrics=metrics),
         train_metrics=train_metrics,
         prediction=pred if keep_predictions else None,
+        log_density=density,
+        log_density_reduction=log_density,
     )
+
+
+def _unpack_forecast_output(
+    output: Array | np.ndarray | ForecastOutput, log_density: Reduction | None
+) -> tuple[Array | np.ndarray, Mapping[str, Array | np.ndarray] | None]:
+    """Split a ``forecast_fn`` return value into draws and an optional posterior.
+
+    Bare draws are passed through with no posterior. A
+    `~~numpyro_forecast.typing.ForecastOutput` yields both. When ``log_density`` is
+    requested and the closure returned bare draws, raise ``ValueError`` naming the fix
+    (return ``ForecastOutput(draws, posterior)``), because the density needs the
+    posterior and ``backtest`` never refits a window.
+    """
+    if isinstance(output, ForecastOutput):
+        return output.draws, output.posterior
+    if log_density is not None:
+        msg = (
+            "log_density was requested but forecast_fn returned bare draws; return "
+            "ForecastOutput(draws, posterior) from forecast_fn so backtest can score the "
+            "test block on the same posterior (it never refits a window)."
+        )
+        raise ValueError(msg)
+    return output, None
 
 
 def backtest(
@@ -716,6 +785,8 @@ def backtest(
     eval_train: bool = False,
     keep_predictions: bool = False,
     reuse_model: bool = True,
+    log_density: Reduction | None = None,
+    density_reader: DensityReader = predict_density,
 ) -> list[BacktestResult]:
     """Backtest a forecasting model on a moving window of ``(train, test)`` data.
 
@@ -861,6 +932,24 @@ def backtest(
         recompiles per window; for a single fused fit over all windows use
         `backtest_vectorized()`. Ignored for expanding windows and when
         ``False``.
+    log_density
+        If set, also score every window's realized test block with
+        `~~numpyro_forecast.predictive.forecast_log_density()` on the posterior the
+        closure fitted, reduced with this `~~numpyro_forecast.typing.Reduction`
+        (``"marginal"`` or ``"joint"``) and stored on ``BacktestResult.log_density``
+        together with the reduction name. Requires ``forecast_fn`` to return a
+        `~~numpyro_forecast.typing.ForecastOutput` (draws plus posterior), so the
+        model is fit once per window and the closure never sees the test block.
+        The density is computed on the untransformed truth, with an independent
+        key substream, so requesting it changes no other field; ``transform`` does
+        not apply to it (a metric on a transformed scale and a density on the
+        model scale differ by a Jacobian the package does not add).
+    density_reader
+        The `~~numpyro_forecast.typing.DensityReader` for the model's forecast
+        site: `~~numpyro_forecast.predictive.predict_density()` (default) for
+        models built on `~~numpyro_forecast.models.predict()`,
+        `~~numpyro_forecast.predictive.ssoe_density()` for models built on
+        `~~numpyro_forecast.models.ssoe()`.
 
     Returns
     -------
@@ -870,8 +959,10 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``.
+        If ``data`` and ``covariates`` durations differ, if ``eval_train=True``
+        but ``in_sample_fn`` is ``None``, or if ``log_density`` is set but
+        ``forecast_fn`` returns bare draws instead of a
+        `~~numpyro_forecast.typing.ForecastOutput`.
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -919,6 +1010,8 @@ def backtest(
                 transform=transform,
                 eval_train=eval_train,
                 keep_predictions=keep_predictions,
+                log_density=log_density,
+                density_reader=density_reader,
             )
         )
 
@@ -950,6 +1043,14 @@ class VectorizedBacktestResult:
         Stacked out-of-sample forecast samples with shape
         ``(num_windows, num_samples, *batch, test_window, obs)``, or ``None``
         unless ``keep_predictions=True``.
+    log_density
+        Stacked per-cell forecast log densities of the realized test blocks,
+        shape ``(num_windows, *batch, test_window, obs)`` (``"marginal"``) or
+        ``(num_windows, *batch, 1, obs)`` (``"joint"``), or ``None`` unless
+        ``log_density`` was requested.
+    log_density_reduction
+        Which `~~numpyro_forecast.typing.Reduction` ``log_density`` holds, or
+        ``None``.
     """
 
     t0: Array
@@ -959,6 +1060,8 @@ class VectorizedBacktestResult:
     losses: Array
     metrics: dict[str, Array]
     predictions: Array | None = None
+    log_density: Array | None = None
+    log_density_reduction: Reduction | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view.
@@ -1027,6 +1130,8 @@ def backtest_vectorized(
     num_samples: int = 100,
     metrics: Mapping[str, Metric] | None = None,
     keep_predictions: bool = False,
+    log_density: Reduction | None = None,
+    density_reader: DensityReader = predict_density,
 ) -> VectorizedBacktestResult:
     """Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
@@ -1090,6 +1195,16 @@ def backtest_vectorized(
         and score on the host.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
+    log_density
+        If set, also score every window's realized test block with the per-draw
+        forecast log densities of
+        `~~numpyro_forecast.predictive.forecast_log_density()`, reduced with this
+        `~~numpyro_forecast.typing.Reduction` inside the fused pass and stored on
+        ``VectorizedBacktestResult.log_density``. This driver owns the posterior
+        of every window, so no closure change is needed.
+    density_reader
+        The `~~numpyro_forecast.typing.DensityReader` for the model's forecast
+        site (see `backtest()`).
 
     Returns
     -------
@@ -1176,6 +1291,23 @@ def backtest_vectorized(
     resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
+    density: Array | None = None
+    if log_density is not None:
+        # One more vmapped pass with its own key stream (fold_in 3 of each window's
+        # parent key, disjoint from the three streams of _window_key_streams), then
+        # the reduction inside the same jit so the per-draw array is never materialized
+        # across windows: (num_windows, *batch, test_window, obs).
+        density = _vectorized_log_density(
+            rng_key,
+            model,
+            posterior,
+            train_d,
+            hor_c,
+            truth,
+            reader=density_reader,
+            reduction=log_density,
+        )
+
     return VectorizedBacktestResult(
         t0=starts,
         t1=starts + train_window,
@@ -1184,7 +1316,31 @@ def backtest_vectorized(
         losses=losses,
         metrics=metric_values,
         predictions=predictions if keep_predictions else None,
+        log_density=density,
+        log_density_reduction=log_density,
     )
+
+
+def _vectorized_log_density(
+    rng_key: Array,
+    model: ForecastModel,
+    posterior: dict[str, Array],
+    train_data: Array,
+    horizon_covariates: Array,
+    truth: Array,
+    *,
+    reader: DensityReader,
+    reduction: Reduction,
+) -> Array:
+    """Per-window reduced forecast log densities inside the fused vectorized backtest.
+
+    ``vmap`` of `~~numpyro_forecast.predictive._log_density()` with ``reader`` over
+    the window axis, followed by
+    `~~numpyro_forecast.predictive.reduce_log_density()`, under one ``jit``. Keys are
+    ``fold_in(fold_in(rng_key, i), 3)`` per window ``i``, disjoint from the
+    fit/posterior/forecast streams of `_window_key_streams()`.
+    """
+    raise NotImplementedError
 
 
 def results_to_dataframe(

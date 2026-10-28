@@ -119,6 +119,16 @@ reference:
       - predictive.forecast
       - predictive.predict_in_sample
 
+  - title: Forecast log densities
+    desc: Per-draw log densities of realized future values under the forecast distribution, the input of stacking.
+    contents:
+      - predictive.forecast_log_density
+      - predictive.reduce_log_density
+      - predictive.log_density_ess
+      - predictive.conditional_log_density
+      - predictive.predict_density
+      - predictive.ssoe_density
+
   - title: Backtesting & evaluation
     desc: Rolling-window backtesting and forecast metrics.
     contents:
@@ -138,6 +148,23 @@ reference:
       - metrics.eval_pinball
       - metrics.eval_interval_score
       - metrics.make_mase
+
+  - title: Model stacking
+    desc: "Combine several models with weights learned from backtests: cells, solvers, hierarchical weight blocks, mixture draws."
+    contents:
+      - stacking.StackingCells
+      - stacking.stacking_cells
+      - stacking.window_design_effect
+      - stacking.log_score
+      - stacking.stacking_weights
+      - stacking.pseudo_bma_weights
+      - stacking.mixture_crps_terms
+      - stacking.crps_stacking_weights
+      - stacking.rectified_features
+      - stacking.hierarchical_weights
+      - stacking.stacking_factor
+      - stacking.stack_forecasts
+      - stacking.MixturePer
 
   - title: ArviZ export
     desc: Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
@@ -168,6 +195,10 @@ reference:
       - typing.InSampleFn
       - typing.Metric
       - typing.ModelFactory
+      - typing.ForecastOutput
+      - typing.DensityReader
+      - typing.Reduction
+      - typing.GroupPrior
       - typing.Array
       - typing.BlackjaxBuildFn
 
@@ -217,6 +248,8 @@ reference:
       - exceptions.DeviceMemoryError
       - exceptions.HostMemoryKindError
       - exceptions.DevicePlatformError
+      - exceptions.DensitySiteError
+      - exceptions.StackingShapeError
 
 # Example notebooks live in docs/examples/. The .qmd wrapper pages that embed
 # their stored outputs are generated at build time by scripts/build_docs.py

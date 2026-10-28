@@ -21,19 +21,31 @@ backend is not initialized), every chunk is moved off the accelerator before
 the next one is drawn, so accelerator memory is bounded by a single chunk
 instead of the full draw array. The ``device`` contract is documented once, on
 `draw_posterior()`; the predictive drivers share it.
+
+`forecast_log_density()` is the density counterpart of `forecast()`: one seeded,
+conditioned, traced pass of the model per posterior draw, with a
+`~~numpyro_forecast.typing.DensityReader` turning each trace into the log density of
+the realized future values given that draw's sampled future latent path. The per-draw
+array it returns is reduced over draws by `reduce_log_density()` into one of the two
+h-step scores (`~~numpyro_forecast.typing.Reduction`), and
+`conditional_log_density()` is the exact chain-rule route for error-feedback models
+(`~~numpyro_forecast.models.ssoe()`), where the block density conditioned on the
+realized values is the in-sample filter extended by the block. The design is in
+``docs/dev/stacking_design.md``.
 """
 
 from collections.abc import Callable, Mapping
 from functools import lru_cache, partial
-from typing import cast
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro.distributions as dist
 from jax import random
 from jax.tree_util import tree_map
 from jax.typing import ArrayLike
-from jaxtyping import Num
+from jaxtyping import Float, Num
 from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
@@ -50,7 +62,8 @@ from numpyro_forecast._validation import (
     _require_covariates_extend_data,
     _require_positive_num_samples,
 )
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.exceptions import DensitySiteError
+from numpyro_forecast.typing import Array, DensityReader, ForecastModel, Reduction
 
 
 def _ensure_sample_axis_for_delta(samples: dict[str, Array], num_samples: int) -> dict[str, Array]:
@@ -600,3 +613,410 @@ def predict_in_sample(
         return _predict_obs(key, model, post, covariates, parallel=parallel)
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
+
+
+# --- Forecast log densities (stacking design, docs/dev/stacking_design.md) ----------------
+
+
+_FUTURE_OBS_SITE = "obs_future"
+"""The observation site `~~numpyro_forecast.models.predict()` samples over the horizon."""
+
+
+def _site_log_prob(fn: dist.Distribution, truth: Array) -> Array:
+    """``fn.log_prob`` of a ``(*batch, future, obs)`` block, laid out per cell or per block.
+
+    Branches on ``fn.event_shape`` **before** calling ``log_prob``, because a
+    correlated family silently broadcasts a wrongly shaped ``truth``: a
+    ``MultivariateNormal`` with event ``(future,)`` evaluated at ``truth`` of shape
+    ``(future, 1)`` returns ``(future,)`` finite garbage, one scalar broadcast against
+    the whole event, with no error. Elementwise families (empty event shape) return the
+    per-cell value ``(*batch, future, obs)``. An event shape of ``(future,)`` (time-leading
+    MVN, the layout `~~numpyro_forecast.surgery` supports) evaluates ``truth[..., 0]``
+    and returns the joint block value reshaped to ``(*batch, 1, 1)``; an event shape of
+    ``(obs,)`` (an `ssoe()` noise distribution over the observation axis) evaluates the
+    block and returns ``(*batch, future, 1)``. Any other event shape raises
+    ``ValueError`` naming it, rather than guessing.
+    """
+    raise NotImplementedError
+
+
+def predict_density(
+    model_trace: Mapping[str, Any],
+    truth: Num[Array, " *batch future obs"],
+    *,
+    site: str = _FUTURE_OBS_SITE,
+) -> Float[Array, " *batch _future _obs"]:
+    """Read the forecast log density from the ``obs_future`` site of a traced pass.
+
+    The built-in `~~numpyro_forecast.typing.DensityReader` for models built on
+    `~~numpyro_forecast.models.predict()`: returns
+    ``model_trace[site]["fn"].log_prob(truth)`` with ``site="obs_future"``, the log density of the
+    realized block under the forecast distribution conditioned on the pass's sampled
+    future latent path. For an elementwise observation family the result has one
+    value per cell, shape ``(*batch, future, obs)``; for a correlated family whose
+    event shape covers the time axis the single joint value per draw is returned
+    as ``(*batch, 1, 1)``, so only the ``"joint"`` reduction is meaningful
+    downstream (the event shape is checked before ``log_prob`` is called, since a
+    mis-shaped ``truth`` would otherwise broadcast into finite garbage; see
+    `_site_log_prob()`).
+
+    Parameters
+    ----------
+    model_trace
+        The trace of one seeded, conditioned pass of the model over the full
+        horizon (what `forecast_log_density()` builds).
+    truth
+        Realized values over the horizon, shape ``(*batch, future, obs)``, with
+        the integer dtype `~~numpyro_forecast.models.predict()` requires for a
+        discrete family.
+    site
+        The observed site to read; ``"obs_future"`` by default. A model that
+        registers its own predictive over the horizon under another name (a
+        zero-inflated demand predictive next to an `ssoe()` recursion, say) is
+        read with ``functools.partial(predict_density, site=...)``.
+
+    Returns
+    -------
+    Float[Array, " *batch _future _obs"]
+        The per-cell log density, or the joint block log density with size-one
+        trailing axes.
+
+    Raises
+    ------
+    DensitySiteError
+        If the trace has no ``obs_future`` site: the model registers ``forecast``
+        itself (an `~~numpyro_forecast.models.ssoe()` model) and needs
+        `ssoe_density()` instead.
+    ValueError
+        If the site's event shape is neither empty nor the time-leading
+        ``(future,)`` layout.
+    """
+    traced = model_trace.get(site)
+    if traced is None:
+        msg = (
+            f"the traced model pass has no {site!r} site, so predict_density cannot read a "
+            "forecast density: the model registers 'forecast' itself. For an additive "
+            "model built on ssoe(), pass reader=ssoe_density(name) and register "
+            "numpyro.deterministic(f'{name}_mu_future', r.mu_future) when forecasting; "
+            "otherwise register the predictive to score as an observed site and point "
+            "predict_density at it with site=."
+        )
+        raise DensitySiteError(msg)
+    raise NotImplementedError
+
+
+def ssoe_density(name: str) -> DensityReader:
+    """Build the `~~numpyro_forecast.typing.DensityReader` for an `ssoe()` model.
+
+    `~~numpyro_forecast.models.ssoe()` registers only the future error site
+    ``f"{name}_future"`` and returns the path means; the caller writes the likelihood
+    and registers ``forecast``. The forecast distribution at step ``j`` along a sampled
+    error path is therefore ``noise_dist`` shifted by ``mu_future[j]``, and the reader
+    computes ``noise_fn.log_prob(truth - mu_future)`` with ``noise_fn`` read from the
+    error site (the draw's own parameters, expanded under the ``time_future`` plate) and
+    ``mu_future`` read from the deterministic site ``f"{name}_mu_future"``, which the
+    model has to register when forecasting:
+
+    ```python
+    r = ssoe(h, "arma", y, init, mean, update, dist.Normal(0.0, sigma))
+    numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
+    if h.future > 0:
+        numpyro.deterministic("arma_mu_future", r.mu_future)
+        numpyro.deterministic("forecast", r.y_future)
+    ```
+
+    This is the horizon-marginal density along simulated predecessors, the same
+    quantity `predict_density()` reads for `~~numpyro_forecast.models.predict()`
+    models, and it is correct for **additive single-channel** models (ARMA,
+    exponential smoothing, a local level), where the observation is the channel's
+    mean plus the channel's noise. It is *not* the demand density of the
+    intermittent-demand models (Croston, TSB), whose ``forecast`` is a product of two
+    channels and whose predictive, a zero-inflated mixture, exists nowhere in the
+    trace: such a model has to register an ``obs_future``-style site holding the
+    predictive the user wants scored, and then `predict_density()` applies (with
+    ``site`` pointing at it). The chain-rule block density of an `ssoe()` model is
+    exact and cheaper through `conditional_log_density()`.
+
+    Parameters
+    ----------
+    name
+        The site prefix passed to `~~numpyro_forecast.models.ssoe()`.
+
+    Returns
+    -------
+    DensityReader
+        ``(trace, truth) -> log_density`` of shape ``(*batch, future, obs_or_1)``.
+
+    Raises
+    ------
+    DensitySiteError
+        From the returned reader, when ``f"{name}_future"`` or
+        ``f"{name}_mu_future"`` is missing from the trace.
+    """
+    raise NotImplementedError
+
+
+@partial(jax.jit, static_argnums=(1, 5), static_argnames=("parallel",))
+def _log_density(
+    rng_key: Array,
+    model: ForecastModel,
+    posterior: Mapping[str, Array | np.ndarray],
+    data: Array,
+    covariates: Array,
+    reader: DensityReader,
+    truth: Array,
+    *,
+    parallel: bool = True,
+) -> Array:
+    """Per-draw forecast log densities: one seeded, conditioned, traced pass per draw.
+
+    For each draw: ``substitute`` its in-sample sites, ``seed`` the pass so every
+    ``_future`` site and reparameterization auxiliary is drawn from the prior
+    (exactly as ``Predictive`` does in `_predict()`), ``condition`` the
+    ``obs_future`` site on ``truth`` so its density is recorded rather than sampled,
+    ``trace`` the model over the full horizon, and hand the trace to ``reader``. The
+    draw axis is mapped with ``vmap`` (``parallel=True``) or ``lax.map``. Jitted with
+    ``model`` and ``reader`` static, so each ``(model, reader, shape)`` compiles once
+    and the chunked `forecast_log_density()` loop reuses it.
+    """
+    raise NotImplementedError
+
+
+def forecast_log_density(
+    rng_key: Array,
+    model: ForecastModel,
+    posterior: Mapping[str, ArrayLike],
+    data: Array,
+    covariates: Array,
+    truth: Num[Array, " *batch future obs"],
+    *,
+    reader: DensityReader = predict_density,
+    batch_size: int | None = None,
+    parallel: bool = True,
+    device: jax.Device | str | None = None,
+) -> Float[Array | np.ndarray, " sample *batch _future _obs"]:
+    r"""Per-draw log densities of the realized future values under the forecast distribution.
+
+    The density counterpart of `forecast()`, with the same arguments plus ``truth``:
+    for posterior draw $s$ with parameters $\theta^{(s)}$ and a future latent path
+    $z^{(s)}$ drawn from the prior exactly as `forecast()` draws it, the result is
+
+    $$
+    \ell^{(s)}_{j} = \log p\left(y_{t+j} \mid z^{(s)}, \theta^{(s)}, y_{\le t}\right),
+    $$
+
+    one value per draw and cell, shape ``(sample, *batch, future, obs)``. It is the
+    raw material of the two h-step scores: `reduce_log_density()` averages it over
+    draws cell by cell (``"marginal"``, the density of the $j$-step-ahead forecast
+    distribution, the one `forecast()` samples) or over the block (``"joint"``, the
+    chain-rule block density). ``reader`` turns each traced pass into its log density:
+    `predict_density()` (default) for models built on
+    `~~numpyro_forecast.models.predict()`, `ssoe_density()` for models built on
+    `~~numpyro_forecast.models.ssoe()`. The function never returns forecast draws;
+    `forecast()` does, with its own key.
+
+    ``posterior`` must hold in-sample sites only. A dict that also carries
+    ``_future`` sites (the output of a ``Predictive`` call over a horizon, or of a
+    previous `forecast()` trace) would pin the future path by name through
+    ``substitute`` and return the same densities for every key with no error, so the
+    driver rejects such keys with ``ValueError`` listing them (any key containing
+    ``"_future"``, plus ``"obs_future"`` and ``"forecast"``). Chunking, ``parallel``,
+    ``device`` and the host-offload rules are those of `forecast()`.
+
+    Parameters
+    ----------
+    rng_key
+        PRNG key for the future latent paths.
+    model
+        The forecasting model callable (the same one that produced ``posterior``).
+    posterior
+        Posterior samples of the in-sample latent sites, sample axis leading; the
+        output of a ``device="host"`` stage is accepted directly.
+    data
+        Observed data with time at axis ``-2`` and length ``t``.
+    covariates
+        Covariates with time at axis ``-2`` and length ``duration > t``.
+    truth
+        Realized values over the horizon, shape ``(*batch, duration - t, obs)``,
+        integer-dtyped for a discrete observation family.
+    reader
+        The `~~numpyro_forecast.typing.DensityReader` for the model's forecast site.
+    batch_size
+        Optional chunk size for the draw axis (caps peak memory).
+    parallel
+        ``vmap`` (``True``) or ``lax.map`` (``False``) over the draw axis.
+    device
+        Placement of each chunk and the stitched result; the contract of
+        `draw_posterior()`.
+
+    Returns
+    -------
+    Float[Array | np.ndarray, " sample *batch _future _obs"]
+        Per-draw log densities; a size-one time axis for a correlated family
+        (see `predict_density()`).
+
+    Raises
+    ------
+    ValueError
+        If ``covariates`` does not extend beyond ``data``, if ``truth`` does not
+        have shape ``(*batch, duration - t, obs)``, if ``posterior`` carries a
+        future site, or if the observation family is discrete and ``truth`` is not
+        integer-dtyped (the `~~numpyro_forecast.models.predict()` message).
+    DensitySiteError
+        If ``reader`` cannot find its site in the trace.
+
+    Notes
+    -----
+    Reproducibility is per ``(rng_key, batch_size)`` as for `forecast()`. A density
+    and a forecast drawn with the same key are *not* on the same future paths
+    (``condition`` changes the key consumption of the pass); nothing downstream
+    needs them to be. The number of draws must grow with the horizon: the
+    ``"marginal"`` average at a cell where the realized value is far in the tail of
+    most sampled paths is carried by few draws (`log_density_ess()`), and the
+    log-mean-exp estimator is biased downward by about half its squared standard
+    error, a bias that is larger for the model with the wider latent path.
+    """
+    raise NotImplementedError
+
+
+def reduce_log_density(
+    log_density: Float[ArrayLike, " sample *batch future obs"],
+    reduction: Reduction = "marginal",
+) -> Float[Array, " *batch _future _obs"]:
+    r"""Reduce per-draw forecast log densities over the draw axis into an h-step score.
+
+    ``"marginal"`` (default) averages the density cell by cell,
+
+    $$
+    \hat\ell_{j} = \log \frac{1}{S} \sum_s \exp \ell^{(s)}_{j},
+    $$
+
+    the log density of the $j$-step-ahead forecast distribution at the realized
+    value with the intermediate steps not revealed: the distribution `forecast()`
+    samples and every sample metric scores, and the quantity that stacks per
+    horizon step. The result keeps the cell layout ``(*batch, future, obs)``.
+    ``"joint"`` sums over the time axis first,
+
+    $$
+    \hat L = \log \frac{1}{S} \sum_s \exp \sum_j \ell^{(s)}_{j},
+    $$
+
+    the block density, equal by the chain rule to the sum of one-step-ahead
+    densities each conditional on the realized predecessors (what
+    `arviz_stats.loo.lfo_cv` computes). It is an importance-sampling-like average
+    whose effective sample size collapses with the horizon length
+    (`log_density_ess()` measures it; on the prototype it kept 11% of the draws at
+    14 steps against 80% for the marginal); the result has a size-one time axis,
+    ``(*batch, 1, obs)``. The two coincide at horizon one only (for a longer block
+    the chain rule conditions on realized intermediate values that also update the
+    posterior over the parameters, so they differ even for an iid model) and must
+    never be compared with each other. Both reductions are ``logsumexp`` based and
+    stable for densities of any magnitude; both accept host-committed or NumPy
+    input.
+
+    Parameters
+    ----------
+    log_density
+        Per-draw log densities from `forecast_log_density()`, sample axis first.
+    reduction
+        ``"marginal"`` or ``"joint"`` (see `~~numpyro_forecast.typing.Reduction`).
+
+    Returns
+    -------
+    Float[Array, " *batch _future _obs"]
+        The per-cell score (``"marginal"``) or the block score with a size-one
+        time axis (``"joint"``). A name outside the
+        `~~numpyro_forecast.typing.Reduction` literal is rejected at the call
+        boundary by the runtime type check.
+    """
+    raise NotImplementedError
+
+
+def log_density_ess(
+    log_density: Float[ArrayLike, " sample *batch future obs"],
+    reduction: Reduction = "marginal",
+) -> Float[Array, " *batch _future _obs"]:
+    r"""Effective sample size of a `reduce_log_density()` estimate, as a count of draws.
+
+    With normalized weights $v_s \propto \exp \ell^{(s)}$ (per cell for
+    ``"marginal"``, per block for ``"joint"``), returns $1 / \sum_s v_s^2$, between
+    one and the number of draws. A value far below the draw count means the
+    average is carried by a few draws whose sampled path happens to be close to the
+    realized values; the ``"joint"`` reduction over a long block is the usual case.
+
+    Parameters
+    ----------
+    log_density
+        Per-draw log densities from `forecast_log_density()`, sample axis first.
+    reduction
+        Which reduction's weights to diagnose.
+
+    Returns
+    -------
+    Float[Array, " *batch _future _obs"]
+        The effective sample size, laid out like the reduction's result.
+    """
+    raise NotImplementedError
+
+
+def conditional_log_density(
+    model: ForecastModel,
+    posterior: Mapping[str, ArrayLike],
+    data: Array,
+    covariates: Array,
+    truth: Num[Array, " *batch future obs"],
+    *,
+    batch_size: int | None = None,
+    device: jax.Device | str | None = None,
+) -> Float[Array | np.ndarray, " sample *batch future obs"]:
+    r"""Per-draw one-step-ahead log densities of a realized block, by the chain rule.
+
+    Runs the model on the concatenated series ``concat(data, truth)`` with a zero
+    horizon (``covariates`` sliced to the in-sample length), so the ``obs`` site
+    records $\log p(y_{t+j} \mid y_{\le t+j-1}, \theta^{(s)})$ for every draw, and
+    returns the last ``future`` rows. For an error-feedback model built on
+    `~~numpyro_forecast.models.ssoe()` this is exact and cheap: the recursion
+    conditioned on the realized block is the in-sample filter extended by the block,
+    and the ``"marginal"`` reduction of the result (`reduce_log_density()`) is the
+    posterior-averaged chain-rule term at each step, whose sum over the block is the
+    block score of `arviz_stats.loo.lfo_cv`. Takes no ``rng_key`` because the pass
+    draws nothing: every sample site is substituted from ``posterior``.
+
+    The route exists only for models whose in-sample sample sites keep their shape
+    when the window grows: a model with a time-indexed latent
+    (`~~numpyro_forecast.models.innovations()`, `~~numpyro_forecast.models.markov_series()`)
+    has a ``drift``-like site of length ``t`` in ``posterior`` that cannot be
+    substituted into a window of length ``t + future``, and the function raises
+    before tracing. Use `forecast_log_density()` with the ``"joint"`` reduction for
+    those.
+
+    Parameters
+    ----------
+    model
+        The forecasting model callable.
+    posterior
+        Posterior samples of every sample site of the in-sample model, sample
+        axis leading.
+    data
+        Observed data with time at axis ``-2`` and length ``t``.
+    covariates
+        Covariates over at least ``t + future`` steps.
+    truth
+        Realized values over the ``future`` steps after ``data``.
+    batch_size
+        Optional chunk size for the draw axis.
+    device
+        Placement of the result; the contract of `draw_posterior()`.
+
+    Returns
+    -------
+    Float[Array | np.ndarray, " sample *batch future obs"]
+        Per-draw chain-rule log densities over the block.
+
+    Raises
+    ------
+    ValueError
+        If ``covariates`` does not cover ``data`` plus ``truth``, or if a site in
+        ``posterior`` has a time axis of length ``t`` (a time-indexed latent).
+    """
+    raise NotImplementedError

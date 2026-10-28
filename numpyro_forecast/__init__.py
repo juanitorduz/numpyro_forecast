@@ -19,6 +19,7 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         predictive,
         priors,
         reparam,
+        stacking,
         surgery,
         var,
     )
@@ -43,12 +44,14 @@ from numpyro_forecast.evaluate import (
 from numpyro_forecast.exceptions import (
     BacktestWindowError,
     CovariateDimsError,
+    DensitySiteError,
     DeviceMemoryError,
     DevicePlatformError,
     HostMemoryKindError,
     KernelConfigError,
     MVNLayoutError,
     NumpyroForecastError,
+    StackingShapeError,
     VectorizedMetricError,
 )
 from numpyro_forecast.models import (
@@ -63,8 +66,32 @@ from numpyro_forecast.models import (
     predict,
     ssoe,
 )
-from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
+from numpyro_forecast.predictive import (
+    conditional_log_density,
+    draw_posterior,
+    forecast,
+    forecast_log_density,
+    log_density_ess,
+    predict_density,
+    predict_in_sample,
+    reduce_log_density,
+    ssoe_density,
+)
 from numpyro_forecast.reparam import time_reparam
+from numpyro_forecast.stacking import (
+    StackingCells,
+    crps_stacking_weights,
+    hierarchical_weights,
+    log_score,
+    mixture_crps_terms,
+    pseudo_bma_weights,
+    rectified_features,
+    stack_forecasts,
+    stacking_cells,
+    stacking_factor,
+    stacking_weights,
+    window_design_effect,
+)
 from numpyro_forecast.surgery import register_elementwise
 
 try:
@@ -78,6 +105,7 @@ __all__ = [
     "BacktestResult",
     "BacktestWindowError",
     "CovariateDimsError",
+    "DensitySiteError",
     "DeviceMemoryError",
     "DevicePlatformError",
     "Horizon",
@@ -88,6 +116,8 @@ __all__ = [
     "SSOEMean",
     "SSOEResult",
     "SSOEUpdate",
+    "StackingCells",
+    "StackingShapeError",
     "Transition",
     "VectorizedBacktestResult",
     "VectorizedMetricError",
@@ -95,6 +125,8 @@ __all__ = [
     "add_forecast_groups",
     "backtest",
     "backtest_vectorized",
+    "conditional_log_density",
+    "crps_stacking_weights",
     "draw_posterior",
     "eval_coverage",
     "eval_crps",
@@ -102,14 +134,29 @@ __all__ = [
     "eval_rmse",
     "evaluate_forecast",
     "forecast",
+    "forecast_log_density",
+    "hierarchical_weights",
     "innovations",
+    "log_density_ess",
+    "log_score",
     "markov_series",
+    "mixture_crps_terms",
     "predict",
+    "predict_density",
     "predict_in_sample",
     "predictions_to_datatree",
+    "pseudo_bma_weights",
+    "rectified_features",
+    "reduce_log_density",
     "register_elementwise",
     "results_to_dataframe",
     "ssoe",
+    "ssoe_density",
+    "stack_forecasts",
+    "stacking_cells",
+    "stacking_factor",
+    "stacking_weights",
     "time_reparam",
     "to_datatree",
+    "window_design_effect",
 ]
