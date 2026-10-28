@@ -1,6 +1,6 @@
 # Scaffolding: forecast log densities and model stacking
 
-Companion to `docs/dev/stacking_design.md`. That document says what and why; this one says where every piece lives, what its exact signature and type contract is, how each kernel is to be implemented, and which test pins which property. Everything described here exists on the `stacking-scaffold` branch: the public surface is declared with full signatures, docstrings and jaxtyping annotations, the plumbing that needs no algorithm is implemented, every kernel is a `raise NotImplementedError`, and the two new test modules are written against the declared surface with a strict `xfail(raises=NotImplementedError)` on each test that reaches a stub. The branch passes `ruff check`, `ruff format --check`, `ty check` (the same pre-existing diagnostics as `main`, none new), `tests/test_docs_reference.py`, `tests/test_docstring_markup.py`, `tests/test_package.py`, `tests/test_api_snapshot.py`, and the existing `tests/test_evaluate.py`, `tests/test_backtest_vectorized.py` and `tests/test_predictive.py`; the new tests report 7 passes (the implemented validation paths and the trace-level mechanism check) and 84 strict xfails. Implementing a kernel turns its xfails into failures until the mark is removed, which is the intended workflow: delete the `@scaffold` mark of a test when its kernel lands and make it pass.
+Companion to `docs/dev/stacking_design.md`. That document says what and why; this one says where every piece lives, what its exact signature and type contract is, how each kernel is to be implemented, and which test pins which property. Everything described here exists on the [`stacking-scaffold`](https://github.com/juanitorduz/numpyro_forecast/tree/stacking-scaffold) branch: the public surface is declared with full signatures, docstrings and jaxtyping annotations, the plumbing that needs no algorithm is implemented, every kernel is a `raise NotImplementedError`, and the two new test modules are written against the declared surface with a strict `xfail(raises=NotImplementedError)` on each test that reaches a stub. The branch passes `ruff check`, `ruff format --check`, `ty check` (the same pre-existing diagnostics as `main`, none new), `tests/test_docs_reference.py`, `tests/test_docstring_markup.py`, `tests/test_package.py`, `tests/test_api_snapshot.py`, and the existing `tests/test_evaluate.py`, `tests/test_backtest_vectorized.py` and `tests/test_predictive.py`; the new tests report 7 passes (the implemented validation paths and the trace-level mechanism check) and 84 strict xfails. Implementing a kernel turns its xfails into failures until the mark is removed, which is the intended workflow: delete the `@scaffold` mark of a test when its kernel lands and make it pass.
 
 ## 1. Inventory of the branch
 
@@ -67,7 +67,7 @@ Branch on `fn.event_shape` first.
 - `()`: return `fn.log_prob(truth)`, shape `(*batch, future, obs)`.
 - `(future,)` with `truth.shape[-1] == 1` (the time-leading MVN layout the surgery module supports): `fn.log_prob(truth[..., 0])` has shape `(*batch,)`; return it reshaped to `(*batch, 1, 1)`.
 - `(obs,)` matching `truth.shape[-1]` (an `ssoe()` noise distribution with an event over the observation axis, the VAR case): `fn.log_prob(truth)` has shape `(*batch, future)`; return `[..., None]`.
-- Anything else: `ValueError` naming `fn.event_shape` and the three supported layouts.
+- Anything else: `ValueError` naming `fn.event_shape` and the three supported layouts. When the MVN layout issue is fixed by giving the observation distribution an event of `(future, 1)` (a reshape transform), add that case to the joint branch; if it is fixed by squeezing the data in `predict()`, nothing changes here.
 
 Pinned by `test_predict_density_known_normal_matches_closed_form`, `test_mvn_obs_returns_the_joint_block_density` (which also checks the value against the conditional MVN computed by hand) and `test_unsupported_event_shape_raises`.
 
@@ -77,7 +77,7 @@ The missing-site branch is implemented. The rest is `return _site_log_prob(model
 
 ### 3.3 `predictive.ssoe_density(name) -> DensityReader`
 
-Return a closure that reads `noise = model_trace[f"{name}_future"]["fn"]` and `mu = model_trace[f"{name}_mu_future"]["value"]`, raising `DensitySiteError` naming the missing site and the one-line deterministic when either is absent, and returns `_site_log_prob(noise, truth - mu)`. `noise` is the distribution expanded under the `time_future` plate, so its batch shape already carries `future`. Pinned by `test_ssoe_density_matches_ar1_closed_form` (the AR(1) closed form at $S = 20{,}000$, tolerance 0.03) and `test_ssoe_density_requires_mu_future_deterministic`.
+Return a closure that reads `noise = model_trace[f"{name}_future"]["fn"]` and `loc = model_trace[loc_site]["value"]` (`loc_site` is `"forecast_loc"` by default), raising `DensitySiteError` naming the missing site and the one-line deterministic when either is absent, and returns `_site_log_prob(noise, truth - loc)`. The location is the caller's deterministic by decision (design Section 7.1); deriving it as `forecast - eps` was rejected because a transformed `forecast` makes it silently wrong. An optional eager one-draw check of `forecast - eps == forecast_loc` before the jitted loop is the place to catch that; it is not part of the reader. `noise` is the distribution expanded under the `time_future` plate, so its batch shape already carries `future`. Pinned by `test_ssoe_density_matches_ar1_closed_form` (the AR(1) closed form at $S = 20{,}000$, tolerance 0.03) and `test_ssoe_density_requires_forecast_loc_deterministic`.
 
 ### 3.4 `predictive._log_density(rng_key, model, posterior, data, covariates, reader, truth, *, parallel)`
 
@@ -262,7 +262,7 @@ and apply it per test, never at module level, because the tests of implemented v
 | `poisson_model` | discrete support through a link: the integer-dtype error and the Poisson closed form |
 | `mvn_model` | time-correlated `MultivariateNormal` in the layout the surgery module supports: the joint block case, checked against the conditional MVN computed with `numpy.linalg` |
 | `series_model` | a series plate: batch dimensions are carried through as `(S, 3, future, 1)` |
-| `ar1_ssoe_model` | an AR(1) in error-feedback form with the `ar_mu_future` deterministic: the `ssoe_density` reader against the AR(1) closed form, the chain-rule route against `log_likelihood` on the concatenated series, and the agreement of the two routes at one step |
+| `ar1_ssoe_model` | an AR(1) in error-feedback form with the `forecast_loc` deterministic: the `ssoe_density` reader against the AR(1) closed form, the chain-rule route against `log_likelihood` on the concatenated series, and the agreement of the two routes at one step |
 
 `tiled(num_samples, **values)` builds a posterior dict of fixed values with a leading sample axis, so the driver is tested with known parameters and the only randomness is the future path.
 
@@ -276,7 +276,7 @@ and apply it per test, never at module level, because the tests of implemented v
 | `test_mvn_obs_returns_the_joint_block_density` | shape `(S, 1, 1)`, value equals the conditional MVN | identity |
 | `test_unsupported_event_shape_raises` | event `(future, 2)` is refused | contract |
 | `test_ssoe_density_matches_ar1_closed_form` | AR(1) h-step marginal at $S = 20{,}000$ | statistical, tolerance 0.03 |
-| `test_ssoe_density_requires_mu_future_deterministic` | `DensitySiteError` naming `ar_mu_future` | contract |
+| `test_ssoe_density_requires_forecast_loc_deterministic` | `DensitySiteError` naming `forecast_loc` | contract |
 | `test_random_walk_marginal_matches_analytic_h_step_density` | $\text{Normal}(\text{level}_t, \sqrt{h\,\text{ds}^2 + \sigma^2})$ at $S = 8{,}000$ | statistical, tolerance 0.03 |
 | `test_future_latents_are_drawn_from_the_prior_and_in_sample_sites_are_pinned` | key changes the result iff the future path is random | mechanism |
 | `test_time_reparam_model_matches_the_plain_model_marginal` | `time_reparam("haar")` leaves the marginal unchanged | statistical |
@@ -381,6 +381,6 @@ The two modules run in about 40 seconds on four CPU workers with every kernel st
 - **Two h-step scores, never compared.** `reduction="marginal"` is the default and the one the sample metrics correspond to; `"joint"` is the chain-rule block score of `lfo_cv`; they coincide at horizon one only.
 - **The window is the unit of exchangeability** for every stacking standard error, bootstrap and tempering; quote held-out gains per window with a paired standard error, and against equal weights.
 - **`forecast_fn` may return `ForecastOutput`**; it must when `backtest(log_density=...)` is requested, and the closure never receives the test block.
-- **A model is stackable** when it is built on `predict()`, or on `ssoe()` with `numpyro.deterministic(f"{name}_mu_future", r.mu_future)` registered when forecasting (additive single-channel models only), or when it registers an observed-style site holding the predictive to score and the user points `predict_density(site=...)` at it.
+- **A model is stackable** when it is built on `predict()`, or on `ssoe()` with `numpyro.deterministic("forecast_loc", r.mu_future)` registered next to `forecast` (additive single-channel models only; the block never registers it), or when it registers an observed-style site holding the predictive to score and the user points `predict_density(site=...)` at it.
 - **Model axis last** on every stacking matrix and on per-cell weights.
 - **No shipped model functions**: hierarchical stacking is two blocks the user composes.

@@ -147,8 +147,8 @@ class DensitySiteError(NumpyroForecastError, ValueError):
     ``obs_future`` site (the model registers ``forecast`` by hand, typically on top of
     `~~numpyro_forecast.models.ssoe()`), and by
     `~~numpyro_forecast.predictive.ssoe_density()` when the ``{name}_future`` error site
-    or the ``{name}_mu_future`` deterministic is missing. The message names the reader
-    to use, or the one-line deterministic the model has to register.
+    or the ``forecast_loc`` deterministic is missing. The message names the reader to
+    use, or the one-line deterministic the model has to register next to ``forecast``.
     """
 
 

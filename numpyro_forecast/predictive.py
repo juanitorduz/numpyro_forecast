@@ -621,6 +621,15 @@ def predict_in_sample(
 _FUTURE_OBS_SITE = "obs_future"
 """The observation site `~~numpyro_forecast.models.predict()` samples over the horizon."""
 
+_FORECAST_LOC_SITE = "forecast_loc"
+"""The deterministic an additive `ssoe()` model registers next to ``forecast``: the forecast location.
+
+The caller of `~~numpyro_forecast.models.ssoe()` owns the observation model (it writes ``obs``
+and registers ``forecast``), so it also registers the location the noise is shifted onto,
+``numpyro.deterministic("forecast_loc", r.mu_future)``, the quantity `ssoe_density()` reads.
+The block itself keeps registering nothing but its error site.
+"""
+
 
 def _site_log_prob(fn: dist.Distribution, truth: Array) -> Array:
     """``fn.log_prob`` of a ``(*batch, future, obs)`` block, laid out per cell or per block.
@@ -697,7 +706,7 @@ def predict_density(
             f"the traced model pass has no {site!r} site, so predict_density cannot read a "
             "forecast density: the model registers 'forecast' itself. For an additive "
             "model built on ssoe(), pass reader=ssoe_density(name) and register "
-            "numpyro.deterministic(f'{name}_mu_future', r.mu_future) when forecasting; "
+            f"numpyro.deterministic({_FORECAST_LOC_SITE!r}, r.mu_future) next to 'forecast'; "
             "otherwise register the predictive to score as an observed site and point "
             "predict_density at it with site=."
         )
@@ -705,25 +714,34 @@ def predict_density(
     raise NotImplementedError
 
 
-def ssoe_density(name: str) -> DensityReader:
-    """Build the `~~numpyro_forecast.typing.DensityReader` for an `ssoe()` model.
+def ssoe_density(name: str, *, loc_site: str = _FORECAST_LOC_SITE) -> DensityReader:
+    """Build the `~~numpyro_forecast.typing.DensityReader` for an additive `ssoe()` model.
 
     `~~numpyro_forecast.models.ssoe()` registers only the future error site
     ``f"{name}_future"`` and returns the path means; the caller writes the likelihood
     and registers ``forecast``. The forecast distribution at step ``j`` along a sampled
-    error path is therefore ``noise_dist`` shifted by ``mu_future[j]``, and the reader
-    computes ``noise_fn.log_prob(truth - mu_future)`` with ``noise_fn`` read from the
-    error site (the draw's own parameters, expanded under the ``time_future`` plate) and
-    ``mu_future`` read from the deterministic site ``f"{name}_mu_future"``, which the
-    model has to register when forecasting:
+    error path is therefore ``noise_dist`` shifted by the forecast location
+    ``r.mu_future[j]``, and the reader computes ``noise_fn.log_prob(truth - loc)`` with
+    ``noise_fn`` read from the error site (the draw's own parameters, expanded under the
+    ``time_future`` plate) and ``loc`` read from the deterministic ``loc_site``,
+    ``"forecast_loc"`` by default, which the model registers next to ``forecast``:
 
     ```python
-    r = ssoe(h, "arma", y, init, mean, update, dist.Normal(0.0, sigma))
+    r = ssoe(h, "eps", y, init, mean, update, dist.Normal(0.0, sigma))
     numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     if h.future > 0:
-        numpyro.deterministic("arma_mu_future", r.mu_future)
+        numpyro.deterministic("forecast_loc", r.mu_future)
         numpyro.deterministic("forecast", r.y_future)
     ```
+
+    The caller registers the location, not the block, for the same reason the caller
+    writes ``obs`` and ``forecast``: the observation model is the caller's. Deriving the
+    location from the sites that already exist (``forecast`` minus the error draw) was
+    rejected because it is silently wrong whenever ``forecast`` is a transformed
+    ``r.y_future`` (the censored demand example clips it); an explicit site fails
+    loudly instead. For an additive model ``forecast - eps_future`` must equal
+    ``forecast_loc``, which a caller can run as a one-draw eager check before the
+    jitted loop.
 
     This is the horizon-marginal density along simulated predecessors, the same
     quantity `predict_density()` reads for `~~numpyro_forecast.models.predict()`
@@ -740,7 +758,10 @@ def ssoe_density(name: str) -> DensityReader:
     Parameters
     ----------
     name
-        The site prefix passed to `~~numpyro_forecast.models.ssoe()`.
+        The site prefix passed to `~~numpyro_forecast.models.ssoe()`; the noise
+        distribution is read from ``f"{name}_future"``.
+    loc_site
+        The deterministic holding the forecast location, ``"forecast_loc"`` by default.
 
     Returns
     -------
@@ -750,8 +771,8 @@ def ssoe_density(name: str) -> DensityReader:
     Raises
     ------
     DensitySiteError
-        From the returned reader, when ``f"{name}_future"`` or
-        ``f"{name}_mu_future"`` is missing from the trace.
+        From the returned reader, when ``f"{name}_future"`` or ``loc_site`` is missing
+        from the trace.
     """
     raise NotImplementedError
 

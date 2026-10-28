@@ -104,7 +104,7 @@ def series_model(covariates: Array, data: Array | None = None) -> None:
 
 
 def ar1_ssoe_model(covariates: Array, data: Array | None = None) -> None:
-    """AR(1) in error-feedback form on `ssoe()`, registering ``ar_mu_future`` for the reader."""
+    """AR(1) in error-feedback form on `ssoe()`, registering ``forecast_loc`` for the reader."""
     h = Horizon.from_data(covariates, data)
     phi = numpyro.sample("phi", dist.Uniform(-1.0, 1.0))
     sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
@@ -120,7 +120,7 @@ def ar1_ssoe_model(covariates: Array, data: Array | None = None) -> None:
     )
     numpyro.sample("obs", dist.Normal(r.mu, sigma), obs=h.data)
     if h.future > 0:
-        numpyro.deterministic("ar_mu_future", r.mu_future)
+        numpyro.deterministic("forecast_loc", r.mu_future)
         numpyro.deterministic("forecast", r.y_future)
 
 
@@ -259,7 +259,7 @@ def test_ssoe_density_matches_ar1_closed_form() -> None:
 
 
 @scaffold
-def test_ssoe_density_requires_mu_future_deterministic() -> None:
+def test_ssoe_density_requires_forecast_loc_deterministic() -> None:
     def bare_ar1(covariates: Array, data: Array | None = None) -> None:
         h = Horizon.from_data(covariates, data)
         sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
@@ -279,7 +279,7 @@ def test_ssoe_density_requires_mu_future_deterministic() -> None:
 
     y_obs = jnp.ones((T_OBS, 1))
     covariates = jnp.concatenate([y_obs, jnp.zeros((FUTURE, 1))], axis=-2)
-    with pytest.raises(DensitySiteError, match="ar_mu_future"):
+    with pytest.raises(DensitySiteError, match="forecast_loc"):
         forecast_log_density(
             random.PRNGKey(0),
             bare_ar1,
