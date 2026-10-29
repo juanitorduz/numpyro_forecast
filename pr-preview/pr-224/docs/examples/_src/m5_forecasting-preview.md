@@ -86,7 +86,9 @@ rng_key = random.PRNGKey(seed=42)
 # undeclared batch dimension at every trace; the model 2 section explains why it is harmless.
 warnings.filterwarnings("ignore", message="Missing a plate statement for batch dimension -2")
 # arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.
-warnings.filterwarnings("ignore", message="When multiple credible intervals are plotted")
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
 
 %load_ext autoreload
 %autoreload 2
