@@ -9,7 +9,7 @@ a user-supplied fit/forecast closure (see `~~numpyro_forecast.typing.ForecastFn`
 """
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from functools import partial
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -383,12 +383,34 @@ class BacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
 
+        The view does not copy the arrays: ``prediction`` is the same object as
+        ``self.prediction``. The ``metrics`` and ``train_metrics`` mappings are
+        shallow copies, so changing the returned dictionary never changes the
+        result. Use ``copy.deepcopy(result.to_dict())`` for an independent copy
+        of the arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
+
+
+def _fields_view(result: "BacktestResult | VectorizedBacktestResult") -> dict[str, Any]:
+    """Map each field of a backtest result to its value without copying the arrays.
+
+    ``dataclasses.asdict`` deep-copies every value that is not a dict, list or
+    tuple, so with ``keep_predictions=True`` it copied the full forecast draws
+    on each call. The arrays are returned as they are; only the dict-valued
+    fields (the small metric mappings) are shallow-copied, so a caller who
+    mutates the returned mapping never changes the frozen result.
+    """
+    view: dict[str, Any] = {}
+    for result_field in fields(result):
+        value = getattr(result, result_field.name)
+        view[result_field.name] = dict(value) if isinstance(value, dict) else value
+    return view
 
 
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
@@ -963,12 +985,18 @@ class VectorizedBacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view.
 
+        The view does not copy the arrays: ``predictions``, ``losses`` and the
+        window indices are the same objects as on the result. The ``metrics``
+        mapping is a shallow copy, so changing the returned dictionary never
+        changes the result. Use ``copy.deepcopy(result.to_dict())`` for an
+        independent copy of the arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
 
 
 def _vmapped_metrics(
@@ -983,7 +1011,11 @@ def _vmapped_metrics(
     """
     try:
         return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
-    except (jax.errors.ConcretizationTypeError, jax.errors.TracerArrayConversionError) as err:
+    except (
+        jax.errors.ConcretizationTypeError,
+        jax.errors.TracerArrayConversionError,
+        jax.errors.TracerIntegerConversionError,
+    ) as err:
         raise VectorizedMetricError() from err
 
 
@@ -1105,7 +1137,9 @@ def backtest_vectorized(
         there is no room for a single window.
     VectorizedMetricError
         If a metric forces a host conversion under ``vmap`` (it is not a pure
-        JAX function).
+        JAX function), for example ``float(...)``, ``int(...)``,
+        ``range(...)``, Python list indexing or a NumPy call on a traced
+        value.
     """
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"

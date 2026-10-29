@@ -61,7 +61,7 @@ def crps_empirical(
         regardless of whether ``truth`` is: either operand is moved to device
         memory first (`~~numpyro_forecast._offload._device_view()`).
     truth
-        Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
+        Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
 
     Returns
     -------

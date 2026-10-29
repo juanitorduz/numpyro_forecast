@@ -540,6 +540,34 @@ def test_backtest_result_to_dict() -> None:
     }
 
 
+@pytest.mark.parametrize("kind", ["jax", "numpy"])
+def test_backtest_result_to_dict_does_not_copy_prediction(kind: str) -> None:
+    """``to_dict()`` is a view: the kept prediction is the result's own object (#199).
+
+    ``dataclasses.asdict`` deep-copied every array, which for
+    ``keep_predictions=True`` doubled the memory of the forecast draws on each
+    call. The small metric mappings stay independent copies, so mutating the
+    returned dict never changes the frozen result.
+    """
+    prediction = jnp.ones((20, 4, 1)) if kind == "jax" else np.ones((20, 4, 1))
+    result = BacktestResult(
+        t0=0,
+        t1=10,
+        t2=14,
+        num_samples=20,
+        walltime=0.5,
+        metrics={"mae": 1.0},
+        train_metrics={"mae": 0.5},
+        prediction=prediction,
+    )
+    flat = result.to_dict()
+    assert flat["prediction"] is prediction
+    flat["metrics"]["mae"] = 2.0
+    flat["train_metrics"]["mae"] = 3.0
+    assert result.metrics == {"mae": 1.0}
+    assert result.train_metrics == {"mae": 0.5}
+
+
 def test_backtest_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="share the time axis length"):
         backtest(
