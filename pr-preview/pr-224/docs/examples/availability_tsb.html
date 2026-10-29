@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/availability_tsb-preview.html"><i class="bi bi-journal-code"></i>TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/availability_tsb.ipynb" data-notebook-title="TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`" data-notebook-cellid="9e4fd41f">
 <p>TSB with Availability Constraints for Intermittent Demand with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/availability_tsb/"><strong>Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It closes the intermittent-demand trilogy started by the <a href="croston.html">Croston example</a> and the <a href="tsb.html">TSB example</a>, and like those notebooks it focuses on the <em>one</em> structural change the method makes and why that change matters.</p>
 <p>The motivation is a fact of retail life that the classical intermittent-demand methods ignore: a sales series contains <strong>two kinds of zeros</strong>. Some periods are zero because nobody wanted the product (no demand), and some are zero because nobody <em>could</em> buy it (a stock-out, a delisting, a closed store). What we observe is censored demand, <span class="math inline">y_t = a_t \cdot d^{\ast}_t</span>, where <span class="math inline">d^{\ast}_t</span> is the demand that would have materialized and <span class="math inline">a_t \in \{0, 1\}</span> says whether the product was on the shelf.</p>
@@ -2489,7 +2489,7 @@ full-availability forecast, plain TSB:                1,479.8 (60% of truth)</co
 <li>statsforecast documentation: <a href="https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html"><code>TSB</code></a>, the classical TSB baseline.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/availability_tsb-preview.html#9e4fd41f">Source: TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`</a></div>
+</div>
 
 
 

@@ -2351,5 +2351,3 @@ In practice the mechanisms compose: a retailer with hourly stockout labels *and*
 - Tobin, J. (1958). [*Estimation of Relationships for Limited Dependent Variables*](https://doi.org/10.2307/1907382). Econometrica, 26(1), 24-36. The classic censored-regression (Tobit) model.
 - The [ARMA example](arma.md) in this documentation, which introduces the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for AR-on-observations models.
 - The [availability TSB example](availability_tsb.md) and the [fresh retail stockout example](fresh_retail_stockout.md) in this documentation: the sibling availability mechanisms compared above.
-
-[Source: Demand Forecasting with Censored Likelihood with `numpyro_forecast`](_src/censored_demand-preview.html#679c0a19)

@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/arma-preview.html"><i class="bi bi-journal-code"></i>ARMA(1,1) Model with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/arma.ipynb" data-notebook-title="ARMA(1,1) Model with `numpyro_forecast`" data-notebook-cellid="3ed59a64">
 <p>ARMA(1,1) Model with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/arma_numpyro/"><strong>Notes on an ARMA(1,1) Model with NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. Autoregressive moving average (ARMA) models are the workhorse of classical time series analysis, and the <span class="math inline">(1,1)</span> member is the smallest one that combines both mechanisms: an autoregressive term that feeds the previous <em>observation</em> back into the mean, and a moving average term that feeds the previous <em>forecast error</em> back. We simulate data from an ARMA(1,1) process, so we own the data generating process and can verify that the model recovers the true parameters, and we fit it with MCMC (the NUTS sampler) through plain NumPyro.</p>
 <p>Two deliberate changes from the blog post are worth calling out:</p>
@@ -1693,7 +1693,7 @@ mean out-of-sample 94% coverage: 1.00  (nominal 0.94)</code></pre>
 <li>The <a href="forecasting_univariate.html">univariate forecasting example</a> in this documentation, which introduces <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> and the per-fold evaluation workflow.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/arma-preview.html#3ed59a64">Source: ARMA(1,1) Model with `numpyro_forecast`</a></div>
+</div>
 
 
 

@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/exponential_smoothing_state_space-preview.html"><i class="bi bi-journal-code"></i>Exponential Smoothing in State Space Form with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/exponential_smoothing_state_space.ipynb" data-notebook-title="Exponential Smoothing in State Space Form with `numpyro_forecast`" data-notebook-cellid="9b8886b7">
 <p>Exponential Smoothing in State Space Form with <code>numpyro_forecast</code></p>
 <p>Exponential smoothing is one of the most widely used forecasting techniques. In its classical (component) form it is a set of recursive update equations for a <em>level</em>, a <em>trend</em>, and a <em>seasonal</em> component. A more powerful way to write the same idea is the <strong>innovations state space form</strong> (also known as the single source of error, or SSOE, model), which turns exponential smoothing into a proper generative stochastic process. The key consequence is that forecast uncertainty is propagated correctly: the prediction interval widens with the horizon instead of collapsing to the observation noise.</p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/"><em>Exponential Smoothing with NumPyro: State Space Form</em></a> (with material from its predecessor <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro/"><em>Notes on Exponential Smoothing with NumPyro</em></a>) into a <code>numpyro_forecast</code> example. We show how to write the damped Holt-Winters model in state space form as a plain NumPyro model on the package’s <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block (the single-source-of-error recursion is exactly what the block implements), fit it with the NUTS sampler, and reuse the package’s forecasting and evaluation machinery. Along the way we introduce the JAX <code>scan</code> operation that rolls the latent state forward.</p>
@@ -1565,7 +1565,7 @@ forecast samples: (8000, 48, 1)</code></pre>
 <li>Orduz, J. <a href="https://juanitorduz.github.io/exponential_smoothing_numpyro/"><em>Notes on Exponential Smoothing with NumPyro</em></a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/exponential_smoothing_state_space-preview.html#9b8886b7">Source: Exponential Smoothing in State Space Form with `numpyro_forecast`</a></div>
+</div>
 
 
 

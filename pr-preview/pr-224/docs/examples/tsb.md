@@ -2342,5 +2342,3 @@ It is worth being explicit about why a classical ARMA model is not the tool here
 - Morgan, P. [*Adaptations of Croston's Method*](https://www.pmorgan.com.au/tutorials/adaptations-of-crostons-method/). A tutorial covering TSB alongside the other Croston variants.
 - statsforecast documentation: [`TSB`](https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html), the classical baseline the blog post compares against.
 - The [ARMA example](arma.md) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
-
-[Source: TSB Method for Intermittent Demand with `numpyro_forecast`](_src/tsb-preview.html#df433ad4)

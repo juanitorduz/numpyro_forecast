@@ -1833,5 +1833,3 @@ ax.set(
 - NumPyro documentation: [Example: AR(2) process](https://num.pyro.ai/en/stable/examples/ar2.html).
 - The [exponential smoothing example](exponential_smoothing_state_space.md) in this documentation, which uses the same [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for an error-feedback model.
 - The [univariate forecasting example](forecasting_univariate.md) in this documentation, which introduces [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) and the per-fold evaluation workflow.
-
-[Source: ARMA(1,1) Model with `numpyro_forecast`](_src/arma-preview.html#3ed59a64)

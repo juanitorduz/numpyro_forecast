@@ -2290,5 +2290,3 @@ The numbers complete the picture, and they are instructive rather than flatterin
 - statsforecast documentation: [`CrostonOptimized`](https://nixtlaverse.nixtla.io/statsforecast/src/core/models.html#crostonoptimized), the classical baseline the blog post compares against.
 - The [exponential smoothing example](exponential_smoothing_state_space.md) in this documentation, which uses the same [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for the damped Holt-Winters state space model.
 - The [ARMA example](arma.md) in this documentation, which introduces the series-as-covariates pattern and the expanding-window [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) workflow.
-
-[Source: Croston's Method for Intermittent Demand with `numpyro_forecast`](_src/croston-preview.html#bc1b95c6)

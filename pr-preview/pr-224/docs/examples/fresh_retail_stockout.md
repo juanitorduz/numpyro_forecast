@@ -2263,7 +2263,7 @@ del prior_obs
 
 # Inference with SVI
 
-We fit with NumPyro's `SVI` against an explicit `AutoNormal` guide. Instead of a fixed learning rate we pass a custom `optax` optimizer, the one-cycle Adam schedule chained with `reduce_on_plateau`, which converges noticeably better on this panel (the same recipe as in the [inference methods comparison](inference_methods_comparison.md) example); `SVI` expects a NumPyro optimizer, so the optax chain goes through one line of glue, `numpyro.optim.optax_to_numpyro`.
+We fit with NumPyro's `SVI` against an explicit `AutoNormal` guide. Instead of a fixed learning rate we pass a custom `optax` optimizer, the one-cycle Adam schedule chained with `reduce_on_plateau`, which converges noticeably better on this panel (the same recipe as in the [inference methods comparison](inference_methods_comparison.md) example); `SVI` accepts the optax chain as is and wraps it with `numpyro.optim.optax_to_numpyro` itself, so the explicit wrapper in the code below is optional.
 
 We set `progress_bar=False`, and not only because the scanned update loop compiles to a single `lax.scan` that finishes all 60{,}000 steps in a few seconds on CPU. The step-by-step execution path behind the progress bar compiles to slightly different floating-point arithmetic, and on this panel that tiny perturbation is enough to steer the optimizer into a distinctly worse ELBO optimum (the evaluation section returns to this sensitivity). The scanned path is both the fast and the well-behaved one here.
 
@@ -5210,5 +5210,3 @@ The holiday effect is the one large, consistent promotion signal: about a quarte
 - Orduz, J. [*Hierarchical forecasting with NumPyro (part I)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/).
 - Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
 - Related examples: [hierarchical forecasting I](hierarchical_forecasting_1.md), [inference methods comparison](inference_methods_comparison.md).
-
-[Source: Forecasting retail demand under stockouts](_src/fresh_retail_stockout-preview.html#184a22e1)

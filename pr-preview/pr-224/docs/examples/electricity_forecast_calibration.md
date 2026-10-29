@@ -601,5 +601,3 @@ This opens up nice opportunities to calibrate forecasting models with domain kno
 - Orduz, J. [*Electricity Demand Forecast: Prior Calibration*](https://juanitorduz.github.io/electricity_forecast_with_priors/).
 - Orduz, J. [*Electricity Demand Forecast: Dynamic Time-Series Model*](https://juanitorduz.github.io/electricity_forecast/) (the uncalibrated baseline this notebook extends).
 - [*Continuous Ranked Probability Score*](https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score) (Wikipedia).
-
-[Source: Electricity demand forecasting: prior calibration with `numpyro_forecast`](_src/electricity_forecast_calibration-preview.html#239f1a5f)

@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/fresh_retail_stockout-preview.html"><i class="bi bi-journal-code"></i>Forecasting retail demand under stockouts</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/fresh_retail_stockout.ipynb" data-notebook-title="Forecasting retail demand under stockouts" data-notebook-cellid="184a22e1">
 <p>Forecasting retail demand under stockouts</p>
 <p>The <a href="https://huggingface.co/datasets/Dingdong-Inc/FreshRetailNet-50K">FreshRetailNet-50K</a> dataset (<a href="https://arxiv.org/abs/2505.16319">Yang et al., 2025</a>) contains <span class="math inline">50{,}000</span> daily store-product demand series from fresh retail operations: <span class="math inline">90</span> days per series, with hourly sales, hourly stockout labels, and promotion, discount, and calendar covariates. The native stockout labels make it a great public benchmark for a classic operational problem: observed sales are a <em>censored</em> version of demand, because a store cannot sell what is not on the shelf.</p>
 <p>We model this with a <strong>multiplicative availability factor</strong>: expected sales factor into a demand component and an availability component. A forecasting model describes what demand would be with the product fully in stock, and a multiplicative factor, a function of the day’s recorded availability with parameters learned from the data, scales that demand down when it was not. In this example the two components are:</p>
@@ -2405,7 +2405,7 @@ f_{t,s} &amp;= \phi_s + (1 - \phi_s) \, \frac{1 - e^{-b_s a_{t,s}}}{1 - e^{-b_s}
 </section>
 <section id="inference-with-svi" class="level1">
 <h1>Inference with SVI</h1>
-<p>We fit with NumPyro’s <code>SVI</code> against an explicit <code>AutoNormal</code> guide. Instead of a fixed learning rate we pass a custom <code>optax</code> optimizer, the one-cycle Adam schedule chained with <code>reduce_on_plateau</code>, which converges noticeably better on this panel (the same recipe as in the <a href="inference_methods_comparison.html">inference methods comparison</a> example); <code>SVI</code> expects a NumPyro optimizer, so the optax chain goes through one line of glue, <code>numpyro.optim.optax_to_numpyro</code>.</p>
+<p>We fit with NumPyro’s <code>SVI</code> against an explicit <code>AutoNormal</code> guide. Instead of a fixed learning rate we pass a custom <code>optax</code> optimizer, the one-cycle Adam schedule chained with <code>reduce_on_plateau</code>, which converges noticeably better on this panel (the same recipe as in the <a href="inference_methods_comparison.html">inference methods comparison</a> example); <code>SVI</code> accepts the optax chain as is and wraps it with <code>numpyro.optim.optax_to_numpyro</code> itself, so the explicit wrapper in the code below is optional.</p>
 <p>We set <code>progress_bar=False</code>, and not only because the scanned update loop compiles to a single <code>lax.scan</code> that finishes all <span class="math inline">60{,}000</span> steps in a few seconds on CPU. The step-by-step execution path behind the progress bar compiles to slightly different floating-point arithmetic, and on this panel that tiny perturbation is enough to steer the optimizer into a distinctly worse ELBO optimum (the evaluation section returns to this sensitivity). The scanned path is both the fast and the well-behaved one here.</p>
 <div id="c07626fd" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:18:12.809600Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:18:12.809414Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:18:31.390945Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:18:31.388876Z&quot;}}" data-execution_count="29">
 <div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="op">%%</span>time</span>
@@ -4139,7 +4139,7 @@ largest daily gap on 2024-06-22 (availability 0.42): expected sales 13.7 vs dema
 <li>Related examples: <a href="hierarchical_forecasting_1.html">hierarchical forecasting I</a>, <a href="inference_methods_comparison.html">inference methods comparison</a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/fresh_retail_stockout-preview.html#184a22e1">Source: Forecasting retail demand under stockouts</a></div>
+</div>
 
 
 

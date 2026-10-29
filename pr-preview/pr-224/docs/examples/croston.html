@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/croston-preview.html"><i class="bi bi-journal-code"></i>Croston's Method for Intermittent Demand with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/croston.ipynb" data-notebook-title="Croston's Method for Intermittent Demand with `numpyro_forecast`" data-notebook-cellid="bc1b95c6">
 <p>Croston’s Method for Intermittent Demand with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/croston_numpyro/"><strong>Croston’s Method for Intermittent Time Series Forecasting in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. <strong>Intermittent demand</strong> series are dominated by zeros: most periods see no demand at all, and the occasional non-zero observation arrives at irregular times. Spare parts, slow-moving retail items, and rarely ordered SKUs all look like this. Classical smoothing methods degrade badly on such data, because averaging over the zeros drags the forecast toward zero while telling us nothing about <em>when</em> the next demand will arrive or <em>how large</em> it will be.</p>
 <p><a href="https://www.pmorgan.com.au/tutorials/crostons-method/">Croston’s method</a> attacks the problem by splitting the series <span class="math inline">y_t</span> into two better-behaved components: the <strong>demand sizes</strong> <span class="math inline">z_t</span> (the non-zero values) and the <strong>demand intervals</strong> <span class="math inline">p_t</span> (the number of periods between consecutive non-zero values). Each component is smoothed separately with simple exponential smoothing, and the forecast is their ratio,</p>
@@ -1892,7 +1892,7 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
 <li>The <a href="arma.html">ARMA example</a> in this documentation, which introduces the series-as-covariates pattern and the expanding-window <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> workflow.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/croston-preview.html#bc1b95c6">Source: Croston's Method for Intermittent Demand with `numpyro_forecast`</a></div>
+</div>
 
 
 

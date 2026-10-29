@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/censored_demand-preview.html"><i class="bi bi-journal-code"></i>Demand Forecasting with Censored Likelihood with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/censored_demand.ipynb" data-notebook-title="Demand Forecasting with Censored Likelihood with `numpyro_forecast`" data-notebook-cellid="679c0a19">
 <p>Demand Forecasting with Censored Likelihood with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/demand/"><strong>Demand Forecasting with Censored Likelihood</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. The subject is a fact of retail life: recorded sales understate demand in two distinct ways. When the product is out of stock, a day of genuine demand is recorded as zero sales. And when demand exceeds what the shelf (or the supply) can carry, the register stops counting at the capacity cap, so the recorded number is a <em>lower bound</em> on what customers actually wanted. A model trained naively on such a series learns to forecast <em>sales</em>, but replenishment and capacity planning need a forecast of <em>demand</em>: order against sales and you bake yesterday’s stockouts into tomorrow’s assortment, systematically under-serving your best days.</p>
 <p>We simulate a demand series from an AR(2) process with weekly seasonality, corrupt it into observed sales through random stockouts and a hard capacity cap, and then fit an AR(2) model with Fourier seasonality <strong>whose likelihood knows about the censoring</strong>: below the cap an observation contributes the usual <span class="math inline">\text{Normal}</span> density, and at the cap it contributes the <em>survival mass</em> <span class="math inline">P(\text{demand} \geq \text{cap})</span>, the probability that latent demand was at least as large as the recorded bound. Days with the product off the shelf are masked out of the likelihood entirely. Because the data are simulated, the true demand is known and the claim “the censored likelihood recovers demand” can be checked against ground truth rather than asserted.</p>
@@ -2192,7 +2192,7 @@ Group: /
 <li>The <a href="availability_tsb.html">availability TSB example</a> and the <a href="fresh_retail_stockout.html">fresh retail stockout example</a> in this documentation: the sibling availability mechanisms compared above.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/censored_demand-preview.html#679c0a19">Source: Demand Forecasting with Censored Likelihood with `numpyro_forecast`</a></div>
+</div>
 
 
 

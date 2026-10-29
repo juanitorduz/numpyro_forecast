@@ -3061,5 +3061,3 @@ The empirical coverage of the central 50\\ interval moves around the nominal lev
 - Durbin, J., & Koopman, S. J. (2012). *Time Series Analysis by State Space Methods*, 2nd edition. Oxford University Press.
 - Särkkä, S., & Svensson, L. (2023). [*Bayesian Filtering and Smoothing*](https://users.aalto.fi/~ssarkka/pub/bfs_book_2023_online.pdf), 2nd edition. Cambridge University Press.
 - [Design document: integrating `numpyro_forecast` with `dynestyx`](https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md), the internal document this notebook implements.
-
-[Source: State Space Models with `dynestyx` and `numpyro_forecast`](_src/dynestyx_integration-preview.html#dd3a99d1)

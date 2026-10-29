@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/dynestyx_integration-preview.html"><i class="bi bi-journal-code"></i>State Space Models with `dynestyx` and `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/dynestyx_integration.ipynb" data-notebook-title="State Space Models with `dynestyx` and `numpyro_forecast`" data-notebook-cellid="dd3a99d1">
 <p>State Space Models with <code>dynestyx</code> and <code>numpyro_forecast</code></p>
 <p>In this notebook we write a <a href="https://github.com/BasisResearch/dynestyx"><code>dynestyx</code></a> state space model as a <code>numpyro_forecast</code> model. We then fit it, forecast with it and backtest it with the drivers of the package, without changing them.</p>
 <p><code>dynestyx</code> is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a <code>DynamicalModel</code>, which bundles an initial condition, a state evolution and an observation model. Its primitive, <code>dsx.sample</code>, is interpreted by effect handlers. A <code>Filter</code> or a <code>Smoother</code> integrates the latent path out with a filtering algorithm (exactly with the Kalman filter for linear-Gaussian models, approximately with the ensemble, extended and unscented Kalman filters and with particle filters) and adds the marginal log likelihood, or its estimate, to the NumPyro trace. A <code>LatentPathBuilder</code> samples the path explicitly. A <code>Simulator</code> rolls the model forward in time.</p>
@@ -2668,7 +2668,7 @@ truth:                  [ 1.5  0.5 -0.4  0.3]</code></pre>
 <li><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/docs/dev/dynestyx_integration_design.md">Design document: integrating <code>numpyro_forecast</code> with <code>dynestyx</code></a>, the internal document this notebook implements.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/dynestyx_integration-preview.html#dd3a99d1">Source: State Space Models with `dynestyx` and `numpyro_forecast`</a></div>
+</div>
 
 
 

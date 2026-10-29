@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/electricity_forecast-preview.html"><i class="bi bi-journal-code"></i>Electricity demand forecasting with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/electricity_forecast.ipynb" data-notebook-title="Electricity demand forecasting with `numpyro_forecast`" data-notebook-cellid="9cb111e5">
 <p>Electricity demand forecasting with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/electricity_forecast/"><strong>Electricity Demand Forecast: Dynamic Time-Series Model</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. The TensorFlow Probability case study <a href="https://www.tensorflow.org/probability/examples/Structural_Time_Series_Modeling_Case_Studies_Atmospheric_CO2_and_Electricity_Demand">Structural Time Series Modeling Case Studies: Atmospheric CO2 and Electricity Demand</a> forecasts this electricity demand series with their structural time series module <a href="https://www.tensorflow.org/probability/api_docs/python/tfp/sts"><code>tfp.sts</code></a>, modeling the temperature effect as a <em>linear</em> regression. Here we extend that example: we keep temperature as a covariate but model its effect as a <em>varying coefficient</em> through a (Hilbert Space approximation) Gaussian process, which captures the non-linear relationship between temperature and demand. We are not using the Gaussian process to extrapolate over time, but to capture the non-linear covariate effect, as in <a href="https://juanitorduz.github.io/bikes_gp/">Time-Varying Regression Coefficients via Hilbert Space Gaussian Process Approximation</a>.</p>
 <p>Instead of hand-writing a bespoke predictive loop, we write the model as a plain NumPyro model function that calls the package’s <a href="../../reference/models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict</a> building block, fit it with NumPyro’s <code>SVI</code>, produce draws with <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a>, <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a> and <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a>, and score train and test with <a href="../../reference/evaluate.evaluate_forecast.html#numpyro_forecast.evaluate.evaluate_forecast" class="gdls-link gdls-code">evaluate_forecast</a>. Throughout the package, time lives at axis <code>-2</code> and the observation dimension at <code>-1</code>, and the forecast horizon is inferred from the covariates being longer than the data.</p>
@@ -1019,7 +1019,7 @@ covariates shape: (1344, 2)</code></pre>
 <li><a href="https://en.wikipedia.org/wiki/Scoring_rule#Continuous_ranked_probability_score"><em>Continuous Ranked Probability Score</em></a> (Wikipedia).</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/electricity_forecast-preview.html#9cb111e5">Source: Electricity demand forecasting with `numpyro_forecast`</a></div>
+</div>
 
 
 

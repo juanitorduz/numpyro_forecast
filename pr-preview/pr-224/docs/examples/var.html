@@ -348,9 +348,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/var-preview.html"><i class="bi bi-journal-code"></i>Vector Autoregression (VAR) with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -378,7 +378,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/var.ipynb" data-notebook-title="Vector Autoregression (VAR) with `numpyro_forecast`" data-notebook-cellid="50138624">
 <p>Vector Autoregression (VAR) with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/var_numpyro/"><strong>Bayesian VAR in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. A vector autoregression (VAR) models several time series jointly: each series is regressed on the past values of all series, and the shocks are correlated across series. We fit a VAR with two lags to the quarterly growth rates of US real GDP, consumption and investment, sample the posterior with NUTS, forecast 30 quarters ahead, and compute impulse response functions (IRFs), the standard tool to read a VAR.</p>
 <p>The package provides the VAR pieces as reusable components. You do not write the lag recursion, the forecast loop or the IRF recursion yourself:</p>
@@ -2577,7 +2577,7 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
 <li>statsmodels. <a href="https://www.statsmodels.org/stable/datasets/generated/macrodata.html">macrodata</a>: United States macroeconomic data, 1959Q1 to 2009Q3, public domain.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/var-preview.html#50138624">Source: Vector Autoregression (VAR) with `numpyro_forecast`</a></div>
+</div>
 
 
 

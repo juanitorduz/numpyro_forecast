@@ -2480,5 +2480,3 @@ ax.margins(y=0.2);
 - Hyndman, R. J., Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/hierarchical.html), chapter 11 (hierarchical and grouped time series).
 - Nixtla. [*m5-forecasts*](https://github.com/Nixtla/m5-forecasts) (the data mirror).
 - Related examples: [hierarchical forecasting I](hierarchical_forecasting_1.md), [forecasting retail demand under stockouts](fresh_retail_stockout.md), [univariate forecasting](forecasting_univariate.md).
-
-[Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`](_src/m5_forecasting-preview.html#db57b4af)

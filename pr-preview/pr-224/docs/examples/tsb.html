@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/tsb-preview.html"><i class="bi bi-journal-code"></i>TSB Method for Intermittent Demand with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,7 +379,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/tsb.ipynb" data-notebook-title="TSB Method for Intermittent Demand with `numpyro_forecast`" data-notebook-cellid="df433ad4">
 <p>TSB Method for Intermittent Demand with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/tsb_numpyro/"><strong>TSB Method for Intermittent Time Series Forecasting in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It is the direct follow-up to the <a href="croston.html">Croston example</a>, and rather than re-deriving intermittent demand from scratch, we focus on the one thing the <strong>Teunter-Syntetos-Babai (TSB)</strong> method changes and why that change matters.</p>
 <p>The setup is the same. <strong>Intermittent demand</strong> series are dominated by zeros, with the occasional non-zero demand arriving at irregular times (spare parts, slow-moving SKUs). <a href="https://juanitorduz.github.io/croston_numpyro/">Croston’s method</a> splits the series <span class="math inline">y_t</span> into <strong>demand sizes</strong> <span class="math inline">z_t</span> (the non-zero values) and <strong>demand intervals</strong> <span class="math inline">p_t</span> (the gaps between demands), smooths each with simple exponential smoothing, and forecasts the ratio <span class="math inline">\hat{z}_t / \hat{p}_t</span>: the expected demand per period. Its well-known weakness is that both components update <strong>only at demand events</strong>. Once demand stops, a Croston forecast never moves again: it stays frozen at the last level no matter how long the drought runs, so it cannot express that a slow item is going obsolete.</p>
@@ -1930,7 +1930,7 @@ empirical 94% coverage: 1.00  (nominal 0.94)</code></pre>
 <li>The <a href="arma.html">ARMA example</a> in this documentation, which introduces the series-as-covariates pattern and the expanding-window <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> workflow.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/tsb-preview.html#df433ad4">Source: TSB Method for Intermittent Demand with `numpyro_forecast`</a></div>
+</div>
 
 
 

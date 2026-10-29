@@ -3100,5 +3100,3 @@ The same caveats as in the sibling notebooks apply to the likelihood choices: Ga
 - Teunter, R. H., Syntetos, A. A., & Babai, M. Z. (2011). *Intermittent demand: Linking forecasting to inventory obsolescence*. European Journal of Operational Research, 214(3), 606-615. The paper that introduces the TSB method.
 - Croston, J. D. (1972). *Forecasting and stock control for intermittent demands*. Operational Research Quarterly, 23(3), 289-303.
 - statsforecast documentation: [`TSB`](https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html), the classical TSB baseline.
-
-[Source: TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`](_src/availability_tsb-preview.html#9e4fd41f)
