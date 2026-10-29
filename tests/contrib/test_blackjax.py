@@ -708,6 +708,27 @@ def test_multipathfinder_samples_psis_reproducible_per_key(
         assert bool(jnp.array_equal(first[name], second[name]))
 
 
+@pytest.mark.parametrize("batch_size", [None, 1])
+def test_multipathfinder_samples_psis_warns_once_at_the_caller(
+    multipathfinder_fit: MultiPathfinderFit, batch_size: int | None
+) -> None:
+    """The sampling-time ``pareto_k`` warning fires once per call, at the caller (#216).
+
+    It used to fire inside the per-chunk draw function, once per chunk, with a
+    ``stacklevel`` that pointed into ``_offload.py``.
+    """
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        multipathfinder_samples(
+            random.PRNGKey(4), multipathfinder_fit, 4, resample="psis", batch_size=batch_size
+        )
+    pareto = [w for w in record if "pareto_k" in str(w.message)]
+    assert len(pareto) == 1
+    assert pareto[0].filename == __file__
+    if batch_size is not None:
+        assert "of 4 chunks" in str(pareto[0].message)
+
+
 def test_multipathfinder_samples_auto_follows_pareto_k(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
