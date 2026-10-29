@@ -1,10 +1,15 @@
 """Smoke tests for package import and metadata."""
 
+import importlib
+import inspect
+import pkgutil
 import subprocess
 import sys
 
 import jax
 import jax.numpy as jnp
+import pytest
+from jaxtyping import TypeCheckError
 
 import numpyro_forecast
 from numpyro_forecast import (
@@ -30,6 +35,7 @@ from numpyro_forecast import (
     predict_in_sample,
     ssoe,
 )
+from numpyro_forecast.contrib.blackjax import BlackjaxNUTSKernel, PathfinderFit
 
 
 def test_version() -> None:
@@ -131,6 +137,38 @@ def test_base_import_no_extras() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "OK" in result.stdout
+
+
+def test_every_package_function_is_runtime_type_checked() -> None:
+    """Every function of every package module is wrapped by the jaxtyping import hook (#213).
+
+    The hook in ``numpyro_forecast/__init__.py`` only wraps modules first imported
+    inside its ``with`` block; a module imported after the block closes (as
+    ``contrib.blackjax`` once was) silently loses its runtime type checks.
+    """
+    unchecked = []
+    for info in pkgutil.walk_packages(numpyro_forecast.__path__, "numpyro_forecast."):
+        module = importlib.import_module(info.name)
+        for name, obj in vars(module).items():
+            if not inspect.isfunction(obj) or obj.__module__ != info.name:
+                continue
+            if not hasattr(obj, "__wrapped__"):
+                unchecked.append(f"{info.name}.{name}")
+    assert not unchecked, f"not wrapped by the jaxtyping import hook: {unchecked}"
+
+
+def test_contrib_blackjax_rejects_wrong_argument_types() -> None:
+    """Wrong argument types to ``contrib.blackjax`` fail at the call, like the core (#213)."""
+    with pytest.raises(TypeCheckError):
+        BlackjaxNUTSKernel(model="not a model")  # ty: ignore[invalid-argument-type]
+    with pytest.raises(TypeCheckError):
+        PathfinderFit(
+            state=None,
+            model=None,  # ty: ignore[invalid-argument-type]
+            covariates="x",  # ty: ignore[invalid-argument-type]
+            data=3,  # ty: ignore[invalid-argument-type]
+            elbo="y",  # ty: ignore[invalid-argument-type]
+        )
 
 
 def test_compile_harness_backend_available(count_compilations) -> None:

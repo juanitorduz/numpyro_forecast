@@ -5,6 +5,7 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 """
 
 import dataclasses
+import inspect
 import pickle
 import warnings
 from collections import namedtuple
@@ -18,6 +19,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import assert_host_resident, assert_numpy_host, fail_devices_for, rw_model
 from jax import Array, random
+from jaxtyping import TypeCheckError
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
@@ -732,13 +734,18 @@ def test_multipathfinder_samples_auto_follows_pareto_k(
 def test_multipathfinder_samples_invalid_resample_raises(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
-    with pytest.raises(ValueError, match="resample must be one of"):
+    """An unknown ``resample`` is a type error under the runtime type checks (#213)."""
+    with pytest.raises(TypeCheckError):
         multipathfinder_samples(
             random.PRNGKey(2),
             multipathfinder_fit,
             10,
             resample="nope",  # ty: ignore[invalid-argument-type]
         )
+    # With the checks disabled (``JAXTYPING_DISABLE=1``) the explicit guard still rejects it.
+    unchecked = inspect.unwrap(multipathfinder_samples)
+    with pytest.raises(ValueError, match="resample must be one of"):
+        unchecked(random.PRNGKey(2), multipathfinder_fit, 10, resample="nope")
 
 
 def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderFit) -> None:
@@ -895,7 +902,8 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
     the first path's ELBO with ``nan`` (``MultipathfinderState``/``PathfinderState``
     are NamedTuples); ``psis_weights`` reads ``logp``/``logq``, so the PSIS
     diagnostics are unaffected. The cheap-settings ``pareto_k`` warning fires
-    too and is captured by the same ``pytest.warns`` block.
+    too and is captured by the same ``pytest.warns`` block. Both are attributed to
+    this test file, the caller.
     """
     import blackjax.vi.multipathfinder as multipathfinder_module
 
@@ -909,7 +917,7 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
     monkeypatch.setattr(multipathfinder_module, "multi_approximate", nan_first_path)
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
-    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)"):
+    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)") as record:
         fit = fit_multipathfinder(
             random.PRNGKey(1),
             rw_model,
@@ -919,6 +927,8 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
             num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
             maxiter=_MULTIPATH_MAXITER,
         )
+    # Both fit-time warnings point at this call, not at the type-checking wrapper (#213).
+    assert {w.filename for w in record} == {__file__}
     assert len(fit.elbos) == 2
     assert not np.isfinite(fit.elbos[0])
     assert np.isfinite(fit.elbos[1])
