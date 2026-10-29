@@ -542,7 +542,7 @@ def test_to_datatree_rejects_non_positive_num_chains(num_chains: int) -> None:
         )
 
 
-@pytest.mark.parametrize("num_chains", [0, -3])
+@pytest.mark.parametrize("num_chains", [0, -3, True, False])
 def test_reshape_chains_rejects_non_positive_num_chains(num_chains: int) -> None:
     with pytest.raises(ValueError, match="num_chains must be a positive integer"):
         _reshape_chains(np.zeros((6, 2)), num_chains)
