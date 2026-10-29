@@ -19,7 +19,7 @@ contrib.blackjax.multipathfinder_samples(
 ```
 
 
-Every call draws fresh unconstrained samples from each path's fitted normal approximation (`num_samples` per path, via `blackjax.vi.pathfinder.sample` vmapped over the paths) and then combines the paths into a single set of `num_samples` draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) and [pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples): [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) and NumPyro's `Predictive` consume it unchanged. Chunking and device offload are delegated to the shared `_draw_chunked()` driver, so the same memory-bounding contract applies.
+Every call draws fresh unconstrained samples from each path's fitted normal approximation (`num_samples` per path, via `blackjax.vi.pathfinder.sample` vmapped over the paths) and then combines the paths into a single set of `num_samples` draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior) and [pathfinder_samples()](contrib.blackjax.pathfinder_samples.md#numpyro_forecast.contrib.blackjax.pathfinder_samples): [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) and NumPyro's `Predictive` consume it unchanged. Chunking and device offload are delegated to the shared `draw_chunked()` driver, so the same memory-bounding contract applies.
 
 
 ## Resampling Strategies
@@ -64,7 +64,7 @@ Posterior samples of the latent sites, sample axis leading (with `device="host"`
 
 
 `ValueError`  
-If `num_samples` or `batch_size` is not positive, or `resample` is not one of `"auto"`, `"psis"`, `"elbo"`.
+If `num_samples` or `batch_size` is not positive (an unknown `resample` is a type error under the package's runtime type checking, and a `ValueError` only when that checking is disabled).
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
