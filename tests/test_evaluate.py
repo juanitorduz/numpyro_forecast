@@ -656,6 +656,68 @@ def test_backtest_eval_train_does_not_change_oos_metrics(rng_key: Array) -> None
         assert a.metrics == b.metrics
 
 
+def test_backtest_eval_train_key_is_independent_of_forecast_fn_split_keys(rng_key: Array) -> None:
+    # Regression test for #200: the documented forecast_fn splits its key with
+    # random.split(rng_key, 3), and with jax_threefry_partitionable (the default
+    # since jax 0.5) fold_in(k, i) == split(k, n)[i] for every n > i. The key that
+    # in_sample_fn receives must therefore not be fold_in(rng_key, i) for a small
+    # i, or the in-sample draws reuse the forecast's random numbers.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    forecast_keys: list[Array] = []
+    in_sample_keys: list[Array] = []
+
+    def forecast_fn(
+        rng_key: Array,
+        model: object,
+        train_data: Array,
+        train_covariates: Array,
+        full_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        forecast_keys.append(rng_key)
+        _, _, key_pred = random.split(rng_key, 3)  # as in the backtest() docstring
+        return _canned_forecast_fn(
+            key_pred, model, train_data, train_covariates, full_covariates, num_samples
+        )
+
+    def in_sample_fn(
+        rng_key: Array,
+        model: object,
+        train_data: Array,
+        train_covariates: Array,
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array:
+        in_sample_keys.append(rng_key)
+        return _canned_in_sample_fn(rng_key, model, train_data, train_covariates, num_samples)
+
+    backtest(
+        rng_key,
+        rw_model_factory,
+        data,
+        covariates,
+        forecast_fn=forecast_fn,
+        in_sample_fn=in_sample_fn,
+        metrics={"crps": eval_crps},
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=20,
+        eval_train=True,
+    )
+    assert forecast_keys and len(forecast_keys) == len(in_sample_keys)
+    for forecast_key, in_sample_key in zip(forecast_keys, in_sample_keys, strict=True):
+        # Every key a closure would usually derive from the forecast key: the key
+        # itself and each key of a split into up to 8 parts.
+        derived = [forecast_key, *(k for n in range(2, 9) for k in random.split(forecast_key, n))]
+        for key in derived:
+            assert not bool(jnp.array_equal(in_sample_key, key))
+
+
 def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
