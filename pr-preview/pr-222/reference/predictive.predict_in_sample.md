@@ -58,6 +58,9 @@ In-sample posterior-predictive draws of the `obs` site (with `device="host"` com
 ## Raises
 
 
+`ValueError`  
+If `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, or if `covariates` has fewer than two axes (time must be at axis `-2`) or no time steps.
+
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 

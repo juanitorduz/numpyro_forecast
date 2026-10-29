@@ -47,7 +47,7 @@ In-sample data with time at axis `-2`.
 Covariates with time at axis `-2`. When `covariates` extends beyond `data` along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries `predictions` (forecast `obs` draws from [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast)) and `predictions_constant_data` groups.
 
 `num_chains: int = ``1`  
-Number of chains to split `posterior`'s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to `1` (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the `num_chains` the sampler was run with; see `_reshape_chains()` for the reshape contract and its divisibility requirement.
+Number of chains to split `posterior`'s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to `1` (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the `num_chains` the sampler was run with; see `_reshape_chains()` for the reshape contract and its divisibility requirement. Must be a positive integer.
 
 `batch_size: int | None = None`  
 Optional chunk size that bounds how many draws touch the accelerator at once, across both the in-sample and forecast predictive sampling. When set, sampling runs in chunks of this many draws, each chunk moved to `device` before the next is drawn. The per-chunk accelerator footprint is a handful of `(batch_size, time, series)` buffers, so it scales linearly with this value times the panel width: on wide panels lower it until a chunk fits. The batch size must be strictly below the draw count for that bound to hold: at or above it, sampling falls back to the single-shot path and the full array is materialized on the default device before the single transfer. Chunking changes the PRNG stream layout of the predictive draws, so results are reproducible per `(rng_key, batch_size)`. `None` (default) samples everything in one shot (the results are still moved to `device`).
@@ -79,7 +79,7 @@ A tree with `posterior` (`(chain, draw, ...)`, split per `num_chains`), `posteri
 
 
 `ValueError`  
-If `covariates` is shorter than `data` along the time axis, if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon, or if `posterior`'s sample count is not evenly divisible by `num_chains`.
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` is shorter than `data` along the time axis, if a `posterior` leaf has no sample axis, if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon, if `num_chains` is not a positive integer (`bool` included), or if `posterior`'s sample count is not evenly divisible by `num_chains`.
 
 `CovariateDimsError`  
 If `covariate_dims` does not name every `covariates` axis.

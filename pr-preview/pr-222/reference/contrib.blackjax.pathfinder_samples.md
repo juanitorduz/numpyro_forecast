@@ -13,7 +13,7 @@ contrib.blackjax.pathfinder_samples(
 ```
 
 
-The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`, exactly like [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior). Chunking and device offload are delegated to the shared `_draw_chunked()` driver, so the same memory-bounding contract applies.
+The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`, exactly like [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior). Chunking and device offload are delegated to the shared `draw_chunked()` driver, so the same memory-bounding contract applies.
 
 PRNG: within each chunk (the whole draw, when unchunked), the chunk key is split into a model-initialization stream and a Pathfinder-sampling stream (the init param draws are unused, but the streams are kept isolated).
 
