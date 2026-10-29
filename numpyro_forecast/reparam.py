@@ -49,9 +49,8 @@ TimeTransform = Literal["haar", "dct"]
 
 _AUX_INFER_KEY = "numpyro_forecast_time_reparam_aux"
 _NESTING_MSG = (
-    "time_reparam cannot be nested: `model` already contains a time_reparam model "
-    "(directly or under NumPyro handlers such as scope or seed); apply time_reparam "
-    "once, to the innermost model"
+    "time_reparam cannot be nested: `model` already contains a time_reparam model; "
+    "apply time_reparam once, to the innermost model"
 )
 _TRANSFORMS: dict[str, tuple[Callable[[int], Transform], str]] = {
     "haar": (lambda dim: HaarTransform(dim=dim), "haar"),
@@ -138,10 +137,8 @@ def _contains_time_reparam(model: object) -> bool:
 
     Follows ``.fn`` through every `numpyro.primitives.Messenger` (``scope``,
     ``seed``, ``substitute``, ``condition``, ...). It does not look inside a plain
-    function or a `functools.partial()`, on purpose: a composite model whose body
-    calls a `time_reparam()` component next to its own time latents is valid
-    (the outer transform targets those latents), and from the outside it cannot be
-    told apart from a nesting hidden behind a wrapper function.
+    function or a `functools.partial()`; `_TimeReparamHandler` catches a nesting
+    hidden behind one when the model is traced.
     """
     while isinstance(model, Messenger):
         if isinstance(model, numpyro.handlers.reparam) and isinstance(
@@ -150,6 +147,40 @@ def _contains_time_reparam(model: object) -> bool:
             return True
         model = model.fn
     return False
+
+
+class _TimeReparamHandler(numpyro.handlers.reparam):
+    """`numpyro.handlers.reparam` that raises when a nested model leaves it nothing to do.
+
+    A nesting behind a plain function or a `functools.partial()` is invisible to
+    `_contains_time_reparam()`. Each call counts the auxiliary sites this handler
+    sees and the sites it turns into a deterministic: auxiliary sites with nothing
+    targeted mean the outer transform is a no-op, so the call raises. A composite
+    model with time latents of its own next to a `time_reparam()` component is
+    accepted.
+    """
+
+    num_auxiliary: int = 0
+    num_targeted: int = 0
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Run the model and raise if it gave this handler only auxiliary sites."""
+        self.num_auxiliary = 0
+        self.num_targeted = 0
+        out = super().__call__(*args, **kwargs)
+        if self.num_auxiliary and not self.num_targeted:
+            raise ValueError(_NESTING_MSG)
+        return out
+
+    def process_message(self, msg: dict[str, Any]) -> None:
+        """Reparameterize ``msg`` and count auxiliary and targeted sample sites."""
+        if msg["type"] != "sample":
+            return
+        if (msg.get("infer") or {}).get(_AUX_INFER_KEY):
+            self.num_auxiliary += 1
+        super().process_message(msg)
+        if msg["type"] == "deterministic":
+            self.num_targeted += 1
 
 
 def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastModel:
@@ -199,11 +230,11 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
         not supported: the inner handler would turn the site into a deterministic
         before the outer one sees it, so the outer transform would silently be
         a no-op. The check runs when wrapping and looks through any NumPyro
-        handlers around ``model`` (``scope``, ``seed``, ...). It does not look
-        inside a plain function or a `functools.partial()`, so a nesting hidden
-        behind one is not detected; that is what keeps a composite model valid,
-        whose body calls a `time_reparam()` component next to its own time
-        latents (the outer transform then applies to those latents only).
+        handlers around ``model`` (``scope``, ``seed``, ...). A nesting behind a
+        plain function or a `functools.partial()` raises when the model is first
+        traced, if the outer transform finds no time latent of its own. A
+        composite model whose body calls a `time_reparam()` component next to its
+        own time latents is valid: the outer transform applies to those latents.
 
     Notes
     -----
@@ -250,5 +281,5 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     """
     if _contains_time_reparam(model):
         raise ValueError(_NESTING_MSG)
-    wrapped = numpyro.handlers.reparam(model, config=_TimeReparamConfig(transform))
+    wrapped = _TimeReparamHandler(model, config=_TimeReparamConfig(transform))
     return cast(ForecastModel, wrapped)

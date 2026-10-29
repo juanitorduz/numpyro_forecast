@@ -200,7 +200,7 @@ _HIDING_HANDLERS: dict[str, Callable[[ForecastModel], ForecastModel]] = {
 def test_nesting_through_handlers_is_rejected(
     wrapper: Callable[[ForecastModel], ForecastModel],
 ) -> None:
-    """A NumPyro handler between the two calls does not hide the nesting (#214).
+    """A NumPyro handler between the two calls does not hide the nesting.
 
     Without the check the outer ``"dct"`` silently does nothing: the trace keeps
     only the inner ``drift_haar`` auxiliary site. The check runs when wrapping,
@@ -236,6 +236,18 @@ def test_composite_with_a_time_reparam_component_is_accepted() -> None:
     tr = get_trace(model, covariates, data)
     assert {"level_dct", "seasonal/drift_haar"} <= set(tr)
     assert tr["level"]["type"] == tr["seasonal/drift"]["type"] == "deterministic"
+
+
+def test_nesting_behind_a_function_is_rejected_when_traced() -> None:
+    """A wrapper function hides the inner model from the handler walk, not from the trace."""
+    inner = time_reparam(rw_model, "haar")
+
+    def wrapper(covariates: Array, data: Array | None = None) -> None:
+        inner(covariates, data)
+
+    model, data, covariates = _split(time_reparam(wrapper, "dct"))
+    with pytest.raises(ValueError, match="cannot be nested"):
+        get_trace(model, covariates, data)
 
 
 def test_side_by_side_time_reparam_models_are_not_nesting() -> None:
