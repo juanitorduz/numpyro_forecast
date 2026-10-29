@@ -225,6 +225,21 @@ def test_duration_too_short_rejected() -> None:
         )
 
 
+def test_covariates_without_time_axis_rejected() -> None:
+    """1-D covariates name the ``(time, k)`` layout instead of an ``IndexError``."""
+    data, _ = _series(50)
+    with pytest.raises(ValueError, match=r"covariates must have time at axis -2"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            jnp.zeros(50),
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(rw_model),
+        )
+
+
 def test_covariate_length_mismatch_rejected() -> None:
     """Mismatched data/covariate durations raise ``ValueError``."""
     data, _ = _series(50)

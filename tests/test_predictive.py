@@ -127,6 +127,27 @@ def test_forecast_rejects_covariates_not_longer() -> None:
         forecast(random.PRNGKey(3), model, post, data, empty_covariates(30))
 
 
+def test_forecast_rejects_covariates_without_time_axis() -> None:
+    post = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(
+        ValueError, match=r"covariates must have time at axis -2.*got shape \(8,\)"
+    ):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), jnp.arange(8.0))
+
+
+def test_forecast_rejects_data_without_observations() -> None:
+    """A cold-start series with no observations names the cause, not the empty plate."""
+    post = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
+    with pytest.raises(ValueError, match="data has no observed time steps"):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((0, 1)), empty_covariates(8))
+
+
+def test_forecast_rejects_posterior_leaf_without_sample_axis() -> None:
+    post = {"level": jnp.array(0.0), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), empty_covariates(8))
+
+
 def test_predict_in_sample_shape_and_finite() -> None:
     model, _data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
@@ -168,6 +189,12 @@ def test_sample_axis_size_rejects_empty() -> None:
 def test_sample_axis_size_rejects_ragged_sample_axis() -> None:
     posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((6, 1))}
     with pytest.raises(ValueError, match="disagree on the sample axis"):
+        _sample_axis_size(posterior)
+
+
+def test_sample_axis_size_rejects_leaves_without_sample_axis() -> None:
+    posterior = {"a": jnp.zeros(()), "b": jnp.zeros((5, 1)), "c": np.zeros(())}
+    with pytest.raises(ValueError, match=r"posterior sites \['a', 'c'\] have no sample axis"):
         _sample_axis_size(posterior)
 
 

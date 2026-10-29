@@ -25,6 +25,7 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
+from numpyro_forecast._validation import _require_time_axis
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -870,8 +871,9 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, or if ``eval_train=True`` but
+        ``in_sample_fn`` is ``None``.
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -879,6 +881,8 @@ def backtest(
     if eval_train and in_sample_fn is None:
         msg = "eval_train=True requires in_sample_fn to be set"
         raise ValueError(msg)
+    _require_time_axis("data", data)
+    _require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
@@ -1099,7 +1103,8 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), or if their durations differ.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1107,6 +1112,8 @@ def backtest_vectorized(
         If a metric forces a host conversion under ``vmap`` (it is not a pure
         JAX function).
     """
+    _require_time_axis("data", data)
+    _require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)

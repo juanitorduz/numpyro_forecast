@@ -49,6 +49,7 @@ from numpyro_forecast._offload import (
 from numpyro_forecast._validation import (
     _require_covariates_extend_data,
     _require_positive_num_samples,
+    _require_sample_axis,
 )
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -248,12 +249,14 @@ def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     Raises
     ------
     ValueError
-        If ``posterior`` is empty or the leaves disagree on the sample-axis
-        length (the message names the offending sites).
+        If ``posterior`` is empty, a leaf has no sample axis (a 0-d leaf), or
+        the leaves disagree on the sample-axis length (the message names the
+        offending sites).
     """
     if not posterior:
         msg = "posterior must be non-empty"
         raise ValueError(msg)
+    _require_sample_axis(posterior)
     sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
     distinct = set(sizes.values())
     if len(distinct) != 1:
@@ -462,7 +465,9 @@ def forecast(
     Raises
     ------
     ValueError
-        If ``covariates`` does not extend beyond ``data`` along the time axis.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if ``covariates`` does not extend beyond ``data`` along
+        the time axis, or if a ``posterior`` leaf has no sample axis.
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see

@@ -30,6 +30,7 @@ from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 from numpyro.primitives import _PYRO_STACK
 
+from numpyro_forecast._validation import _require_time_axis
 from numpyro_forecast.arrays import _zeros_like_data, concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
@@ -128,10 +129,31 @@ class Horizon(eqx.Module):
         Raises
         ------
         ValueError
-            If ``data`` is longer than ``covariates`` along the time axis.
+            If ``covariates`` or ``data`` has fewer than two axes (time must be
+            at axis ``-2``), if ``covariates`` has no time steps, if ``data``
+            has no time steps (use ``data=None`` to sample from the prior), or
+            if ``data`` is longer than ``covariates`` along the time axis.
         """
+        _require_time_axis("covariates", covariates)
         duration = covariates.shape[-2]
-        t_obs = duration if data is None else data.shape[-2]
+        if duration == 0:
+            msg = (
+                f"covariates has no time steps (shape {tuple(covariates.shape)}); the horizon "
+                "needs at least one time step at axis -2"
+            )
+            raise ValueError(msg)
+        t_obs = duration
+        if data is not None:
+            _require_time_axis("data", data)
+            t_obs = data.shape[-2]
+            if t_obs == 0:
+                msg = (
+                    f"data has no observed time steps (shape {tuple(data.shape)}); a model "
+                    "needs at least one in-sample step. For a series with no history, sample "
+                    "from the prior with data=None, for example "
+                    "numpyro.infer.Predictive(model, num_samples=...)(rng_key, covariates)"
+                )
+                raise ValueError(msg)
         if t_obs > duration:
             msg = "data must not be longer than covariates along the time axis"
             raise ValueError(msg)
