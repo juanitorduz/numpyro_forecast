@@ -20,7 +20,7 @@ This converts Pyro's `obs = data - prediction` idiom into an additive shift of t
 - `StudentT`: `loc` is the mean when `df > 1` (and always the median and the mode); for `df <= 1` there is no mean.
 - `Cauchy`: `loc` is the mode (and the median); there is no mean.
 - `Gumbel`: `loc` is the mode; the mean is `loc + np.euler_gamma * scale` (about `loc + 0.5772 * scale`).
-- `AsymmetricLaplace`: `loc` is the mode; the mean is `loc + scale * (1 / asymmetry - asymmetry)`.
+- `AsymmetricLaplace`: `loc` is the mode; the mean is `loc + scale * (1 / asymmetry - asymmetry)`, which is `loc` only for `asymmetry = 1` (the symmetric case).
 
 An `Independent` wrapper follows its base distribution. When the predictor must be the mean of a `Gumbel` or `AsymmetricLaplace` observation, center the noise yourself, for example `dist.Gumbel(-np.euler_gamma * scale, scale)`.
 
