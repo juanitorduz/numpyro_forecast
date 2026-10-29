@@ -2234,7 +2234,7 @@ sample_dims :
 
 ## NUTS diagnostics
 
-Because the NUTS tree keeps its `4` chains, the standard MCMC diagnostics apply directly to it: `az.summary` reports posterior summaries, effective sample sizes, and \hat{R} for the scalar parameters. Values of \hat{R} below about 1.01, together with a bulk effective sample size (`ess_bulk`) above about `400` for `4` chains, indicate that the chains mixed well (Vehtari et al. 2021). The interval columns (`eti89_lb` and `eti89_ub`) are the bounds of ArviZ's default 89\\ equal-tailed interval, not of the 94\\ HDI that the forecast bands below use.
+Because the NUTS tree keeps its `4` chains, the standard MCMC diagnostics apply directly to it: `az.summary` reports posterior summaries, effective sample sizes, and \hat{R} for the scalar parameters. Values of \hat{R} below about `1.01`, together with a bulk effective sample size (`ess_bulk`) above about `400` for `4` chains, indicate that the chains mixed well (Vehtari et al. 2021). The interval columns (`eti89_lb` and `eti89_ub`) are the bounds of ArviZ's default 89\\ equal-tailed interval, not of the 94\\ HDI that the forecast bands below use.
 
 
     In [20]:
@@ -2254,7 +2254,7 @@ az.summary(nuts_tree, var_names=["bias", "drift_scale", "nu", "sigma", "centered
 | centered | 0.2 | 0.16 | 0.02 | 0.5 | 5 | 10 | 1.82 | 0.076 | 0.042 |
 
 
-The scalar parameters that shape the forecast (`bias`, `drift_scale`, `nu`, `sigma`) are close to convergence but do not meet the usual standard: their \hat{R} values are 1.02 to 1.04, and `nu` and `sigma` have a bulk effective sample size of only `188` and `87` from `4_000` draws. Their summaries are therefore approximate, and longer chains would make them more reliable. The parameter that does not mix at all is `centered`, and it is worth understanding why: this site only selects the drift's parameterization, so the joint density over the data is the same for every value of `centered` and its exact posterior equals its \text{Uniform}(0, 1) prior. NUTS explores that flat direction slowly, which is exactly what the large \hat{R} flags, but none of it leaks into the forecasts, which consume only the implied drift.
+The scalar parameters that shape the forecast (`bias`, `drift_scale`, `nu`, `sigma`) are close to convergence but do not meet the usual standard: their \hat{R} values are `1.02` to `1.04`, and `drift_scale`, `nu` and `sigma` have a bulk effective sample size of only `271`, `188` and `87` from `4_000` draws. Their summaries are therefore approximate, and longer chains would make them more reliable. The parameter that does not mix at all is `centered`, and it is worth understanding why: this site only selects the drift's parameterization, so the joint density over the data is the same for every value of `centered` and its exact posterior equals its \text{Uniform}(0, 1) prior. NUTS explores that flat direction slowly, which is exactly what the large \hat{R} flags, but none of it leaks into the forecasts, which consume only the implied drift.
 
 
 # CRPS on train and test
