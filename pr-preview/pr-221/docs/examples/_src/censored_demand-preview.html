@@ -243,7 +243,7 @@
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../../../index.html">
-    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
+    <span class="navbar-title">numpyro_forecast</span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -260,15 +260,11 @@
     <a class="nav-link" href="../../../reference/index.html"> 
 <span class="menu-text">Reference</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="../../../changelog.html"> 
-<span class="menu-text">Changelog</span></a>
-  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
     </span>
   </li>  
 </ul>
@@ -2032,7 +2028,7 @@ Group: /
 <div id="8f42ba52" class="cell markdown">
 <p>Two readings, one per truth:</p>
 <ul>
-<li><strong>Against latent demand</strong>, the aggregate point metrics are nearly a wash: the two MAEs differ by about one thousandth, and the naive model is ahead on RMSE and CRPS. This is expected. Both models target the <em>sales</em> scale, which sits below demand by about <span class="math inline">0.35</span> in expectation, so a modest downward offset against this truth is structural and shared. The gap is larger than the friction <span class="math inline">\delta = 0.25</span>: for demand well above zero, <span class="math inline">d_t - s_t = \max(\delta - \varepsilon^s_t, 0)</span>, whose mean is <span class="math inline">\delta \, \Phi(\delta / \sigma_s) + \sigma_s \, \varphi(\delta / \sigma_s) \approx 0.349</span>, because the cap at <span class="math inline">d_t</span> cuts off the noise that would push sales above demand. On the two thirds of test days where demand sits below the cap the two likelihoods largely agree, and there the naive model’s tighter, lower predictive scores well, offsetting its losses at the peaks. Calibration is where they separate: the censored model’s central intervals cover at or above their nominal levels at both widths, while the naive model’s <span class="math inline">50\%</span> interval falls short, because treating capped days as exact observations drags its mean down <em>and</em> shrinks its fitted noise scale (compare the <span class="math inline">\sigma</span> posteriors in the two summary tables).</li>
+<li><strong>Against latent demand</strong>, the aggregate point metrics are nearly a wash: the two MAEs differ by about one thousandth, and the naive model is ahead on RMSE and CRPS. This is expected. Both models target the <em>sales</em> scale, which sits below demand by about <span class="math inline">0.35</span> in expectation, so a modest downward offset against this truth is structural and shared. The gap is larger than the friction <span class="math inline">\delta = 0.25</span>: for demand well above zero, <span class="math inline">d_t - s_t = \max(\delta - \varepsilon^s_t, 0)</span>, whose mean is <span class="math inline">\delta \, \Phi(\delta / \sigma_s) + \sigma_s \, \varphi(\delta / \sigma_s) \approx 0.349</span> (with <span class="math inline">\varphi</span> the standard <span class="math inline">\text{Normal}</span> density), because the cap at <span class="math inline">d_t</span> cuts off the noise that would push sales above demand. On the two thirds of test days where demand sits below the cap the two likelihoods largely agree, and there the naive model’s tighter, lower predictive scores well, offsetting its losses at the peaks. Calibration is where they separate: the censored model’s central intervals cover at or above their nominal levels at both widths, while the naive model’s <span class="math inline">50\%</span> interval falls short, because treating capped days as exact observations drags its mean down <em>and</em> shrinks its fitted noise scale (compare the <span class="math inline">\sigma</span> posteriors in the two summary tables).</li>
 <li><strong>Against observed sales</strong>, the naive model wins the three point metrics (MAE, RMSE, CRPS), and that is not a defect but the fresh retail example’s lesson restated: the test window’s observed sales are themselves gated and capped, so a <em>correct</em> demand forecast is penalized for sitting above the caps and the stockout zeros. Scoring against recorded sales systematically favors models that repeat the corruption, though only on point accuracy: both models’ intervals sit far below nominal against this truth (the censored model covers <span class="math inline">0.267</span> at <span class="math inline">50\%</span> and <span class="math inline">0.600</span> at <span class="math inline">94\%</span>, the naive model <span class="math inline">0.300</span> and <span class="math inline">0.467</span>), and neither is clearly the better calibrated one. In production, where latent demand is unavailable, this is an argument for evaluating on periods or stores with clean availability.</li>
 </ul>
 <p>Neither aggregate row answers the operational question, “how much should we stock for the strong days?”, so we re-score on exactly the days that drive that decision: the test days whose latent demand exceeds the cap, the days a planner would under-stock by trusting the naive model.</p>
