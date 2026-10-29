@@ -155,7 +155,8 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     Raises
     ------
     ValueError
-        If the leading axis length is not evenly divisible by ``num_chains``.
+        If ``num_chains`` is less than ``1``, or if the leading axis length is
+        not evenly divisible by ``num_chains``.
 
     Notes
     -----
@@ -169,6 +170,12 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     ``group_by_chain=True`` upstream only to disambiguate chain order for
     yourself, then flatten back before passing samples to ``to_datatree``.
     """
+    if num_chains < 1:
+        msg = (
+            f"num_chains must be a positive integer, got {num_chains}; pass the num_chains "
+            "the sampler was run with (1 for SVI or Pathfinder draws)"
+        )
+        raise ValueError(msg)
     reshaped = np.asarray(array)
     n = reshaped.shape[0]
     if n % num_chains != 0:
@@ -278,7 +285,8 @@ def to_datatree(
         pseudo-chain, correct for a posterior with no chain structure, e.g.
         SVI or Pathfinder draws). For an MCMC posterior, pass the
         ``num_chains`` the sampler was run with; see `_reshape_chains()`
-        for the reshape contract and its divisibility requirement.
+        for the reshape contract and its divisibility requirement. Must be a
+        positive integer.
     batch_size
         Optional chunk size that bounds how many draws touch the accelerator
         at once, across both the in-sample and forecast predictive sampling.
@@ -351,8 +359,9 @@ def to_datatree(
     ValueError
         If ``covariates`` is shorter than ``data`` along the time axis, if
         ``time_coord`` is given but its length does not match the in-sample
-        window plus the forecast horizon, or if ``posterior``'s sample count is
-        not evenly divisible by ``num_chains``.
+        window plus the forecast horizon, if ``num_chains`` is less than ``1``,
+        or if ``posterior``'s sample count is not evenly divisible by
+        ``num_chains``.
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError
