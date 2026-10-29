@@ -2103,7 +2103,9 @@ series
     One label per series, defining the ``series`` coordinate.
 group
     Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-    ``"posterior_predictive"``, ``"predictions"``).
+    ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+    ``"constant_data"`` are reserved: the function always writes those two
+    groups.
 observed
     Optional observations, shape ``(time, series)``, stored in
     ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -2118,7 +2120,9 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``series`` does not have one label per series in ``predictions``.
+    If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+    names), or if ``series`` does not have one label per series in
+    ``predictions``.
 
 
 ## Extensions (contrib)
