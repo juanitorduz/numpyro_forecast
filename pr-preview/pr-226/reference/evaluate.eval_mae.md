@@ -38,4 +38,4 @@ The mean absolute error as a scalar array.
 
 
 `ValueError`  
-If `truth.shape` is not `pred.shape[1:]` and the runtime type hook is off (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).
+If `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).

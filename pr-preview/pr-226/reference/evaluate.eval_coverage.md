@@ -43,4 +43,4 @@ The fraction of ground truth inside the central `alpha` interval, as a scalar ar
 
 
 `ValueError`  
-If `alpha` is not strictly inside `(0, 1)`, or `truth.shape` is not `pred.shape[1:]` and the runtime type hook is off (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).
+If `alpha` is not strictly inside `(0, 1)`, or `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).

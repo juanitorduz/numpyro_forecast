@@ -1479,9 +1479,9 @@ VectorizedBacktestResult
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, or the model's
-    ``"forecast"`` site does not have the shape of the test window, so
-    each window's ``truth.shape`` is not ``pred.shape[1:]``.
+    If ``data`` and ``covariates`` durations differ, or ``metrics`` is not
+    empty and the model's ``"forecast"`` site does not have the shape of
+    ``data`` over the test window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
@@ -1591,9 +1591,8 @@ dict[str, float]
 Raises
 ------
 ValueError
-    If ``truth.shape`` is not ``pred.shape[1:]`` and the runtime type hook is off (see
-    `~~numpyro_forecast.typing.Metric`). The check runs here once, so a custom metric in
-    ``metrics`` never sees a mismatched pair.
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
 
 results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
 
@@ -1663,8 +1662,7 @@ Array
 Raises
 ------
 ValueError
-    If ``truth.shape`` is not ``pred.shape[1:]`` and
-    the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
@@ -1690,8 +1688,7 @@ Array
 Raises
 ------
 ValueError
-    If ``truth.shape`` is not ``pred.shape[1:]`` and
-    the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
@@ -1717,8 +1714,7 @@ Array
 Raises
 ------
 ValueError
-    If ``truth.shape`` is not ``pred.shape[1:]`` and
-    the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9, batch_size: int | None = None) -> jax.Array
 
@@ -1759,8 +1755,7 @@ Raises
 ------
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
-    ``pred.shape[1:]`` and the runtime type hook is off (see
-    `~~numpyro_forecast.typing.Metric`).
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jaxtyping.Float[Array, '*batch']
 
@@ -1795,8 +1790,8 @@ Float[Array, "*batch"]
 Raises
 ------
 ValueError
-    If ``truth.shape`` is not ``pred.shape[1:]`` and the runtime type hook is off (see
-    `~~numpyro_forecast.typing.Metric`), or ``pred`` has fewer than 2 samples.
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`), or
+    ``pred`` has fewer than 2 samples.
 
 References
 ----------
@@ -1835,8 +1830,7 @@ Raises
 ------
 ValueError
     If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
-    ``pred.shape[1:]`` and the runtime type hook is off (see
-    `~~numpyro_forecast.typing.Metric`).
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9) -> jax.Array
 
@@ -1870,8 +1864,7 @@ Raises
 ------
 ValueError
     If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
-    ``pred.shape[1:]`` and the runtime type hook is off (see
-    `~~numpyro_forecast.typing.Metric`).
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'] | jaxtyping.Float[ndarray, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
 
@@ -1897,9 +1890,8 @@ seasonality
 Returns
 -------
 Metric
-    A ``(pred, truth)`` callable computing MASE as a scalar array. It
-    raises ``ValueError`` if ``truth.shape`` is not ``pred.shape[1:]`` and
-    the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+    A ``(pred, truth)`` callable computing MASE as a scalar array. It raises ``ValueError`` if
+    ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 Raises
 ------
@@ -1953,7 +1945,8 @@ num_chains
     pseudo-chain, correct for a posterior with no chain structure, e.g.
     SVI or Pathfinder draws). For an MCMC posterior, pass the
     ``num_chains`` the sampler was run with; see `_reshape_chains()`
-    for the reshape contract and its divisibility requirement.
+    for the reshape contract and its divisibility requirement. Must be a
+    positive integer.
 batch_size
     Optional chunk size that bounds how many draws touch the accelerator
     at once, across both the in-sample and forecast predictive sampling.
@@ -2026,8 +2019,9 @@ Raises
 ValueError
     If ``covariates`` is shorter than ``data`` along the time axis, if
     ``time_coord`` is given but its length does not match the in-sample
-    window plus the forecast horizon, or if ``posterior``'s sample count is
-    not evenly divisible by ``num_chains``.
+    window plus the forecast horizon, if ``num_chains`` is not a positive
+    integer (``bool`` included), or if ``posterior``'s sample count is not
+    evenly divisible by ``num_chains``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
@@ -2142,7 +2136,9 @@ series
     One label per series, defining the ``series`` coordinate.
 group
     Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-    ``"posterior_predictive"``, ``"predictions"``).
+    ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+    ``"constant_data"`` are reserved: the function always writes those two
+    groups.
 observed
     Optional observations, shape ``(time, series)``, stored in
     ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -2157,7 +2153,9 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``series`` does not have one label per series in ``predictions``.
+    If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+    names), or if ``series`` does not have one label per series in
+    ``predictions``.
 
 
 ## Extensions (contrib)
@@ -2968,9 +2966,10 @@ training window followed by a ``test_weeks`` test window.
 Parameters
 ----------
 train_days
-    Number of training days (24 hours each).
+    Number of training days (24 hours each). Must be at least 1.
 test_weeks
-    Number of test weeks (``24 * 7`` hours each).
+    Number of test weeks (``24 * 7`` hours each). Must be non-negative;
+    ``0`` returns the training window only, with ``split == y.shape[1]``.
 
 Returns
 -------
@@ -2984,8 +2983,10 @@ stations : list[str]
 Raises
 ------
 ValueError
-    If the requested ``train_days`` + ``test_weeks`` window exceeds the
-    available history (which would otherwise wrap a negative slice index).
+    If ``train_days`` is less than 1 or ``test_weeks`` is negative (checked
+    before the download), or if the requested ``train_days`` + ``test_weeks``
+    window exceeds the available history (which would otherwise wrap a
+    negative slice index).
 
 load_victoria_electricity() -> tuple[jaxtyping.Float[Array, 'time 1'], jaxtyping.Float[Array, 'time']]
 
