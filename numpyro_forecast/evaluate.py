@@ -25,7 +25,11 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast._validation import _require_positive_num_samples, require_pred_truth_shapes
+from numpyro_forecast._validation import (
+    require_positive_num_samples,
+    require_pred_truth_shapes,
+    require_time_axis,
+)
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -656,7 +660,7 @@ def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Met
     check the error comes from the metric itself, after the first window has
     been fitted and forecast.
     """
-    _require_positive_num_samples(num_samples)
+    require_positive_num_samples(num_samples)
     if num_samples >= 2:
         return
     needs_two: list[str] = []
@@ -959,9 +963,10 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small
-        (see ``num_samples``).
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, if ``eval_train=True`` but
+        ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
+        ``num_samples``).
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -969,6 +974,8 @@ def backtest(
     if eval_train and in_sample_fn is None:
         msg = "eval_train=True requires in_sample_fn to be set"
         raise ValueError(msg)
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
@@ -1220,10 +1227,11 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, if ``num_samples``
-        is too small (see ``num_samples``), or if ``metrics`` is not empty
-        and the model's ``"forecast"`` site does not have the shape of
-        ``data`` over the test window.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, if ``num_samples`` is too
+        small (see ``num_samples``), or if ``metrics`` is not empty and the
+        model's ``"forecast"`` site does not have the shape of ``data`` over
+        the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1233,6 +1241,8 @@ def backtest_vectorized(
         indexing or a NumPy call on a traced value) or builds a value-dependent
         shape (a boolean mask index such as ``x[x > 0]``).
     """
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)

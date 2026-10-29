@@ -540,6 +540,17 @@ def test_backtest_result_to_dict() -> None:
     }
 
 
+def test_backtest_rejects_covariates_without_time_axis() -> None:
+    with pytest.raises(ValueError, match=r"covariates must have time at axis -2"):
+        backtest(
+            random.PRNGKey(0),
+            rw_model_factory,
+            jnp.zeros((20, 1)),
+            jnp.zeros(20),
+            forecast_fn=_never_called,
+        )
+
+
 @pytest.mark.parametrize("kind", ["jax", "numpy"])
 def test_backtest_result_to_dict_does_not_copy_prediction(kind: str) -> None:
     """``to_dict()`` is a view: the kept prediction is the result's own object (#199).

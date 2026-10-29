@@ -48,7 +48,7 @@ from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
 from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, _draw_chunked
-from numpyro_forecast._validation import _require_positive_num_samples
+from numpyro_forecast._validation import require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
@@ -722,7 +722,7 @@ def pathfinder_samples(
         If ``device="cpu"`` is requested and the JAX CPU backend is not
         initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
-    _require_positive_num_samples(num_samples)
+    require_positive_num_samples(num_samples)
     blackjax = require("blackjax", extra="blackjax")
     _ensure_stable_bfgs_sample()
 
@@ -1099,7 +1099,7 @@ def multipathfinder_samples(
         ``device="cpu"`` is requested and the JAX CPU backend is not
         initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
-    _require_positive_num_samples(num_samples)
+    require_positive_num_samples(num_samples)
     # The `Literal` hint rejects an unknown `resample` first under the package's runtime
     # type checking; this guard only fires when that is disabled (`JAXTYPING_DISABLE=1`).
     if resample not in ("auto", "psis", "elbo"):

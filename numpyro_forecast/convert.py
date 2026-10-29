@@ -24,7 +24,7 @@ from jax.typing import ArrayLike
 from jaxtyping import Float, Num
 
 from numpyro_forecast._offload import _resolve_device
-from numpyro_forecast._validation import _require_covariates_cover_data
+from numpyro_forecast._validation import require_covariates_cover_data, require_sample_axis
 from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
@@ -360,7 +360,10 @@ def to_datatree(
     Raises
     ------
     ValueError
-        If ``covariates`` is shorter than ``data`` along the time axis, if
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if ``data`` has no time steps, if ``covariates`` is
+        shorter than ``data`` along the time axis, if a ``posterior`` leaf has
+        no sample axis, if
         ``time_coord`` is given but its length does not match the in-sample
         window plus the forecast horizon, if ``num_chains`` is not a positive
         integer (``bool`` included), or if ``posterior``'s sample count is not
@@ -393,7 +396,7 @@ def to_datatree(
     matching-length covariates and attach the horizon with
     `add_forecast_groups()`.
     """
-    _require_covariates_cover_data(data, covariates)
+    require_covariates_cover_data(data, covariates)
     cov_dims = _resolve_covariate_dims(covariates, covariate_dims)
     n_time = data.shape[-2]
     horizon = covariates.shape[-2] - n_time
@@ -421,6 +424,7 @@ def to_datatree(
 
     merged_arg = cast("dict[Any, Any]", merged_coords)
 
+    require_sample_axis(posterior)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
         for name, value in posterior.items()

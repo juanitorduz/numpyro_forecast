@@ -294,6 +294,33 @@ def test_to_datatree_rejects_short_covariates() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("data", "covariates", "name"),
+    [
+        (jnp.zeros((6, 1)), jnp.arange(8.0), "covariates"),
+        (jnp.zeros(6), jnp.zeros((8, 0)), "data"),
+    ],
+)
+def test_to_datatree_rejects_inputs_without_time_axis(
+    data: Array, covariates: Array, name: str
+) -> None:
+    posterior = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=rf"{name} must have time at axis -2"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates)
+
+
+def test_to_datatree_rejects_posterior_leaf_without_sample_axis() -> None:
+    posterior = {"level": jnp.array(0.0), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+def test_to_datatree_rejects_data_without_observations() -> None:
+    posterior = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
+    with pytest.raises(ValueError, match=r"data has no observed time steps \(shape \(0, 1\)\)"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((0, 1)), empty_covariates(8))
+
+
 def test_to_datatree_coords_reach_forecast_groups() -> None:
     """User coords propagate to the forecast groups; the forecast time coordinate wins."""
     posterior, data, _ = _mcmc_posterior(num_chains=1)
