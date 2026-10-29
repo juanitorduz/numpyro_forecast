@@ -97,4 +97,4 @@ If `data` and `covariates` durations differ.
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.
 
 `VectorizedMetricError`  
-If a metric forces a host conversion under `vmap` (it is not a pure JAX function), for example `float(...)`, `int(...)`, `range(...)`, Python list indexing, a boolean mask index such as `x[x > 0]` or a NumPy call on a traced value.
+If a metric is not a pure JAX function under `vmap`: it forces a host conversion (`float(...)`, `int(...)`, `range(...)`, Python list indexing or a NumPy call on a traced value) or builds a value-dependent shape (a boolean mask index such as `x[x > 0]`).
