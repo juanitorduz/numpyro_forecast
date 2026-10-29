@@ -46,7 +46,7 @@ def fake_bart_counts(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.usefixtures("fake_bart_counts")
 def test_load_bart_hierarchical_valid_window() -> None:
-    """A valid window keeps ``train_days * 24`` training and ``test_weeks`` test hours."""
+    """A valid window keeps ``train_days * 24`` training hours and ``test_weeks`` test weeks."""
     y, split, stations = load_bart_hierarchical(train_days=7, test_weeks=1)
     assert y.shape == (2, 7 * 24 + datasets.HOURS_PER_WEEK, 2)
     assert split == 7 * 24
@@ -61,17 +61,27 @@ def test_load_bart_hierarchical_zero_test_weeks() -> None:
     assert split == y.shape[1]
 
 
-@pytest.mark.usefixtures("fake_bart_counts")
+@pytest.fixture
+def no_bart_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if the loader reaches the BART download."""
+
+    def fail() -> tuple[Array, list[str]]:
+        raise AssertionError("argument validation must run before the download")
+
+    monkeypatch.setattr(datasets, "_load_counts", fail)
+
+
+@pytest.mark.usefixtures("no_bart_download")
 @pytest.mark.parametrize("train_days", [0, -1])
 def test_load_bart_hierarchical_rejects_non_positive_train_days(train_days: int) -> None:
-    """A ``train_days`` below 1 names the argument instead of the history length."""
+    """A ``train_days`` below 1 names the argument and fails before the download."""
     with pytest.raises(ValueError, match=rf"train_days must be at least 1, got {train_days}"):
         load_bart_hierarchical(train_days=train_days, test_weeks=1)
 
 
-@pytest.mark.usefixtures("fake_bart_counts")
+@pytest.mark.usefixtures("no_bart_download")
 def test_load_bart_hierarchical_rejects_negative_test_weeks() -> None:
-    """A negative ``test_weeks`` fails fast instead of returning an empty array (#191)."""
+    """A negative ``test_weeks`` fails before the download instead of returning an empty array."""
     with pytest.raises(ValueError, match=r"test_weeks must be non-negative, got -1"):
         load_bart_hierarchical(train_days=7, test_weeks=-1)
 
