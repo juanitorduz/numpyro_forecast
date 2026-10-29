@@ -928,7 +928,16 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
             maxiter=_MULTIPATH_MAXITER,
         )
     # Both fit-time warnings point at this call, not at the type-checking wrapper (#213).
-    assert {w.filename for w in record} == {__file__}
+    # Only the package's own warnings are checked, so an unrelated jax or blackjax
+    # DeprecationWarning cannot break the assertion.
+    fit_warnings = [
+        w
+        for w in record
+        if issubclass(w.category, UserWarning)
+        and ("path(s) failed" in str(w.message) or "pareto_k=" in str(w.message))
+    ]
+    assert len(fit_warnings) == 2
+    assert {w.filename for w in fit_warnings} == {__file__}
     assert len(fit.elbos) == 2
     assert not np.isfinite(fit.elbos[0])
     assert np.isfinite(fit.elbos[1])
