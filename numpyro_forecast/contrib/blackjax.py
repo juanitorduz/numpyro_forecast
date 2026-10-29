@@ -47,7 +47,7 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
-from numpyro_forecast._offload import _WARNING_SKIP_PREFIXES, _draw_chunked
+from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, _draw_chunked
 from numpyro_forecast._validation import _require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.optional import require
@@ -970,7 +970,7 @@ def fit_multipathfinder(
             f"{n_failed} of {num_paths} path(s) failed (non-finite ELBO); raise "
             "maxiter/maxcor or inspect elbos."
         )
-        warnings.warn(msg, UserWarning, skip_file_prefixes=_WARNING_SKIP_PREFIXES)
+        warnings.warn(msg, UserWarning, skip_file_prefixes=WARNING_SKIP_PREFIXES)
     if pareto_k_value > _PARETO_K_THRESHOLD:
         msg = (
             f"pareto_k={pareto_k_value:.2f} > {_PARETO_K_THRESHOLD}: PSIS importance "
@@ -979,7 +979,7 @@ def fit_multipathfinder(
             "ELBO-weighted path sampling instead of PSIS resampling; increase "
             "num_paths/maxiter/maxcor or fall back to MCMC."
         )
-        warnings.warn(msg, UserWarning, skip_file_prefixes=_WARNING_SKIP_PREFIXES)
+        warnings.warn(msg, UserWarning, skip_file_prefixes=WARNING_SKIP_PREFIXES)
 
     return MultiPathfinderFit(
         state=state,

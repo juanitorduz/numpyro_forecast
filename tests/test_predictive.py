@@ -27,7 +27,7 @@ from numpyro.infer.autoguide import AutoNormal
 
 import numpyro_forecast
 from numpyro_forecast._offload import (
-    _WARNING_SKIP_PREFIXES,
+    WARNING_SKIP_PREFIXES,
     _device_view,
     _draw_chunked,
     _host_memory_kind,
@@ -1151,7 +1151,7 @@ def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPat
     assert_numpy_host(hosted)
     # The package prefix must be exactly the package directory: one level too high
     # would skip the whole checkout (tests included) and misattribute the warning.
-    assert _WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
+    assert WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
 
 
 def test_predictive_oom_reports_batch_size() -> None:

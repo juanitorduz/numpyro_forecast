@@ -89,7 +89,7 @@ NumPy results); ``"pinned_host"`` commits to the host memory kind of the
 array's own device. Both are idempotent under `_resolve_device()`.
 """
 
-_WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
+WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
     os.path.dirname(os.path.abspath(path))
     for path in (
         __file__,  # numpyro_forecast/ (this file lives in the package root)
@@ -449,7 +449,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
     NumPy results, and no warning since nothing is lost but the container
     type. ``"cpu"`` is the same request made explicitly, so an unmet one warns
     (a `UserWarning` that skips the package's own frames and the
-    jaxtyping/beartype wrappers, `_WARNING_SKIP_PREFIXES`, so it is
+    jaxtyping/beartype wrappers, `WARNING_SKIP_PREFIXES`, so it is
     attributed to, and deduplicated per, the user's call site) before taking
     the NumPy path. Both sentinels pass through unchanged, so a pre-resolved
     value can be forwarded (``to_datatree`` resolves once for both drivers).
@@ -501,7 +501,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
                 "device='host' explicitly, or initialize the CPU backend, e.g. "
                 f"numpyro.set_platform('{accelerator},cpu'), to silence this warning.",
                 UserWarning,
-                skip_file_prefixes=_WARNING_SKIP_PREFIXES,
+                skip_file_prefixes=WARNING_SKIP_PREFIXES,
             )
             return "numpy"
     try:
