@@ -2578,9 +2578,8 @@ UserWarning
     chunk and the warning reports the largest ``pareto_k`` and how many
     chunks exceed the threshold). This is a separate diagnostic from
     ``fit.pareto_k``, which is computed once over the pool stored at fit
-    time. Also if
-    ``device="cpu"`` is requested and the JAX CPU backend is not
-    initialized, so the draws take the NumPy path of ``"host"`` instead.
+    time. Also if ``device="cpu"`` is requested and the JAX CPU backend is
+    not initialized, so the draws take the NumPy path of ``"host"`` instead.
 
 
 ## Typing
