@@ -260,7 +260,7 @@ def _never_called_guide(*_args: object, **_kwargs: object) -> None:
 def test_too_few_samples_rejected_before_any_fit(
     num_samples: int, metrics: dict[str, Callable[..., Array]] | None, match: str
 ) -> None:
-    """A ``num_samples`` the metrics cannot score raises before the SVI fit (#204)."""
+    """A ``num_samples`` the metrics cannot score raises before the SVI fit."""
     data, cov = _series(50)
     with pytest.raises(ValueError, match=match):
         backtest_vectorized(

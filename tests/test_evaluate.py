@@ -772,8 +772,8 @@ def test_backtest_rejects_too_few_samples_before_any_fit(
     metrics: dict[str, Any] | None,
     match: str,
 ) -> None:
-    # Regression test for #204: a num_samples that the metrics cannot score
-    # raises a ValueError that names num_samples before forecast_fn runs.
+    # A num_samples that the metrics cannot score raises a ValueError that
+    # names num_samples before forecast_fn runs.
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     with pytest.raises(ValueError, match=match):
@@ -794,7 +794,7 @@ def test_backtest_rejects_too_few_samples_before_any_fit(
 
 
 def test_backtest_accepts_one_sample_without_crps(rng_key: Array) -> None:
-    # A single draw is valid when no metric needs two (#204 must not over-reject).
+    # A single draw is valid when no metric needs two, so the entry check must accept it.
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     results = backtest(

@@ -876,11 +876,11 @@ def backtest(
     num_samples
         Number of forecast samples per window. Must be positive, and at least
         2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
-        does) or `~~numpyro_forecast.metrics.crps_empirical()`, directly or as
-        a `functools.partial()` of either. Both rules are checked before the
-        first window is fitted. A CRPS inside another wrapper (a ``lambda``
-        or a ``jax.jit`` function) or added by ``per_window_metrics`` is not
-        checked up front: it fails only when it runs.
+        does) or a `functools.partial()` of it. Both rules are checked before
+        the first window is fitted. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) or added by
+        ``per_window_metrics`` is not checked up front: it fails only when it
+        runs.
     batch_size
         Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
         (see the contract above).
@@ -1121,11 +1121,10 @@ def backtest_vectorized(
     num_samples
         Number of forecast samples drawn per window. Must be positive, and at
         least 2 when ``metrics`` contains `eval_crps()` (as
-        `DEFAULT_METRICS` does) or
-        `~~numpyro_forecast.metrics.crps_empirical()`, directly or as a
-        `functools.partial()` of either. Both rules are checked before the
-        fit. A CRPS inside another wrapper (a ``lambda`` or a ``jax.jit``
-        function) is not checked up front: it fails only after the fit.
+        `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+        are checked before the fit. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) is not checked up front: it
+        fails only after the fit.
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
