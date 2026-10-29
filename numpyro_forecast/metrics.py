@@ -112,8 +112,8 @@ def crps_empirical(
     Raises
     ------
     ValueError
-        If ``truth.shape`` is not ``pred.shape[1:]``, or ``pred`` has fewer
-        than 2 samples.
+        If ``truth.shape`` is not ``pred.shape[1:]`` and the runtime type hook is off (see
+        `~~numpyro_forecast.typing.Metric`), or ``pred`` has fewer than 2 samples.
 
     References
     ----------
@@ -177,8 +177,9 @@ def eval_pinball(
     Raises
     ------
     ValueError
-        If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape``
-        is not ``pred.shape[1:]``.
+        If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` and the runtime type hook is off (see
+        `~~numpyro_forecast.typing.Metric`).
     """
     _check_pred_truth(pred, truth)
     if not 0.0 < quantile < 1.0:
@@ -239,8 +240,9 @@ def eval_interval_score(
     Raises
     ------
     ValueError
-        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is
-        not ``pred.shape[1:]``.
+        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` and the runtime type hook is off (see
+        `~~numpyro_forecast.typing.Metric`).
     """
     _check_pred_truth(pred, truth)
     if not 0.0 < alpha < 1.0:
@@ -287,7 +289,8 @@ def make_mase(
     -------
     Metric
         A ``(pred, truth)`` callable computing MASE as a scalar array. It
-        raises ``ValueError`` if ``truth.shape`` is not ``pred.shape[1:]``.
+        raises ``ValueError`` if ``truth.shape`` is not ``pred.shape[1:]`` and
+        the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
 
     Raises
     ------
