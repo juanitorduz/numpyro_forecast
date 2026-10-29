@@ -89,6 +89,7 @@ Each notebook also feeds the card grid on the Examples index page: set a short p
 **The thumbnail must be a single landscape panel, about twice as wide as tall.** The card grid scales the image to the card width, so a square or tall figure (a stacked multi-panel grid, a forest plot, a facet grid) makes its card several times taller than the others and breaks the layout. Pick a one-axes figure with `figsize=(12, 6)` or `(10, 6)` (every other notebook's thumbnail has an aspect ratio between 1.3 and 2.0), typically the headline forecast with its HDI bands, and if the best results figure is a grid, tag a single-panel figure instead. `tests/test_build_docs.py` checks the aspect ratio of every committed notebook's thumbnail.
 
 - Do not use `plt.show()` in notebooks.
+- Link to other docs pages with relative paths (`<example>.html` for another example, `../../reference/<entry>.html` for the API reference), never with absolute `https://juanitorduz.github.io/numpyro_forecast/` URLs, and filter environment warnings (such as preliz's "PyMC not installed" or the arviz-plots alpha hint) with `warnings.filterwarnings` at the top of the setup cell instead of storing them; `tests/test_notebook_hygiene.py` enforces both.
 
 ## Writing
 
