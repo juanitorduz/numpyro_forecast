@@ -1256,7 +1256,7 @@ y_t &amp;= x_t + v_t, \qquad v_t \sim \text{Normal}(0, r).
 </div>
 </div>
 </div>
-<p>The metrics on the held-out window agree as well.</p>
+<p>The metrics on the held-out window agree as well. The agreement is the point of this table, not the calibration: all three strategies put <span class="math inline">20</span> of the <span class="math inline">24</span> test points (<span class="math inline">0.833</span>) inside the central <span class="math inline">50\%</span> interval and every point inside the <span class="math inline">94\%</span> interval. One test window is not enough to check calibration. The <span class="math inline">24</span> forecast errors share the level error at the split and the random walk after it, so they are strongly correlated. In a simulation of this model with the true <span class="math inline">q</span> and <span class="math inline">r</span>, a calibrated forecast puts <span class="math inline">20</span> or more of the <span class="math inline">24</span> points inside its <span class="math inline">50\%</span> interval in about <span class="math inline">7\%</span> of the windows.</p>
 </section>
 <section id="posterior-predictive-checks" class="level2">
 <h2 class="anchored" data-anchor-id="posterior-predictive-checks">Posterior Predictive Checks</h2>

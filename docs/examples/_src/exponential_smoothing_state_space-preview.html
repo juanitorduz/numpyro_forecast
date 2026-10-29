@@ -384,9 +384,9 @@
 <div id="3b39bbd9" class="cell markdown">
 <section id="generate-synthetic-data" class="level1">
 <h1>Generate synthetic data</h1>
-<p>We use the same synthetic series as the source posts: a seasonal cosine wave with period <span class="math inline">m = 15</span>, a slow logarithmic trend, and additive Gaussian noise,</p>
+<p>We use the same synthetic series as the source posts: a seasonal cosine wave with a period of about <span class="math inline">15</span> samples, a slow logarithmic trend, and additive Gaussian noise,</p>
 <p><span class="math display">y_t = \cos(2 \pi t) + \log(t + 1) + 0.2 \, \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, 1).</span></p>
-<p>This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last <span class="math inline">20\%</span> of the series as a test set.</p>
+<p>Here <span class="math inline">t</span> is not the integer index but a grid of <span class="math inline">240</span> evenly spaced points from <span class="math inline">0</span> to <span class="math inline">16</span> (the <code>jnp.linspace</code> in the next cell), so one cycle of <span class="math inline">\cos(2 \pi t)</span> spans <span class="math inline">239 / 16 \approx 14.94</span> samples. The model below uses <span class="math inline">m = 15</span> seasonal states, which drift against the data by about one sample over the <span class="math inline">240</span> points; the effect is small. This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last <span class="math inline">20\%</span> of the series as a test set.</p>
 </section>
 </div>
 <div class="cell-container"><div class="cell-decorator"><pre>In [2]:</pre></div><div id="e028b823" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:20.484664Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:20.484433Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:20.762949Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:20.762431Z&quot;}}" data-execution_count="2">

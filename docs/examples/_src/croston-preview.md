@@ -184,7 +184,7 @@ ax_p.set(
 
 # Prior for the smoothing parameters
 
-Both components get a \text{Beta}(2, 20) prior on their smoothing parameter. Its mean is 2/22 \approx 0.09 and most of its mass sits below 0.3, consistent with the standard practice for Croston's method: the classical optimized implementations restrict the smoothing parameter to roughly \[0.1, 0.3\], because a level that reacts strongly to each new demand produces volatile, over-reactive forecasts on sparse data. The prior concentrates on the same low-smoothing region while also keeping mass near zero, letting the data decide within it.
+Both components get a \text{Beta}(2, 20) prior on their smoothing parameter. Its mean is 2/22 \approx 0.09 and most of its mass (99.4\\) sits below 0.3, in the spirit of the standard practice for Croston's method: the classical optimized implementations restrict the smoothing parameter to roughly \[0.1, 0.3\], because a level that reacts strongly to each new demand produces volatile, over-reactive forecasts on sparse data. The prior is more conservative than that range: its mean sits just below it, and 63.5\\ of its mass is below 0.1 (only 35.9\\ is inside \[0.1, 0.3\]). It still leaves the data room to choose a value inside the classical range.
 
 
     In [5]:
