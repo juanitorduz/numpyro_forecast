@@ -402,12 +402,11 @@ class BacktestResult:
 def _fields_view(result: "BacktestResult | VectorizedBacktestResult") -> dict[str, Any]:
     """Map each field of a backtest result to its value without copying the arrays.
 
-    ``dataclasses.asdict`` deep-copies every value that is not a dict, list or
-    tuple, so with ``keep_predictions=True`` it copied the full forecast draws
-    on each call. The arrays are returned as they are; only the dict-valued
-    fields (the small metric mappings) are shallow-copied, so a caller who adds
-    or replaces entries never changes the frozen result (an in-place write to
-    a NumPy array field still does).
+    Unlike ``dataclasses.asdict``, which deep-copies every array (the full
+    forecast draws with ``keep_predictions=True``), this returns the arrays as
+    they are. Only the dict-valued fields (the small metric mappings) are
+    shallow-copied, so a caller who adds or replaces entries never changes the
+    frozen result (an in-place write to a NumPy array field still does).
     """
     view: dict[str, Any] = {}
     for result_field in fields(result):
@@ -1141,10 +1140,10 @@ def backtest_vectorized(
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
     VectorizedMetricError
-        If a metric forces a host conversion under ``vmap`` (it is not a pure
-        JAX function), for example ``float(...)``, ``int(...)``,
-        ``range(...)``, Python list indexing, a boolean mask index such as
-        ``x[x > 0]`` or a NumPy call on a traced value.
+        If a metric is not a pure JAX function under ``vmap``: it forces a host
+        conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
+        indexing or a NumPy call on a traced value) or builds a value-dependent
+        shape (a boolean mask index such as ``x[x > 0]``).
     """
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
