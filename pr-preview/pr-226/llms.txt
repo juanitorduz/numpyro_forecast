@@ -83,7 +83,7 @@
 - [convert.predictions_to_datatree](https://juanitorduz.github.io/numpyro_forecast/reference/convert.predictions_to_datatree.html)
 
 #### Extensions (contrib)
-> Optional backends behind pyproject extras (never imported by default).
+> Optional backends behind pyproject extras (the backend library loads only on first use).
 
 - [contrib.blackjax.BlackjaxNUTSKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxNUTSKernel.html)
 - [contrib.blackjax.BlackjaxMCLMCKernel](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxMCLMCKernel.html)

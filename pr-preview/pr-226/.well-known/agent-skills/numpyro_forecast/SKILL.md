@@ -122,7 +122,7 @@ Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotti
 
 ### Extensions (contrib)
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 - `contrib.blackjax.BlackjaxNUTSKernel`
 - `contrib.blackjax.BlackjaxMCLMCKernel`
@@ -212,7 +212,7 @@ Package exception hierarchy raised at validation boundaries.
 8. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
 9. time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError.
 10. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
-11. numpyro_forecast.contrib.blackjax is never imported by default and needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
+11. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
 
 ## Best practices
 

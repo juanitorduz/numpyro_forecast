@@ -1372,7 +1372,13 @@ min_test_window
 stride
     Step between successive train/test splits.
 num_samples
-    Number of forecast samples per window.
+    Number of forecast samples per window. Must be positive, and at least
+    2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
+    does) or a `functools.partial()` of it. Both rules are checked before
+    the first window is fitted. A CRPS inside another wrapper (a
+    ``lambda`` or a ``jax.jit`` function) or added by
+    ``per_window_metrics`` is not checked up front: it fails only when it
+    runs.
 batch_size
     Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
     (see the contract above).
@@ -1400,8 +1406,9 @@ list[BacktestResult]
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-    but ``in_sample_fn`` is ``None``.
+    If ``data`` and ``covariates`` durations differ, if ``eval_train=True``
+    but ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small
+    (see ``num_samples``).
 BacktestWindowError
     If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
     ``train_window``, or ``"expanding"`` with one).
@@ -1459,7 +1466,12 @@ stride
 num_steps
     Number of SVI steps per window.
 num_samples
-    Number of forecast samples drawn per window.
+    Number of forecast samples drawn per window. Must be positive, and at
+    least 2 when ``metrics`` contains `eval_crps()` (as
+    `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+    are checked before the fit. A CRPS inside another wrapper (a
+    ``lambda`` or a ``jax.jit`` function) is not checked up front: it
+    fails only after the fit.
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1479,15 +1491,18 @@ VectorizedBacktestResult
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, or ``metrics`` is not
-    empty and the model's ``"forecast"`` site does not have the shape of
+    If ``data`` and ``covariates`` durations differ, if ``num_samples``
+    is too small (see ``num_samples``), or if ``metrics`` is not empty
+    and the model's ``"forecast"`` site does not have the shape of
     ``data`` over the test window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
 VectorizedMetricError
-    If a metric forces a host conversion under ``vmap`` (it is not a pure
-    JAX function).
+    If a metric is not a pure JAX function under ``vmap``: it forces a host
+    conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
+    indexing or a NumPy call on a traced value) or builds a value-dependent
+    shape (a boolean mask index such as ``x[x > 0]``).
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
@@ -1780,7 +1795,7 @@ pred
     regardless of whether ``truth`` is: either operand is moved to device
     memory first (`~~numpyro_forecast._offload._device_view()`).
 truth
-    Ground-truth values with shape ``(*batch)`` (broadcastable to ``pred``).
+    Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
 
 Returns
 -------
@@ -2160,7 +2175,7 @@ ValueError
 
 ## Extensions (contrib)
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 
 BlackjaxNUTSKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, num_adaptation_steps: int = 500, target_acceptance_rate: float = 0.8) -> None
@@ -2275,7 +2290,7 @@ data
 elbo
     The evidence lower bound of the fitted approximation.
 
-fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
+fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
 
 Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -2430,7 +2445,7 @@ pareto_k
     `multipathfinder_samples()` reads it to decide whether
     ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
 
-fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
+fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
 
 Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -2599,8 +2614,9 @@ dict[str, Array]
 Raises
 ------
 ValueError
-    If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
-    not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+    If ``num_samples`` or ``batch_size`` is not positive (an unknown
+    ``resample`` is a type error under the package's runtime type checking,
+    and a ``ValueError`` only when that checking is disabled).
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -3131,9 +3147,11 @@ VectorizedMetricError(message: str | None = None) -> None
 A metric is not vmappable in the vectorized backtest.
 
 Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when a
-metric forces a host conversion (e.g. ``float(...)`` or ``numpy`` calls)
-under ``vmap``. Metrics must be pure JAX functions returning a scalar
-array; see `~~numpyro_forecast.typing.Metric`.
+metric forces a host conversion under ``vmap`` (``float(...)``,
+``int(...)``, ``range(...)``, Python list indexing or ``numpy`` calls on a
+traced value) or builds a value-dependent shape (a boolean mask index such
+as ``x[x > 0]``; use ``jnp.where`` instead). Metrics must be pure JAX
+functions returning a scalar array; see `~~numpyro_forecast.typing.Metric`.
 
 KernelConfigError(message: str | None = None) -> None
 
