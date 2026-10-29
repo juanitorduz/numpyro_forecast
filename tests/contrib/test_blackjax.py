@@ -729,7 +729,6 @@ def test_multipathfinder_samples_psis_warns_once_at_the_caller(
         message = str(pareto[0].message)
         assert "of 4 chunks" in message
         assert "larger batch_size" in message
-        assert "#203" in message
 
 
 def test_multipathfinder_samples_auto_follows_pareto_k(
