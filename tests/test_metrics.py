@@ -1,20 +1,24 @@
 """Tests for the empirical CRPS implementation."""
 
-import json
-import os
-import subprocess
-import sys
+from collections.abc import Callable
 from functools import partial
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import numpy as np
 import pytest
 from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
+from numpyro_forecast.evaluate import (
+    eval_coverage,
+    eval_crps,
+    eval_mae,
+    eval_rmse,
+    evaluate_forecast,
+)
 from numpyro_forecast.metrics import (
     _check_pred_truth,
     crps_empirical,
@@ -343,108 +347,64 @@ def test_metrics_are_vmappable() -> None:
 
 # --- The pred/truth shape contract without the runtime type hook (#196) -----
 
-_SHAPE_CHECK_SCRIPT = """
-import json
 
-import jaxtyping
+def _bias(pred: Array, truth: Array) -> Array:
+    """A custom metric for `evaluate_forecast()`: the mean error of the sample mean."""
+    return (pred.mean(axis=0) - truth).mean()
 
-assert jaxtyping.config.jaxtyping_disable, "JAXTYPING_DISABLE=1 did not reach jaxtyping"
 
-import jax.numpy as jnp
-from jax import random
+@pytest.fixture
+def no_type_hook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the jaxtyping runtime checks off; jaxtyping reads the flag on every call."""
+    monkeypatch.setattr(jaxtyping.config, "jaxtyping_disable", True)
 
-from numpyro_forecast.evaluate import (
-    eval_coverage,
-    eval_crps,
-    eval_mae,
-    eval_rmse,
-    evaluate_forecast,
+
+@pytest.mark.usefixtures("no_type_hook")
+@pytest.mark.parametrize(
+    "metric",
+    [
+        pytest.param(crps_empirical, id="crps_empirical"),
+        pytest.param(eval_mae, id="eval_mae"),
+        pytest.param(eval_rmse, id="eval_rmse"),
+        pytest.param(eval_crps, id="eval_crps"),
+        pytest.param(partial(eval_crps, batch_size=2), id="eval_crps batch_size=2"),
+        pytest.param(eval_coverage, id="eval_coverage"),
+        pytest.param(partial(eval_coverage, batch_size=2), id="eval_coverage batch_size=2"),
+        pytest.param(eval_pinball, id="eval_pinball"),
+        pytest.param(eval_interval_score, id="eval_interval_score"),
+        pytest.param(make_mase(jnp.arange(10.0)[:, None] ** 1.5), id="make_mase"),
+        pytest.param(evaluate_forecast, id="evaluate_forecast"),
+        pytest.param(
+            partial(evaluate_forecast, metrics={"bias": _bias}),
+            id="evaluate_forecast custom metric",
+        ),
+    ],
 )
-from numpyro_forecast.metrics import (
-    crps_empirical,
-    eval_interval_score,
-    eval_pinball,
-    make_mase,
-)
-
-pred = random.normal(random.PRNGKey(0), (20, 4, 1))
-truth_flat = jnp.arange(4.0)  # (f,): the obs axis dropped from the (f, 1) layout
-metrics = {
-    "crps_empirical": crps_empirical,
-    "eval_mae": eval_mae,
-    "eval_rmse": eval_rmse,
-    "eval_crps": eval_crps,
-    "eval_crps batch_size=2": lambda p, t: eval_crps(p, t, batch_size=2),
-    "eval_coverage": eval_coverage,
-    "eval_coverage batch_size=2": lambda p, t: eval_coverage(p, t, batch_size=2),
-    "eval_pinball": eval_pinball,
-    "eval_interval_score": eval_interval_score,
-    "make_mase": make_mase(jnp.arange(10.0)[:, None] ** 1.5),
-    "evaluate_forecast": evaluate_forecast,
-    "evaluate_forecast custom metric": lambda p, t: evaluate_forecast(
-        p, t, metrics={"bias": lambda a, b: (a.mean(axis=0) - b).mean()}
-    ),
-}
-outcome = {}
-for name, fn in metrics.items():
-    try:
-        fn(pred, truth_flat)
-    except Exception as exc:
-        outcome[name] = [type(exc).__name__, str(exc)]
-    else:
-        outcome[name] = ["no error", ""]
-print(json.dumps(outcome))
-"""
-
-_SHAPE_CHECK_METRICS = (
-    "crps_empirical",
-    "eval_mae",
-    "eval_rmse",
-    "eval_crps",
-    "eval_crps batch_size=2",
-    "eval_coverage",
-    "eval_coverage batch_size=2",
-    "eval_pinball",
-    "eval_interval_score",
-    "make_mase",
-    "evaluate_forecast",
-    "evaluate_forecast custom metric",
-)
-
-
-@pytest.fixture(scope="module")
-def shape_check_outcomes() -> dict[str, list[str]]:
-    """Call every metric with a ``(f,)`` truth against ``(S, f, 1)`` draws, hook disabled.
-
-    ``JAXTYPING_DISABLE=1`` must be set before ``numpyro_forecast`` is imported,
-    so the calls run once in a fresh interpreter (started in the repository
-    root, so it imports this checkout) and report each outcome as JSON.
-    """
-    result = subprocess.run(  # noqa: S603 - our own interpreter and script, no user input
-        [sys.executable, "-c", _SHAPE_CHECK_SCRIPT],
-        check=True,
-        capture_output=True,
-        text=True,
-        cwd=Path(__file__).resolve().parents[1],
-        env={**os.environ, "JAXTYPING_DISABLE": "1"},
-    )
-    return json.loads(result.stdout.strip().splitlines()[-1])
-
-
-@pytest.mark.parametrize("name", _SHAPE_CHECK_METRICS)
 def test_metric_rejects_truth_shape_mismatch_without_type_hook(
-    shape_check_outcomes: dict[str, list[str]], name: str
+    metric: Callable[[Array, Array], object],
 ) -> None:
-    """A ``truth`` that is not ``pred.shape[1:]`` raises ``ValueError`` with the hook off.
+    """A ``(f,)`` truth against ``(S, f, 1)`` draws raises ``ValueError`` with the hook off."""
+    pred = random.normal(random.PRNGKey(0), (20, 4, 1))
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(4,\)"):
+        metric(pred, jnp.arange(4.0))
 
-    Regression for #196: with ``JAXTYPING_DISABLE=1`` the kernels broadcast a
-    ``(f,)`` truth against ``(f, 1)`` statistics into an ``(f, f)`` grid and
-    returned wrong values, and the chunked ``batch_size`` paths flattened the
-    mismatch away and returned a different value for the same call.
-    """
-    exc_type, message = shape_check_outcomes[name]
-    assert exc_type == "ValueError", (exc_type, message)
-    assert "truth must have shape pred.shape[1:] = (4, 1), got (4,)" in message
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        pytest.param(eval_coverage, id="eval_coverage"),
+        pytest.param(partial(eval_coverage, batch_size=2), id="eval_coverage batch_size=2"),
+        pytest.param(
+            partial(evaluate_forecast, metrics={"bias": _bias}),
+            id="evaluate_forecast custom metric",
+        ),
+    ],
+)
+def test_metric_rejects_scalar_truth(metric: Callable[[Array, float], object]) -> None:
+    """A scalar ``truth`` passes the jaxtyping hook, so only the explicit check rejects it."""
+    pred = random.normal(random.PRNGKey(0), (20, 4, 1))
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(\)"):
+        metric(pred, 0.0)
 
 
 def test_check_pred_truth_rejects_truth_shape_mismatch_in_process() -> None:

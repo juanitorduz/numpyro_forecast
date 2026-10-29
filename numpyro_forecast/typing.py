@@ -35,11 +35,12 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 `~~numpyro_forecast.metrics.make_mase()`.
 
 The built-in metrics and `~~numpyro_forecast.evaluate.evaluate_forecast()`
-check that ``truth.shape`` is ``pred.shape[1:]``. With the runtime type hook
-on (the default), the jaxtyping annotations reject a mismatch first and raise
-``jaxtyping.TypeCheckError``; with the hook off (``JAXTYPING_DISABLE=1``) an
-explicit check raises ``ValueError`` instead. Either way a mismatched
-``truth`` never broadcasts into a wrong value.
+check that ``truth.shape`` is ``pred.shape[1:]`` and raise ``ValueError``
+otherwise. With the runtime type hook on (the default), the jaxtyping
+annotations reject a mismatched array first and raise
+``jaxtyping.TypeCheckError``. A Python or NumPy scalar ``truth`` passes the
+annotations, so the explicit check raises ``ValueError`` for it. Either way a
+mismatched ``truth`` never broadcasts into a wrong value.
 """
 
 

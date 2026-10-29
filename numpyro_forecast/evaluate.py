@@ -79,8 +79,7 @@ def eval_mae(
     Raises
     ------
     ValueError
-        If ``truth.shape`` is not ``pred.shape[1:]`` and
-        the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     _check_pred_truth(pred, truth)
     return _eval_mae(_device_view(pred), _device_view(truth))
@@ -117,8 +116,7 @@ def eval_rmse(
     Raises
     ------
     ValueError
-        If ``truth.shape`` is not ``pred.shape[1:]`` and
-        the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     _check_pred_truth(pred, truth)
     return _eval_rmse(_device_view(pred), _device_view(truth))
@@ -225,8 +223,7 @@ def eval_crps(
     Raises
     ------
     ValueError
-        If ``truth.shape`` is not ``pred.shape[1:]`` and
-        the runtime type hook is off (see `~~numpyro_forecast.typing.Metric`).
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     _check_pred_truth(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
@@ -292,8 +289,7 @@ def eval_coverage(
     ------
     ValueError
         If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
-        ``pred.shape[1:]`` and the runtime type hook is off (see
-        `~~numpyro_forecast.typing.Metric`).
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     _check_pred_truth(pred, truth)
     if not 0.0 < alpha < 1.0:
@@ -361,9 +357,8 @@ def evaluate_forecast(
     Raises
     ------
     ValueError
-        If ``truth.shape`` is not ``pred.shape[1:]`` and the runtime type hook is off (see
-        `~~numpyro_forecast.typing.Metric`). The check runs here once, so a custom metric in
-        ``metrics`` never sees a mismatched pair.
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
     """
     _check_pred_truth(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
@@ -1131,9 +1126,9 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or the model's
-        ``"forecast"`` site does not have the shape of the test window, so
-        each window's ``truth.shape`` is not ``pred.shape[1:]``.
+        If ``data`` and ``covariates`` durations differ, or ``metrics`` is not
+        empty and the model's ``"forecast"`` site does not have the shape of
+        ``data`` over the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1208,10 +1203,15 @@ def backtest_vectorized(
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
     resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
-    # One window is enough: every window shares the forecast and truth shapes. A
-    # forecast site that does not match the data window (for example one with the
-    # obs axis dropped) would otherwise broadcast silently in a custom metric.
-    _check_pred_truth(predictions[0], truth[0])
+    # Every window shares the forecast and truth shapes, so one comparison covers all of
+    # them. A custom metric would otherwise broadcast a mismatched forecast silently.
+    if resolved_metrics and predictions.shape[2:] != truth.shape[1:]:
+        msg = (
+            f"the model's 'forecast' site has shape {predictions.shape[2:]} per draw, but "
+            f"each test window of data has shape {truth.shape[1:]}; the forecast site must "
+            "have the shape of data over the test window, (..., test_window, obs)"
+        )
+        raise ValueError(msg)
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
     return VectorizedBacktestResult(
