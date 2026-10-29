@@ -47,7 +47,7 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
-from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, _draw_chunked
+from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, draw_chunked
 from numpyro_forecast._validation import require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.optional import require
@@ -672,7 +672,7 @@ def pathfinder_samples(
     `~~numpyro_forecast.predictive.forecast()` or NumPyro's
     ``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
     Chunking and device offload are delegated to the shared
-    `~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+    `~~numpyro_forecast._offload.draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -743,7 +743,7 @@ def pathfinder_samples(
         transform = postprocess_fn(fit.covariates, fit.data)
         return jax.vmap(transform)(unconstrained)
 
-    return _draw_chunked(
+    return draw_chunked(
         rng_key,
         draw_fn,
         num_samples,
@@ -1013,7 +1013,7 @@ def multipathfinder_samples(
     `pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
     and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
     are delegated to the shared
-    `~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+    `~~numpyro_forecast._offload.draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     Resampling strategies
@@ -1173,7 +1173,7 @@ def multipathfinder_samples(
         transform = postprocess_fn(fit.covariates, fit.data)
         return jax.vmap(transform)(unconstrained)
 
-    samples = _draw_chunked(
+    samples = draw_chunked(
         rng_key,
         draw_fn,
         num_samples,
@@ -1188,7 +1188,7 @@ def multipathfinder_samples(
 def _warn_high_chunk_pareto_k(chunk_pareto_ks: list[float]) -> None:
     """Warn once, at the caller, if any PSIS chunk of a draw has ``pareto_k`` above ``0.7``.
 
-    `multipathfinder_samples()` runs PSIS once per chunk of `_draw_chunked()`, so
+    `multipathfinder_samples()` runs PSIS once per chunk of `draw_chunked()`, so
     the per-chunk values are collected during the draw and reported here in a
     single warning: the largest value and, when there is more than one chunk,
     how many chunks exceed the threshold. ``skip_file_prefixes`` attributes it to
