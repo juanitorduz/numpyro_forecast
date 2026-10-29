@@ -40,15 +40,25 @@ def _require_time_axis(name: str, x: Array | np.ndarray) -> None:
     """Raise ``ValueError`` unless ``x`` has a time axis at ``-2`` and a last axis at ``-1``."""
     if x.ndim >= 2:
         return
-    hint = (
-        "a model without covariates takes jnp.zeros((duration, 0))"
-        if name == "covariates"
-        else "a univariate series has shape (time, 1)"
-    )
+    is_covariates = name == "covariates"
+    last_axis = "the covariate dim" if is_covariates else "the observation dim"
+    layout = "(..., time, k), k may be 0" if is_covariates else "(..., time, obs)"
+    if x.ndim == 1:
+        hint = "Add the last axis with x[..., None] if the array is one series over time " + (
+            "(a model without covariates takes jnp.zeros((duration, 0)))"
+            if is_covariates
+            else "(a univariate series has shape (time, 1))"
+        )
+    else:
+        hint = "A 0-d value has no time axis: pass " + (
+            "a (time, k) array, for example jnp.zeros((duration, 0)) for a model "
+            "without covariates"
+            if is_covariates
+            else "the series as a (time, obs) array (a univariate series has shape (time, 1))"
+        )
     msg = (
-        f"{name} must have time at axis -2 and the observation dim at axis -1 "
-        f"(shape (..., time, k)); got shape {tuple(x.shape)}. Add the last axis "
-        f"with x[..., None] ({hint})"
+        f"{name} must have time at axis -2 and {last_axis} at axis -1 "
+        f"(shape {layout}); got shape {tuple(x.shape)}. {hint}"
     )
     raise ValueError(msg)
 
