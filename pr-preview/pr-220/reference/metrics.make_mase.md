@@ -32,7 +32,7 @@ Seasonal period (`>= 1`); `1` is the random-walk naive baseline.
 
 
 `Metric`  
-A `(pred, truth)` callable computing MASE as a scalar array.
+A `(pred, truth)` callable computing MASE as a scalar array. It raises `ValueError` if `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).
 
 
 ## Raises

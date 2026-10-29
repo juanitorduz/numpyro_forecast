@@ -122,7 +122,7 @@ Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotti
 
 ### Extensions (contrib)
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 - `contrib.blackjax.BlackjaxNUTSKernel`
 - `contrib.blackjax.BlackjaxMCLMCKernel`
@@ -202,17 +202,18 @@ Package exception hierarchy raised at validation boundaries.
 
 ## Gotchas
 
-1. Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,).
+1. Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,). A model without covariates still takes covariates of shape (duration, 0), and data needs at least one time step: for a series with no history, call the model with data=None (predict_in_sample with only the global sites in the posterior, or numpyro.infer.Predictive for the prior).
 2. There is no horizon argument. The forecast horizon is covariates.shape[-2] - data.shape[-2]: fit with covariates[:t_obs] and forecast with the full-horizon covariates, using the same model function.
 3. Every function that consumes randomness takes rng_key as its first positional argument (draw_posterior, forecast, predict_in_sample, to_datatree, backtest).
 4. The drivers read the sites "obs" and "forecast" by name. Never put predict (or hand-written obs/forecast sites) inside handlers.scope; scope only the latent building blocks.
 5. innovations is called inside plates you open yourself; markov_series rejects an enclosing plate and takes plates=[(name, size)] instead.
 6. ssoe registers only the <name>_future error site: write the likelihood against result.mu yourself and register numpyro.deterministic("forecast", result.y_future) when h.future > 0. Its mean and update functions must not call numpyro.sample.
 7. innovations, ssoe and predict take distribution instances (dist.Normal(0.0, scale)), not distribution classes or thunks.
-8. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
-9. time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError.
-10. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
-11. numpyro_forecast.contrib.blackjax is never imported by default and needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
+8. predict shifts the location of a loc=0 noise instance onto the predictor, and ssoe adds its draws to the step mean: the predictor is the mean for Normal, StudentT (df > 1), Laplace and MultivariateNormal noise, but the mode for Gumbel and AsymmetricLaplace, whose mean is offset (for AsymmetricLaplace unless asymmetry = 1; Cauchy has no mean). Center that noise yourself when the predictor must be the mean, e.g. dist.Gumbel(-np.euler_gamma * scale, scale).
+9. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
+10. time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError.
+11. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
+12. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
 
 ## Best practices
 

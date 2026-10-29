@@ -66,11 +66,11 @@ rng_key = random.PRNGKey(seed=42)
 
 # Generate synthetic data
 
-We use the same synthetic series as the source posts: a seasonal cosine wave with period m = 15, a slow logarithmic trend, and additive Gaussian noise,
+We use the same synthetic series as the source posts: a seasonal cosine wave with a period of about 15 samples, a slow logarithmic trend, and additive Gaussian noise,
 
 y_t = \cos(2 \pi t) + \log(t + 1) + 0.2 \\ \varepsilon_t, \qquad \varepsilon_t \sim \text{Normal}(0, 1).
 
-This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last 20\\ of the series as a test set.
+Here t is not the integer index but a grid of 240 evenly spaced points from 0 to 16 (the `jnp.linspace` in the next cell), so one cycle of \cos(2 \pi t) spans 239 / 16 \approx 14.94 samples. The model below uses m = 15 seasonal states, which drift against the data by about one sample over the 240 points; the effect is small. This gives us a trend, a clear seasonality, and enough noise to make the inference interesting. We hold out the last 20\\ of the series as a test set.
 
 
     In [2]:

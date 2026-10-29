@@ -37,3 +37,10 @@ Optional number of flattened data cells (the product of the batch shape, e.g. t
 
 `Array`  
 The mean empirical CRPS as a scalar array.
+
+
+## Raises
+
+
+`ValueError`  
+If `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).
