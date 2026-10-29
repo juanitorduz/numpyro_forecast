@@ -902,6 +902,14 @@ def test_predictions_to_datatree_label_length_mismatch_raises() -> None:
         predictions_to_datatree(predictions, x, labels[:-1])
 
 
+@pytest.mark.parametrize("group", ["observed_data", "constant_data"])
+def test_predictions_to_datatree_rejects_reserved_group(group: str) -> None:
+    """A reserved group name raises instead of silently overwriting the draws."""
+    predictions, x, labels = _prediction_draws()
+    with pytest.raises(ValueError, match=rf"group='{group}' is reserved"):
+        predictions_to_datatree(predictions, x, labels, group=group)
+
+
 def test_predictions_to_datatree_accepts_jax_arrays() -> None:
     predictions, x, labels = _prediction_draws()
     tree = predictions_to_datatree(jnp.asarray(predictions), jnp.asarray(x), labels)
