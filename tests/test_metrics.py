@@ -16,6 +16,7 @@ from jax import Array, random
 from jaxtyping import TypeCheckError
 
 from numpyro_forecast.metrics import (
+    _check_pred_truth,
     crps_empirical,
     eval_interval_score,
     eval_pinball,
@@ -444,3 +445,29 @@ def test_metric_rejects_truth_shape_mismatch_without_type_hook(
     exc_type, message = shape_check_outcomes[name]
     assert exc_type == "ValueError", (exc_type, message)
     assert "truth must have shape pred.shape[1:] = (4, 1), got (4,)" in message
+
+
+def test_check_pred_truth_rejects_truth_shape_mismatch_in_process() -> None:
+    """The helper itself has no shape annotations, so it raises under the default hook too."""
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(4,\)"):
+        _check_pred_truth(jnp.zeros((20, 4, 1)), jnp.zeros((4,)))
+
+
+def test_check_pred_truth_rejects_scalar_pred() -> None:
+    """A point forecast passed as a scalar ``pred`` has no sample axis to drop."""
+    with pytest.raises(ValueError, match="sample axis first"):
+        _check_pred_truth(jnp.asarray(1.0), jnp.asarray(1.0))
+
+
+def test_check_pred_truth_reads_static_shapes_of_tracers() -> None:
+    """Under ``jit`` and ``vmap`` the check sees tracer shapes and needs no host value."""
+
+    def checked(pred: Array, truth: Array) -> Array:
+        _check_pred_truth(pred, truth)
+        return pred.mean(axis=0) - truth
+
+    pred = jnp.zeros((3, 20, 4, 1))
+    truth = jnp.zeros((3, 4, 1))
+    assert jax.jit(jax.vmap(checked))(pred, truth).shape == (3, 4, 1)
+    with pytest.raises(ValueError, match="truth must have shape"):
+        jax.jit(jax.vmap(checked))(pred, truth[..., 0])
