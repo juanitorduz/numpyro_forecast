@@ -1139,10 +1139,23 @@ def backtest_vectorized(
     the number of windows, giving order-of-magnitude wall-clock wins for tens
     of windows on small models.
 
-    PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-    ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
-    posterior-draw, and forecast subkeys (the parent itself is never consumed;
-    see `_window_key_streams()`).
+    PRNG: ``fold_in(rng_key, -1)`` keys the eager warm-up ``svi.init`` on
+    window 0. An autoguide runs its ``init_loc_fn`` once, at its first init
+    (this warm-up for a fresh guide). A location-based autoguide (for example
+    ``AutoNormal``, ``AutoDelta`` or ``AutoMultivariateNormal``) derives all
+    its initial parameters from those locations, so every window starts from
+    the warm-up point. ``fold_in(rng_key, i)`` is the window-``i`` parent,
+    split into SVI-init, posterior-draw, and forecast subkeys (the parent
+    itself is never consumed; see `_window_key_streams()`). The SVI-init
+    subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the
+    window (``svi.init`` keeps a key split from it in the SVI state), so it
+    changes the fit of a stochastic guide such as ``AutoNormal`` even when
+    every window starts from the same point. It changes the start of a window
+    only for guide parameters whose initializer takes a key: the network
+    weights of a flow autoguide (``AutoIAFNormal``, ``AutoBNAFNormal``) or a
+    callable initializer in a hand-written guide, such as
+    ``numpyro.param("loc", lambda key: random.normal(key))``. Those guides
+    start each window from a different point.
 
     Parameters
     ----------
@@ -1255,7 +1268,11 @@ def backtest_vectorized(
     # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
     # caches its prototype trace on the instance at first init, so if that
     # first init happens under vmap tracing the instance retains tracers and
-    # any later eager use raises UnexpectedTracerError.
+    # any later eager use raises UnexpectedTracerError. For a fresh autoguide
+    # it is also the only init that runs init_loc_fn, so for a location-based
+    # autoguide its key sets the starting point of every window (the vmapped
+    # inits reuse those locations). A flow autoguide still draws its network
+    # weights from each window's SVI-init key.
     # (fold_in requires a non-negative uint32 index on this JAX version, so
     # the ``-1`` warm-up sentinel is passed as an int32 array.)
     svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
