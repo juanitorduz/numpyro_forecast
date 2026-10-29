@@ -1,49 +1,34 @@
-"""Check the prose of the ``inference_methods_comparison`` notebook against the facts.
+"""Check the NUTS diagnostics prose of ``inference_methods_comparison`` against its summary.
 
-The docs build renders the committed notebook as is, so a sentence that describes package
-or NumPyro behavior that does not exist, or that disagrees with a stored output, reaches the
-published page. These checks read the notebook JSON only; nothing is executed.
+The docs build renders the committed notebook as is, so the sentences that read the stored
+``az.summary`` table (the mixing claim, the low effective sample sizes and the interval
+columns) must agree with it. These checks read the notebook JSON only; nothing is executed.
+The rules for every notebook (percentages in LaTeX, the optax wording) are in
+``tests/test_notebook_hygiene.py``.
 """
 
-import json
 import re
-from pathlib import Path
-from typing import Any
 
 import pytest
+from notebook_cells import Cell, markdown, read_cells, source
 
-NOTEBOOK = (
-    Path(__file__).resolve().parent.parent
-    / "docs"
-    / "examples"
-    / "inference_methods_comparison.ipynb"
-)
 SCALARS = ("bias", "drift_scale", "nu", "sigma")
 # Vehtari et al. (2021): with four chains, trust a summary when R-hat < 1.01 and the bulk
-# effective sample size is above about 400.
+# effective sample size is above 400.
 R_HAT_THRESHOLD = 1.01
 ESS_THRESHOLD = 400
 
 
 @pytest.fixture(scope="module")
-def cells() -> list[dict[str, Any]]:
+def cells() -> list[Cell]:
     """The cells of the committed notebook."""
-    return json.loads(NOTEBOOK.read_text())["cells"]
+    return read_cells("inference_methods_comparison")
 
 
-def _source(cell: dict[str, Any]) -> str:
-    source = cell.get("source", "")
-    return "".join(source) if isinstance(source, list) else source
-
-
-def _markdown(cells: list[dict[str, Any]]) -> str:
-    return "\n\n".join(_source(cell) for cell in cells if cell["cell_type"] == "markdown")
-
-
-def _summary_table(cells: list[dict[str, Any]]) -> str:
+def _summary_table(cells: list[Cell]) -> str:
     """The stored ``text/plain`` output of the ``az.summary`` cell."""
     for cell in cells:
-        if cell["cell_type"] == "code" and "az.summary(" in _source(cell):
+        if cell["cell_type"] == "code" and "az.summary(" in source(cell):
             return "".join(
                 "".join(output["data"]["text/plain"])
                 for output in cell["outputs"]
@@ -52,58 +37,48 @@ def _summary_table(cells: list[dict[str, Any]]) -> str:
     raise AssertionError("no az.summary cell in the notebook")
 
 
-def test_no_claim_that_the_mclmc_adapter_warns(cells: list[dict[str, Any]]) -> None:
-    """The BlackJAX adapters document ``num_warmup=0``; they emit no warning for it."""
-    assert "adapter warns" not in _markdown(cells)
-
-
-def test_no_claim_that_svi_needs_optax_to_numpyro(cells: list[dict[str, Any]]) -> None:
-    """``numpyro.infer.SVI`` wraps an optax ``GradientTransformation`` itself."""
-    markdown = _markdown(cells)
-    assert "expects a NumPyro optimizer" not in markdown
-    assert "needs one line of glue" not in markdown
-
-
-def test_mixing_claim_matches_the_stored_summary(cells: list[dict[str, Any]]) -> None:
-    """The prose says the four scalars "mix well" only if their stored R-hat allows it."""
-    # pandas wraps the wide table: the first block, up to the first blank line, has r_hat.
+def _summary_column(cells: list[Cell], name: str) -> dict[str, str]:
+    """One column of the first block of the stored summary, keyed by variable name."""
+    # pandas wraps the wide table: the first block, up to the first blank line, has the
+    # r_hat and ess_bulk columns.
     header, *lines = _summary_table(cells).split("\n\n")[0].splitlines()
-    column = header.split().index("r_hat") + 1  # each row starts with the variable name
-    rows = {line.split()[0]: line.split() for line in lines}
-    r_hat = {name: float(rows[name][column]) for name in SCALARS}
+    column = header.split().index(name) + 1  # each row starts with the variable name
+    return {line.split()[0]: line.split()[column] for line in lines}
+
+
+def test_mixing_claim_matches_the_stored_summary(cells: list[Cell]) -> None:
+    """The prose quotes the stored R-hat range and says "mix well" only if it allows it."""
+    column = _summary_column(cells, "r_hat")
+    r_hat = {name: float(column[name]) for name in SCALARS}
+    text = markdown(cells)
+    quoted = {f"`{value:.2f}`" for value in (min(r_hat.values()), max(r_hat.values()))}
+    assert all(value in text for value in quoted), (
+        f"the prose does not quote the stored R-hat range {sorted(quoted)}"
+    )
     if max(r_hat.values()) >= R_HAT_THRESHOLD:
-        assert "mix well" not in _markdown(cells), (
+        assert "mix well" not in text, (
             f"the stored R-hat values {r_hat} do not support the claim that they mix well"
         )
 
 
-def test_low_bulk_ess_is_named_in_the_prose(cells: list[dict[str, Any]]) -> None:
+def test_low_bulk_ess_is_named_in_the_prose(cells: list[Cell]) -> None:
     """Every forecast scalar whose stored bulk ESS is below the threshold is quoted."""
-    header, *lines = _summary_table(cells).split("\n\n")[0].splitlines()
-    column = header.split().index("ess_bulk") + 1
-    rows = {line.split()[0]: line.split() for line in lines}
-    low = {name: rows[name][column] for name in SCALARS if int(rows[name][column]) < ESS_THRESHOLD}
-    markdown = _markdown(cells)
-    missing = {name: ess for name, ess in low.items() if f"`{ess}`" not in markdown}
+    column = _summary_column(cells, "ess_bulk")
+    low = {name: column[name] for name in SCALARS if int(column[name]) < ESS_THRESHOLD}
+    text = markdown(cells)
+    missing = {name: ess for name, ess in low.items() if f"`{ess}`" not in text}
     assert not missing, f"the prose does not quote the low bulk ESS of {missing}"
 
 
-def test_prose_names_the_interval_of_the_summary(cells: list[dict[str, Any]]) -> None:
-    """The stored summary prints ArviZ's default interval; the prose must say which one."""
+def test_prose_names_the_interval_of_the_summary(cells: list[Cell]) -> None:
+    """The prose names the interval columns of the stored summary and their level."""
     header = _summary_table(cells).splitlines()[0]
     match = re.search(r"\b(eti|hdi)(\d+)_lb\b", header)
     assert match is not None, header
     kind, level = match.groups()
-    markdown = _markdown(cells)
+    text = markdown(cells)
     name = "equal-tailed" if kind == "eti" else "HDI"
-    assert f"${level}\\%$ {name}" in markdown, (
-        f"the summary prints a {level}% {kind.upper()}; say so in the prose, "
-        f"for example ${level}\\%$ {name}"
+    column = match.group(0)
+    assert f"`{column}`" in text and f"${level}\\%$ {name}" in text, (
+        f"the summary prints {column}; name that column and the ${level}\\%$ {name} in the prose"
     )
-
-
-def test_percentages_in_prose_use_latex(cells: list[dict[str, Any]]) -> None:
-    r"""Prose writes percentages as LaTeX (``$30\%$``), not as code spans or plain text."""
-    markdown = re.sub(r"\$\$.*?\$\$", "", _markdown(cells), flags=re.DOTALL)
-    markdown = re.sub(r"\$[^$\n]*\$", "", markdown)
-    assert not re.findall(r"\d%", markdown)
