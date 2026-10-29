@@ -903,7 +903,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L708-L941" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L708-L942" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest</span>(</span>
@@ -993,7 +993,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">in_sample_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">InSampleFn | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional closure that fits <code>model</code> on the training window and scores its in-sample fit (see <a href="typing.InSampleFn.html#numpyro_forecast.typing.InSampleFn" class="gdls-link gdls-code">InSampleFn</a> and the contract above). Required when <code>eval_train=True</code>. It receives <code>random.fold_in(rng_key, 2**31 - 1)</code>, a key different from <code>rng_key</code> and from every key of <code>random.split(rng_key, n)</code> for <code>n</code> below <code>2**31</code>. Thus the in-sample draws do not reuse the random numbers of a <code>forecast_fn</code> that splits <code>rng_key</code> (as in the example above).</p>
+<p>Optional closure that fits <code>model</code> on the training window and scores its in-sample fit (see <a href="typing.InSampleFn.html#numpyro_forecast.typing.InSampleFn" class="gdls-link gdls-code">InSampleFn</a> and the contract above). Required when <code>eval_train=True</code>. It receives <code>random.fold_in(rng_key, _EVAL_TRAIN_STREAM)</code>, where the private module constant <code>_EVAL_TRAIN_STREAM</code> is an index that no <code>random.split(rng_key, n)</code> of practical size reaches. Thus the key differs from <code>rng_key</code> and from the keys of such a split, and the in-sample draws do not reuse the random numbers of a <code>forecast_fn</code> that splits <code>rng_key</code> (as in the example above).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
