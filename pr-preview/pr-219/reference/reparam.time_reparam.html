@@ -905,7 +905,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L171-L268" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L155-L254" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">reparam</span><span class="op">.</span><span class="sig-name">time_reparam</span>(
@@ -948,7 +948,7 @@ The wrapped model. It is a <code>numpyro.handlers.reparam</code> handler and is 
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>model</code> already contains the result of <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a>. Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op. The check runs when wrapping, through any NumPyro handlers around <code>model</code> (<code>scope</code>, <code>seed</code>, …), and again when the wrapped model is traced, for an inner model hidden behind a plain function or a <code>functools.partial()</code>.
+If <code>model</code> already contains the result of <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a>. Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op. The check runs when wrapping and looks through any NumPyro handlers around <code>model</code> (<code>scope</code>, <code>seed</code>, …). It does not look inside a plain function or a <code>functools.partial()</code>, so a nesting hidden behind one is not detected; that is what keeps a composite model valid, whose body calls a <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a> component next to its own time latents (the outer transform then applies to those latents only).
 </dd>
 </dl>
 </div>

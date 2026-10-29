@@ -38,7 +38,7 @@ The wrapped model. It is a `numpyro.handlers.reparam` handler and is the single 
 
 
 `ValueError`  
-If `model` already contains the result of [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam). Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op. The check runs when wrapping, through any NumPyro handlers around `model` (`scope`, `seed`, …), and again when the wrapped model is traced, for an inner model hidden behind a plain function or a `functools.partial()`.
+If `model` already contains the result of [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam). Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op. The check runs when wrapping and looks through any NumPyro handlers around `model` (`scope`, `seed`, …). It does not look inside a plain function or a `functools.partial()`, so a nesting hidden behind one is not detected; that is what keeps a composite model valid, whose body calls a [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) component next to its own time latents (the outer transform then applies to those latents only).
 
 
 ## Notes
