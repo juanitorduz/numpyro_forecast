@@ -1201,7 +1201,7 @@ def _warn_high_chunk_pareto_k(chunk_pareto_ks: list[float]) -> None:
         msg += (
             f" This is the largest pareto_k over {len(chunk_pareto_ks)} chunks "
             f"({len(high)} of {len(chunk_pareto_ks)} chunks above {_PARETO_K_THRESHOLD}): "
-            "PSIS runs once per chunk (see numpyro_forecast issue #203), so a larger "
-            "batch_size, or none, gives each PSIS step more draws."
+            "PSIS runs once per chunk, so a larger batch_size, or none, gives each PSIS "
+            "step more draws."
         )
     warnings.warn(msg, UserWarning, skip_file_prefixes=_WARNING_SKIP_PREFIXES)
