@@ -243,6 +243,40 @@ def test_covariate_length_mismatch_rejected() -> None:
         )
 
 
+def _never_called_guide(*_args: object, **_kwargs: object) -> None:
+    """A guide that fails the test if ``backtest_vectorized`` ever fits or samples it."""
+    pytest.fail("the guide should never have been called")
+
+
+@pytest.mark.parametrize(
+    ("num_samples", "metrics", "match"),
+    [
+        (0, None, "num_samples must be positive"),
+        (0, {}, "num_samples must be positive"),
+        (1, None, r"num_samples=1 is too small for the metrics \['crps'\]"),
+        (1, {"crps_half": partial(eval_crps, batch_size=2)}, "num_samples=1 is too small"),
+    ],
+)
+def test_too_few_samples_rejected_before_any_fit(
+    num_samples: int, metrics: dict[str, Callable[..., Array]] | None, match: str
+) -> None:
+    """A ``num_samples`` the metrics cannot score raises before the SVI fit."""
+    data, cov = _series(50)
+    with pytest.raises(ValueError, match=match):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=_never_called_guide,
+            num_steps=10,
+            num_samples=num_samples,
+            metrics=metrics,
+        )
+
+
 @pytest.mark.parametrize(
     ("duration", "train", "test", "stride"),
     [

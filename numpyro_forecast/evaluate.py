@@ -25,6 +25,7 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
+from numpyro_forecast._validation import _require_positive_num_samples
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -616,6 +617,37 @@ def _slice_window(
     return train_data, train_covariates, full_covariates, truth
 
 
+_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps, crps_empirical)
+"""Metric kernels that need at least 2 forecast samples (the empirical CRPS)."""
+
+
+def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Metric]) -> None:
+    """Raise ``ValueError`` before any fit if ``num_samples`` is too small for ``metrics``.
+
+    ``num_samples`` must be positive, and at least 2 when a metric is (or is a
+    `functools.partial()` of) one of `_TWO_SAMPLE_METRICS`. Without this
+    check the error comes from the metric itself, after the first window has
+    been fitted and forecast.
+    """
+    _require_positive_num_samples(num_samples)
+    if num_samples >= 2:
+        return
+    needs_two: list[str] = []
+    for name, fn in metrics.items():
+        kernel: object = fn
+        while isinstance(kernel, partial):
+            kernel = kernel.func
+        if kernel in _TWO_SAMPLE_METRICS:
+            needs_two.append(name)
+    if needs_two:
+        msg = (
+            f"num_samples={num_samples} is too small for the metrics {needs_two}: the "
+            "empirical CRPS needs at least 2 forecast samples per window. Pass "
+            "num_samples >= 2, or remove those entries from the metrics mapping"
+        )
+        raise ValueError(msg)
+
+
 def _eval_train_window(
     rng_key: Array,
     in_sample_fn: InSampleFn,
@@ -866,7 +898,13 @@ def backtest(
     stride
         Step between successive train/test splits.
     num_samples
-        Number of forecast samples per window.
+        Number of forecast samples per window. Must be positive, and at least
+        2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
+        does) or a `functools.partial()` of it. Both rules are checked before
+        the first window is fitted. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) or added by
+        ``per_window_metrics`` is not checked up front: it fails only when it
+        runs.
     batch_size
         Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
         (see the contract above).
@@ -894,8 +932,9 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``.
+        If ``data`` and ``covariates`` durations differ, if ``eval_train=True``
+        but ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small
+        (see ``num_samples``).
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -908,6 +947,7 @@ def backtest(
         raise ValueError(msg)
     window_type = _resolve_window_type(window_type, train_window)
     metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, metrics)
     duration = data.shape[-2]
 
     shared_model: ForecastModel | None = None
@@ -1115,7 +1155,12 @@ def backtest_vectorized(
     num_steps
         Number of SVI steps per window.
     num_samples
-        Number of forecast samples drawn per window.
+        Number of forecast samples drawn per window. Must be positive, and at
+        least 2 when ``metrics`` contains `eval_crps()` (as
+        `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+        are checked before the fit. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) is not checked up front: it
+        fails only after the fit.
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1135,7 +1180,8 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ.
+        If ``data`` and ``covariates`` durations differ, or if ``num_samples``
+        is too small (see ``num_samples``).
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1154,6 +1200,8 @@ def backtest_vectorized(
         raise BacktestWindowError("test_window must be >= 1")
     if stride < 1:
         raise BacktestWindowError("stride must be >= 1")
+    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, resolved_metrics)
 
     duration = data.shape[-2]
     last_start = duration - train_window - test_window
@@ -1211,7 +1259,6 @@ def backtest_vectorized(
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
-    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
     return VectorizedBacktestResult(
