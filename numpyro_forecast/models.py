@@ -666,9 +666,10 @@ def ssoe[Carry](
         so ``mu_t`` is the mean of ``y_t`` only when the errors have mean zero:
         ``Gumbel`` errors with ``loc = 0`` have a nonzero mean, and
         ``AsymmetricLaplace`` errors with ``loc = 0`` have a nonzero mean unless
-        ``asymmetry = 1``; that mean offsets every step (see
-        `~~numpyro_forecast.surgery.shift_loc()` for the offsets), and
-        ``Cauchy`` errors have no mean.
+        ``asymmetry = 1`` (see `~~numpyro_forecast.surgery.shift_loc()` for the
+        offsets). That mean shifts each ``y_t`` away from ``mu_t``, and ``update``
+        carries the shift into the later means, so the forecast bias can grow
+        with the horizon. ``Cauchy`` errors have no mean.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays with
         time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a

@@ -133,7 +133,8 @@ def shift_loc(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
     An ``Independent`` wrapper follows its base distribution. When the
     predictor must be the mean of a ``Gumbel`` or ``AsymmetricLaplace``
     observation, center the noise yourself, for example
-    ``dist.Gumbel(-np.euler_gamma * scale, scale)``.
+    ``dist.Gumbel(-np.euler_gamma * scale, scale)`` or
+    ``dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)``.
 
     Parameters
     ----------

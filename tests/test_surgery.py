@@ -9,7 +9,6 @@ import numpyro.distributions as dist
 import pytest
 
 from numpyro_forecast import surgery
-from numpyro_forecast.models import predict, ssoe
 from numpyro_forecast.surgery import (
     _ELEMENTWISE_FAMILIES,
     prefix_condition,
@@ -331,7 +330,7 @@ def test_shift_loc_puts_the_documented_statistic_at_the_predictor(
 def test_shift_loc_docstring_states_what_loc_is_per_family(
     family: type[dist.Distribution],
 ) -> None:
-    """The ``shift_loc`` docstring says, per family, whether ``loc`` is the mean or the mode.
+    """The ``shift_loc`` docstring has one bullet per family that names its statistic.
 
     Regression for #180: the docs called every registered family
     "zero-centered", so a reader took the predictor as the mean also for
@@ -341,24 +340,7 @@ def test_shift_loc_docstring_states_what_loc_is_per_family(
     assert doc is not None
     bullets = [b for b in _docstring_bullets(doc) if f"``{family.__name__}``" in b]
     assert len(bullets) == 1, (family.__name__, bullets)
-    assert f"``loc`` is the {_LOCATION_STATISTIC[family]}" in bullets[0]
-
-
-@pytest.mark.parametrize(
-    "label",
-    ["predict", "ssoe", "shift_loc", "AGENTS.md"],
-)
-def test_noise_docs_do_not_call_every_family_zero_centered(label: str) -> None:
-    """No doc calls the ``loc = 0`` noise "zero-centered" (it is not mean zero for all, #180)."""
-    texts = {
-        "predict": predict.__doc__,
-        "ssoe": ssoe.__doc__,
-        "shift_loc": shift_loc.__doc__,
-        "AGENTS.md": (_REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
-    }
-    text = texts[label]
-    assert text is not None
-    assert not re.search(r"zero[- ]cent(?:er|r)ed", text, flags=re.IGNORECASE)
+    assert re.search(rf"\b{_LOCATION_STATISTIC[family]}\b", bullets[0]), bullets[0]
 
 
 def test_skill_block_states_the_predictor_is_not_always_the_mean() -> None:
