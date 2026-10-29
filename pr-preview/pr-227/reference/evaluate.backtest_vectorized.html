@@ -903,7 +903,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1015-L1195" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1015-L1201" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest_vectorized</span>(</span>
@@ -925,7 +925,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-text">
 <p>Estimator-equivalent to <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows, giving order-of-magnitude wall-clock wins for tens of windows on small models.</p>
-<p>PRNG: <code>fold_in(rng_key, -1)</code> keys the eager warm-up <code>svi.init</code> on window 0. An autoguide runs its <code>init_loc_fn</code> once, at its first init (this warm-up for a fresh guide), so its initial locations are the starting point of every window. <code>fold_in(rng_key, i)</code> is the window-<code>i</code> parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see <code>_window_key_streams()</code>). The SVI-init subkey changes the start of a window only for guide parameters whose initializer takes a key, for example <code>numpyro.param("loc", lambda key: random.normal(key))</code> in a hand-written guide.</p>
+<p>PRNG: <code>fold_in(rng_key, -1)</code> keys the eager warm-up <code>svi.init</code> on window 0. An autoguide runs its <code>init_loc_fn</code> once, at its first init (this warm-up for a fresh guide). A location-based autoguide (for example <code>AutoNormal</code>, <code>AutoDelta</code> or <code>AutoMultivariateNormal</code>) derives all its initial parameters from those locations, so every window starts from the warm-up point. <code>fold_in(rng_key, i)</code> is the window-<code>i</code> parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see <code>_window_key_streams()</code>). The SVI-init subkey changes the start of a window only for guide parameters whose initializer takes a key: the network weights of a flow autoguide (<code>AutoIAFNormal</code>, <code>AutoBNAFNormal</code>) or a callable initializer in a hand-written guide, such as <code>numpyro.param("loc", lambda key: random.normal(key))</code>. Those guides start each window from a different point.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
