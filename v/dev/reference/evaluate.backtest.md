@@ -158,7 +158,7 @@ One result per backtest window.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`).
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`).
 
 `BacktestWindowError`  
 If `window_type` and `train_window` disagree (`"rolling"` without a `train_window`, or `"expanding"` with one).

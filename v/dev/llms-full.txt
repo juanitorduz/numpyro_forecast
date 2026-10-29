@@ -1177,7 +1177,11 @@ Num[Array, " sample *batch future obs"]
 Raises
 ------
 ValueError
-    If ``covariates`` does not extend beyond ``data`` along the time axis.
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
+    extend beyond ``data`` along the time axis, or if ``posterior`` is
+    empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
+    on the sample-axis length.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -1259,6 +1263,10 @@ Num[Array, " sample *batch time obs"]
 
 Raises
 ------
+ValueError
+    If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
+    the leaves disagree on the sample-axis length, or if ``covariates`` has
+    fewer than two axes (time must be at axis ``-2``) or no time steps.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -1440,9 +1448,10 @@ list[BacktestResult]
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, if ``eval_train=True``
-    but ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small
-    (see ``num_samples``).
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if their durations differ, if ``eval_train=True`` but
+    ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
+    ``num_samples``).
 BacktestWindowError
     If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
     ``train_window``, or ``"expanding"`` with one).
@@ -1538,10 +1547,11 @@ VectorizedBacktestResult
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, if ``num_samples``
-    is too small (see ``num_samples``), or if ``metrics`` is not empty
-    and the model's ``"forecast"`` site does not have the shape of
-    ``data`` over the test window.
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if their durations differ, if ``num_samples`` is too
+    small (see ``num_samples``), or if ``metrics`` is not empty and the
+    model's ``"forecast"`` site does not have the shape of ``data`` over
+    the test window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
@@ -2079,7 +2089,10 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``covariates`` is shorter than ``data`` along the time axis, if
+    If ``data`` or ``covariates`` has fewer than two axes (time must be at
+    axis ``-2``), if ``data`` has no time steps, if ``covariates`` is
+    shorter than ``data`` along the time axis, if a ``posterior`` leaf has
+    no sample axis, if
     ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon, if ``num_chains`` is not a positive
     integer (``bool`` included), or if ``posterior``'s sample count is not

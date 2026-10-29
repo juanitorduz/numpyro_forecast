@@ -202,7 +202,7 @@ Package exception hierarchy raised at validation boundaries.
 
 ## Gotchas
 
-1. Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,).
+1. Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,). A model without covariates still takes covariates of shape (duration, 0), and data needs at least one time step: for a series with no history, call the model with data=None (predict_in_sample with only the global sites in the posterior, or numpyro.infer.Predictive for the prior).
 2. There is no horizon argument. The forecast horizon is covariates.shape[-2] - data.shape[-2]: fit with covariates[:t_obs] and forecast with the full-horizon covariates, using the same model function.
 3. Every function that consumes randomness takes rng_key as its first positional argument (draw_posterior, forecast, predict_in_sample, to_datatree, backtest).
 4. The drivers read the sites "obs" and "forecast" by name. Never put predict (or hand-written obs/forecast sites) inside handlers.scope; scope only the latent building blocks.
