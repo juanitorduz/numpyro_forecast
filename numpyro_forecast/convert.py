@@ -170,7 +170,7 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     ``group_by_chain=True`` upstream only to disambiguate chain order for
     yourself, then flatten back before passing samples to ``to_datatree``.
     """
-    if num_chains < 1:
+    if isinstance(num_chains, bool) or num_chains < 1:
         msg = (
             f"num_chains must be a positive integer, got {num_chains}; pass the num_chains "
             "the sampler was run with (1 for SVI or Pathfinder draws)"
