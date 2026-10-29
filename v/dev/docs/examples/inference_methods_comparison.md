@@ -269,7 +269,7 @@ The rotation pays off in the mixing, not in the wall time. The smallest bulk ESS
 
 ## SVI
 
-NumPyro's `SVI` expects a NumPyro optimizer, so any optax `GradientTransformation` needs one line of glue, `numpyro.optim.optax_to_numpyro`, before it can be passed in. We use that to run a custom optimizer built from two pieces:
+NumPyro's `SVI` accepts an optax `GradientTransformation` as is and wraps it with `numpyro.optim.optax_to_numpyro` itself. The SVI cells of this notebook call that wrapper explicitly, which is optional and gives the same result. We use this to run a custom optimizer built from two pieces:
 
 - A **one-cycle** learning-rate schedule (`optax.linear_onecycle_schedule`): a linear warmup to a peak followed by a long annealing phase. The warmup lets the optimizer pass through a much higher mid-run learning rate than a fixed setting could tolerate, and the final annealing polishes the optimum.
 - **Reduce-on-plateau** (`optax.contrib.reduce_on_plateau`): an adaptive safeguard that scales the updates down by `factor=0.8` whenever the ELBO, averaged over `accumulation_size=100` steps, stops improving for `patience=20` consecutive windows. NumPyro forwards the per-step ELBO value to the optimizer chain, which is exactly the signal this transformation monitors.
@@ -367,7 +367,7 @@ print(f"final ELBO loss, SVI + DCT (peak 0.01): {np.mean(svi_dct_same_result.los
     final ELBO loss, SVI + DCT (peak 0.01): 197.1
 
 
-The rotated run descends far faster over the first few thousand steps and then stalls well above the baseline. It has not converged to a different optimum: run for longer at a fixed learning rate it keeps descending and ends below the baseline (the [univariate example](forecasting_univariate.md) shows this under a fixed `Adam(0.005)` for `50_000` steps). What stalls it is the intercept. Early in the run the level holds part of the intercept and `bias` has to take it over, and in the original coordinates that hand-over is a two-parameter ridge between `bias` and the first increment, whereas in the DCT basis a level offset is spread over all `417` cosine coefficients, so Adam moves it one small per-coordinate step at a time. The one-cycle schedule, whose peak of `0.01` was tuned for the original coordinates, starts annealing at `30%` of the budget, long before that hand-over is complete.
+The rotated run descends far faster over the first few thousand steps and then stalls well above the baseline. It has not converged to a different optimum: run for longer at a fixed learning rate it keeps descending and ends below the baseline (the [univariate example](forecasting_univariate.md) shows this under a fixed `Adam(0.005)` for `50_000` steps). What stalls it is the intercept. Early in the run the level holds part of the intercept and `bias` has to take it over, and in the original coordinates that hand-over is a two-parameter ridge between `bias` and the first increment, whereas in the DCT basis a level offset is spread over all `417` cosine coefficients, so Adam moves it one small per-coordinate step at a time. The one-cycle schedule, whose peak of `0.01` was tuned for the original coordinates, starts annealing at 30\\ of the budget, long before that hand-over is complete.
 
 The rotated posterior is better conditioned, so it tolerates a larger step. Tripling the peak to `0.03` and keeping everything else identical lets the run finish within the same `20_000` steps, and it does so for every seed we tried (a peak of `0.02` finishes only for some seeds, and the baseline itself gets worse at higher peaks, so the re-tuning is specific to the new coordinates). This second fit is the `SVI + DCT` column in the comparison below.
 
@@ -511,7 +511,7 @@ pathfinder_posterior = multipathfinder_samples(key_pathfinder_draw, pathfinder_f
 
 ## MCLMC
 
-The `MCMC` entry point used for NUTS accepts any NumPyro-compatible kernel, and `numpyro_forecast.contrib.blackjax` provides adapters for BlackJAX samplers (the same optional dependency as Pathfinder above). [BlackjaxMCLMCKernel](../../reference/contrib.blackjax.BlackjaxMCLMCKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel) wraps microcanonical Langevin Monte Carlo: the kernel tunes the step size, the trajectory length L, and a diagonal preconditioner once inside its `init`, and every subsequent MCMC step is a single tuned MCLMC step. Because that tuning replaces warmup, we pass `num_warmup=0` (the adapter warns that warmup steps would be discarded work), and because the adapter must run chains sequentially we pass `chain_method="sequential"` and draw one long chain instead of four parallel ones.
+The `MCMC` entry point used for NUTS accepts any NumPyro-compatible kernel, and `numpyro_forecast.contrib.blackjax` provides adapters for BlackJAX samplers (the same optional dependency as Pathfinder above). [BlackjaxMCLMCKernel](../../reference/contrib.blackjax.BlackjaxMCLMCKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxMCLMCKernel) wraps microcanonical Langevin Monte Carlo: the kernel tunes the step size, the trajectory length L, and a diagonal preconditioner once inside its `init`, and every subsequent MCMC step is a single tuned MCLMC step. Because that tuning replaces warmup, we pass `num_warmup=0` (the adapter's docstring asks for this: tuning already runs once inside `init`, so NumPyro warmup steps on top of it would be discarded work), and because the adapter must run chains sequentially we pass `chain_method="sequential"` and draw one long chain instead of four parallel ones.
 
 The flip side of skipping the Metropolis correction is that nothing rejects a bad step: the draws carry a small discretization bias controlled by the tuned step size, and an unlucky tuning run degrades the samples silently instead of showing up as divergences the way it would in NUTS. In practice one validates MCLMC against a proper score like the CRPS below or against a short NUTS reference run. We use a generous tuning budget, which costs little because a tuning step is as cheap as a sampling step.
 
@@ -2175,7 +2175,7 @@ sample_dims :
 
 ## NUTS diagnostics
 
-Because the NUTS tree keeps its `4` chains, the standard MCMC diagnostics apply directly to it: `az.summary` reports posterior summaries, effective sample sizes, and \hat{R} for the scalar parameters. Values of \hat{R} close to `1` indicate that the chains mixed well.
+Because the NUTS tree keeps its `4` chains, the standard MCMC diagnostics apply directly to it: `az.summary` reports posterior summaries, effective sample sizes, and \hat{R} for the scalar parameters. Values of \hat{R} below `1.01`, together with a bulk effective sample size (`ess_bulk`) above `400` for `4` chains, indicate that the chains mixed well (Vehtari et al. 2021). The interval columns (`eti89_lb` and `eti89_ub`) are the bounds of ArviZ's default 89\\ equal-tailed interval, not of the 94\\ HDI that the forecast bands below use.
 
 
 ``` python
@@ -2192,7 +2192,7 @@ az.summary(nuts_tree, var_names=["bias", "drift_scale", "nu", "sigma", "centered
 | centered | 0.2 | 0.16 | 0.02 | 0.5 | 5 | 10 | 1.82 | 0.076 | 0.042 |
 
 
-The scalar parameters that shape the forecast (`bias`, `drift_scale`, `nu`, `sigma`) mix well. The exception is `centered`, and it is worth understanding why: this site only selects the drift's parameterization, so the joint density over the data is the same for every value of `centered` and its exact posterior equals its \text{Uniform}(0, 1) prior. NUTS explores that flat direction slowly, which is exactly what the large \hat{R} flags, but none of it leaks into the forecasts, which consume only the implied drift.
+The scalar parameters that shape the forecast (`bias`, `drift_scale`, `nu`, `sigma`) are close to convergence but do not meet the usual standard: their \hat{R} values are `1.02` to `1.04`, and `drift_scale`, `nu` and `sigma` have a bulk effective sample size of only `271`, `188` and `87` from `4_000` draws. Their summaries are therefore approximate, and longer chains would make them more reliable. The parameter that does not mix at all is `centered`, for a structural reason: this site only selects the drift's parameterization, so the joint density over the data is the same for every value of `centered` and its exact posterior equals its \text{Uniform}(0, 1) prior. NUTS explores that flat direction slowly, which is exactly what the large \hat{R} flags, but none of it leaks into the forecasts, which consume only the implied drift.
 
 
 # CRPS on train and test
@@ -2415,6 +2415,7 @@ A single train/test split is only one view of forecasting skill; the [univariate
 - Hoffman, M. D., Blei, D. M., Wang, C., & Paisley, J. (2013). [*Stochastic variational inference*](https://jmlr.org/papers/v14/hoffman13a.html). JMLR.
 - Zhang, L., Carpenter, B., Gelman, A., & Vehtari, A. (2022). [*Pathfinder: Parallel quasi-Newton variational inference*](https://jmlr.org/papers/v23/21-0889.html). JMLR.
 - Vehtari, A., Simpson, D., Gelman, A., Yao, Y., & Gabry, J. (2024). [*Pareto smoothed importance sampling*](https://jmlr.org/papers/v25/19-556.html). JMLR.
+- Vehtari, A., Gelman, A., Simpson, D., Carpenter, B., & Bürkner, P.-C. (2021). [*Rank-normalization, folding, and localization: An improved \hat{R} for assessing convergence of MCMC*](https://doi.org/10.1214/20-BA1221). Bayesian Analysis.
 - Robnik, J., De Luca, G. B., Silverstein, E., & Seljak, U. (2023). [*Microcanonical Hamiltonian Monte Carlo*](https://jmlr.org/papers/v24/22-1450.html). JMLR.
 - Robnik, J., & Seljak, U. (2024). [*Fluctuation without dissipation: Microcanonical Langevin Monte Carlo*](https://arxiv.org/abs/2303.18221).
 - Smith, L. N., & Topin, N. (2019). [*Super-convergence: Very fast training of neural networks using large learning rates*](https://arxiv.org/abs/1708.07120).
