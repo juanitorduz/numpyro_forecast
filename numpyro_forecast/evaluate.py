@@ -384,10 +384,12 @@ class BacktestResult:
         """Return a flat dictionary view (Pyro-style access).
 
         The view does not copy the arrays: ``prediction`` is the same object as
-        ``self.prediction``. The ``metrics`` and ``train_metrics`` mappings are
-        shallow copies, so changing the returned dictionary never changes the
-        result. Use ``copy.deepcopy(result.to_dict())`` for an independent copy
-        of the arrays.
+        ``self.prediction``, so an in-place write to a NumPy ``prediction``
+        changes the result. The ``metrics`` and ``train_metrics`` mappings are
+        shallow copies, so adding or replacing entries of the returned
+        dictionary (or of those mappings) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
 
         Returns
         -------
@@ -403,8 +405,9 @@ def _fields_view(result: "BacktestResult | VectorizedBacktestResult") -> dict[st
     ``dataclasses.asdict`` deep-copies every value that is not a dict, list or
     tuple, so with ``keep_predictions=True`` it copied the full forecast draws
     on each call. The arrays are returned as they are; only the dict-valued
-    fields (the small metric mappings) are shallow-copied, so a caller who
-    mutates the returned mapping never changes the frozen result.
+    fields (the small metric mappings) are shallow-copied, so a caller who adds
+    or replaces entries never changes the frozen result (an in-place write to
+    a NumPy array field still does).
     """
     view: dict[str, Any] = {}
     for result_field in fields(result):
@@ -987,9 +990,10 @@ class VectorizedBacktestResult:
 
         The view does not copy the arrays: ``predictions``, ``losses`` and the
         window indices are the same objects as on the result. The ``metrics``
-        mapping is a shallow copy, so changing the returned dictionary never
-        changes the result. Use ``copy.deepcopy(result.to_dict())`` for an
-        independent copy of the arrays.
+        mapping is a shallow copy, so adding or replacing entries of the
+        returned dictionary (or of that mapping) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
 
         Returns
         -------
@@ -1015,6 +1019,7 @@ def _vmapped_metrics(
         jax.errors.ConcretizationTypeError,
         jax.errors.TracerArrayConversionError,
         jax.errors.TracerIntegerConversionError,
+        jax.errors.NonConcreteBooleanIndexError,
     ) as err:
         raise VectorizedMetricError() from err
 
@@ -1138,8 +1143,8 @@ def backtest_vectorized(
     VectorizedMetricError
         If a metric forces a host conversion under ``vmap`` (it is not a pure
         JAX function), for example ``float(...)``, ``int(...)``,
-        ``range(...)``, Python list indexing or a NumPy call on a traced
-        value.
+        ``range(...)``, Python list indexing, a boolean mask index such as
+        ``x[x > 0]`` or a NumPy call on a traced value.
     """
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"

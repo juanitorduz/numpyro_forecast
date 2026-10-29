@@ -39,15 +39,16 @@ class VectorizedMetricError(NumpyroForecastError, TypeError):
 
     Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when a
     metric forces a host conversion under ``vmap``: ``float(...)``,
-    ``int(...)``, ``range(...)``, Python list indexing or ``numpy`` calls on a
-    traced value. Metrics must be pure JAX functions returning a scalar
+    ``int(...)``, ``range(...)``, Python list indexing, a boolean mask index
+    (``x[x > 0]``, whose result shape depends on the values) or ``numpy``
+    calls on a traced value. Metrics must be pure JAX functions returning a scalar
     array; see `~~numpyro_forecast.typing.Metric`.
     """
 
     default_message = (
         "backtest_vectorized metrics must be pure JAX functions returning a scalar "
         "array; one forced a host conversion (e.g. float(...), int(...), range(...), "
-        "Python list indexing or numpy) under vmap. "
+        "Python list indexing, a boolean mask such as x[x > 0], or numpy) under vmap. "
         "Use backtest(), or keep_predictions=True and score on the host."
     )
 

@@ -549,16 +549,22 @@ def _host_list_index(pred: Array, truth: Array) -> Array:
     return jnp.asarray([0.0, 1.0][jnp.argmax(truth.ravel()) % 2]) + 0.0 * pred.mean()
 
 
+def _host_boolean_mask(pred: Array, truth: Array) -> Array:
+    """Index with a traced boolean mask (``NonConcreteBooleanIndexError``)."""
+    return pred[pred > truth].mean()
+
+
 @pytest.mark.parametrize(
     "host_mae",
-    [_host_float_mae, _host_range_count, _host_list_index],
-    ids=["float", "range", "list_index"],
+    [_host_float_mae, _host_range_count, _host_list_index, _host_boolean_mask],
+    ids=["float", "range", "list_index", "boolean_mask"],
 )
 def test_host_metric_raises_actionable_error(host_mae: Callable[[Array, Array], Array]) -> None:
     """A metric that forces a host conversion raises ``VectorizedMetricError``.
 
-    The ``range`` and ``list_index`` cases are the regression for #199: they
-    raise `jax.errors.TracerIntegerConversionError`, a sibling of
+    The ``range``, ``list_index`` and ``boolean_mask`` cases are the regression
+    for #199: they raise `jax.errors.TracerIntegerConversionError` and
+    `jax.errors.NonConcreteBooleanIndexError`, siblings of
     ``ConcretizationTypeError``, which escaped untranslated.
     """
     duration = TRAIN + TEST + 2
