@@ -192,7 +192,7 @@ Pack prediction draws into a DataTree laid out for per-series `plot_lm` faceting
 ## Extensions (contrib)
 
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 
 [contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  

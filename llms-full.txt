@@ -2142,7 +2142,7 @@ ValueError
 
 ## Extensions (contrib)
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 
 BlackjaxNUTSKernel(model: numpyro_forecast.typing.ForecastModel | None = None, *, num_adaptation_steps: int = 500, target_acceptance_rate: float = 0.8) -> None
@@ -2257,7 +2257,7 @@ data
 elbo
     The evidence lower bound of the fitted approximation.
 
-fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
+fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
 
 Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -2412,7 +2412,7 @@ pareto_k
     `multipathfinder_samples()` reads it to decide whether
     ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
 
-fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
+fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
 
 Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -2581,8 +2581,9 @@ dict[str, Array]
 Raises
 ------
 ValueError
-    If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
-    not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+    If ``num_samples`` or ``batch_size`` is not positive (an unknown
+    ``resample`` is a type error under the package's runtime type checking,
+    and a ``ValueError`` only when that checking is disabled).
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
