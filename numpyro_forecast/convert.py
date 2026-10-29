@@ -35,6 +35,9 @@ _SAMPLE_DIMS = ["chain", "draw"]
 _DEFAULT_COVARIATE_DIMS = ("time", "covariate_dim")
 """Default dimension names for the stored covariates (the 2-D layout)."""
 
+_RESERVED_PREDICTION_GROUPS = frozenset({"observed_data", "constant_data"})
+"""The groups `predictions_to_datatree()` always writes, so ``group`` cannot name them."""
+
 
 def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | None) -> list[str]:
     """Validate and normalize the covariate dimension names.
@@ -623,7 +626,9 @@ def predictions_to_datatree(
         One label per series, defining the ``series`` coordinate.
     group
         Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-        ``"posterior_predictive"``, ``"predictions"``).
+        ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+        ``"constant_data"`` are reserved: the function always writes those two
+        groups.
     observed
         Optional observations, shape ``(time, series)``, stored in
         ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -638,8 +643,17 @@ def predictions_to_datatree(
     Raises
     ------
     ValueError
-        If ``series`` does not have one label per series in ``predictions``.
+        If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+        names), or if ``series`` does not have one label per series in
+        ``predictions``.
     """
+    if group in _RESERVED_PREDICTION_GROUPS:
+        msg = (
+            f"group={group!r} is reserved: predictions_to_datatree() always writes the "
+            "'observed_data' and 'constant_data' groups. Store the draws under another "
+            "name, for example 'posterior_predictive', 'prior_predictive' or 'predictions'"
+        )
+        raise ValueError(msg)
     preds = np.asarray(predictions)[None]
     if len(series) != preds.shape[-1]:
         msg = f"series has length {len(series)} but predictions carry {preds.shape[-1]} series"
