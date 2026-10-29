@@ -171,7 +171,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -188,11 +188,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -901,7 +905,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L229-L489" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L239-L501" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -949,7 +953,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">num_chains</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">1</span></span></code></dt>
 <dd>
-<p>Number of chains to split <code>posterior</code>’s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to <code>1</code> (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the <code>num_chains</code> the sampler was run with; see <code>_reshape_chains()</code> for the reshape contract and its divisibility requirement.</p>
+<p>Number of chains to split <code>posterior</code>’s flattened sample axis into (and, identically, the in-sample/forecast predictive draws, which are drawn with the same sample count). Defaults to <code>1</code> (a single pseudo-chain, correct for a posterior with no chain structure, e.g. SVI or Pathfinder draws). For an MCMC posterior, pass the <code>num_chains</code> the sampler was run with; see <code>_reshape_chains()</code> for the reshape contract and its divisibility requirement. Must be a positive integer.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">batch_size</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -995,7 +999,7 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, or if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>.</p>
+<p>If <code>covariates</code> is shorter than <code>data</code> along the time axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, if <code>num_chains</code> is not a positive integer (<code>bool</code> included), or if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
 <dd>
