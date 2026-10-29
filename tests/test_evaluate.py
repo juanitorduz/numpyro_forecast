@@ -540,6 +540,34 @@ def test_backtest_result_to_dict() -> None:
     }
 
 
+@pytest.mark.parametrize("kind", ["jax", "numpy"])
+def test_backtest_result_to_dict_does_not_copy_prediction(kind: str) -> None:
+    """``to_dict()`` is a view: the kept prediction is the result's own object (#199).
+
+    ``dataclasses.asdict`` deep-copied every array, which for
+    ``keep_predictions=True`` doubled the memory of the forecast draws on each
+    call. The small metric mappings stay independent copies, so mutating the
+    returned dict never changes the frozen result.
+    """
+    prediction = jnp.ones((20, 4, 1)) if kind == "jax" else np.ones((20, 4, 1))
+    result = BacktestResult(
+        t0=0,
+        t1=10,
+        t2=14,
+        num_samples=20,
+        walltime=0.5,
+        metrics={"mae": 1.0},
+        train_metrics={"mae": 0.5},
+        prediction=prediction,
+    )
+    flat = result.to_dict()
+    assert flat["prediction"] is prediction
+    flat["metrics"]["mae"] = 2.0
+    flat["train_metrics"]["mae"] = 3.0
+    assert result.metrics == {"mae": 1.0}
+    assert result.train_metrics == {"mae": 0.5}
+
+
 def test_backtest_rejects_length_mismatch() -> None:
     with pytest.raises(ValueError, match="share the time axis length"):
         backtest(
@@ -755,6 +783,61 @@ def test_backtest_eval_train_requires_in_sample_fn(rng_key: Array) -> None:
             num_samples=10,
             eval_train=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("num_samples", "metrics", "match"),
+    [
+        (0, None, "num_samples must be positive"),
+        (-3, {"mae": eval_mae}, "num_samples must be positive"),
+        (1, None, r"num_samples=1 is too small for the metrics \['crps'\]"),
+        (1, {"crps_chunked": partial(eval_crps, batch_size=2)}, "num_samples=1 is too small"),
+    ],
+)
+def test_backtest_rejects_too_few_samples_before_any_fit(
+    rng_key: Array,
+    num_samples: int,
+    metrics: dict[str, Any] | None,
+    match: str,
+) -> None:
+    # A num_samples that the metrics cannot score raises a ValueError that
+    # names num_samples before forecast_fn runs.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    with pytest.raises(ValueError, match=match):
+        backtest(
+            rng_key,
+            rw_model_factory,
+            data,
+            covariates,
+            forecast_fn=_never_called,
+            in_sample_fn=_never_called,
+            metrics=metrics,
+            test_window=4,
+            min_train_window=12,
+            stride=4,
+            num_samples=num_samples,
+            eval_train=True,
+        )
+
+
+def test_backtest_accepts_one_sample_without_crps(rng_key: Array) -> None:
+    # A single draw is valid when no metric needs two, so the entry check must accept it.
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        rw_model_factory,
+        data,
+        covariates,
+        forecast_fn=_canned_forecast_fn,
+        metrics={"mae": eval_mae, "rmse": eval_rmse},
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=1,
+    )
+    assert results and all(set(r.metrics) == {"mae", "rmse"} for r in results)
 
 
 def test_backtest_forwards_batch_size_into_both_closures(rng_key: Array) -> None:

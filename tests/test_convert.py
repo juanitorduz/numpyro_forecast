@@ -11,7 +11,12 @@ import xarray.testing as xarray_testing
 from conftest import empty_covariates, fail_devices_for, nuts_samples, rw_model, svi_guide_params
 from jax import Array, random
 
-from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
+from numpyro_forecast.convert import (
+    _reshape_chains,
+    add_forecast_groups,
+    predictions_to_datatree,
+    to_datatree,
+)
 from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
@@ -520,6 +525,29 @@ def test_to_datatree_rejects_non_divisible_num_chains() -> None:
         to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=3)
 
 
+@pytest.mark.parametrize("num_chains", [0, -1, -2])
+def test_to_datatree_rejects_non_positive_num_chains(num_chains: int) -> None:
+    """``num_chains < 1`` raises by name instead of a bare ZeroDivisionError or reshape error."""
+    posterior = {"level": jnp.zeros(6), "drift": jnp.zeros((6, 18, 1))}
+    with pytest.raises(
+        ValueError, match=rf"num_chains must be a positive integer, got {num_chains}"
+    ):
+        to_datatree(
+            random.PRNGKey(2),
+            _model(),
+            posterior,
+            _series(18),
+            empty_covariates(18),
+            num_chains=num_chains,
+        )
+
+
+@pytest.mark.parametrize("num_chains", [0, -3, True, False])
+def test_reshape_chains_rejects_non_positive_num_chains(num_chains: int) -> None:
+    with pytest.raises(ValueError, match="num_chains must be a positive integer"):
+        _reshape_chains(np.zeros((6, 2)), num_chains)
+
+
 def test_to_datatree_accepts_numpy_posterior() -> None:
     """A NumPy posterior dict (host-offloaded draws) passes straight through."""
     posterior, data, covariates = _mcmc_posterior(num_chains=1)
@@ -872,6 +900,14 @@ def test_predictions_to_datatree_label_length_mismatch_raises() -> None:
     predictions, x, labels = _prediction_draws()
     with pytest.raises(ValueError, match="series has length"):
         predictions_to_datatree(predictions, x, labels[:-1])
+
+
+@pytest.mark.parametrize("group", ["observed_data", "constant_data"])
+def test_predictions_to_datatree_rejects_reserved_group(group: str) -> None:
+    """A reserved group name raises instead of silently overwriting the draws."""
+    predictions, x, labels = _prediction_draws()
+    with pytest.raises(ValueError, match=rf"group='{group}' is reserved"):
+        predictions_to_datatree(predictions, x, labels, group=group)
 
 
 def test_predictions_to_datatree_accepts_jax_arrays() -> None:

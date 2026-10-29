@@ -147,7 +147,7 @@ reference:
       - convert.predictions_to_datatree
 
   - title: Extensions (contrib)
-    desc: Optional backends behind pyproject extras (never imported by default).
+    desc: Optional backends behind pyproject extras (the backend library loads only on first use).
     contents:
       - contrib.blackjax.BlackjaxNUTSKernel
       - contrib.blackjax.BlackjaxMCLMCKernel
@@ -294,7 +294,7 @@ skill:
     - "predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data."
     - "time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError."
     - "draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers."
-    - "numpyro_forecast.contrib.blackjax is never imported by default and needs the blackjax extra (pip install \"numpyro_forecast[blackjax]\"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro."
+    - "numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install \"numpyro_forecast[blackjax]\"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro."
   best_practices:
     - "Keep inference plain NumPyro: SVI with an autoguide or MCMC with any kernel; nothing in the package wraps svi.run or mcmc.run."
     - "Use LocScaleReparam(0) on innovations priors for SVI, and time_reparam(model, \"dct\") when the latent is a random-walk level."

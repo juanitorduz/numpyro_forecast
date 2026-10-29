@@ -244,6 +244,40 @@ def test_covariate_length_mismatch_rejected() -> None:
         )
 
 
+def _never_called_guide(*_args: object, **_kwargs: object) -> None:
+    """A guide that fails the test if ``backtest_vectorized`` ever fits or samples it."""
+    pytest.fail("the guide should never have been called")
+
+
+@pytest.mark.parametrize(
+    ("num_samples", "metrics", "match"),
+    [
+        (0, None, "num_samples must be positive"),
+        (0, {}, "num_samples must be positive"),
+        (1, None, r"num_samples=1 is too small for the metrics \['crps'\]"),
+        (1, {"crps_half": partial(eval_crps, batch_size=2)}, "num_samples=1 is too small"),
+    ],
+)
+def test_too_few_samples_rejected_before_any_fit(
+    num_samples: int, metrics: dict[str, Callable[..., Array]] | None, match: str
+) -> None:
+    """A ``num_samples`` the metrics cannot score raises before the SVI fit."""
+    data, cov = _series(50)
+    with pytest.raises(ValueError, match=match):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=_never_called_guide,
+            num_steps=10,
+            num_samples=num_samples,
+            metrics=metrics,
+        )
+
+
 @pytest.mark.parametrize(
     ("duration", "train", "test", "stride"),
     [
@@ -535,13 +569,41 @@ def test_chunked_metric_raises_actionable_error() -> None:
         )
 
 
-def test_host_metric_raises_actionable_error() -> None:
-    """A metric that forces a host conversion raises ``VectorizedMetricError``."""
+def _host_float_mae(pred: Array, truth: Array) -> Array:
+    """Convert a traced value with ``float(...)`` (``ConcretizationTypeError``)."""
+    return jnp.asarray(float(jnp.abs(pred - truth).mean()))
+
+
+def _host_range_count(pred: Array, truth: Array) -> Array:
+    """Convert a traced value with ``range(...)`` (``TracerIntegerConversionError``)."""
+    return jnp.asarray(len(range(jnp.sum(truth > 0))), jnp.float32) + 0.0 * pred.mean()
+
+
+def _host_list_index(pred: Array, truth: Array) -> Array:
+    """Index a Python list with a traced value (``TracerIntegerConversionError``)."""
+    return jnp.asarray([0.0, 1.0][jnp.argmax(truth.ravel()) % 2]) + 0.0 * pred.mean()
+
+
+def _host_boolean_mask(pred: Array, truth: Array) -> Array:
+    """Index with a traced boolean mask (``NonConcreteBooleanIndexError``)."""
+    return pred[pred > truth].mean()
+
+
+@pytest.mark.parametrize(
+    "host_mae",
+    [_host_float_mae, _host_range_count, _host_list_index, _host_boolean_mask],
+    ids=["float", "range", "list_index", "boolean_mask"],
+)
+def test_host_metric_raises_actionable_error(host_mae: Callable[[Array, Array], Array]) -> None:
+    """A host conversion or a value-dependent shape in a metric raises ``VectorizedMetricError``.
+
+    The ``range`` and ``list_index`` cases raise
+    `jax.errors.TracerIntegerConversionError` and the ``boolean_mask`` case raises
+    `jax.errors.NonConcreteBooleanIndexError` (a ``JAXIndexError``); neither is a
+    ``ConcretizationTypeError``, so each needs its own entry in the ``except`` tuple.
+    """
     duration = TRAIN + TEST + 2
     data, cov = _series(duration)
-
-    def host_mae(pred: Array, truth: Array) -> Array:
-        return jnp.asarray(float(jnp.abs(pred - truth).mean()))
 
     model = rw_model
     with pytest.raises(VectorizedMetricError):
@@ -557,6 +619,26 @@ def test_host_metric_raises_actionable_error() -> None:
             num_samples=10,
             metrics={"host_mae": host_mae},
         )
+
+
+def test_vectorized_result_to_dict_does_not_copy_predictions() -> None:
+    """``to_dict()`` is a view: the kept predictions are the result's own object (#199)."""
+    predictions = jnp.ones((2, 10, TEST, 1))
+    result = VectorizedBacktestResult(
+        t0=jnp.zeros(2, dtype=jnp.int32),
+        t1=jnp.full(2, TRAIN),
+        t2=jnp.full(2, TRAIN + TEST),
+        num_samples=10,
+        losses=jnp.zeros((2, 5)),
+        metrics={"mae": jnp.ones(2)},
+        predictions=predictions,
+    )
+    flat = result.to_dict()
+    assert set(flat) == {"t0", "t1", "t2", "num_samples", "losses", "metrics", "predictions"}
+    assert flat["predictions"] is predictions
+    assert flat["losses"] is result.losses
+    flat["metrics"]["rmse"] = jnp.zeros(2)
+    assert set(result.metrics) == {"mae"}
 
 
 def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> None:

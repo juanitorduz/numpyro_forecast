@@ -9,7 +9,7 @@ a user-supplied fit/forecast closure (see `~~numpyro_forecast.typing.ForecastFn`
 """
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from functools import partial
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -25,6 +25,7 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
+from numpyro_forecast._validation import _require_positive_num_samples
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import _check_pred_truth, crps_empirical
 from numpyro_forecast.optional import require
@@ -410,12 +411,36 @@ class BacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
 
+        The view does not copy the arrays: ``prediction`` is the same object as
+        ``self.prediction``, so an in-place write to a NumPy ``prediction``
+        changes the result. The ``metrics`` and ``train_metrics`` mappings are
+        shallow copies, so adding or replacing entries of the returned
+        dictionary (or of those mappings) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
+
+
+def _fields_view(result: "BacktestResult | VectorizedBacktestResult") -> dict[str, Any]:
+    """Map each field of a backtest result to its value without copying the arrays.
+
+    Unlike ``dataclasses.asdict``, which deep-copies every array (the full
+    forecast draws with ``keep_predictions=True``), this returns the arrays as
+    they are. Only the dict-valued fields (the small metric mappings) are
+    shallow-copied, so a caller who adds or replaces entries never changes the
+    frozen result (an in-place write to a NumPy array field still does).
+    """
+    view: dict[str, Any] = {}
+    for result_field in fields(result):
+        value = getattr(result, result_field.name)
+        view[result_field.name] = dict(value) if isinstance(value, dict) else value
+    return view
 
 
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
@@ -617,6 +642,37 @@ def _slice_window(
     full_covariates = covariates[..., t0:t2, :]
     truth = data[..., t1:t2, :]
     return train_data, train_covariates, full_covariates, truth
+
+
+_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps, crps_empirical)
+"""Metric kernels that need at least 2 forecast samples (the empirical CRPS)."""
+
+
+def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Metric]) -> None:
+    """Raise ``ValueError`` before any fit if ``num_samples`` is too small for ``metrics``.
+
+    ``num_samples`` must be positive, and at least 2 when a metric is (or is a
+    `functools.partial()` of) one of `_TWO_SAMPLE_METRICS`. Without this
+    check the error comes from the metric itself, after the first window has
+    been fitted and forecast.
+    """
+    _require_positive_num_samples(num_samples)
+    if num_samples >= 2:
+        return
+    needs_two: list[str] = []
+    for name, fn in metrics.items():
+        kernel: object = fn
+        while isinstance(kernel, partial):
+            kernel = kernel.func
+        if kernel in _TWO_SAMPLE_METRICS:
+            needs_two.append(name)
+    if needs_two:
+        msg = (
+            f"num_samples={num_samples} is too small for the metrics {needs_two}: the "
+            "empirical CRPS needs at least 2 forecast samples per window. Pass "
+            "num_samples >= 2, or remove those entries from the metrics mapping"
+        )
+        raise ValueError(msg)
 
 
 def _eval_train_window(
@@ -869,7 +925,13 @@ def backtest(
     stride
         Step between successive train/test splits.
     num_samples
-        Number of forecast samples per window.
+        Number of forecast samples per window. Must be positive, and at least
+        2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
+        does) or a `functools.partial()` of it. Both rules are checked before
+        the first window is fitted. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) or added by
+        ``per_window_metrics`` is not checked up front: it fails only when it
+        runs.
     batch_size
         Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
         (see the contract above).
@@ -897,8 +959,9 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``.
+        If ``data`` and ``covariates`` durations differ, if ``eval_train=True``
+        but ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small
+        (see ``num_samples``).
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -911,6 +974,7 @@ def backtest(
         raise ValueError(msg)
     window_type = _resolve_window_type(window_type, train_window)
     metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, metrics)
     duration = data.shape[-2]
 
     shared_model: ForecastModel | None = None
@@ -990,12 +1054,19 @@ class VectorizedBacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view.
 
+        The view does not copy the arrays: ``predictions``, ``losses`` and the
+        window indices are the same objects as on the result. The ``metrics``
+        mapping is a shallow copy, so adding or replacing entries of the
+        returned dictionary (or of that mapping) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
 
 
 def _vmapped_metrics(
@@ -1010,7 +1081,12 @@ def _vmapped_metrics(
     """
     try:
         return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
-    except (jax.errors.ConcretizationTypeError, jax.errors.TracerArrayConversionError) as err:
+    except (
+        jax.errors.ConcretizationTypeError,
+        jax.errors.TracerArrayConversionError,
+        jax.errors.TracerIntegerConversionError,
+        jax.errors.NonConcreteBooleanIndexError,
+    ) as err:
         raise VectorizedMetricError() from err
 
 
@@ -1106,7 +1182,12 @@ def backtest_vectorized(
     num_steps
         Number of SVI steps per window.
     num_samples
-        Number of forecast samples drawn per window.
+        Number of forecast samples drawn per window. Must be positive, and at
+        least 2 when ``metrics`` contains `eval_crps()` (as
+        `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+        are checked before the fit. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) is not checked up front: it
+        fails only after the fit.
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1126,15 +1207,18 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or ``metrics`` is not
-        empty and the model's ``"forecast"`` site does not have the shape of
+        If ``data`` and ``covariates`` durations differ, if ``num_samples``
+        is too small (see ``num_samples``), or if ``metrics`` is not empty
+        and the model's ``"forecast"`` site does not have the shape of
         ``data`` over the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
     VectorizedMetricError
-        If a metric forces a host conversion under ``vmap`` (it is not a pure
-        JAX function).
+        If a metric is not a pure JAX function under ``vmap``: it forces a host
+        conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
+        indexing or a NumPy call on a traced value) or builds a value-dependent
+        shape (a boolean mask index such as ``x[x > 0]``).
     """
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
@@ -1145,6 +1229,8 @@ def backtest_vectorized(
         raise BacktestWindowError("test_window must be >= 1")
     if stride < 1:
         raise BacktestWindowError("stride must be >= 1")
+    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, resolved_metrics)
 
     duration = data.shape[-2]
     last_start = duration - train_window - test_window
@@ -1202,7 +1288,6 @@ def backtest_vectorized(
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
-    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
     # Every window shares the forecast and truth shapes, so one comparison covers all of
     # them. A custom metric would otherwise broadcast a mismatched forecast silently.
     if resolved_metrics and predictions.shape[2:] != truth.shape[1:]:

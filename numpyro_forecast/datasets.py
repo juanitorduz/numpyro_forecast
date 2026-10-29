@@ -85,9 +85,10 @@ def load_bart_hierarchical(
     Parameters
     ----------
     train_days
-        Number of training days (24 hours each).
+        Number of training days (24 hours each). Must be at least 1.
     test_weeks
-        Number of test weeks (``24 * 7`` hours each).
+        Number of test weeks (``24 * 7`` hours each). Must be non-negative;
+        ``0`` returns the training window only, with ``split == y.shape[1]``.
 
     Returns
     -------
@@ -101,15 +102,26 @@ def load_bart_hierarchical(
     Raises
     ------
     ValueError
-        If the requested ``train_days`` + ``test_weeks`` window exceeds the
-        available history (which would otherwise wrap a negative slice index).
+        If ``train_days`` is less than 1 or ``test_weeks`` is negative (checked
+        before the download), or if the requested ``train_days`` + ``test_weeks``
+        window exceeds the available history (which would otherwise wrap a
+        negative slice index).
     """
+    if train_days < 1:
+        msg = f"train_days must be at least 1, got {train_days}; pass a positive number of days"
+        raise ValueError(msg)
+    if test_weeks < 0:
+        msg = (
+            f"test_weeks must be non-negative, got {test_weeks}; "
+            "pass 0 for no test window or a positive number of weeks"
+        )
+        raise ValueError(msg)
     counts, stations = _load_counts()
     log_counts = jnp.log1p(jnp.transpose(counts, (1, 0, 2)))
     t_total = log_counts.shape[1]
     t1 = t_total - test_weeks * HOURS_PER_WEEK
     t0 = t1 - train_days * 24
-    if t0 < 0 or t1 <= t0:
+    if t0 < 0:
         msg = (
             f"requested window (train_days={train_days}, test_weeks={test_weeks}) "
             f"exceeds available history of {t_total} hours"
