@@ -34,6 +34,7 @@ import importlib
 import math
 import warnings
 from collections import namedtuple
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
@@ -41,11 +42,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import random
+from jax.typing import ArrayLike
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
-from numpyro_forecast._offload import _draw_chunked
+from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, _draw_chunked
 from numpyro_forecast._validation import _require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.optional import require
@@ -562,7 +564,7 @@ def fit_pathfinder(
     maxcor: int = 10,
     maxls: int = 1_000,
     gtol: float = 1e-8,
-    init_params: dict[str, Array] | None = None,
+    init_params: Mapping[str, ArrayLike] | None = None,
 ) -> PathfinderFit:
     """Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -812,7 +814,7 @@ def fit_multipathfinder(
     maxls: int = 1_000,
     gtol: float = 1e-8,
     ftol: float = 1e-5,
-    init_params: dict[str, Array] | None = None,
+    init_params: Mapping[str, ArrayLike] | None = None,
 ) -> MultiPathfinderFit:
     """Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -968,7 +970,7 @@ def fit_multipathfinder(
             f"{n_failed} of {num_paths} path(s) failed (non-finite ELBO); raise "
             "maxiter/maxcor or inspect elbos."
         )
-        warnings.warn(msg, UserWarning, stacklevel=2)
+        warnings.warn(msg, UserWarning, skip_file_prefixes=WARNING_SKIP_PREFIXES)
     if pareto_k_value > _PARETO_K_THRESHOLD:
         msg = (
             f"pareto_k={pareto_k_value:.2f} > {_PARETO_K_THRESHOLD}: PSIS importance "
@@ -977,7 +979,7 @@ def fit_multipathfinder(
             "ELBO-weighted path sampling instead of PSIS resampling; increase "
             "num_paths/maxiter/maxcor or fall back to MCMC."
         )
-        warnings.warn(msg, UserWarning, stacklevel=2)
+        warnings.warn(msg, UserWarning, skip_file_prefixes=WARNING_SKIP_PREFIXES)
 
     return MultiPathfinderFit(
         state=state,
@@ -1077,8 +1079,9 @@ def multipathfinder_samples(
     Raises
     ------
     ValueError
-        If ``num_samples`` or ``batch_size`` is not positive, or ``resample`` is
-        not one of ``"auto"``, ``"psis"``, ``"elbo"``.
+        If ``num_samples`` or ``batch_size`` is not positive (an unknown
+        ``resample`` is a type error under the package's runtime type checking,
+        and a ``ValueError`` only when that checking is disabled).
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
@@ -1097,6 +1100,8 @@ def multipathfinder_samples(
         initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
     _require_positive_num_samples(num_samples)
+    # The `Literal` hint rejects an unknown `resample` first under the package's runtime
+    # type checking; this guard only fires when that is disabled (`JAXTYPING_DISABLE=1`).
     if resample not in ("auto", "psis", "elbo"):
         msg = f"resample must be one of 'auto', 'psis', 'elbo', got {resample!r}"
         raise ValueError(msg)
