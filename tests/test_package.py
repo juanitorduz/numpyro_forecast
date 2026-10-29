@@ -145,11 +145,16 @@ def test_every_package_function_is_runtime_type_checked() -> None:
     The hook in ``numpyro_forecast/__init__.py`` only wraps modules first imported
     inside its ``with`` block; a module imported after the block closes (as
     ``contrib.blackjax`` once was) silently loses its runtime type checks.
+    Dunder names are skipped: from Python 3.14 (PEP 649) a module with
+    module-level annotations holds a compiler-generated ``__annotate__``
+    function, which the hook does not (and need not) wrap.
     """
     unchecked = []
     for info in pkgutil.walk_packages(numpyro_forecast.__path__, "numpyro_forecast."):
         module = importlib.import_module(info.name)
         for name, obj in vars(module).items():
+            if name.startswith("__") and name.endswith("__"):
+                continue
             if not inspect.isfunction(obj) or obj.__module__ != info.name:
                 continue
             if not hasattr(obj, "__wrapped__"):
