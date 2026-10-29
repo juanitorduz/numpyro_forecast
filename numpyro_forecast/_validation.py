@@ -25,9 +25,15 @@ def _require_covariates_extend_data(data: Array, covariates: Array) -> None:
 
 
 def _require_covariates_cover_data(data: Array, covariates: Array) -> None:
-    """Raise ``ValueError`` unless ``covariates`` is at least as long as ``data`` in time."""
+    """Raise ``ValueError`` unless ``data`` is non-empty and ``covariates`` cover it in time."""
     _require_time_axis("data", data)
     _require_time_axis("covariates", covariates)
+    if data.shape[-2] == 0:
+        msg = (
+            f"data has no observed time steps (shape {tuple(data.shape)}); the in-sample "
+            "window needs at least one step"
+        )
+        raise ValueError(msg)
     if covariates.shape[-2] < data.shape[-2]:
         msg = (
             f"covariates cover {covariates.shape[-2]} time steps but data has "

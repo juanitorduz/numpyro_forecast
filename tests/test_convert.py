@@ -310,6 +310,12 @@ def test_to_datatree_rejects_posterior_leaf_without_sample_axis() -> None:
         to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
 
 
+def test_to_datatree_rejects_data_without_observations() -> None:
+    posterior = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
+    with pytest.raises(ValueError, match=r"data has no observed time steps \(shape \(0, 1\)\)"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((0, 1)), empty_covariates(8))
+
+
 def test_to_datatree_coords_reach_forecast_groups() -> None:
     """User coords propagate to the forecast groups; the forecast time coordinate wins."""
     posterior, data, _ = _mcmc_posterior(num_chains=1)

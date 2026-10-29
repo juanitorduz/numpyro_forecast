@@ -130,18 +130,13 @@ class Horizon(eqx.Module):
         ------
         ValueError
             If ``covariates`` or ``data`` has fewer than two axes (time must be
-            at axis ``-2``), if ``covariates`` has no time steps, if ``data``
-            has no time steps (use ``data=None`` to sample from the prior), or
-            if ``data`` is longer than ``covariates`` along the time axis.
+            at axis ``-2``), if ``data`` has no time steps (for a series with
+            no history, call the model with ``data=None``), if ``covariates``
+            has no time steps, or if ``data`` is longer than ``covariates``
+            along the time axis.
         """
         _require_time_axis("covariates", covariates)
         duration = covariates.shape[-2]
-        if duration == 0:
-            msg = (
-                f"covariates has no time steps (shape {tuple(covariates.shape)}); the horizon "
-                "needs at least one time step at axis -2"
-            )
-            raise ValueError(msg)
         t_obs = duration
         if data is not None:
             _require_time_axis("data", data)
@@ -149,11 +144,19 @@ class Horizon(eqx.Module):
             if t_obs == 0:
                 msg = (
                     f"data has no observed time steps (shape {tuple(data.shape)}); a model "
-                    "needs at least one in-sample step. For a series with no history, sample "
-                    "from the prior with data=None, for example "
-                    "numpyro.infer.Predictive(model, num_samples=...)(rng_key, covariates)"
+                    "needs at least one in-sample step. For a series with no history, call the "
+                    "model with data=None: predict_in_sample(rng_key, model, posterior, "
+                    "covariates) with only the global sites in posterior, or "
+                    "numpyro.infer.Predictive(model, num_samples=...)(rng_key, covariates) "
+                    "for the prior"
                 )
                 raise ValueError(msg)
+        if duration == 0:
+            msg = (
+                f"covariates has no time steps (shape {tuple(covariates.shape)}); the horizon "
+                "needs at least one time step at axis -2"
+            )
+            raise ValueError(msg)
         if t_obs > duration:
             msg = "data must not be longer than covariates along the time axis"
             raise ValueError(msg)

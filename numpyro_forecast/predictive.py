@@ -351,6 +351,8 @@ def _chunked_draws(
         The stitched draws for the original sample count (committed to
         ``device`` when one is given; NumPy for ``"numpy"``).
     """
+    # Before `_leaf_view()`: a Python scalar leaf would fail its type check unnamed.
+    _require_sample_axis(posterior)
     staged = {
         name: _leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
     }
@@ -466,8 +468,10 @@ def forecast(
     ------
     ValueError
         If ``data`` or ``covariates`` has fewer than two axes (time must be at
-        axis ``-2``), if ``covariates`` does not extend beyond ``data`` along
-        the time axis, or if a ``posterior`` leaf has no sample axis.
+        axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
+        extend beyond ``data`` along the time axis, or if ``posterior`` is
+        empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
+        on the sample-axis length.
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see

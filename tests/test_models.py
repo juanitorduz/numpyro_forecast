@@ -76,10 +76,11 @@ def test_horizon_rejects_data_without_time_axis(data: Array, hint: str) -> None:
         Horizon.from_data(jnp.zeros((8, 0)), data)
 
 
-def test_horizon_rejects_data_without_observations() -> None:
+@pytest.mark.parametrize("duration", [8, 0])
+def test_horizon_rejects_data_without_observations(duration: int) -> None:
     """A cold-start ``data`` of shape ``(0, obs)`` fails before ``plate("time", 0)``."""
     with pytest.raises(ValueError, match=r"data has no observed time steps \(shape \(0, 1\)\)"):
-        Horizon.from_data(jnp.zeros((8, 0)), jnp.zeros((0, 1)))
+        Horizon.from_data(jnp.zeros((duration, 0)), jnp.zeros((0, 1)))
 
 
 def test_horizon_rejects_covariates_without_time_steps() -> None:

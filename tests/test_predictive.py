@@ -22,6 +22,7 @@ from conftest import (
     svi_guide_params,
 )
 from jax import random
+from jax.typing import ArrayLike
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.autoguide import AutoNormal
 
@@ -142,8 +143,9 @@ def test_forecast_rejects_data_without_observations() -> None:
         forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((0, 1)), empty_covariates(8))
 
 
-def test_forecast_rejects_posterior_leaf_without_sample_axis() -> None:
-    post = {"level": jnp.array(0.0), "drift": jnp.zeros((4, 6, 1))}
+@pytest.mark.parametrize("level", [jnp.array(0.0), 0.0])
+def test_forecast_rejects_posterior_leaf_without_sample_axis(level: ArrayLike) -> None:
+    post = {"level": level, "drift": jnp.zeros((4, 6, 1))}
     with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
         forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), empty_covariates(8))
 
