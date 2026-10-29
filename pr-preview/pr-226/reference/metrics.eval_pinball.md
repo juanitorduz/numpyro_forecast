@@ -43,4 +43,4 @@ The mean pinball loss as a scalar array.
 
 
 `ValueError`  
-If `quantile` is not strictly inside `(0, 1)`, or `truth.shape` is not `pred.shape[1:]`.
+If `quantile` is not strictly inside `(0, 1)`, or `truth.shape` is not `pred.shape[1:]` and the runtime type hook is off (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).

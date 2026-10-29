@@ -91,7 +91,7 @@ The stacked per-window losses, metrics, and window indices.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ.
+If `data` and `covariates` durations differ, or the model's `"forecast"` site does not have the shape of the test window, so each window's `truth.shape` is not `pred.shape[1:]`.
 
 `BacktestWindowError`  
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.

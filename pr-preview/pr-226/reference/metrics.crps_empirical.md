@@ -42,7 +42,7 @@ Elementwise CRPS, one value per `batch` location.
 
 
 `ValueError`  
-If `truth.shape` is not `pred.shape[1:]`, or `pred` has fewer than 2 samples.
+If `truth.shape` is not `pred.shape[1:]` and the runtime type hook is off (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)), or `pred` has fewer than 2 samples.
 
 
 ## References
