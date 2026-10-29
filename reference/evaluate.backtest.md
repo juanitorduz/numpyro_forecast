@@ -132,7 +132,7 @@ Minimum test window size when `test_window` is `None`.
 Step between successive train/test splits.
 
 `num_samples: int = ``100`  
-Number of forecast samples per window.
+Number of forecast samples per window. Must be positive, and at least 2 when `metrics` contains [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) (as [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) does) or a `functools.partial()` of it. Both rules are checked before the first window is fitted. A CRPS inside another wrapper (a `lambda` or a `jax.jit` function) or added by `per_window_metrics` is not checked up front: it fails only when it runs.
 
 `batch_size: int | None = None`  
 Optional chunk size forwarded to `forecast_fn` and `in_sample_fn` (see the contract above).
@@ -158,7 +158,7 @@ One result per backtest window.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ, or if `eval_train=True` but `in_sample_fn` is `None`.
+If `data` and `covariates` durations differ, if `eval_train=True` but `in_sample_fn` is `None`, or if `num_samples` is too small (see `num_samples`).
 
 `BacktestWindowError`  
 If `window_type` and `train_window` disagree (`"rolling"` without a `train_window`, or `"expanding"` with one).

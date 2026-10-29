@@ -884,13 +884,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L37-L50" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L37-L54" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">VectorizedMetricError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Raised by <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> when a metric forces a host conversion (e.g.&nbsp;<code>float(...)</code> or <code>numpy</code> calls) under <code>vmap</code>. Metrics must be pure JAX functions returning a scalar array; see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>.</p>
+<p>Raised by <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a> when a metric forces a host conversion under <code>vmap</code> (<code>float(...)</code>, <code>int(...)</code>, <code>range(...)</code>, Python list indexing or <code>numpy</code> calls on a traced value) or builds a value-dependent shape (a boolean mask index such as <code>x[x &gt; 0]</code>; use <code>jnp.where</code> instead). Metrics must be pure JAX functions returning a scalar array; see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>.</p>
 </div>
 
 

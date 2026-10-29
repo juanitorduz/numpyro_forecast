@@ -71,7 +71,7 @@ Step between successive windows (`>= 1`).
 Number of SVI steps per window.
 
 `num_samples: int = ``100`  
-Number of forecast samples drawn per window.
+Number of forecast samples drawn per window. Must be positive, and at least 2 when `metrics` contains [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) (as [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) does) or a `functools.partial()` of it. Both rules are checked before the fit. A CRPS inside another wrapper (a `lambda` or a `jax.jit` function) is not checked up front: it fails only after the fit.
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}`, is scored inside the single fused computation. Host-side metrics are unsupported here; use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest), or `keep_predictions=True` and score on the host.
@@ -91,10 +91,10 @@ The stacked per-window losses, metrics, and window indices.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ.
+If `data` and `covariates` durations differ, or if `num_samples` is too small (see `num_samples`).
 
 `BacktestWindowError`  
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.
 
 `VectorizedMetricError`  
-If a metric forces a host conversion under `vmap` (it is not a pure JAX function).
+If a metric is not a pure JAX function under `vmap`: it forces a host conversion (`float(...)`, `int(...)`, `range(...)`, Python list indexing or a NumPy call on a traced value) or builds a value-dependent shape (a boolean mask index such as `x[x > 0]`).
