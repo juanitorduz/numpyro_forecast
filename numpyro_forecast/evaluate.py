@@ -9,7 +9,7 @@ a user-supplied fit/forecast closure (see `~~numpyro_forecast.typing.ForecastFn`
 """
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from functools import partial
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -25,6 +25,11 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
+from numpyro_forecast._validation import (
+    require_positive_num_samples,
+    require_pred_truth_shapes,
+    require_time_axis,
+)
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -75,7 +80,13 @@ def eval_mae(
     -------
     Array
         The mean absolute error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     return _eval_mae(_device_view(pred), _device_view(truth))
 
 
@@ -106,7 +117,13 @@ def eval_rmse(
     -------
     Array
         The root mean squared error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
@@ -207,7 +224,13 @@ def eval_crps(
     -------
     Array
         The mean empirical CRPS as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
         return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
     return _chunked_cell_metric(
@@ -270,8 +293,10 @@ def eval_coverage(
     Raises
     ------
     ValueError
-        If ``alpha`` is not strictly inside ``(0, 1)``.
+        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
@@ -333,7 +358,14 @@ def evaluate_forecast(
     -------
     dict[str, float]
         Each metric name mapped to its value.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
     """
+    require_pred_truth_shapes(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
@@ -383,12 +415,36 @@ class BacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view (Pyro-style access).
 
+        The view does not copy the arrays: ``prediction`` is the same object as
+        ``self.prediction``, so an in-place write to a NumPy ``prediction``
+        changes the result. The ``metrics`` and ``train_metrics`` mappings are
+        shallow copies, so adding or replacing entries of the returned
+        dictionary (or of those mappings) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
+
+
+def _fields_view(result: "BacktestResult | VectorizedBacktestResult") -> dict[str, Any]:
+    """Map each field of a backtest result to its value without copying the arrays.
+
+    Unlike ``dataclasses.asdict``, which deep-copies every array (the full
+    forecast draws with ``keep_predictions=True``), this returns the arrays as
+    they are. Only the dict-valued fields (the small metric mappings) are
+    shallow-copied, so a caller who adds or replaces entries never changes the
+    frozen result (an in-place write to a NumPy array field still does).
+    """
+    view: dict[str, Any] = {}
+    for result_field in fields(result):
+        value = getattr(result, result_field.name)
+        view[result_field.name] = dict(value) if isinstance(value, dict) else value
+    return view
 
 
 def _timed[T](fn: Callable[[], T]) -> tuple[T, float]:
@@ -590,6 +646,37 @@ def _slice_window(
     full_covariates = covariates[..., t0:t2, :]
     truth = data[..., t1:t2, :]
     return train_data, train_covariates, full_covariates, truth
+
+
+_TWO_SAMPLE_METRICS: tuple[Callable[..., Array], ...] = (eval_crps, crps_empirical)
+"""Metric kernels that need at least 2 forecast samples (the empirical CRPS)."""
+
+
+def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Metric]) -> None:
+    """Raise ``ValueError`` before any fit if ``num_samples`` is too small for ``metrics``.
+
+    ``num_samples`` must be positive, and at least 2 when a metric is (or is a
+    `functools.partial()` of) one of `_TWO_SAMPLE_METRICS`. Without this
+    check the error comes from the metric itself, after the first window has
+    been fitted and forecast.
+    """
+    require_positive_num_samples(num_samples)
+    if num_samples >= 2:
+        return
+    needs_two: list[str] = []
+    for name, fn in metrics.items():
+        kernel: object = fn
+        while isinstance(kernel, partial):
+            kernel = kernel.func
+        if kernel in _TWO_SAMPLE_METRICS:
+            needs_two.append(name)
+    if needs_two:
+        msg = (
+            f"num_samples={num_samples} is too small for the metrics {needs_two}: the "
+            "empirical CRPS needs at least 2 forecast samples per window. Pass "
+            "num_samples >= 2, or remove those entries from the metrics mapping"
+        )
+        raise ValueError(msg)
 
 
 def _eval_train_window(
@@ -859,7 +946,13 @@ def backtest(
     stride
         Step between successive train/test splits.
     num_samples
-        Number of forecast samples per window.
+        Number of forecast samples per window. Must be positive, and at least
+        2 when ``metrics`` contains `eval_crps()` (as `DEFAULT_METRICS`
+        does) or a `functools.partial()` of it. Both rules are checked before
+        the first window is fitted. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) or added by
+        ``per_window_metrics`` is not checked up front: it fails only when it
+        runs.
     batch_size
         Optional chunk size forwarded to ``forecast_fn`` and ``in_sample_fn``
         (see the contract above).
@@ -887,8 +980,10 @@ def backtest(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``eval_train=True``
-        but ``in_sample_fn`` is ``None``.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, if ``eval_train=True`` but
+        ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
+        ``num_samples``).
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -896,11 +991,14 @@ def backtest(
     if eval_train and in_sample_fn is None:
         msg = "eval_train=True requires in_sample_fn to be set"
         raise ValueError(msg)
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
     window_type = _resolve_window_type(window_type, train_window)
     metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, metrics)
     duration = data.shape[-2]
 
     shared_model: ForecastModel | None = None
@@ -980,12 +1078,19 @@ class VectorizedBacktestResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a flat dictionary view.
 
+        The view does not copy the arrays: ``predictions``, ``losses`` and the
+        window indices are the same objects as on the result. The ``metrics``
+        mapping is a shallow copy, so adding or replacing entries of the
+        returned dictionary (or of that mapping) never changes the result. Use
+        ``copy.deepcopy(result.to_dict())`` for an independent copy of the
+        arrays.
+
         Returns
         -------
         dict[str, Any]
             All fields as a plain dictionary.
         """
-        return asdict(self)
+        return _fields_view(self)
 
 
 def _vmapped_metrics(
@@ -1000,7 +1105,12 @@ def _vmapped_metrics(
     """
     try:
         return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
-    except (jax.errors.ConcretizationTypeError, jax.errors.TracerArrayConversionError) as err:
+    except (
+        jax.errors.ConcretizationTypeError,
+        jax.errors.TracerArrayConversionError,
+        jax.errors.TracerIntegerConversionError,
+        jax.errors.NonConcreteBooleanIndexError,
+    ) as err:
         raise VectorizedMetricError() from err
 
 
@@ -1053,10 +1163,23 @@ def backtest_vectorized(
     the number of windows, giving order-of-magnitude wall-clock wins for tens
     of windows on small models.
 
-    PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-    ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
-    posterior-draw, and forecast subkeys (the parent itself is never consumed;
-    see `_window_key_streams()`).
+    PRNG: ``fold_in(rng_key, -1)`` keys the eager warm-up ``svi.init`` on
+    window 0. An autoguide runs its ``init_loc_fn`` once, at its first init
+    (this warm-up for a fresh guide). A location-based autoguide (for example
+    ``AutoNormal``, ``AutoDelta`` or ``AutoMultivariateNormal``) derives all
+    its initial parameters from those locations, so every window starts from
+    the warm-up point. ``fold_in(rng_key, i)`` is the window-``i`` parent,
+    split into SVI-init, posterior-draw, and forecast subkeys (the parent
+    itself is never consumed; see `_window_key_streams()`). The SVI-init
+    subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the
+    window (``svi.init`` keeps a key split from it in the SVI state), so it
+    changes the fit of a stochastic guide such as ``AutoNormal`` even when
+    every window starts from the same point. It changes the start of a window
+    only for guide parameters whose initializer takes a key: the network
+    weights of a flow autoguide (``AutoIAFNormal``, ``AutoBNAFNormal``) or a
+    callable initializer in a hand-written guide, such as
+    ``numpyro.param("loc", lambda key: random.normal(key))``. Those guides
+    start each window from a different point.
 
     Parameters
     ----------
@@ -1096,7 +1219,12 @@ def backtest_vectorized(
     num_steps
         Number of SVI steps per window.
     num_samples
-        Number of forecast samples drawn per window.
+        Number of forecast samples drawn per window. Must be positive, and at
+        least 2 when ``metrics`` contains `eval_crps()` (as
+        `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
+        are checked before the fit. A CRPS inside another wrapper (a
+        ``lambda`` or a ``jax.jit`` function) is not checked up front: it
+        fails only after the fit.
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1116,14 +1244,22 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if their durations differ, if ``num_samples`` is too
+        small (see ``num_samples``), or if ``metrics`` is not empty and the
+        model's ``"forecast"`` site does not have the shape of ``data`` over
+        the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
     VectorizedMetricError
-        If a metric forces a host conversion under ``vmap`` (it is not a pure
-        JAX function).
+        If a metric is not a pure JAX function under ``vmap``: it forces a host
+        conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
+        indexing or a NumPy call on a traced value) or builds a value-dependent
+        shape (a boolean mask index such as ``x[x > 0]``).
     """
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] != covariates.shape[-2]:
         msg = "data and covariates must share the time axis length"
         raise ValueError(msg)
@@ -1133,6 +1269,8 @@ def backtest_vectorized(
         raise BacktestWindowError("test_window must be >= 1")
     if stride < 1:
         raise BacktestWindowError("stride must be >= 1")
+    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    _require_num_samples_for_metrics(num_samples, resolved_metrics)
 
     duration = data.shape[-2]
     last_start = duration - train_window - test_window
@@ -1157,7 +1295,11 @@ def backtest_vectorized(
     # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
     # caches its prototype trace on the instance at first init, so if that
     # first init happens under vmap tracing the instance retains tracers and
-    # any later eager use raises UnexpectedTracerError.
+    # any later eager use raises UnexpectedTracerError. For a fresh autoguide
+    # it is also the only init that runs init_loc_fn, so for a location-based
+    # autoguide its key sets the starting point of every window (the vmapped
+    # inits reuse those locations). A flow autoguide still draws its network
+    # weights from each window's SVI-init key.
     # (fold_in requires a non-negative uint32 index on this JAX version, so
     # the ``-1`` warm-up sentinel is passed as an int32 array.)
     svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
@@ -1190,7 +1332,15 @@ def backtest_vectorized(
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
-    resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
+    # Every window shares the forecast and truth shapes, so one comparison covers all of
+    # them. A custom metric would otherwise broadcast a mismatched forecast silently.
+    if resolved_metrics and predictions.shape[2:] != truth.shape[1:]:
+        msg = (
+            f"the model's 'forecast' site has shape {predictions.shape[2:]} per draw, but "
+            f"each test window of data has shape {truth.shape[1:]}; the forecast site must "
+            "have the shape of data over the test window, (..., test_window, obs)"
+        )
+        raise ValueError(msg)
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
     return VectorizedBacktestResult(

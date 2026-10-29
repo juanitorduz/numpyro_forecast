@@ -5,6 +5,7 @@ These are skip-marked when ``blackjax`` is not installed, so the base CI leg
 """
 
 import dataclasses
+import inspect
 import pickle
 import warnings
 from collections import namedtuple
@@ -18,6 +19,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import assert_host_resident, assert_numpy_host, fail_devices_for, rw_model
 from jax import Array, random
+from jaxtyping import TypeCheckError
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
@@ -708,6 +710,28 @@ def test_multipathfinder_samples_psis_reproducible_per_key(
         assert bool(jnp.array_equal(first[name], second[name]))
 
 
+@pytest.mark.parametrize("batch_size", [None, 1])
+def test_multipathfinder_samples_psis_warns_once_at_the_caller(
+    multipathfinder_fit: MultiPathfinderFit, batch_size: int | None
+) -> None:
+    """The sampling-time ``pareto_k`` warning fires once per call, at the caller.
+
+    With ``batch_size`` the draw runs in chunks and the warning still fires once.
+    """
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        multipathfinder_samples(
+            random.PRNGKey(4), multipathfinder_fit, 4, resample="psis", batch_size=batch_size
+        )
+    pareto = [w for w in record if "pareto_k" in str(w.message)]
+    assert len(pareto) == 1
+    assert pareto[0].filename == __file__
+    if batch_size is not None:
+        message = str(pareto[0].message)
+        assert "of 4 chunks" in message
+        assert "larger batch_size" in message
+
+
 def test_multipathfinder_samples_auto_follows_pareto_k(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
@@ -732,13 +756,18 @@ def test_multipathfinder_samples_auto_follows_pareto_k(
 def test_multipathfinder_samples_invalid_resample_raises(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
-    with pytest.raises(ValueError, match="resample must be one of"):
+    """An unknown ``resample`` is a type error under the runtime type checks."""
+    with pytest.raises(TypeCheckError):
         multipathfinder_samples(
             random.PRNGKey(2),
             multipathfinder_fit,
             10,
             resample="nope",  # ty: ignore[invalid-argument-type]
         )
+    # With the checks disabled (``JAXTYPING_DISABLE=1``) the explicit guard still rejects it.
+    unchecked = inspect.unwrap(multipathfinder_samples)
+    with pytest.raises(ValueError, match="resample must be one of"):
+        unchecked(random.PRNGKey(2), multipathfinder_fit, 10, resample="nope")
 
 
 def test_multipathfinder_forecast_composes(multipathfinder_fit: MultiPathfinderFit) -> None:
@@ -895,7 +924,8 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
     the first path's ELBO with ``nan`` (``MultipathfinderState``/``PathfinderState``
     are NamedTuples); ``psis_weights`` reads ``logp``/``logq``, so the PSIS
     diagnostics are unaffected. The cheap-settings ``pareto_k`` warning fires
-    too and is captured by the same ``pytest.warns`` block.
+    too and is captured by the same ``pytest.warns`` block. Both are attributed to
+    this test file, the caller.
     """
     import blackjax.vi.multipathfinder as multipathfinder_module
 
@@ -909,7 +939,7 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
     monkeypatch.setattr(multipathfinder_module, "multi_approximate", nan_first_path)
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
-    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)"):
+    with pytest.warns(UserWarning, match=r"1 of 2 path\(s\) failed \(non-finite ELBO\)") as record:
         fit = fit_multipathfinder(
             random.PRNGKey(1),
             rw_model,
@@ -919,6 +949,17 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
             num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
             maxiter=_MULTIPATH_MAXITER,
         )
+    # Both fit-time warnings point at this call, not at the type-checking wrapper.
+    # Only the package's own warnings are checked, so an unrelated jax or blackjax
+    # DeprecationWarning cannot break the assertion.
+    fit_warnings = [
+        w
+        for w in record
+        if issubclass(w.category, UserWarning)
+        and ("path(s) failed" in str(w.message) or "pareto_k=" in str(w.message))
+    ]
+    assert len(fit_warnings) == 2
+    assert {w.filename for w in fit_warnings} == {__file__}
     assert len(fit.elbos) == 2
     assert not np.isfinite(fit.elbos[0])
     assert np.isfinite(fit.elbos[1])
@@ -999,6 +1040,49 @@ def test_fit_multipathfinder_uses_supplied_init_params(
         jax.tree.map(lambda a, b: bool(jnp.array_equal(a, b)), captured[0], stacked)
     )
     assert len(fit.elbos) == 2
+
+
+def test_fits_accept_numpy_init_params() -> None:
+    """Both Pathfinder fits accept a NumPy start point, as the host contract allows.
+
+    A start point taken from draws made with ``device="host"`` holds NumPy leaves
+    when no CPU backend is initialized, so the runtime type checks must not
+    narrow ``init_params`` to jax arrays.
+    """
+    from numpyro.infer.util import initialize_model
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    covariates = _empty_covariates(_MULTIPATH_T)
+    positions = [
+        initialize_model(key, rw_model, dynamic_args=True, model_args=(covariates, data))[0].z
+        for key in random.split(random.PRNGKey(7), 2)
+    ]
+    single = {name: np.asarray(value) for name, value in positions[0].items()}
+    stacked = {name: np.stack([np.asarray(p[name]) for p in positions]) for name in single}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        fit = fit_pathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            init_params=single,
+        )
+        multi = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_paths=2,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            init_params=stacked,
+        )
+    assert np.isfinite(fit.elbo)
+    assert len(multi.elbos) == 2
 
 
 def test_fit_multipathfinder_empty_init_params_raises() -> None:

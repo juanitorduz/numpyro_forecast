@@ -9,7 +9,7 @@ It is guide-only on purpose: MCMC users already hold their posterior samples via
 covariates, data)`` call; neither needs this function. The blackjax Pathfinder
 backend has its own analogous entry point,
 `~~numpyro_forecast.contrib.blackjax.pathfinder_samples()`, built on the same
-shared chunk-and-transfer loop, `~~numpyro_forecast._offload._draw_chunked()`.
+shared chunk-and-transfer loop, `~~numpyro_forecast._offload.draw_chunked()`.
 
 `forecast()` samples forecasts over the horizon from posterior draws, and
 `predict_in_sample()` samples the in-sample posterior predictive of the
@@ -38,17 +38,18 @@ from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
 from numpyro_forecast._offload import (
-    _draw_chunked,
     _leaf_view,
     _oom_advice,
     _resolve_device,
     _ResolvedDevice,
     _stitch_chunks,
     _transfer,
+    draw_chunked,
 )
 from numpyro_forecast._validation import (
-    _require_covariates_extend_data,
-    _require_positive_num_samples,
+    require_covariates_extend_data,
+    require_positive_num_samples,
+    require_sample_axis,
 )
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -212,7 +213,7 @@ def draw_posterior(
     function draws afresh from a variational guide, and chunks drawn from
     independent subkeys remain valid i.i.d. posterior samples.
     """
-    _require_positive_num_samples(num_samples)
+    require_positive_num_samples(num_samples)
 
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
         if isinstance(guide, AutoDelta):
@@ -221,7 +222,7 @@ def draw_posterior(
         sample = _jitted_sample_posterior(guide)
         return sample(key, params, sample_shape=(n,))
 
-    return _draw_chunked(
+    return draw_chunked(
         rng_key,
         draw_fn,
         num_samples,
@@ -248,12 +249,14 @@ def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     Raises
     ------
     ValueError
-        If ``posterior`` is empty or the leaves disagree on the sample-axis
-        length (the message names the offending sites).
+        If ``posterior`` is empty, a leaf has no sample axis (a 0-d leaf), or
+        the leaves disagree on the sample-axis length (the message names the
+        offending sites).
     """
     if not posterior:
         msg = "posterior must be non-empty"
         raise ValueError(msg)
+    require_sample_axis(posterior)
     sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
     distinct = set(sizes.values())
     if len(distinct) != 1:
@@ -348,6 +351,8 @@ def _chunked_draws(
         The stitched draws for the original sample count (committed to
         ``device`` when one is given; NumPy for ``"numpy"``).
     """
+    # Before `_leaf_view()`: a Python scalar leaf would fail its type check unnamed.
+    require_sample_axis(posterior)
     staged = {
         name: _leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
     }
@@ -462,7 +467,11 @@ def forecast(
     Raises
     ------
     ValueError
-        If ``covariates`` does not extend beyond ``data`` along the time axis.
+        If ``data`` or ``covariates`` has fewer than two axes (time must be at
+        axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
+        extend beyond ``data`` along the time axis, or if ``posterior`` is
+        empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
+        on the sample-axis length.
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
@@ -486,7 +495,7 @@ def forecast(
     changing ``batch_size`` changes the PRNG stream layout and therefore the
     exact draws. ``device`` never changes the draws, only where they live.
     """
-    _require_covariates_extend_data(data, covariates)
+    require_covariates_extend_data(data, covariates)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return _predict(key, model, post, data, covariates, parallel=parallel)
@@ -581,6 +590,10 @@ def predict_in_sample(
 
     Raises
     ------
+    ValueError
+        If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
+        the leaves disagree on the sample-axis length, or if ``covariates`` has
+        fewer than two axes (time must be at axis ``-2``) or no time steps.
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see

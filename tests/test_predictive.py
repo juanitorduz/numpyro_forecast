@@ -22,14 +22,14 @@ from conftest import (
     svi_guide_params,
 )
 from jax import random
+from jax.typing import ArrayLike
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.autoguide import AutoNormal
 
 import numpyro_forecast
 from numpyro_forecast._offload import (
-    _WARNING_SKIP_PREFIXES,
+    WARNING_SKIP_PREFIXES,
     _device_view,
-    _draw_chunked,
     _host_memory_kind,
     _host_sharding,
     _is_cpu_committed,
@@ -40,6 +40,7 @@ from numpyro_forecast._offload import (
     _resolve_device,
     _stitch_chunks,
     _transfer,
+    draw_chunked,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
 from numpyro_forecast.predictive import (
@@ -127,6 +128,28 @@ def test_forecast_rejects_covariates_not_longer() -> None:
         forecast(random.PRNGKey(3), model, post, data, empty_covariates(30))
 
 
+def test_forecast_rejects_covariates_without_time_axis() -> None:
+    post = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(
+        ValueError, match=r"covariates must have time at axis -2.*got shape \(8,\)"
+    ):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), jnp.arange(8.0))
+
+
+def test_forecast_rejects_data_without_observations() -> None:
+    """A cold-start series with no observations names the cause, not the empty plate."""
+    post = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
+    with pytest.raises(ValueError, match="data has no observed time steps"):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((0, 1)), empty_covariates(8))
+
+
+@pytest.mark.parametrize("level", [jnp.array(0.0), 0.0])
+def test_forecast_rejects_posterior_leaf_without_sample_axis(level: ArrayLike) -> None:
+    post = {"level": level, "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
+        forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), empty_covariates(8))
+
+
 def test_predict_in_sample_shape_and_finite() -> None:
     model, _data, guide, params = _fit_data()
     post = draw_posterior(random.PRNGKey(2), guide, params, 10)
@@ -168,6 +191,12 @@ def test_sample_axis_size_rejects_empty() -> None:
 def test_sample_axis_size_rejects_ragged_sample_axis() -> None:
     posterior = {"a": jnp.zeros((5, 1)), "b": jnp.zeros((6, 1))}
     with pytest.raises(ValueError, match="disagree on the sample axis"):
+        _sample_axis_size(posterior)
+
+
+def test_sample_axis_size_rejects_leaves_without_sample_axis() -> None:
+    posterior = {"a": jnp.zeros(()), "b": jnp.zeros((5, 1)), "c": np.zeros(())}
+    with pytest.raises(ValueError, match=r"posterior sites \['a', 'c'\] have no sample axis"):
         _sample_axis_size(posterior)
 
 
@@ -991,7 +1020,7 @@ def test_chunked_draws_host_transfers_each_chunk(
 def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
     """The shared draw driver's host path: same values, host memory, correct overdraw cut.
 
-    ``_draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
+    ``draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
     samplers, so its host contract is asserted directly on a deterministic
     ``draw_fn``: for one ``(rng_key, batch_size)``, ``device="host"`` must
     reproduce the ``device=None`` draws bit for bit while every leaf ends up
@@ -1003,8 +1032,8 @@ def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
         return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
 
     key = random.PRNGKey(11)
-    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
-    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
+    plain = draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
 
     assert_host_resident(hosted)
     assert set(hosted) == {"a", "b"}
@@ -1048,8 +1077,8 @@ def test_draw_chunked_numpy_returns_numpy_and_matches_values() -> None:
         return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
 
     key = random.PRNGKey(11)
-    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
-    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
+    plain = draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
     assert_numpy_host(hosted)
     assert hosted["a"].shape == (7, 2)
     assert hosted["b"].shape == (7,)
@@ -1151,7 +1180,7 @@ def test_cpu_fallback_warning_attributes_to_caller(monkeypatch: pytest.MonkeyPat
     assert_numpy_host(hosted)
     # The package prefix must be exactly the package directory: one level too high
     # would skip the whole checkout (tests included) and misattribute the warning.
-    assert _WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
+    assert WARNING_SKIP_PREFIXES[0] == os.path.dirname(numpyro_forecast.__file__)
 
 
 def test_predictive_oom_reports_batch_size() -> None:

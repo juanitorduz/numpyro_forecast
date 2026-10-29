@@ -9,7 +9,7 @@ is produced. The helpers here own the device semantics of that loop:
 target (a `jax.Device`, the ``"pinned_host"`` fallback sentinel, or
 ``None``), `_transfer()` moves one chunk there and blocks, and
 `_stitch_chunks()` concatenates the transferred chunks without pulling
-them back onto the accelerator. `_draw_chunked()` is the shared chunk-and-transfer
+them back onto the accelerator. `draw_chunked()` is the shared chunk-and-transfer
 loop itself: it owns batch-size validation, the single-shot passthrough, key
 splitting, and the per-chunk draw/transfer/stitch sequence, so
 `~~numpyro_forecast.predictive.draw_posterior()` and
@@ -89,7 +89,7 @@ NumPy results); ``"pinned_host"`` commits to the host memory kind of the
 array's own device. Both are idempotent under `_resolve_device()`.
 """
 
-_WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
+WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
     os.path.dirname(os.path.abspath(path))
     for path in (
         __file__,  # numpyro_forecast/ (this file lives in the package root)
@@ -449,7 +449,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
     NumPy results, and no warning since nothing is lost but the container
     type. ``"cpu"`` is the same request made explicitly, so an unmet one warns
     (a `UserWarning` that skips the package's own frames and the
-    jaxtyping/beartype wrappers, `_WARNING_SKIP_PREFIXES`, so it is
+    jaxtyping/beartype wrappers, `WARNING_SKIP_PREFIXES`, so it is
     attributed to, and deduplicated per, the user's call site) before taking
     the NumPy path. Both sentinels pass through unchanged, so a pre-resolved
     value can be forwarded (``to_datatree`` resolves once for both drivers).
@@ -501,7 +501,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
                 "device='host' explicitly, or initialize the CPU backend, e.g. "
                 f"numpyro.set_platform('{accelerator},cpu'), to silence this warning.",
                 UserWarning,
-                skip_file_prefixes=_WARNING_SKIP_PREFIXES,
+                skip_file_prefixes=WARNING_SKIP_PREFIXES,
             )
             return "numpy"
     try:
@@ -657,7 +657,7 @@ def _stitch_chunks(
     return stitched if stitched.shape[0] == num_samples else stitched[:num_samples]
 
 
-def _draw_chunked(
+def draw_chunked(
     rng_key: Array,
     draw_fn: Callable[[Array, int], dict[str, Array]],
     num_samples: int,
