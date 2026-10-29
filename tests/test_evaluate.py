@@ -712,10 +712,11 @@ def test_backtest_eval_train_key_is_independent_of_forecast_fn_split_keys(rng_ke
     assert forecast_keys and len(forecast_keys) == len(in_sample_keys)
     for forecast_key, in_sample_key in zip(forecast_keys, in_sample_keys, strict=True):
         # Every key a closure would usually derive from the forecast key: the key
-        # itself and each key of a split into up to 8 parts.
+        # itself, each key of a split into up to 8 parts, and a large split.
         derived = [forecast_key, *(k for n in range(2, 9) for k in random.split(forecast_key, n))]
         for key in derived:
             assert not bool(jnp.array_equal(in_sample_key, key))
+        assert not bool((random.split(forecast_key, 100_000) == in_sample_key).all(axis=-1).any())
 
 
 def test_backtest_keep_predictions_stores_oos_samples(rng_key: Array) -> None:
