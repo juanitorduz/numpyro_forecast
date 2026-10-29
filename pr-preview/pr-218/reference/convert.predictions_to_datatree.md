@@ -31,7 +31,7 @@ Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot 
 One label per series, defining the `series` coordinate.
 
 `group: str = ``"posterior_predictive"`  
-Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`).
+Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`). `"observed_data"` and `"constant_data"` are reserved: the function always writes those two groups.
 
 `observed: Float[ArrayLike, ``" time series"] | None`` = None`  
 Optional observations, shape `(time, series)`, stored in `observed_data`; when `None` a zeros placeholder is stored instead.
@@ -48,4 +48,4 @@ A tree with the `group`, `observed_data`, and `constant_data` groups; `obs` has 
 
 
 `ValueError`  
-If `series` does not have one label per series in `predictions`.
+If `group` is `"observed_data"` or `"constant_data"` (reserved names), or if `series` does not have one label per series in `predictions`.

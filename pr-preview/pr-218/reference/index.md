@@ -77,7 +77,7 @@ Time-axis operations on observation distributions, extensible via singledispatch
 
 
 [surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
-Re-center a zero-centered noise distribution at `loc`.
+Shift the location parameter of a noise distribution by `loc`.
 
 [surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
 Slice an elementwise distribution along the time axis `-2`.
@@ -192,7 +192,7 @@ Pack prediction draws into a DataTree laid out for per-series `plot_lm` faceting
 ## Extensions (contrib)
 
 
-Optional backends behind pyproject extras (never imported by default).
+Optional backends behind pyproject extras (the backend library loads only on first use).
 
 
 [contrib.blackjax.BlackjaxNUTSKernel](contrib.blackjax.BlackjaxNUTSKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxNUTSKernel)  
