@@ -1912,7 +1912,8 @@ num_chains
     pseudo-chain, correct for a posterior with no chain structure, e.g.
     SVI or Pathfinder draws). For an MCMC posterior, pass the
     ``num_chains`` the sampler was run with; see `_reshape_chains()`
-    for the reshape contract and its divisibility requirement.
+    for the reshape contract and its divisibility requirement. Must be a
+    positive integer.
 batch_size
     Optional chunk size that bounds how many draws touch the accelerator
     at once, across both the in-sample and forecast predictive sampling.
@@ -1985,8 +1986,9 @@ Raises
 ValueError
     If ``covariates`` is shorter than ``data`` along the time axis, if
     ``time_coord`` is given but its length does not match the in-sample
-    window plus the forecast horizon, or if ``posterior``'s sample count is
-    not evenly divisible by ``num_chains``.
+    window plus the forecast horizon, if ``num_chains`` is not a positive
+    integer (``bool`` included), or if ``posterior``'s sample count is not
+    evenly divisible by ``num_chains``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
