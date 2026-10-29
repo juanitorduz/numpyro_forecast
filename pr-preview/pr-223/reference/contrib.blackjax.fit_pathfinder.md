@@ -60,7 +60,7 @@ Maximum number of line-search steps per L-BFGS iteration.
 `gtol: float = ``1e-08`  
 L-BFGS gradient-norm convergence tolerance.
 
-`init_params: dict[str, Array] | None = None`  
+`init_params: Mapping[str, ArrayLike] | None = None`  
 Optional initial unconstrained position, overriding NumPyro's own initialization draw (`param_info.z`); `initialize_model` still runs regardless, since it also builds the potential/postprocess functions.
 
 

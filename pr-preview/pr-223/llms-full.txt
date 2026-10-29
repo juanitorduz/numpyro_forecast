@@ -1912,7 +1912,8 @@ num_chains
     pseudo-chain, correct for a posterior with no chain structure, e.g.
     SVI or Pathfinder draws). For an MCMC posterior, pass the
     ``num_chains`` the sampler was run with; see `_reshape_chains()`
-    for the reshape contract and its divisibility requirement.
+    for the reshape contract and its divisibility requirement. Must be a
+    positive integer.
 batch_size
     Optional chunk size that bounds how many draws touch the accelerator
     at once, across both the in-sample and forecast predictive sampling.
@@ -1985,8 +1986,9 @@ Raises
 ValueError
     If ``covariates`` is shorter than ``data`` along the time axis, if
     ``time_coord`` is given but its length does not match the in-sample
-    window plus the forecast horizon, or if ``posterior``'s sample count is
-    not evenly divisible by ``num_chains``.
+    window plus the forecast horizon, if ``num_chains`` is not a positive
+    integer (``bool`` included), or if ``posterior``'s sample count is not
+    evenly divisible by ``num_chains``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
@@ -2101,7 +2103,9 @@ series
     One label per series, defining the ``series`` coordinate.
 group
     Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-    ``"posterior_predictive"``, ``"predictions"``).
+    ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+    ``"constant_data"`` are reserved: the function always writes those two
+    groups.
 observed
     Optional observations, shape ``(time, series)``, stored in
     ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -2116,7 +2120,9 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``series`` does not have one label per series in ``predictions``.
+    If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+    names), or if ``series`` does not have one label per series in
+    ``predictions``.
 
 
 ## Extensions (contrib)
@@ -2236,7 +2242,7 @@ data
 elbo
     The evidence lower bound of the fitted approximation.
 
-fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
+fit_pathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_elbo_samples: int = 200, ftol: float = 1e-05, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.PathfinderFit
 
 Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -2391,7 +2397,7 @@ pareto_k
     `multipathfinder_samples()` reads it to decide whether
     ``resample="auto"`` uses PSIS or ELBO-weighted path sampling.
 
-fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: dict[str, jax.Array] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
+fit_multipathfinder(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, data: jax.Array, covariates: jax.Array, *, num_paths: int = 4, num_elbo_samples: int = 200, maxiter: int = 30, maxcor: int = 10, maxls: int = 1000, gtol: float = 1e-08, ftol: float = 1e-05, init_params: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex] | None = None) -> numpyro_forecast.contrib.blackjax.MultiPathfinderFit
 
 Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 
@@ -2928,9 +2934,10 @@ training window followed by a ``test_weeks`` test window.
 Parameters
 ----------
 train_days
-    Number of training days (24 hours each).
+    Number of training days (24 hours each). Must be at least 1.
 test_weeks
-    Number of test weeks (``24 * 7`` hours each).
+    Number of test weeks (``24 * 7`` hours each). Must be non-negative;
+    ``0`` returns the training window only, with ``split == y.shape[1]``.
 
 Returns
 -------
@@ -2944,8 +2951,10 @@ stations : list[str]
 Raises
 ------
 ValueError
-    If the requested ``train_days`` + ``test_weeks`` window exceeds the
-    available history (which would otherwise wrap a negative slice index).
+    If ``train_days`` is less than 1 or ``test_weeks`` is negative (checked
+    before the download), or if the requested ``train_days`` + ``test_weeks``
+    window exceeds the available history (which would otherwise wrap a
+    negative slice index).
 
 load_victoria_electricity() -> tuple[jaxtyping.Float[Array, 'time 1'], jaxtyping.Float[Array, 'time']]
 
