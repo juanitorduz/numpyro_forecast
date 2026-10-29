@@ -1095,9 +1095,8 @@ def multipathfinder_samples(
         chunk and the warning reports the largest ``pareto_k`` and how many
         chunks exceed the threshold). This is a separate diagnostic from
         ``fit.pareto_k``, which is computed once over the pool stored at fit
-        time. Also if
-        ``device="cpu"`` is requested and the JAX CPU backend is not
-        initialized, so the draws take the NumPy path of ``"host"`` instead.
+        time. Also if ``device="cpu"`` is requested and the JAX CPU backend is
+        not initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
     _require_positive_num_samples(num_samples)
     if resample not in ("auto", "psis", "elbo"):
@@ -1193,14 +1192,16 @@ def _warn_high_chunk_pareto_k(chunk_pareto_ks: list[float]) -> None:
     high = [k for k in chunk_pareto_ks if k > _PARETO_K_THRESHOLD]
     if not high:
         return
-    chunks = (
-        f" (the largest over the chunks; {len(high)} of {len(chunk_pareto_ks)} chunks above it)"
-        if len(chunk_pareto_ks) > 1
-        else ""
-    )
     msg = (
-        f"pareto_k={max(high):.2f} > {_PARETO_K_THRESHOLD} on this call's fresh draws{chunks}: "
+        f"pareto_k={max(high):.2f} > {_PARETO_K_THRESHOLD} on this call's fresh draws: "
         'PSIS resampling is unreliable; pass resample="elbo" (or resample="auto") to weight '
         "whole paths by their ELBO instead."
     )
+    if len(chunk_pareto_ks) > 1:
+        msg += (
+            f" This is the largest pareto_k over {len(chunk_pareto_ks)} chunks "
+            f"({len(high)} of {len(chunk_pareto_ks)} chunks above {_PARETO_K_THRESHOLD}): "
+            "PSIS runs once per chunk (see numpyro_forecast issue #203), so a larger "
+            "batch_size, or none, gives each PSIS step more draws."
+        )
     warnings.warn(msg, UserWarning, skip_file_prefixes=_WARNING_SKIP_PREFIXES)
