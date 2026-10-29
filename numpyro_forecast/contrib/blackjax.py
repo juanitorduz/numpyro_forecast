@@ -47,7 +47,7 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
-from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, _draw_chunked
+from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, draw_chunked
 from numpyro_forecast._validation import require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.optional import require
@@ -672,7 +672,7 @@ def pathfinder_samples(
     `~~numpyro_forecast.predictive.forecast()` or NumPyro's
     ``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
     Chunking and device offload are delegated to the shared
-    `~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+    `~~numpyro_forecast._offload.draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -743,7 +743,7 @@ def pathfinder_samples(
         transform = postprocess_fn(fit.covariates, fit.data)
         return jax.vmap(transform)(unconstrained)
 
-    return _draw_chunked(
+    return draw_chunked(
         rng_key,
         draw_fn,
         num_samples,
@@ -1013,7 +1013,7 @@ def multipathfinder_samples(
     `pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
     and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
     are delegated to the shared
-    `~~numpyro_forecast._offload._draw_chunked()` driver, so the same
+    `~~numpyro_forecast._offload.draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     Resampling strategies
@@ -1093,11 +1093,13 @@ def multipathfinder_samples(
     Warns
     -----
     UserWarning
-        In PSIS mode, if the ``pareto_k`` recomputed on this call's fresh draws
-        exceeds ``0.7``. This is a separate diagnostic from ``fit.pareto_k``,
-        which is computed once over the pool stored at fit time. Also if
-        ``device="cpu"`` is requested and the JAX CPU backend is not
-        initialized, so the draws take the NumPy path of ``"host"`` instead.
+        In PSIS mode, once per call, if the ``pareto_k`` recomputed on this
+        call's fresh draws exceeds ``0.7`` (with ``batch_size``, PSIS runs per
+        chunk and the warning reports the largest ``pareto_k`` and how many
+        chunks exceed the threshold). This is a separate diagnostic from
+        ``fit.pareto_k``, which is computed once over the pool stored at fit
+        time. Also if ``device="cpu"`` is requested and the JAX CPU backend is
+        not initialized, so the draws take the NumPy path of ``"host"`` instead.
     """
     require_positive_num_samples(num_samples)
     # The `Literal` hint rejects an unknown `resample` first under the package's runtime
@@ -1123,6 +1125,9 @@ def multipathfinder_samples(
         if bool(jnp.any(finite))
         else jnp.full((num_paths,), 1.0 / num_paths)
     )
+
+    # One fresh-draw ``pareto_k`` per PSIS chunk; read after the draws to warn once per call.
+    chunk_pareto_ks: list[float] = []
 
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
         # Three isolated streams: the (unused) init param draws, the per-path
@@ -1155,14 +1160,7 @@ def multipathfinder_samples(
             potential_fn = potential_fn_gen(fit.covariates, fit.data)
             logp = jax.vmap(lambda position: -potential_fn(position))(flat_draws)
             log_w, pareto_k = blackjax.diagnostics.psis_weights(logp - logq.reshape(-1))
-            pareto_k_value = float(pareto_k)
-            if pareto_k_value > _PARETO_K_THRESHOLD:
-                msg = (
-                    f"pareto_k={pareto_k_value:.2f} > {_PARETO_K_THRESHOLD} on this "
-                    'call\'s fresh draws: PSIS resampling is unreliable; pass resample="elbo" '
-                    '(or resample="auto") to weight whole paths by their ELBO instead.'
-                )
-                warnings.warn(msg, UserWarning, stacklevel=2)
+            chunk_pareto_ks.append(float(pareto_k))
             indices = jax.random.choice(
                 key_choice,
                 log_w.shape[0],
@@ -1175,7 +1173,7 @@ def multipathfinder_samples(
         transform = postprocess_fn(fit.covariates, fit.data)
         return jax.vmap(transform)(unconstrained)
 
-    return _draw_chunked(
+    samples = draw_chunked(
         rng_key,
         draw_fn,
         num_samples,
@@ -1183,3 +1181,32 @@ def multipathfinder_samples(
         device=device,
         stage="posterior drawing",
     )
+    _warn_high_chunk_pareto_k(chunk_pareto_ks)
+    return samples
+
+
+def _warn_high_chunk_pareto_k(chunk_pareto_ks: list[float]) -> None:
+    """Warn once, at the caller, if any PSIS chunk of a draw has ``pareto_k`` above ``0.7``.
+
+    `multipathfinder_samples()` runs PSIS once per chunk of `draw_chunked()`, so
+    the per-chunk values are collected during the draw and reported here in a
+    single warning: the largest value and, when there is more than one chunk,
+    how many chunks exceed the threshold. ``skip_file_prefixes`` attributes it to
+    the caller's line, past the package frames and the type-checking wrappers.
+    """
+    high = [k for k in chunk_pareto_ks if k > _PARETO_K_THRESHOLD]
+    if not high:
+        return
+    msg = (
+        f"pareto_k={max(high):.2f} > {_PARETO_K_THRESHOLD} on this call's fresh draws: "
+        'PSIS resampling is unreliable; pass resample="elbo" (or resample="auto") to weight '
+        "whole paths by their ELBO instead."
+    )
+    if len(chunk_pareto_ks) > 1:
+        msg += (
+            f" This is the largest pareto_k over {len(chunk_pareto_ks)} chunks "
+            f"({len(high)} of {len(chunk_pareto_ks)} chunks above {_PARETO_K_THRESHOLD}): "
+            "PSIS runs once per chunk, so a larger batch_size, or none, gives each PSIS "
+            "step more draws."
+        )
+    warnings.warn(msg, UserWarning, skip_file_prefixes=WARNING_SKIP_PREFIXES)

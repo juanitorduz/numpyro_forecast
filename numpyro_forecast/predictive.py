@@ -9,7 +9,7 @@ It is guide-only on purpose: MCMC users already hold their posterior samples via
 covariates, data)`` call; neither needs this function. The blackjax Pathfinder
 backend has its own analogous entry point,
 `~~numpyro_forecast.contrib.blackjax.pathfinder_samples()`, built on the same
-shared chunk-and-transfer loop, `~~numpyro_forecast._offload._draw_chunked()`.
+shared chunk-and-transfer loop, `~~numpyro_forecast._offload.draw_chunked()`.
 
 `forecast()` samples forecasts over the horizon from posterior draws, and
 `predict_in_sample()` samples the in-sample posterior predictive of the
@@ -38,13 +38,13 @@ from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
 from numpyro_forecast._offload import (
-    _draw_chunked,
     _leaf_view,
     _oom_advice,
     _resolve_device,
     _ResolvedDevice,
     _stitch_chunks,
     _transfer,
+    draw_chunked,
 )
 from numpyro_forecast._validation import (
     require_covariates_extend_data,
@@ -222,7 +222,7 @@ def draw_posterior(
         sample = _jitted_sample_posterior(guide)
         return sample(key, params, sample_shape=(n,))
 
-    return _draw_chunked(
+    return draw_chunked(
         rng_key,
         draw_fn,
         num_samples,

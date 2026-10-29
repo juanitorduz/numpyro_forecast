@@ -9,7 +9,7 @@ is produced. The helpers here own the device semantics of that loop:
 target (a `jax.Device`, the ``"pinned_host"`` fallback sentinel, or
 ``None``), `_transfer()` moves one chunk there and blocks, and
 `_stitch_chunks()` concatenates the transferred chunks without pulling
-them back onto the accelerator. `_draw_chunked()` is the shared chunk-and-transfer
+them back onto the accelerator. `draw_chunked()` is the shared chunk-and-transfer
 loop itself: it owns batch-size validation, the single-shot passthrough, key
 splitting, and the per-chunk draw/transfer/stitch sequence, so
 `~~numpyro_forecast.predictive.draw_posterior()` and
@@ -657,7 +657,7 @@ def _stitch_chunks(
     return stitched if stitched.shape[0] == num_samples else stitched[:num_samples]
 
 
-def _draw_chunked(
+def draw_chunked(
     rng_key: Array,
     draw_fn: Callable[[Array, int], dict[str, Array]],
     num_samples: int,

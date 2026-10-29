@@ -30,7 +30,6 @@ import numpyro_forecast
 from numpyro_forecast._offload import (
     WARNING_SKIP_PREFIXES,
     _device_view,
-    _draw_chunked,
     _host_memory_kind,
     _host_sharding,
     _is_cpu_committed,
@@ -41,6 +40,7 @@ from numpyro_forecast._offload import (
     _resolve_device,
     _stitch_chunks,
     _transfer,
+    draw_chunked,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
 from numpyro_forecast.predictive import (
@@ -1020,7 +1020,7 @@ def test_chunked_draws_host_transfers_each_chunk(
 def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
     """The shared draw driver's host path: same values, host memory, correct overdraw cut.
 
-    ``_draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
+    ``draw_chunked`` is the loop behind ``draw_posterior`` and the Pathfinder
     samplers, so its host contract is asserted directly on a deterministic
     ``draw_fn``: for one ``(rng_key, batch_size)``, ``device="host"`` must
     reproduce the ``device=None`` draws bit for bit while every leaf ends up
@@ -1032,8 +1032,8 @@ def test_draw_chunked_host_is_host_resident_and_matches_values() -> None:
         return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
 
     key = random.PRNGKey(11)
-    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
-    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
+    plain = draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = draw_chunked(key, draw_fn, 7, batch_size=3, device="host", stage="test drawing")
 
     assert_host_resident(hosted)
     assert set(hosted) == {"a", "b"}
@@ -1077,8 +1077,8 @@ def test_draw_chunked_numpy_returns_numpy_and_matches_values() -> None:
         return {"a": random.normal(key, (n, 2)), "b": random.uniform(key, (n,))}
 
     key = random.PRNGKey(11)
-    plain = _draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
-    hosted = _draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
+    plain = draw_chunked(key, draw_fn, 7, batch_size=3, device=None, stage="test drawing")
+    hosted = draw_chunked(key, draw_fn, 7, batch_size=3, device="numpy", stage="test drawing")
     assert_numpy_host(hosted)
     assert hosted["a"].shape == (7, 2)
     assert hosted["b"].shape == (7,)
