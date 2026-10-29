@@ -155,8 +155,8 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     Raises
     ------
     ValueError
-        If ``num_chains`` is less than ``1``, or if the leading axis length is
-        not evenly divisible by ``num_chains``.
+        If ``num_chains`` is not a positive integer (``bool`` included), or if
+        the leading axis length is not evenly divisible by ``num_chains``.
 
     Notes
     -----
