@@ -48,7 +48,8 @@ class VectorizedMetricError(NumpyroForecastError, TypeError):
     default_message = (
         "backtest_vectorized metrics must be pure JAX functions returning a scalar "
         "array; one forced a host conversion (e.g. float(...), int(...), range(...), "
-        "Python list indexing, a boolean mask such as x[x > 0], or numpy) under vmap. "
+        "Python list indexing or numpy) or a value-dependent shape (a boolean mask such "
+        "as x[x > 0]; use jnp.where instead) under vmap. "
         "Use backtest(), or keep_predictions=True and score on the host."
     )
 
