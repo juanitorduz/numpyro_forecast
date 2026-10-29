@@ -1486,8 +1486,8 @@ BacktestWindowError
 VectorizedMetricError
     If a metric forces a host conversion under ``vmap`` (it is not a pure
     JAX function), for example ``float(...)``, ``int(...)``,
-    ``range(...)``, Python list indexing or a NumPy call on a traced
-    value.
+    ``range(...)``, Python list indexing, a boolean mask index such as
+    ``x[x > 0]`` or a NumPy call on a traced value.
 
 BacktestResult(t0: int, t1: int, t2: int, num_samples: int, walltime: float, metrics: dict[str, float], train_metrics: dict[str, float] = <factory>, prediction: jax.Array | numpy.ndarray | None = None) -> None
 
@@ -3092,8 +3092,9 @@ A metric is not vmappable in the vectorized backtest.
 
 Raised by `~~numpyro_forecast.evaluate.backtest_vectorized()` when a
 metric forces a host conversion under ``vmap``: ``float(...)``,
-``int(...)``, ``range(...)``, Python list indexing or ``numpy`` calls on a
-traced value. Metrics must be pure JAX functions returning a scalar
+``int(...)``, ``range(...)``, Python list indexing, a boolean mask index
+(``x[x > 0]``, whose result shape depends on the values) or ``numpy``
+calls on a traced value. Metrics must be pure JAX functions returning a scalar
 array; see `~~numpyro_forecast.typing.Metric`.
 
 KernelConfigError(message: str | None = None) -> None
