@@ -712,10 +712,9 @@ def test_multipathfinder_samples_psis_reproducible_per_key(
 def test_multipathfinder_samples_psis_warns_once_at_the_caller(
     multipathfinder_fit: MultiPathfinderFit, batch_size: int | None
 ) -> None:
-    """The sampling-time ``pareto_k`` warning fires once per call, at the caller (#216).
+    """The sampling-time ``pareto_k`` warning fires once per call, at the caller.
 
-    It used to fire inside the per-chunk draw function, once per chunk, with a
-    ``stacklevel`` that pointed into ``_offload.py``.
+    With ``batch_size`` the draw runs in chunks and the warning still fires once.
     """
     with warnings.catch_warnings(record=True) as record:
         warnings.simplefilter("always")
