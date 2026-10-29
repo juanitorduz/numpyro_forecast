@@ -6,6 +6,7 @@ drivers consume the auxiliary site, and that the reparameterized model runs end
 to end under SVI and NUTS.
 """
 
+import functools
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from types import SimpleNamespace
@@ -17,7 +18,7 @@ import numpyro.distributions as dist
 import pytest
 from jax import random
 from numpyro.distributions.transforms import DiscreteCosineTransform, HaarTransform, Transform
-from numpyro.handlers import scope
+from numpyro.handlers import scope, seed
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.util import log_density
@@ -187,6 +188,62 @@ def test_nesting_is_rejected() -> None:
     wrapped = time_reparam(rw_model, "haar")
     with pytest.raises(ValueError, match="cannot be nested"):
         time_reparam(wrapped, "dct")
+
+
+def _closure(model: ForecastModel) -> ForecastModel:
+    """Hide ``model`` behind a plain Python function, which no handler walk can see through."""
+
+    def wrapper(covariates: Array, data: Array | None = None) -> None:
+        model(covariates, data)
+
+    return wrapper
+
+
+_HIDING_WRAPPERS: dict[str, Callable[[ForecastModel], ForecastModel]] = {
+    "scope": lambda model: scope(model, prefix="a"),
+    "seed": lambda model: seed(model, 0),
+    "scope_of_seed": lambda model: scope(seed(model, 0), prefix="a"),
+    "closure": _closure,
+    "partial": lambda model: functools.partial(model),
+}
+
+
+@pytest.mark.parametrize("wrapper", _HIDING_WRAPPERS.values(), ids=_HIDING_WRAPPERS.keys())
+def test_nesting_is_rejected_through_wrappers(
+    wrapper: Callable[[ForecastModel], ForecastModel],
+) -> None:
+    """A handler or function between the two calls does not hide the nesting (#214).
+
+    Without the check the outer ``"dct"`` silently does nothing: the trace keeps
+    only the inner ``drift_haar`` auxiliary site.
+    """
+    model, data, covariates = _split(rw_model)
+    with pytest.raises(ValueError, match="cannot be nested"):
+        nested = time_reparam(wrapper(time_reparam(model, "haar")), "dct")
+        get_trace(nested, covariates, data)
+
+
+@pytest.mark.parametrize("wrapper", ["scope", "seed", "scope_of_seed"])
+def test_nesting_through_handlers_is_rejected_at_construction(wrapper: str) -> None:
+    """NumPyro handlers are walked when the model is wrapped, before any trace (#214)."""
+    inner = _HIDING_WRAPPERS[wrapper](time_reparam(rw_model, "haar"))
+    with pytest.raises(ValueError, match="cannot be nested"):
+        time_reparam(inner, "dct")
+
+
+def test_side_by_side_time_reparam_models_are_not_nesting() -> None:
+    """Two reparameterized models combined under prefixes are not mistaken for nesting."""
+    left = scope(time_reparam(rw_model, "haar"), prefix="a")
+    right = scope(time_reparam(rw_model, "dct"), prefix="b")
+
+    def combined(covariates: Array, data: Array | None = None) -> None:
+        left(covariates, data)
+        right(covariates, data)
+
+    model, data, covariates = _split(combined)
+    tr = get_trace(model, covariates, data)
+    assert {"a/drift_haar", "b/drift_dct"} <= set(tr)
+    assert tr["a/drift"]["type"] == tr["b/drift"]["type"] == "deterministic"
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])

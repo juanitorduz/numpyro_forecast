@@ -39,7 +39,7 @@ from numpyro.distributions.transforms import (
     Transform,
 )
 from numpyro.infer.reparam import Reparam, UnitJacobianReparam
-from numpyro.primitives import _PYRO_STACK
+from numpyro.primitives import _PYRO_STACK, Messenger
 
 from numpyro_forecast.models import PlateName
 from numpyro_forecast.typing import Array, ForecastModel
@@ -48,6 +48,11 @@ TimeTransform = Literal["haar", "dct"]
 """The time-axis transform applied by `time_reparam()`: ``"haar"`` or ``"dct"``."""
 
 _AUX_INFER_KEY = "numpyro_forecast_time_reparam_aux"
+_NESTING_MSG = (
+    "time_reparam cannot be nested: `model` already contains a time_reparam model "
+    "(directly, under NumPyro handlers such as scope or seed, or inside a wrapper "
+    "function); apply time_reparam once, to the innermost model"
+)
 _TRANSFORMS: dict[str, tuple[Callable[[int], Transform], str]] = {
     "haar": (lambda dim: HaarTransform(dim=dim), "haar"),
     "dct": (lambda dim: DiscreteCosineTransform(dim=dim), "dct"),
@@ -67,12 +72,21 @@ class _TimeReparam(UnitJacobianReparam):
     base distribution to the full plate shape before the time axis and every
     plate axis to its right become event axes. Plate axes to the left of time
     stay batch axes without a plate frame: the split of Pyro's
-    ``experimental_allow_batch=True``.
+    ``experimental_allow_batch=True``. The auxiliary sample also carries
+    ``marker`` (the `_TimeReparamConfig` that created it) under the
+    ``infer`` key that config reads, so a second config can detect nesting.
     """
 
-    def __init__(self, transform: Transform, suffix: str, plate_names: frozenset[str]) -> None:
+    def __init__(
+        self,
+        transform: Transform,
+        suffix: str,
+        plate_names: frozenset[str],
+        marker: "_TimeReparamConfig",
+    ) -> None:
         super().__init__(transform, suffix=suffix)
         self.plate_names = plate_names
+        self.marker = marker
 
     def __call__(
         self, name: str, fn: dist.Distribution, obs: Array | None
@@ -87,7 +101,7 @@ class _TimeReparam(UnitJacobianReparam):
         x = numpyro.sample(
             f"{name}_{self.suffix}",
             dist.TransformedDistribution(self._wrap(fn, expand_shape, base_event_dim), transform),
-            infer={"block_plates": self.plate_names, _AUX_INFER_KEY: True},
+            infer={"block_plates": self.plate_names, _AUX_INFER_KEY: self.marker},
         )
         return None, cast(Array, transform.inv(x))
 
@@ -105,7 +119,12 @@ class _TimeReparamConfig:
     reasons: `numpyro.handlers.scope` renames the frames after a plate has pushed
     them while the plate blocks by its own bare name, and the auxiliary site must
     be hidden from every enclosing plate, not only ``time``. The auxiliary sample
-    carries an ``infer`` marker so it is never targeted a second time.
+    carries an ``infer`` marker (the config itself) so it is never targeted a
+    second time. A config that sees an auxiliary site marked by another config
+    sits outside a nested `time_reparam()` model, whose sites it can never
+    transform, so it raises the nesting ``ValueError`` at trace time. This catches
+    the nestings that `_contains_time_reparam()` cannot see, such as an inner
+    model behind a plain function or a `functools.partial()`.
     """
 
     transform: TimeTransform
@@ -114,7 +133,10 @@ class _TimeReparamConfig:
         """Return the reparameterizer for a sample site under the ``time`` plate, else ``None``."""
         if msg["type"] != "sample" or msg["is_observed"]:
             return None
-        if (msg.get("infer") or {}).get(_AUX_INFER_KEY):
+        marker = (msg.get("infer") or {}).get(_AUX_INFER_KEY)
+        if marker is not None:
+            if marker is not self:
+                raise ValueError(_NESTING_MSG)
             return None
         fn = msg["fn"]
         if getattr(fn.support, "is_discrete", False):
@@ -125,7 +147,25 @@ class _TimeReparamConfig:
             return None
         dim = cast(int, time_plate.dim) - fn.event_dim
         make_transform, suffix = _TRANSFORMS[self.transform]
-        return _TimeReparam(make_transform(dim), suffix, frozenset(plate.name for plate in plates))
+        plate_names = frozenset(plate.name for plate in plates)
+        return _TimeReparam(make_transform(dim), suffix, plate_names, self)
+
+
+def _contains_time_reparam(model: object) -> bool:
+    """Return whether a `time_reparam()` handler sits in the NumPyro handler chain of ``model``.
+
+    Follows ``.fn`` through every `numpyro.primitives.Messenger` (``scope``,
+    ``seed``, ``substitute``, ``condition``, ...). It cannot see through a plain
+    function or a `functools.partial()`; `_TimeReparamConfig` catches those
+    when the model is traced.
+    """
+    while isinstance(model, Messenger):
+        if isinstance(model, numpyro.handlers.reparam) and isinstance(
+            model.config, _TimeReparamConfig
+        ):
+            return True
+        model = model.fn
+    return False
 
 
 def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastModel:
@@ -171,10 +211,13 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     Raises
     ------
     ValueError
-        If ``model`` is already the result of `time_reparam()`. Nesting is not
-        supported: the inner handler would turn the site into a deterministic
+        If ``model`` already contains the result of `time_reparam()`. Nesting is
+        not supported: the inner handler would turn the site into a deterministic
         before the outer one sees it, so the outer transform would silently be
-        a no-op.
+        a no-op. The check runs when wrapping, through any NumPyro handlers
+        around ``model`` (``scope``, ``seed``, ...), and again when the wrapped
+        model is traced, for an inner model hidden behind a plain function or a
+        `functools.partial()`.
 
     Notes
     -----
@@ -219,10 +262,7 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     samples = forecast(key_pred, model_dct, posterior, data, covariates)
     ```
     """
-    if isinstance(model, numpyro.handlers.reparam) and isinstance(
-        model.config, _TimeReparamConfig
-    ):
-        msg = "time_reparam cannot be nested: `model` is already a time_reparam model"
-        raise ValueError(msg)
+    if _contains_time_reparam(model):
+        raise ValueError(_NESTING_MSG)
     wrapped = numpyro.handlers.reparam(model, config=_TimeReparamConfig(transform))
     return cast(ForecastModel, wrapped)
