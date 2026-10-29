@@ -562,10 +562,10 @@ def _host_boolean_mask(pred: Array, truth: Array) -> Array:
 def test_host_metric_raises_actionable_error(host_mae: Callable[[Array, Array], Array]) -> None:
     """A metric that forces a host conversion raises ``VectorizedMetricError``.
 
-    The ``range``, ``list_index`` and ``boolean_mask`` cases are the regression
-    for #199: they raise `jax.errors.TracerIntegerConversionError` and
-    `jax.errors.NonConcreteBooleanIndexError`, siblings of
-    ``ConcretizationTypeError``, which escaped untranslated.
+    The ``range`` and ``list_index`` cases raise
+    `jax.errors.TracerIntegerConversionError` and the ``boolean_mask`` case raises
+    `jax.errors.NonConcreteBooleanIndexError` (a ``JAXIndexError``); neither is a
+    ``ConcretizationTypeError``, so each needs its own entry in the ``except`` tuple.
     """
     duration = TRAIN + TEST + 2
     data, cov = _series(duration)
