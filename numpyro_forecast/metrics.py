@@ -12,6 +12,7 @@ from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from numpyro_forecast._offload import _device_view
+from numpyro_forecast._validation import require_pred_truth_shapes
 from numpyro_forecast.typing import Array, Metric
 
 
@@ -68,12 +69,19 @@ def crps_empirical(
     Float[Array, "*batch"]
         Elementwise CRPS, one value per ``batch`` location.
 
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`), or
+        ``pred`` has fewer than 2 samples.
+
     References
     ----------
     Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules,
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
+    require_pred_truth_shapes(pred, truth)
     pred_arr = _device_view(pred)
     num_samples = pred_arr.shape[0]
     if num_samples < 2:
@@ -129,8 +137,10 @@ def eval_pinball(
     Raises
     ------
     ValueError
-        If ``quantile`` is not strictly inside ``(0, 1)``.
+        If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < quantile < 1.0:
         msg = f"quantile must be in (0, 1), got {quantile}"
         raise ValueError(msg)
@@ -189,8 +199,10 @@ def eval_interval_score(
     Raises
     ------
     ValueError
-        If ``alpha`` is not strictly inside ``(0, 1)``.
+        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
@@ -234,7 +246,8 @@ def make_mase(
     Returns
     -------
     Metric
-        A ``(pred, truth)`` callable computing MASE as a scalar array.
+        A ``(pred, truth)`` callable computing MASE as a scalar array. It raises ``ValueError`` if
+        ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
     Raises
     ------
@@ -267,6 +280,7 @@ def make_mase(
         pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
     ) -> Array:
         """MASE for one ``(pred, truth)`` pair, scaled by the enclosing ``train_data``."""
+        require_pred_truth_shapes(pred, truth)
         return _mase(_device_view(pred), _device_view(truth), scale=scale)
 
     return mase

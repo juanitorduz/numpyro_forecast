@@ -25,7 +25,7 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast._validation import _require_positive_num_samples
+from numpyro_forecast._validation import _require_positive_num_samples, require_pred_truth_shapes
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -76,7 +76,13 @@ def eval_mae(
     -------
     Array
         The mean absolute error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     return _eval_mae(_device_view(pred), _device_view(truth))
 
 
@@ -107,7 +113,13 @@ def eval_rmse(
     -------
     Array
         The root mean squared error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
@@ -208,7 +220,13 @@ def eval_crps(
     -------
     Array
         The mean empirical CRPS as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
         return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
     return _chunked_cell_metric(
@@ -271,8 +289,10 @@ def eval_coverage(
     Raises
     ------
     ValueError
-        If ``alpha`` is not strictly inside ``(0, 1)``.
+        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
@@ -334,7 +354,14 @@ def evaluate_forecast(
     -------
     dict[str, float]
         Each metric name mapped to its value.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
     """
+    require_pred_truth_shapes(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
@@ -1180,8 +1207,10 @@ def backtest_vectorized(
     Raises
     ------
     ValueError
-        If ``data`` and ``covariates`` durations differ, or if ``num_samples``
-        is too small (see ``num_samples``).
+        If ``data`` and ``covariates`` durations differ, if ``num_samples``
+        is too small (see ``num_samples``), or if ``metrics`` is not empty
+        and the model's ``"forecast"`` site does not have the shape of
+        ``data`` over the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1259,6 +1288,15 @@ def backtest_vectorized(
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
+    # Every window shares the forecast and truth shapes, so one comparison covers all of
+    # them. A custom metric would otherwise broadcast a mismatched forecast silently.
+    if resolved_metrics and predictions.shape[2:] != truth.shape[1:]:
+        msg = (
+            f"the model's 'forecast' site has shape {predictions.shape[2:]} per draw, but "
+            f"each test window of data has shape {truth.shape[1:]}; the forecast site must "
+            "have the shape of data over the test window, (..., test_window, obs)"
+        )
+        raise ValueError(msg)
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
     return VectorizedBacktestResult(

@@ -31,6 +31,7 @@ from numpyro_forecast.evaluate import (
     eval_crps,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
+from numpyro_forecast.models import Horizon
 from numpyro_forecast.predictive import draw_posterior, forecast
 
 TRAIN, TEST = 30, 5
@@ -709,3 +710,69 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
     assert len(recorded_optims) == 1
     assert isinstance(recorded_optims[0], numpyro.optim.Adam)
     assert recorded_optims[0] is not explicit_optim
+
+
+def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
+    """A model whose ``"forecast"`` site drops the obs axis: ``(future,)``, not ``(future, 1)``."""
+    h = Horizon.from_data(covariates, data)
+    loc = numpyro.sample("loc", dist.Normal(0.0, 1.0))
+    if h.data is not None:
+        numpyro.sample("obs", dist.Normal(loc, 1.0).expand(h.data.shape).to_event(2), obs=h.data)
+    numpyro.deterministic("forecast", jnp.full((h.future,), loc))
+
+
+def test_forecast_shape_mismatch_raises_before_scoring() -> None:
+    """A forecast site that does not match the test window raises ``ValueError`` (#196).
+
+    A custom metric such as ``(pred.mean(0) - truth).mean()`` broadcasts a
+    ``(test,)`` forecast against a ``(test, 1)`` truth into a ``(test, test)``
+    grid without error, so the check runs once on the stacked windows before
+    the metrics are vmapped.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+
+    def bias(pred: Array, truth: Array) -> Array:
+        return (pred.mean(axis=0) - truth).mean()
+
+    model = _squeezed_forecast_model
+    with pytest.raises(ValueError, match=r"'forecast' site has shape \(5,\) per draw"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(model),
+            num_steps=1,
+            num_samples=10,
+            metrics={"bias": bias},
+        )
+
+
+def test_forecast_shape_check_is_skipped_without_metrics() -> None:
+    """With ``metrics={}`` nothing is scored, so a mismatched forecast site still returns.
+
+    A predictions-only run does not compare the shapes: the shape guard
+    exists to protect the metrics, not to validate the model.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+    model = _squeezed_forecast_model
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        num_steps=1,
+        num_samples=10,
+        metrics={},
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    assert result.predictions.shape == (3, 10, TEST)
+    assert result.metrics == {}

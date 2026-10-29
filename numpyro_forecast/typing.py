@@ -33,6 +33,14 @@ boundaries (`~~numpyro_forecast.evaluate.evaluate_forecast()`,
 the window axis. Parametrize by closure: ``functools.partial`` for keywords
 (e.g. ``partial(eval_coverage, alpha=0.5)``) or a factory like
 `~~numpyro_forecast.metrics.make_mase()`.
+
+The built-in metrics and `~~numpyro_forecast.evaluate.evaluate_forecast()`
+check that ``truth.shape`` is ``pred.shape[1:]`` and raise ``ValueError``
+otherwise. With the runtime type hook on (the default), the jaxtyping
+annotations reject a mismatched array first and raise
+``jaxtyping.TypeCheckError``. A Python or NumPy scalar ``truth`` passes the
+annotations, so the explicit check raises ``ValueError`` for it. Either way a
+mismatched ``truth`` never broadcasts into a wrong value.
 """
 
 
