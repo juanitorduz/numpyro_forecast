@@ -53,6 +53,41 @@ def test_horizon_rejects_data_longer_than_covariates() -> None:
         Horizon.from_data(covariates, data)
 
 
+@pytest.mark.parametrize(
+    ("covariates", "hint"),
+    [(jnp.arange(8.0), r"x\[\.\.\., None\]"), (jnp.array(0.0), "A 0-d value has no time axis")],
+)
+def test_horizon_rejects_covariates_without_time_axis(covariates: Array, hint: str) -> None:
+    """1-D (or 0-d) covariates name the ``(time, k)`` layout instead of an ``IndexError``."""
+    with pytest.raises(
+        ValueError, match=rf"covariates must have time at axis -2 and the covariate dim.*{hint}"
+    ):
+        Horizon.from_data(covariates, None)
+
+
+@pytest.mark.parametrize(
+    ("data", "hint"),
+    [(jnp.zeros(6), r"got shape \(6,\)\. Add the last axis"), (jnp.array(0.0), "A 0-d value")],
+)
+def test_horizon_rejects_data_without_time_axis(data: Array, hint: str) -> None:
+    with pytest.raises(
+        ValueError, match=rf"data must have time at axis -2 and the observation dim.*{hint}"
+    ):
+        Horizon.from_data(jnp.zeros((8, 0)), data)
+
+
+@pytest.mark.parametrize("duration", [8, 0])
+def test_horizon_rejects_data_without_observations(duration: int) -> None:
+    """A cold-start ``data`` of shape ``(0, obs)`` fails before ``plate("time", 0)``."""
+    with pytest.raises(ValueError, match=r"data has no observed time steps \(shape \(0, 1\)\)"):
+        Horizon.from_data(jnp.zeros((duration, 0)), jnp.zeros((0, 1)))
+
+
+def test_horizon_rejects_covariates_without_time_steps() -> None:
+    with pytest.raises(ValueError, match=r"covariates has no time steps \(shape \(0, 0\)\)"):
+        Horizon.from_data(jnp.zeros((0, 0)), None)
+
+
 def test_horizon_zero_data_shape() -> None:
     data = jnp.zeros((20, 1))
     covariates = jnp.zeros((25, 0))

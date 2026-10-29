@@ -11,7 +11,12 @@ import xarray.testing as xarray_testing
 from conftest import empty_covariates, fail_devices_for, nuts_samples, rw_model, svi_guide_params
 from jax import Array, random
 
-from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
+from numpyro_forecast.convert import (
+    _reshape_chains,
+    add_forecast_groups,
+    predictions_to_datatree,
+    to_datatree,
+)
 from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
@@ -289,6 +294,33 @@ def test_to_datatree_rejects_short_covariates() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("data", "covariates", "name"),
+    [
+        (jnp.zeros((6, 1)), jnp.arange(8.0), "covariates"),
+        (jnp.zeros(6), jnp.zeros((8, 0)), "data"),
+    ],
+)
+def test_to_datatree_rejects_inputs_without_time_axis(
+    data: Array, covariates: Array, name: str
+) -> None:
+    posterior = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=rf"{name} must have time at axis -2"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates)
+
+
+def test_to_datatree_rejects_posterior_leaf_without_sample_axis() -> None:
+    posterior = {"level": jnp.array(0.0), "drift": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+def test_to_datatree_rejects_data_without_observations() -> None:
+    posterior = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
+    with pytest.raises(ValueError, match=r"data has no observed time steps \(shape \(0, 1\)\)"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((0, 1)), empty_covariates(8))
+
+
 def test_to_datatree_coords_reach_forecast_groups() -> None:
     """User coords propagate to the forecast groups; the forecast time coordinate wins."""
     posterior, data, _ = _mcmc_posterior(num_chains=1)
@@ -518,6 +550,29 @@ def test_to_datatree_rejects_non_divisible_num_chains() -> None:
         ValueError, match=r"posterior sample count 20 is not evenly divisible by num_chains 3"
     ):
         to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates, num_chains=3)
+
+
+@pytest.mark.parametrize("num_chains", [0, -1, -2])
+def test_to_datatree_rejects_non_positive_num_chains(num_chains: int) -> None:
+    """``num_chains < 1`` raises by name instead of a bare ZeroDivisionError or reshape error."""
+    posterior = {"level": jnp.zeros(6), "drift": jnp.zeros((6, 18, 1))}
+    with pytest.raises(
+        ValueError, match=rf"num_chains must be a positive integer, got {num_chains}"
+    ):
+        to_datatree(
+            random.PRNGKey(2),
+            _model(),
+            posterior,
+            _series(18),
+            empty_covariates(18),
+            num_chains=num_chains,
+        )
+
+
+@pytest.mark.parametrize("num_chains", [0, -3, True, False])
+def test_reshape_chains_rejects_non_positive_num_chains(num_chains: int) -> None:
+    with pytest.raises(ValueError, match="num_chains must be a positive integer"):
+        _reshape_chains(np.zeros((6, 2)), num_chains)
 
 
 def test_to_datatree_accepts_numpy_posterior() -> None:
@@ -872,6 +927,14 @@ def test_predictions_to_datatree_label_length_mismatch_raises() -> None:
     predictions, x, labels = _prediction_draws()
     with pytest.raises(ValueError, match="series has length"):
         predictions_to_datatree(predictions, x, labels[:-1])
+
+
+@pytest.mark.parametrize("group", ["observed_data", "constant_data"])
+def test_predictions_to_datatree_rejects_reserved_group(group: str) -> None:
+    """A reserved group name raises instead of silently overwriting the draws."""
+    predictions, x, labels = _prediction_draws()
+    with pytest.raises(ValueError, match=rf"group='{group}' is reserved"):
+        predictions_to_datatree(predictions, x, labels, group=group)
 
 
 def test_predictions_to_datatree_accepts_jax_arrays() -> None:
