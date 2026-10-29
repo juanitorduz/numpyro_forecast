@@ -116,4 +116,4 @@ The horizon with `duration = covariates.shape[-2]`, `t_obs = data.shape[-2]` (or
 
 
 `ValueError`  
-If `covariates` or `data` has fewer than two axes (time must be at axis `-2`), if `covariates` has no time steps, if `data` has no time steps (use `data=None` to sample from the prior), or if `data` is longer than `covariates` along the time axis.
+If `covariates` or `data` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps (for a series with no history, call the model with `data=None`), if `covariates` has no time steps, or if `data` is longer than `covariates` along the time axis.

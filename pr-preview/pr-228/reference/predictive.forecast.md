@@ -63,7 +63,7 @@ Forecast samples over the `future = duration - t` horizon (floating point for co
 
 
 `ValueError`  
-If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `covariates` does not extend beyond `data` along the time axis, or if a `posterior` leaf has no sample axis.
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` does not extend beyond `data` along the time axis, or if `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length.
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).

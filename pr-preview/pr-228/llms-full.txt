@@ -1144,8 +1144,10 @@ Raises
 ------
 ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
-    axis ``-2``), if ``covariates`` does not extend beyond ``data`` along
-    the time axis, or if a ``posterior`` leaf has no sample axis.
+    axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
+    extend beyond ``data`` along the time axis, or if ``posterior`` is
+    empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
+    on the sample-axis length.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -1920,7 +1922,8 @@ num_chains
     pseudo-chain, correct for a posterior with no chain structure, e.g.
     SVI or Pathfinder draws). For an MCMC posterior, pass the
     ``num_chains`` the sampler was run with; see `_reshape_chains()`
-    for the reshape contract and its divisibility requirement.
+    for the reshape contract and its divisibility requirement. Must be a
+    positive integer.
 batch_size
     Optional chunk size that bounds how many draws touch the accelerator
     at once, across both the in-sample and forecast predictive sampling.
@@ -1992,11 +1995,13 @@ Raises
 ------
 ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
-    axis ``-2``), if ``covariates`` is shorter than ``data`` along the time
-    axis, if a ``posterior`` leaf has no sample axis, if
+    axis ``-2``), if ``data`` has no time steps, if ``covariates`` is
+    shorter than ``data`` along the time axis, if a ``posterior`` leaf has
+    no sample axis, if
     ``time_coord`` is given but its length does not match the in-sample
-    window plus the forecast horizon, or if ``posterior``'s sample count is
-    not evenly divisible by ``num_chains``.
+    window plus the forecast horizon, if ``num_chains`` is not a positive
+    integer (``bool`` included), or if ``posterior``'s sample count is not
+    evenly divisible by ``num_chains``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
@@ -2111,7 +2116,9 @@ series
     One label per series, defining the ``series`` coordinate.
 group
     Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-    ``"posterior_predictive"``, ``"predictions"``).
+    ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+    ``"constant_data"`` are reserved: the function always writes those two
+    groups.
 observed
     Optional observations, shape ``(time, series)``, stored in
     ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -2126,7 +2133,9 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``series`` does not have one label per series in ``predictions``.
+    If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+    names), or if ``series`` does not have one label per series in
+    ``predictions``.
 
 
 ## Extensions (contrib)
@@ -2937,9 +2946,10 @@ training window followed by a ``test_weeks`` test window.
 Parameters
 ----------
 train_days
-    Number of training days (24 hours each).
+    Number of training days (24 hours each). Must be at least 1.
 test_weeks
-    Number of test weeks (``24 * 7`` hours each).
+    Number of test weeks (``24 * 7`` hours each). Must be non-negative;
+    ``0`` returns the training window only, with ``split == y.shape[1]``.
 
 Returns
 -------
@@ -2953,8 +2963,10 @@ stations : list[str]
 Raises
 ------
 ValueError
-    If the requested ``train_days`` + ``test_weeks`` window exceeds the
-    available history (which would otherwise wrap a negative slice index).
+    If ``train_days`` is less than 1 or ``test_weeks`` is negative (checked
+    before the download), or if the requested ``train_days`` + ``test_weeks``
+    window exceeds the available history (which would otherwise wrap a
+    negative slice index).
 
 load_victoria_electricity() -> tuple[jaxtyping.Float[Array, 'time 1'], jaxtyping.Float[Array, 'time']]
 
