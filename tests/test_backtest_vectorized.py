@@ -19,7 +19,12 @@ import pytest
 from conftest import rw_model, svi_forecast_fn
 from jax import Array, random
 from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer.autoguide import (
+    AutoGuide,
+    AutoIAFNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+)
 
 from numpyro_forecast import Horizon
 from numpyro_forecast.evaluate import (
@@ -418,24 +423,42 @@ def test_window_streams_are_disjoint() -> None:
 
 
 def _level_model(covariates: Array, data: Array | None = None) -> None:
-    """A constant-level model whose ``forecast`` is the sampled level ``mu``."""
+    """A constant-level model over 2 series whose ``forecast`` is the sampled level ``mu``.
+
+    Two series give a 2-dimensional latent, the minimum for ``AutoIAFNormal``.
+    """
     h = Horizon.from_data(covariates, data)
-    mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
-    with numpyro.plate("time", h.t_obs, dim=-2):
-        numpyro.sample("obs", dist.Normal(mu, 1.0), obs=data)
+    with numpyro.plate("series", 2, dim=-1):
+        mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 10.0)))
+        with numpyro.plate("time", h.t_obs, dim=-2):
+            numpyro.sample("obs", dist.Normal(mu, 1.0), obs=data)
     if h.future:
-        numpyro.deterministic("forecast", jnp.full((h.future, 1), mu))
+        numpyro.deterministic("forecast", jnp.broadcast_to(mu, (h.future, 2)))
 
 
 def _keyed_level_guide(covariates: Array, data: Array | None = None) -> None:
     """A hand-written guide whose initial ``loc`` is drawn from the SVI-init key."""
-    loc = numpyro.param("loc", lambda key: random.normal(key))
-    numpyro.sample("mu", dist.Normal(loc, 1e-6))
+    loc = numpyro.param("loc", lambda key: random.normal(key, (2,)))
+    with numpyro.plate("series", 2, dim=-1):
+        numpyro.sample("mu", dist.Normal(loc, 1e-6))
 
 
-def _starting_points(rng_key: Array, guide: Guide) -> Array:
-    """Each window's SVI starting point of ``mu`` (``num_steps=0``, near-zero guide scale)."""
-    data, cov = jnp.zeros((30, 1)), jnp.zeros((30, 0))
+def _starting_points(monkeypatch: pytest.MonkeyPatch, rng_key: Array, guide: Guide) -> Array:
+    """Each window's forecast of the first ``mu`` after ``num_steps=0``.
+
+    Every window has the same (all-zero) data, and the posterior and forecast
+    keys of window 0 are reused for all windows, so the forecasts differ
+    across windows only if the SVI starting points differ.
+    """
+
+    def shared_draw_keys(key: Array, num_windows: int) -> tuple[Array, Array, Array]:
+        init_keys, post_keys, fc_keys = _window_key_streams(key, num_windows)
+        post_keys = jnp.broadcast_to(post_keys[0], post_keys.shape)
+        fc_keys = jnp.broadcast_to(fc_keys[0], fc_keys.shape)
+        return init_keys, post_keys, fc_keys
+
+    monkeypatch.setattr("numpyro_forecast.evaluate._window_key_streams", shared_draw_keys)
+    data, cov = jnp.zeros((30, 2)), jnp.zeros((30, 0))
     result = backtest_vectorized(
         rng_key,
         lambda: _level_model,
@@ -454,36 +477,76 @@ def _starting_points(rng_key: Array, guide: Guide) -> Array:
     return result.predictions[:, 0, 0, 0]
 
 
-def test_autoguide_windows_start_at_the_warmup_init() -> None:
-    """An autoguide starts every window at the eager warm-up init (#202).
+def test_location_autoguide_windows_start_at_the_warmup_init(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A location-based autoguide starts every window at the warm-up init (#202).
 
-    The autoguide runs ``init_loc_fn`` once, in the warm-up ``svi.init`` keyed
+    ``AutoNormal`` runs ``init_loc_fn`` once, in the warm-up ``svi.init`` keyed
     by ``fold_in(rng_key, -1)``, so every window starts from that point and the
-    per-window SVI-init subkeys do not change it. A hand-written guide whose
-    ``numpyro.param`` initializer takes a key does use the per-window subkey.
+    per-window SVI-init subkeys do not change it.
     """
     rng_key = random.PRNGKey(0)
-    auto = _starting_points(rng_key, AutoNormal(_level_model, init_scale=1e-6))
+    auto = _starting_points(monkeypatch, rng_key, AutoNormal(_level_model, init_scale=1e-6))
+    assert bool(jnp.all(auto == auto[0]))
 
     guide = AutoNormal(_level_model, init_scale=1e-6)
     svi = SVI(_level_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
     warmup_key = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
-    state = svi.init(warmup_key, jnp.zeros((10, 0)), jnp.zeros((10, 1)))
-    warmup_loc = svi.get_params(state)["mu_auto_loc"]
+    state = svi.init(warmup_key, jnp.zeros((10, 0)), jnp.zeros((10, 2)))
+    warmup_loc = svi.get_params(state)["mu_auto_loc"][0]
     assert jnp.allclose(auto, warmup_loc, atol=1e-4)
 
-    hand = _starting_points(rng_key, _keyed_level_guide)
-    assert len({round(float(x), 4) for x in hand}) == hand.shape[0]
+
+def test_keyed_param_initializer_uses_the_per_window_init_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A callable ``numpyro.param`` initializer starts each window differently (#202)."""
+    starts = _starting_points(monkeypatch, random.PRNGKey(0), _keyed_level_guide)
+    assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
+
+
+@pytest.mark.parametrize(
+    ("make_guide", "same_start"),
+    [
+        pytest.param(lambda: AutoNormal(_level_model), True, id="AutoNormal"),
+        pytest.param(
+            lambda: AutoMultivariateNormal(_level_model), True, id="AutoMultivariateNormal"
+        ),
+        pytest.param(lambda: AutoIAFNormal(_level_model), False, id="AutoIAFNormal"),
+    ],
+)
+def test_autoguide_init_params_across_window_init_keys(
+    make_guide: Callable[[], AutoGuide], same_start: bool
+) -> None:
+    """Which autoguides draw their initial parameters from the SVI-init key (#202).
+
+    Replays the init sequence of `backtest_vectorized()`: one eager warm-up
+    ``svi.init`` keyed by ``fold_in(rng_key, -1)``, then a vmapped ``svi.init``
+    per window with the SVI-init keys of `_window_key_streams()`. The
+    location-based autoguides get the same parameters in every window; the
+    network weights of a flow autoguide come from each window's key.
+    """
+    import jax
+
+    rng_key = random.PRNGKey(0)
+    cov, data = jnp.zeros((10, 0)), jnp.zeros((10, 2))
+    svi = SVI(_level_model, make_guide(), numpyro.optim.Adam(0.01), Trace_ELBO())
+    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), cov, data)
+    init_keys, _, _ = _window_key_streams(rng_key, 2)
+    params = svi.get_params(jax.vmap(lambda key: svi.init(key, cov, data))(init_keys))
+    leaves = jax.tree_util.tree_leaves(params)
+    assert leaves
+    assert all(bool(jnp.array_equal(x[0], x[1])) for x in leaves) == same_start
 
 
 def test_docstring_describes_the_warmup_init_key() -> None:
-    """The PRNG paragraph says what the warm-up and SVI-init keys do (#202)."""
+    """The PRNG paragraph no longer calls the warm-up init discarded (#202)."""
     doc = backtest_vectorized.__doc__
     assert doc is not None
     prng = doc.split("PRNG:", 1)[1].split("Parameters\n", 1)[0]
     assert "discarded" not in prng
     assert "init_loc_fn" in prng
-    assert "every window" in prng
 
 
 def test_result_schema_and_dataframe_row_shape() -> None:
