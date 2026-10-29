@@ -65,7 +65,7 @@ from numpyro_forecast import (
 )
 from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.metrics import crps_empirical
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.typing import Array, ForecastFn, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -4520,9 +4520,6 @@ The package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.e
 
 
 ``` python
-from numpyro_forecast.typing import ForecastFn
-
-
 def make_scaled_forecast_fn(optimizer: optax.GradientTransformation, num_steps: int) -> ForecastFn:
     """Build an SVI forecast closure that owns the per-series mean scaling as a fit-time step.
 
@@ -4532,7 +4529,6 @@ def make_scaled_forecast_fn(optimizer: optax.GradientTransformation, num_steps: 
     derived from ``train_data`` alone, inside the call,
     ``backtest(..., forecast_fn=make_scaled_forecast_fn(optimizer, num_steps))`` recomputes
     the normalization inside every fold, so no future level can leak into the model input.
-    The SVI settings are arguments of the factory, so the closure reads no notebook globals.
 
     Parameters
     ----------

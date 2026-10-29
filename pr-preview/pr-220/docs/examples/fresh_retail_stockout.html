@@ -438,7 +438,7 @@ window.Quarto = {
 <span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> periodic_repeat</span>
 <span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.metrics <span class="im">import</span> crps_empirical</span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastFn, ForecastModel</span>
 <span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
 <span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">12</span>, <span class="dv">7</span>]</span>
@@ -3467,88 +3467,84 @@ below-side miss share:      [0.003 0.007 0.001 0.009 0.013 0.006 0.004 0.003 0.0
 <p>One methodological remark before leaving the evaluation. The per-series scale was computed once, from the training window of our single split, and that is sound because there is only one split. The moment this evaluation graduates to rolling-origin backtesting, that global step becomes a leak: each fold has a different training window, and a scale computed outside the fold loop (worse, on the full series) feeds the fold information about levels it has not seen yet, exactly the leakage the scaling section warned about. The normalization is part of the model pipeline, and in a backtest the pipeline must run once per fold.</p>
 <p>The package’s <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> helper leaves room for exactly this: its <code>forecast_fn</code> is any callable <code>(rng_key, model, train_data, train_covariates, full_covariates, num_samples, *, batch_size=None)</code> returning forecast draws, and it slices the <em>raw</em> data per window before calling it. Everything between the raw window and the returned draws belongs to the closure, so the clean way to fold the scaling in is to derive the scale inside it, from whatever training window the fold hands over, fit on the scaled data, and rescale the draws on the way out. We define it here but do not run it (the single split above is already scored); the next steps point to it for the backtesting extension. A small factory, <code>make_scaled_forecast_fn(optimizer, num_steps)</code>, takes the SVI settings as arguments and returns the closure, so the closure reads no notebook globals. The closure also keeps a series with no sales in the fold’s training window on its raw scale, because its zero mean would otherwise make its scaled data <span class="math inline">0 / 0</span>, that is NaN, and the fit would fail; a short first fold or a different series selection can produce such a series.</p>
 <div id="5f5485a5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:22:09.784967Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:22:09.784882Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:22:09.805992Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:22:09.805515Z&quot;}}" data-execution_count="39">
-<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> ForecastFn</span>
-<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a></span>
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> make_scaled_forecast_fn(optimizer: optax.GradientTransformation, num_steps: <span class="bu">int</span>) <span class="op">-&gt;</span> ForecastFn:</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Build an SVI forecast closure that owns the per-series mean scaling as a fit-time step.</span></span>
 <span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> make_scaled_forecast_fn(optimizer: optax.GradientTransformation, num_steps: <span class="bu">int</span>) <span class="op">-&gt;</span> ForecastFn:</span>
-<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Build an SVI forecast closure that owns the per-series mean scaling as a fit-time step.</span></span>
-<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a><span class="co">    The returned closure computes the per-series scale from the training window it is</span></span>
-<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a><span class="co">    handed, fits the model on the scaled data, and returns forecast draws rescaled to the</span></span>
-<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a><span class="co">    original units (clipped at zero, since sales are non-negative). Because the scale is</span></span>
-<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a><span class="co">    derived from ``train_data`` alone, inside the call,</span></span>
-<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a><span class="co">    ``backtest(..., forecast_fn=make_scaled_forecast_fn(optimizer, num_steps))`` recomputes</span></span>
-<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a><span class="co">    the normalization inside every fold, so no future level can leak into the model input.</span></span>
-<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a><span class="co">    The SVI settings are arguments of the factory, so the closure reads no notebook globals.</span></span>
-<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-15"><a href="#cb53-15" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters</span></span>
-<span id="cb53-16"><a href="#cb53-16" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
-<span id="cb53-17"><a href="#cb53-17" aria-hidden="true" tabindex="-1"></a><span class="co">    optimizer</span></span>
-<span id="cb53-18"><a href="#cb53-18" aria-hidden="true" tabindex="-1"></a><span class="co">        The optax optimizer for the SVI fit of every fold.</span></span>
-<span id="cb53-19"><a href="#cb53-19" aria-hidden="true" tabindex="-1"></a><span class="co">    num_steps</span></span>
-<span id="cb53-20"><a href="#cb53-20" aria-hidden="true" tabindex="-1"></a><span class="co">        Number of SVI steps per fold.</span></span>
-<span id="cb53-21"><a href="#cb53-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-22"><a href="#cb53-22" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns</span></span>
-<span id="cb53-23"><a href="#cb53-23" aria-hidden="true" tabindex="-1"></a><span class="co">    -------</span></span>
-<span id="cb53-24"><a href="#cb53-24" aria-hidden="true" tabindex="-1"></a><span class="co">    ForecastFn</span></span>
-<span id="cb53-25"><a href="#cb53-25" aria-hidden="true" tabindex="-1"></a><span class="co">        A closure with the ``forecast_fn`` signature of ``backtest``.</span></span>
-<span id="cb53-26"><a href="#cb53-26" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb53-27"><a href="#cb53-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-28"><a href="#cb53-28" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> scaled_forecast_fn(</span>
-<span id="cb53-29"><a href="#cb53-29" aria-hidden="true" tabindex="-1"></a>        rng_key: Array,</span>
-<span id="cb53-30"><a href="#cb53-30" aria-hidden="true" tabindex="-1"></a>        model: ForecastModel,</span>
-<span id="cb53-31"><a href="#cb53-31" aria-hidden="true" tabindex="-1"></a>        train_data: Float[Array, <span class="st">" t_train n_series"</span>],</span>
-<span id="cb53-32"><a href="#cb53-32" aria-hidden="true" tabindex="-1"></a>        train_covariates: Float[Array, <span class="st">" n_inputs t_train n_series"</span>],</span>
-<span id="cb53-33"><a href="#cb53-33" aria-hidden="true" tabindex="-1"></a>        full_covariates: Float[Array, <span class="st">" n_inputs duration n_series"</span>],</span>
-<span id="cb53-34"><a href="#cb53-34" aria-hidden="true" tabindex="-1"></a>        num_samples: <span class="bu">int</span>,</span>
-<span id="cb53-35"><a href="#cb53-35" aria-hidden="true" tabindex="-1"></a>        <span class="op">*</span>,</span>
-<span id="cb53-36"><a href="#cb53-36" aria-hidden="true" tabindex="-1"></a>        batch_size: <span class="bu">int</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
-<span id="cb53-37"><a href="#cb53-37" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">-&gt;</span> Array <span class="op">|</span> np.ndarray:</span>
-<span id="cb53-38"><a href="#cb53-38" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Fit on the scaled training window and return rescaled forecast draws.</span></span>
-<span id="cb53-39"><a href="#cb53-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-40"><a href="#cb53-40" aria-hidden="true" tabindex="-1"></a><span class="co">        Parameters</span></span>
-<span id="cb53-41"><a href="#cb53-41" aria-hidden="true" tabindex="-1"></a><span class="co">        ----------</span></span>
-<span id="cb53-42"><a href="#cb53-42" aria-hidden="true" tabindex="-1"></a><span class="co">        rng_key</span></span>
-<span id="cb53-43"><a href="#cb53-43" aria-hidden="true" tabindex="-1"></a><span class="co">            PRNG key for the fit, the posterior draw, and the forecast.</span></span>
-<span id="cb53-44"><a href="#cb53-44" aria-hidden="true" tabindex="-1"></a><span class="co">        model</span></span>
-<span id="cb53-45"><a href="#cb53-45" aria-hidden="true" tabindex="-1"></a><span class="co">            The forecasting model to fit, as returned by ``model_fn``.</span></span>
-<span id="cb53-46"><a href="#cb53-46" aria-hidden="true" tabindex="-1"></a><span class="co">        train_data</span></span>
-<span id="cb53-47"><a href="#cb53-47" aria-hidden="true" tabindex="-1"></a><span class="co">            Raw (unscaled) training data with time at axis ``-2``.</span></span>
-<span id="cb53-48"><a href="#cb53-48" aria-hidden="true" tabindex="-1"></a><span class="co">        train_covariates</span></span>
-<span id="cb53-49"><a href="#cb53-49" aria-hidden="true" tabindex="-1"></a><span class="co">            Covariates over the training window, time at axis ``-2``.</span></span>
-<span id="cb53-50"><a href="#cb53-50" aria-hidden="true" tabindex="-1"></a><span class="co">        full_covariates</span></span>
-<span id="cb53-51"><a href="#cb53-51" aria-hidden="true" tabindex="-1"></a><span class="co">            Covariates over the training window followed by the test horizon.</span></span>
-<span id="cb53-52"><a href="#cb53-52" aria-hidden="true" tabindex="-1"></a><span class="co">        num_samples</span></span>
-<span id="cb53-53"><a href="#cb53-53" aria-hidden="true" tabindex="-1"></a><span class="co">            Number of forecast draws to return.</span></span>
-<span id="cb53-54"><a href="#cb53-54" aria-hidden="true" tabindex="-1"></a><span class="co">        batch_size</span></span>
-<span id="cb53-55"><a href="#cb53-55" aria-hidden="true" tabindex="-1"></a><span class="co">            Chunk size forwarded to ``draw_posterior`` and ``forecast``.</span></span>
-<span id="cb53-56"><a href="#cb53-56" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-57"><a href="#cb53-57" aria-hidden="true" tabindex="-1"></a><span class="co">        Returns</span></span>
-<span id="cb53-58"><a href="#cb53-58" aria-hidden="true" tabindex="-1"></a><span class="co">        -------</span></span>
-<span id="cb53-59"><a href="#cb53-59" aria-hidden="true" tabindex="-1"></a><span class="co">        Array | np.ndarray</span></span>
-<span id="cb53-60"><a href="#cb53-60" aria-hidden="true" tabindex="-1"></a><span class="co">            Forecast draws on the original sales scale, shape</span></span>
-<span id="cb53-61"><a href="#cb53-61" aria-hidden="true" tabindex="-1"></a><span class="co">            ``(num_samples, horizon, n_series)``.</span></span>
-<span id="cb53-62"><a href="#cb53-62" aria-hidden="true" tabindex="-1"></a><span class="co">        """</span></span>
-<span id="cb53-63"><a href="#cb53-63" aria-hidden="true" tabindex="-1"></a>        key_fit, key_post, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
-<span id="cb53-64"><a href="#cb53-64" aria-hidden="true" tabindex="-1"></a>        fold_scale: Float[Array, <span class="st">" n_series"</span>] <span class="op">=</span> train_data.mean(axis<span class="op">=-</span><span class="dv">2</span>)</span>
-<span id="cb53-65"><a href="#cb53-65" aria-hidden="true" tabindex="-1"></a>        <span class="co"># A series with no sales in this fold's training window has a zero mean, and</span></span>
-<span id="cb53-66"><a href="#cb53-66" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 0 / 0 would make its scaled data NaN; keep such a series on its raw scale.</span></span>
-<span id="cb53-67"><a href="#cb53-67" aria-hidden="true" tabindex="-1"></a>        fold_scale <span class="op">=</span> jnp.where(fold_scale <span class="op">&gt;</span> <span class="dv">0</span>, fold_scale, <span class="fl">1.0</span>)</span>
-<span id="cb53-68"><a href="#cb53-68" aria-hidden="true" tabindex="-1"></a>        scaled_data <span class="op">=</span> train_data <span class="op">/</span> fold_scale</span>
-<span id="cb53-69"><a href="#cb53-69" aria-hidden="true" tabindex="-1"></a>        fold_guide <span class="op">=</span> AutoNormal(model)</span>
-<span id="cb53-70"><a href="#cb53-70" aria-hidden="true" tabindex="-1"></a>        fold_svi <span class="op">=</span> SVI(model, fold_guide, optax_to_numpyro(optimizer), Trace_ELBO())</span>
-<span id="cb53-71"><a href="#cb53-71" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> fold_svi.run(</span>
-<span id="cb53-72"><a href="#cb53-72" aria-hidden="true" tabindex="-1"></a>            key_fit, num_steps, train_covariates, scaled_data, progress_bar<span class="op">=</span><span class="va">False</span></span>
-<span id="cb53-73"><a href="#cb53-73" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb53-74"><a href="#cb53-74" aria-hidden="true" tabindex="-1"></a>        fold_posterior <span class="op">=</span> draw_posterior(</span>
-<span id="cb53-75"><a href="#cb53-75" aria-hidden="true" tabindex="-1"></a>            key_post, fold_guide, result.params, num_samples, batch_size<span class="op">=</span>batch_size</span>
-<span id="cb53-76"><a href="#cb53-76" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb53-77"><a href="#cb53-77" aria-hidden="true" tabindex="-1"></a>        pred <span class="op">=</span> forecast(</span>
-<span id="cb53-78"><a href="#cb53-78" aria-hidden="true" tabindex="-1"></a>            key_fc, model, fold_posterior, scaled_data, full_covariates, batch_size<span class="op">=</span>batch_size</span>
-<span id="cb53-79"><a href="#cb53-79" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb53-80"><a href="#cb53-80" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.clip(pred <span class="op">*</span> fold_scale, <span class="bu">min</span><span class="op">=</span><span class="fl">0.0</span>)</span>
-<span id="cb53-81"><a href="#cb53-81" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb53-82"><a href="#cb53-82" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> scaled_forecast_fn</span></code></pre></div>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="co">    The returned closure computes the per-series scale from the training window it is</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="co">    handed, fits the model on the scaled data, and returns forecast draws rescaled to the</span></span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a><span class="co">    original units (clipped at zero, since sales are non-negative). Because the scale is</span></span>
+<span id="cb53-7"><a href="#cb53-7" aria-hidden="true" tabindex="-1"></a><span class="co">    derived from ``train_data`` alone, inside the call,</span></span>
+<span id="cb53-8"><a href="#cb53-8" aria-hidden="true" tabindex="-1"></a><span class="co">    ``backtest(..., forecast_fn=make_scaled_forecast_fn(optimizer, num_steps))`` recomputes</span></span>
+<span id="cb53-9"><a href="#cb53-9" aria-hidden="true" tabindex="-1"></a><span class="co">    the normalization inside every fold, so no future level can leak into the model input.</span></span>
+<span id="cb53-10"><a href="#cb53-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-11"><a href="#cb53-11" aria-hidden="true" tabindex="-1"></a><span class="co">    Parameters</span></span>
+<span id="cb53-12"><a href="#cb53-12" aria-hidden="true" tabindex="-1"></a><span class="co">    ----------</span></span>
+<span id="cb53-13"><a href="#cb53-13" aria-hidden="true" tabindex="-1"></a><span class="co">    optimizer</span></span>
+<span id="cb53-14"><a href="#cb53-14" aria-hidden="true" tabindex="-1"></a><span class="co">        The optax optimizer for the SVI fit of every fold.</span></span>
+<span id="cb53-15"><a href="#cb53-15" aria-hidden="true" tabindex="-1"></a><span class="co">    num_steps</span></span>
+<span id="cb53-16"><a href="#cb53-16" aria-hidden="true" tabindex="-1"></a><span class="co">        Number of SVI steps per fold.</span></span>
+<span id="cb53-17"><a href="#cb53-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-18"><a href="#cb53-18" aria-hidden="true" tabindex="-1"></a><span class="co">    Returns</span></span>
+<span id="cb53-19"><a href="#cb53-19" aria-hidden="true" tabindex="-1"></a><span class="co">    -------</span></span>
+<span id="cb53-20"><a href="#cb53-20" aria-hidden="true" tabindex="-1"></a><span class="co">    ForecastFn</span></span>
+<span id="cb53-21"><a href="#cb53-21" aria-hidden="true" tabindex="-1"></a><span class="co">        A closure with the ``forecast_fn`` signature of ``backtest``.</span></span>
+<span id="cb53-22"><a href="#cb53-22" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb53-23"><a href="#cb53-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-24"><a href="#cb53-24" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> scaled_forecast_fn(</span>
+<span id="cb53-25"><a href="#cb53-25" aria-hidden="true" tabindex="-1"></a>        rng_key: Array,</span>
+<span id="cb53-26"><a href="#cb53-26" aria-hidden="true" tabindex="-1"></a>        model: ForecastModel,</span>
+<span id="cb53-27"><a href="#cb53-27" aria-hidden="true" tabindex="-1"></a>        train_data: Float[Array, <span class="st">" t_train n_series"</span>],</span>
+<span id="cb53-28"><a href="#cb53-28" aria-hidden="true" tabindex="-1"></a>        train_covariates: Float[Array, <span class="st">" n_inputs t_train n_series"</span>],</span>
+<span id="cb53-29"><a href="#cb53-29" aria-hidden="true" tabindex="-1"></a>        full_covariates: Float[Array, <span class="st">" n_inputs duration n_series"</span>],</span>
+<span id="cb53-30"><a href="#cb53-30" aria-hidden="true" tabindex="-1"></a>        num_samples: <span class="bu">int</span>,</span>
+<span id="cb53-31"><a href="#cb53-31" aria-hidden="true" tabindex="-1"></a>        <span class="op">*</span>,</span>
+<span id="cb53-32"><a href="#cb53-32" aria-hidden="true" tabindex="-1"></a>        batch_size: <span class="bu">int</span> <span class="op">|</span> <span class="va">None</span> <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb53-33"><a href="#cb53-33" aria-hidden="true" tabindex="-1"></a>    ) <span class="op">-&gt;</span> Array <span class="op">|</span> np.ndarray:</span>
+<span id="cb53-34"><a href="#cb53-34" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Fit on the scaled training window and return rescaled forecast draws.</span></span>
+<span id="cb53-35"><a href="#cb53-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-36"><a href="#cb53-36" aria-hidden="true" tabindex="-1"></a><span class="co">        Parameters</span></span>
+<span id="cb53-37"><a href="#cb53-37" aria-hidden="true" tabindex="-1"></a><span class="co">        ----------</span></span>
+<span id="cb53-38"><a href="#cb53-38" aria-hidden="true" tabindex="-1"></a><span class="co">        rng_key</span></span>
+<span id="cb53-39"><a href="#cb53-39" aria-hidden="true" tabindex="-1"></a><span class="co">            PRNG key for the fit, the posterior draw, and the forecast.</span></span>
+<span id="cb53-40"><a href="#cb53-40" aria-hidden="true" tabindex="-1"></a><span class="co">        model</span></span>
+<span id="cb53-41"><a href="#cb53-41" aria-hidden="true" tabindex="-1"></a><span class="co">            The forecasting model to fit, as returned by ``model_fn``.</span></span>
+<span id="cb53-42"><a href="#cb53-42" aria-hidden="true" tabindex="-1"></a><span class="co">        train_data</span></span>
+<span id="cb53-43"><a href="#cb53-43" aria-hidden="true" tabindex="-1"></a><span class="co">            Raw (unscaled) training data with time at axis ``-2``.</span></span>
+<span id="cb53-44"><a href="#cb53-44" aria-hidden="true" tabindex="-1"></a><span class="co">        train_covariates</span></span>
+<span id="cb53-45"><a href="#cb53-45" aria-hidden="true" tabindex="-1"></a><span class="co">            Covariates over the training window, time at axis ``-2``.</span></span>
+<span id="cb53-46"><a href="#cb53-46" aria-hidden="true" tabindex="-1"></a><span class="co">        full_covariates</span></span>
+<span id="cb53-47"><a href="#cb53-47" aria-hidden="true" tabindex="-1"></a><span class="co">            Covariates over the training window followed by the test horizon.</span></span>
+<span id="cb53-48"><a href="#cb53-48" aria-hidden="true" tabindex="-1"></a><span class="co">        num_samples</span></span>
+<span id="cb53-49"><a href="#cb53-49" aria-hidden="true" tabindex="-1"></a><span class="co">            Number of forecast draws to return.</span></span>
+<span id="cb53-50"><a href="#cb53-50" aria-hidden="true" tabindex="-1"></a><span class="co">        batch_size</span></span>
+<span id="cb53-51"><a href="#cb53-51" aria-hidden="true" tabindex="-1"></a><span class="co">            Chunk size forwarded to ``draw_posterior`` and ``forecast``.</span></span>
+<span id="cb53-52"><a href="#cb53-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-53"><a href="#cb53-53" aria-hidden="true" tabindex="-1"></a><span class="co">        Returns</span></span>
+<span id="cb53-54"><a href="#cb53-54" aria-hidden="true" tabindex="-1"></a><span class="co">        -------</span></span>
+<span id="cb53-55"><a href="#cb53-55" aria-hidden="true" tabindex="-1"></a><span class="co">        Array | np.ndarray</span></span>
+<span id="cb53-56"><a href="#cb53-56" aria-hidden="true" tabindex="-1"></a><span class="co">            Forecast draws on the original sales scale, shape</span></span>
+<span id="cb53-57"><a href="#cb53-57" aria-hidden="true" tabindex="-1"></a><span class="co">            ``(num_samples, horizon, n_series)``.</span></span>
+<span id="cb53-58"><a href="#cb53-58" aria-hidden="true" tabindex="-1"></a><span class="co">        """</span></span>
+<span id="cb53-59"><a href="#cb53-59" aria-hidden="true" tabindex="-1"></a>        key_fit, key_post, key_fc <span class="op">=</span> random.split(rng_key, <span class="dv">3</span>)</span>
+<span id="cb53-60"><a href="#cb53-60" aria-hidden="true" tabindex="-1"></a>        fold_scale: Float[Array, <span class="st">" n_series"</span>] <span class="op">=</span> train_data.mean(axis<span class="op">=-</span><span class="dv">2</span>)</span>
+<span id="cb53-61"><a href="#cb53-61" aria-hidden="true" tabindex="-1"></a>        <span class="co"># A series with no sales in this fold's training window has a zero mean, and</span></span>
+<span id="cb53-62"><a href="#cb53-62" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 0 / 0 would make its scaled data NaN; keep such a series on its raw scale.</span></span>
+<span id="cb53-63"><a href="#cb53-63" aria-hidden="true" tabindex="-1"></a>        fold_scale <span class="op">=</span> jnp.where(fold_scale <span class="op">&gt;</span> <span class="dv">0</span>, fold_scale, <span class="fl">1.0</span>)</span>
+<span id="cb53-64"><a href="#cb53-64" aria-hidden="true" tabindex="-1"></a>        scaled_data <span class="op">=</span> train_data <span class="op">/</span> fold_scale</span>
+<span id="cb53-65"><a href="#cb53-65" aria-hidden="true" tabindex="-1"></a>        fold_guide <span class="op">=</span> AutoNormal(model)</span>
+<span id="cb53-66"><a href="#cb53-66" aria-hidden="true" tabindex="-1"></a>        fold_svi <span class="op">=</span> SVI(model, fold_guide, optax_to_numpyro(optimizer), Trace_ELBO())</span>
+<span id="cb53-67"><a href="#cb53-67" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> fold_svi.run(</span>
+<span id="cb53-68"><a href="#cb53-68" aria-hidden="true" tabindex="-1"></a>            key_fit, num_steps, train_covariates, scaled_data, progress_bar<span class="op">=</span><span class="va">False</span></span>
+<span id="cb53-69"><a href="#cb53-69" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb53-70"><a href="#cb53-70" aria-hidden="true" tabindex="-1"></a>        fold_posterior <span class="op">=</span> draw_posterior(</span>
+<span id="cb53-71"><a href="#cb53-71" aria-hidden="true" tabindex="-1"></a>            key_post, fold_guide, result.params, num_samples, batch_size<span class="op">=</span>batch_size</span>
+<span id="cb53-72"><a href="#cb53-72" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb53-73"><a href="#cb53-73" aria-hidden="true" tabindex="-1"></a>        pred <span class="op">=</span> forecast(</span>
+<span id="cb53-74"><a href="#cb53-74" aria-hidden="true" tabindex="-1"></a>            key_fc, model, fold_posterior, scaled_data, full_covariates, batch_size<span class="op">=</span>batch_size</span>
+<span id="cb53-75"><a href="#cb53-75" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb53-76"><a href="#cb53-76" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> jnp.clip(pred <span class="op">*</span> fold_scale, <span class="bu">min</span><span class="op">=</span><span class="fl">0.0</span>)</span>
+<span id="cb53-77"><a href="#cb53-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-78"><a href="#cb53-78" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> scaled_forecast_fn</span></code></pre></div>
 </div>
 </section>
 </section>
