@@ -25,9 +25,9 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast._validation import _require_positive_num_samples
+from numpyro_forecast._validation import _require_positive_num_samples, require_pred_truth_shapes
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
-from numpyro_forecast.metrics import _check_pred_truth, crps_empirical
+from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
 from numpyro_forecast.predictive import _chunk_indices
 from numpyro_forecast.typing import (
@@ -82,7 +82,7 @@ def eval_mae(
     ValueError
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     return _eval_mae(_device_view(pred), _device_view(truth))
 
 
@@ -119,7 +119,7 @@ def eval_rmse(
     ValueError
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
@@ -226,7 +226,7 @@ def eval_crps(
     ValueError
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
         return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
     return _chunked_cell_metric(
@@ -292,7 +292,7 @@ def eval_coverage(
         If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
         ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
@@ -361,7 +361,7 @@ def evaluate_forecast(
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
         check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}

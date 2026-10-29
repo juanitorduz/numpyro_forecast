@@ -754,7 +754,7 @@ def test_forecast_shape_mismatch_raises_before_scoring() -> None:
 def test_forecast_shape_check_is_skipped_without_metrics() -> None:
     """With ``metrics={}`` nothing is scored, so a mismatched forecast site still returns.
 
-    This keeps the ``main`` behavior of a predictions-only run: the shape guard
+    A predictions-only run does not compare the shapes: the shape guard
     exists to protect the metrics, not to validate the model.
     """
     duration = TRAIN + TEST + 2

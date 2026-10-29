@@ -12,6 +12,7 @@ from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
+from numpyro_forecast._validation import require_pred_truth_shapes
 from numpyro_forecast.evaluate import (
     eval_coverage,
     eval_crps,
@@ -20,7 +21,6 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.metrics import (
-    _check_pred_truth,
     crps_empirical,
     eval_interval_score,
     eval_pinball,
@@ -422,23 +422,23 @@ def test_metric_rejects_scalar_truth(metric: Callable[[Array, float], object]) -
         metric(pred, 0.0)
 
 
-def test_check_pred_truth_rejects_truth_shape_mismatch_in_process() -> None:
+def test_require_pred_truth_shapes_rejects_truth_shape_mismatch_in_process() -> None:
     """The helper itself has no shape annotations, so it raises under the default hook too."""
     with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(4,\)"):
-        _check_pred_truth(jnp.zeros((20, 4, 1)), jnp.zeros((4,)))
+        require_pred_truth_shapes(jnp.zeros((20, 4, 1)), jnp.zeros((4,)))
 
 
-def test_check_pred_truth_rejects_scalar_pred() -> None:
+def test_require_pred_truth_shapes_rejects_scalar_pred() -> None:
     """A point forecast passed as a scalar ``pred`` has no sample axis to drop."""
     with pytest.raises(ValueError, match="sample axis first"):
-        _check_pred_truth(jnp.asarray(1.0), jnp.asarray(1.0))
+        require_pred_truth_shapes(jnp.asarray(1.0), jnp.asarray(1.0))
 
 
-def test_check_pred_truth_reads_static_shapes_of_tracers() -> None:
+def test_require_pred_truth_shapes_reads_static_shapes_of_tracers() -> None:
     """Under ``jit`` and ``vmap`` the check sees tracer shapes and needs no host value."""
 
     def checked(pred: Array, truth: Array) -> Array:
-        _check_pred_truth(pred, truth)
+        require_pred_truth_shapes(pred, truth)
         return pred.mean(axis=0) - truth
 
     pred = jnp.zeros((3, 20, 4, 1))

@@ -8,52 +8,12 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
 from numpyro_forecast._offload import _device_view
+from numpyro_forecast._validation import require_pred_truth_shapes
 from numpyro_forecast.typing import Array, Metric
-
-
-def _check_pred_truth(pred: ArrayLike, truth: ArrayLike) -> None:
-    """Raise when ``truth.shape`` is not ``pred.shape[1:]``.
-
-    Every metric scores ``pred`` of shape ``(sample, *batch)`` against
-    ``truth`` of shape ``(*batch)``. The jaxtyping annotations check this only
-    while the runtime type hook is on; with ``JAXTYPING_DISABLE=1`` a
-    mismatched ``truth`` (for example ``(f,)`` against ``(sample, f, 1)``)
-    broadcasts into a wrong grid and returns a silently wrong value. The check
-    reads static shapes only, so it costs nothing and also works on tracers
-    under ``jit`` and ``vmap``.
-
-    Parameters
-    ----------
-    pred
-        Forecast samples with the sample axis first.
-    truth
-        Ground-truth values.
-
-    Raises
-    ------
-    ValueError
-        If ``pred`` has no sample axis or ``truth.shape != pred.shape[1:]``.
-    """
-    pred_shape, truth_shape = np.shape(pred), np.shape(truth)
-    if not pred_shape:
-        msg = (
-            "pred must have the sample axis first, shape (sample, *batch), got a scalar; "
-            "pass the forecast draws, not a point forecast"
-        )
-        raise ValueError(msg)
-    if pred_shape[1:] != truth_shape:
-        msg = (
-            f"truth must have shape pred.shape[1:] = {pred_shape[1:]}, got {truth_shape}. "
-            "pred has shape (sample, *batch) and truth has shape (*batch): remove only "
-            "the sample axis, and restore any axis dropped from truth (for example "
-            "truth[..., None] for a missing obs axis)"
-        )
-        raise ValueError(msg)
 
 
 @jax.jit
@@ -121,7 +81,7 @@ def crps_empirical(
     Prediction, and Estimation". *Journal of the American Statistical
     Association*.
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     pred_arr = _device_view(pred)
     num_samples = pred_arr.shape[0]
     if num_samples < 2:
@@ -180,7 +140,7 @@ def eval_pinball(
         If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
         ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < quantile < 1.0:
         msg = f"quantile must be in (0, 1), got {quantile}"
         raise ValueError(msg)
@@ -242,7 +202,7 @@ def eval_interval_score(
         If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
         ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
-    _check_pred_truth(pred, truth)
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
@@ -320,7 +280,7 @@ def make_mase(
         pred: Float[ArrayLike, " sample *batch"], truth: Float[ArrayLike, " *batch"]
     ) -> Array:
         """MASE for one ``(pred, truth)`` pair, scaled by the enclosing ``train_data``."""
-        _check_pred_truth(pred, truth)
+        require_pred_truth_shapes(pred, truth)
         return _mase(_device_view(pred), _device_view(truth), scale=scale)
 
     return mase
