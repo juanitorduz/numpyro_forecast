@@ -38,6 +38,13 @@ Ground-truth values with shape `(*batch)` (matching `pred` without the sample ax
 Elementwise CRPS, one value per `batch` location.
 
 
+## Raises
+
+
+`ValueError`  
+If `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)), or `pred` has fewer than 2 samples.
+
+
 ## References
 
 Tilmann Gneiting, Adrian E. Raftery (2007). "Strictly Proper Scoring Rules, Prediction, and Estimation". *Journal of the American Statistical Association*.

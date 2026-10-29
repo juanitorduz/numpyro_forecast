@@ -1491,8 +1491,10 @@ VectorizedBacktestResult
 Raises
 ------
 ValueError
-    If ``data`` and ``covariates`` durations differ, or if ``num_samples``
-    is too small (see ``num_samples``).
+    If ``data`` and ``covariates`` durations differ, if ``num_samples``
+    is too small (see ``num_samples``), or if ``metrics`` is not empty
+    and the model's ``"forecast"`` site does not have the shape of
+    ``data`` over the test window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
@@ -1601,6 +1603,12 @@ Returns
 dict[str, float]
     Each metric name mapped to its value.
 
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+    check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
+
 results_to_dataframe(results: 'Sequence[BacktestResult] | VectorizedBacktestResult') -> 'pd.DataFrame'
 
 Flatten backtest results into a tidy one-row-per-window ``DataFrame``.
@@ -1666,6 +1674,11 @@ Returns
 Array
     The mean empirical CRPS as a scalar array.
 
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
+
 eval_mae(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
 Mean absolute error using the forecast sample median as point estimate.
@@ -1687,6 +1700,11 @@ Returns
 Array
     The mean absolute error as a scalar array.
 
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
+
 eval_rmse(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jax.Array
 
 Root mean squared error using the forecast sample mean as point estimate.
@@ -1707,6 +1725,11 @@ Returns
 -------
 Array
     The root mean squared error as a scalar array.
+
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_coverage(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9, batch_size: int | None = None) -> jax.Array
 
@@ -1746,7 +1769,8 @@ Array
 Raises
 ------
 ValueError
-    If ``alpha`` is not strictly inside ``(0, 1)``.
+    If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 crps_empirical(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float) -> jaxtyping.Float[Array, '*batch']
 
@@ -1777,6 +1801,12 @@ Returns
 -------
 Float[Array, "*batch"]
     Elementwise CRPS, one value per ``batch`` location.
+
+Raises
+------
+ValueError
+    If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`), or
+    ``pred`` has fewer than 2 samples.
 
 References
 ----------
@@ -1814,7 +1844,8 @@ Array
 Raises
 ------
 ValueError
-    If ``quantile`` is not strictly inside ``(0, 1)``.
+    If ``quantile`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 eval_interval_score(pred: jaxtyping.Float[Array, 'sample *batch'] | jaxtyping.Float[ndarray, 'sample *batch'], truth: jaxtyping.Float[Array, '*batch'] | jaxtyping.Float[ndarray, '*batch'] | numpy.number | float, *, alpha: float = 0.9) -> jax.Array
 
@@ -1847,7 +1878,8 @@ Array
 Raises
 ------
 ValueError
-    If ``alpha`` is not strictly inside ``(0, 1)``.
+    If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+    ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 make_mase(train_data: jaxtyping.Float[Array, '*batch time obs_dim'] | jaxtyping.Float[ndarray, '*batch time obs_dim'], *, seasonality: int = 1) -> collections.abc.Callable[[jax.Array, jax.Array], jax.Array]
 
@@ -1873,7 +1905,8 @@ seasonality
 Returns
 -------
 Metric
-    A ``(pred, truth)`` callable computing MASE as a scalar array.
+    A ``(pred, truth)`` callable computing MASE as a scalar array. It raises ``ValueError`` if
+    ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
 
 Raises
 ------

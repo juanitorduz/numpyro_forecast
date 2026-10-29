@@ -91,7 +91,7 @@ The stacked per-window losses, metrics, and window indices.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ, or if `num_samples` is too small (see `num_samples`).
+If `data` and `covariates` durations differ, if `num_samples` is too small (see `num_samples`), or if `metrics` is not empty and the model's `"forecast"` site does not have the shape of `data` over the test window.
 
 `BacktestWindowError`  
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.

@@ -32,3 +32,10 @@ Ground-truth values (matching `pred` without the sample axis).
 
 `Array`  
 The root mean squared error as a scalar array.
+
+
+## Raises
+
+
+`ValueError`  
+If `truth.shape` is not `pred.shape[1:]` (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)).

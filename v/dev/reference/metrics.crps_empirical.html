@@ -916,6 +916,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#parameters" id="toc-parameters" class="nav-link active" data-scroll-target="#parameters">Parameters</a></li>
   <li><a href="#returns" id="toc-returns" class="nav-link" data-scroll-target="#returns">Returns</a></li>
+  <li><a href="#raises" id="toc-raises" class="nav-link" data-scroll-target="#raises">Raises</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 </nav>
@@ -947,7 +948,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L39-L82" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/metrics.py#L40-L90" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">metrics</span><span class="op">.</span><span class="sig-name">crps_empirical</span>(
@@ -984,6 +985,17 @@ Ground-truth values with shape <code>(*batch)</code> (matching <code>pred</code>
 <dt><code> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch"</span>]</span></code></dt>
 <dd>
 Elementwise CRPS, one value per <code>batch</code> location.
+</dd>
+</dl>
+</div>
+</section>
+<section id="raises" class="level2 doc-raises">
+<h2 class="doc-raises">Raises</h2>
+<div class="doc-definition-items">
+<dl>
+<dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
+<dd>
+If <code>truth.shape</code> is not <code>pred.shape[1:]</code> (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>), or <code>pred</code> has fewer than 2 samples.
 </dd>
 </dl>
 </div>
