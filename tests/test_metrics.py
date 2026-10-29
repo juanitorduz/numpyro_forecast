@@ -79,6 +79,21 @@ def test_crps_shape_mismatch_raises() -> None:
         crps_empirical(jnp.zeros((10, 3)), jnp.zeros((4,)))
 
 
+def test_crps_empirical_truth_docstring_states_the_shape_contract() -> None:
+    """The ``truth`` entry documents ``pred.shape[1:]``, not broadcasting (#199).
+
+    The ``*batch`` annotation binds ``truth`` to ``pred.shape[1:]``, so a
+    broadcastable ``truth`` such as ``(1,)`` against ``(5, 4)`` draws is
+    rejected; the docstring must not promise broadcasting.
+    """
+    doc = crps_empirical.__doc__
+    assert doc is not None
+    assert "broadcastable" not in doc
+    assert "(matching ``pred`` without the sample axis)" in doc
+    with pytest.raises(TypeCheckError):
+        crps_empirical(jnp.zeros((5, 4)), jnp.zeros((1,)))
+
+
 def test_crps_needs_two_samples() -> None:
     with pytest.raises(ValueError, match="at least 2 samples"):
         crps_empirical(jnp.zeros((1, 3)), jnp.zeros((3,)))
