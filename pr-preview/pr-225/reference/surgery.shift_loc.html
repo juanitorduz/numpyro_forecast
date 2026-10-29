@@ -903,7 +903,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L112-L157" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L112-L158" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">shift_loc</span>(
@@ -920,7 +920,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>Gumbel</code>: <code>loc</code> is the mode; the mean is <code>loc + np.euler_gamma * scale</code> (about <code>loc + 0.5772 * scale</code>).</li>
 <li><code>AsymmetricLaplace</code>: <code>loc</code> is the mode; the mean is <code>loc + scale * (1 / asymmetry - asymmetry)</code>, which is <code>loc</code> only for <code>asymmetry = 1</code> (the symmetric case).</li>
 </ul>
-<p>An <code>Independent</code> wrapper follows its base distribution. When the predictor must be the mean of a <code>Gumbel</code> or <code>AsymmetricLaplace</code> observation, center the noise yourself, for example <code>dist.Gumbel(-np.euler_gamma * scale, scale)</code>.</p>
+<p>An <code>Independent</code> wrapper follows its base distribution. When the predictor must be the mean of a <code>Gumbel</code> or <code>AsymmetricLaplace</code> observation, center the noise yourself, for example <code>dist.Gumbel(-np.euler_gamma * scale, scale)</code> or <code>dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

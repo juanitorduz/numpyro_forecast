@@ -22,7 +22,7 @@ This converts Pyro's `obs = data - prediction` idiom into an additive shift of t
 - `Gumbel`: `loc` is the mode; the mean is `loc + np.euler_gamma * scale` (about `loc + 0.5772 * scale`).
 - `AsymmetricLaplace`: `loc` is the mode; the mean is `loc + scale * (1 / asymmetry - asymmetry)`, which is `loc` only for `asymmetry = 1` (the symmetric case).
 
-An `Independent` wrapper follows its base distribution. When the predictor must be the mean of a `Gumbel` or `AsymmetricLaplace` observation, center the noise yourself, for example `dist.Gumbel(-np.euler_gamma * scale, scale)`.
+An `Independent` wrapper follows its base distribution. When the predictor must be the mean of a `Gumbel` or `AsymmetricLaplace` observation, center the noise yourself, for example `dist.Gumbel(-np.euler_gamma * scale, scale)` or `dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)`.
 
 
 ## Parameters
