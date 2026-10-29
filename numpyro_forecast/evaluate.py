@@ -1044,10 +1044,13 @@ def backtest_vectorized(
     the warm-up point. ``fold_in(rng_key, i)`` is the window-``i`` parent,
     split into SVI-init, posterior-draw, and forecast subkeys (the parent
     itself is never consumed; see `_window_key_streams()`). The SVI-init
-    subkey changes the start of a window only for guide parameters whose
-    initializer takes a key: the network weights of a flow autoguide
-    (``AutoIAFNormal``, ``AutoBNAFNormal``) or a callable initializer in a
-    hand-written guide, such as
+    subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the
+    window (``svi.init`` keeps a key split from it in the SVI state), so it
+    changes the fit of a stochastic guide such as ``AutoNormal`` even when
+    every window starts from the same point. It changes the start of a window
+    only for guide parameters whose initializer takes a key: the network
+    weights of a flow autoguide (``AutoIAFNormal``, ``AutoBNAFNormal``) or a
+    callable initializer in a hand-written guide, such as
     ``numpyro.param("loc", lambda key: random.normal(key))``. Those guides
     start each window from a different point.
 

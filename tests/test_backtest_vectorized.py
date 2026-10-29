@@ -480,7 +480,7 @@ def _starting_points(monkeypatch: pytest.MonkeyPatch, rng_key: Array, guide: Gui
 def test_location_autoguide_windows_start_at_the_warmup_init(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A location-based autoguide starts every window at the warm-up init (#202).
+    """A location-based autoguide starts every window at the warm-up init.
 
     ``AutoNormal`` runs ``init_loc_fn`` once, in the warm-up ``svi.init`` keyed
     by ``fold_in(rng_key, -1)``, so every window starts from that point and the
@@ -501,7 +501,7 @@ def test_location_autoguide_windows_start_at_the_warmup_init(
 def test_keyed_param_initializer_uses_the_per_window_init_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A callable ``numpyro.param`` initializer starts each window differently (#202)."""
+    """A callable ``numpyro.param`` initializer starts each window differently."""
     starts = _starting_points(monkeypatch, random.PRNGKey(0), _keyed_level_guide)
     assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
 
@@ -519,7 +519,7 @@ def test_keyed_param_initializer_uses_the_per_window_init_key(
 def test_autoguide_init_params_across_window_init_keys(
     make_guide: Callable[[], AutoGuide], same_start: bool
 ) -> None:
-    """Which autoguides draw their initial parameters from the SVI-init key (#202).
+    """Which autoguides draw their initial parameters from the SVI-init key.
 
     Replays the init sequence of `backtest_vectorized()`: one eager warm-up
     ``svi.init`` keyed by ``fold_in(rng_key, -1)``, then a vmapped ``svi.init``
@@ -540,8 +540,31 @@ def test_autoguide_init_params_across_window_init_keys(
     assert all(bool(jnp.array_equal(x[0], x[1])) for x in leaves) == same_start
 
 
+def test_svi_init_key_seeds_the_elbo_steps() -> None:
+    """The SVI-init subkey changes the fit of ``AutoNormal`` even with a shared start.
+
+    ``svi.init`` keeps a key split from its ``rng_key`` in the SVI state and
+    every ``svi.update`` splits it for the ELBO draws, so two windows with the
+    same data and the same warm-up start end at different parameters.
+    """
+    import jax
+
+    rng_key = random.PRNGKey(0)
+    cov, data = jnp.zeros((10, 0)), jnp.zeros((10, 2))
+    svi = SVI(_level_model, AutoNormal(_level_model), numpyro.optim.Adam(0.01), Trace_ELBO())
+    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), cov, data)
+    init_keys, _, _ = _window_key_streams(rng_key, 2)
+    state = jax.vmap(lambda key: svi.init(key, cov, data))(init_keys)
+    start = svi.get_params(state)["mu_auto_loc"]
+    assert bool(jnp.array_equal(start[0], start[1]))
+    for _ in range(20):
+        state, _ = jax.vmap(lambda s: svi.update(s, cov, data))(state)
+    end = svi.get_params(state)["mu_auto_loc"]
+    assert not bool(jnp.allclose(end[0], end[1]))
+
+
 def test_docstring_describes_the_warmup_init_key() -> None:
-    """The PRNG paragraph no longer calls the warm-up init discarded (#202)."""
+    """The PRNG paragraph names ``init_loc_fn`` and does not call the warm-up init discarded."""
     doc = backtest_vectorized.__doc__
     assert doc is not None
     prng = doc.split("PRNG:", 1)[1].split("Parameters\n", 1)[0]
