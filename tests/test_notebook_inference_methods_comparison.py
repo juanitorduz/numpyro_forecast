@@ -19,8 +19,10 @@ NOTEBOOK = (
     / "inference_methods_comparison.ipynb"
 )
 SCALARS = ("bias", "drift_scale", "nu", "sigma")
-# Vehtari et al. (2021): with four chains, trust a summary when R-hat < 1.01.
+# Vehtari et al. (2021): with four chains, trust a summary when R-hat < 1.01 and the bulk
+# effective sample size is above about 400.
 R_HAT_THRESHOLD = 1.01
+ESS_THRESHOLD = 400
 
 
 @pytest.fixture(scope="module")
@@ -73,6 +75,17 @@ def test_mixing_claim_matches_the_stored_summary(cells: list[dict[str, Any]]) ->
         assert "mix well" not in _markdown(cells), (
             f"the stored R-hat values {r_hat} do not support the claim that they mix well"
         )
+
+
+def test_low_bulk_ess_is_named_in_the_prose(cells: list[dict[str, Any]]) -> None:
+    """Every forecast scalar whose stored bulk ESS is below the threshold is quoted."""
+    header, *lines = _summary_table(cells).split("\n\n")[0].splitlines()
+    column = header.split().index("ess_bulk") + 1
+    rows = {line.split()[0]: line.split() for line in lines}
+    low = {name: rows[name][column] for name in SCALARS if int(rows[name][column]) < ESS_THRESHOLD}
+    markdown = _markdown(cells)
+    missing = {name: ess for name, ess in low.items() if f"`{ess}`" not in markdown}
+    assert not missing, f"the prose does not quote the low bulk ESS of {missing}"
 
 
 def test_prose_names_the_interval_of_the_summary(cells: list[dict[str, Any]]) -> None:
