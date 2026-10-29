@@ -263,7 +263,7 @@ update
     ``eps_t`` (not a recomputed ``y_t - mu_t``, which can differ by an ulp);
     when the update needs the mean, call ``mean(carry, x_t)`` inside it.
 noise_dist
-    Zero-centered per-step error distribution, either an elementwise family
+    Per-step error distribution with location ``0``, either an elementwise family
     (event rank 0) or a multivariate family over the observation axis (event
     rank 1, e.g. ``dist.MultivariateNormal(jnp.zeros(obs), scale_tril=L)``
     for shocks correlated across series, the VAR case). For a
@@ -273,7 +273,14 @@ noise_dist
     ``(B, 1, obs)`` and ``(B, 1)`` respectively. Either way the draw under
     the time plate (``dim=-2`` for event rank 0, ``dim=-1`` for event rank 1)
     is exactly ``(*batch, future, obs)`` with the dtype of the means; event
-    rank 2 or higher is rejected.
+    rank 2 or higher is rejected. Over the horizon ``y_t = mu_t + eps_t``,
+    so ``mu_t`` is the mean of ``y_t`` only when the errors have mean zero:
+    ``Gumbel`` errors with ``loc = 0`` have a nonzero mean, and
+    ``AsymmetricLaplace`` errors with ``loc = 0`` have a nonzero mean unless
+    ``asymmetry = 1`` (see `~~numpyro_forecast.surgery.shift_loc()` for the
+    offsets). That mean shifts each ``y_t`` away from ``mu_t``, and ``update``
+    carries the shift into the later means, so the forecast bias can grow
+    with the horizon. ``Cauchy`` errors have no mean.
 xs
     Optional exogenous inputs over the full horizon: a PyTree of arrays with
     time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
@@ -398,10 +405,16 @@ Register the observation and forecast sites for the model.
 
 ``prediction`` is the deterministic predictor over the full horizon (time at
 axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
-two forms. A `numpyro.distributions.Distribution` is zero-centered
-observation noise (e.g. ``dist.StudentT(nu, 0.0, sigma)``) shifted onto the
-predictor with `~~numpyro_forecast.surgery.shift_loc()`, which also owns
-the multivariate-normal layout check. A callable is a link mapping the
+two forms. A `numpyro.distributions.Distribution` is observation noise with
+location ``0`` (e.g. ``dist.StudentT(nu, 0.0, sigma)``) whose location is
+shifted onto the predictor with `~~numpyro_forecast.surgery.shift_loc()`,
+which also owns the multivariate-normal layout check. The predictor is then
+the location of the observation distribution: the mean for ``Normal``,
+``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
+but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
+offset from it (for ``AsymmetricLaplace`` unless ``asymmetry = 1``), and for
+``Cauchy`` noise, which has no mean (see
+`~~numpyro_forecast.surgery.shift_loc()`). A callable is a link mapping the
 predictor to the observation distribution directly (the GLM form, e.g.
 ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the
 observation site ``"obs"`` is observed; while forecasting the in-sample
@@ -418,9 +431,9 @@ Parameters
 h
     The horizon for the current model call (see `Horizon`).
 obs_dist
-    Zero-centered noise distribution (shifted onto ``prediction``) or a
-    link callable from the full-horizon predictor to the observation
-    distribution.
+    Noise distribution with location ``0`` (its location is shifted onto
+    ``prediction``) or a link callable from the full-horizon predictor to
+    the observation distribution.
 prediction
     The deterministic predictor over the full horizon, time at axis ``-2``.
 
@@ -783,22 +796,43 @@ Time-axis operations on observation distributions, extensible via singledispatch
 
 shift_loc(noise_dist: numpyro.distributions.distribution.Distribution, loc: jax.Array) -> numpyro.distributions.distribution.Distribution
 
-Re-center a zero-centered noise distribution at ``loc``.
+Shift the location parameter of a noise distribution by ``loc``.
 
 This converts Pyro's ``obs = data - prediction`` idiom into an additive
-shift of the observation distribution's location.
+shift of the observation distribution's location: the result is
+``noise_dist`` with ``loc`` added to its location parameter and every other
+parameter unchanged. For noise with location ``0`` the result has its
+location at ``loc``, and that location is not the mean for every family:
+
+- ``Normal``, ``Laplace`` and ``MultivariateNormal``: ``loc`` is the mean
+  (and also the median and the mode).
+- ``StudentT``: ``loc`` is the mean when ``df > 1`` (and always the median
+  and the mode); for ``df <= 1`` there is no mean.
+- ``Cauchy``: ``loc`` is the mode (and the median); there is no mean.
+- ``Gumbel``: ``loc`` is the mode; the mean is
+  ``loc + np.euler_gamma * scale`` (about ``loc + 0.5772 * scale``).
+- ``AsymmetricLaplace``: ``loc`` is the mode; the mean is
+  ``loc + scale * (1 / asymmetry - asymmetry)``, which is ``loc`` only for
+  ``asymmetry = 1`` (the symmetric case).
+
+An ``Independent`` wrapper follows its base distribution. When the
+predictor must be the mean of a ``Gumbel`` or ``AsymmetricLaplace``
+observation, center the noise yourself, for example
+``dist.Gumbel(-np.euler_gamma * scale, scale)`` or
+``dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)``.
 
 Parameters
 ----------
 noise_dist
-    A zero-centered location-family distribution.
+    A location-family noise distribution, usually with location ``0``.
 loc
-    The deterministic mean to add to the distribution's location.
+    The deterministic predictor to add to the distribution's location.
 
 Returns
 -------
 dist.Distribution
-    A distribution centered at ``loc``.
+    The same family with its location shifted by ``loc`` (the mean or the
+    mode, depending on the family, see above).
 
 Raises
 ------

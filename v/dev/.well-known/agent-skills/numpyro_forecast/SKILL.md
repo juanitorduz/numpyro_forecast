@@ -209,10 +209,11 @@ Package exception hierarchy raised at validation boundaries.
 5. innovations is called inside plates you open yourself; markov_series rejects an enclosing plate and takes plates=[(name, size)] instead.
 6. ssoe registers only the <name>_future error site: write the likelihood against result.mu yourself and register numpyro.deterministic("forecast", result.y_future) when h.future > 0. Its mean and update functions must not call numpyro.sample.
 7. innovations, ssoe and predict take distribution instances (dist.Normal(0.0, scale)), not distribution classes or thunks.
-8. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
-9. time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError.
-10. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
-11. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
+8. predict shifts the location of a loc=0 noise instance onto the predictor, and ssoe adds its draws to the step mean: the predictor is the mean for Normal, StudentT (df > 1), Laplace and MultivariateNormal noise, but the mode for Gumbel and AsymmetricLaplace, whose mean is offset (for AsymmetricLaplace unless asymmetry = 1; Cauchy has no mean). Center that noise yourself when the predictor must be the mean, e.g. dist.Gumbel(-np.euler_gamma * scale, scale).
+9. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
+10. time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError.
+11. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
+12. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
 
 ## Best practices
 

@@ -77,7 +77,7 @@ Time-axis operations on observation distributions, extensible via singledispatch
 
 
 [surgery.shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc)  
-Re-center a zero-centered noise distribution at `loc`.
+Shift the location parameter of a noise distribution by `loc`.
 
 [surgery.slice_time()](surgery.slice_time.md#numpyro_forecast.surgery.slice_time)  
 Slice an elementwise distribution along the time axis `-2`.
