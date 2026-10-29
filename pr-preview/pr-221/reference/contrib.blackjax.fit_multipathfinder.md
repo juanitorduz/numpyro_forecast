@@ -66,7 +66,7 @@ L-BFGS gradient-norm convergence tolerance.
 `ftol: float = ``1e-05`  
 L-BFGS relative function-value convergence tolerance.
 
-`init_params: dict[str, Array] | None = None`  
+`init_params: Mapping[str, ArrayLike] | None = None`  
 Optional starting positions, one per path, overriding the default per-path `init_to_uniform` draws. Unlike the single-path [fit_pathfinder()](contrib.blackjax.fit_pathfinder.md#numpyro_forecast.contrib.blackjax.fit_pathfinder) argument of the same name, every leaf must already carry a leading axis of size `num_paths` (validated; a mismatch raises `ValueError`).
 
 

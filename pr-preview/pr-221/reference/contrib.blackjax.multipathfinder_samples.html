@@ -171,7 +171,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -188,11 +188,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -901,7 +905,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L993-L1180" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L995-L1185" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">multipathfinder_samples</span>(</span>
@@ -915,7 +919,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Every call draws fresh unconstrained samples from each path’s fitted normal approximation (<code>num_samples</code> per path, via <code>blackjax.vi.pathfinder.sample</code> vmapped over the paths) and then combines the paths into a single set of <code>num_samples</code> draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> and <a href="contrib.blackjax.pathfinder_samples.html#numpyro_forecast.contrib.blackjax.pathfinder_samples" class="gdls-link gdls-code">pathfinder_samples()</a>: <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> and NumPyro’s <code>Predictive</code> consume it unchanged. Chunking and device offload are delegated to the shared <code>_draw_chunked()</code> driver, so the same memory-bounding contract applies.</p>
+<p>Every call draws fresh unconstrained samples from each path’s fitted normal approximation (<code>num_samples</code> per path, via <code>blackjax.vi.pathfinder.sample</code> vmapped over the paths) and then combines the paths into a single set of <code>num_samples</code> draws. Nothing is recycled from the small pool stored at fit time, so asking for more draws than that pool held costs nothing in duplication. The output contract is identical to <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> and <a href="contrib.blackjax.pathfinder_samples.html#numpyro_forecast.contrib.blackjax.pathfinder_samples" class="gdls-link gdls-code">pathfinder_samples()</a>: <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> and NumPyro’s <code>Predictive</code> consume it unchanged. Chunking and device offload are delegated to the shared <code>draw_chunked()</code> driver, so the same memory-bounding contract applies.</p>
 </div>
 <section id="resampling-strategies" class="level2 doc-resampling-strategies">
 <h2 class="doc-resampling-strategies">Resampling Strategies</h2>
@@ -971,7 +975,7 @@ Posterior samples of the latent sites, sample axis leading (with <code>device="h
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>num_samples</code> or <code>batch_size</code> is not positive, or <code>resample</code> is not one of <code>"auto"</code>, <code>"psis"</code>, <code>"elbo"</code>.</p>
+<p>If <code>num_samples</code> or <code>batch_size</code> is not positive (an unknown <code>resample</code> is a type error under the package’s runtime type checking, and a <code>ValueError</code> only when that checking is disabled).</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">HostMemoryKindError</span></code></dt>
 <dd>
@@ -990,7 +994,7 @@ If <code>device</code> names a platform whose backend is not initialized (see <c
 <dl>
 <dt><code> <span class="doc-parameter-annotation">UserWarning</span></code></dt>
 <dd>
-In PSIS mode, if the <code>pareto_k</code> recomputed on this call’s fresh draws exceeds <code>0.7</code>. This is a separate diagnostic from <code>fit.pareto_k</code>, which is computed once over the pool stored at fit time. Also if <code>device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of <code>"host"</code> instead.
+In PSIS mode, once per call, if the <code>pareto_k</code> recomputed on this call’s fresh draws exceeds <code>0.7</code> (with <code>batch_size</code>, PSIS runs per chunk and the warning reports the largest <code>pareto_k</code> and how many chunks exceed the threshold). This is a separate diagnostic from <code>fit.pareto_k</code>, which is computed once over the pool stored at fit time. Also if <code>device="cpu"</code> is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of <code>"host"</code> instead.
 </dd>
 </dl>
 </div>

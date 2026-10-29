@@ -124,7 +124,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
   <link rel="alternate" type="text/markdown" href="surgery.shift_loc.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html">
-  <meta name="description" content="Re-center a zero-centered noise distribution at loc.">
+  <meta name="description" content="Shift the location parameter of a noise distribution by loc.">
   <script type="application/ld+json">
 [
   {
@@ -155,12 +155,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="surgery.shift_loc() – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Re-center a zero-centered noise distribution at loc.">
+  <meta property="og:description" content="Shift the location parameter of a noise distribution by loc.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/surgery.shift_loc.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="surgery.shift_loc() – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Re-center a zero-centered noise distribution at loc.">
+  <meta name="twitter:description" content="Shift the location parameter of a noise distribution by loc.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -171,7 +171,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -188,11 +188,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -895,11 +899,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Re-center a zero-centered noise distribution at <code>loc</code>.</p>
+<p>Shift the location parameter of a noise distribution by <code>loc</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L112-L137" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L112-L158" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">shift_loc</span>(
@@ -908,7 +912,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>This converts Pyro’s <code>obs = data - prediction</code> idiom into an additive shift of the observation distribution’s location.</p>
+<p>This converts Pyro’s <code>obs = data - prediction</code> idiom into an additive shift of the observation distribution’s location: the result is <code>noise_dist</code> with <code>loc</code> added to its location parameter and every other parameter unchanged. For noise with location <code>0</code> the result has its location at <code>loc</code>, and that location is not the mean for every family:</p>
+<ul>
+<li><code>Normal</code>, <code>Laplace</code> and <code>MultivariateNormal</code>: <code>loc</code> is the mean (and also the median and the mode).</li>
+<li><code>StudentT</code>: <code>loc</code> is the mean when <code>df &gt; 1</code> (and always the median and the mode); for <code>df &lt;= 1</code> there is no mean.</li>
+<li><code>Cauchy</code>: <code>loc</code> is the mode (and the median); there is no mean.</li>
+<li><code>Gumbel</code>: <code>loc</code> is the mode; the mean is <code>loc + np.euler_gamma * scale</code> (about <code>loc + 0.5772 * scale</code>).</li>
+<li><code>AsymmetricLaplace</code>: <code>loc</code> is the mode; the mean is <code>loc + scale * (1 / asymmetry - asymmetry)</code>, which is <code>loc</code> only for <code>asymmetry = 1</code> (the symmetric case).</li>
+</ul>
+<p>An <code>Independent</code> wrapper follows its base distribution. When the predictor must be the mean of a <code>Gumbel</code> or <code>AsymmetricLaplace</code> observation, center the noise yourself, for example <code>dist.Gumbel(-np.euler_gamma * scale, scale)</code> or <code>dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -916,11 +928,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <dl>
 <dt><code><span class="doc-parameter-name">noise_dist</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
-<p>A zero-centered location-family distribution.</p>
+<p>A location-family noise distribution, usually with location <code>0</code>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">loc</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-The deterministic mean to add to the distribution’s location.
+The deterministic predictor to add to the distribution’s location.
 </dd>
 </dl>
 </div>
@@ -931,7 +943,7 @@ The deterministic mean to add to the distribution’s location.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
-A distribution centered at <code>loc</code>.
+The same family with its location shifted by <code>loc</code> (the mean or the mode, depending on the family, see above).
 </dd>
 </dl>
 </div>

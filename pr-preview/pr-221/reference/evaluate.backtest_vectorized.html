@@ -171,7 +171,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
     <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">numpyro_forecast</span>
+    <span class="navbar-title">numpyro_forecast <span class="version-badge" title="Released 2026-09-29">v0.4.0</span></span>
     </a>
   </div>
             <div id="quarto-search" class=""></div>
@@ -188,11 +188,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <a class="nav-link active" href="../reference/index.html" aria-current="page"> 
 <span class="menu-text">Reference</span></a>
   </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../changelog.html"> 
+<span class="menu-text">Changelog</span></a>
+  </li>  
 </ul>
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
     <span class="nav-link">
-<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast"></div>
+<div id="github-widget" data-owner="juanitorduz" data-repo="numpyro_forecast" data-stars="39" data-forks="3"></div>
     </span>
   </li>  
 </ul>
@@ -899,7 +903,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1015-L1187" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L1125-L1337" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest_vectorized</span>(</span>
@@ -921,7 +925,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-text">
 <p>Estimator-equivalent to <a href="evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest()</a> with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows, giving order-of-magnitude wall-clock wins for tens of windows on small models.</p>
-<p>PRNG: <code>fold_in(rng_key, -1)</code> seeds a discarded eager warm-up init; <code>fold_in(rng_key, i)</code> is the window-<code>i</code> parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see <code>_window_key_streams()</code>).</p>
+<p>PRNG: <code>fold_in(rng_key, -1)</code> keys the eager warm-up <code>svi.init</code> on window 0. An autoguide runs its <code>init_loc_fn</code> once, at its first init (this warm-up for a fresh guide). A location-based autoguide (for example <code>AutoNormal</code>, <code>AutoDelta</code> or <code>AutoMultivariateNormal</code>) derives all its initial parameters from those locations, so every window starts from the warm-up point. <code>fold_in(rng_key, i)</code> is the window-<code>i</code> parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see <code>_window_key_streams()</code>). The SVI-init subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the window (<code>svi.init</code> keeps a key split from it in the SVI state), so it changes the fit of a stochastic guide such as <code>AutoNormal</code> even when every window starts from the same point. It changes the start of a window only for guide parameters whose initializer takes a key: the network weights of a flow autoguide (<code>AutoIAFNormal</code>, <code>AutoBNAFNormal</code>) or a callable initializer in a hand-written guide, such as <code>numpyro.param("loc", lambda key: random.normal(key))</code>. Those guides start each window from a different point.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -972,7 +976,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">num_samples</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">int</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="dv">100</span></span></code></dt>
 <dd>
-<p>Number of forecast samples drawn per window.</p>
+<p>Number of forecast samples drawn per window. Must be positive, and at least 2 when <code>metrics</code> contains <a href="evaluate.eval_crps.html#numpyro_forecast.evaluate.eval_crps" class="gdls-link gdls-code">eval_crps()</a> (as <a href="evaluate.DEFAULT_METRICS.html#numpyro_forecast.evaluate.DEFAULT_METRICS" class="gdls-link gdls-code">DEFAULT_METRICS</a> does) or a <code>functools.partial()</code> of it. Both rules are checked before the fit. A CRPS inside another wrapper (a <code>lambda</code> or a <code>jax.jit</code> function) is not checked up front: it fails only after the fit.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">metrics</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, Metric] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -1002,7 +1006,7 @@ The stacked per-window losses, metrics, and window indices.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>data</code> and <code>covariates</code> durations differ.</p>
+<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if their durations differ, if <code>num_samples</code> is too small (see <code>num_samples</code>), or if <code>metrics</code> is not empty and the model’s <code>"forecast"</code> site does not have the shape of <code>data</code> over the test window.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">BacktestWindowError</span></code></dt>
 <dd>
@@ -1010,7 +1014,7 @@ The stacked per-window losses, metrics, and window indices.
 </dd>
 <dt><code> <span class="doc-parameter-annotation">VectorizedMetricError</span></code></dt>
 <dd>
-If a metric forces a host conversion under <code>vmap</code> (it is not a pure JAX function).
+If a metric is not a pure JAX function under <code>vmap</code>: it forces a host conversion (<code>float(...)</code>, <code>int(...)</code>, <code>range(...)</code>, Python list indexing or a NumPy call on a traced value) or builds a value-dependent shape (a boolean mask index such as <code>x[x &gt; 0]</code>).
 </dd>
 </dl>
 </div>

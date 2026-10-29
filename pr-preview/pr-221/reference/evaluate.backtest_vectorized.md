@@ -28,7 +28,7 @@ evaluate.backtest_vectorized(
 
 Estimator-equivalent to [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest) with rolling windows; it differs only in PRNG stream layout and float reduction order, so the equivalence is statistical, not bitwise. Model, guide, and SVI compile once regardless of the number of windows, giving order-of-magnitude wall-clock wins for tens of windows on small models.
 
-PRNG: `fold_in(rng_key, -1)` seeds a discarded eager warm-up init; `fold_in(rng_key, i)` is the window-`i` parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see `_window_key_streams()`).
+PRNG: `fold_in(rng_key, -1)` keys the eager warm-up `svi.init` on window 0. An autoguide runs its `init_loc_fn` once, at its first init (this warm-up for a fresh guide). A location-based autoguide (for example `AutoNormal`, `AutoDelta` or `AutoMultivariateNormal`) derives all its initial parameters from those locations, so every window starts from the warm-up point. `fold_in(rng_key, i)` is the window-`i` parent, split into SVI-init, posterior-draw, and forecast subkeys (the parent itself is never consumed; see `_window_key_streams()`). The SVI-init subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the window (`svi.init` keeps a key split from it in the SVI state), so it changes the fit of a stochastic guide such as `AutoNormal` even when every window starts from the same point. It changes the start of a window only for guide parameters whose initializer takes a key: the network weights of a flow autoguide (`AutoIAFNormal`, `AutoBNAFNormal`) or a callable initializer in a hand-written guide, such as `numpyro.param("loc", lambda key: random.normal(key))`. Those guides start each window from a different point.
 
 
 ## Parameters
@@ -71,7 +71,7 @@ Step between successive windows (`>= 1`).
 Number of SVI steps per window.
 
 `num_samples: int = ``100`  
-Number of forecast samples drawn per window.
+Number of forecast samples drawn per window. Must be positive, and at least 2 when `metrics` contains [eval_crps()](evaluate.eval_crps.md#numpyro_forecast.evaluate.eval_crps) (as [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS) does) or a `functools.partial()` of it. Both rules are checked before the fit. A CRPS inside another wrapper (a `lambda` or a `jax.jit` function) is not checked up front: it fails only after the fit.
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each metric is vmapped over the window axis, so any pure-JAX mapping, including partial-bound variants such as `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}`, is scored inside the single fused computation. Host-side metrics are unsupported here; use [backtest()](evaluate.backtest.md#numpyro_forecast.evaluate.backtest), or `keep_predictions=True` and score on the host.
@@ -91,10 +91,10 @@ The stacked per-window losses, metrics, and window indices.
 
 
 `ValueError`  
-If `data` and `covariates` durations differ.
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if their durations differ, if `num_samples` is too small (see `num_samples`), or if `metrics` is not empty and the model's `"forecast"` site does not have the shape of `data` over the test window.
 
 `BacktestWindowError`  
 If `train_window`, `test_window`, or `stride` is `< 1`, or there is no room for a single window.
 
 `VectorizedMetricError`  
-If a metric forces a host conversion under `vmap` (it is not a pure JAX function).
+If a metric is not a pure JAX function under `vmap`: it forces a host conversion (`float(...)`, `int(...)`, `range(...)`, Python list indexing or a NumPy call on a traced value) or builds a value-dependent shape (a boolean mask index such as `x[x > 0]`).
