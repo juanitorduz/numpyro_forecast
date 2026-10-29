@@ -21,6 +21,7 @@ from jax import Array, random
 from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
+from numpyro_forecast import Horizon
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     VectorizedBacktestResult,
@@ -32,6 +33,7 @@ from numpyro_forecast.evaluate import (
 )
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.predictive import draw_posterior, forecast
+from numpyro_forecast.typing import Guide
 
 TRAIN, TEST = 30, 5
 
@@ -413,6 +415,75 @@ def test_window_streams_are_disjoint() -> None:
         keys += [init_keys[i], post_keys[i], fc_keys[i], parents[i]]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
     assert len(set(raw)) == len(raw)
+
+
+def _level_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant-level model whose ``forecast`` is the sampled level ``mu``."""
+    h = Horizon.from_data(covariates, data)
+    mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.Normal(mu, 1.0), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), mu))
+
+
+def _keyed_level_guide(covariates: Array, data: Array | None = None) -> None:
+    """A hand-written guide whose initial ``loc`` is drawn from the SVI-init key."""
+    loc = numpyro.param("loc", lambda key: random.normal(key))
+    numpyro.sample("mu", dist.Normal(loc, 1e-6))
+
+
+def _starting_points(rng_key: Array, guide: Guide) -> Array:
+    """Each window's SVI starting point of ``mu`` (``num_steps=0``, near-zero guide scale)."""
+    data, cov = jnp.zeros((30, 1)), jnp.zeros((30, 0))
+    result = backtest_vectorized(
+        rng_key,
+        lambda: _level_model,
+        data,
+        cov,
+        train_window=10,
+        test_window=2,
+        stride=5,
+        guide=guide,
+        num_steps=0,
+        num_samples=2,
+        metrics={},
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    return result.predictions[:, 0, 0, 0]
+
+
+def test_autoguide_windows_start_at_the_warmup_init() -> None:
+    """An autoguide starts every window at the eager warm-up init (#202).
+
+    The autoguide runs ``init_loc_fn`` once, in the warm-up ``svi.init`` keyed
+    by ``fold_in(rng_key, -1)``, so every window starts from that point and the
+    per-window SVI-init subkeys do not change it. A hand-written guide whose
+    ``numpyro.param`` initializer takes a key does use the per-window subkey.
+    """
+    rng_key = random.PRNGKey(0)
+    auto = _starting_points(rng_key, AutoNormal(_level_model, init_scale=1e-6))
+
+    guide = AutoNormal(_level_model, init_scale=1e-6)
+    svi = SVI(_level_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    warmup_key = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
+    state = svi.init(warmup_key, jnp.zeros((10, 0)), jnp.zeros((10, 1)))
+    warmup_loc = svi.get_params(state)["mu_auto_loc"]
+    assert jnp.allclose(auto, warmup_loc, atol=1e-4)
+
+    hand = _starting_points(rng_key, _keyed_level_guide)
+    assert len({round(float(x), 4) for x in hand}) == hand.shape[0]
+
+
+def test_docstring_describes_the_warmup_init_key() -> None:
+    """The PRNG paragraph says what the warm-up and SVI-init keys do (#202)."""
+    doc = backtest_vectorized.__doc__
+    assert doc is not None
+    prng = doc.split("PRNG:", 1)[1].split("Parameters\n", 1)[0]
+    assert "discarded" not in prng
+    assert "init_loc_fn" in prng
+    assert "every window" in prng
 
 
 def test_result_schema_and_dataframe_row_shape() -> None:

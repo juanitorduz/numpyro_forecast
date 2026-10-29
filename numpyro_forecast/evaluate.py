@@ -1036,10 +1036,16 @@ def backtest_vectorized(
     the number of windows, giving order-of-magnitude wall-clock wins for tens
     of windows on small models.
 
-    PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
+    PRNG: ``fold_in(rng_key, -1)`` keys the eager warm-up ``svi.init`` on
+    window 0. An autoguide runs its ``init_loc_fn`` once, at its first init
+    (this warm-up for a fresh guide), so its initial locations are the
+    starting point of every window.
     ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
     posterior-draw, and forecast subkeys (the parent itself is never consumed;
-    see `_window_key_streams()`).
+    see `_window_key_streams()`). The SVI-init subkey changes the start of a
+    window only for guide parameters whose initializer takes a key, for
+    example ``numpyro.param("loc", lambda key: random.normal(key))`` in a
+    hand-written guide.
 
     Parameters
     ----------
@@ -1140,7 +1146,9 @@ def backtest_vectorized(
     # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
     # caches its prototype trace on the instance at first init, so if that
     # first init happens under vmap tracing the instance retains tracers and
-    # any later eager use raises UnexpectedTracerError.
+    # any later eager use raises UnexpectedTracerError. For a fresh autoguide
+    # it is also the only init that runs init_loc_fn, so its key sets the
+    # starting point of every window (the vmapped inits reuse those locations).
     # (fold_in requires a non-negative uint32 index on this JAX version, so
     # the ``-1`` warm-up sentinel is passed as an int32 array.)
     svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
