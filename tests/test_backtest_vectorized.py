@@ -26,7 +26,7 @@ from numpyro.infer.autoguide import (
     AutoNormal,
 )
 
-from numpyro_forecast import Horizon
+from numpyro_forecast import Horizon, predict
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     VectorizedBacktestResult,
@@ -84,40 +84,70 @@ def test_window_indices_match_loop_backtest() -> None:
     assert [int(x) for x in vec.t2] == [r.t2 for r in loop]
 
 
+def _trend_model(covariates: Array, data: Array | None = None) -> None:
+    """A linear trend in the time covariate, with only global latents.
+
+    The data determine the three parameters well, so a converged SVI fit gives
+    almost the same forecast for every seed. The forecast of ``rw_model``
+    depends on the fitted level of every training step, so its MAE over a
+    5-step window changes by a factor of up to 10 with the seed.
+    """
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+    slope = jnp.asarray(numpyro.sample("slope", dist.Normal(0.0, 1.0)))
+    sigma = jnp.asarray(numpyro.sample("sigma", dist.LogNormal(-2.0, 1.0)))
+    predict(h, dist.Normal(0.0, sigma), level + slope * covariates)
+
+
 def test_metrics_statistically_close_to_loop() -> None:
-    """Per-window MAE/CRPS match the loop path within a generous tolerance."""
+    """Per-window MAE and CRPS of the two backtests agree, averaged over seeds.
+
+    The two estimators use different PRNG layouts, so one seed compares two
+    random draws. The mean over a few seeds of a well-determined model removes
+    most of that noise: over 6 seeds and all 20 triples of them, the largest
+    per-window relative difference of the 3-seed mean MAE was about 0.26, so
+    a tolerance of 0.5 checks agreement and does not depend on the seeds.
+    """
     duration = 50
-    data, cov = _series(duration)
-    loop = backtest(
-        random.PRNGKey(3),
-        lambda: rw_model,
-        data,
-        cov,
-        forecast_fn=svi_forecast_fn(num_steps=800),
-        train_window=TRAIN,
-        test_window=TEST,
-        stride=5,
-        num_samples=200,
-    )
-    model = rw_model
-    vec = backtest_vectorized(
-        random.PRNGKey(3),
-        lambda: model,
-        data,
-        cov,
-        train_window=TRAIN,
-        test_window=TEST,
-        guide=AutoNormal(model),
-        stride=5,
-        num_steps=800,
-        num_samples=200,
-    )
-    loop_mae = jnp.array([r.metrics["mae"] for r in loop])
-    # Estimators differ in PRNG layout; check coarse agreement on MAE only.
-    assert jnp.all(jnp.isfinite(vec.metrics["mae"]))
-    assert jnp.all(jnp.isfinite(loop_mae))
-    rel_err = jnp.abs(vec.metrics["mae"] - loop_mae) / jnp.maximum(loop_mae, 1e-6)
-    assert float(rel_err.mean()) < 1.5
+    time = jnp.linspace(0.0, 1.0, duration)[:, None]
+    data = 0.5 + 2.0 * time + 0.1 * random.normal(random.PRNGKey(0), (duration, 1))
+    model = _trend_model
+    loop_metrics: dict[str, list[Array]] = {"mae": [], "crps": []}
+    vec_metrics: dict[str, list[Array]] = {"mae": [], "crps": []}
+    for seed in range(3):
+        loop = backtest(
+            random.PRNGKey(seed),
+            lambda: model,
+            data,
+            time,
+            forecast_fn=svi_forecast_fn(num_steps=2_000),
+            train_window=TRAIN,
+            test_window=TEST,
+            stride=5,
+            num_samples=200,
+        )
+        vec = backtest_vectorized(
+            random.PRNGKey(seed),
+            lambda: model,
+            data,
+            time,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(model),
+            stride=5,
+            num_steps=2_000,
+            num_samples=200,
+        )
+        for name in loop_metrics:
+            loop_metrics[name].append(jnp.array([r.metrics[name] for r in loop]))
+            vec_metrics[name].append(jnp.asarray(vec.metrics[name]))
+    for name in loop_metrics:
+        loop_mean = jnp.stack(loop_metrics[name]).mean(axis=0)
+        vec_mean = jnp.stack(vec_metrics[name]).mean(axis=0)
+        assert bool(jnp.all(jnp.isfinite(loop_mean)))
+        assert bool(jnp.all(jnp.isfinite(vec_mean)))
+        rel_err = jnp.abs(vec_mean - loop_mean) / loop_mean
+        assert float(rel_err.max()) < 0.5, (name, loop_mean, vec_mean)
 
 
 @pytest.mark.parametrize(

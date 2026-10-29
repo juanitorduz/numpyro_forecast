@@ -696,11 +696,11 @@ def test_backtest_eval_train_does_not_change_oos_metrics(rng_key: Array) -> None
 
 
 def test_backtest_eval_train_key_is_independent_of_forecast_fn_split_keys(rng_key: Array) -> None:
-    # Regression test for #200: the documented forecast_fn splits its key with
-    # random.split(rng_key, 3), and with jax_threefry_partitionable (the default
-    # since jax 0.5) fold_in(k, i) == split(k, n)[i] for every n > i. The key that
-    # in_sample_fn receives must therefore not be fold_in(rng_key, i) for a small
-    # i, or the in-sample draws reuse the forecast's random numbers.
+    # The documented forecast_fn splits its key with random.split(rng_key, 3).
+    # The key that in_sample_fn receives must not be one that forecast_fn can
+    # derive, or the in-sample draws reuse the forecast's random numbers. With
+    # jax_threefry_partitionable (the default) fold_in(k, i) == split(k, n)[i] for
+    # every n > i, so a fold_in of the forecast key with a small index fails this.
     data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
     covariates = jnp.zeros((24, 0))
     forecast_keys: list[Array] = []
@@ -749,6 +749,11 @@ def test_backtest_eval_train_key_is_independent_of_forecast_fn_split_keys(rng_ke
         eval_train=True,
     )
     assert forecast_keys and len(forecast_keys) == len(in_sample_keys)
+    # Each window splits rng_key once and gives each closure its own child.
+    expected_forecast_key, expected_in_sample_key = random.split(rng_key)
+    for forecast_key, in_sample_key in zip(forecast_keys, in_sample_keys, strict=True):
+        assert bool(jnp.array_equal(forecast_key, expected_forecast_key))
+        assert bool(jnp.array_equal(in_sample_key, expected_in_sample_key))
     for forecast_key, in_sample_key in zip(forecast_keys, in_sample_keys, strict=True):
         # Every key a closure would usually derive from the forecast key: the key
         # itself, each key of a split into up to 8 parts, and a large split.

@@ -707,16 +707,6 @@ def _eval_train_window(
     return evaluate_forecast(train_pred, train_truth, metrics=metrics)
 
 
-_EVAL_TRAIN_STREAM = 2**31 - 1
-"""``fold_in`` index of the key that `backtest()` passes to ``in_sample_fn``.
-
-With ``jax_threefry_partitionable`` (the jax default) ``fold_in(k, i)`` equals
-``split(k, n)[i]`` for every ``n > i``, so a small index such as ``2`` gives
-``in_sample_fn`` the same key that a ``forecast_fn`` gets from
-``random.split(rng_key, 3)[2]``. No split of ordinary size reaches this index.
-"""
-
-
 def _run_window(
     rng_key: Array,
     t0: int,
@@ -745,9 +735,14 @@ def _run_window(
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
 
     model = shared_model if shared_model is not None else model_fn()
+    # One unconditional split gives each closure its own child key. Two keys from one
+    # split are independent, so nothing forecast_fn derives from its key reaches
+    # train_key, and the split does not depend on eval_train, so enabling in-sample
+    # scoring never changes the out-of-sample draws.
+    forecast_key, train_key = random.split(rng_key)
     pred, walltime = _timed(
         lambda: forecast_fn(
-            rng_key,
+            forecast_key,
             model,
             train_data,
             train_covariates,
@@ -764,12 +759,8 @@ def _run_window(
     if eval_train:
         # in_sample_fn is guaranteed non-None here: backtest's entry check raises
         # before any window runs when eval_train=True and in_sample_fn is None.
-        # In-sample scoring is an optional diagnostic: derive its key with
-        # fold_in so enabling it never shifts the key passed to forecast_fn
-        # above. The index is out of reach of any split that forecast_fn does
-        # (see _EVAL_TRAIN_STREAM), so the two closures never share a key.
         train_metrics = _eval_train_window(
-            random.fold_in(rng_key, _EVAL_TRAIN_STREAM),
+            train_key,
             cast("InSampleFn", in_sample_fn),
             model,
             train_data,
@@ -886,7 +877,11 @@ def backtest(
     Parameters
     ----------
     rng_key
-        Base PRNG key (used for every window, matching Pyro).
+        Base PRNG key, used for every window (matching Pyro). Each window
+        splits it once, ``forecast_key, train_key = random.split(rng_key)``:
+        ``forecast_fn`` receives ``forecast_key`` and ``in_sample_fn`` receives
+        ``train_key``. The split does not depend on ``eval_train``, so turning
+        in-sample scoring on does not change the out-of-sample draws.
     model_fn
         Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
     data
@@ -901,12 +896,10 @@ def backtest(
         Optional closure that fits ``model`` on the training window and scores
         its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
         the contract above). Required when ``eval_train=True``. It receives
-        ``random.fold_in(rng_key, _EVAL_TRAIN_STREAM)``, where the private
-        module constant ``_EVAL_TRAIN_STREAM`` is an index that no
-        ``random.split(rng_key, n)`` of practical size reaches. Thus the key
-        differs from ``rng_key`` and from the keys of such a split, and the
+        the second key of ``random.split(rng_key)`` (see ``rng_key``), which
+        is independent of the key that ``forecast_fn`` receives. Thus the
         in-sample draws do not reuse the random numbers of a ``forecast_fn``
-        that splits ``rng_key`` (as in the example above).
+        that splits its key (as in the example above).
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each function takes ``(pred, truth)`` and returns a scalar array (see
