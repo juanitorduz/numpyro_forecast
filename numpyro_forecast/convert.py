@@ -359,9 +359,9 @@ def to_datatree(
     ValueError
         If ``covariates`` is shorter than ``data`` along the time axis, if
         ``time_coord`` is given but its length does not match the in-sample
-        window plus the forecast horizon, if ``num_chains`` is less than ``1``,
-        or if ``posterior``'s sample count is not evenly divisible by
-        ``num_chains``.
+        window plus the forecast horizon, if ``num_chains`` is not a positive
+        integer (``bool`` included), or if ``posterior``'s sample count is not
+        evenly divisible by ``num_chains``.
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError
