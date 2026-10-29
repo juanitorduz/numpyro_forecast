@@ -664,8 +664,9 @@ def ssoe[Carry](
         is exactly ``(*batch, future, obs)`` with the dtype of the means; event
         rank 2 or higher is rejected. Over the horizon ``y_t = mu_t + eps_t``,
         so ``mu_t`` is the mean of ``y_t`` only when the errors have mean zero:
-        ``Gumbel`` and ``AsymmetricLaplace`` errors with ``loc = 0`` have a
-        nonzero mean that offsets every step (see
+        ``Gumbel`` errors with ``loc = 0`` have a nonzero mean, and
+        ``AsymmetricLaplace`` errors with ``loc = 0`` have a nonzero mean unless
+        ``asymmetry = 1``; that mean offsets every step (see
         `~~numpyro_forecast.surgery.shift_loc()` for the offsets), and
         ``Cauchy`` errors have no mean.
     xs
@@ -798,7 +799,8 @@ def predict(
     the location of the observation distribution: the mean for ``Normal``,
     ``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
     but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
-    offset from it, and for ``Cauchy`` noise, which has no mean (see
+    offset from it (for ``AsymmetricLaplace`` unless ``asymmetry = 1``), and for
+    ``Cauchy`` noise, which has no mean (see
     `~~numpyro_forecast.surgery.shift_loc()`). A callable is a link mapping the
     predictor to the observation distribution directly (the GLM form, e.g.
     ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the

@@ -127,7 +127,8 @@ def shift_loc(noise_dist: dist.Distribution, loc: Array) -> dist.Distribution:
     - ``Gumbel``: ``loc`` is the mode; the mean is
       ``loc + np.euler_gamma * scale`` (about ``loc + 0.5772 * scale``).
     - ``AsymmetricLaplace``: ``loc`` is the mode; the mean is
-      ``loc + scale * (1 / asymmetry - asymmetry)``.
+      ``loc + scale * (1 / asymmetry - asymmetry)``, which is ``loc`` only for
+      ``asymmetry = 1`` (the symmetric case).
 
     An ``Independent`` wrapper follows its base distribution. When the
     predictor must be the mean of a ``Gumbel`` or ``AsymmetricLaplace``
