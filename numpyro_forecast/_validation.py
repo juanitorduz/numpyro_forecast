@@ -8,26 +8,26 @@ from jax.typing import ArrayLike
 from numpyro_forecast.typing import Array
 
 
-def _require_positive_num_samples(num_samples: int) -> None:
+def require_positive_num_samples(num_samples: int) -> None:
     """Raise ``ValueError`` if ``num_samples`` is not positive."""
     if num_samples <= 0:
         msg = "num_samples must be positive"
         raise ValueError(msg)
 
 
-def _require_covariates_extend_data(data: Array, covariates: Array) -> None:
+def require_covariates_extend_data(data: Array, covariates: Array) -> None:
     """Raise ``ValueError`` unless ``covariates`` is longer than ``data`` in time."""
-    _require_time_axis("data", data)
-    _require_time_axis("covariates", covariates)
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] >= covariates.shape[-2]:
         msg = "covariates must extend beyond data along the time axis"
         raise ValueError(msg)
 
 
-def _require_covariates_cover_data(data: Array, covariates: Array) -> None:
+def require_covariates_cover_data(data: Array, covariates: Array) -> None:
     """Raise ``ValueError`` unless ``data`` is non-empty and ``covariates`` cover it in time."""
-    _require_time_axis("data", data)
-    _require_time_axis("covariates", covariates)
+    require_time_axis("data", data)
+    require_time_axis("covariates", covariates)
     if data.shape[-2] == 0:
         msg = (
             f"data has no observed time steps (shape {tuple(data.shape)}); the in-sample "
@@ -42,7 +42,7 @@ def _require_covariates_cover_data(data: Array, covariates: Array) -> None:
         raise ValueError(msg)
 
 
-def _require_time_axis(name: str, x: Array | np.ndarray) -> None:
+def require_time_axis(name: str, x: Array | np.ndarray) -> None:
     """Raise ``ValueError`` unless ``x`` has a time axis at ``-2`` and a last axis at ``-1``."""
     if x.ndim >= 2:
         return
@@ -69,7 +69,7 @@ def _require_time_axis(name: str, x: Array | np.ndarray) -> None:
     raise ValueError(msg)
 
 
-def _require_sample_axis(posterior: Mapping[str, ArrayLike]) -> None:
+def require_sample_axis(posterior: Mapping[str, ArrayLike]) -> None:
     """Raise ``ValueError`` naming the ``posterior`` leaves that have no leading sample axis."""
     missing = [name for name, leaf in posterior.items() if np.ndim(leaf) == 0]
     if missing:

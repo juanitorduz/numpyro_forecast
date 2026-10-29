@@ -47,9 +47,9 @@ from numpyro_forecast._offload import (
     _transfer,
 )
 from numpyro_forecast._validation import (
-    _require_covariates_extend_data,
-    _require_positive_num_samples,
-    _require_sample_axis,
+    require_covariates_extend_data,
+    require_positive_num_samples,
+    require_sample_axis,
 )
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -213,7 +213,7 @@ def draw_posterior(
     function draws afresh from a variational guide, and chunks drawn from
     independent subkeys remain valid i.i.d. posterior samples.
     """
-    _require_positive_num_samples(num_samples)
+    require_positive_num_samples(num_samples)
 
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
         if isinstance(guide, AutoDelta):
@@ -256,7 +256,7 @@ def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     if not posterior:
         msg = "posterior must be non-empty"
         raise ValueError(msg)
-    _require_sample_axis(posterior)
+    require_sample_axis(posterior)
     sizes = {name: leaf.shape[0] for name, leaf in posterior.items()}
     distinct = set(sizes.values())
     if len(distinct) != 1:
@@ -352,7 +352,7 @@ def _chunked_draws(
         ``device`` when one is given; NumPy for ``"numpy"``).
     """
     # Before `_leaf_view()`: a Python scalar leaf would fail its type check unnamed.
-    _require_sample_axis(posterior)
+    require_sample_axis(posterior)
     staged = {
         name: _leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
     }
@@ -495,7 +495,7 @@ def forecast(
     changing ``batch_size`` changes the PRNG stream layout and therefore the
     exact draws. ``device`` never changes the draws, only where they live.
     """
-    _require_covariates_extend_data(data, covariates)
+    require_covariates_extend_data(data, covariates)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
         return _predict(key, model, post, data, covariates, parallel=parallel)

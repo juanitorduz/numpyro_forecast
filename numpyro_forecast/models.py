@@ -30,7 +30,7 @@ from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 from numpyro.primitives import _PYRO_STACK
 
-from numpyro_forecast._validation import _require_time_axis
+from numpyro_forecast._validation import require_time_axis
 from numpyro_forecast.arrays import _zeros_like_data, concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
@@ -135,11 +135,11 @@ class Horizon(eqx.Module):
             has no time steps, or if ``data`` is longer than ``covariates``
             along the time axis.
         """
-        _require_time_axis("covariates", covariates)
+        require_time_axis("covariates", covariates)
         duration = covariates.shape[-2]
         t_obs = duration
         if data is not None:
-            _require_time_axis("data", data)
+            require_time_axis("data", data)
             t_obs = data.shape[-2]
             if t_obs == 0:
                 msg = (
