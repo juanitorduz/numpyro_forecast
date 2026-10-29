@@ -34,6 +34,7 @@ import importlib
 import math
 import warnings
 from collections import namedtuple
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
@@ -41,6 +42,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import random
+from jax.typing import ArrayLike
 from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
@@ -562,7 +564,7 @@ def fit_pathfinder(
     maxcor: int = 10,
     maxls: int = 1_000,
     gtol: float = 1e-8,
-    init_params: dict[str, Array] | None = None,
+    init_params: Mapping[str, ArrayLike] | None = None,
 ) -> PathfinderFit:
     """Fit a forecasting model with BlackJAX Pathfinder variational inference.
 
@@ -812,7 +814,7 @@ def fit_multipathfinder(
     maxls: int = 1_000,
     gtol: float = 1e-8,
     ftol: float = 1e-5,
-    init_params: dict[str, Array] | None = None,
+    init_params: Mapping[str, ArrayLike] | None = None,
 ) -> MultiPathfinderFit:
     """Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 

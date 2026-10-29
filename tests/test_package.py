@@ -140,7 +140,7 @@ def test_base_import_no_extras() -> None:
 
 
 def test_every_package_function_is_runtime_type_checked() -> None:
-    """Every function of every package module is wrapped by the jaxtyping import hook (#213).
+    """Every function of every package module is wrapped by the jaxtyping import hook.
 
     The hook in ``numpyro_forecast/__init__.py`` only wraps modules first imported
     inside its ``with`` block; a module imported after the block closes (as
@@ -163,7 +163,7 @@ def test_every_package_function_is_runtime_type_checked() -> None:
 
 
 def test_contrib_blackjax_rejects_wrong_argument_types() -> None:
-    """Wrong argument types to ``contrib.blackjax`` fail at the call, like the core (#213)."""
+    """Wrong argument types to ``contrib.blackjax`` fail at the call, like the core."""
     with pytest.raises(TypeCheckError):
         BlackjaxNUTSKernel(model="not a model")  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeCheckError):

@@ -734,7 +734,7 @@ def test_multipathfinder_samples_auto_follows_pareto_k(
 def test_multipathfinder_samples_invalid_resample_raises(
     multipathfinder_fit: MultiPathfinderFit,
 ) -> None:
-    """An unknown ``resample`` is a type error under the runtime type checks (#213)."""
+    """An unknown ``resample`` is a type error under the runtime type checks."""
     with pytest.raises(TypeCheckError):
         multipathfinder_samples(
             random.PRNGKey(2),
@@ -927,7 +927,7 @@ def test_fit_multipathfinder_warns_on_non_finite_path_elbo(
             num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
             maxiter=_MULTIPATH_MAXITER,
         )
-    # Both fit-time warnings point at this call, not at the type-checking wrapper (#213).
+    # Both fit-time warnings point at this call, not at the type-checking wrapper.
     # Only the package's own warnings are checked, so an unrelated jax or blackjax
     # DeprecationWarning cannot break the assertion.
     fit_warnings = [
@@ -1018,6 +1018,49 @@ def test_fit_multipathfinder_uses_supplied_init_params(
         jax.tree.map(lambda a, b: bool(jnp.array_equal(a, b)), captured[0], stacked)
     )
     assert len(fit.elbos) == 2
+
+
+def test_fits_accept_numpy_init_params() -> None:
+    """Both Pathfinder fits accept a NumPy start point, as the host contract allows.
+
+    A start point taken from draws made with ``device="host"`` holds NumPy leaves
+    when no CPU backend is initialized, so the runtime type checks must not
+    narrow ``init_params`` to jax arrays.
+    """
+    from numpyro.infer.util import initialize_model
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (_MULTIPATH_T, 1)), axis=-2)
+    covariates = _empty_covariates(_MULTIPATH_T)
+    positions = [
+        initialize_model(key, rw_model, dynamic_args=True, model_args=(covariates, data))[0].z
+        for key in random.split(random.PRNGKey(7), 2)
+    ]
+    single = {name: np.asarray(value) for name, value in positions[0].items()}
+    stacked = {name: np.stack([np.asarray(p[name]) for p in positions]) for name in single}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        fit = fit_pathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            init_params=single,
+        )
+        multi = fit_multipathfinder(
+            random.PRNGKey(1),
+            rw_model,
+            data,
+            covariates,
+            num_paths=2,
+            num_elbo_samples=_MULTIPATH_NUM_ELBO_SAMPLES,
+            maxiter=_MULTIPATH_MAXITER,
+            init_params=stacked,
+        )
+    assert np.isfinite(fit.elbo)
+    assert len(multi.elbos) == 2
 
 
 def test_fit_multipathfinder_empty_init_params_raises() -> None:
