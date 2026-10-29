@@ -35,6 +35,9 @@ _SAMPLE_DIMS = ["chain", "draw"]
 _DEFAULT_COVARIATE_DIMS = ("time", "covariate_dim")
 """Default dimension names for the stored covariates (the 2-D layout)."""
 
+_RESERVED_PREDICTION_GROUPS = frozenset({"observed_data", "constant_data"})
+"""The groups `predictions_to_datatree()` always writes, so ``group`` cannot name them."""
+
 
 def _resolve_covariate_dims(covariates: Array, covariate_dims: Sequence[str] | None) -> list[str]:
     """Validate and normalize the covariate dimension names.
@@ -155,7 +158,8 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     Raises
     ------
     ValueError
-        If the leading axis length is not evenly divisible by ``num_chains``.
+        If ``num_chains`` is not a positive integer (``bool`` included), or if
+        the leading axis length is not evenly divisible by ``num_chains``.
 
     Notes
     -----
@@ -169,6 +173,12 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     ``group_by_chain=True`` upstream only to disambiguate chain order for
     yourself, then flatten back before passing samples to ``to_datatree``.
     """
+    if isinstance(num_chains, bool) or num_chains < 1:
+        msg = (
+            f"num_chains must be a positive integer, got {num_chains}; pass the num_chains "
+            "the sampler was run with (1 for SVI or Pathfinder draws)"
+        )
+        raise ValueError(msg)
     reshaped = np.asarray(array)
     n = reshaped.shape[0]
     if n % num_chains != 0:
@@ -278,7 +288,8 @@ def to_datatree(
         pseudo-chain, correct for a posterior with no chain structure, e.g.
         SVI or Pathfinder draws). For an MCMC posterior, pass the
         ``num_chains`` the sampler was run with; see `_reshape_chains()`
-        for the reshape contract and its divisibility requirement.
+        for the reshape contract and its divisibility requirement. Must be a
+        positive integer.
     batch_size
         Optional chunk size that bounds how many draws touch the accelerator
         at once, across both the in-sample and forecast predictive sampling.
@@ -354,8 +365,9 @@ def to_datatree(
         shorter than ``data`` along the time axis, if a ``posterior`` leaf has
         no sample axis, if
         ``time_coord`` is given but its length does not match the in-sample
-        window plus the forecast horizon, or if ``posterior``'s sample count is
-        not evenly divisible by ``num_chains``.
+        window plus the forecast horizon, if ``num_chains`` is not a positive
+        integer (``bool`` included), or if ``posterior``'s sample count is not
+        evenly divisible by ``num_chains``.
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError
@@ -627,7 +639,9 @@ def predictions_to_datatree(
         One label per series, defining the ``series`` coordinate.
     group
         Predictive group to store the draws under (e.g. ``"prior_predictive"``,
-        ``"posterior_predictive"``, ``"predictions"``).
+        ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
+        ``"constant_data"`` are reserved: the function always writes those two
+        groups.
     observed
         Optional observations, shape ``(time, series)``, stored in
         ``observed_data``; when ``None`` a zeros placeholder is stored instead.
@@ -642,8 +656,17 @@ def predictions_to_datatree(
     Raises
     ------
     ValueError
-        If ``series`` does not have one label per series in ``predictions``.
+        If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
+        names), or if ``series`` does not have one label per series in
+        ``predictions``.
     """
+    if group in _RESERVED_PREDICTION_GROUPS:
+        msg = (
+            f"group={group!r} is reserved: predictions_to_datatree() always writes the "
+            "'observed_data' and 'constant_data' groups. Store the draws under another "
+            "name, for example 'posterior_predictive', 'prior_predictive' or 'predictions'"
+        )
+        raise ValueError(msg)
     preds = np.asarray(predictions)[None]
     if len(series) != preds.shape[-1]:
         msg = f"series has length {len(series)} but predictions carry {preds.shape[-1]} series"
