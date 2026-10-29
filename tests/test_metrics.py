@@ -1,15 +1,25 @@
 """Tests for the empirical CRPS implementation."""
 
+from collections.abc import Callable
 from functools import partial
 
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import numpy as np
 import pytest
 from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
+from numpyro_forecast._validation import require_pred_truth_shapes
+from numpyro_forecast.evaluate import (
+    eval_coverage,
+    eval_crps,
+    eval_mae,
+    eval_rmse,
+    evaluate_forecast,
+)
 from numpyro_forecast.metrics import (
     crps_empirical,
     eval_interval_score,
@@ -348,3 +358,91 @@ def test_metrics_are_vmappable() -> None:
         values = jax.vmap(metric)(pred, truth)
         assert values.shape == (4,)
         assert bool(jnp.all(jnp.isfinite(values)))
+
+
+# --- The pred/truth shape contract without the runtime type hook (#196) -----
+
+
+def _bias(pred: Array, truth: Array) -> Array:
+    """A custom metric for `evaluate_forecast()`: the mean error of the sample mean."""
+    return (pred.mean(axis=0) - truth).mean()
+
+
+@pytest.fixture
+def no_type_hook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Turn the jaxtyping runtime checks off; jaxtyping reads the flag on every call."""
+    monkeypatch.setattr(jaxtyping.config, "jaxtyping_disable", True)
+
+
+@pytest.mark.usefixtures("no_type_hook")
+@pytest.mark.parametrize(
+    "metric",
+    [
+        pytest.param(crps_empirical, id="crps_empirical"),
+        pytest.param(eval_mae, id="eval_mae"),
+        pytest.param(eval_rmse, id="eval_rmse"),
+        pytest.param(eval_crps, id="eval_crps"),
+        pytest.param(partial(eval_crps, batch_size=2), id="eval_crps batch_size=2"),
+        pytest.param(eval_coverage, id="eval_coverage"),
+        pytest.param(partial(eval_coverage, batch_size=2), id="eval_coverage batch_size=2"),
+        pytest.param(eval_pinball, id="eval_pinball"),
+        pytest.param(eval_interval_score, id="eval_interval_score"),
+        pytest.param(make_mase(jnp.arange(10.0)[:, None] ** 1.5), id="make_mase"),
+        pytest.param(evaluate_forecast, id="evaluate_forecast"),
+        pytest.param(
+            partial(evaluate_forecast, metrics={"bias": _bias}),
+            id="evaluate_forecast custom metric",
+        ),
+    ],
+)
+def test_metric_rejects_truth_shape_mismatch_without_type_hook(
+    metric: Callable[[Array, Array], object],
+) -> None:
+    """A ``(f,)`` truth against ``(S, f, 1)`` draws raises ``ValueError`` with the hook off."""
+    pred = random.normal(random.PRNGKey(0), (20, 4, 1))
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(4,\)"):
+        metric(pred, jnp.arange(4.0))
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        pytest.param(eval_coverage, id="eval_coverage"),
+        pytest.param(partial(eval_coverage, batch_size=2), id="eval_coverage batch_size=2"),
+        pytest.param(
+            partial(evaluate_forecast, metrics={"bias": _bias}),
+            id="evaluate_forecast custom metric",
+        ),
+    ],
+)
+def test_metric_rejects_scalar_truth(metric: Callable[[Array, float], object]) -> None:
+    """A scalar ``truth`` passes the jaxtyping hook, so only the explicit check rejects it."""
+    pred = random.normal(random.PRNGKey(0), (20, 4, 1))
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(\)"):
+        metric(pred, 0.0)
+
+
+def test_require_pred_truth_shapes_rejects_truth_shape_mismatch_in_process() -> None:
+    """The helper itself has no shape annotations, so it raises under the default hook too."""
+    with pytest.raises(ValueError, match=r"pred.shape\[1:\] = \(4, 1\), got \(4,\)"):
+        require_pred_truth_shapes(jnp.zeros((20, 4, 1)), jnp.zeros((4,)))
+
+
+def test_require_pred_truth_shapes_rejects_scalar_pred() -> None:
+    """A point forecast passed as a scalar ``pred`` has no sample axis to drop."""
+    with pytest.raises(ValueError, match="sample axis first"):
+        require_pred_truth_shapes(jnp.asarray(1.0), jnp.asarray(1.0))
+
+
+def test_require_pred_truth_shapes_reads_static_shapes_of_tracers() -> None:
+    """Under ``jit`` and ``vmap`` the check sees tracer shapes and needs no host value."""
+
+    def checked(pred: Array, truth: Array) -> Array:
+        require_pred_truth_shapes(pred, truth)
+        return pred.mean(axis=0) - truth
+
+    pred = jnp.zeros((3, 20, 4, 1))
+    truth = jnp.zeros((3, 4, 1))
+    assert jax.jit(jax.vmap(checked))(pred, truth).shape == (3, 4, 1)
+    with pytest.raises(ValueError, match="truth must have shape"):
+        jax.jit(jax.vmap(checked))(pred, truth[..., 0])

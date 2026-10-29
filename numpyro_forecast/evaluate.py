@@ -25,7 +25,11 @@ from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
 from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast._validation import require_positive_num_samples, require_time_axis
+from numpyro_forecast._validation import (
+    require_positive_num_samples,
+    require_pred_truth_shapes,
+    require_time_axis,
+)
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.optional import require
@@ -76,7 +80,13 @@ def eval_mae(
     -------
     Array
         The mean absolute error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     return _eval_mae(_device_view(pred), _device_view(truth))
 
 
@@ -107,7 +117,13 @@ def eval_rmse(
     -------
     Array
         The root mean squared error as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     return _eval_rmse(_device_view(pred), _device_view(truth))
 
 
@@ -208,7 +224,13 @@ def eval_crps(
     -------
     Array
         The mean empirical CRPS as a scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
         return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
     return _chunked_cell_metric(
@@ -271,8 +293,10 @@ def eval_coverage(
     Raises
     ------
     ValueError
-        If ``alpha`` is not strictly inside ``(0, 1)``.
+        If ``alpha`` is not strictly inside ``(0, 1)``, or ``truth.shape`` is not
+        ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
+    require_pred_truth_shapes(pred, truth)
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
@@ -334,7 +358,14 @@ def evaluate_forecast(
     -------
     dict[str, float]
         Each metric name mapped to its value.
+
+    Raises
+    ------
+    ValueError
+        If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
+        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
     """
+    require_pred_truth_shapes(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
     if not metrics:
         return {}
@@ -1115,10 +1146,23 @@ def backtest_vectorized(
     the number of windows, giving order-of-magnitude wall-clock wins for tens
     of windows on small models.
 
-    PRNG: ``fold_in(rng_key, -1)`` seeds a discarded eager warm-up init;
-    ``fold_in(rng_key, i)`` is the window-``i`` parent, split into SVI-init,
-    posterior-draw, and forecast subkeys (the parent itself is never consumed;
-    see `_window_key_streams()`).
+    PRNG: ``fold_in(rng_key, -1)`` keys the eager warm-up ``svi.init`` on
+    window 0. An autoguide runs its ``init_loc_fn`` once, at its first init
+    (this warm-up for a fresh guide). A location-based autoguide (for example
+    ``AutoNormal``, ``AutoDelta`` or ``AutoMultivariateNormal``) derives all
+    its initial parameters from those locations, so every window starts from
+    the warm-up point. ``fold_in(rng_key, i)`` is the window-``i`` parent,
+    split into SVI-init, posterior-draw, and forecast subkeys (the parent
+    itself is never consumed; see `_window_key_streams()`). The SVI-init
+    subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the
+    window (``svi.init`` keeps a key split from it in the SVI state), so it
+    changes the fit of a stochastic guide such as ``AutoNormal`` even when
+    every window starts from the same point. It changes the start of a window
+    only for guide parameters whose initializer takes a key: the network
+    weights of a flow autoguide (``AutoIAFNormal``, ``AutoBNAFNormal``) or a
+    callable initializer in a hand-written guide, such as
+    ``numpyro.param("loc", lambda key: random.normal(key))``. Those guides
+    start each window from a different point.
 
     Parameters
     ----------
@@ -1184,8 +1228,10 @@ def backtest_vectorized(
     ------
     ValueError
         If ``data`` or ``covariates`` has fewer than two axes (time must be at
-        axis ``-2``), if their durations differ, or if ``num_samples`` is too
-        small (see ``num_samples``).
+        axis ``-2``), if their durations differ, if ``num_samples`` is too
+        small (see ``num_samples``), or if ``metrics`` is not empty and the
+        model's ``"forecast"`` site does not have the shape of ``data`` over
+        the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1232,7 +1278,11 @@ def backtest_vectorized(
     # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
     # caches its prototype trace on the instance at first init, so if that
     # first init happens under vmap tracing the instance retains tracers and
-    # any later eager use raises UnexpectedTracerError.
+    # any later eager use raises UnexpectedTracerError. For a fresh autoguide
+    # it is also the only init that runs init_loc_fn, so for a location-based
+    # autoguide its key sets the starting point of every window (the vmapped
+    # inits reuse those locations). A flow autoguide still draws its network
+    # weights from each window's SVI-init key.
     # (fold_in requires a non-negative uint32 index on this JAX version, so
     # the ``-1`` warm-up sentinel is passed as an int32 array.)
     svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
@@ -1265,6 +1315,15 @@ def backtest_vectorized(
 
     predictions = jax.jit(jax.vmap(forecast_one))(fc_keys, posterior, train_d, hor_c)
 
+    # Every window shares the forecast and truth shapes, so one comparison covers all of
+    # them. A custom metric would otherwise broadcast a mismatched forecast silently.
+    if resolved_metrics and predictions.shape[2:] != truth.shape[1:]:
+        msg = (
+            f"the model's 'forecast' site has shape {predictions.shape[2:]} per draw, but "
+            f"each test window of data has shape {truth.shape[1:]}; the forecast site must "
+            "have the shape of data over the test window, (..., test_window, obs)"
+        )
+        raise ValueError(msg)
     metric_values = _vmapped_metrics(resolved_metrics, predictions, truth)
 
     return VectorizedBacktestResult(

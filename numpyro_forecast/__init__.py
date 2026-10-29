@@ -5,6 +5,10 @@ from importlib.metadata import PackageNotFoundError, version
 from jaxtyping import install_import_hook
 
 with install_import_hook("numpyro_forecast", "beartype.beartype"):
+    # Bound here so great-docs can resolve the `contrib.blackjax.*` reference entries by
+    # attribute walk (API reference, llms-full.txt); the module imports no optional extra.
+    # It stays inside the hook so it is runtime type-checked like the core modules.
+    import numpyro_forecast.contrib.blackjax  # noqa: F401
     from numpyro_forecast import (  # noqa: F401
         acf,
         arrays,
@@ -23,9 +27,6 @@ with install_import_hook("numpyro_forecast", "beartype.beartype"):
         var,
     )
 
-# Bound here so great-docs can resolve the `contrib.blackjax.*` reference entries by
-# attribute walk (API reference, llms-full.txt); the module imports no optional extra.
-import numpyro_forecast.contrib.blackjax  # noqa: F401
 from numpyro_forecast.convert import add_forecast_groups, predictions_to_datatree, to_datatree
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,

@@ -19,8 +19,14 @@ import pytest
 from conftest import rw_model, svi_forecast_fn
 from jax import Array, random
 from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer.autoguide import (
+    AutoGuide,
+    AutoIAFNormal,
+    AutoMultivariateNormal,
+    AutoNormal,
+)
 
+from numpyro_forecast import Horizon
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     VectorizedBacktestResult,
@@ -32,6 +38,7 @@ from numpyro_forecast.evaluate import (
 )
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.predictive import draw_posterior, forecast
+from numpyro_forecast.typing import Guide
 
 TRAIN, TEST = 30, 5
 
@@ -464,6 +471,156 @@ def test_window_streams_are_disjoint() -> None:
     assert len(set(raw)) == len(raw)
 
 
+def _level_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant-level model over 2 series whose ``forecast`` is the sampled level ``mu``.
+
+    Two series give a 2-dimensional latent, the minimum for ``AutoIAFNormal``.
+    """
+    h = Horizon.from_data(covariates, data)
+    with numpyro.plate("series", 2, dim=-1):
+        mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 10.0)))
+        with numpyro.plate("time", h.t_obs, dim=-2):
+            numpyro.sample("obs", dist.Normal(mu, 1.0), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.broadcast_to(mu, (h.future, 2)))
+
+
+def _keyed_level_guide(covariates: Array, data: Array | None = None) -> None:
+    """A hand-written guide whose initial ``loc`` is drawn from the SVI-init key."""
+    loc = numpyro.param("loc", lambda key: random.normal(key, (2,)))
+    with numpyro.plate("series", 2, dim=-1):
+        numpyro.sample("mu", dist.Normal(loc, 1e-6))
+
+
+def _starting_points(monkeypatch: pytest.MonkeyPatch, rng_key: Array, guide: Guide) -> Array:
+    """Each window's forecast of the first ``mu`` after ``num_steps=0``.
+
+    Every window has the same (all-zero) data, and the posterior and forecast
+    keys of window 0 are reused for all windows, so the forecasts differ
+    across windows only if the SVI starting points differ.
+    """
+
+    def shared_draw_keys(key: Array, num_windows: int) -> tuple[Array, Array, Array]:
+        init_keys, post_keys, fc_keys = _window_key_streams(key, num_windows)
+        post_keys = jnp.broadcast_to(post_keys[0], post_keys.shape)
+        fc_keys = jnp.broadcast_to(fc_keys[0], fc_keys.shape)
+        return init_keys, post_keys, fc_keys
+
+    monkeypatch.setattr("numpyro_forecast.evaluate._window_key_streams", shared_draw_keys)
+    data, cov = jnp.zeros((30, 2)), jnp.zeros((30, 0))
+    result = backtest_vectorized(
+        rng_key,
+        lambda: _level_model,
+        data,
+        cov,
+        train_window=10,
+        test_window=2,
+        stride=5,
+        guide=guide,
+        num_steps=0,
+        num_samples=2,
+        metrics={},
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    return result.predictions[:, 0, 0, 0]
+
+
+def test_location_autoguide_windows_start_at_the_warmup_init(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A location-based autoguide starts every window at the warm-up init.
+
+    ``AutoNormal`` runs ``init_loc_fn`` once, in the warm-up ``svi.init`` keyed
+    by ``fold_in(rng_key, -1)``, so every window starts from that point and the
+    per-window SVI-init subkeys do not change it.
+    """
+    rng_key = random.PRNGKey(0)
+    auto = _starting_points(monkeypatch, rng_key, AutoNormal(_level_model, init_scale=1e-6))
+    assert bool(jnp.all(auto == auto[0]))
+
+    guide = AutoNormal(_level_model, init_scale=1e-6)
+    svi = SVI(_level_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    warmup_key = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
+    state = svi.init(warmup_key, jnp.zeros((10, 0)), jnp.zeros((10, 2)))
+    warmup_loc = svi.get_params(state)["mu_auto_loc"][0]
+    assert jnp.allclose(auto, warmup_loc, atol=1e-4)
+
+
+def test_keyed_param_initializer_uses_the_per_window_init_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A callable ``numpyro.param`` initializer starts each window differently."""
+    starts = _starting_points(monkeypatch, random.PRNGKey(0), _keyed_level_guide)
+    assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
+
+
+@pytest.mark.parametrize(
+    ("make_guide", "same_start"),
+    [
+        pytest.param(lambda: AutoNormal(_level_model), True, id="AutoNormal"),
+        pytest.param(
+            lambda: AutoMultivariateNormal(_level_model), True, id="AutoMultivariateNormal"
+        ),
+        pytest.param(lambda: AutoIAFNormal(_level_model), False, id="AutoIAFNormal"),
+    ],
+)
+def test_autoguide_init_params_across_window_init_keys(
+    make_guide: Callable[[], AutoGuide], same_start: bool
+) -> None:
+    """Which autoguides draw their initial parameters from the SVI-init key.
+
+    Replays the init sequence of `backtest_vectorized()`: one eager warm-up
+    ``svi.init`` keyed by ``fold_in(rng_key, -1)``, then a vmapped ``svi.init``
+    per window with the SVI-init keys of `_window_key_streams()`. The
+    location-based autoguides get the same parameters in every window; the
+    network weights of a flow autoguide come from each window's key.
+    """
+    import jax
+
+    rng_key = random.PRNGKey(0)
+    cov, data = jnp.zeros((10, 0)), jnp.zeros((10, 2))
+    svi = SVI(_level_model, make_guide(), numpyro.optim.Adam(0.01), Trace_ELBO())
+    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), cov, data)
+    init_keys, _, _ = _window_key_streams(rng_key, 2)
+    params = svi.get_params(jax.vmap(lambda key: svi.init(key, cov, data))(init_keys))
+    leaves = jax.tree_util.tree_leaves(params)
+    assert leaves
+    assert all(bool(jnp.array_equal(x[0], x[1])) for x in leaves) == same_start
+
+
+def test_svi_init_key_seeds_the_elbo_steps() -> None:
+    """The SVI-init subkey changes the fit of ``AutoNormal`` even with a shared start.
+
+    ``svi.init`` keeps a key split from its ``rng_key`` in the SVI state and
+    every ``svi.update`` splits it for the ELBO draws, so two windows with the
+    same data and the same warm-up start end at different parameters.
+    """
+    import jax
+
+    rng_key = random.PRNGKey(0)
+    cov, data = jnp.zeros((10, 0)), jnp.zeros((10, 2))
+    svi = SVI(_level_model, AutoNormal(_level_model), numpyro.optim.Adam(0.01), Trace_ELBO())
+    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), cov, data)
+    init_keys, _, _ = _window_key_streams(rng_key, 2)
+    state = jax.vmap(lambda key: svi.init(key, cov, data))(init_keys)
+    start = svi.get_params(state)["mu_auto_loc"]
+    assert bool(jnp.array_equal(start[0], start[1]))
+    for _ in range(20):
+        state, _ = jax.vmap(lambda s: svi.update(s, cov, data))(state)
+    end = svi.get_params(state)["mu_auto_loc"]
+    assert not bool(jnp.allclose(end[0], end[1]))
+
+
+def test_docstring_describes_the_warmup_init_key() -> None:
+    """The PRNG paragraph names ``init_loc_fn`` and does not call the warm-up init discarded."""
+    doc = backtest_vectorized.__doc__
+    assert doc is not None
+    prng = doc.split("PRNG:", 1)[1].split("Parameters\n", 1)[0]
+    assert "discarded" not in prng
+    assert "init_loc_fn" in prng
+
+
 def test_result_schema_and_dataframe_row_shape() -> None:
     """Result fields are per-window and results_to_dataframe is one row per window."""
     from numpyro_forecast.evaluate import results_to_dataframe
@@ -724,3 +881,69 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
     assert len(recorded_optims) == 1
     assert isinstance(recorded_optims[0], numpyro.optim.Adam)
     assert recorded_optims[0] is not explicit_optim
+
+
+def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
+    """A model whose ``"forecast"`` site drops the obs axis: ``(future,)``, not ``(future, 1)``."""
+    h = Horizon.from_data(covariates, data)
+    loc = numpyro.sample("loc", dist.Normal(0.0, 1.0))
+    if h.data is not None:
+        numpyro.sample("obs", dist.Normal(loc, 1.0).expand(h.data.shape).to_event(2), obs=h.data)
+    numpyro.deterministic("forecast", jnp.full((h.future,), loc))
+
+
+def test_forecast_shape_mismatch_raises_before_scoring() -> None:
+    """A forecast site that does not match the test window raises ``ValueError`` (#196).
+
+    A custom metric such as ``(pred.mean(0) - truth).mean()`` broadcasts a
+    ``(test,)`` forecast against a ``(test, 1)`` truth into a ``(test, test)``
+    grid without error, so the check runs once on the stacked windows before
+    the metrics are vmapped.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+
+    def bias(pred: Array, truth: Array) -> Array:
+        return (pred.mean(axis=0) - truth).mean()
+
+    model = _squeezed_forecast_model
+    with pytest.raises(ValueError, match=r"'forecast' site has shape \(5,\) per draw"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(model),
+            num_steps=1,
+            num_samples=10,
+            metrics={"bias": bias},
+        )
+
+
+def test_forecast_shape_check_is_skipped_without_metrics() -> None:
+    """With ``metrics={}`` nothing is scored, so a mismatched forecast site still returns.
+
+    A predictions-only run does not compare the shapes: the shape guard
+    exists to protect the metrics, not to validate the model.
+    """
+    duration = TRAIN + TEST + 2
+    data, cov = _series(duration)
+    model = _squeezed_forecast_model
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        num_steps=1,
+        num_samples=10,
+        metrics={},
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    assert result.predictions.shape == (3, 10, TEST)
+    assert result.metrics == {}
