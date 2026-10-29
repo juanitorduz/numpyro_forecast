@@ -1,10 +1,15 @@
 """Tests for the distribution-surgery dispatchers and the elementwise registry."""
 
+import re
+from pathlib import Path
+
 import jax.numpy as jnp
+import numpy as np
 import numpyro.distributions as dist
 import pytest
 
 from numpyro_forecast import surgery
+from numpyro_forecast.models import predict, ssoe
 from numpyro_forecast.surgery import (
     _ELEMENTWISE_FAMILIES,
     prefix_condition,
@@ -247,3 +252,120 @@ def test_mvn_subclass_dispatches_to_mvn_handler() -> None:
     sliced = slice_time(d, slice(None, 2))
     assert isinstance(sliced, dist.MultivariateNormal)
     assert sliced.loc.shape == (5, 2)
+
+
+# --- What the shifted location is for each shift_loc family (#180) ----------
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+_LOCATION_STATISTIC: dict[type[dist.Distribution], str] = {
+    dist.Normal: "mean",
+    dist.StudentT: "mean",
+    dist.Laplace: "mean",
+    dist.Cauchy: "mode",
+    dist.Gumbel: "mode",
+    dist.AsymmetricLaplace: "mode",
+}
+"""The statistic that ``loc`` is after `shift_loc()` of a ``loc = 0`` noise instance."""
+
+_LOC_ZERO_NOISE: list[dist.Distribution] = [
+    dist.Normal(0.0, 2.0),
+    dist.StudentT(4.0, 0.0, 2.0),
+    dist.Laplace(0.0, 2.0),
+    dist.Cauchy(0.0, 2.0),
+    dist.Gumbel(0.0, 2.0),
+    dist.AsymmetricLaplace(0.0, 1.0, 3.0),
+]
+
+
+def _docstring_bullets(doc: str) -> list[str]:
+    """Return the ``- ...`` bullet items of a docstring, continuation lines joined."""
+    bullets: list[list[str]] = []
+    current: list[str] | None = None
+    for line in doc.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            current = [stripped[2:]]
+            bullets.append(current)
+        elif not stripped:
+            current = None
+        elif current is not None:
+            current.append(stripped)
+    return [" ".join(bullet) for bullet in bullets]
+
+
+def test_location_statistic_table_covers_every_shift_loc_family() -> None:
+    assert set(_LOCATION_STATISTIC) == set(surgery._SHIFT_LOC_FAMILIES)
+    assert {type(noise) for noise in _LOC_ZERO_NOISE} == set(surgery._SHIFT_LOC_FAMILIES)
+
+
+@pytest.mark.parametrize("noise", _LOC_ZERO_NOISE, ids=lambda d: type(d).__name__)
+def test_shift_loc_puts_the_documented_statistic_at_the_predictor(
+    noise: dist.Distribution,
+) -> None:
+    """``shift_loc`` of a ``loc = 0`` noise puts its mean or its mode at the predictor.
+
+    ``Gumbel`` and ``AsymmetricLaplace`` with ``loc = 0`` do not have mean zero,
+    so the predictor is their mode and the mean is offset by the documented
+    amount; ``Cauchy`` has no mean.
+    """
+    prediction = jnp.full((3, 1), 5.0)
+    shifted = shift_loc(noise, prediction)
+    statistic = _LOCATION_STATISTIC[type(noise)]
+    if statistic == "mean":
+        assert jnp.allclose(shifted.mean, prediction, atol=1e-5)
+    else:
+        eps = 1e-2
+        at_loc = jnp.asarray(shifted.log_prob(prediction))
+        assert bool(jnp.all(at_loc > jnp.asarray(shifted.log_prob(prediction - eps))))
+        assert bool(jnp.all(at_loc > jnp.asarray(shifted.log_prob(prediction + eps))))
+    if isinstance(noise, dist.Gumbel):
+        offset = np.euler_gamma * 2.0
+        assert jnp.allclose(shifted.mean, prediction + offset, atol=1e-5)
+    if isinstance(noise, dist.AsymmetricLaplace):
+        offset = 1.0 * (1.0 / 3.0 - 3.0)
+        assert jnp.allclose(shifted.mean, prediction + offset, atol=1e-5)
+
+
+@pytest.mark.parametrize("family", surgery._SHIFT_LOC_FAMILIES, ids=lambda cls: cls.__name__)
+def test_shift_loc_docstring_states_what_loc_is_per_family(
+    family: type[dist.Distribution],
+) -> None:
+    """The ``shift_loc`` docstring says, per family, whether ``loc`` is the mean or the mode.
+
+    Regression for #180: the docs called every registered family
+    "zero-centered", so a reader took the predictor as the mean also for
+    ``Gumbel`` and ``AsymmetricLaplace``, whose mean is offset from ``loc``.
+    """
+    doc = shift_loc.__doc__
+    assert doc is not None
+    bullets = [b for b in _docstring_bullets(doc) if f"``{family.__name__}``" in b]
+    assert len(bullets) == 1, (family.__name__, bullets)
+    assert f"``loc`` is the {_LOCATION_STATISTIC[family]}" in bullets[0]
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["predict", "ssoe", "shift_loc", "AGENTS.md"],
+)
+def test_noise_docs_do_not_call_every_family_zero_centered(label: str) -> None:
+    """No doc calls the ``loc = 0`` noise "zero-centered" (it is not mean zero for all, #180)."""
+    texts = {
+        "predict": predict.__doc__,
+        "ssoe": ssoe.__doc__,
+        "shift_loc": shift_loc.__doc__,
+        "AGENTS.md": (_REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    }
+    text = texts[label]
+    assert text is not None
+    assert not re.search(r"zero[- ]cent(?:er|r)ed", text, flags=re.IGNORECASE)
+
+
+def test_skill_block_states_the_predictor_is_not_always_the_mean() -> None:
+    """The ``skill:`` gotchas tell agents that Gumbel and AsymmetricLaplace need centering."""
+    yaml = pytest.importorskip("yaml")
+    config = yaml.safe_load((_REPO_ROOT / "great-docs.yml").read_text(encoding="utf-8"))
+    gotchas = [g for g in config["skill"]["gotchas"] if "Gumbel" in g]
+    assert len(gotchas) == 1, gotchas
+    assert "AsymmetricLaplace" in gotchas[0]
+    assert "mode" in gotchas[0]

@@ -652,7 +652,7 @@ def ssoe[Carry](
         ``eps_t`` (not a recomputed ``y_t - mu_t``, which can differ by an ulp);
         when the update needs the mean, call ``mean(carry, x_t)`` inside it.
     noise_dist
-        Zero-centered per-step error distribution, either an elementwise family
+        Per-step error distribution with location ``0``, either an elementwise family
         (event rank 0) or a multivariate family over the observation axis (event
         rank 1, e.g. ``dist.MultivariateNormal(jnp.zeros(obs), scale_tril=L)``
         for shocks correlated across series, the VAR case). For a
@@ -662,7 +662,12 @@ def ssoe[Carry](
         ``(B, 1, obs)`` and ``(B, 1)`` respectively. Either way the draw under
         the time plate (``dim=-2`` for event rank 0, ``dim=-1`` for event rank 1)
         is exactly ``(*batch, future, obs)`` with the dtype of the means; event
-        rank 2 or higher is rejected.
+        rank 2 or higher is rejected. Over the horizon ``y_t = mu_t + eps_t``,
+        so ``mu_t`` is the mean of ``y_t`` only when the errors have mean zero:
+        ``Gumbel`` and ``AsymmetricLaplace`` errors with ``loc = 0`` have a
+        nonzero mean that offsets every step (see
+        `~~numpyro_forecast.surgery.shift_loc()` for the offsets), and
+        ``Cauchy`` errors have no mean.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays with
         time at axis ``-2`` and ``duration`` rows (a single array, a tuple, a
@@ -786,10 +791,15 @@ def predict(
 
     ``prediction`` is the deterministic predictor over the full horizon (time at
     axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
-    two forms. A `numpyro.distributions.Distribution` is zero-centered
-    observation noise (e.g. ``dist.StudentT(nu, 0.0, sigma)``) shifted onto the
-    predictor with `~~numpyro_forecast.surgery.shift_loc()`, which also owns
-    the multivariate-normal layout check. A callable is a link mapping the
+    two forms. A `numpyro.distributions.Distribution` is observation noise with
+    location ``0`` (e.g. ``dist.StudentT(nu, 0.0, sigma)``) whose location is
+    shifted onto the predictor with `~~numpyro_forecast.surgery.shift_loc()`,
+    which also owns the multivariate-normal layout check. The predictor is then
+    the location of the observation distribution: the mean for ``Normal``,
+    ``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
+    but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
+    offset from it, and for ``Cauchy`` noise, which has no mean (see
+    `~~numpyro_forecast.surgery.shift_loc()`). A callable is a link mapping the
     predictor to the observation distribution directly (the GLM form, e.g.
     ``lambda eta: dist.Poisson(jnp.exp(eta))``). Either way, while training the
     observation site ``"obs"`` is observed; while forecasting the in-sample
@@ -806,9 +816,9 @@ def predict(
     h
         The horizon for the current model call (see `Horizon`).
     obs_dist
-        Zero-centered noise distribution (shifted onto ``prediction``) or a
-        link callable from the full-horizon predictor to the observation
-        distribution.
+        Noise distribution with location ``0`` (its location is shifted onto
+        ``prediction``) or a link callable from the full-horizon predictor to
+        the observation distribution.
     prediction
         The deterministic predictor over the full horizon, time at axis ``-2``.
 
@@ -830,7 +840,7 @@ def predict(
     )
     if not isinstance(full_dist, dist.Distribution):
         msg = (
-            "obs_dist must be a zero-centered noise Distribution or a link callable that "
+            "obs_dist must be a noise Distribution with location 0 or a link callable that "
             f"returns a Distribution, got {type(full_dist).__name__} from the link; e.g. "
             "predict(h, dist.Normal(0.0, sigma), mu) or "
             "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
