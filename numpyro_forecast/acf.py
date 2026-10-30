@@ -39,8 +39,8 @@ def _acf(
     # The float32 mean of a constant series is generally not exactly that
     # constant (the sum rounds, and XLA multiplies by 1 / T), so centering alone
     # leaves a tiny nonzero residual whose normalized autocovariance is a
-    # finite, AR(1)-like (T - k) / T. After subtracting the first sample a
-    # constant series is exactly zero, so the mean, the FFT and the
+    # finite, AR(1)-like ratio such as (T - k) / T. After subtracting the first
+    # sample a constant series is exactly zero, so the mean, the FFT and the
     # autocovariance are exact zeros and every lag is 0 / 0 = NaN. The ACF is
     # shift invariant, and the shift also bounds every value by the range of
     # the series, which avoids float32 cancellation for a large level.
@@ -132,8 +132,9 @@ def acf(
     lag ``0`` included, is NaN (a ``0 / 0``), with or without `jax.jit()`.
     The series is shifted by its first sample before centering, which makes a
     constant series exactly zero in floating point. NaN does not imply a
-    constant series: in float32, deviations from the mean below about
-    ``1e-19`` square to zero and also give NaN.
+    constant series: a NaN or infinite sample also gives NaN at every lag,
+    and in float32 a series whose deviations from the mean are near the
+    underflow threshold (about ``1e-19``) can give NaN or inaccurate values.
 
     References
     ----------
