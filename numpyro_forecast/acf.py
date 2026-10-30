@@ -10,10 +10,11 @@ Durbin-Levinson recursion to the ACF.
 Unlike the model-data layout used elsewhere in the package (time at axis
 ``-2``), these functions reduce over time and return a lag spectrum, so they
 take time on the **last** axis: inputs are shaped ``(*batch, time)`` and
-outputs ``(*batch, max_lag + 1)``, with lag ``0`` (identically ``1.0``)
-included. For package-layout data shaped ``(*batch, time, obs)``, pass
-``jnp.moveaxis(data, -2, -1)`` to get per-series spectra ``(*batch, obs,
-max_lag + 1)``.
+outputs ``(*batch, max_lag + 1)``, with lag ``0`` included (identically
+``1.0``, except for a constant series, where every lag is NaN). For
+package-layout data shaped ``(*batch, time, obs)``, pass
+``jnp.moveaxis(data, -2, -1)`` to get per-series spectra
+``(*batch, obs, max_lag + 1)``.
 """
 
 from functools import partial
@@ -35,6 +36,15 @@ def _acf(
 ) -> Float[Array, " *batch lags"]:
     """Jitted ACF core; the ``max_lag`` bounds guard lives in `acf()`."""
     m2 = 2 * _fft_next_fast_len(y.shape[-1])
+    # The float32 mean of a constant series is generally not exactly that
+    # constant (the sum rounds, and XLA multiplies by 1 / T), so centering alone
+    # leaves a tiny nonzero residual whose normalized autocovariance is a
+    # finite, AR(1)-like (T - k) / T. After subtracting the first sample a
+    # constant series is exactly zero, so the mean, the FFT and the
+    # autocovariance are exact zeros and every lag is 0 / 0 = NaN. The ACF is
+    # shift invariant, and the shift also bounds every value by the range of
+    # the series, which avoids float32 cancellation for a large level.
+    y = y - y[..., :1]
     y_centered = y - y.mean(axis=-1, keepdims=True)
     freq = jnp.fft.rfft(y_centered, n=m2, axis=-1)
     autocov = jnp.fft.irfft(freq * jnp.conj(freq), n=m2, axis=-1)[..., : max_lag + 1]
@@ -108,7 +118,8 @@ def acf(
     -------
     Float[Array, "*batch lags"]
         Autocorrelations for lags ``0, 1, ..., max_lag`` (``max_lag + 1``
-        values; lag ``0`` is identically ``1.0``).
+        values; lag ``0`` is identically ``1.0``; all NaN for a constant
+        series).
 
     Raises
     ------
@@ -117,9 +128,12 @@ def acf(
 
     Notes
     -----
-    A constant series has zero variance, so the result is meaningless: all NaN
-    in eager execution (a ``0 / 0``), while under `jax.jit()` the rounding
-    of the mean can instead yield arbitrary finite values.
+    A constant series has zero variance and no autocorrelation, so every lag,
+    lag ``0`` included, is NaN (a ``0 / 0``), with or without `jax.jit()`.
+    The series is shifted by its first sample before centering, which makes a
+    constant series exactly zero in floating point. NaN does not imply a
+    constant series: in float32, deviations from the mean below about
+    ``1e-19`` square to zero and also give NaN.
 
     References
     ----------
@@ -165,7 +179,8 @@ def pacf(
     -------
     Float[Array, "*batch lags"]
         Partial autocorrelations for lags ``0, 1, ..., max_lag``
-        (``max_lag + 1`` values; lag ``0`` is identically ``1.0``).
+        (``max_lag + 1`` values; lag ``0`` is identically ``1.0``; all NaN
+        for a constant series).
 
     Raises
     ------
@@ -174,10 +189,9 @@ def pacf(
 
     Notes
     -----
-    A constant series has zero variance, so the result is meaningless (see
-    `acf()`); a near-deterministic series can likewise overflow the
-    recursion (the denominator above approaches zero) and produce infinities
-    or NaNs.
+    A constant series gives NaN at every lag, as in `acf()`; a
+    near-deterministic series can overflow the recursion (the denominator
+    above approaches zero) and produce infinities or NaNs.
 
     References
     ----------
