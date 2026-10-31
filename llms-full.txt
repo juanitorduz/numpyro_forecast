@@ -118,6 +118,14 @@ Returns
 Array
     The latent over the full horizon with time at axis ``-2``.
 
+Raises
+------
+ValueError
+    If a given value of the ``name`` or ``f"{name}_future"`` site (for
+    example a posterior that ``Predictive`` substitutes) does not have
+    ``h.t_obs`` or ``h.future`` steps on its time plate: the usual cause is
+    a posterior drawn for a different training length.
+
 markov_series(h: numpyro_forecast.models.Horizon, name: str, init_carry: Carry, transition: Transition[Carry], xs: jaxtyping.PyTree[jax.Array] | None = None, *, advance: Advance[Carry] | None = None, plates: collections.abc.Sequence[tuple[str, int]] = (), reparam_config: collections.abc.Mapping[str, numpyro.infer.reparam.Reparam] | None = None) -> jax.Array
 
 Sample a Markov (state-space) latent over the full horizon.
@@ -143,9 +151,12 @@ transition
     ``numpyro.sample`` statement.
 xs
     Optional exogenous inputs over the full horizon: a PyTree of arrays
-    with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
-    leaf by leaf into scan layout internally; ``None`` for autonomous
-    dynamics.
+    with time at axis ``-2`` and ``duration`` rows (a single array, a
+    tuple, a dict, ...), moved leaf by leaf into scan layout internally;
+    ``None`` for autonomous dynamics. Slice each leaf from ``covariates``,
+    which has ``duration`` rows in every model call (training included),
+    or extend an in-sample input with
+    `~~numpyro_forecast.arrays.pad_future()`.
 advance
     Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
     next carry from the sampled latent; ``None`` means the carry *is* the
@@ -170,9 +181,11 @@ Raises
 ValueError
     If forecasting without observed data (only reachable with a hand-built
     `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-    data), if the per-step shape lacks the observation dimension, if an
-    enclosing plate is detected, or if ``advance`` is omitted and
-    ``init_carry`` is not a single array with the shape and dtype of a draw.
+    data), if an ``xs`` leaf lacks the time or observation axis or does
+    not span ``h.duration`` rows, if the per-step shape lacks the
+    observation dimension, if an enclosing plate is detected, or if
+    ``advance`` is omitted and ``init_carry`` is not a single array with
+    the shape and dtype of a draw.
 
 ssoe(h: numpyro_forecast.models.Horizon, name: str, y: jax.Array | None, init_carry: Carry, mean: SSOEMean[Carry], update: SSOEUpdate[Carry], noise_dist: numpyro.distributions.distribution.Distribution, xs: jaxtyping.PyTree[jax.Array] | None = None) -> numpyro_forecast.models.SSOEResult
 
@@ -1150,7 +1163,11 @@ posterior
     of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
     is accepted directly.
 data
-    Observed data with time at axis ``-2`` and length ``t``.
+    Observed data with time at axis ``-2`` and length ``t``. When
+    ``posterior`` holds in-sample time latents, ``t`` must be the training
+    length that ``posterior`` was drawn for; a
+    `~~numpyro_forecast.models.innovations()` site of another length
+    raises ``ValueError``.
 covariates
     Covariates with time at axis ``-2`` and length ``duration > t``.
 batch_size
@@ -1194,9 +1211,13 @@ Raises
 ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
     axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
-    extend beyond ``data`` along the time axis, or if ``posterior`` is
+    extend beyond ``data`` along the time axis, if ``posterior`` is
     empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
-    on the sample-axis length.
+    on the sample-axis length, if a ``posterior`` value of an
+    `~~numpyro_forecast.models.innovations()` site does not have ``t``
+    steps (a posterior drawn for a different training length), or if the
+    ``"forecast"`` draws do not have time at axis ``-2`` with
+    ``duration - t`` steps.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -1252,7 +1273,13 @@ posterior
 covariates
     Covariates with time at axis ``-2`` spanning the observed window. Its time
     length must match the data the ``posterior`` was fit on, since the in-sample
-    latent sites are sized to that window.
+    latent sites are sized to that window. An
+    `~~numpyro_forecast.models.innovations()` site of another length raises
+    ``ValueError`` however the model slices its ``"obs"`` site. For other
+    latents the driver checks only that the ``"obs"`` draws have one step
+    per row, and a `~~numpyro_forecast.models.markov_series()` latent
+    replays a shorter posterior as a prefix and draws the remaining steps
+    from the prior (a longer one raises NumPyro's ``RuntimeError``).
 batch_size
     Optional chunk size for sampling (caps peak memory).
 parallel
@@ -1289,8 +1316,13 @@ Raises
 ------
 ValueError
     If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
-    the leaves disagree on the sample-axis length, or if ``covariates`` has
-    fewer than two axes (time must be at axis ``-2``) or no time steps.
+    the leaves disagree on the sample-axis length, if ``covariates`` has
+    fewer than two axes (time must be at axis ``-2``) or no time steps,
+    if a ``posterior`` value of an
+    `~~numpyro_forecast.models.innovations()` site does not have one step
+    per ``covariates`` row (a posterior drawn for a different training
+    length), or if the ``"obs"`` draws do not have time at axis ``-2`` with
+    one step per ``covariates`` row.
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -2135,8 +2167,14 @@ ValueError
     no sample axis, if
     ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon, if ``num_chains`` is not a positive
-    integer (``bool`` included), or if ``posterior``'s sample count is not
-    evenly divisible by ``num_chains``.
+    integer (``bool`` included), if ``posterior``'s sample count is not
+    evenly divisible by ``num_chains``, if a ``posterior`` value of an
+    `~~numpyro_forecast.models.innovations()` site does not have one step
+    per ``data`` row (a posterior drawn for a different training length),
+    or if the in-sample draws do not have one time step per ``data`` row or
+    the forecast draws one per ``covariates`` row past ``data`` (see
+    `~~numpyro_forecast.predictive.predict_in_sample()` and
+    `~~numpyro_forecast.predictive.forecast()`).
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError

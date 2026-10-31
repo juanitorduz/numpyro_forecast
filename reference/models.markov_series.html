@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-17888a1159294d3eb470f19f6f52f5a5.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-9238893d7e4deb0f460d1aeaa19f5ea8.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-7e9b4f36233c51a331fcd27f7c4ba3a1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -892,7 +892,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L295-L397" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/models.py#L350-L465" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">models</span><span class="op">.</span><span class="sig-name">markov_series</span>(</span>
@@ -932,7 +932,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">xs</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">PyTree[Array] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-<p>Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis <code>-2</code> (a single array, a tuple, a dict, …), moved leaf by leaf into scan layout internally; <code>None</code> for autonomous dynamics.</p>
+<p>Optional exogenous inputs over the full horizon: a PyTree of arrays with time at axis <code>-2</code> and <code>duration</code> rows (a single array, a tuple, a dict, …), moved leaf by leaf into scan layout internally; <code>None</code> for autonomous dynamics. Slice each leaf from <code>covariates</code>, which has <code>duration</code> rows in every model call (training included), or extend an in-sample input with <a href="arrays.pad_future.html#numpyro_forecast.arrays.pad_future" class="gdls-link gdls-code">pad_future()</a>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">advance</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Advance[Carry] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
@@ -966,7 +966,7 @@ The latent over the full horizon in package layout <code>(*plate_batch, duration
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if the per-step shape lacks the observation dimension, if an enclosing plate is detected, or if <code>advance</code> is omitted and <code>init_carry</code> is not a single array with the shape and dtype of a draw.
+If forecasting without observed data (only reachable with a hand-built <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>: <a href="models.Horizon.html#numpyro_forecast.models.Horizon.from_data" class="gdls-link gdls-code">Horizon.from_data()</a> never sets <code>future &gt; 0</code> without data), if an <code>xs</code> leaf lacks the time or observation axis or does not span <code>h.duration</code> rows, if the per-step shape lacks the observation dimension, if an enclosing plate is detected, or if <code>advance</code> is omitted and <code>init_carry</code> is not a single array with the shape and dtype of a draw.
 </dd>
 </dl>
 </div>
