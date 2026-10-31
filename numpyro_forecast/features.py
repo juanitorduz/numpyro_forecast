@@ -1,12 +1,16 @@
 """Seasonal feature builders: Fourier design matrices and periodic tiling.
 
-Both helpers run host-side, outside any trace; `fourier_features()`
-memoizes its design matrix per argument tuple.
+Both helpers can be called inside a model function, and so also run under a JAX
+trace (`svi.run`, the jitted `~~numpyro_forecast.predictive.forecast()`).
+`fourier_features()` caches a host NumPy copy of its design matrix per argument
+tuple and converts it to a JAX array in the current default float dtype on every
+call, so the cache never holds a tracer and the dtype follows the x64 flag.
 """
 
 from functools import lru_cache
 
 import jax.numpy as jnp
+import numpy as np
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
@@ -18,17 +22,21 @@ def _fourier_features(
     duration: int,
     period: float,
     num_terms: int,
-) -> Float[Array, " duration two_num_terms"]:
+) -> Float[np.ndarray, " duration two_num_terms"]:
     """Memoized Fourier-feature core.
 
-    The design matrix is fully determined by ``(duration, period, num_terms)``
-    and is built host-side, never inside a trace, so the result is cached per
-    argument tuple rather than recomputed (see `fourier_features()`).
+    The design matrix is fully determined by ``(duration, period, num_terms)``,
+    so it is cached per argument tuple. It is built with NumPy in float64 and
+    marked read-only: a NumPy array is never a JAX tracer, so the cached value
+    does not depend on whether the first call ran inside a trace, and
+    `fourier_features()` casts it to the default float dtype per call.
     """
-    time = jnp.arange(duration)[:, None]
-    harmonics = jnp.arange(1, num_terms + 1)[None, :]
-    angles = 2.0 * jnp.pi * harmonics * time / period
-    return jnp.concatenate([jnp.sin(angles), jnp.cos(angles)], axis=-1)
+    time = np.arange(duration, dtype=np.float64)[:, None]
+    harmonics = np.arange(1, num_terms + 1, dtype=np.float64)[None, :]
+    angles = 2.0 * np.pi * harmonics * time / period
+    design = np.concatenate([np.sin(angles), np.cos(angles)], axis=-1)
+    design.setflags(write=False)
+    return design
 
 
 def fourier_features(
@@ -37,6 +45,12 @@ def fourier_features(
     num_terms: int,
 ) -> Float[Array, " duration two_num_terms"]:
     """Build a Fourier seasonality design matrix.
+
+    Safe to call inside a model function (for example with ``h.duration`` of a
+    `~~numpyro_forecast.models.Horizon`), also under `svi.run` or the jitted
+    `~~numpyro_forecast.predictive.forecast()`. The matrix is computed in
+    float64 and cached per argument tuple, then returned in the current
+    default float dtype (``float64`` with x64 enabled, ``float32`` otherwise).
 
     Parameters
     ----------
@@ -53,7 +67,8 @@ def fourier_features(
     Float[Array, "duration two_num_terms"]
         The design matrix of shape ``(duration, 2 * num_terms)``.
     """
-    return _fourier_features(duration, float(period), num_terms)
+    design = _fourier_features(duration, float(period), num_terms)
+    return jnp.asarray(design, dtype=jnp.result_type(float))
 
 
 def periodic_repeat(x: ArrayLike, duration: int, *, axis: int = -1) -> Array:
