@@ -2312,7 +2312,7 @@ plot_irf_grid(
 </figure>
 
 
-"math inline">h = 1</span>-2) before settling.
+ks. Every panel decays toward zero by h \approx 8-10, as stability requires; the own-shock (diagonal) panels start at exactly 1 by construction and decay the fastest, some dipping briefly negative (e.g. `realgdp response to realgdp shock` around h = 1-2) before settling.
 
 
 ## Orthogonalized and cumulative responses
@@ -2496,7 +2496,7 @@ summary_mn
 
 ## Shrinkage of the coefficients
 
-The table compares the posterior standard deviation of every coefficient under the two priors. The ratio column is below one where the Minnesota prior tightened the posterior. The effect is largest on the second lag, where the harmonic decay halves the prior standard deviation, and on the GDP and consumption equations. The investment equation at lag one is unchanged within Monte Carlo error: after the scale correction its prior is wide relative to what the data say, so the data decide.
+The table compares the posterior standard deviation of every coefficient under the two priors. A ratio below one means that the Minnesota prior tightened the posterior. The effect is largest on the second lag, where the harmonic decay halves the prior standard deviation. The exception is the investment equation at lag one (polars elides these rows, so see the prior table and the Minnesota summary above). After the scale correction, its prior on lagged GDP and lagged consumption is wider than the weak \text{Normal}(0, 1) prior. These posteriors are therefore slightly wider, and their means move away from zero, for example from 2.84 to 3.28 on lagged consumption.
 
 
 ``` python
@@ -2572,7 +2572,7 @@ shape: (3, 3)
 
 ## Impulse responses
 
-The grid overlays the posterior mean responses under the Minnesota prior (orange) on the bands and mean of the weak prior fit (blue). The two means agree closely and the orange line stays inside the 50\\ band of the weak prior fit in every panel. The Minnesota mean is smoother at two and three quarters after the shock, where the prior halves the standard deviation of the second-lag coefficients and irons out the wiggle that the weak prior fit shows there. With 200 quarters for 18 coefficients the data dominate a prior of this tightness; a smaller `tightness` trades this agreement for more shrinkage.
+The grid overlays the posterior mean responses under the Minnesota prior (orange) on the bands and mean of the weak prior fit (blue). The two means agree closely, and the orange line stays inside the 50\\ band of the weak prior fit in most panels. The clearest exception is `realinv response to realcons shock` at h = 1: the response at one quarter equals the lag-one coefficient, so the Minnesota mean there is the posterior mean of `phi[1, realinv, realcons]`, 3.28, above the top of the weak prior's 50\\ band at about 3.1. This is the shift discussed above. The other is `realcons response to realgdp shock` at h = 2, where the Minnesota mean sits near zero while the weak prior band runs from about -0.24 to -0.05; a few other panels show smaller excursions at h = 2. Two and three quarters after the shock are also where the Minnesota mean is smoother: the prior halves the standard deviation of the second-lag coefficients and irons out the wiggle that the weak prior fit shows there. With 200 quarters for 18 coefficients the data still dominate a prior of this tightness; a smaller `tightness` trades this agreement for more shrinkage.
 
 
 ``` python
