@@ -1,6 +1,7 @@
 """MultivariateNormal distribution-surgery tests (roadmap §9)."""
 
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
@@ -253,3 +254,37 @@ def test_slice_time_and_prefix_condition_mvn_batched() -> None:
         assert isinstance(cond_b, dist.MultivariateNormal)
         assert jnp.allclose(sliced.loc[b], sliced_b.loc)
         assert jnp.allclose(cond.loc[b], cond_b.loc, atol=1e-4)
+
+
+@pytest.mark.parametrize("depth", [1, 2], ids=["to_event", "nested_to_event"])
+def test_prefix_condition_independent_mvn_is_the_gaussian_conditional(depth: int) -> None:
+    """An ``Independent``-wrapped MVN over time conditions on the observed prefix.
+
+    Regression for #171: the ``Independent`` dispatch returned the horizon
+    marginal, so a ``.to_event(1)`` panel of time-correlated series ignored the
+    prefix and the forecast fell back to the prior mean. ``depth = 2`` wraps the
+    MVN twice (numpyro does not merge nested ``Independent`` wrappers).
+    """
+    time, t = 6, 4
+    lead = (1,) * (depth - 1)  # one extra batch axis per extra wrapper
+    cov = _ar_covariance(time, 0.9)
+    loc = jnp.stack([jnp.zeros(time), jnp.linspace(-1.0, 1.0, time)])  # two series
+    data = jnp.stack([jnp.ones((t, 1)), jnp.full((t, 1), -0.5)])  # (2, t, 1)
+    noise: dist.Distribution = dist.MultivariateNormal(
+        loc=loc.reshape(*lead, 2, time), covariance_matrix=cov
+    )
+    for _ in range(depth):
+        noise = noise.to_event(1)
+
+    cond = prefix_condition(noise, data.reshape(*lead, 2, t, 1))
+
+    c = np.asarray(cov, dtype=np.float64)
+    mu = np.asarray(loc, dtype=np.float64)
+    x = np.asarray(data[..., 0], dtype=np.float64)
+    gain = np.linalg.solve(c[:t, :t], c[:t, t:]).T  # Sigma_fp @ inv(Sigma_pp)
+    expected_mean = mu[:, t:] + (x - mu[:, :t]) @ gain.T
+    expected_var = np.broadcast_to(np.diag(c[t:, t:] - gain @ c[:t, t:]), (2, time - t))
+    assert isinstance(cond, dist.Independent)
+    assert cond.event_shape == (*lead, 2, time - t)
+    assert jnp.allclose(cond.mean, expected_mean.reshape(*lead, 2, time - t), atol=1e-4)
+    assert jnp.allclose(cond.variance, expected_var.reshape(*lead, 2, time - t), atol=1e-4)
