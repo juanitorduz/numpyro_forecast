@@ -1,5 +1,6 @@
 """Tests for the ArviZ DataTree export (roadmap §5)."""
 
+import re
 import warnings
 from collections.abc import Collection, Mapping
 from typing import Any, cast
@@ -220,7 +221,7 @@ def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
     )
     with pytest.raises(ValueError, match="pass explicit time_coord"):
         add_forecast_groups(tree, fc, future_covariates[n:])
-    future_days = days[-1] + 1 + np.arange(3)
+    future_days = days[-1] + np.arange(1, 4)
     out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=future_days)
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, future_days)
 
@@ -340,17 +341,22 @@ def _labels(kind: str, labels: list[str]) -> Collection[Any]:
 
 
 @pytest.mark.parametrize(
-    "kind",
+    ("kind", "dtype_kind"),
     [
-        "ndarray-int",
-        "ndarray-datetime64",
-        "range-index",
-        "naive-datetime-index",
-        "aware-datetime-index",
+        ("ndarray-int", "i"),
+        ("ndarray-datetime64", "M"),
+        ("range-index", "i"),
+        ("naive-datetime-index", "M"),
+        ("aware-datetime-index", "O"),
     ],
 )
-def test_to_datatree_accepts_array_and_index_time_coord(kind: str) -> None:
-    """Issue #164: a NumPy array or pandas index is a ``time_coord``, split like a list."""
+def test_to_datatree_accepts_array_and_index_time_coord(kind: str, dtype_kind: str) -> None:
+    """Issue #164: a NumPy array or pandas index is a ``time_coord``, split like a list.
+
+    The dtype check matters: ``assert_array_equal`` treats ``datetime64`` values
+    and ``pd.Timestamp`` objects as equal, so only the dtype shows that naive
+    times stay a datetime coordinate. Only an aware index is an object array.
+    """
     time_coord = _time_coord(kind)
     expected = np.asarray(list(time_coord))
     tree = _two_series_tree(time_coord=time_coord)
@@ -358,6 +364,8 @@ def test_to_datatree_accepts_array_and_index_time_coord(kind: str) -> None:
         np.testing.assert_array_equal(tree[group].coords["time"].values, expected[:3])
     for group in ("predictions", "predictions_constant_data"):
         np.testing.assert_array_equal(tree[group].coords["time"].values, expected[3:])
+    for group in set(tree.children) - {"posterior"}:
+        assert tree[group].coords["time"].dtype.kind == dtype_kind
 
 
 @pytest.mark.parametrize("route", ["to_datatree", "add_forecast_groups"])
@@ -399,6 +407,62 @@ def test_to_datatree_coords_accept_array_and_index(kind: str) -> None:
     for group in ("posterior_predictive", "observed_data", "predictions"):
         assert tree[group]["obs"].dims[-2:] == ("time", "obs_dim")
         assert tree[group].coords["obs_dim"].values.tolist() == ["a", "b"]
+
+
+_COORDINATE_NAMES = {
+    "time_coord": "time_coord",
+    "coords": "coords['obs_dim']",
+    "add_forecast_groups": "time_coord",
+    "series": "series",
+}
+
+
+def _export_with_coordinate(site: str, value: Any) -> None:
+    """Pass ``value`` as the coordinate that ``site`` names, to the function that takes it."""
+    if site == "time_coord":
+        _two_series_tree(time_coord=value)
+    elif site == "coords":
+        _two_series_tree(coords={"obs_dim": value})
+    elif site == "add_forecast_groups":
+        tree = _two_series_tree(duration=3)
+        add_forecast_groups(tree, jnp.zeros((4, 2, 2)), empty_covariates(2), time_coord=value)
+    else:
+        predictions, x, _ = _prediction_draws(series=2)
+        predictions_to_datatree(predictions, x, value)
+
+
+@pytest.mark.parametrize("site", list(_COORDINATE_NAMES))
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        pytest.param({"b", "a"}, r"got set that converts to shape \(\)", id="set"),
+        pytest.param({"a": 0, "b": 1}, r"got dict that converts to shape \(\)", id="dict"),
+        pytest.param(np.array(5), r"got ndarray that converts to shape \(\)", id="scalar"),
+        pytest.param(np.zeros((2, 2)), r"converts to shape \(2, 2\)", id="2d-array"),
+    ],
+)
+def test_unordered_or_not_one_dimensional_coordinate_raises(
+    site: str, value: Any, match: str
+) -> None:
+    """A set, a dict, a scalar or a 2-D array is no coordinate: it raises by name.
+
+    A set or a dict is a ``Collection`` but has no order, and ``np.asarray``
+    makes it a 0-d array that used to fail inside xarray or with an
+    ``IndexError`` on the length check.
+    """
+    name = re.escape(_COORDINATE_NAMES[site])
+    with pytest.raises(ValueError, match=rf"{name} must be an ordered one-dimensional .*{match}"):
+        _export_with_coordinate(site, value)
+
+
+@pytest.mark.parametrize("site", list(_COORDINATE_NAMES))
+def test_multi_index_coordinate_raises(site: str) -> None:
+    """A ``pd.MultiIndex`` would become one tuple per position and lose its levels."""
+    pd = pytest.importorskip("pandas")
+    value = pd.MultiIndex.from_tuples([("a", 1), ("b", 2)])
+    name = re.escape(_COORDINATE_NAMES[site])
+    with pytest.raises(ValueError, match=rf"{name} is a pandas MultiIndex with 2 levels"):
+        _export_with_coordinate(site, value)
 
 
 def test_to_datatree_rejects_short_covariates() -> None:
