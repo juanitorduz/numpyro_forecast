@@ -437,7 +437,8 @@ and exposed as the ``"forecast"`` deterministic site that
 distribution must support time-axis surgery
 (`~~numpyro_forecast.surgery.slice_time()` /
 `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
-family or a registered one.
+family or a registered one. This also holds for a distribution wrapped in
+``Independent`` (e.g. by ``.to_event(1)``).
 
 Parameters
 ----------
@@ -888,7 +889,9 @@ reduces to the forecast-horizon marginal, i.e. a time slice ``[t:]``. Only
 registered elementwise families take this path; correlated families (e.g.
 ``MultivariateNormal``) need a dedicated dispatch implementing a genuine
 Gaussian conditional, which is checked here rather than silently reduced to
-a slice (the R1 fix).
+a slice (the R1 fix). An ``Independent`` wrapper (e.g. from ``.to_event(1)``)
+conditions its base distribution and keeps its ``reinterpreted_batch_ndims``,
+so wrapping does not change the conditional.
 
 Parameters
 ----------
@@ -905,8 +908,8 @@ dist.Distribution
 Raises
 ------
 NotImplementedError
-    If ``noise_dist`` is not a registered elementwise family (and has no
-    dedicated dispatch).
+    If ``noise_dist`` (or the base of an ``Independent`` wrapper) is not a
+    registered elementwise family (and has no dedicated dispatch).
 
 register_elementwise(cls: type[numpyro.distributions.distribution.Distribution]) -> type[numpyro.distributions.distribution.Distribution]
 
@@ -992,6 +995,11 @@ ValueError
     (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
     the outer transform does nothing there either.
 
+    Also if an in-sample time latent is under a subsampled plate when the
+    model is traced: a plate opened with ``subsample_size`` smaller than its
+    size, or a full model plate that the guide subsamples through
+    ``create_plates``. See the Notes.
+
 Notes
 -----
 - Hand the wrapped model, not the original, to the guide, the sampler and
@@ -1014,6 +1022,14 @@ Notes
   unaffected), the scan sites of
   `~~numpyro_forecast.models.markov_series()`, the error sites of
   `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+- Time latents under a subsampled plate are not supported. The auxiliary
+  site is sampled outside every enclosing plate, so a subsampled plate
+  would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
+  would size its parameters to the minibatch. A time latent under such a
+  plate therefore raises ``ValueError``, also when the guide subsamples the
+  plate through ``create_plates``. Time latents outside the subsampled
+  plate (for example one level shared by all series) and a plate with
+  ``subsample_size`` equal to its size are accepted.
 - Posterior dictionaries from `~~numpyro_forecast.predictive.draw_posterior()`
   and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
   ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes

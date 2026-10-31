@@ -14,7 +14,7 @@ surgery.prefix_condition(
 ```
 
 
-For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e. a time slice `[t:]`. Only registered elementwise families take this path; correlated families (e.g. `MultivariateNormal`) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix).
+For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e. a time slice `[t:]`. Only registered elementwise families take this path; correlated families (e.g. `MultivariateNormal`) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix). An `Independent` wrapper (e.g. from `.to_event(1)`) conditions its base distribution and keeps its `reinterpreted_batch_ndims`, so wrapping does not change the conditional.
 
 
 ## Parameters
@@ -38,4 +38,4 @@ The forecast-horizon distribution over `(*batch, f, obs)`.
 
 
 `NotImplementedError`  
-If `noise_dist` is not a registered elementwise family (and has no dedicated dispatch).
+If `noise_dist` (or the base of an `Independent` wrapper) is not a registered elementwise family (and has no dedicated dispatch).
