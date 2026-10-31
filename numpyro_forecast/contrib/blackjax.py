@@ -47,11 +47,11 @@ from numpyro.infer.mcmc import MCMCKernel
 from numpyro.infer.util import initialize_model
 from numpyro.util import identity
 
-from numpyro_forecast._offload import WARNING_SKIP_PREFIXES, draw_chunked
-from numpyro_forecast._validation import require_positive_num_samples
 from numpyro_forecast.exceptions import KernelConfigError
+from numpyro_forecast.offload import WARNING_SKIP_PREFIXES, draw_chunked
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
+from numpyro_forecast.validation import require_positive_num_samples
 
 _BJState = namedtuple("_BJState", ["position", "inner", "rng_key"])
 """MCMC state threaded by every `_BlackjaxKernel`.
@@ -672,7 +672,7 @@ def pathfinder_samples(
     `~~numpyro_forecast.predictive.forecast()` or NumPyro's
     ``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
     Chunking and device offload are delegated to the shared
-    `~~numpyro_forecast._offload.draw_chunked()` driver, so the same
+    `~~numpyro_forecast.offload.draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -711,10 +711,10 @@ def pathfinder_samples(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -1013,7 +1013,7 @@ def multipathfinder_samples(
     `pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
     and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
     are delegated to the shared
-    `~~numpyro_forecast._offload.draw_chunked()` driver, so the same
+    `~~numpyro_forecast.offload.draw_chunked()` driver, so the same
     memory-bounding contract applies.
 
     Resampling strategies
@@ -1085,10 +1085,10 @@ def multipathfinder_samples(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----

@@ -12,18 +12,6 @@ import jax.numpy as jnp
 from numpyro_forecast.typing import Array
 
 
-def _zeros_like_data(data: Array, duration: int) -> Array:
-    """Return zeros shaped like ``data`` with the time axis ``-2`` set to ``duration``.
-
-    Shared core of `zero_data_like()` and
-    `numpyro_forecast.models.Horizon.zero_data`: it exposes the
-    shape/dtype of the data over the full forecast horizon without leaking
-    observed values into the model.
-    """
-    shape = (*data.shape[:-2], duration, data.shape[-1])
-    return jnp.zeros(shape, dtype=data.dtype)
-
-
 def zero_data_like(data: Array, covariates: Array) -> Array:
     """Return zeros shaped like ``data`` but extended to the covariate duration.
 
@@ -44,7 +32,7 @@ def zero_data_like(data: Array, covariates: Array) -> Array:
     Array
         Zeros of shape ``(*batch, duration, obs)``.
     """
-    return _zeros_like_data(data, covariates.shape[-2])
+    return jnp.zeros((*data.shape[:-2], covariates.shape[-2], data.shape[-1]), dtype=data.dtype)
 
 
 def concat_future(prefix: Array, suffix: Array, *, axis: int = -2) -> Array:

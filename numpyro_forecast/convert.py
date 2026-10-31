@@ -23,11 +23,11 @@ from jax import random
 from jax.typing import ArrayLike
 from jaxtyping import Float, Num
 
-from numpyro_forecast._offload import _resolve_device
-from numpyro_forecast._validation import require_covariates_cover_data, require_sample_axis
 from numpyro_forecast.exceptions import CovariateDimsError
+from numpyro_forecast.offload import resolve_device
 from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.validation import require_covariates_cover_data, require_sample_axis
 
 _SAMPLE_DIMS = ["chain", "draw"]
 """The ArviZ sample dimensions shared by the posterior groups."""
@@ -624,10 +624,10 @@ def to_datatree(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that
         exposes no host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not
-        initialized (see `~~numpyro_forecast._offload._resolve_device()`).
+        initialized (see `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -691,7 +691,7 @@ def to_datatree(
     covariates_insample = covariates[..., :n_time, :]
     # Resolve once so the two predictive drivers share one placement (and an
     # unmet explicit "cpu" request warns once per export).
-    resolved_device = _resolve_device(device)
+    resolved_device = resolve_device(device)
     predictive = predict_in_sample(
         key_pred,
         model,

@@ -24,16 +24,10 @@ from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoGuide
 from numpyro.optim import Adam
 
-from numpyro_forecast._offload import _device_view, _leaf_view, _oom_advice
-from numpyro_forecast._validation import (
-    require_positive_num_samples,
-    require_pred_truth_shapes,
-    require_time_axis,
-)
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
 from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.offload import chunk_indices, device_view, leaf_view, oom_advice
 from numpyro_forecast.optional import require
-from numpyro_forecast.predictive import _chunk_indices
 from numpyro_forecast.typing import (
     Array,
     ForecastFn,
@@ -42,6 +36,11 @@ from numpyro_forecast.typing import (
     InSampleFn,
     Metric,
     ModelFactory,
+)
+from numpyro_forecast.validation import (
+    require_positive_num_samples,
+    require_pred_truth_shapes,
+    require_time_axis,
 )
 
 if TYPE_CHECKING:
@@ -66,7 +65,7 @@ def eval_mae(
 
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so either (or
+    (`~~numpyro_forecast.offload.device_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -87,7 +86,7 @@ def eval_mae(
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     require_pred_truth_shapes(pred, truth)
-    return _eval_mae(_device_view(pred), _device_view(truth))
+    return _eval_mae(device_view(pred), device_view(truth))
 
 
 @jax.jit
@@ -103,7 +102,7 @@ def eval_rmse(
 
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so either (or
+    (`~~numpyro_forecast.offload.device_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -124,7 +123,7 @@ def eval_rmse(
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`).
     """
     require_pred_truth_shapes(pred, truth)
-    return _eval_rmse(_device_view(pred), _device_view(truth))
+    return _eval_rmse(device_view(pred), device_view(truth))
 
 
 _crps_cells = jax.jit(crps_empirical)
@@ -149,12 +148,12 @@ def _chunked_cell_metric(
 
     The batch shape is flattened to ``n_cells`` data cells and evaluated in
     wrapped index blocks of exactly ``batch_size`` cells
-    (`~~numpyro_forecast.predictive._chunk_indices()`), so the
+    (`~~numpyro_forecast.offload.chunk_indices()`), so the
     jitted ``kernel`` compiles once; each block's per-cell values are staged on
     the host before the next block runs, bounding accelerator memory by
     ``sample * batch_size`` values plus the kernel workspace. The sample axis
     is never chunked. Inputs are normalized with
-    `~~numpyro_forecast._offload._leaf_view()` so a host-committed
+    `~~numpyro_forecast.offload.leaf_view()` so a host-committed
     panel is sliced on the host instead of raising when a device-resident
     index array gathers against it.
 
@@ -175,14 +174,14 @@ def _chunked_cell_metric(
     Array
         The mean of the per-cell metric values, as a scalar array.
     """
-    pred_view = _leaf_view(pred)
-    truth_view = _leaf_view(truth)
+    pred_view = leaf_view(pred)
+    truth_view = leaf_view(truth)
     sample = pred_view.shape[0]
     pred_flat = pred_view.reshape(sample, -1)
     truth_flat = truth_view.reshape(-1)
     n_cells = truth_flat.shape[0]
-    indices = _chunk_indices(n_cells, batch_size)
-    with _oom_advice("metric evaluation", batch_size):
+    indices = chunk_indices(n_cells, batch_size)
+    with oom_advice("metric evaluation", batch_size):
         chunks = [np.asarray(kernel(pred_flat[:, idx], truth_flat[idx])) for idx in indices]
     values = np.concatenate(chunks, axis=0)[:n_cells]
     return jnp.asarray(values.mean())
@@ -216,7 +215,7 @@ def eval_crps(
         to float tolerance, not bitwise); at or above the cell count the
         single-pass path runs instead, which moves any host-committed operand
         back to device memory first
-        (`~~numpyro_forecast._offload._device_view()`) so either
+        (`~~numpyro_forecast.offload.device_view()`) so either
         ``pred`` or ``truth`` (or both) may be host-committed regardless of
         ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -232,7 +231,7 @@ def eval_crps(
     """
     require_pred_truth_shapes(pred, truth)
     if batch_size is None or batch_size >= np.size(truth):
-        return _eval_crps_single_pass(_device_view(pred), _device_view(truth))
+        return _eval_crps_single_pass(device_view(pred), device_view(truth))
     return _chunked_cell_metric(
         _crps_cells,
         cast("Array | np.ndarray", pred),
@@ -281,7 +280,7 @@ def eval_coverage(
         the identical count; only the precision of the final division differs
         from the single pass. Either path accepts a host-committed ``pred``
         or ``truth`` (or both); the single pass moves them to device memory
-        first (`~~numpyro_forecast._offload._device_view()`).
+        first (`~~numpyro_forecast.offload.device_view()`).
         ``None`` (default) evaluates in one pass.
 
     Returns
@@ -301,7 +300,7 @@ def eval_coverage(
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= np.size(truth):
-        return _coverage_indicator(_device_view(pred), _device_view(truth), alpha=alpha).mean()
+        return _coverage_indicator(device_view(pred), device_view(truth), alpha=alpha).mean()
     kernel = partial(_coverage_indicator, alpha=alpha)
     return _chunked_cell_metric(
         kernel, cast("Array | np.ndarray", pred), cast("Array | np.ndarray", truth), batch_size
@@ -374,7 +373,7 @@ def evaluate_forecast(
     # is moved to device memory so the jitted metric kernels below never see a
     # host/device memory-kind mismatch, whichever of pred/truth (or both) was
     # host-committed.
-    pred_arr, truth_arr = _device_view(pred), _device_view(truth)
+    pred_arr, truth_arr = device_view(pred), device_view(truth)
     # Evaluate every metric kernel, then pull the whole batch across the device
     # boundary in a single host transfer instead of one sync per metric.
     stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])

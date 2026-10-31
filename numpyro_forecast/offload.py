@@ -5,10 +5,10 @@ Both the posterior drivers (`~~numpyro_forecast.predictive.draw_posterior()`,
 drivers in `~~numpyro_forecast.predictive` draw large sample arrays
 in fixed-size chunks and move each chunk off the accelerator before the next one
 is produced. The helpers here own the device semantics of that loop:
-`_resolve_device()` turns the public ``device`` argument into a concrete
+`resolve_device()` turns the public ``device`` argument into a concrete
 target (a `jax.Device`, the ``"pinned_host"`` fallback sentinel, or
-``None``), `_transfer()` moves one chunk there and blocks, and
-`_stitch_chunks()` concatenates the transferred chunks without pulling
+``None``), `transfer()` moves one chunk there and blocks, and
+`stitch_chunks()` concatenates the transferred chunks without pulling
 them back onto the accelerator. `draw_chunked()` is the shared chunk-and-transfer
 loop itself: it owns batch-size validation, the single-shot passthrough, key
 splitting, and the per-chunk draw/transfer/stitch sequence, so
@@ -23,7 +23,7 @@ backend initialized it commits every chunk to the CPU backend device
 (``numpyro.set_platform("cuda")`` or a ``JAX_PLATFORMS`` preset restricts
 ``jax_platforms``) there is no pageable ``jax.Array`` container at all, since
 a CUDA client offers only device and pinned host memory, so
-`_resolve_device()` takes the backend-free path instead: each chunk is
+`resolve_device()` takes the backend-free path instead: each chunk is
 copied with `jax.device_get()` and the results are NumPy arrays (the
 ``"numpy"`` sentinel, also requestable explicitly). Pinned host memory (a
 `jax.sharding.SingleDeviceSharding` carrying a host memory kind on the
@@ -33,11 +33,11 @@ default (``XLA_PJRT_GPU_HOST_MEMORY_LIMIT_GB``) and its allocator fragments,
 which is what ran a 50,000-series posterior (46.8 GiB) out of host memory when
 it was the default. Either way nothing of the stitched result occupies
 accelerator memory. `_is_host_resident()` is the one predicate behind the
-consumers: `_leaf_view()` exposes a host-resident jax leaf as a NumPy view
+consumers: `leaf_view()` exposes a host-resident jax leaf as a NumPy view
 (NumPy leaves pass straight through) so per-chunk gathers run on the host (a
 pinned leaf gathered with a device-resident index raises a memory-space
 mismatch; a CPU-committed leaf would instead drag the gather, and the jitted
-predictive it feeds, onto the CPU), and `_device_view()` is its
+predictive it feeds, onto the CPU), and `device_view()` is its
 counterpart for the unchunked metric entry points, handing the fused kernel an
 accelerator-resident copy.
 
@@ -81,12 +81,12 @@ from numpyro_forecast.typing import Array
 _HOST_MEMORY_KINDS: tuple[str, ...] = ("pinned_host", "unpinned_host")
 """Host memory kinds, in preference order (``pinned_host`` is jax's offload target)."""
 
-_ResolvedDevice = jax.Device | Literal["pinned_host", "numpy"] | None
+ResolvedDevice = jax.Device | Literal["pinned_host", "numpy"] | None
 """A resolved placement: a device, the pinned-memory or NumPy sentinel, or ``None``.
 
 ``"numpy"`` is the backend-free path (one `jax.device_get()` per chunk,
 NumPy results); ``"pinned_host"`` commits to the host memory kind of the
-array's own device. Both are idempotent under `_resolve_device()`.
+array's own device. Both are idempotent under `resolve_device()`.
 """
 
 WARNING_SKIP_PREFIXES: tuple[str, ...] = tuple(
@@ -163,7 +163,7 @@ def _memory_budget_line() -> str:
 
 
 @contextmanager
-def _oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
+def oom_advice(stage: str, batch_size: int | None) -> Iterator[None]:
     """Re-raise device OOM errors from ``stage`` with the budget and the lever.
 
     Anything whose message does not contain ``RESOURCE_EXHAUSTED`` propagates
@@ -311,7 +311,7 @@ def _is_cpu_committed(leaf: Array) -> bool:
 def _is_host_resident(leaf: Array) -> bool:
     """Whether ``leaf`` must be staged before it meets accelerator-side code.
 
-    The one switch behind `_leaf_view()` and `_device_view()`. A leaf
+    The one switch behind `leaf_view()` and `device_view()`. A leaf
     in a host memory kind (`_HOST_MEMORY_KINDS`, an explicit
     ``device="pinned_host"`` result) is host-resident on every backend. A CPU-committed leaf
     (the primary ``device="host"`` result) counts only when the default backend
@@ -337,7 +337,7 @@ def _is_host_resident(leaf: Array) -> bool:
     return jax.default_backend() != "cpu" and _is_cpu_committed(leaf)
 
 
-def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
+def leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     """Expose ``leaf`` in the form that keeps downstream gathers off the accelerator.
 
     A device-resident `jax.Array` is returned unchanged. A host-resident
@@ -381,10 +381,10 @@ def _leaf_view(leaf: Array | np.ndarray) -> Array | np.ndarray:
     return np.asarray(leaf)
 
 
-def _device_view(leaf: ArrayLike) -> Array:
+def device_view(leaf: ArrayLike) -> Array:
     """Move a host-resident leaf onto the accelerator before it feeds a metric kernel.
 
-    The counterpart to `_leaf_view()` for the *unchunked* metric entry
+    The counterpart to `leaf_view()` for the *unchunked* metric entry
     points in `~~numpyro_forecast.evaluate` and
     `~~numpyro_forecast.metrics.crps_empirical()`: those run one fused
     ``jnp``/jitted kernel directly on ``pred`` and ``truth``, and a
@@ -403,7 +403,7 @@ def _device_view(leaf: ArrayLike) -> Array:
     committed to another accelerator.
 
     A tracer is passed through untouched, for the same reason as
-    `_leaf_view()`: it is host-resident by neither fact nor definition
+    `leaf_view()`: it is host-resident by neither fact nor definition
     under ``vmap``/``jit``, and it has no ``.sharding`` to inspect.
 
     Parameters
@@ -437,15 +437,15 @@ def _device_view(leaf: ArrayLike) -> Array:
     return jnp.asarray(leaf)
 
 
-def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
+def resolve_device(device: jax.Device | str | None) -> ResolvedDevice:
     """Resolve a device spec to a `jax.Device` or a resolved sentinel.
 
     ``"host"`` resolves to the CPU backend device (pageable host memory,
     committed jax Arrays). When that backend is not initialized (e.g. after
     ``numpyro.set_platform("cuda")`` or a ``JAX_PLATFORMS`` preset restricted
     ``jax_platforms``) it resolves to the ``"numpy"`` sentinel instead, which
-    `_transfer()` implements as one `jax.device_get()` per chunk and
-    `_stitch_chunks()` as `numpy.concatenate()`: pageable, backend-free,
+    `transfer()` implements as one `jax.device_get()` per chunk and
+    `stitch_chunks()` as `numpy.concatenate()`: pageable, backend-free,
     NumPy results, and no warning since nothing is lost but the container
     type. ``"cpu"`` is the same request made explicitly, so an unmet one warns
     (a `UserWarning` that skips the package's own frames and the
@@ -518,7 +518,7 @@ def _resolve_device(device: jax.Device | str | None) -> _ResolvedDevice:
         raise DevicePlatformError(msg) from err
 
 
-def _transfer(draws: Array, device: _ResolvedDevice) -> Array | np.ndarray:
+def transfer(draws: Array, device: ResolvedDevice) -> Array | np.ndarray:
     """Move ``draws`` to ``device`` and wait for the transfer to finish.
 
     Blocking makes the memory profile deterministic: the source buffer is
@@ -586,10 +586,50 @@ def _aligned_empty(shape: tuple[int, ...], dtype: np.dtype) -> np.ndarray:
     return raw[offset : offset + nbytes].view(dtype).reshape(shape)
 
 
-def _stitch_chunks(
+def chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
+    """Build wrapped sample-axis index blocks of exactly ``batch_size`` rows each.
+
+    Block ``i`` holds ``arange(i * batch_size, (i + 1) * batch_size) % num_samples``:
+    every block shares one shape, so the jitted kernel a chunk feeds compiles
+    exactly once regardless of ``num_samples``, and the final block wraps around
+    to re-use leading rows (when ``num_samples`` is not an exact multiple of
+    ``batch_size``), which the caller discards with a final ``[:num_samples]``
+    slice. The predictive chunk driver (`~~numpyro_forecast.predictive.forecast()`,
+    `~~numpyro_forecast.predictive.predict_in_sample()`) gathers posterior draws
+    with these blocks, and the chunked metric evaluation of
+    `~~numpyro_forecast.evaluate` gathers metric cells with them. The blocks
+    reproduce the draws of the former posterior-padding scheme bit for bit
+    without materializing a padded copy of the posterior.
+
+    Parameters
+    ----------
+    num_samples
+        Total number of rows to cover (callers with
+        ``num_samples <= batch_size`` take the unchunked passthrough instead).
+    batch_size
+        Positive chunk size.
+
+    Returns
+    -------
+    list[Array]
+        One integer index block of length ``batch_size`` per chunk.
+
+    Raises
+    ------
+    ValueError
+        If ``batch_size`` is not positive.
+    """
+    if batch_size <= 0:
+        msg = f"batch_size must be positive, got {batch_size}"
+        raise ValueError(msg)
+    starts = range(0, num_samples, batch_size)
+    return [jnp.arange(start, start + batch_size) % num_samples for start in starts]
+
+
+def stitch_chunks(
     chunks: list[Array | np.ndarray],
     num_samples: int,
-    device: _ResolvedDevice,
+    device: ResolvedDevice,
 ) -> Array | np.ndarray:
     """Concatenate transferred chunks along the sample axis and drop the overdraw.
 
@@ -676,8 +716,8 @@ def draw_chunked(
     with each subkey and exactly ``batch_size`` as the sample count (so every chunk
     shares one shape and whatever ``draw_fn`` compiles internally compiles exactly
     once), every leaf of every chunk is moved to ``device`` as soon as it is drawn
-    (`_transfer()`), and the final chunk's overdraw is discarded by
-    `_stitch_chunks()`. Chunking is a memory knob, not a reproducibility knob:
+    (`transfer()`), and the final chunk's overdraw is discarded by
+    `stitch_chunks()`. Chunking is a memory knob, not a reproducibility knob:
     draws are reproducible per ``(rng_key, batch_size)``, but changing ``batch_size``
     changes the PRNG stream layout and therefore the exact draws.
 
@@ -695,9 +735,9 @@ def draw_chunked(
         ``num_samples`` takes the single-shot passthrough.
     device
         Where each chunk (and the single-shot result) is moved as soon as it is
-        drawn; forwarded to `_resolve_device()`.
+        drawn; forwarded to `resolve_device()`.
     stage
-        Human-readable stage name forwarded to `_oom_advice()` for the OOM
+        Human-readable stage name forwarded to `oom_advice()` for the OOM
         error message (e.g. ``"posterior drawing"``).
 
     Returns
@@ -712,35 +752,35 @@ def draw_chunked(
     ValueError
         If ``batch_size`` is not positive.
     DeviceMemoryError
-        If ``draw_fn`` fails with a device OOM (see `_oom_advice()`).
+        If ``draw_fn`` fails with a device OOM (see `oom_advice()`).
     """
-    resolved = _resolve_device(device)
+    resolved = resolve_device(device)
     if batch_size is not None and batch_size <= 0:
         msg = f"batch_size must be positive, got {batch_size}"
         raise ValueError(msg)
     if batch_size is None or batch_size >= num_samples:
-        with _oom_advice(stage, batch_size):
+        with oom_advice(stage, batch_size):
             samples = draw_fn(rng_key, num_samples)
-            return {name: _transfer(leaf, resolved) for name, leaf in samples.items()}
+            return {name: transfer(leaf, resolved) for name, leaf in samples.items()}
     num_chunks = -(-num_samples // batch_size)  # ceil; the last chunk overdraws
     keys = random.split(rng_key, num_chunks)
     chunks: list[dict[str, Array | np.ndarray]] = []
-    with _oom_advice(stage, batch_size):
+    with oom_advice(stage, batch_size):
         for key in keys:
             # An explicit loop with pop-per-leaf keeps the accelerator peak at
             # one chunk: every device buffer of chunk k is released (each leaf
             # as soon as its copy lands on ``device``) before chunk k+1 is
             # dispatched.
             draws = dict(draw_fn(key, batch_size))
-            chunks.append({name: _transfer(draws.pop(name), resolved) for name in list(draws)})
+            chunks.append({name: transfer(draws.pop(name), resolved) for name in list(draws)})
             del draws
         # Pop (not index) each leaf out of every per-chunk dict so the list
-        # built for _stitch_chunks is the *only* reference to those buffers;
-        # _stitch_chunks then frees it as soon as it has staged the result,
+        # built for stitch_chunks is the *only* reference to those buffers;
+        # stitch_chunks then frees it as soon as it has staged the result,
         # instead of the per-chunk dicts here keeping a second reference alive
         # for the rest of the loop.
         names = list(chunks[0])
         return {
-            name: _stitch_chunks([chunk.pop(name) for chunk in chunks], num_samples, resolved)
+            name: stitch_chunks([chunk.pop(name) for chunk in chunks], num_samples, resolved)
             for name in names
         }
