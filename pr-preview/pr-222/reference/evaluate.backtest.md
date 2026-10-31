@@ -102,7 +102,7 @@ Covariates with time at axis `-2` (same duration as `data`).
 Closure that fits `model` on the training window and forecasts the test horizon (see [ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn) and the contract above).
 
 `in_sample_fn: InSampleFn | None = None`  
-Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`. It receives the second key of `random.split(rng_key)` (see `rng_key`), which is independent of the key that `forecast_fn` receives. Thus the in-sample draws do not reuse the random numbers of a `forecast_fn` that splits its key (as in the example above).
+Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`. It receives its own child of `rng_key` (see `rng_key`), never a key that `forecast_fn` can derive from its own.
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.

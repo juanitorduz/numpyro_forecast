@@ -1388,10 +1388,8 @@ in_sample_fn
     Optional closure that fits ``model`` on the training window and scores
     its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
     the contract above). Required when ``eval_train=True``. It receives
-    the second key of ``random.split(rng_key)`` (see ``rng_key``), which
-    is independent of the key that ``forecast_fn`` receives. Thus the
-    in-sample draws do not reuse the random numbers of a ``forecast_fn``
-    that splits its key (as in the example above).
+    its own child of ``rng_key`` (see ``rng_key``), never a key that
+    ``forecast_fn`` can derive from its own.
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each function takes ``(pred, truth)`` and returns a scalar array (see
