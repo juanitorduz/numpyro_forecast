@@ -6,9 +6,18 @@ from typing import cast
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
+import numpyro.distributions as dist
 import pytest
 import xarray.testing as xarray_testing
-from conftest import empty_covariates, fail_devices_for, nuts_samples, rw_model, svi_guide_params
+from conftest import (
+    as_model,
+    empty_covariates,
+    fail_devices_for,
+    nuts_samples,
+    rw_model,
+    svi_guide_params,
+)
 from jax import Array, random
 
 from numpyro_forecast.convert import (
@@ -17,6 +26,7 @@ from numpyro_forecast.convert import (
     predictions_to_datatree,
     to_datatree,
 )
+from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import ForecastModel
 
@@ -154,6 +164,7 @@ def test_add_forecast_groups_adds_groups_and_time_continuation() -> None:
     assert "predictions_constant_data" in out.children
     times = out["predictions"].coords["time"].values
     np.testing.assert_array_equal(times, np.arange(n, n + 5))
+    assert out["predictions"]["obs"].dims == ("chain", "draw", "time", "obs_dim")
     # The original tree is untouched.
     assert "predictions" not in tree.children
 
@@ -475,6 +486,210 @@ def test_add_forecast_groups_inherited_dims_reject_wrong_ndim() -> None:
     )
     with pytest.raises(CovariateDimsError, match="carry 3 axis names"):
         add_forecast_groups(tree, fc, future_covariates[n:])
+
+
+# --- batched (*batch, time, obs) data (issue #172) --------------------------
+
+
+def _panel_body(h: Horizon, covariates: Array) -> None:
+    """A model whose predictor takes the ``(batch, time, obs)`` layout of ``covariates``."""
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 0.5))
+    drift = innovations(h, "drift", dist.Normal(0.0, 0.1))
+    predict(h, dist.Normal(0.0, sigma), covariates + jnp.cumsum(drift, axis=-2))
+
+
+def _panel(
+    batch: int, t: int, horizon: int, num_draws: int = 4
+) -> tuple[ForecastModel, dict[str, Array], Array, Array]:
+    """A batched export setup: ``data`` of shape ``(batch, t, 2)`` with distinct values."""
+    data = jnp.arange(batch * t * 2, dtype=jnp.float32).reshape(batch, t, 2)
+    covariates = jnp.zeros((batch, t + horizon, 2))
+    posterior = {"sigma": jnp.full((num_draws,), 0.3), "drift": jnp.zeros((num_draws, t, 1))}
+    return as_model(_panel_body), posterior, data, covariates
+
+
+@pytest.mark.parametrize(
+    ("batch", "t", "horizon"),
+    [(3, 5, 0), (3, 5, 2), (5, 5, 0), (5, 5, 2)],
+    ids=["batch-ne-time", "batch-ne-time-horizon", "batch-eq-time", "batch-eq-time-horizon"],
+)
+def test_to_datatree_batched_data_keeps_time_at_axis_minus_two(
+    batch: int, t: int, horizon: int
+) -> None:
+    """``(batch, time, obs)`` data puts the ``time`` dim on axis -2 of every ``obs`` group.
+
+    The fixed ``("time", "obs_dim")`` names used to land on the batch and time
+    axes: a batch size other than the time length failed with a size conflict,
+    and an equal one exported a tree whose ``sel(time=k)`` returned batch row
+    ``k``.
+    """
+    model, posterior, data, covariates = _panel(batch, t, horizon)
+    tree = to_datatree(
+        random.PRNGKey(1),
+        model,
+        posterior,
+        data,
+        covariates,
+        covariate_dims=["batch", "time", "covariate_dim"],
+    )
+    dims = ("obs_batch_0", "time", "obs_dim")
+    observed = tree["observed_data"]["obs"]
+    assert observed.dims == dims
+    for k in range(t):
+        np.testing.assert_array_equal(observed.sel(time=k).values, np.asarray(data)[..., k, :])
+    assert tree["posterior_predictive"]["obs"].dims == ("chain", "draw", *dims)
+    if horizon:
+        predictions = tree["predictions"]["obs"]
+        assert predictions.dims == ("chain", "draw", *dims)
+        np.testing.assert_array_equal(predictions.coords["time"].values, np.arange(t, t + horizon))
+
+
+def test_to_datatree_obs_dims_name_every_data_axis() -> None:
+    """``obs_dims`` names the axes of all three ``obs`` groups, which share the user coords."""
+    model, posterior, data, covariates = _panel(3, 5, 2)
+    origins = ["SFO", "OAK", "SJC"]
+    tree = to_datatree(
+        random.PRNGKey(1),
+        model,
+        posterior,
+        data,
+        covariates,
+        coords={"origin": origins},
+        covariate_dims=["origin", "time", "covariate_dim"],
+        obs_dims=["origin", "time", "destin"],
+    )
+    for group in ("observed_data", "posterior_predictive", "predictions"):
+        obs = tree[group]["obs"]
+        assert obs.dims[-3:] == ("origin", "time", "destin")
+        np.testing.assert_array_equal(obs.coords["origin"].values, origins)
+    np.testing.assert_array_equal(
+        tree["observed_data"]["obs"].sel(origin="OAK").values, np.asarray(data)[1]
+    )
+
+
+@pytest.mark.parametrize(
+    ("obs_dims", "match"),
+    [
+        (["time", "obs_dim"], r"obs_dims has 2 names \['time', 'obs_dim'\] but data has 3"),
+        (["origin", "date", "destin"], r"obs_dims must name the time axis \(axis -2\) 'time'"),
+        (["obs_dim", "time", "obs_dim"], r"obs_dims repeats a name"),
+        (["chain", "time", "obs_dim"], r"obs_dims uses the sample dimension names \['chain'\]"),
+    ],
+)
+def test_to_datatree_rejects_malformed_obs_dims(obs_dims: list[str], match: str) -> None:
+    model, posterior, data, covariates = _panel(3, 5, 0)
+    with pytest.raises(ValueError, match=match):
+        to_datatree(
+            random.PRNGKey(1),
+            model,
+            posterior,
+            data,
+            covariates,
+            covariate_dims=["origin", "time", "covariate_dim"],
+            obs_dims=obs_dims,
+        )
+
+
+def test_to_datatree_rejects_obs_draws_with_more_axes_than_data() -> None:
+    """A model whose ``obs`` site has more axes than ``data`` raises instead of mislabeling.
+
+    With a batch size equal to the time length, the auto-named extra axis used
+    to export without an error, with ``time`` on the batch axis.
+    """
+    model, posterior, _, covariates = _panel(5, 5, 0)
+    with pytest.raises(
+        ValueError, match=r"the in-sample predictive draws have shape \(5, 5, 2\) per draw"
+    ):
+        to_datatree(
+            random.PRNGKey(1),
+            model,
+            posterior,
+            jnp.zeros((5, 2)),
+            covariates,
+            covariate_dims=["batch", "time", "covariate_dim"],
+        )
+
+
+@pytest.mark.parametrize(
+    ("obs_dims", "coords"),
+    [(None, None), (["origin", "time", "destin"], {"origin": ["SFO", "OAK", "SJC"]})],
+    ids=["default-names", "named-and-labeled"],
+)
+def test_add_forecast_groups_lays_out_batched_forecast_like_to_datatree(
+    obs_dims: list[str] | None, coords: dict[str, list[str]] | None
+) -> None:
+    """A ``(sample, batch, future, obs)`` forecast gets the forecast groups of `to_datatree()`.
+
+    Both forecast groups take the dimension names and labels of their in-sample
+    counterparts, so label-based selection works the same whichever route
+    attached the forecast.
+    """
+    model, posterior, data, covariates = _panel(3, 5, 2)
+    n = data.shape[-2]
+    covariate_dims = ["origin", "time", "covariate_dim"]
+    one_call = to_datatree(
+        random.PRNGKey(1),
+        model,
+        posterior,
+        data,
+        covariates,
+        coords=coords,
+        covariate_dims=covariate_dims,
+        obs_dims=obs_dims,
+    )
+    tree = to_datatree(
+        random.PRNGKey(1),
+        model,
+        posterior,
+        data,
+        covariates[:, :n],
+        coords=coords,
+        covariate_dims=covariate_dims,
+        obs_dims=obs_dims,
+    )
+    fc = forecast(random.PRNGKey(4), model, posterior, data, covariates)
+    out = add_forecast_groups(tree, fc, covariates[:, n:])
+    for group, name in (("predictions", "obs"), ("predictions_constant_data", "covariates")):
+        expected = one_call[group][name]
+        actual = out[group][name]
+        assert actual.dims == expected.dims
+        for dim in expected.dims:
+            np.testing.assert_array_equal(actual.coords[dim].values, expected.coords[dim].values)
+    np.testing.assert_array_equal(np.asarray(out["predictions"]["obs"])[0], np.asarray(fc))
+
+
+def test_add_forecast_groups_rejects_forecast_layout_mismatch() -> None:
+    """A forecast with other axes than the tree's stored ``obs`` raises by name."""
+    model, posterior, data, covariates = _panel(3, 5, 2)
+    n = data.shape[-2]
+    tree = to_datatree(
+        random.PRNGKey(1),
+        model,
+        posterior,
+        data,
+        covariates[:, :n],
+        covariate_dims=["origin", "time", "covariate_dim"],
+    )
+    fc = forecast(random.PRNGKey(4), model, posterior, data, covariates)
+    with pytest.raises(ValueError, match=r"forecast_samples have shape \(2, 2\) per draw"):
+        add_forecast_groups(tree, fc[:, 0], covariates[:, n:])
+
+
+def test_add_forecast_groups_squeezed_observed_data_takes_default_names() -> None:
+    """An ``observed_data`` squeezed to one series does not block the forecast groups.
+
+    The example notebooks select one series with ``isel(obs_dim=0)`` before
+    plotting. Its stored ``obs`` has no time axis at -2 to inherit, so the
+    forecast takes the default names.
+    """
+    posterior, data, covariates = _svi_posterior(num_draws=10)
+    n = data.shape[-2]
+    future_covariates = empty_covariates(n + 3)
+    fc = forecast(random.PRNGKey(4), _model(), posterior, data, future_covariates)
+    tree = to_datatree(random.PRNGKey(2), _model(), posterior, data, covariates)
+    tree["observed_data"] = tree["observed_data"].dataset.isel(obs_dim=0)
+    out = add_forecast_groups(tree, fc, future_covariates[n:])
+    assert out["predictions"]["obs"].dims == ("chain", "draw", "time", "obs_dim")
 
 
 def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:
