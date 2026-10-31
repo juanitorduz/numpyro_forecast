@@ -65,7 +65,7 @@ from numpyro_forecast import (
 )
 from numpyro_forecast.features import periodic_repeat
 from numpyro_forecast.metrics import crps_empirical
-from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.typing import Array, ForecastFn, ForecastModel
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [12, 7]
@@ -493,7 +493,7 @@ print(f"empirical floor at zero availability: {empirical_floor:.3f}")
 </figure>
 
 
-The curve is saturating, exactly the shape a multiplicative factor should have: steep gains at low availability, flattening out near full availability. Two details matter for the model. First, the value at zero availability is positive (about 0.04), which is the empirical floor the factor must reproduce. Second, the bins just below full availability sit slightly *above* the fully-available bin. That is endogeneity, not magic: stockouts happen disproportionately on high-demand days (a sell-out is itself evidence of demand), so a naive read of this curve overstates what availability alone does. The model mitigates this by attributing day-to-day variation to the trend, weekly seasonality, and promotion covariates jointly with the factor.
+The curve is saturating, exactly the shape a multiplicative factor should have: steep gains at low availability, flattening out near full availability. Two details matter for the model. First, the value at zero availability is positive (about 0.04), which is the empirical floor the factor must reproduce. Like the weights w_h, this floor is computed over the full dataset, test window included (all 90 days, of which the last 14 are held out below); a deployed system would compute it on the training window only. Second, the bins just below full availability sit slightly *above* the fully-available bin. That is endogeneity, not magic: stockouts happen disproportionately on high-demand days (a sell-out is itself evidence of demand), so a naive read of this curve overstates what availability alone does. The model mitigates this by attributing day-to-day variation to the trend, weekly seasonality, and promotion covariates jointly with the factor.
 
 
 ## Promotion and calendar covariates
@@ -1811,7 +1811,7 @@ Alternatives that do not work here:
 
 The factor f\_{t,s} deserves a close look, because its three ingredients each fix a concrete failure mode:
 
-- **The floor \phi_s \in (0, 1).** At zero recorded availability the factor equals \phi_s, not zero, so the 15\\ of flagged stockout days with positive sales are explained by a small expected sale instead of blowing up the likelihood. The prior \phi_s \sim \text{Beta}(2, 18) (mean 0.1) is informed by the empirical floor of about 0.04 measured above, while staying wide enough for series with sloppier labels.
+- **The floor \phi_s \in (0, 1).** At zero recorded availability the factor equals \phi_s, not zero, so the 15\\ of flagged stockout days with positive sales are explained by a small expected sale instead of blowing up the likelihood. The prior \phi_s \sim \text{Beta}(2, 18) (mean 0.1) is informed by the empirical floor of about 0.04 measured above (on the full dataset, test window included, as noted there), while staying wide enough for series with sloppier labels.
 - **The saturating link 1 - e^{-b_s a}.** This is the classic random-encounter (reach) curve: if purchase attempts arrive through the day as a Poisson process with intensity b_s, and a share a of the (sales-weighted) selling time is in stock, the probability that at least one attempt lands while the product is on the shelf is exactly 1 - e^{-b_s a}. It matches the concave shape of the empirical curve, and compared to alternatives such as \tanh it is cheaper (one exponential), has a smooth monotone gradient in b_s, and gives b_s a direct interpretation as purchase-opportunity intensity.
 - **The normalization by 1 - e^{-b_s}.** Without it, the factor at full availability is 1 - e^{-b_s} \< 1, and the model can trade the factor's overall scale against the level \ell\_{t,s} (multiply one, divide the other), leaving both non-identified. Anchoring f\_{t,s} = 1 at a = 1 removes that degeneracy: the level is the demand at full availability, \phi_s is exactly the share of demand still sold on a fully flagged-out day, and b_s only controls the curvature. Numerically we compute the ratio with `expm1`, which avoids the catastrophic cancellation in 1 - e^{-b_s} for small b_s, where the naive expression degrades toward 0/0.
 
@@ -2254,7 +2254,7 @@ del prior_obs
 
 # Inference with SVI
 
-We fit with NumPyro's `SVI` against an explicit `AutoNormal` guide. Instead of a fixed learning rate we pass a custom `optax` optimizer, the one-cycle Adam schedule chained with `reduce_on_plateau`, which converges noticeably better on this panel (the same recipe as in the [inference methods comparison](inference_methods_comparison.md) example); `SVI` expects a NumPyro optimizer, so the optax chain goes through one line of glue, `numpyro.optim.optax_to_numpyro`.
+We fit with NumPyro's `SVI` against an explicit `AutoNormal` guide. Instead of a fixed learning rate we pass a custom `optax` optimizer, the one-cycle Adam schedule chained with `reduce_on_plateau`, which converges noticeably better on this panel (the same recipe as in the [inference methods comparison](inference_methods_comparison.md) example); `SVI` accepts the optax chain as is and wraps it with `numpyro.optim.optax_to_numpyro` itself, so the explicit wrapper in the code below is optional.
 
 We set `progress_bar=False`, and not only because the scanned update loop compiles to a single `lax.scan` that finishes all 60{,}000 steps in a few seconds on CPU. The step-by-step execution path behind the progress bar compiles to slightly different floating-point arithmetic, and on this panel that tiny perturbation is enough to steer the optimizer into a distinctly worse ELBO optimum (the evaluation section returns to this sensitivity). The scanned path is both the fast and the well-behaved one here.
 
@@ -3701,7 +3701,7 @@ float32
 <img src="data:image/svg+xml;base64,PHN2ZyBjbGFzcz0iaWNvbiB4ci1pY29uLWRhdGFiYXNlIj48dXNlIGhyZWY9IiNpY29uLWRhdGFiYXNlIiAvPjwvc3ZnPg==" class="icon xr-icon-database" />
 
 
-87, ...,  0.20114972,0.84348726,  1.1463547 ],[ 1.0346723 ,  1.1722391 ,  1.187351  , ...,  0.22209796,1.2061733 ,  1.2836114 ],...,[ 1.962699  ,  0.54537344,  1.6579019 , ...,  1.6014011 ,1.2569416 ,  1.5523391 ],[ 0.32394326,  0.8351764 ,  1.2544222 , ...,  1.701104  ,1.3943398 ,  1.5898428 ],[ 0.73859763,  0.6991624 ,  1.815384  , ...,  1.2871976 ,1.3773917 ,  0.6067765 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
+    array([[[[ 0.06865707,  0.8562886 ,  0.9034085 , ...,  0.36918858,0.65169656,  0.7528772 ],[ 0.9086647 ,  0.9109446 ,  1.394842  , ...,  0.2492817 ,0.6428833 ,  0.16800544],[ 1.6635079 ,  1.2614503 ,  1.6077211 , ...,  0.17847507,0.6093773 ,  1.7834978 ],...,[ 1.201245  ,  0.8734956 ,  1.2235355 , ...,  1.3595259 ,1.3566885 ,  2.0559974 ],[ 0.8215446 ,  0.8515652 ,  1.9608728 , ...,  1.7634014 ,1.6452765 ,  1.929777  ],[ 0.86058086,  0.938585  ,  1.4964871 , ...,  1.5783353 ,0.93787265,  1.4511259 ]],[[ 0.04560059,  0.95299613,  0.5848917 , ...,  0.20886081,0.4369905 ,  0.17537558],[ 1.334465  ,  0.8543097 ,  0.74852824, ...,  0.08796128,0.42953712,  0.36081153],[ 1.6598704 ,  1.5403934 ,  1.0278491 , ...,  0.22597992,0.99385536,  1.2304275 ],...1.5952222 ,  0.92083204],[ 1.3069011 ,  0.8059875 ,  0.9465923 , ...,  1.4483203 ,1.8530891 ,  2.2727678 ],[ 0.4515608 ,  0.22717817,  0.72322756, ...,  1.1751524 ,1.2564839 , -0.10584579]],[[ 0.07586825,  0.79923296,  0.9676082 , ...,  0.24900112,0.89224315,  0.9242667 ],[ 0.6410705 ,  1.0393132 ,  0.59486187, ...,  0.20114972,0.84348726,  1.1463547 ],[ 1.0346723 ,  1.1722391 ,  1.187351  , ...,  0.22209796,1.2061733 ,  1.2836114 ],...,[ 1.962699  ,  0.54537344,  1.6579019 , ...,  1.6014011 ,1.2569416 ,  1.5523391 ],[ 0.32394326,  0.8351764 ,  1.2544222 , ...,  1.701104  ,1.3943398 ,  1.5898428 ],[ 0.73859763,  0.6991624 ,  1.815384  , ...,  1.2871976 ,1.3773917 ,  0.6067765 ]]]],shape=(1, 1000, 76, 1000), dtype=float32)
 
 
 Attributes: (5)
@@ -4516,66 +4516,88 @@ The two panels pin the story down. The median PIT starts just below 0.5 and drif
 
 One methodological remark before leaving the evaluation. The per-series scale was computed once, from the training window of our single split, and that is sound because there is only one split. The moment this evaluation graduates to rolling-origin backtesting, that global step becomes a leak: each fold has a different training window, and a scale computed outside the fold loop (worse, on the full series) feeds the fold information about levels it has not seen yet, exactly the leakage the scaling section warned about. The normalization is part of the model pipeline, and in a backtest the pipeline must run once per fold.
 
-The package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper leaves room for exactly this: its `forecast_fn` is any callable `(rng_key, model, train_data, train_covariates, full_covariates, num_samples, *, batch_size=None)` returning forecast draws, and it slices the *raw* data per window before calling it. Everything between the raw window and the returned draws belongs to the closure, so the clean way to fold the scaling in is to derive the scale inside it, from whatever training window the fold hands over, fit on the scaled data, and rescale the draws on the way out. We define it here but do not run it (the single split above is already scored); the next steps point to it for the backtesting extension.
+The package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper leaves room for exactly this: its `forecast_fn` is any callable `(rng_key, model, train_data, train_covariates, full_covariates, num_samples, *, batch_size=None)` returning forecast draws, and it slices the *raw* data per window before calling it. Everything between the raw window and the returned draws belongs to the closure, so the clean way to fold the scaling in is to derive the scale inside it, from whatever training window the fold hands over, fit on the scaled data, and rescale the draws on the way out. We define it here but do not run it (the single split above is already scored); the next steps point to it for the backtesting extension. A small factory, `make_scaled_forecast_fn(optimizer, num_steps)`, takes the SVI settings as arguments and returns the closure, so the closure reads no notebook globals. The closure also keeps a series with no sales in the fold's training window on its raw scale, because its zero mean would otherwise make its scaled data 0 / 0, that is NaN, and the fit would fail; a short first fold or a different series selection can produce such a series.
 
 
 ``` python
-def scaled_forecast_fn(
-    rng_key: Array,
-    model: ForecastModel,
-    train_data: Float[Array, " t_train n_series"],
-    train_covariates: Float[Array, " n_inputs t_train n_series"],
-    full_covariates: Float[Array, " n_inputs duration n_series"],
-    num_samples: int,
-    *,
-    batch_size: int | None = None,
-) -> Array | np.ndarray:
-    """SVI forecast closure that owns the per-series mean scaling as a fit-time step.
+def make_scaled_forecast_fn(optimizer: optax.GradientTransformation, num_steps: int) -> ForecastFn:
+    """Build an SVI forecast closure that owns the per-series mean scaling as a fit-time step.
 
-    Computes the per-series scale from the training window it is handed, fits
-    the model on the scaled data, and returns forecast draws rescaled to the
-    original units (clipped at zero, since sales are non-negative). Because the
-    scale is derived from ``train_data`` alone, inside the call,
-    ``backtest(..., forecast_fn=scaled_forecast_fn)`` recomputes the
-    normalization inside every fold, so no future level can leak into the model
-    input.
+    The returned closure computes the per-series scale from the training window it is
+    handed, fits the model on the scaled data, and returns forecast draws rescaled to the
+    original units (clipped at zero, since sales are non-negative). Because the scale is
+    derived from ``train_data`` alone, inside the call,
+    ``backtest(..., forecast_fn=make_scaled_forecast_fn(optimizer, num_steps))`` recomputes
+    the normalization inside every fold, so no future level can leak into the model input.
 
     Parameters
     ----------
-    rng_key
-        PRNG key for the fit, the posterior draw, and the forecast.
-    model
-        The forecasting model to fit, as returned by ``model_fn``.
-    train_data
-        Raw (unscaled) training data with time at axis ``-2``.
-    train_covariates
-        Covariates over the training window, time at axis ``-2``.
-    full_covariates
-        Covariates over the training window followed by the test horizon.
-    num_samples
-        Number of forecast draws to return.
-    batch_size
-        Chunk size forwarded to ``draw_posterior`` and ``forecast``.
+    optimizer
+        The optax optimizer for the SVI fit of every fold.
+    num_steps
+        Number of SVI steps per fold.
 
     Returns
     -------
-    Array | np.ndarray
-        Forecast draws on the original sales scale, shape
-        ``(num_samples, horizon, n_series)``.
+    ForecastFn
+        A closure with the ``forecast_fn`` signature of ``backtest``.
     """
-    key_fit, key_post, key_fc = random.split(rng_key, 3)
-    fold_scale: Float[Array, " n_series"] = train_data.mean(axis=-2)
-    scaled_data = train_data / fold_scale
-    fold_guide = AutoNormal(model)
-    fold_svi = SVI(model, fold_guide, optax_to_numpyro(optimizer), Trace_ELBO())
-    result = fold_svi.run(key_fit, num_steps, train_covariates, scaled_data, progress_bar=False)
-    fold_posterior = draw_posterior(
-        key_post, fold_guide, result.params, num_samples, batch_size=batch_size
-    )
-    pred = forecast(
-        key_fc, model, fold_posterior, scaled_data, full_covariates, batch_size=batch_size
-    )
-    return jnp.clip(pred * fold_scale, min=0.0)
+
+    def scaled_forecast_fn(
+        rng_key: Array,
+        model: ForecastModel,
+        train_data: Float[Array, " t_train n_series"],
+        train_covariates: Float[Array, " n_inputs t_train n_series"],
+        full_covariates: Float[Array, " n_inputs duration n_series"],
+        num_samples: int,
+        *,
+        batch_size: int | None = None,
+    ) -> Array | np.ndarray:
+        """Fit on the scaled training window and return rescaled forecast draws.
+
+        Parameters
+        ----------
+        rng_key
+            PRNG key for the fit, the posterior draw, and the forecast.
+        model
+            The forecasting model to fit, as returned by ``model_fn``.
+        train_data
+            Raw (unscaled) training data with time at axis ``-2``.
+        train_covariates
+            Covariates over the training window, time at axis ``-2``.
+        full_covariates
+            Covariates over the training window followed by the test horizon.
+        num_samples
+            Number of forecast draws to return.
+        batch_size
+            Chunk size forwarded to ``draw_posterior`` and ``forecast``.
+
+        Returns
+        -------
+        Array | np.ndarray
+            Forecast draws on the original sales scale, shape
+            ``(num_samples, horizon, n_series)``.
+        """
+        key_fit, key_post, key_fc = random.split(rng_key, 3)
+        fold_scale: Float[Array, " n_series"] = train_data.mean(axis=-2)
+        # A series with no sales in this fold's training window has a zero mean, and
+        # 0 / 0 would make its scaled data NaN; keep such a series on its raw scale.
+        fold_scale = jnp.where(fold_scale > 0, fold_scale, 1.0)
+        scaled_data = train_data / fold_scale
+        fold_guide = AutoNormal(model)
+        fold_svi = SVI(model, fold_guide, optax_to_numpyro(optimizer), Trace_ELBO())
+        result = fold_svi.run(
+            key_fit, num_steps, train_covariates, scaled_data, progress_bar=False
+        )
+        fold_posterior = draw_posterior(
+            key_post, fold_guide, result.params, num_samples, batch_size=batch_size
+        )
+        pred = forecast(
+            key_fc, model, fold_posterior, scaled_data, full_covariates, batch_size=batch_size
+        )
+        return jnp.clip(pred * fold_scale, min=0.0)
+
+    return scaled_forecast_fn
 ```
 
 
@@ -5192,7 +5214,7 @@ The holiday effect is the one large, consistent promotion signal: about a quarte
 - Replace the mean-level factor with a censored likelihood: treat sales as latent demand right-censored by the available stock, which uses the same availability feature but models the mechanism instead of its average effect.
 - Move to a strictly positive observation model (for example a negative binomial on rounded units), so the zero-sales days need no clipping and the heavier tail addresses the in-sample central-band over-coverage measured above.
 - Add the weather covariates (precipitation, temperature) that this notebook left out.
-- Evaluate with rolling-origin backtesting via the package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper instead of a single split, passing the `scaled_forecast_fn` defined above as `forecast_fn` so the per-series scaling is recomputed inside every fold.
+- Evaluate with rolling-origin backtesting via the package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper instead of a single split, passing `make_scaled_forecast_fn(optimizer, num_steps)` from above as `forecast_fn` so the per-series scaling is recomputed inside every fold.
 
 
 # References
