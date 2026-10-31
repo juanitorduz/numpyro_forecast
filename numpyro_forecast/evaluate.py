@@ -1142,6 +1142,10 @@ def _fresh_copy(guide: AutoGuide) -> AutoGuide:
     all, are shared: a deep copy would also copy whatever object the model is
     bound to, which can fail (an object that holds a lock, or a PRNG key
     under ``jit``).
+
+    This relies on NumPyro (0.22) writing in place only into top-level
+    containers of the guide: a setup that wrote into a nested container would
+    leak traced values into ``guide``.
     """
     clone = copy.copy(guide)
     for name, value in list(vars(clone).items()):
@@ -1262,7 +1266,11 @@ def backtest_vectorized(
         each window fits its own copy of it, and the instance you pass is left
         unchanged, so it can be passed again to a later call. Its
         ``init_loc_fn`` runs inside the vmapped fit, so it must be traceable
-        by JAX (no NumPy conversion of the values it receives).
+        by JAX (no NumPy conversion of the values it receives). The copy per
+        window applies only when ``guide`` itself is an autoguide: an autoguide
+        behind a handler (``handlers.scale(AutoNormal(model), ...)``) or called
+        from a guide function is shared by all windows and set up once, on
+        window 0, so its supports and Laplace covariance come from window 0.
 
     optim
         NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
@@ -1306,6 +1314,12 @@ def backtest_vectorized(
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
+    RuntimeError
+        If the SVI loss of a window is not finite at the first step (no valid
+        start on that window), after the fit and before the forecasts. When an
+        eager init of the first such window gives NumPyro's own error (for
+        example no valid initial parameters), that error is raised instead;
+        an eager init of window 0 before the fit raises it for window 0.
     VectorizedMetricError
         If a metric is not a pure JAX function under ``vmap``: it forces a host
         conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
@@ -1392,9 +1406,23 @@ def backtest_vectorized(
     # NumPyro raises its errors for a bad model or start (no valid initial point,
     # an unsupported site) only on concrete values; under vmap the fit returns NaN
     # silently. So one eager init of a throwaway copy on window 0, with the key of
-    # window 0, runs first.
+    # window 0, runs first, and fails fast.
     window_svi().init(init_keys[0], train_c[0], train_d[0])
     posterior, losses = jax.jit(jax.vmap(fit_and_draw_one))(init_keys, post_keys, train_d, train_c)
+    # A start can be valid on window 0 and not on a later window (init_loc_fn and
+    # the supports use each window's data). Such a window has a non-finite loss
+    # from the first step on, so its fit and forecasts are NaN.
+    bad = np.flatnonzero(~np.isfinite(np.asarray(losses[:, 0]))) if num_steps > 0 else []
+    if len(bad):
+        # Same key as the vmapped init, so the same start: NumPyro names the cause.
+        window_svi().init(init_keys[bad[0]], train_c[bad[0]], train_d[bad[0]])
+        msg = (
+            f"the SVI loss of the windows with t0 = {[int(starts[w]) for w in bad]} is not "
+            "finite at the first step, so their fits and forecasts are NaN; check the model "
+            "and the guide's init_loc_fn on those windows, or fit them one at a time with "
+            "backtest() to see the error"
+        )
+        raise RuntimeError(msg)
 
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
         pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])

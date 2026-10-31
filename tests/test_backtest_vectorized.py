@@ -29,6 +29,7 @@ from numpyro.infer.autoguide import (
     AutoMultivariateNormal,
     AutoNormal,
 )
+from numpyro.infer.initialization import init_to_value
 
 from numpyro_forecast import Horizon, predict
 from numpyro_forecast.evaluate import (
@@ -1159,6 +1160,58 @@ def test_invalid_start_on_window_zero_raises() -> None:
             train_window=TRAIN,
             test_window=TEST,
             guide=AutoNormal(_log_normal_model),
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+def test_invalid_start_on_a_later_window_raises() -> None:
+    """A start that is valid on window 0 but not on window 1 raises NumPyro's error.
+
+    ``level = 0.5`` is inside the support of window 0 (data in ``[0, 1]``) and
+    outside the support of window 1 (data in ``[10, 11]``), so only the vmapped
+    fit of window 1 starts from an invalid point. Its loss is NaN from the first
+    step, and an eager init of that window raises the cause, as a fresh guide
+    per window in `backtest()` does.
+    """
+    train, test = 12, 2
+    stride = train + test
+    u = random.uniform(random.PRNGKey(0), (2 * stride, 1))
+    data = jnp.where(jnp.arange(2 * stride)[:, None] < stride, u, u + 10.0)
+    guide = AutoNormal(_bounded_level_model, init_loc_fn=init_to_value(values={"level": 0.5}))
+    with pytest.raises(ValueError, match="invalid loc"):
+        backtest_vectorized(
+            random.PRNGKey(1),
+            lambda: _bounded_level_model,
+            data,
+            jnp.zeros((2 * stride, 0)),
+            train_window=train,
+            test_window=test,
+            stride=stride,
+            guide=guide,
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+def test_non_finite_first_loss_raises() -> None:
+    """A window whose loss is not finite at the first step raises ``RuntimeError``.
+
+    The start is valid, so an eager init raises nothing, but ``init_scale=1e25``
+    makes the first ELBO draws of ``mu`` overflow the squared error in float32:
+    the fit would be NaN from there on.
+    """
+    data, cov = jnp.zeros((20, 2)), jnp.zeros((20, 0))
+    with pytest.raises(RuntimeError, match=r"t0 = \[0, 5\] is not finite at the first step"):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: _level_model,
+            data,
+            cov,
+            train_window=10,
+            test_window=2,
+            stride=5,
+            guide=AutoNormal(_level_model, init_scale=1e25),
             num_steps=5,
             num_samples=4,
         )
