@@ -25,16 +25,19 @@ def _crps_empirical(
     num_samples = pred.shape[0]
     pred_sorted = jnp.sort(pred, axis=0)
     diff = pred_sorted[1:] - pred_sorted[:-1]
-    # Build the rank weights i * (n - i) in the data dtype. The cast must precede
-    # the multiply: an int32 * int32 product overflows (to negative values) for
-    # large sample counts, and casting the overflowed result would not recover it.
-    lower = jnp.arange(1, num_samples, dtype=pred.dtype)
-    upper = jnp.arange(num_samples - 1, 0, -1, dtype=pred.dtype)
-    weight = (lower * upper).reshape((num_samples - 1,) + (1,) * (diff.ndim - 1))
+    # Normalized rank weights (i / n) * ((n - i) / n) <= 1/4: neither the weights
+    # nor the weighted sum (at most a quarter of the sample range) overflow a
+    # low-precision dtype; float16 cannot hold i * (n - i) or n ** 2 from 256
+    # draws (#184). The integer ranks divided by n give the default float dtype,
+    # where the ranks are exact even past the float16 range, and no int32 product
+    # i * (n - i) forms (it overflows to negative values once n exceeds ~46k).
+    lower = jnp.arange(1, num_samples) / num_samples
+    upper = jnp.arange(num_samples - 1, 0, -1) / num_samples
+    weight = (
+        (lower * upper).astype(pred.dtype).reshape((num_samples - 1,) + (1,) * (diff.ndim - 1))
+    )
     absolute_error = jnp.abs(pred - truth).mean(axis=0)
-    # Normalize in the data dtype too: a Python ``num_samples ** 2`` constant
-    # overflows int32 inside the jitted kernel once ``num_samples`` exceeds ~46k.
-    return absolute_error - (diff * weight).sum(axis=0) / jnp.asarray(num_samples, pred.dtype) ** 2
+    return absolute_error - (diff * weight).sum(axis=0)
 
 
 def crps_empirical(
