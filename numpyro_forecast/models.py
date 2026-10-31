@@ -891,6 +891,83 @@ def _has_discrete_support(d: dist.Distribution) -> bool:
         return False
 
 
+def _require_predictor_axes(h: Horizon, prediction: Array) -> None:
+    """Require ``prediction`` to have a time axis at ``-2`` and an observation axis at ``-1``.
+
+    Distributions broadcast from the right, so a predictor without the
+    observation axis (the ``(duration,)`` result of ``covariates @ beta``) puts
+    its time steps on the observation axis of the data: ``(time, 1)`` data is
+    scored on a ``(time, time)`` grid and a square panel gets a per-series
+    effect, both without an error (issue #166). The length of the time axis is
+    checked by the drivers on the ``"obs"`` and ``"forecast"`` draws, whose
+    message also names a posterior drawn for another training length (#168).
+    """
+    shape = tuple(prediction.shape)
+    if len(shape) >= 2:
+        return
+    if len(shape) == 1 and shape[0] == h.duration:
+        hint = (
+            "Add the observation axis with prediction[..., None]: a univariate predictor has "
+            "shape (duration, 1) and a panel predictor (duration, n)."
+        )
+    else:
+        width = "obs" if h.data is None else h.data.shape[-1]
+        hint = (
+            f"The predictor needs h.duration = {h.duration} rows at axis -2: broadcast a "
+            f"constant or per-series predictor with jnp.broadcast_to(prediction, ({h.duration}, "
+            f"{width})), and build a time-varying one from the full-horizon covariates."
+        )
+    msg = (
+        "predict expects prediction to have shape (*batch, duration, obs), with time at axis "
+        f"-2 and the observation axis at -1, but it has shape {shape}. Without the observation "
+        f"axis, the values broadcast onto the observation axis of the data. {hint}"
+    )
+    raise ValueError(msg)
+
+
+def _require_obs_axis(h: Horizon, full_dist: dist.Distribution) -> None:
+    """Require the last axis of ``full_dist`` to broadcast onto the last axis of ``h.data``.
+
+    A ``(duration,)`` term added to a ``(duration, 1)`` predictor, a
+    ``(duration,)`` noise parameter or a link that drops the observation axis
+    gives the distribution time on its last axis, which the predictor check
+    cannot see (issue #166). Without data there is no observation axis to
+    compare against, so the check is skipped.
+    """
+    data = h.data
+    if data is None:
+        return
+    base = full_dist
+    while isinstance(inner := getattr(base, "base_dist", None), dist.Distribution):
+        base = inner
+    if isinstance(base, dist.MultivariateNormal):
+        # Its event is the time axis, without the observation axis (issue #160).
+        return
+    shape = tuple(full_dist.batch_shape) + tuple(full_dist.event_shape)
+    width = data.shape[-1]
+    if not shape or shape[-1] in (1, width):
+        return
+    allowed = "1" if width == 1 else f"1 or {width}"
+    if shape[-1] == h.duration:
+        hint = (
+            f"Its last axis has the h.duration = {h.duration} time steps: give a (duration,) "
+            "term (for example covariates @ beta in level + covariates @ beta, or a "
+            "time-varying scale) the observation axis with [..., None], and transpose a "
+            "(series, time) predictor to (time, series)."
+        )
+    else:
+        hint = (
+            "Check the last axis of the predictor and of every parameter of obs_dist: it is "
+            f"the observation axis of the data, with size {allowed}."
+        )
+    msg = (
+        "predict expects the observation distribution to end in the observation axis of the "
+        f"data (shape {tuple(data.shape)}), so its last axis must have size {allowed}, but its "
+        f"batch_shape + event_shape is {shape}. {hint}"
+    )
+    raise ValueError(msg)
+
+
 def predict(
     h: Horizon,
     obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
@@ -931,7 +1008,10 @@ def predict(
         ``prediction``) or a link callable from the full-horizon predictor to
         the observation distribution.
     prediction
-        The deterministic predictor over the full horizon, time at axis ``-2``.
+        The deterministic predictor over the full horizon, shape
+        ``(*batch, duration, obs)``: ``h.duration`` steps at axis ``-2`` and the
+        observation axis at ``-1``, so ``(duration, 1)`` for a univariate series
+        and ``(duration, n)`` for a panel of ``n`` series.
 
     Raises
     ------
@@ -941,9 +1021,15 @@ def predict(
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     ValueError
-        If the observation distribution has discrete support but ``h.data`` is
+        If ``prediction`` has fewer than two axes (for example a 1-D
+        ``covariates @ beta``, which needs ``[..., None]``); if ``h.data`` is
+        given and the last axis of the observation distribution is neither
+        ``1`` nor the last axis of ``h.data`` (for example a ``(duration,)``
+        noise scale or a ``(duration,)`` term added to the predictor); or if
+        the observation distribution has discrete support but ``h.data`` is
         not integer-dtyped (the usual mistake for count models).
     """
+    _require_predictor_axes(h, prediction)
     full_dist = (
         shift_loc(obs_dist, prediction)
         if isinstance(obs_dist, dist.Distribution)
@@ -957,6 +1043,7 @@ def predict(
             "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
         )
         raise TypeError(msg)
+    _require_obs_axis(h, full_dist)
     if h.data is not None and _has_discrete_support(full_dist):
         if not jnp.issubdtype(h.data.dtype, jnp.integer):
             msg = (
