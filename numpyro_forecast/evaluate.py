@@ -964,7 +964,8 @@ def backtest(
         `~~numpyro_forecast.predictive.predict_in_sample()` call that
         ``forecast_fn`` or ``in_sample_fn`` makes compiles once per window, and
         so does an SVI fit; for a single fused fit and forecast over all
-        windows use `backtest_vectorized()`.
+        windows use `backtest_vectorized()`. Kept for API stability: it only
+        matters for a ``model_fn`` that is expensive or stateful.
 
     Returns
     -------

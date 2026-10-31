@@ -28,7 +28,6 @@ draw array. The ``device`` contract is documented once, on
 """
 
 from collections.abc import Callable, Mapping
-from functools import lru_cache
 from typing import cast
 
 import jax
@@ -91,20 +90,24 @@ def _index_tree[Leaf: Array | np.ndarray](
     return tree_map(lambda leaf: leaf[index], tree)
 
 
-@lru_cache(maxsize=8)
 def _jitted_sample_posterior(guide: AutoGuide) -> Callable[..., dict[str, Array]]:
-    """Return a jitted, per-guide-cached ``sample_posterior`` with static ``sample_shape``.
+    """Return a freshly jitted ``sample_posterior`` of ``guide`` with static ``sample_shape``.
 
     Eagerly, ``sample_posterior`` materializes every latent and deterministic
     site (and their intermediates) at full sample size with no buffer planning,
     which is what blows accelerator memory on wide panels. Under ``jax.jit``
-    XLA schedules and reuses those buffers, and caching per guide instance
-    means every chunk of a `draw_posterior()` call (and repeated calls
-    with the same fit and sample count) shares one compiled executable. Unlike
-    the predictive drivers, which compile once per call (`_compiled_predictive()`),
-    this cache outlives the call: an autoguide fixes its prototype trace at
-    initialization, so a later change to the model cannot make the cached
-    program stale, but the guide must be hashable.
+    XLA schedules and reuses those buffers. `draw_posterior()` builds it once
+    per call and reuses it for every chunk, so a call compiles a single
+    program whatever the number of chunks.
+
+    Like the predictive drivers (`_compiled_predictive()`), nothing is cached
+    across calls. An ``AutoContinuous`` guide such as ``AutoNormal`` re-runs the
+    model through ``Predictive`` inside ``sample_posterior`` to recompute its
+    deterministic sites (for example the ``<name>`` site of a
+    `~~numpyro_forecast.reparam.time_reparam()` model), so a program cached on
+    the guide would replay the first trace of the model and return stale
+    deterministic draws after a global, closure value or attribute the model
+    reads changes (issue #167). The guide also need not be hashable.
 
     Parameters
     ----------
@@ -136,7 +139,10 @@ def draw_posterior(
     An ``AutoDelta`` guide is a MAP point estimate: it is drawn once and tiled to
     ``num_samples`` (`_ensure_sample_axis_for_delta()`), since it carries no
     posterior spread of its own. Every other ``AutoGuide`` is sampled through a
-    jitted, per-guide-cached ``sample_posterior`` (`_jitted_sample_posterior()`).
+    jitted ``sample_posterior`` (`_jitted_sample_posterior()`) that the call
+    compiles once and shares across its chunks; nothing is cached across calls,
+    so the draws (deterministic sites included) reflect the model as it is at
+    call time.
 
     Parameters
     ----------
@@ -221,12 +227,13 @@ def draw_posterior(
     independent subkeys remain valid i.i.d. posterior samples.
     """
     require_positive_num_samples(num_samples)
+    is_delta = isinstance(guide, AutoDelta)
+    sample = None if is_delta else _jitted_sample_posterior(guide)
 
     def draw_fn(key: Array, n: int) -> dict[str, Array]:
-        if isinstance(guide, AutoDelta):
+        if sample is None:
             point = guide.sample_posterior(key, params)
             return _ensure_sample_axis_for_delta(point, n)
-        sample = _jitted_sample_posterior(guide)
         return sample(key, params, sample_shape=(n,))
 
     return draw_chunked(
