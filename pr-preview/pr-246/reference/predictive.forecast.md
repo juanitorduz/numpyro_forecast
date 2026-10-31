@@ -37,7 +37,7 @@ The forecasting model callable (the same one that produced `posterior`).
 Posterior samples of the latent sites, sample axis leading. The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly.
 
 `data: Array`  
-Observed data with time at axis `-2` and length `t`. When `posterior` holds in-sample time latents (for example from [innovations()](models.innovations.md#numpyro_forecast.models.innovations)), `t` must be the training length that `posterior` was drawn for.
+Observed data with time at axis `-2` and length `t`. When `posterior` holds in-sample time latents, `t` must be the training length that `posterior` was drawn for; a [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site of another length raises `ValueError`.
 
 `covariates: Array`  
 Covariates with time at axis `-2` and length `duration > t`.
@@ -63,7 +63,7 @@ Forecast samples over the `future = duration - t` horizon (floating point for co
 
 
 `ValueError`  
-If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` does not extend beyond `data` along the time axis, if `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, or if the `"forecast"` draws do not have time at axis `-2` with `duration - t` steps (for example because `posterior` was drawn for a different training length).
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` does not extend beyond `data` along the time axis, if `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have `t` steps (a posterior drawn for a different training length), or if the `"forecast"` draws do not have time at axis `-2` with `duration - t` steps.
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
