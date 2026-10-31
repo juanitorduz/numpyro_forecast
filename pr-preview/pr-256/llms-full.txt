@@ -475,16 +475,18 @@ ValueError
     ``covariates @ beta``, which needs ``[..., None]``); if the observation
     distribution has fewer than two axes (as a bare ``MultivariateNormal``
     over time does: its ``(time,)`` event has no observation axis); if
-    ``h.data`` is given and the observation distribution would score each
-    observation more than once (for example a ``(duration,)`` term added to
-    a ``(duration, 1)`` predictor, a ``(duration,)`` noise scale or a second
-    ``[..., None]``); or if the observation distribution has discrete
-    support but ``h.data`` is not integer-dtyped (the usual mistake for
-    count models). The shape checks cannot tell a ``(duration,)`` term
-    from a per-series one when ``h.data`` has ``h.duration`` series (a
-    square panel in training), and they reject a model whose discrete
-    latents are enumerated (for example ``NUTS`` with funsor installed),
-    because the enumeration axes look like repeated observations.
+    ``h.data`` is given and the observation distribution does not broadcast
+    against it or would score each observation more than once (for example
+    a ``(duration,)`` term added to a ``(duration, 1)`` predictor, a
+    ``(duration,)`` noise scale, a second ``[..., None]``, or a predictor
+    built from a posterior drawn for a shorter training window); or if the
+    observation distribution has discrete support but ``h.data`` is not
+    integer-dtyped (the usual mistake for count models). The shape checks
+    cannot tell a ``(duration,)`` term from a per-series one when ``h.data``
+    has ``h.duration`` series (a square panel in training), and they reject
+    a model whose discrete latents are enumerated (for example ``NUTS`` with
+    funsor installed), because the enumeration axes look like repeated
+    observations.
 
 PlateName(*values)
 
