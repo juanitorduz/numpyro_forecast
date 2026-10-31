@@ -125,7 +125,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
   <link rel="alternate" type="text/markdown" href="contrib.blackjax.BlackjaxCustomKernel.md">
   <link rel="canonical" href="https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxCustomKernel.html">
-  <meta name="description" content="Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.">
+  <meta name="description" content="Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn and step_fn.">
   <script type="application/ld+json">
 [
   {
@@ -156,12 +156,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </script>
   <meta property="og:type" content="website">
   <meta property="og:title" content="contrib.blackjax.BlackjaxCustomKernel – numpyro_forecast | numpyro_forecast">
-  <meta property="og:description" content="Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.">
+  <meta property="og:description" content="Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn and step_fn.">
   <meta property="og:url" content="https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.BlackjaxCustomKernel.html">
   <meta property="og:site_name" content="numpyro_forecast">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="contrib.blackjax.BlackjaxCustomKernel – numpyro_forecast | numpyro_forecast">
-  <meta name="twitter:description" content="Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn.">
+  <meta name="twitter:description" content="Adapt an arbitrary BlackJAX sampler via a user-supplied build_fn and step_fn.">
 </head>
 
 <body class="gd-ref-sidebar nav-sidebar floating nav-fixed doc-api-page quarto-light">
@@ -887,25 +887,52 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <div class="doc-subject">
-<p>Adapt an arbitrary BlackJAX sampler via a user-supplied <code>build_fn</code>.</p>
+<p>Adapt an arbitrary BlackJAX sampler via a user-supplied <code>build_fn</code> and <code>step_fn</code>.</p>
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L396-L444" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/blackjax.py#L538-L652" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">blackjax</span><span class="op">.</span><span class="va">BlackjaxCustomKernel</span>(
     <span class="va">model</span><span class="op">=</span><span class="cn-none">None</span>,
     <span class="op">*</span>,
     <span class="va">build_fn</span>,
+    <span class="va">step_fn</span>,
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The escape hatch for kernels without a dedicated wrapper. <code>build_fn</code> receives <code>(rng_key, logdensity_fn, position, num_warmup)</code> and must return <code>(inner_state, step_fn)</code>, where <code>inner_state</code> exposes <code>.position</code> over the same sites as the model and <code>step_fn</code> has signature <code>(rng_key, inner_state) -&gt; (inner_state, info)</code>. The base class validates the returned state’s key set and raises <code>TypeError</code> if it is malformed.</p>
+<p>The escape hatch for kernels without a dedicated wrapper. <code>build_fn</code> receives <code>(rng_key, logdensity_fn, position, num_warmup)</code>, runs the adaptation, and must return <code>(inner_state, params)</code>, where <code>inner_state</code> exposes <code>.position</code> over the same sites as the model and <code>params</code> is a pytree of numeric arrays with the tuned parameters (use <code>None</code> for a sampler without tuning). <code>step_fn</code> receives <code>(rng_key, inner_state, logdensity_fn, params)</code> and must return <code>(inner_state, info)</code>. The base class validates the returned state’s key set and the <code>params</code> leaves, and raises <code>TypeError</code> if either is malformed.</p>
+<p>NumPyro compiles the sampling loop once and reuses it for all chains (and for re-runs with <code>jit_model_args=True</code>), and the loop traces <code>params</code>. Two rules follow:</p>
+<ul>
+<li><code>step_fn</code> must use the <code>logdensity_fn</code> and <code>params</code> it receives. A closure over the log density or the tuned values of a <code>build_fn</code> call keeps the values of the first call.</li>
+<li>A static setting that blackjax needs as a concrete Python value (for example <code>max_num_doublings</code> of NUTS) goes in <code>step_fn</code>, as a closure or a <code>functools.partial</code> argument, and not in <code>params</code>. A closure over such static configuration is fine. <code>TypeError</code> reports a Python or NumPy <code>int</code> or <code>bool</code> scalar in <code>params</code>.</li>
+</ul>
+<p><code>blackjax.window_adaptation</code> puts extra keyword arguments such as <code>max_num_doublings</code> into <code>result.parameters</code>, so remove them from <code>params</code> and give them to the step instead. For BlackJAX NUTS with window adaptation:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> blackjax</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>MAX_NUM_DOUBLINGS <span class="op">=</span> <span class="dv">6</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_fn(rng_key, logdensity_fn, position, num_warmup):</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    adapt <span class="op">=</span> blackjax.window_adaptation(</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        blackjax.nuts, logdensity_fn, max_num_doublings<span class="op">=</span>MAX_NUM_DOUBLINGS</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    result, _ <span class="op">=</span> adapt.run(rng_key, position, num_steps<span class="op">=</span><span class="dv">500</span>)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    params <span class="op">=</span> {k: v <span class="cf">for</span> k, v <span class="kw">in</span> result.parameters.items() <span class="cf">if</span> k <span class="op">!=</span> <span class="st">"max_num_doublings"</span>}</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result.state, params</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> step_fn(rng_key, inner_state, logdensity_fn, params):</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    nuts <span class="op">=</span> blackjax.nuts(logdensity_fn, max_num_doublings<span class="op">=</span>MAX_NUM_DOUBLINGS, <span class="op">**</span>params)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> nuts.step(rng_key, inner_state)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>kernel <span class="op">=</span> BlackjaxCustomKernel(model, build_fn<span class="op">=</span>build_fn, step_fn<span class="op">=</span>step_fn)</span></code></pre></div>
 </div>
 <section id="run-configuration" class="level2 doc-run-configuration">
 <h2 class="doc-run-configuration">Run Configuration</h2>
-<p>Pass this kernel to <code>numpyro.infer.MCMC</code> with <strong><code>chain_method="sequential"</code> only</strong>. With more than one chain, <code>chain_method="vectorized"</code> hands <code>_BlackjaxKernel.init()</code> a stacked <code>rng_key</code> of shape <code>(num_chains, 2)</code> rather than vmapping a per-chain call, and the <code>jax.random.split</code> inside <code>init</code> rejects a non-scalar key with a <code>ValueError</code> (pinned by the test suite). <code>chain_method="parallel"</code> is likewise unsupported: it is not exercised by this package and shares the same single-key assumption. Also pass <strong><code>num_warmup=0</code></strong>: whatever adaptation <code>build_fn</code> performs runs once inside <code>_BlackjaxKernel.init()</code>, so any NumPyro-driven warmup steps on top of that are simply discarded work, not additional tuning.</p>
+<p>Pass this kernel to <code>numpyro.infer.MCMC</code> with <strong><code>chain_method="sequential"</code> only</strong>. With more than one chain, <code>chain_method="vectorized"</code> hands <code>_BlackjaxKernel.init()</code> a stacked <code>rng_key</code> of shape <code>(num_chains, 2)</code> rather than vmapping a per-chain call, and the <code>jax.random.split</code> inside <code>init</code> rejects a non-scalar key with a <code>ValueError</code> (pinned by the test suite). <code>chain_method="parallel"</code> is likewise unsupported: it is not exercised by this package and shares the same single-key assumption. Each chain of a sequential run calls <code>_BlackjaxKernel.init()</code> and so <code>build_fn</code>. The <code>params</code> it returns are part of the sampler state and <code>_BlackjaxKernel.sample()</code> builds the log density from the model arguments of the current run, so the chains are independent runs and a second <code>mcmc.run</code> on new data (also with <code>jit_model_args=True</code>) samples the new posterior. A run that continues from <code>mcmc.post_warmup_state</code> calls <code>build_fn</code> again and discards the result, and starts from the blackjax state and the <code>params</code> of the earlier run, with no warning: on new data a sampler whose state holds the log density of the old data (NUTS, for example) can freeze on one point. Leave <code>post_warmup_state</code> unset for a run on new data. Also pass <strong><code>num_warmup=0</code></strong>: whatever adaptation <code>build_fn</code> performs runs once inside <code>_BlackjaxKernel.init()</code>, so any NumPyro-driven warmup steps on top of that are simply discarded work, not additional tuning.</p>
 </section>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -917,7 +944,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">build_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">BlackjaxBuildFn</span></code></dt>
 <dd>
-The blackjax build callable described above.
+<p>The blackjax build callable described above.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">step_fn</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">BlackjaxStepFn</span></code></dt>
+<dd>
+The blackjax step callable described above.
 </dd>
 </dl>
 </div>

@@ -638,6 +638,12 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">typing.BlackjaxBuildFn</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../reference/typing.BlackjaxStepFn.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">typing.BlackjaxStepFn</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -863,7 +869,7 @@ ul.task-list li input[type="checkbox"] {
 <p><code><span class="doc-parameter-name">typing.BlackjaxBuildFn</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default">Callable[…, object]</span></code></p>
 </div>
 <div class="doc-text">
-<p>Returns <code>(inner_state, step_fn)</code>. <code>rng_key</code> is first, matching the package’s rng-key-first convention. Consumed by <a href="contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="gdls-link gdls-code">BlackjaxCustomKernel</a>.</p>
+<p>Runs the adaptation and returns <code>(inner_state, params)</code>, with <code>params</code> a pytree of numeric arrays holding the tuned parameters. Static settings that blackjax needs as concrete Python values (for example an integer <code>max_num_doublings</code>) do not go in <code>params</code>: bind them in the <a href="typing.BlackjaxStepFn.html#numpyro_forecast.typing.BlackjaxStepFn" class="gdls-link gdls-code">BlackjaxStepFn</a>. <code>rng_key</code> is first, matching the package’s rng-key-first convention. Consumed by <a href="contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="gdls-link gdls-code">BlackjaxCustomKernel</a>.</p>
 </div>
 
 

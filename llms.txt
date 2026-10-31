@@ -106,6 +106,7 @@
 - [typing.ModelFactory](https://juanitorduz.github.io/numpyro_forecast/reference/typing.ModelFactory.html)
 - [typing.Array](https://juanitorduz.github.io/numpyro_forecast/reference/typing.Array.html)
 - [typing.BlackjaxBuildFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxBuildFn.html)
+- [typing.BlackjaxStepFn](https://juanitorduz.github.io/numpyro_forecast/reference/typing.BlackjaxStepFn.html)
 
 #### Autocorrelation
 > Batched autocorrelation and partial autocorrelation diagnostics.

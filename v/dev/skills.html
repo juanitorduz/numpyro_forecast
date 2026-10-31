@@ -385,94 +385,95 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`typing.ModelFactory`</span></span>
 <span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`typing.Array`</span></span>
 <span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`typing.BlackjaxBuildFn`</span></span>
-<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a><span class="fu">### Autocorrelation</span></span>
-<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a>Batched autocorrelation and partial autocorrelation diagnostics.</span>
-<span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`acf.acf`</span></span>
-<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`acf.pacf`</span></span>
-<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a><span class="fu">### Seasonal features</span></span>
-<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a>Fourier design matrices and seasonal tiling.</span>
-<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`features.fourier_features`</span></span>
-<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`features.periodic_repeat`</span></span>
-<span id="cb1-163"><a href="#cb1-163" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-164"><a href="#cb1-164" aria-hidden="true" tabindex="-1"></a><span class="fu">### Array helpers</span></span>
-<span id="cb1-165"><a href="#cb1-165" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-166"><a href="#cb1-166" aria-hidden="true" tabindex="-1"></a>Time-axis array shaping for the train/forecast split.</span>
-<span id="cb1-167"><a href="#cb1-167" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-168"><a href="#cb1-168" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`arrays.zero_data_like`</span></span>
-<span id="cb1-169"><a href="#cb1-169" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`arrays.concat_future`</span></span>
-<span id="cb1-170"><a href="#cb1-170" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`arrays.pad_future`</span></span>
-<span id="cb1-171"><a href="#cb1-171" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-172"><a href="#cb1-172" aria-hidden="true" tabindex="-1"></a><span class="fu">### Datasets</span></span>
-<span id="cb1-173"><a href="#cb1-173" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-174"><a href="#cb1-174" aria-hidden="true" tabindex="-1"></a>Example datasets used in the tutorials.</span>
-<span id="cb1-175"><a href="#cb1-175" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-176"><a href="#cb1-176" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_weekly`</span></span>
-<span id="cb1-177"><a href="#cb1-177" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_hierarchical`</span></span>
-<span id="cb1-178"><a href="#cb1-178" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_victoria_electricity`</span></span>
-<span id="cb1-179"><a href="#cb1-179" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.bart_available`</span></span>
-<span id="cb1-180"><a href="#cb1-180" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_m5`</span></span>
-<span id="cb1-181"><a href="#cb1-181" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.M5Data`</span></span>
-<span id="cb1-182"><a href="#cb1-182" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-183"><a href="#cb1-183" aria-hidden="true" tabindex="-1"></a><span class="fu">### Optional dependencies</span></span>
-<span id="cb1-184"><a href="#cb1-184" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-185"><a href="#cb1-185" aria-hidden="true" tabindex="-1"></a>Lazy imports behind pyproject extras.</span>
-<span id="cb1-186"><a href="#cb1-186" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-187"><a href="#cb1-187" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`optional.require`</span></span>
-<span id="cb1-188"><a href="#cb1-188" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-189"><a href="#cb1-189" aria-hidden="true" tabindex="-1"></a><span class="fu">### Exceptions</span></span>
-<span id="cb1-190"><a href="#cb1-190" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-191"><a href="#cb1-191" aria-hidden="true" tabindex="-1"></a>Package exception hierarchy raised at validation boundaries.</span>
-<span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-193"><a href="#cb1-193" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.NumpyroForecastError`</span></span>
-<span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.BacktestWindowError`</span></span>
-<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.VectorizedMetricError`</span></span>
-<span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.KernelConfigError`</span></span>
-<span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.CovariateDimsError`</span></span>
-<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.MVNLayoutError`</span></span>
-<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.DeviceMemoryError`</span></span>
-<span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.HostMemoryKindError`</span></span>
-<span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.DevicePlatformError`</span></span>
-<span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a><span class="fu">## Gotchas</span></span>
-<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,). A model without covariates still takes covariates of shape (duration, 0), and data needs at least one time step: for a series with no history, call the model with data=None (predict_in_sample with only the global sites in the posterior, or numpyro.infer.Predictive for the prior).</span>
-<span id="cb1-206"><a href="#cb1-206" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>There is no horizon argument. The forecast horizon is covariates.shape<span class="co">[</span><span class="ot">-2</span><span class="co">]</span> - data.shape<span class="co">[</span><span class="ot">-2</span><span class="co">]</span>: fit with covariates<span class="co">[</span><span class="ot">:t_obs</span><span class="co">]</span> and forecast with the full-horizon covariates, using the same model function.</span>
-<span id="cb1-207"><a href="#cb1-207" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Every xs leaf of markov_series and ssoe has h.duration rows in every model call: slice it from the full-horizon covariates, or extend an in-sample input (an update gate) with pad_future(x, h.future); never pass the observed window alone or a longer array.</span>
-<span id="cb1-208"><a href="#cb1-208" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>A posterior with in-sample time latents serves only the training length it was drawn for. innovations raises ValueError when a posterior value of its site does not have h.t_obs rows, and forecast and predict_in_sample raise when the forecast or obs draws do not have one step per covariate row past data or per in-sample covariate row. A markov_series posterior is replayed as a prefix instead: a longer window draws the extra in-sample steps from the prior without an error, so always pass the training window.</span>
-<span id="cb1-209"><a href="#cb1-209" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>Every function that consumes randomness takes rng_key as its first positional argument (draw_posterior, forecast, predict_in_sample, to_datatree, backtest).</span>
-<span id="cb1-210"><a href="#cb1-210" aria-hidden="true" tabindex="-1"></a><span class="ss">6. </span>The drivers read the sites "obs" and "forecast" by name. Never put predict (or hand-written obs/forecast sites) inside handlers.scope; scope only the latent building blocks.</span>
-<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a><span class="ss">7. </span>innovations is called inside plates you open yourself; markov_series rejects an enclosing plate and takes plates=<span class="co">[</span><span class="ot">(name, size)</span><span class="co">]</span> instead.</span>
-<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a><span class="ss">8. </span>ssoe registers only the <span class="dt">&lt;</span><span class="kw">name</span><span class="dt">&gt;</span>_future error site: write the likelihood against result.mu yourself and register numpyro.deterministic("forecast", result.y_future) when h.future &gt; 0. Its mean and update functions must not call numpyro.sample.</span>
-<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a><span class="ss">9. </span>innovations, ssoe and predict take distribution instances (dist.Normal(0.0, scale)), not distribution classes or thunks.</span>
-<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a><span class="ss">10. </span>predict shifts the location of a loc=0 noise instance onto the predictor, and ssoe adds its draws to the step mean: the predictor is the mean for Normal, StudentT (df &gt; 1), Laplace and MultivariateNormal noise, but the mode for Gumbel and AsymmetricLaplace, whose mean is offset (for AsymmetricLaplace unless asymmetry = 1; Cauchy has no mean). Center that noise yourself when the predictor must be the mean, e.g. dist.Gumbel(-np.euler_gamma * scale, scale).</span>
-<span id="cb1-215"><a href="#cb1-215" aria-hidden="true" tabindex="-1"></a><span class="ss">11. </span>predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.</span>
-<span id="cb1-216"><a href="#cb1-216" aria-hidden="true" tabindex="-1"></a><span class="ss">12. </span>to_datatree names the obs axes of (*batch, time, obs) data obs_batch_0, ..., time, obs_dim by default. Pass obs_dims (one name per data axis, "time" at axis -2) to name them, reuse the covariate_dims name of a shared batch axis, and refer to these names in coords and posterior_dims; covariates with batch axes need covariate_dims.</span>
-<span id="cb1-217"><a href="#cb1-217" aria-hidden="true" tabindex="-1"></a><span class="ss">13. </span>add_forecast_groups lays the forecast out like the tree it extends: it splits forecast_samples into the (chain, draw) layout and labels of the tree's posterior and takes the axis names and non-time labels of observed_data obs and constant_data covariates, so the forecast needs one draw per posterior draw in tree<span class="co">[</span><span class="ot">"posterior"</span><span class="co">]</span>.stack(sample=("chain", "draw")) order (forecast() with the posterior that built the tree) and the in-sample size on every non-time axis; it raises ValueError otherwise, and to attach fewer draws, subset the tree with isel first.</span>
-<span id="cb1-218"><a href="#cb1-218" aria-hidden="true" tabindex="-1"></a><span class="ss">14. </span>time_reparam returns a wrapped model: hand the wrapped model, not the original, to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest, because only it has the <span class="dt">&lt;</span><span class="kw">name</span><span class="dt">&gt;</span>_haar or <span class="dt">&lt;</span><span class="kw">name</span><span class="dt">&gt;</span>_dct site that the posterior holds; nesting two time_reparam calls raises ValueError, and so does an innovations latent under a subsampled plate (a minibatched panel, also when the guide subsamples the plate through create_plates).</span>
-<span id="cb1-219"><a href="#cb1-219" aria-hidden="true" tabindex="-1"></a><span class="ss">15. </span>draw_posterior, forecast and predict_in_sample compile once per call (shared by every batch_size chunk) and cache nothing across calls (to_datatree runs the two drivers, so it compiles too): as with numpyro.infer.Predictive, a changed global or attribute the model reads takes effect on the next call and the model can be any callable, hashable or not, but each repeated call with the same model compiles again.</span>
-<span id="cb1-220"><a href="#cb1-220" aria-hidden="true" tabindex="-1"></a><span class="ss">16. </span>draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.</span>
-<span id="cb1-221"><a href="#cb1-221" aria-hidden="true" tabindex="-1"></a><span class="ss">17. </span>numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast<span class="co">[</span><span class="ot">blackjax</span><span class="co">]</span>"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.</span>
-<span id="cb1-222"><a href="#cb1-222" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-223"><a href="#cb1-223" aria-hidden="true" tabindex="-1"></a><span class="fu">## Best practices</span></span>
-<span id="cb1-224"><a href="#cb1-224" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-225"><a href="#cb1-225" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Keep inference plain NumPyro: SVI with an autoguide or MCMC with any kernel; nothing in the package wraps svi.run or mcmc.run.</span>
-<span id="cb1-226"><a href="#cb1-226" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Use LocScaleReparam(0) on innovations priors for SVI, and time_reparam(model, "dct") when the latent is a random-walk level.</span>
-<span id="cb1-227"><a href="#cb1-227" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>On a GPU, call numpyro.set_platform("cuda") before building the model and pass batch_size and device="host" to draw_posterior, forecast, predict_in_sample and to_datatree so the draws never sit on the accelerator at once; draws come back as jax Arrays on the CPU device or NumPy arrays.</span>
-<span id="cb1-228"><a href="#cb1-228" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Score forecasts with eval_crps and eval_coverage on held-out data, and backtest over rolling origins rather than trusting a single split.</span>
-<span id="cb1-229"><a href="#cb1-229" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Write integers with four or more digits with underscores (1_000, 10_000) and thread PRNG keys explicitly with jax.random.split.</span>
-<span id="cb1-230"><a href="#cb1-230" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-231"><a href="#cb1-231" aria-hidden="true" tabindex="-1"></a><span class="fu">## Resources</span></span>
-<span id="cb1-232"><a href="#cb1-232" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-233"><a href="#cb1-233" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Full documentation</span><span class="co">](https://juanitorduz.github.io/numpyro_forecast/)</span></span>
-<span id="cb1-234"><a href="#cb1-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms.txt</span><span class="co">](llms.txt)</span> — Indexed API reference for LLMs</span>
-<span id="cb1-235"><a href="#cb1-235" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms-full.txt</span><span class="co">](llms-full.txt)</span> — Comprehensive documentation for LLMs</span>
-<span id="cb1-236"><a href="#cb1-236" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Source code</span><span class="co">](https://github.com/juanitorduz/numpyro_forecast)</span></span></code></pre></div>
+<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`typing.BlackjaxStepFn`</span></span>
+<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a><span class="fu">### Autocorrelation</span></span>
+<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a>Batched autocorrelation and partial autocorrelation diagnostics.</span>
+<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`acf.acf`</span></span>
+<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`acf.pacf`</span></span>
+<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a><span class="fu">### Seasonal features</span></span>
+<span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a>Fourier design matrices and seasonal tiling.</span>
+<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`features.fourier_features`</span></span>
+<span id="cb1-163"><a href="#cb1-163" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`features.periodic_repeat`</span></span>
+<span id="cb1-164"><a href="#cb1-164" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-165"><a href="#cb1-165" aria-hidden="true" tabindex="-1"></a><span class="fu">### Array helpers</span></span>
+<span id="cb1-166"><a href="#cb1-166" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-167"><a href="#cb1-167" aria-hidden="true" tabindex="-1"></a>Time-axis array shaping for the train/forecast split.</span>
+<span id="cb1-168"><a href="#cb1-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-169"><a href="#cb1-169" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`arrays.zero_data_like`</span></span>
+<span id="cb1-170"><a href="#cb1-170" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`arrays.concat_future`</span></span>
+<span id="cb1-171"><a href="#cb1-171" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`arrays.pad_future`</span></span>
+<span id="cb1-172"><a href="#cb1-172" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-173"><a href="#cb1-173" aria-hidden="true" tabindex="-1"></a><span class="fu">### Datasets</span></span>
+<span id="cb1-174"><a href="#cb1-174" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-175"><a href="#cb1-175" aria-hidden="true" tabindex="-1"></a>Example datasets used in the tutorials.</span>
+<span id="cb1-176"><a href="#cb1-176" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-177"><a href="#cb1-177" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_weekly`</span></span>
+<span id="cb1-178"><a href="#cb1-178" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_bart_hierarchical`</span></span>
+<span id="cb1-179"><a href="#cb1-179" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_victoria_electricity`</span></span>
+<span id="cb1-180"><a href="#cb1-180" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.bart_available`</span></span>
+<span id="cb1-181"><a href="#cb1-181" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.load_m5`</span></span>
+<span id="cb1-182"><a href="#cb1-182" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`datasets.M5Data`</span></span>
+<span id="cb1-183"><a href="#cb1-183" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-184"><a href="#cb1-184" aria-hidden="true" tabindex="-1"></a><span class="fu">### Optional dependencies</span></span>
+<span id="cb1-185"><a href="#cb1-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-186"><a href="#cb1-186" aria-hidden="true" tabindex="-1"></a>Lazy imports behind pyproject extras.</span>
+<span id="cb1-187"><a href="#cb1-187" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-188"><a href="#cb1-188" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`optional.require`</span></span>
+<span id="cb1-189"><a href="#cb1-189" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-190"><a href="#cb1-190" aria-hidden="true" tabindex="-1"></a><span class="fu">### Exceptions</span></span>
+<span id="cb1-191"><a href="#cb1-191" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a>Package exception hierarchy raised at validation boundaries.</span>
+<span id="cb1-193"><a href="#cb1-193" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.NumpyroForecastError`</span></span>
+<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.BacktestWindowError`</span></span>
+<span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.VectorizedMetricError`</span></span>
+<span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.KernelConfigError`</span></span>
+<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.CovariateDimsError`</span></span>
+<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.MVNLayoutError`</span></span>
+<span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.DeviceMemoryError`</span></span>
+<span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.HostMemoryKindError`</span></span>
+<span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`exceptions.DevicePlatformError`</span></span>
+<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a><span class="fu">## Gotchas</span></span>
+<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-206"><a href="#cb1-206" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,). A model without covariates still takes covariates of shape (duration, 0), and data needs at least one time step: for a series with no history, call the model with data=None (predict_in_sample with only the global sites in the posterior, or numpyro.infer.Predictive for the prior).</span>
+<span id="cb1-207"><a href="#cb1-207" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>There is no horizon argument. The forecast horizon is covariates.shape<span class="co">[</span><span class="ot">-2</span><span class="co">]</span> - data.shape<span class="co">[</span><span class="ot">-2</span><span class="co">]</span>: fit with covariates<span class="co">[</span><span class="ot">:t_obs</span><span class="co">]</span> and forecast with the full-horizon covariates, using the same model function.</span>
+<span id="cb1-208"><a href="#cb1-208" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Every xs leaf of markov_series and ssoe has h.duration rows in every model call: slice it from the full-horizon covariates, or extend an in-sample input (an update gate) with pad_future(x, h.future); never pass the observed window alone or a longer array.</span>
+<span id="cb1-209"><a href="#cb1-209" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>A posterior with in-sample time latents serves only the training length it was drawn for. innovations raises ValueError when a posterior value of its site does not have h.t_obs rows, and forecast and predict_in_sample raise when the forecast or obs draws do not have one step per covariate row past data or per in-sample covariate row. A markov_series posterior is replayed as a prefix instead: a longer window draws the extra in-sample steps from the prior without an error, so always pass the training window.</span>
+<span id="cb1-210"><a href="#cb1-210" aria-hidden="true" tabindex="-1"></a><span class="ss">5. </span>Every function that consumes randomness takes rng_key as its first positional argument (draw_posterior, forecast, predict_in_sample, to_datatree, backtest).</span>
+<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a><span class="ss">6. </span>The drivers read the sites "obs" and "forecast" by name. Never put predict (or hand-written obs/forecast sites) inside handlers.scope; scope only the latent building blocks.</span>
+<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a><span class="ss">7. </span>innovations is called inside plates you open yourself; markov_series rejects an enclosing plate and takes plates=<span class="co">[</span><span class="ot">(name, size)</span><span class="co">]</span> instead.</span>
+<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a><span class="ss">8. </span>ssoe registers only the <span class="dt">&lt;</span><span class="kw">name</span><span class="dt">&gt;</span>_future error site: write the likelihood against result.mu yourself and register numpyro.deterministic("forecast", result.y_future) when h.future &gt; 0. Its mean and update functions must not call numpyro.sample.</span>
+<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a><span class="ss">9. </span>innovations, ssoe and predict take distribution instances (dist.Normal(0.0, scale)), not distribution classes or thunks.</span>
+<span id="cb1-215"><a href="#cb1-215" aria-hidden="true" tabindex="-1"></a><span class="ss">10. </span>predict shifts the location of a loc=0 noise instance onto the predictor, and ssoe adds its draws to the step mean: the predictor is the mean for Normal, StudentT (df &gt; 1), Laplace and MultivariateNormal noise, but the mode for Gumbel and AsymmetricLaplace, whose mean is offset (for AsymmetricLaplace unless asymmetry = 1; Cauchy has no mean). Center that noise yourself when the predictor must be the mean, e.g. dist.Gumbel(-np.euler_gamma * scale, scale).</span>
+<span id="cb1-216"><a href="#cb1-216" aria-hidden="true" tabindex="-1"></a><span class="ss">11. </span>predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.</span>
+<span id="cb1-217"><a href="#cb1-217" aria-hidden="true" tabindex="-1"></a><span class="ss">12. </span>to_datatree names the obs axes of (*batch, time, obs) data obs_batch_0, ..., time, obs_dim by default. Pass obs_dims (one name per data axis, "time" at axis -2) to name them, reuse the covariate_dims name of a shared batch axis, and refer to these names in coords and posterior_dims; covariates with batch axes need covariate_dims.</span>
+<span id="cb1-218"><a href="#cb1-218" aria-hidden="true" tabindex="-1"></a><span class="ss">13. </span>add_forecast_groups lays the forecast out like the tree it extends: it splits forecast_samples into the (chain, draw) layout and labels of the tree's posterior and takes the axis names and non-time labels of observed_data obs and constant_data covariates, so the forecast needs one draw per posterior draw in tree<span class="co">[</span><span class="ot">"posterior"</span><span class="co">]</span>.stack(sample=("chain", "draw")) order (forecast() with the posterior that built the tree) and the in-sample size on every non-time axis; it raises ValueError otherwise, and to attach fewer draws, subset the tree with isel first.</span>
+<span id="cb1-219"><a href="#cb1-219" aria-hidden="true" tabindex="-1"></a><span class="ss">14. </span>time_reparam returns a wrapped model: hand the wrapped model, not the original, to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest, because only it has the <span class="dt">&lt;</span><span class="kw">name</span><span class="dt">&gt;</span>_haar or <span class="dt">&lt;</span><span class="kw">name</span><span class="dt">&gt;</span>_dct site that the posterior holds; nesting two time_reparam calls raises ValueError, and so does an innovations latent under a subsampled plate (a minibatched panel, also when the guide subsamples the plate through create_plates).</span>
+<span id="cb1-220"><a href="#cb1-220" aria-hidden="true" tabindex="-1"></a><span class="ss">15. </span>draw_posterior, forecast and predict_in_sample compile once per call (shared by every batch_size chunk) and cache nothing across calls (to_datatree runs the two drivers, so it compiles too): as with numpyro.infer.Predictive, a changed global or attribute the model reads takes effect on the next call and the model can be any callable, hashable or not, but each repeated call with the same model compiles again.</span>
+<span id="cb1-221"><a href="#cb1-221" aria-hidden="true" tabindex="-1"></a><span class="ss">16. </span>draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.</span>
+<span id="cb1-222"><a href="#cb1-222" aria-hidden="true" tabindex="-1"></a><span class="ss">17. </span>numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast<span class="co">[</span><span class="ot">blackjax</span><span class="co">]</span>"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.</span>
+<span id="cb1-223"><a href="#cb1-223" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-224"><a href="#cb1-224" aria-hidden="true" tabindex="-1"></a><span class="fu">## Best practices</span></span>
+<span id="cb1-225"><a href="#cb1-225" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-226"><a href="#cb1-226" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Keep inference plain NumPyro: SVI with an autoguide or MCMC with any kernel; nothing in the package wraps svi.run or mcmc.run.</span>
+<span id="cb1-227"><a href="#cb1-227" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Use LocScaleReparam(0) on innovations priors for SVI, and time_reparam(model, "dct") when the latent is a random-walk level.</span>
+<span id="cb1-228"><a href="#cb1-228" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>On a GPU, call numpyro.set_platform("cuda") before building the model and pass batch_size and device="host" to draw_posterior, forecast, predict_in_sample and to_datatree so the draws never sit on the accelerator at once; draws come back as jax Arrays on the CPU device or NumPy arrays.</span>
+<span id="cb1-229"><a href="#cb1-229" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Score forecasts with eval_crps and eval_coverage on held-out data, and backtest over rolling origins rather than trusting a single split.</span>
+<span id="cb1-230"><a href="#cb1-230" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Write integers with four or more digits with underscores (1_000, 10_000) and thread PRNG keys explicitly with jax.random.split.</span>
+<span id="cb1-231"><a href="#cb1-231" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-232"><a href="#cb1-232" aria-hidden="true" tabindex="-1"></a><span class="fu">## Resources</span></span>
+<span id="cb1-233"><a href="#cb1-233" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-234"><a href="#cb1-234" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Full documentation</span><span class="co">](https://juanitorduz.github.io/numpyro_forecast/)</span></span>
+<span id="cb1-235"><a href="#cb1-235" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms.txt</span><span class="co">](llms.txt)</span> — Indexed API reference for LLMs</span>
+<span id="cb1-236"><a href="#cb1-236" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">llms-full.txt</span><span class="co">](llms-full.txt)</span> — Comprehensive documentation for LLMs</span>
+<span id="cb1-237"><a href="#cb1-237" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Source code</span><span class="co">](https://github.com/juanitorduz/numpyro_forecast)</span></span></code></pre></div>
 </pre>
 
 

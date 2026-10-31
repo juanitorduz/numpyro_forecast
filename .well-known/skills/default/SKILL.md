@@ -146,6 +146,7 @@ Public type contracts.
 - `typing.ModelFactory`
 - `typing.Array`
 - `typing.BlackjaxBuildFn`
+- `typing.BlackjaxStepFn`
 
 ### Autocorrelation
 

@@ -202,7 +202,7 @@ BlackJAX NUTS with Stan-style window adaptation.
 BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 
 [contrib.blackjax.BlackjaxCustomKernel](contrib.blackjax.BlackjaxCustomKernel.md#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel)  
-Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn`.
+Adapt an arbitrary BlackJAX sampler via a user-supplied `build_fn` and `step_fn`.
 
 [contrib.blackjax.PathfinderFit](contrib.blackjax.PathfinderFit.md#numpyro_forecast.contrib.blackjax.PathfinderFit)  
 The result of fitting a forecasting model with BlackJAX Pathfinder.
