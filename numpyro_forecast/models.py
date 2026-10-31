@@ -175,7 +175,54 @@ def _sample_time_block(
         if reparam is not None:
             stack.enter_context(numpyro.handlers.reparam(config={site: reparam}))
         stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
-        return jnp.asarray(numpyro.sample(site, prior))
+        value = jnp.asarray(numpyro.sample(site, prior))
+    _require_block_steps(site, size, plate_name, len(prior.event_shape), value)
+    return value
+
+
+def _require_block_steps(
+    site: str, size: int, plate_name: str, event_rank: int, value: Array
+) -> None:
+    """Require the value of a time block to have ``size`` steps on its plate axis.
+
+    The plate draws ``size`` steps, but NumPyro substitutes a given value (a
+    ``Predictive`` posterior, ``substitute``, ``condition``, ``init_to_value``)
+    without checking it against the plate. A posterior drawn for another
+    training length would otherwise change the length of the series silently,
+    which a model that slices its own sites can hide from the drivers (issue
+    #168). The plate axis is ``-2`` counted left of the ``event_rank`` event axes.
+    """
+    # An enumerated discrete site (``infer={"enumerate": "parallel"}``) holds its
+    # support as ``(K, 1, ..., 1)``, not the plate length, so it fails this check;
+    # supporting enumeration would mean skipping the check for such sites.
+    axis = -2 - event_rank
+    shape = tuple(value.shape)
+    if value.ndim < -axis:
+        msg = (
+            f"innovations expects the value of site {site!r} to have at least {-axis} axes, "
+            f"with time at axis {axis} (the {size} steps of the '{plate_name}' plate), but it "
+            f"has shape {shape}. A univariate series keeps a size-1 observation axis: "
+            "(time, 1), not (time,); do not squeeze the posterior leaf."
+        )
+        raise ValueError(msg)
+    if shape[axis] == size:
+        return
+    if plate_name == PlateName.TIME:
+        cause = (
+            f"a posterior drawn for a different training length: fit it on data with {size} "
+            "rows, or pass the data and covariates of the window it was fit on"
+        )
+    else:
+        cause = (
+            "a posterior that holds the forecast-horizon site: pass the posterior of the "
+            "training run, which has no _future sites"
+        )
+    msg = (
+        f"innovations expects site {site!r} to have {size} time steps at axis {axis} (the "
+        f"size of the '{plate_name}' plate), but its value has shape {shape}. "
+        f"The usual cause is {cause}."
+    )
+    raise ValueError(msg)
 
 
 def innovations(
@@ -216,6 +263,14 @@ def innovations(
     -------
     Array
         The latent over the full horizon with time at axis ``-2``.
+
+    Raises
+    ------
+    ValueError
+        If a given value of the ``name`` or ``f"{name}_future"`` site (for
+        example a posterior that ``Predictive`` substitutes) does not have
+        ``h.t_obs`` or ``h.future`` steps on its time plate: the usual cause is
+        a posterior drawn for a different training length.
     """
     prefix = _sample_time_block(name, h.t_obs, PlateName.TIME, prior, reparam)
     if h.future <= 0:
@@ -326,9 +381,12 @@ def markov_series[Carry](
         ``numpyro.sample`` statement.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays
-        with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
-        leaf by leaf into scan layout internally; ``None`` for autonomous
-        dynamics.
+        with time at axis ``-2`` and ``duration`` rows (a single array, a
+        tuple, a dict, ...), moved leaf by leaf into scan layout internally;
+        ``None`` for autonomous dynamics. Slice each leaf from ``covariates``,
+        which has ``duration`` rows in every model call (training included),
+        or extend an in-sample input with
+        `~~numpyro_forecast.arrays.pad_future()`.
     advance
         Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
         next carry from the sampled latent; ``None`` means the carry *is* the
@@ -353,14 +411,24 @@ def markov_series[Carry](
     ValueError
         If forecasting without observed data (only reachable with a hand-built
         `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-        data), if the per-step shape lacks the observation dimension, if an
-        enclosing plate is detected, or if ``advance`` is omitted and
-        ``init_carry`` is not a single array with the shape and dtype of a draw.
+        data), if an ``xs`` leaf lacks the time or observation axis or does
+        not span ``h.duration`` rows, if the per-step shape lacks the
+        observation dimension, if an enclosing plate is detected, or if
+        ``advance`` is omitted and ``init_carry`` is not a single array with
+        the shape and dtype of a draw.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
         raise ValueError(msg)
     _reject_enclosing_plates()
+    _validate_xs_leaves(
+        h,
+        xs,
+        "markov_series",
+        "Slice each xs leaf from covariates (h.duration rows in every model call, training "
+        "too) or extend an in-sample input with pad_future(x, h.future); do not pass the "
+        "observed window alone or a longer array.",
+    )
 
     def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
         def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
@@ -441,6 +509,33 @@ class SSOEResult(NamedTuple):
     y_future: Float[Array, " *batch future obs"]
 
 
+def _validate_xs_leaves(h: Horizon, xs: PyTree[Array] | None, block: str, hint: str) -> None:
+    """Require every ``xs`` leaf to carry time at axis ``-2`` and span ``h.duration`` rows.
+
+    Shared by `markov_series()` and `ssoe()`, which both split ``xs`` at
+    ``h.t_obs``; in `markov_series()` a leaf of another length silently changes
+    the number of forecast steps. ``block`` names the caller in the message and
+    ``hint`` ends it.
+    """
+    if xs is None:
+        return
+    for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
+        leaf_name = jax.tree_util.keystr(path) or "<root>"
+        if leaf.ndim < 2:
+            msg = (
+                f"{block} expects every xs leaf to carry time at axis -2 and a trailing "
+                f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
+                "with [..., None]."
+            )
+            raise ValueError(msg)
+        if leaf.shape[-2] != h.duration:
+            msg = (
+                f"{block} expects every xs leaf to span the full horizon (duration = "
+                f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. {hint}"
+            )
+            raise ValueError(msg)
+
+
 def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None) -> Array:
     """Check the driving series and the ``xs`` leaves against the horizon."""
     if y is None:
@@ -463,23 +558,9 @@ def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None)
             f"but h.t_obs = {h.t_obs}. Slice the driving series as covariates[..., :h.t_obs, :]."
         )
         raise ValueError(msg)
-    if xs is not None:
-        for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
-            leaf_name = jax.tree_util.keystr(path) or "<root>"
-            if leaf.ndim < 2:
-                msg = (
-                    "ssoe expects every xs leaf to carry time at axis -2 and a trailing "
-                    f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
-                    "with [..., None]."
-                )
-                raise ValueError(msg)
-            if leaf.shape[-2] != h.duration:
-                msg = (
-                    "ssoe expects every xs leaf to span the full horizon (duration = "
-                    f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. "
-                    "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
-                )
-                raise ValueError(msg)
+    _validate_xs_leaves(
+        h, xs, "ssoe", "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
+    )
     return y
 
 

@@ -366,8 +366,14 @@ def to_datatree(
         no sample axis, if
         ``time_coord`` is given but its length does not match the in-sample
         window plus the forecast horizon, if ``num_chains`` is not a positive
-        integer (``bool`` included), or if ``posterior``'s sample count is not
-        evenly divisible by ``num_chains``.
+        integer (``bool`` included), if ``posterior``'s sample count is not
+        evenly divisible by ``num_chains``, if a ``posterior`` value of an
+        `~~numpyro_forecast.models.innovations()` site does not have one step
+        per ``data`` row (a posterior drawn for a different training length),
+        or if the in-sample draws do not have one time step per ``data`` row or
+        the forecast draws one per ``covariates`` row past ``data`` (see
+        `~~numpyro_forecast.predictive.predict_in_sample()` and
+        `~~numpyro_forecast.predictive.forecast()`).
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError

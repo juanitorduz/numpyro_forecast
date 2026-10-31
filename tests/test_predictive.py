@@ -46,7 +46,7 @@ from numpyro_forecast._offload import (
     draw_chunked,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
-from numpyro_forecast.models import Horizon, predict
+from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.predictive import (
     _chunk_indices,
     _chunked_draws,
@@ -55,6 +55,7 @@ from numpyro_forecast.predictive import (
     forecast,
     predict_in_sample,
 )
+from numpyro_forecast.reparam import time_reparam
 from numpyro_forecast.typing import Array, ForecastModel
 
 
@@ -151,6 +152,141 @@ def test_forecast_rejects_posterior_leaf_without_sample_axis(level: ArrayLike) -
     post = {"level": level, "drift": jnp.zeros((4, 6, 1))}
     with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
         forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+def _handwritten_rw_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk that registers its own ``"obs"`` and ``"forecast"`` sites, no `predict()`."""
+    h = Horizon.from_data(covariates, data)
+    level = jnp.cumsum(innovations(h, "drift", dist.Normal(0.0, 0.1)), axis=-2)
+    numpyro.sample("obs", dist.Normal(level[..., : h.t_obs, :], 0.1), obs=data)
+    if h.future > 0:
+        numpyro.deterministic("forecast", level[..., h.t_obs :, :])
+
+
+@pytest.mark.parametrize(
+    ("driver", "model", "posterior", "match"),
+    [
+        pytest.param(
+            "forecast",
+            rw_model,
+            {"drift": jnp.zeros((4, 3, 1))},
+            r"site 'drift' to have 5 time steps at axis -2 \(the size of the 'time' plate\), "
+            r"but its value has shape \(3, 1\)\. The usual cause is a posterior drawn for a "
+            r"different training length",
+            id="short-posterior",
+        ),
+        pytest.param(
+            "predict_in_sample",
+            _handwritten_rw_model,
+            {"drift": jnp.zeros((4, 7, 1))},
+            r"site 'drift' to have 5 time steps .* has shape \(7, 1\)",
+            id="long-posterior-hidden-by-sliced-obs",
+        ),
+        pytest.param(
+            "forecast",
+            time_reparam(rw_model, "haar"),
+            {"drift_haar": jnp.zeros((4, 7, 1))},
+            r"site 'drift' to have 5 time steps .* has shape \(7, 1\)",
+            id="time-reparam",
+        ),
+        pytest.param(
+            "forecast",
+            rw_model,
+            {"drift": jnp.zeros((4, 5, 1)), "drift_future": jnp.zeros((4, 6, 1))},
+            r"site 'drift_future' to have 3 time steps .* 'time_future' plate.* has shape "
+            r"\(6, 1\)\. The usual cause is a posterior that holds the forecast-horizon site",
+            id="future-site",
+        ),
+        pytest.param(
+            "predict_in_sample",
+            rw_model,
+            {"drift": jnp.zeros((4, 5))},
+            r"the value of site 'drift' to have at least 2 axes, with time at axis -2 .* "
+            r"has shape \(5,\)\. A univariate series keeps a size-1 observation axis",
+            id="squeezed-posterior-leaf",
+        ),
+    ],
+)
+def test_innovations_rejects_posterior_fit_on_another_window(
+    driver: str, model: ForecastModel, posterior: Mapping[str, Array], match: str
+) -> None:
+    """Issue #168: a posterior value of another length raises at the `innovations()` site.
+
+    NumPyro substitutes the value without checking it against the time plate,
+    so a posterior fit on a shorter window used to shorten the forecast, and a
+    longer one went unnoticed by `predict_in_sample()` when the model sliced
+    its own ``"obs"`` site to the covariates.
+    """
+    with pytest.raises(ValueError, match=rf"^innovations expects {match}"):
+        _run_driver(driver, model, posterior, None)
+
+
+def _plate_rw_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk whose time latents are plain plate sites, not `innovations()` sites."""
+    h = Horizon.from_data(covariates, data)
+    with numpyro.plate("steps", h.t_obs, dim=-2):
+        drift = jnp.asarray(numpyro.sample("drift", dist.Normal(0.0, 0.1)))
+    if h.future > 0:
+        with numpyro.plate("steps_future", h.future, dim=-2):
+            drift_future = jnp.asarray(numpyro.sample("drift_future", dist.Normal(0.0, 0.1)))
+        drift = jnp.concatenate([drift, drift_future], axis=-2)
+    predict(h, dist.Normal(0.0, 0.1), jnp.cumsum(drift, axis=-2))
+
+
+@pytest.mark.parametrize(
+    ("posterior_rows", "batch_size"),
+    [(3, None), (7, 3)],
+    ids=["short-posterior", "long-posterior-chunked"],
+)
+def test_forecast_rejects_draws_of_another_length(
+    posterior_rows: int, batch_size: int | None
+) -> None:
+    """Issue #168: forecast draws must have one step per covariate row past ``data``.
+
+    A time latent outside `innovations()` takes the posterior's length, so a
+    posterior fit on 3 (or 7) steps used to return 1 (or 5) forecast steps
+    for 5 observed steps and a 3-step horizon, without an error.
+    """
+    posterior = {"drift": jnp.zeros((4, posterior_rows, 1))}
+    got = posterior_rows + 3 - 5
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^forecast expects the model's 'forecast' site to have 3 time steps at axis -2 "
+            r"\(covariates\.shape\[-2\] - data\.shape\[-2\]\), but it has shape "
+            rf"\({got}, 1\) per draw\. .*they must have 5 rows"
+        ),
+    ):
+        _run_driver("forecast", _plate_rw_model, posterior, batch_size)
+
+
+def test_predict_in_sample_rejects_draws_of_another_length() -> None:
+    """Issue #168: the ``obs`` draws must span the covariates, not the posterior's rows."""
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^predict_in_sample expects the model's 'obs' site to have 5 time steps at axis -2 "
+            r"\(one per row of the in-sample covariates\), but it has shape \(3, 1\) per draw\. "
+            r".*they must have 5 rows"
+        ),
+    ):
+        _run_driver("predict_in_sample", _plate_rw_model, {"drift": jnp.zeros((4, 3, 1))}, None)
+
+
+def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
+    """A model whose ``"forecast"`` site drops the observation axis: ``(future,)`` per draw."""
+    h = Horizon.from_data(covariates, data)
+    loc = numpyro.sample("loc", dist.Normal(0.0, 1.0))
+    numpyro.deterministic("forecast", jnp.full((h.future,), loc))
+
+
+def test_forecast_rejects_site_without_observation_axis() -> None:
+    """A ``(future,)`` site raises a layout error; its only axis is not read as time at ``-2``."""
+    with pytest.raises(
+        ValueError,
+        match=r"^forecast expects each draw .* has shape \(3,\) per draw\. A univariate series",
+    ):
+        _run_driver("forecast", _squeezed_forecast_model, {"loc": jnp.zeros(4)}, None)
 
 
 def test_predict_in_sample_shape_and_finite() -> None:
