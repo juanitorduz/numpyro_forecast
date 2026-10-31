@@ -152,16 +152,14 @@ class _TimeReparamConfig:
             names = ", ".join(
                 f"'{plate.name}' ({plate.subsample_size} of {plate.size})" for plate in subsampled
             )
-            msg_text = (
+            raise ValueError(
                 "time_reparam does not support a time latent under a subsampled plate: site "
                 f"{msg['name']!r} is under {names}. The auxiliary site is sampled outside the "
-                "enclosing plates. Thus it would not get the size / subsample_size scale, and an "
-                "AutoGuide would size its parameters to the minibatch. A guide that subsamples a "
-                "plate with create_plates also subsamples the plate of the model. Remove "
-                "subsample_size from the plate (also from the plate that create_plates returns), "
-                "or do not apply time_reparam to this model"
+                "enclosing plates, so it would not get the size / subsample_size scale, and an "
+                "AutoGuide would size its parameters to the minibatch. Remove subsample_size "
+                "from the plate (also from the plate that create_plates returns), or do not "
+                "apply time_reparam to this model"
             )
-            raise ValueError(msg_text)
         dim = cast(int, time_plate.dim) - fn.event_dim
         make_transform, suffix = _TRANSFORMS[self.transform]
         return _TimeReparam(make_transform(dim), suffix, frozenset(plate.name for plate in plates))
