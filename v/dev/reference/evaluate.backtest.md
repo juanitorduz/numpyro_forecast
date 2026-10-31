@@ -87,7 +87,7 @@ def forecast_fn(
 
 
 `rng_key: Array`  
-Base PRNG key (used for every window, matching Pyro).
+Base PRNG key, used for every window (matching Pyro). Each window splits it once, `forecast_key, train_key = random.split(rng_key)`: `forecast_fn` receives `forecast_key` and `in_sample_fn` receives `train_key`. The split does not depend on `eval_train`, so turning in-sample scoring on does not change the out-of-sample draws.
 
 `model_fn: ModelFactory`  
 Factory returning a fresh [ForecastModel](typing.ForecastModel.md#numpyro_forecast.typing.ForecastModel) per window.
@@ -102,7 +102,7 @@ Covariates with time at axis `-2` (same duration as `data`).
 Closure that fits `model` on the training window and forecasts the test horizon (see [ForecastFn](typing.ForecastFn.md#numpyro_forecast.typing.ForecastFn) and the contract above).
 
 `in_sample_fn: InSampleFn | None = None`  
-Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`.
+Optional closure that fits `model` on the training window and scores its in-sample fit (see [InSampleFn](typing.InSampleFn.md#numpyro_forecast.typing.InSampleFn) and the contract above). Required when `eval_train=True`. It receives its own child of `rng_key` (see `rng_key`), never a key that `forecast_fn` can derive from its own.
 
 `metrics: Mapping[str, Metric] | None = None`  
 Mapping of metric name to function; defaults to [DEFAULT_METRICS](evaluate.DEFAULT_METRICS.md#numpyro_forecast.evaluate.DEFAULT_METRICS). Each function takes `(pred, truth)` and returns a scalar array (see [Metric](typing.Metric.md#numpyro_forecast.typing.Metric)); bind any metric-specific parameters with `functools.partial()`, e.g. `{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.8)}`.

@@ -1369,7 +1369,11 @@ def forecast_fn(
 Parameters
 ----------
 rng_key
-    Base PRNG key (used for every window, matching Pyro).
+    Base PRNG key, used for every window (matching Pyro). Each window
+    splits it once, ``forecast_key, train_key = random.split(rng_key)``:
+    ``forecast_fn`` receives ``forecast_key`` and ``in_sample_fn`` receives
+    ``train_key``. The split does not depend on ``eval_train``, so turning
+    in-sample scoring on does not change the out-of-sample draws.
 model_fn
     Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
 data
@@ -1383,7 +1387,9 @@ forecast_fn
 in_sample_fn
     Optional closure that fits ``model`` on the training window and scores
     its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
-    the contract above). Required when ``eval_train=True``.
+    the contract above). Required when ``eval_train=True``. It receives
+    its own child of ``rng_key`` (see ``rng_key``), never a key that
+    ``forecast_fn`` can derive from its own.
 metrics
     Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
     Each function takes ``(pred, truth)`` and returns a scalar array (see
