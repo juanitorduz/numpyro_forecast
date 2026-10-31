@@ -246,7 +246,8 @@ such: per-step error scales, if that is what you meant.
 **Composition.** Two channels are two calls sharing the same ``Horizon``;
 each opens its own ``time_future`` plate. Scoping a helper that contains the
 call is fine (``handlers.scope`` prefixes the error site and the plate; use
-``name="eps"`` inside a scoped helper so the site reads ``z_eps_future``);
+``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
+or ``z_eps_future`` with ``divider="_"``);
 register ``"obs"`` and ``"forecast"`` outside any scope and build the
 forecast from the channels' ``y_future``.
 
@@ -1222,9 +1223,18 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading. The output
-    of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-    is accepted directly.
+    Posterior samples of the latent sites of the training run, sample axis
+    leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+    output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+    leaves) is accepted directly. A forecast-horizon key with values (one
+    that ends in ``"_future"`` or contains ``"_future_"``, or
+    ``"forecast"``) raises ``ValueError``: it comes from a
+    ``numpyro.infer.Predictive`` call over a horizon, whose sample sites
+    would pin the horizon instead of drawing it from the prior, since the
+    driver substitutes every posterior sample site by name. Such a key with
+    an empty leaf (a site that the model registers on every call, recorded
+    by the training run with a size-0 time axis) is dropped, so the model
+    draws or computes the site as if the key were absent.
 data
     Observed data with time at axis ``-2`` and length ``t``. When
     ``posterior`` holds in-sample time latents, ``t`` must be the training
@@ -1276,7 +1286,9 @@ ValueError
     axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
     extend beyond ``data`` along the time axis, if ``posterior`` is
     empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
-    on the sample-axis length, if a ``posterior`` value of an
+    on the sample-axis length, if a forecast-horizon key of ``posterior``
+    (one that ends in ``"_future"`` or contains ``"_future_"``, or
+    ``"forecast"``) has a non-empty leaf, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have ``t``
     steps (a posterior drawn for a different training length), or if the
     ``"forecast"`` draws do not have time at axis ``-2`` with
@@ -1330,9 +1342,14 @@ rng_key
 model
     The forecasting model callable (the same one that produced ``posterior``).
 posterior
-    Posterior samples of the latent sites, sample axis leading. The output
-    of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-    is accepted directly.
+    Posterior samples of the latent sites of the training run, sample axis
+    leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+    output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+    leaves) is accepted directly. Forecast-horizon keys follow the rule of
+    `forecast()`: one with values raises ``ValueError``, because it marks
+    the output of a ``numpyro.infer.Predictive`` call over a horizon, whose
+    ``"obs"`` key would pin every draw to the observed data, and one with
+    an empty leaf is dropped.
 covariates
     Covariates with time at axis ``-2`` spanning the observed window. Its time
     length must match the data the ``posterior`` was fit on, since the in-sample
@@ -1379,9 +1396,11 @@ Raises
 ------
 ValueError
     If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
-    the leaves disagree on the sample-axis length, if ``covariates`` has
-    fewer than two axes (time must be at axis ``-2``) or no time steps,
-    if a ``posterior`` value of an
+    the leaves disagree on the sample-axis length, if a forecast-horizon
+    key of ``posterior`` (one that ends in ``"_future"`` or contains
+    ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if
+    ``covariates`` has fewer than two axes (time must be at axis ``-2``)
+    or no time steps, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have one step
     per ``covariates`` row (a posterior drawn for a different training
     length), or if the ``"obs"`` draws do not have time at axis ``-2`` with
@@ -2149,11 +2168,19 @@ rng_key
 model
     The forecasting model that produced ``posterior``.
 posterior
-    Posterior samples of the latent sites, with a single flattened sample
-    axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
+    Posterior samples of the latent sites of the training run, with a
+    single flattened sample axis leading (NumPyro's ``mcmc.get_samples()``
+    order, or the output of
     `~~numpyro_forecast.predictive.draw_posterior()`).
     Host-committed leaves (the output of ``draw_posterior(...,
     device="host")``) and NumPy leaves are accepted directly.
+    Forecast-horizon keys follow the rule of
+    `~~numpyro_forecast.predictive.forecast()`: one with values (a key
+    that ends in ``"_future"`` or contains ``"_future_"``, or
+    ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
+    that the model registers on every call, recorded by the training run
+    with a size-0 time axis) is kept in the ``posterior`` group as a
+    size-0 variable, and the predictive drivers drop it.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -2263,7 +2290,9 @@ ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
     axis ``-2``), if ``data`` has no time steps, if ``covariates`` is
     shorter than ``data`` along the time axis, if a ``posterior`` leaf has
-    no sample axis, if
+    no sample axis, if a forecast-horizon key of ``posterior`` (one that
+    ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
+    has a non-empty leaf, if
     ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon, if ``num_chains`` is not a positive
     integer (``bool`` included), if ``posterior``'s sample count is not

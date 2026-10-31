@@ -34,7 +34,7 @@ PRNG key.
 The forecasting model callable (the same one that produced `posterior`).
 
 `posterior: Mapping[str, ArrayLike]`  
-Posterior samples of the latent sites, sample axis leading. The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly.
+Posterior samples of the latent sites of the training run, sample axis leading (`mcmc.get_samples()` of the fit, or [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly. A forecast-horizon key with values (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) raises `ValueError`: it comes from a `numpyro.infer.Predictive` call over a horizon, whose sample sites would pin the horizon instead of drawing it from the prior, since the driver substitutes every posterior sample site by name. Such a key with an empty leaf (a site that the model registers on every call, recorded by the training run with a size-0 time axis) is dropped, so the model draws or computes the site as if the key were absent.
 
 `data: Array`  
 Observed data with time at axis `-2` and length `t`. When `posterior` holds in-sample time latents, `t` must be the training length that `posterior` was drawn for; a [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site of another length raises `ValueError`.
@@ -63,7 +63,7 @@ Forecast samples over the `future = duration - t` horizon (floating point for co
 
 
 `ValueError`  
-If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` does not extend beyond `data` along the time axis, if `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have `t` steps (a posterior drawn for a different training length), or if the `"forecast"` draws do not have time at axis `-2` with `duration - t` steps.
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` does not extend beyond `data` along the time axis, if `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of `posterior` (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) has a non-empty leaf, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have `t` steps (a posterior drawn for a different training length), or if the `"forecast"` draws do not have time at axis `-2` with `duration - t` steps.
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).

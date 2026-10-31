@@ -911,7 +911,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/predictive.py#L453-L585" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/predictive.py#L454-L598" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">predictive</span><span class="op">.</span><span class="sig-name">forecast</span>(</span>
@@ -943,7 +943,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, ArrayLike]</span></code></dt>
 <dd>
-<p>Posterior samples of the latent sites, sample axis leading. The output of a <code>device="host"</code> stage (CPU-committed jax leaves or NumPy leaves) is accepted directly.</p>
+<p>Posterior samples of the latent sites of the training run, sample axis leading (<code>mcmc.get_samples()</code> of the fit, or <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). The output of a <code>device="host"</code> stage (CPU-committed jax leaves or NumPy leaves) is accepted directly. A forecast-horizon key with values (one that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) raises <code>ValueError</code>: it comes from a <code>numpyro.infer.Predictive</code> call over a horizon, whose sample sites would pin the horizon instead of drawing it from the prior, since the driver substitutes every posterior sample site by name. Such a key with an empty leaf (a site that the model registers on every call, recorded by the training run with a size-0 time axis) is dropped, so the model draws or computes the site as if the key were absent.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -985,7 +985,7 @@ Forecast samples over the <code>future = duration - t</code> horizon (floating p
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> does not extend beyond <code>data</code> along the time axis, if <code>posterior</code> is empty, a <code>posterior</code> leaf has no sample axis, or the leaves disagree on the sample-axis length, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have <code>t</code> steps (a posterior drawn for a different training length), or if the <code>"forecast"</code> draws do not have time at axis <code>-2</code> with <code>duration - t</code> steps.</p>
+<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> does not extend beyond <code>data</code> along the time axis, if <code>posterior</code> is empty, a <code>posterior</code> leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of <code>posterior</code> (one that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) has a non-empty leaf, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have <code>t</code> steps (a posterior drawn for a different training length), or if the <code>"forecast"</code> draws do not have time at axis <code>-2</code> with <code>duration - t</code> steps.</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">HostMemoryKindError</span></code></dt>
 <dd>
