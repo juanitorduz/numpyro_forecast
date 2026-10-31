@@ -144,20 +144,31 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
     assert mclmc_crps <= 2.0 * nuts_crps
 
 
+_MAX_NUM_DOUBLINGS = 6
+
+
 def _nuts_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
-    """A minimal custom build_fn running BlackJAX NUTS window adaptation."""
+    """The documented custom build_fn: NUTS window adaptation with a static setting.
+
+    ``window_adaptation`` copies ``max_num_doublings`` into ``result.parameters``; it
+    is a static setting, so it is removed from ``params`` and bound in the step.
+    """
     import blackjax
 
-    adapt = blackjax.window_adaptation(blackjax.nuts, logdensity_fn)
+    adapt = blackjax.window_adaptation(
+        blackjax.nuts, logdensity_fn, max_num_doublings=_MAX_NUM_DOUBLINGS
+    )
     result, _info = adapt.run(rng_key, position, num_steps=200)  # ty: ignore[unknown-argument]
-    return result.state, result.parameters
+    params = {k: v for k, v in result.parameters.items() if k != "max_num_doublings"}
+    return result.state, params
 
 
 def _nuts_step_fn(rng_key, inner_state, logdensity_fn, params):  # type: ignore[no-untyped-def]
     """The matching custom step_fn: one BlackJAX NUTS step with the tuned parameters."""
     import blackjax
 
-    return blackjax.nuts(logdensity_fn, **params).step(rng_key, inner_state)
+    nuts = blackjax.nuts(logdensity_fn, max_num_doublings=_MAX_NUM_DOUBLINGS, **params)
+    return nuts.step(rng_key, inner_state)
 
 
 def test_blackjax_custom_kernel_happy_path() -> None:
@@ -177,6 +188,7 @@ def test_blackjax_custom_kernel_happy_path() -> None:
 
 
 _BadState = namedtuple("_BadState", ["position"])
+_State = namedtuple("_State", ["position"])
 
 
 def _identity_step_fn(rng_key, inner_state, logdensity_fn, params):  # type: ignore[no-untyped-def]
@@ -208,6 +220,7 @@ def test_blackjax_custom_kernel_malformed_state_raises() -> None:
     [
         pytest.param(lambda key, state: (state, None), id="step-function"),
         pytest.param({"step_size": 0.1, "max_num_doublings": 6}, id="python-int"),
+        pytest.param({"max_num_doublings": np.int64(6)}, id="numpy-int"),
         pytest.param({"label": np.asarray(["a"])}, id="string-array"),
     ],
 )
@@ -215,14 +228,14 @@ def test_blackjax_custom_kernel_untraceable_params_raise(params: object) -> None
     """``params`` the sampling loop cannot trace fail at init with a clear message.
 
     A step function in place of the tuned parameters is the old ``build_fn``
-    contract; a Python ``int`` such as ``max_num_doublings`` is a static blackjax
-    setting that would fail as a traced shape deep inside the loop.
+    contract; a Python or NumPy integer such as ``max_num_doublings`` is a static
+    blackjax setting that would fail as a traced shape deep inside the loop.
     """
 
     def build_fn(
         rng_key: Array, logdensity_fn: object, position: dict[str, Array], num_warmup: int
-    ) -> tuple[_BadState, object]:
-        return _BadState(position=position), params
+    ) -> tuple[_State, object]:
+        return _State(position=position), params
 
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     mcmc = MCMC(
@@ -250,17 +263,17 @@ def test_blackjax_custom_kernel_chains_step_with_their_own_params() -> None:
         logdensity_fn: object,
         position: dict[str, Array],
         num_warmup: int,
-    ) -> tuple[_BadState, dict[str, Array]]:
-        return _BadState(position=position), {"increment": jnp.asarray(next(increments))}
+    ) -> tuple[_State, dict[str, Array]]:
+        return _State(position=position), {"increment": jnp.asarray(next(increments))}
 
     def step_fn(
         rng_key: Array,
-        inner_state: _BadState,
+        inner_state: _State,
         logdensity_fn: object,
         params: dict[str, Array],
-    ) -> tuple[_BadState, None]:
+    ) -> tuple[_State, None]:
         moved = {k: v + params["increment"] for k, v in inner_state.position.items()}
-        return _BadState(position=moved), None
+        return _State(position=moved), None
 
     data = random.normal(random.PRNGKey(0), (20, 1))
     mcmc = MCMC(

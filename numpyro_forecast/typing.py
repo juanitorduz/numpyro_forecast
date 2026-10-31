@@ -17,9 +17,10 @@ BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
 Runs the adaptation and returns ``(inner_state, params)``, with ``params`` a pytree of
-numeric arrays holding the tuned parameters (static Python ``int`` settings belong in
-the `~~numpyro_forecast.typing.BlackjaxStepFn`). ``rng_key`` is first, matching the package's
-rng-key-first convention. Consumed by
+numeric arrays holding the tuned parameters. Static settings that blackjax needs as
+concrete Python values (for example an integer ``max_num_doublings``) do not go in
+``params``: bind them in the `~~numpyro_forecast.typing.BlackjaxStepFn`. ``rng_key``
+is first, matching the package's rng-key-first convention. Consumed by
 `~~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
 """
 
@@ -28,8 +29,11 @@ BlackjaxStepFn = Callable[..., object]
 
 Advances ``inner_state`` by one step and returns ``(inner_state, info)``. It receives
 the log density of the current run and the ``params`` of a
-`~~numpyro_forecast.typing.BlackjaxBuildFn` as arguments and must not close over
-them. Consumed by `~~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
+`~~numpyro_forecast.typing.BlackjaxBuildFn` as arguments and must use those: a
+closure over the log density or the tuned values of a build call keeps the values of
+the first call. A closure over static configuration (for example
+``max_num_doublings``) is fine. Consumed by
+`~~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
 """
 
 Metric = Callable[[Array, Array], Array]

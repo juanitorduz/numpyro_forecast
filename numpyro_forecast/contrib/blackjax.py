@@ -8,9 +8,9 @@ BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``,
 requiring ``blackjax>=1.6`` whose MCLMC tuning API this module targets) and is
 never imported at package import time: it is pulled in lazily, via
 `numpyro_forecast.optional.require()`, the first time a kernel is initialized. All three
-kernels run one blackjax step per NumPyro sampling step; adaptation happens once per
-chain inside `_BlackjaxKernel.init()` and the tuned parameters travel in the sampler
-state, so every run against one of these kernels must use
+kernels run one blackjax step per NumPyro sampling step. Every ``mcmc.run`` calls
+`_BlackjaxKernel.init()` once per chain, which runs the adaptation, and the tuned
+parameters travel in the sampler state, so every run against one of these kernels must use
 ``chain_method="sequential"`` and ``num_warmup=0``: see the "Run configuration"
 section on `BlackjaxNUTSKernel`, `BlackjaxMCLMCKernel`, and
 `BlackjaxCustomKernel` for why, and `~~numpyro_forecast.exceptions.KernelConfigError`
@@ -34,6 +34,7 @@ paths when it does not (PSIS weights degenerate in high dimensions).
 import importlib
 import math
 import warnings
+from abc import abstractmethod
 from collections import namedtuple
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -77,13 +78,16 @@ weights are dominated by a handful of draws.
 
 
 def _is_traceable_param(leaf: object) -> bool:
-    """Whether a tuned-parameter leaf can ride in the jitted sampling loop.
+    """Whether a tuned-parameter leaf passes the cheap tripwire for static settings.
 
-    The loop traces every leaf of the sampler state, so a leaf must be a numeric
-    array or a Python float. A Python ``int`` or ``bool`` is rejected: blackjax reads
-    such settings (for example ``max_num_doublings``) as static shapes, which fail
-    once they are traced. Integer arrays pass (a tuned parameter can be one), so a
-    static setting given as a NumPy or jax integer is not caught here.
+    The sampling loop traces every leaf of the sampler state. blackjax reads static
+    settings (for example ``max_num_doublings`` of NUTS) as concrete Python values,
+    and such a value fails with an unclear shape error once it is traced. A static
+    setting usually comes as an integer or boolean scalar, so this heuristic rejects
+    Python and NumPy ``int`` and ``bool`` scalars, non-numeric arrays and every
+    non-array leaf (for example a function). It accepts arrays of any numeric dtype,
+    integer arrays included (a tuned parameter can be one), so a static setting
+    given as a jax or NumPy integer array is not caught.
 
     Parameters
     ----------
@@ -93,13 +97,15 @@ def _is_traceable_param(leaf: object) -> bool:
     Returns
     -------
     bool
-        ``True`` if the leaf is a jax array, a numeric NumPy array or scalar, or a
-        Python ``float`` or ``complex``.
+        ``True`` if the leaf is a jax array, a numeric NumPy array, a NumPy floating
+        or complex scalar, or a Python ``float`` or ``complex``.
     """
     if isinstance(leaf, jax.Array | float | complex):
         return True
-    if isinstance(leaf, np.ndarray | np.generic):
+    if isinstance(leaf, np.ndarray):
         return leaf.dtype.kind in "biufc"
+    if isinstance(leaf, np.generic):
+        return leaf.dtype.kind in "fc"
     return False
 
 
@@ -139,6 +145,7 @@ class _BlackjaxKernel(MCMCKernel):
         """The model the kernel samples from (``None`` until bound)."""
         return self._model
 
+    @abstractmethod
     def _build(
         self,
         rng_key: Array,
@@ -166,8 +173,8 @@ class _BlackjaxKernel(MCMCKernel):
             ``(inner_state, params)`` where ``params`` is the pytree of arrays that
             `_step()` receives in every sampling step.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def _step(
         self,
         rng_key: Array,
@@ -193,7 +200,6 @@ class _BlackjaxKernel(MCMCKernel):
         tuple
             ``(inner_state, info)``.
         """
-        raise NotImplementedError
 
     def init(
         self,
@@ -279,10 +285,11 @@ class _BlackjaxKernel(MCMCKernel):
         if bad_leaves:
             msg = (
                 f"{type(self).__name__} build returned tuned parameters with leaves of "
-                f"type {sorted(set(bad_leaves))}; a build_fn must return "
-                "(inner_state, params) with params a pytree of numeric arrays. The step "
-                "logic goes in step_fn, and so do static settings such as an integer "
-                "max_num_doublings (bind them in step_fn, not in params)."
+                f"type {sorted(set(bad_leaves))}; tuned parameters must be a pytree of "
+                "numeric arrays because the sampling loop traces them. With "
+                "BlackjaxCustomKernel, return (inner_state, params) from build_fn and bind "
+                "static settings such as an integer max_num_doublings in step_fn (a "
+                "closure over static configuration is fine)."
             )
             raise TypeError(msg)
         return _BJState(position=built_position, inner=inner_state, params=params, rng_key=rng_key)
@@ -378,8 +385,11 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
     `_BlackjaxKernel.sample()` builds the log density from the model arguments of
     the current run, so the chains are independent runs and a second ``mcmc.run``
     on new data (also with ``jit_model_args=True``) samples the new posterior. A run
-    that continues from ``mcmc.post_warmup_state`` keeps the blackjax state of the
-    earlier data, so leave ``post_warmup_state`` unset for a run on new data.
+    that continues from ``mcmc.post_warmup_state`` runs the adaptation again and
+    discards the result, and starts from the blackjax state of the earlier data,
+    which holds the log density of that data: on new data every proposal then loses
+    against that stale value and the chain freezes on one point, with no warning.
+    Leave ``post_warmup_state`` unset for a run on new data.
     Also pass **``num_warmup=0``**: adaptation runs once inside `_BlackjaxKernel.init()`
     (via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
     of that are simply discarded work, not additional tuning.
@@ -454,8 +464,11 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
     `_BlackjaxKernel.sample()` builds the log density from the model arguments of
     the current run, so the chains are independent runs and a second ``mcmc.run``
     on new data (also with ``jit_model_args=True``) samples the new posterior. A run
-    that continues from ``mcmc.post_warmup_state`` keeps the blackjax state of the
-    earlier data, so leave ``post_warmup_state`` unset for a run on new data.
+    that continues from ``mcmc.post_warmup_state`` runs the tuning again and discards
+    the result, and keeps the tuned parameters of the earlier run: on new data the
+    chain samples the new posterior with the step size, ``L`` and mass matrix tuned
+    on the old data, with no warning. Leave ``post_warmup_state`` unset for a run on
+    new data.
     Also pass **``num_warmup=0``**: tuning runs once inside `_BlackjaxKernel.init()`
     (via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
@@ -532,29 +545,43 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     tuned parameters (use ``None`` for a sampler without tuning). ``step_fn`` receives
     ``(rng_key, inner_state, logdensity_fn, params)`` and must return
     ``(inner_state, info)``. The base class validates the returned state's key set
-    and the ``params`` leaves, and raises `TypeError` if either is malformed. The
-    sampling loop traces ``params``, so a static setting that blackjax needs as a
-    Python ``int`` (for example ``max_num_doublings`` of NUTS) goes in ``step_fn``,
-    not in ``params``: `TypeError` reports a Python ``int`` or ``bool`` leaf.
+    and the ``params`` leaves, and raises `TypeError` if either is malformed.
 
-    ``step_fn`` gets the log density and the tuned parameters as arguments in every
-    step, and must not close over the ``logdensity_fn`` or the tuned values of a
-    ``build_fn`` call: NumPyro compiles the sampling loop once and reuses it for all
-    chains (and re-runs with ``jit_model_args=True``), so a closure would keep the
-    values of the first call. For BlackJAX NUTS with window adaptation:
+    NumPyro compiles the sampling loop once and reuses it for all chains (and for
+    re-runs with ``jit_model_args=True``), and the loop traces ``params``. Two rules
+    follow:
+
+    - ``step_fn`` must use the ``logdensity_fn`` and ``params`` it receives. A
+      closure over the log density or the tuned values of a ``build_fn`` call keeps
+      the values of the first call.
+    - A static setting that blackjax needs as a concrete Python value (for example
+      ``max_num_doublings`` of NUTS) goes in ``step_fn``, as a closure or a
+      `functools.partial` argument, and not in ``params``. A closure over such static
+      configuration is fine. `TypeError` reports a Python or NumPy ``int`` or
+      ``bool`` scalar in ``params``.
+
+    ``blackjax.window_adaptation`` puts extra keyword arguments such as
+    ``max_num_doublings`` into ``result.parameters``, so remove them from ``params``
+    and give them to the step instead. For BlackJAX NUTS with window adaptation:
 
     ```python
     import blackjax
 
+    MAX_NUM_DOUBLINGS = 6
+
 
     def build_fn(rng_key, logdensity_fn, position, num_warmup):
-        adapt = blackjax.window_adaptation(blackjax.nuts, logdensity_fn)
+        adapt = blackjax.window_adaptation(
+            blackjax.nuts, logdensity_fn, max_num_doublings=MAX_NUM_DOUBLINGS
+        )
         result, _ = adapt.run(rng_key, position, num_steps=500)
-        return result.state, result.parameters
+        params = {k: v for k, v in result.parameters.items() if k != "max_num_doublings"}
+        return result.state, params
 
 
     def step_fn(rng_key, inner_state, logdensity_fn, params):
-        return blackjax.nuts(logdensity_fn, **params).step(rng_key, inner_state)
+        nuts = blackjax.nuts(logdensity_fn, max_num_doublings=MAX_NUM_DOUBLINGS, **params)
+        return nuts.step(rng_key, inner_state)
 
 
     kernel = BlackjaxCustomKernel(model, build_fn=build_fn, step_fn=step_fn)
@@ -574,8 +601,11 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     `_BlackjaxKernel.sample()` builds the log density from the model arguments of
     the current run, so the chains are independent runs and a second ``mcmc.run`` on
     new data (also with ``jit_model_args=True``) samples the new posterior. A run
-    that continues from ``mcmc.post_warmup_state`` keeps the blackjax state of the
-    earlier data, so leave ``post_warmup_state`` unset for a run on new data.
+    that continues from ``mcmc.post_warmup_state`` calls ``build_fn`` again and
+    discards the result, and starts from the blackjax state and the ``params`` of the
+    earlier run, with no warning: on new data a sampler whose state holds the log
+    density of the old data (NUTS, for example) can freeze on one point. Leave
+    ``post_warmup_state`` unset for a run on new data.
     Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
     once inside `_BlackjaxKernel.init()`, so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
