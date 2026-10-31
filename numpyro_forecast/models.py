@@ -175,7 +175,42 @@ def _sample_time_block(
         if reparam is not None:
             stack.enter_context(numpyro.handlers.reparam(config={site: reparam}))
         stack.enter_context(numpyro.plate(plate_name, size, dim=-2))
-        return jnp.asarray(numpyro.sample(site, prior))
+        value = jnp.asarray(numpyro.sample(site, prior))
+    _require_block_steps(site, size, plate_name, len(prior.event_shape), value)
+    return value
+
+
+def _require_block_steps(
+    site: str, size: int, plate_name: str, event_rank: int, value: Array
+) -> None:
+    """Require the value of a time block to have ``size`` steps on its plate axis.
+
+    The plate draws ``size`` steps, but NumPyro substitutes a given value (a
+    ``Predictive`` posterior, ``substitute``, ``condition``, ``init_to_value``)
+    without checking it against the plate. A posterior drawn for another
+    training length would otherwise change the length of the series silently,
+    which a model that slices its own sites can hide from the drivers (issue
+    #168). The plate axis is ``-2`` counted left of the ``event_rank`` event axes.
+    """
+    axis = -2 - event_rank
+    if value.ndim >= -axis and value.shape[axis] == size:
+        return
+    if plate_name == PlateName.TIME:
+        cause = (
+            "a posterior drawn for a different training length: draw it from a fit on data "
+            f"with {size} rows"
+        )
+    else:
+        cause = (
+            "a posterior that holds the forecast-horizon site: pass the posterior of the "
+            "training run, which has no _future sites"
+        )
+    msg = (
+        f"innovations expects site {site!r} to have {size} time steps at axis {axis} (the "
+        f"size of the '{plate_name}' plate), but its value has shape {tuple(value.shape)}. "
+        f"The usual cause is {cause}."
+    )
+    raise ValueError(msg)
 
 
 def innovations(
@@ -216,6 +251,14 @@ def innovations(
     -------
     Array
         The latent over the full horizon with time at axis ``-2``.
+
+    Raises
+    ------
+    ValueError
+        If a given value of the ``name`` or ``f"{name}_future"`` site (for
+        example a posterior that ``Predictive`` substitutes) does not have
+        ``h.t_obs`` or ``h.future`` steps on its time plate: the usual cause is
+        a posterior drawn for a different training length.
     """
     prefix = _sample_time_block(name, h.t_obs, PlateName.TIME, prior, reparam)
     if h.future <= 0:

@@ -193,7 +193,7 @@ def test_xs_threading() -> None:
     ],
     ids=["observed-window", "too-long", "no-obs-axis"],
 )
-def test_xs_must_span_the_horizon(xs: object, match: str) -> None:
+def test_xs_must_span_the_horizon(xs: Array | dict[str, Array], match: str) -> None:
     """Issue #168: every ``xs`` leaf spans ``h.duration`` rows, as ``ssoe`` requires.
 
     An ``xs`` of ``t_obs`` rows (sliced to the observed window) used to run a
