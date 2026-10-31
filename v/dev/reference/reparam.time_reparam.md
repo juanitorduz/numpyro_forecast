@@ -43,7 +43,7 @@ If `model` already contains the result of [time_reparam()](reparam.time_reparam.
 
 ## Notes
 
-- Create the wrapped model once and reuse it: the drivers jit-compile with the model as a static argument, so wrapping again inside a loop recompiles.
+- Hand the wrapped model, not the original, to the guide, the sampler and the drivers: only the wrapped model has the auxiliary site that the posterior holds. Creating it once is a convenience, not a requirement: the drivers key nothing on the model object, so a rewrapped model gives the same draws.
 - Apply it innermost. `scope(time_reparam(model), prefix="a")` yields `a/drift_haar`; `time_reparam(scope(model, "a"))` yields `a/a/drift_haar` because the auxiliary sample passes through `scope` a second time (generic NumPyro reparam-under-scope behavior).
 - It composes with the per-block `reparam=` hook: after `innovations(..., reparam=LocScaleReparam(0))` the site under the plate is `drift_decentered`, so the auxiliary site is `drift_decentered_haar` and both `drift_decentered` and `drift` become deterministic. This matches Pyro, whose config applies to every site in the plate.
 - Untouched sites: the `_future` suffix sites (they stay prior-drawn under `time_future`, so [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) is unaffected), the scan sites of [markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series), the error sites of [ssoe()](models.ssoe.md#numpyro_forecast.models.ssoe), observed sites and discrete sites.

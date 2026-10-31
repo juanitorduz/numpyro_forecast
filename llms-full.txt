@@ -981,8 +981,11 @@ ValueError
 
 Notes
 -----
-- Create the wrapped model once and reuse it: the drivers jit-compile with
-  the model as a static argument, so wrapping again inside a loop recompiles.
+- Hand the wrapped model, not the original, to the guide, the sampler and
+  the drivers: only the wrapped model has the auxiliary site that the
+  posterior holds. Creating it once is a convenience, not a requirement:
+  the drivers key nothing on the model object, so a rewrapped model gives
+  the same draws.
 - Apply it innermost. ``scope(time_reparam(model), prefix="a")`` yields
   ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
   ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
@@ -1039,7 +1042,10 @@ The returned dict has the sample axis leading and is ready to pass to
 An ``AutoDelta`` guide is a MAP point estimate: it is drawn once and tiled to
 ``num_samples`` (`_ensure_sample_axis_for_delta()`), since it carries no
 posterior spread of its own. Every other ``AutoGuide`` is sampled through a
-jitted, per-guide-cached ``sample_posterior`` (`_jitted_sample_posterior()`).
+jitted ``sample_posterior`` (`_jitted_sample_posterior()`) that the call
+compiles once and shares across its chunks; nothing is cached across calls,
+so the draws (deterministic sites included) reflect the model as it is at
+call time.
 
 Parameters
 ----------
@@ -1210,9 +1216,18 @@ Notes
 Chunking is a memory knob, not a reproducibility knob: reproducibility is
 per ``(rng_key, batch_size)``. Every chunk shares the exact ``batch_size``
 shape (the final chunk wraps around to re-used draws that are discarded),
-so the underlying ``_predict`` compiles exactly once for a fixed shape, but
-changing ``batch_size`` changes the PRNG stream layout and therefore the
-exact draws. ``device`` never changes the draws, only where they live.
+so each call compiles the predictive exactly once, but changing
+``batch_size`` changes the PRNG stream layout and therefore the exact
+draws. ``device`` never changes the draws, only where they live.
+
+Each call traces and compiles the model once and keeps no compiled program
+afterwards. In exchange, like a plain ``numpyro.infer.Predictive`` call
+(which re-runs the model every time), the draws always reflect the model
+as it is at call time (a changed global, closure value or attribute it
+reads takes effect on the next call), and ``model`` can be any callable,
+hashable or not. A repeated call with the same model and shapes, for
+example in a scenario loop, therefore compiles again; so does
+`~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
 
 predict_in_sample(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], covariates: jax.Array, *, batch_size: int | None = None, parallel: bool = True, device: jaxlib._jax.Device | str | None = None) -> jaxtyping.Num[Array, 'sample *batch time obs'] | jaxtyping.Num[ndarray, 'sample *batch time obs']
 
@@ -1289,6 +1304,12 @@ Warns
 UserWarning
     If ``device="cpu"`` is requested and the JAX CPU backend is not
     initialized, so the draws take the NumPy path of ``"host"`` instead.
+
+Notes
+-----
+Like `forecast()`, each call compiles the predictive once (shared by every
+``batch_size`` chunk) and keeps no compiled program afterwards, so the draws
+reflect the model as it is at call time and ``model`` need not be hashable.
 
 
 ## Backtesting & evaluation
@@ -1450,10 +1471,14 @@ keep_predictions
 reuse_model
     When ``True`` (default) and the windowing strategy is rolling, the model
     instance returned by the first ``model_fn()`` call is reused for every
-    window so forecast/predict kernels can cache across windows. SVI still
-    recompiles per window; for a single fused fit over all windows use
-    `backtest_vectorized()`. Ignored for expanding windows and when
-    ``False``.
+    window, so ``model_fn`` runs once. Ignored for expanding windows and when
+    ``False`` (``model_fn`` then runs once per window). It does not cache
+    compiled programs: each `~~numpyro_forecast.predictive.forecast()` or
+    `~~numpyro_forecast.predictive.predict_in_sample()` call that
+    ``forecast_fn`` or ``in_sample_fn`` makes compiles once per window, and
+    so does an SVI fit; for a single fused fit and forecast over all
+    windows use `backtest_vectorized()`. Kept for API stability: it only
+    matters for a ``model_fn`` that is expensive or stateful.
 
 Returns
 -------

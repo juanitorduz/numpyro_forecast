@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="../site_libs/quarto-html/quarto-syntax-highlighting-17888a1159294d3eb470f19f6f52f5a5.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-7e9b4f36233c51a331fcd27f7c4ba3a1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-9238893d7e4deb0f460d1aeaa19f5ea8.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -894,7 +894,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L194-L297" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L194-L300" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">reparam</span><span class="op">.</span><span class="sig-name">time_reparam</span>(
@@ -945,7 +945,7 @@ If <code>model</code> already contains the result of <a href="reparam.time_repar
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
 <ul>
-<li>Create the wrapped model once and reuse it: the drivers jit-compile with the model as a static argument, so wrapping again inside a loop recompiles.</li>
+<li>Hand the wrapped model, not the original, to the guide, the sampler and the drivers: only the wrapped model has the auxiliary site that the posterior holds. Creating it once is a convenience, not a requirement: the drivers key nothing on the model object, so a rewrapped model gives the same draws.</li>
 <li>Apply it innermost. <code>scope(time_reparam(model), prefix="a")</code> yields <code>a/drift_haar</code>; <code>time_reparam(scope(model, "a"))</code> yields <code>a/a/drift_haar</code> because the auxiliary sample passes through <code>scope</code> a second time (generic NumPyro reparam-under-scope behavior).</li>
 <li>It composes with the per-block <code>reparam=</code> hook: after <code>innovations(..., reparam=LocScaleReparam(0))</code> the site under the plate is <code>drift_decentered</code>, so the auxiliary site is <code>drift_decentered_haar</code> and both <code>drift_decentered</code> and <code>drift</code> become deterministic. This matches Pyro, whose config applies to every site in the plate.</li>
 <li>Untouched sites: the <code>_future</code> suffix sites (they stay prior-drawn under <code>time_future</code>, so <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> is unaffected), the scan sites of <a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series()</a>, the error sites of <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe()</a>, observed sites and discrete sites.</li>

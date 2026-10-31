@@ -13,7 +13,7 @@ predictive.draw_posterior(
 ```
 
 
-The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`. An `AutoDelta` guide is a MAP point estimate: it is drawn once and tiled to `num_samples` (`_ensure_sample_axis_for_delta()`), since it carries no posterior spread of its own. Every other `AutoGuide` is sampled through a jitted, per-guide-cached `sample_posterior` (`_jitted_sample_posterior()`).
+The returned dict has the sample axis leading and is ready to pass to [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast) or NumPyro's `Predictive`. An `AutoDelta` guide is a MAP point estimate: it is drawn once and tiled to `num_samples` (`_ensure_sample_axis_for_delta()`), since it carries no posterior spread of its own. Every other `AutoGuide` is sampled through a jitted `sample_posterior` (`_jitted_sample_posterior()`) that the call compiles once and shares across its chunks; nothing is cached across calls, so the draws (deterministic sites included) reflect the model as it is at call time.
 
 
 ## Parameters

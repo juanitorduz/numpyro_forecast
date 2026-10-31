@@ -81,4 +81,6 @@ If `device="cpu"` is requested and the JAX CPU backend is not initialized, so th
 
 ## Notes
 
-Chunking is a memory knob, not a reproducibility knob: reproducibility is per `(rng_key, batch_size)`. Every chunk shares the exact `batch_size` shape (the final chunk wraps around to re-used draws that are discarded), so the underlying `_predict` compiles exactly once for a fixed shape, but changing `batch_size` changes the PRNG stream layout and therefore the exact draws. `device` never changes the draws, only where they live.
+Chunking is a memory knob, not a reproducibility knob: reproducibility is per `(rng_key, batch_size)`. Every chunk shares the exact `batch_size` shape (the final chunk wraps around to re-used draws that are discarded), so each call compiles the predictive exactly once, but changing `batch_size` changes the PRNG stream layout and therefore the exact draws. `device` never changes the draws, only where they live.
+
+Each call traces and compiles the model once and keeps no compiled program afterwards. In exchange, like a plain `numpyro.infer.Predictive` call (which re-runs the model every time), the draws always reflect the model as it is at call time (a changed global, closure value or attribute it reads takes effect on the next call), and `model` can be any callable, hashable or not. A repeated call with the same model and shapes, for example in a scenario loop, therefore compiles again; so does [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree), which runs the drivers itself.

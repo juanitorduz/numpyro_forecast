@@ -211,9 +211,10 @@ Package exception hierarchy raised at validation boundaries.
 7. innovations, ssoe and predict take distribution instances (dist.Normal(0.0, scale)), not distribution classes or thunks.
 8. predict shifts the location of a loc=0 noise instance onto the predictor, and ssoe adds its draws to the step mean: the predictor is the mean for Normal, StudentT (df > 1), Laplace and MultivariateNormal noise, but the mode for Gumbel and AsymmetricLaplace, whose mean is offset (for AsymmetricLaplace unless asymmetry = 1; Cauchy has no mean). Center that noise yourself when the predictor must be the mean, e.g. dist.Gumbel(-np.euler_gamma * scale, scale).
 9. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
-10. time_reparam returns a wrapped model: create it once and hand that same object to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest; wrapping inside a loop recompiles, and nesting two time_reparam calls raises ValueError.
-11. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
-12. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
+10. time_reparam returns a wrapped model: hand the wrapped model, not the original, to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest, because only it has the <name>_haar or <name>_dct site that the posterior holds; nesting two time_reparam calls raises ValueError.
+11. draw_posterior, forecast and predict_in_sample compile once per call (shared by every batch_size chunk) and cache nothing across calls (to_datatree runs the two drivers, so it compiles too): as with numpyro.infer.Predictive, a changed global or attribute the model reads takes effect on the next call and the model can be any callable, hashable or not, but each repeated call with the same model compiles again.
+12. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
+13. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
 
 ## Best practices
 

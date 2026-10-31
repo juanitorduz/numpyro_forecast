@@ -73,3 +73,8 @@ If `device` names a platform whose backend is not initialized (see `_resolve_dev
 
 `UserWarning`  
 If `device="cpu"` is requested and the JAX CPU backend is not initialized, so the draws take the NumPy path of `"host"` instead.
+
+
+## Notes
+
+Like [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast), each call compiles the predictive once (shared by every `batch_size` chunk) and keeps no compiled program afterwards, so the draws reflect the model as it is at call time and `model` need not be hashable.
