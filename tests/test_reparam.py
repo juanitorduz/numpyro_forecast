@@ -17,7 +17,7 @@ import numpyro.distributions as dist
 import pytest
 from jax import random
 from numpyro.distributions.transforms import DiscreteCosineTransform, HaarTransform, Transform
-from numpyro.handlers import scope
+from numpyro.handlers import scope, seed
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.util import log_density
@@ -187,6 +187,105 @@ def test_nesting_is_rejected() -> None:
     wrapped = time_reparam(rw_model, "haar")
     with pytest.raises(ValueError, match="cannot be nested"):
         time_reparam(wrapped, "dct")
+
+
+_HIDING_HANDLERS: dict[str, Callable[[ForecastModel], ForecastModel]] = {
+    "scope": lambda model: scope(model, prefix="a"),
+    "seed": lambda model: seed(model, 0),
+    "scope_of_seed": lambda model: scope(seed(model, 0), prefix="a"),
+}
+
+
+@pytest.mark.parametrize("wrapper", _HIDING_HANDLERS.values(), ids=_HIDING_HANDLERS.keys())
+def test_nesting_through_handlers_is_rejected(
+    wrapper: Callable[[ForecastModel], ForecastModel],
+) -> None:
+    """A NumPyro handler between the two calls does not hide the nesting.
+
+    Without the check the outer ``"dct"`` silently does nothing: the trace keeps
+    only the inner ``drift_haar`` auxiliary site. The check runs when wrapping,
+    before any trace.
+    """
+    inner = wrapper(time_reparam(rw_model, "haar"))
+    with pytest.raises(ValueError, match="cannot be nested"):
+        time_reparam(inner, "dct")
+
+
+def test_composite_with_a_time_reparam_component_is_accepted() -> None:
+    """An outer model with its own time latent may call a ``time_reparam`` component.
+
+    The outer transform targets the outer ``level`` site and the inner one keeps
+    the component's ``drift``, so both auxiliary sites are present. This is valid
+    on ``main`` and must stay accepted by the nesting check.
+    """
+
+    def component(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        scale = numpyro.sample("s", dist.LogNormal(-1.0, 1.0))
+        innovations(h, "drift", dist.Normal(0.0, scale))
+
+    inner = scope(time_reparam(component, "haar"), prefix="seasonal")
+
+    def composite(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = jnp.cumsum(innovations(h, "level", dist.Normal(0.0, 0.1)), axis=-2)
+        inner(covariates, data)
+        predict(h, dist.Normal(0.0, 0.1), level)
+
+    model, data, covariates = _split(time_reparam(composite, "dct"))
+    tr = get_trace(model, covariates, data)
+    assert {"level_dct", "seasonal/drift_haar"} <= set(tr)
+    assert tr["level"]["type"] == tr["seasonal/drift"]["type"] == "deterministic"
+
+
+def test_nesting_behind_a_function_is_rejected_when_traced() -> None:
+    """A wrapper function hides the inner model from the handler walk, not from the trace."""
+    inner = time_reparam(rw_model, "haar")
+
+    def wrapper(covariates: Array, data: Array | None = None) -> None:
+        inner(covariates, data)
+
+    model, data, covariates = _split(time_reparam(wrapper, "dct"))
+    with pytest.raises(ValueError, match="no in-sample time latent of its own"):
+        get_trace(model, covariates, data)
+
+
+def test_composite_with_only_untargeted_latents_is_rejected_when_traced() -> None:
+    """A composite whose own time latents are scan sites leaves the outer transform a no-op.
+
+    The ``markov_series`` sites carry no ``time`` plate, so the outer ``"dct"``
+    sees only the component's auxiliary site. The error says that the outer
+    transform found nothing to do, not only that the models are nested.
+    """
+    inner = scope(time_reparam(rw_model, "haar"), prefix="trend")
+
+    def composite(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+
+        def transition(carry: Array, _: object) -> dist.Distribution:
+            return dist.Normal(carry, 1.0).to_event(1)
+
+        markov_series(h, "level", jnp.zeros((1,)), transition)
+        inner(covariates, data)
+
+    model, data, covariates = _split(time_reparam(composite, "dct"))
+    with pytest.raises(ValueError, match="no in-sample time latent of its own"):
+        get_trace(model, covariates, data)
+
+
+def test_side_by_side_time_reparam_models_are_not_nesting() -> None:
+    """Two reparameterized models combined under prefixes are not mistaken for nesting."""
+    left = scope(time_reparam(rw_model, "haar"), prefix="a")
+    right = scope(time_reparam(rw_model, "dct"), prefix="b")
+
+    def combined(covariates: Array, data: Array | None = None) -> None:
+        left(covariates, data)
+        right(covariates, data)
+
+    model, data, covariates = _split(combined)
+    tr = get_trace(model, covariates, data)
+    assert {"a/drift_haar", "b/drift_dct"} <= set(tr)
+    assert tr["a/drift"]["type"] == tr["b/drift"]["type"] == "deterministic"
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])
