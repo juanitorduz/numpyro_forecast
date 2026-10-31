@@ -735,9 +735,14 @@ def _run_window(
         metrics = {**metrics, **per_window_metrics(t0, t1, t2)}
 
     model = shared_model if shared_model is not None else model_fn()
+    # One unconditional split gives each closure its own child key. Two keys from one
+    # split are independent, so nothing forecast_fn derives from its key reaches
+    # train_key, and the split does not depend on eval_train, so enabling in-sample
+    # scoring never changes the out-of-sample draws.
+    forecast_key, train_key = random.split(rng_key)
     pred, walltime = _timed(
         lambda: forecast_fn(
-            rng_key,
+            forecast_key,
             model,
             train_data,
             train_covariates,
@@ -754,11 +759,8 @@ def _run_window(
     if eval_train:
         # in_sample_fn is guaranteed non-None here: backtest's entry check raises
         # before any window runs when eval_train=True and in_sample_fn is None.
-        # In-sample scoring is an optional diagnostic: derive its key as an
-        # independent substream via fold_in so enabling it never shifts the key
-        # passed to forecast_fn above.
         train_metrics = _eval_train_window(
-            random.fold_in(rng_key, 2),
+            train_key,
             cast("InSampleFn", in_sample_fn),
             model,
             train_data,
@@ -875,7 +877,11 @@ def backtest(
     Parameters
     ----------
     rng_key
-        Base PRNG key (used for every window, matching Pyro).
+        Base PRNG key, used for every window (matching Pyro). Each window
+        splits it once, ``forecast_key, train_key = random.split(rng_key)``:
+        ``forecast_fn`` receives ``forecast_key`` and ``in_sample_fn`` receives
+        ``train_key``. The split does not depend on ``eval_train``, so turning
+        in-sample scoring on does not change the out-of-sample draws.
     model_fn
         Factory returning a fresh `~~numpyro_forecast.typing.ForecastModel` per window.
     data
@@ -889,7 +895,9 @@ def backtest(
     in_sample_fn
         Optional closure that fits ``model`` on the training window and scores
         its in-sample fit (see `~~numpyro_forecast.typing.InSampleFn` and
-        the contract above). Required when ``eval_train=True``.
+        the contract above). Required when ``eval_train=True``. It receives
+        its own child of ``rng_key`` (see ``rng_key``), never a key that
+        ``forecast_fn`` can derive from its own.
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each function takes ``(pred, truth)`` and returns a scalar array (see
