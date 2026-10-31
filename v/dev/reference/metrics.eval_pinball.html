@@ -958,7 +958,7 @@ window.Quarto = {
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The pinball loss for the forecast <span class="math inline">\hat q</span> of quantile <span class="math inline">\tau</span> is <span class="math inline">\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); <code>quantile</code> is static so each level specializes its own branch. <code>pred</code> and <code>truth</code> are moved to device memory first (<code>_device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
+<p>The pinball loss for the forecast <span class="math inline">\hat q</span> of quantile <span class="math inline">\tau</span> is <span class="math inline">\max(\tau (y - \hat q), (\tau - 1)(y - \hat q))</span>, averaged over all data elements. At <code>quantile=0.5</code> it is half the mean absolute error. A pure JAX scalar kernel (see <a href="typing.Metric.html#numpyro_forecast.typing.Metric" class="gdls-link gdls-code">Metric</a>); <code>quantile</code> is static so each level specializes its own branch. <code>pred</code> and <code>truth</code> are moved to device memory first (<code>device_view()</code>), so either (or both) may be host-committed, e.g.&nbsp;draws sampled with <code>device="host"</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

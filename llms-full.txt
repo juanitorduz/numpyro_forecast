@@ -1141,10 +1141,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -1237,10 +1237,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -1342,10 +1342,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -1810,7 +1810,7 @@ batch_size
     to float tolerance, not bitwise); at or above the cell count the
     single-pass path runs instead, which moves any host-committed operand
     back to device memory first
-    (`~~numpyro_forecast._offload._device_view()`) so either
+    (`~~numpyro_forecast.offload.device_view()`) so either
     ``pred`` or ``truth`` (or both) may be host-committed regardless of
     ``batch_size``. ``None`` (default) evaluates in one pass.
 
@@ -1830,7 +1830,7 @@ Mean absolute error using the forecast sample median as point estimate.
 
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1856,7 +1856,7 @@ Root mean squared error using the forecast sample mean as point estimate.
 
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -1902,7 +1902,7 @@ batch_size
     the identical count; only the precision of the final division differs
     from the single pass. Either path accepts a host-committed ``pred``
     or ``truth`` (or both); the single pass moves them to device memory
-    first (`~~numpyro_forecast._offload._device_view()`).
+    first (`~~numpyro_forecast.offload.device_view()`).
     ``None`` (default) evaluates in one pass.
 
 Returns
@@ -1938,7 +1938,7 @@ pred
     Forecast samples with the sample axis first, shape ``(sample, *batch)``.
     May be host-committed (e.g. draws sampled with ``device="host"``),
     regardless of whether ``truth`` is: either operand is moved to device
-    memory first (`~~numpyro_forecast._offload._device_view()`).
+    memory first (`~~numpyro_forecast.offload.device_view()`).
 truth
     Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
 
@@ -1969,7 +1969,7 @@ data elements. At ``quantile=0.5`` it is half the mean absolute error. A
 pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`);
 ``quantile`` is static so each level specializes its own branch. ``pred``
 and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -2003,7 +2003,7 @@ averaged over all data elements. It rewards narrow intervals and penalizes
 ground truth falling outside them; lower is better.
 A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
 ``pred`` and ``truth`` are moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so either (or
+(`~~numpyro_forecast.offload.device_view()`), so either (or
 both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -2036,7 +2036,7 @@ the in-sample MAE of the seasonal-naive forecast on ``train_data``,
 time; the returned metric has the standard scalar-array signature (see
 `~~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
 metric's ``pred``/``truth`` are all moved to device memory first
-(`~~numpyro_forecast._offload._device_view()`), so any of
+(`~~numpyro_forecast.offload.device_view()`), so any of
 them may be host-committed, e.g. draws sampled with ``device="host"``.
 
 Parameters
@@ -2218,10 +2218,10 @@ CovariateDimsError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that
     exposes no host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not
-    initialized (see `~~numpyro_forecast._offload._resolve_device()`).
+    initialized (see `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -2566,7 +2566,7 @@ The returned dict has the sample axis leading and is ready to pass to
 `~~numpyro_forecast.predictive.forecast()` or NumPyro's
 ``Predictive``, exactly like `~~numpyro_forecast.predictive.draw_posterior()`.
 Chunking and device offload are delegated to the shared
-`~~numpyro_forecast._offload.draw_chunked()` driver, so the same
+`~~numpyro_forecast.offload.draw_chunked()` driver, so the same
 memory-bounding contract applies.
 
 PRNG: within each chunk (the whole draw, when unchunked), the chunk key is
@@ -2605,10 +2605,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -2757,7 +2757,7 @@ duplication. The output contract is identical to
 `pathfinder_samples()`: `~~numpyro_forecast.predictive.forecast()`
 and NumPyro's ``Predictive`` consume it unchanged. Chunking and device offload
 are delegated to the shared
-`~~numpyro_forecast._offload.draw_chunked()` driver, so the same
+`~~numpyro_forecast.offload.draw_chunked()` driver, so the same
 memory-bounding contract applies.
 
 Resampling strategies
@@ -2829,10 +2829,10 @@ ValueError
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
-    `~~numpyro_forecast._offload._host_memory_kind()`).
+    `~~numpyro_forecast.offload._host_memory_kind()`).
 DevicePlatformError
     If ``device`` names a platform whose backend is not initialized (see
-    `~~numpyro_forecast._offload._resolve_device()`).
+    `~~numpyro_forecast.offload.resolve_device()`).
 
 Warns
 -----
@@ -3433,7 +3433,7 @@ HostMemoryKindError(message: str | None = None) -> None
 
 A device exposes no host memory kind for ``device="pinned_host"``.
 
-Raised by `~~numpyro_forecast._offload._host_memory_kind()`, reached from
+Raised by `~~numpyro_forecast.offload._host_memory_kind()`, reached from
 `~~numpyro_forecast.predictive.draw_posterior()`, the predictive drivers
 and everything built on them, when an explicit ``device="pinned_host"``
 targets a device whose addressable memories include neither
@@ -3445,7 +3445,7 @@ DevicePlatformError(message: str | None = None) -> None
 
 A ``device`` platform name has no initialized JAX backend.
 
-Raised by `~~numpyro_forecast._offload._resolve_device()` (reached from
+Raised by `~~numpyro_forecast.offload.resolve_device()` (reached from
 every function with a ``device`` parameter) when ``device`` names a platform,
 e.g. ``"tpu"``, whose backend is not initialized in this process. The
 message lists the available platforms and how to initialize the missing one

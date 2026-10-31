@@ -25,7 +25,7 @@ where X, X' are independent draws from the forecast distribution F. The expectat
 
 
 `pred: Float[ArrayLike, ``" sample *batch"]`  
-Forecast samples with the sample axis first, shape `(sample, *batch)`. May be host-committed (e.g. draws sampled with `device="host"`), regardless of whether `truth` is: either operand is moved to device memory first (`_device_view()`).
+Forecast samples with the sample axis first, shape `(sample, *batch)`. May be host-committed (e.g. draws sampled with `device="host"`), regardless of whether `truth` is: either operand is moved to device memory first (`device_view()`).
 
 `truth: Float[ArrayLike, ``" *batch"]`  
 Ground-truth values with shape `(*batch)` (matching `pred` without the sample axis).

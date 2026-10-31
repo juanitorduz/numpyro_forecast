@@ -957,7 +957,7 @@ window.Quarto = {
 <dl>
 <dt><code><span class="doc-parameter-name">pred</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" sample *batch"</span>]</span></code></dt>
 <dd>
-<p>Forecast samples with the sample axis first, shape <code>(sample, *batch)</code>. May be host-committed (e.g.&nbsp;draws sampled with <code>device="host"</code>), regardless of whether <code>truth</code> is: either operand is moved to device memory first (<code>_device_view()</code>).</p>
+<p>Forecast samples with the sample axis first, shape <code>(sample, *batch)</code>. May be host-committed (e.g.&nbsp;draws sampled with <code>device="host"</code>), regardless of whether <code>truth</code> is: either operand is moved to device memory first (<code>device_view()</code>).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">truth</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Float[ArrayLike, <span class="st">" *batch"</span>]</span></code></dt>
 <dd>

@@ -65,7 +65,7 @@ If `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves di
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
 
 `DevicePlatformError`  
-If `device` names a platform whose backend is not initialized (see `_resolve_device()`).
+If `device` names a platform whose backend is not initialized (see `resolve_device()`).
 
 
 ## Warns
