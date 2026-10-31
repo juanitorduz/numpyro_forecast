@@ -960,12 +960,14 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
             else f"the obs site would score a {grid} grid, counting each observation more "
             "than once"
         )
-    if isinstance(full_dist, dist.MultivariateNormal):
+    base = full_dist.base_dist if isinstance(full_dist, dist.Independent) else full_dist
+    if isinstance(base, dist.MultivariateNormal):
         hint = (
             "A MultivariateNormal over time has the (time,) event and no observation axis: "
             "pass MultivariateNormal noise with a (duration, 1) predictor (for example "
             "jnp.full((h.duration, 1), value) for a constant mean), or return "
-            "shift_loc(noise, mu) from a link, which gives it the (time, 1) event."
+            "numpyro_forecast.surgery.shift_loc(noise, mu) from a link, which gives it the "
+            "(time, 1) event."
         )
     elif shape and shape[-1] == h.duration and shape[-1] not in (1, width):
         hint = (

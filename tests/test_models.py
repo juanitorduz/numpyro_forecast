@@ -331,6 +331,18 @@ def test_predict_forecast_requires_data() -> None:
             6,
             id="link-returns-bare-mvn",
         ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros((1, h.duration)), jnp.eye(h.duration)).to_event(
+                    1
+                ),
+                jnp.zeros(()),
+            ),
+            (6, 1),
+            8,
+            id="mvn-to-event-without-obs-axis",
+        ),
     ],
 )
 def test_predict_rejects_an_observation_distribution_that_does_not_fit_the_data(
