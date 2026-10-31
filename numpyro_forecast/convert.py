@@ -12,7 +12,7 @@ group is built with `arviz_base.dict_to_dataset()`: it owns dim naming,
 groups are then assembled with `xarray.DataTree.from_dict()`.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any, cast
 
 import arviz_base
@@ -375,14 +375,23 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     return reshaped.reshape(num_chains, n // num_chains, *reshaped.shape[1:])
 
 
-def _merge_coords(
-    time: "np.ndarray", coords: Mapping[str, Sequence[Any]] | None
-) -> dict[str, Any]:
+def _normalize_coords(coords: Mapping[str, Collection[Any]] | None) -> dict[str, "np.ndarray"]:
+    """Convert every user coordinate to a NumPy array.
+
+    A named ``pd.Index`` handed to xarray as is becomes a coordinate on a
+    dimension named after ``Index.name``, which ``arviz_base.dict_to_dataset()``
+    rejects. ``np.asarray`` drops the name and keeps the zone of a
+    timezone-aware index (an object array of aware timestamps), where
+    ``index.values`` would shift the clock to naive UTC.
+    """
+    if coords is None:
+        return {}
+    return {name: np.asarray(values) for name, values in coords.items()}
+
+
+def _merge_coords(time: "np.ndarray", coords: Mapping[str, "np.ndarray"]) -> dict[str, Any]:
     """Merge coordinates with precedence user ``coords`` > generated ``time``."""
-    merged: dict[str, Any] = {"time": time}
-    if coords is not None:
-        merged.update(coords)
-    return merged
+    return {"time": time, **coords}
 
 
 def _forecast_group_datasets(
@@ -494,8 +503,8 @@ def to_datatree(
     num_chains: int = 1,
     batch_size: int | None = None,
     device: jax.Device | str | None = "host",
-    coords: Mapping[str, Sequence[Any]] | None = None,
-    time_coord: Sequence[Any] | None = None,
+    coords: Mapping[str, Collection[Any]] | None = None,
+    time_coord: Collection[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
     covariate_dims: Sequence[str] | None = None,
     obs_dims: Sequence[str] | None = None,
@@ -587,13 +596,18 @@ def to_datatree(
         ``time`` coordinate. They also propagate to the forecast groups, where
         the generated forecast ``time`` takes precedence instead (a user
         ``time`` entry covers the in-sample window; use ``time_coord`` for
-        explicit forecast time values).
+        explicit forecast time values). Each value is any collection of labels
+        (a list, a NumPy array, a pandas index) and is stored as
+        ``np.asarray(value)``, so the name of a pandas index is dropped.
     time_coord
         Optional explicit time coordinate values. Without a forecast horizon it
         covers the in-sample window (defaults to ``range(n_time)``); with a
         horizon it must cover the full ``covariates`` length and is split into
         the in-sample and forecast time coordinates (the default is the integer
-        continuation).
+        continuation). Any collection is accepted (a list, a NumPy array, a
+        pandas index) and stored as ``np.asarray(time_coord)``: a
+        timezone-aware ``pd.DatetimeIndex`` keeps its zone (an object array of
+        aware timestamps), and is not converted to naive UTC.
     posterior_dims
         Optional mapping from a posterior site name to its non-sample dimension
         names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
@@ -714,9 +728,8 @@ def to_datatree(
     else:
         time = np.arange(n_time)
         future_time = np.arange(n_time, n_time + horizon)
-    merged_coords = _merge_coords(time, coords)
-
-    merged_arg = cast("dict[Any, Any]", merged_coords)
+    user_coords = _normalize_coords(coords)
+    merged_arg = cast("dict[Any, Any]", _merge_coords(time, user_coords))
 
     require_sample_axis(posterior)
     require_no_horizon_sites(posterior)
@@ -787,8 +800,8 @@ def to_datatree(
             covariates[..., n_time:, :],
             future_time,
             obs_dims=resolved_obs_dims,
-            obs_coords=coords,
-            covariate_coords=coords,
+            obs_coords=user_coords,
+            covariate_coords=user_coords,
             covariate_dims=cov_dims,
         )
         groups["predictions"] = predictions_ds
@@ -810,7 +823,7 @@ def add_forecast_groups(
     forecast_samples: Num[ArrayLike, " sample *batch future obs"],
     covariates_future: Array,
     *,
-    time_coord: Sequence[Any] | None = None,
+    time_coord: Collection[Any] | None = None,
     covariate_dims: Sequence[str] | None = None,
 ) -> "xarray.DataTree":
     """Attach out-of-sample forecast groups to a copy of ``tree``.
@@ -862,7 +875,10 @@ def add_forecast_groups(
         Optional explicit forecast time coordinate; defaults to integer
         continuation of the in-sample time. Required when the in-sample time
         coordinate is non-integer (e.g. datetime64): auto-continuing would have
-        to guess the frequency, so explicit values are demanded instead.
+        to guess the frequency, so explicit values are demanded instead. Any
+        collection is accepted (a list, a NumPy array, a pandas index) and
+        stored as ``np.asarray(time_coord)``, so a timezone-aware
+        ``pd.DatetimeIndex`` keeps its zone.
     covariate_dims
         Optional dimension names for ``covariates_future``, one per axis. When
         omitted, the names are inherited from the tree's
@@ -968,7 +984,7 @@ def add_forecast_groups(
 def predictions_to_datatree(
     predictions: Float[ArrayLike, " sample time series"],
     x: Num[ArrayLike, " time"],
-    series: Sequence[Any],
+    series: Collection[Any],
     *,
     group: str = "posterior_predictive",
     observed: Float[ArrayLike, " time series"] | None = None,
@@ -1000,7 +1016,9 @@ def predictions_to_datatree(
         `matplotlib.dates.date2num()` floats and re-format the tick labels
         with `matplotlib.dates.ConciseDateFormatter`.
     series
-        One label per series, defining the ``series`` coordinate.
+        One label per series, defining the ``series`` coordinate. Any
+        collection is accepted (a list, a NumPy array, a pandas index) and
+        stored as ``np.asarray(series)``.
     group
         Predictive group to store the draws under (e.g. ``"prior_predictive"``,
         ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
@@ -1037,7 +1055,7 @@ def predictions_to_datatree(
         raise ValueError(msg)
     x_values = np.asarray(x)
     x_grid = np.broadcast_to(x_values[:, None], preds.shape[2:])
-    coords = cast("dict[Any, Any]", {"time": x_values, "series": list(series)})
+    coords = cast("dict[Any, Any]", {"time": x_values, "series": np.asarray(series)})
     predictive_ds = arviz_base.dict_to_dataset(
         {"obs": preds},
         sample_dims=_SAMPLE_DIMS,

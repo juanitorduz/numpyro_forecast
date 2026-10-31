@@ -677,7 +677,7 @@ For `numpyro_forecast`:
 - Panel support through `dsx.plate`.
 - A continuous-time example (Section 6.3's Ornstein-Uhlenbeck level on irregular times, or an SDE latent under `Discretizer` + `LatentPathBuilder`) once the discretizer's runtime checks cooperate with HMC; the case the dsx maintainers single out as their most distinctive.
 - A `Horizon` predictive mode set by the drivers (`predict_in_sample`/`to_datatree` passing `data` plus a mode instead of `data=None`) would remove the series-in-covariates redundancy for `ssoe` and for this block alike.
-- `to_datatree(time_coord=...)` rejects a NumPy array at its beartype check (`Sequence[Any]`); accepting array-likes is needed for irregular time coordinates (A.11).
+- Resolved by issue #164: `to_datatree(time_coord=...)` used to reject a NumPy array at its beartype check (`Sequence[Any]`); it now accepts any collection (a list, a NumPy array, a pandas index), which irregular time coordinates need (A.11).
 
 For `dynestyx` (to raise upstream, wording to be agreed):
 
