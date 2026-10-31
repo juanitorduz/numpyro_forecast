@@ -144,6 +144,26 @@ def test_committed_thumbnails_are_landscape(
     )
 
 
+def test_wrappers_disable_the_notebook_preview_pages(
+    build_docs: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wrappers set ``notebook-view: false``: no ``_src/<name>-preview.html`` copies.
+
+    Quarto renders those copies one directory deeper than the example pages, where the
+    notebooks' relative links to other examples and to the reference do not resolve.
+    """
+    monkeypatch.setattr(build_docs, "EXAMPLES_DIR", tmp_path)
+    monkeypatch.setattr(build_docs, "EMBED_DIR", tmp_path / "_src")
+    monkeypatch.setattr(build_docs, "THUMBNAILS_DIR", tmp_path / "thumbnails")
+    notebook = {"metadata": {}, "cells": [_markdown_cell("# Toy with `numpyro_forecast`")]}
+    (tmp_path / "toy.ipynb").write_text(json.dumps(notebook))
+    (wrapper,) = build_docs.generate_pages()
+    front_matter = yaml.safe_load(wrapper.read_text().split("---\n")[1])
+    assert front_matter["notebook-view"] is False
+    assert front_matter["title"] == "Toy"
+    assert "{{< embed _src/toy.ipynb echo=true >}}" in wrapper.read_text()
+
+
 class TestNewestSemver:
     def test_max_by_numeric_tuple(self, build_docs: ModuleType) -> None:
         assert build_docs.newest_semver(["0.1.3", "0.1.10", "0.0.9"]) == "0.1.10"

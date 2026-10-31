@@ -48,6 +48,8 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
 
 For the tests, we use `pytest`. `make tests` runs the suite in parallel with pytest-xdist (`-n auto`); a plain `uv run pytest tests/test_foo.py` stays sequential for debugging. CI splits the suite into duration-balanced parallel jobs with [pytest-split](https://pypi.org/project/pytest-split/), driven by the committed `.test_durations` file. Refreshing that file is optional: tests missing from it are assigned the average duration, so staleness only degrades group balance, never correctness. When you add or remove notably slow tests, or CI group times drift apart, refresh it with `make store-durations` (a full sequential run) and commit the result.
 
+Do not add tests for notebook-specific claims: a test that compares the prose of one example notebook with its stored outputs or code cells (a number, a percentage, an interval name, a phrase) breaks on every re-execution and checks no package behavior. When you change a notebook, check its claims by hand against the stored outputs instead. The rules that apply to every notebook (`tests/test_docstring_markup.py`, `tests/test_build_docs.py`, `tests/test_examples.py`) stay.
+
 `README.md` is a pytest doctest file (`--doctest-glob`): every `>>>` example in it runs in the suite, so keep the examples self-contained, prompt-formatted and under 99 characters per line, and keep the blank line before each closing fence (without it pytest reads the fence as expected output). The README renders on three surfaces: GitHub, PyPI (`readme = "README.md"`) and the docs landing page (great-docs inlines it into `index.qmd`). Its figures live in `docs/images/` (extracted from the stored outputs of the example notebooks, under the 500 KB `check-added-large-files` limit) and are referenced by absolute `https://raw.githubusercontent.com/juanitorduz/numpyro_forecast/main/docs/images/<name>.png` URLs, because relative paths break on PyPI and on the landing page; they therefore 404 on a PR until it is merged. PyPI renders no math, so `$...$` in the README shows literally there.
 
 ## Docstrings
@@ -89,6 +91,8 @@ Each notebook also feeds the card grid on the Examples index page: set a short p
 **The thumbnail must be a single landscape panel, about twice as wide as tall.** The card grid scales the image to the card width, so a square or tall figure (a stacked multi-panel grid, a forest plot, a facet grid) makes its card several times taller than the others and breaks the layout. Pick a one-axes figure with `figsize=(12, 6)` or `(10, 6)` (every other notebook's thumbnail has an aspect ratio between 1.3 and 2.0), typically the headline forecast with its HDI bands, and if the best results figure is a grid, tag a single-panel figure instead. `tests/test_build_docs.py` checks the aspect ratio of every committed notebook's thumbnail.
 
 - Do not use `plt.show()` in notebooks.
+- Link to other example notebooks and to the API reference with relative paths: `<example>.html` for another example and `../../reference/<entry>.html` for a reference page. Do not use absolute `https://juanitorduz.github.io/numpyro_forecast/` URLs. They always open the stable site root, also from the `/v/dev/` pages and from PR previews, and the stable reference has only the symbols of the last release. The example wrappers that `scripts/build_docs.py` writes set `notebook-view: false`, so Quarto renders no `_src/<name>-preview.html` copy of a notebook, where these relative links would not resolve.
+- Do not store environment warnings in the outputs. Filter them with `warnings.filterwarnings` in the setup cell. preliz emits "PyMC not installed" at import time, so its filter goes before `import preliz`; arviz-plots emits "When multiple credible intervals are plotted" when `aes` maps `alpha`. `tests/test_notebook_hygiene.py` rejects stored stderr that contains these two warnings or a `site-packages/` path, and checks that every relative link names an example notebook or a `reference:` entry.
 
 ## Writing
 
@@ -113,6 +117,10 @@ Use explicit name distributions like $\text{Normal}(\mu, \sigma)$ instead of $\m
 
 - Use latex format r"$94\%$ HDI" instead of "94% HDI" for matplotlib plots.
 - In the text, also use LaTex like $94\%$ HDI instead of "94% HDI".
+
+### Percentages
+
+In notebook prose, write every percentage as LaTeX, for example $30\%$, not as `30%` in a code span or as plain text. `tests/test_notebook_hygiene.py` checks the markdown cells of every example notebook.
 
 ### American English spelling
 

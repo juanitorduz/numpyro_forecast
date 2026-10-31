@@ -1,5 +1,7 @@
 """Tests for the batched ACF/PACF diagnostics."""
 
+import contextlib
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -139,14 +141,50 @@ def test_rejects_max_lag_out_of_range(max_lag: int) -> None:
         pacf(y, max_lag=max_lag)
 
 
-def test_constant_series_is_nan_in_eager_mode() -> None:
-    # Under jit the mean rounds (sum * (1/n)), leaving a nonzero constant
-    # residual whose normalized autocorrelation is meaningless but finite; the
-    # documented NaN contract holds for eager execution only.
-    y = jnp.ones((30,))
-    with jax.disable_jit():
-        assert bool(jnp.all(jnp.isnan(acf(y, max_lag=5))))
-        assert bool(jnp.all(jnp.isnan(pacf(y, max_lag=5))))
+@pytest.mark.parametrize("eager", [False, True], ids=["jit", "eager"])
+@pytest.mark.parametrize("time", [10, 30])
+@pytest.mark.parametrize("level", [0.0, 1.0, 3.3, 5.0, -7.25, 10_000.0])
+def test_constant_series_is_nan(level: float, time: int, eager: bool) -> None:
+    # A zero-variance series has no autocorrelation: every lag is a 0 / 0 in
+    # the default (jitted) call and under jax.disable_jit() alike, whatever the
+    # level, so it can never read as a persistent AR(1)-like spectrum.
+    y = jnp.full((time,), level)
+    mode = jax.disable_jit() if eager else contextlib.nullcontext()
+    with mode:
+        acf_values = np.asarray(acf(y, max_lag=3))
+        pacf_values = np.asarray(pacf(y, max_lag=3))
+    assert np.isnan(acf_values).all(), acf_values
+    assert np.isnan(pacf_values).all(), pacf_values
+
+
+def test_constant_rows_of_a_panel_are_nan(rng_key: Array) -> None:
+    # Every constant row is NaN regardless of its level, through batching and
+    # through jax.vmap, and the NaN rows do not leak into the non-degenerate
+    # row of the same batch.
+    noise = random.normal(rng_key, (30,))
+    panel = jnp.stack([jnp.zeros(30), jnp.full(30, 1.0), jnp.full(30, 5.0), noise])
+    for fn in (acf, pacf):
+        got = np.asarray(fn(panel, max_lag=2))
+        mapped = np.asarray(jax.vmap(lambda s, fn=fn: fn(s, max_lag=2))(panel))
+        assert np.isnan(got[:3]).all(), got
+        assert np.isnan(mapped[:3]).all(), mapped
+        np.testing.assert_allclose(got[3], np.asarray(fn(noise, max_lag=2)), atol=1e-6)
+        np.testing.assert_allclose(mapped[3], got[3], atol=1e-6)
+
+
+@pytest.mark.parametrize(("level", "bump"), [(0.0, 1.0), (5.0, 1.0), (5.0, 1e-3), (10_000.0, 1.0)])
+def test_near_constant_series_is_finite(level: float, bump: float) -> None:
+    # Guard against over-rejection (passes before and after the constant
+    # series fix): one changed sample makes the variance nonzero, so the
+    # spectrum is finite and close to the float64 oracle, also when the bump
+    # is small compared with the level (a variance threshold would give NaN).
+    y = jnp.full((30,), level).at[10].add(bump)
+    acf_values = acf(y, max_lag=5)
+    pacf_values = pacf(y, max_lag=5)
+    assert bool(jnp.all(jnp.isfinite(acf_values)))
+    assert bool(jnp.all(jnp.isfinite(pacf_values)))
+    assert jnp.allclose(acf_values, jnp.asarray(_np_acf(np.asarray(y), 5)), atol=1e-3)
+    assert jnp.allclose(pacf_values, jnp.asarray(_np_pacf(np.asarray(y), 5)), atol=1e-3)
 
 
 def test_wrong_input_typecheck_error() -> None:

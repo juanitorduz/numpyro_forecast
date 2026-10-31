@@ -5,7 +5,8 @@ render Jupyter notebooks directly, and it only stages a section's ``.qmd`` pages
 and asset *subdirectories* into its build tree (never a loose top-level
 notebook). Each notebook in ``docs/examples/`` is therefore shown through a thin
 ``.qmd`` wrapper that embeds the notebook's stored outputs from a transient
-``_src/`` subdirectory.
+``_src/`` subdirectory. The wrappers set ``notebook-view: false``, so Quarto renders no
+separate notebook preview pages under ``_src/``.
 
 The section index that great-docs auto-generates renders pages as image cards
 when their front matter carries ``description`` and ``image`` fields, so each
@@ -262,7 +263,13 @@ def generate_pages() -> list[Path]:
     for path in sorted(EXAMPLES_DIR.glob("*.ipynb")):
         notebook = load_notebook(path)
         shutil.copy2(path, EMBED_DIR / path.name)
-        front_matter = [f"title: {json.dumps(notebook_title(notebook, path))}"]
+        front_matter = [
+            f"title: {json.dumps(notebook_title(notebook, path))}",
+            # Without this, the embed shortcode also renders a `_src/<name>-preview.html` copy
+            # of the notebook one directory deeper, where the notebook's relative links to
+            # other examples and to the reference do not resolve.
+            "notebook-view: false",
+        ]
         description = notebook_description(notebook)
         if description:
             front_matter.append(f"description: {json.dumps(description)}")
