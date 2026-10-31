@@ -903,7 +903,10 @@ def predict(
     two forms. A `numpyro.distributions.Distribution` is observation noise with
     location ``0`` (e.g. ``dist.StudentT(nu, 0.0, sigma)``) whose location is
     shifted onto the predictor with `~~numpyro_forecast.surgery.shift_loc()`,
-    which also owns the multivariate-normal layout check. The predictor is then
+    which also owns the multivariate-normal layout: noise correlated over time,
+    ``dist.MultivariateNormal(jnp.zeros(h.duration), cov)``, gets the event shape
+    ``(time, 1)``, so ``"obs"`` scores each series jointly and the forecast
+    keeps the observation axis. The predictor is then
     the location of the observation distribution: the mean for ``Normal``,
     ``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
     but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
