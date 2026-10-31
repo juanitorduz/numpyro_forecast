@@ -8,8 +8,9 @@ BlackJAX is an optional dependency (``pip install numpyro_forecast[blackjax]``,
 requiring ``blackjax>=1.6`` whose MCLMC tuning API this module targets) and is
 never imported at package import time: it is pulled in lazily, via
 `numpyro_forecast.optional.require()`, the first time a kernel is initialized. All three
-kernels run one blackjax step per NumPyro sampling step; adaptation happens once inside
-`_BlackjaxKernel.init()`, so every run against one of these kernels must use
+kernels run one blackjax step per NumPyro sampling step; adaptation happens once per
+chain inside `_BlackjaxKernel.init()` and the tuned parameters travel in the sampler
+state, so every run against one of these kernels must use
 ``chain_method="sequential"`` and ``num_warmup=0``: see the "Run configuration"
 section on `BlackjaxNUTSKernel`, `BlackjaxMCLMCKernel`, and
 `BlackjaxCustomKernel` for why, and `~~numpyro_forecast.exceptions.KernelConfigError`
@@ -50,15 +51,20 @@ from numpyro.util import identity
 from numpyro_forecast.exceptions import KernelConfigError
 from numpyro_forecast.offload import WARNING_SKIP_PREFIXES, draw_chunked
 from numpyro_forecast.optional import require
-from numpyro_forecast.typing import Array, BlackjaxBuildFn, ForecastModel
+from numpyro_forecast.typing import Array, BlackjaxBuildFn, BlackjaxStepFn, ForecastModel
 from numpyro_forecast.validation import require_positive_num_samples
 
-_BJState = namedtuple("_BJState", ["position", "inner", "rng_key"])
+_BJState = namedtuple("_BJState", ["position", "inner", "params", "rng_key"])
 """MCMC state threaded by every `_BlackjaxKernel`.
 
 ``position`` is the unconstrained sample dict (the NumPyro ``sample_field``),
-``inner`` is the opaque blackjax algorithm state, and ``rng_key`` is the PRNG key
-carried between steps.
+``inner`` is the opaque blackjax algorithm state, ``params`` is the pytree of arrays
+that the adaptation of this chain tuned (for example the step size and the inverse
+mass matrix), and ``rng_key`` is the PRNG key carried between steps. The tuned
+parameters live in the state, not on the kernel, because NumPyro compiles the
+sampling loop once and reuses it for every chain (and, with ``jit_model_args=True``,
+for every re-run): a value read from the kernel instance would stay frozen at the
+first ``init()``.
 """
 
 _PARETO_K_THRESHOLD = 0.7
@@ -70,16 +76,46 @@ weights are dominated by a handful of draws.
 """
 
 
+def _is_traceable_param(leaf: object) -> bool:
+    """Whether a tuned-parameter leaf can ride in the jitted sampling loop.
+
+    The loop traces every leaf of the sampler state, so a leaf must be a numeric
+    array or a Python float. A Python ``int`` or ``bool`` is rejected: blackjax reads
+    such settings (for example ``max_num_doublings``) as static shapes, which fail
+    once they are traced. Integer arrays pass (a tuned parameter can be one), so a
+    static setting given as a NumPy or jax integer is not caught here.
+
+    Parameters
+    ----------
+    leaf
+        A leaf of the ``params`` pytree that a build function returned.
+
+    Returns
+    -------
+    bool
+        ``True`` if the leaf is a jax array, a numeric NumPy array or scalar, or a
+        Python ``float`` or ``complex``.
+    """
+    if isinstance(leaf, jax.Array | float | complex):
+        return True
+    if isinstance(leaf, np.ndarray | np.generic):
+        return leaf.dtype.kind in "biufc"
+    return False
+
+
 class _BlackjaxKernel(MCMCKernel):
     """Base adapter turning a blackjax sampler into a NumPyro ``MCMCKernel``.
 
     Subclasses implement `_build()`, which runs adaptation and returns the
-    initial blackjax state together with a one-step transition function. This base
-    owns the shared plumbing: it builds the model's log density via
-    `numpyro.infer.util.initialize_model()`, drives the blackjax step in
-    `sample()`, exposes ``sample_field = "position"``, and validates that the
-    built state exposes a ``position`` with the same key set as the initial one (a
-    tripwire for a malformed custom ``build_fn``).
+    initial blackjax state together with the tuned parameters, and `_step()`, which
+    advances a blackjax state by one step given a log density and those parameters.
+    This base owns the shared plumbing: it builds the model's log density via
+    `numpyro.infer.util.initialize_model()`, carries the tuned parameters in the
+    sampler state, rebuilds the log density from the model arguments in every
+    `sample()` call, exposes ``sample_field = "position"``, and validates that the
+    built state exposes a ``position`` with the same key set as the initial one and
+    that the tuned parameters are a pytree of arrays (tripwires for a malformed
+    custom ``build_fn``).
 
     Parameters
     ----------
@@ -96,7 +132,7 @@ class _BlackjaxKernel(MCMCKernel):
     def __init__(self, model: ForecastModel | None = None) -> None:
         self._model = model
         self._postprocess_fn: Any = None
-        self._step_fn: Any = None
+        self._potential_fn_gen: Any = None
 
     @property
     def model(self) -> ForecastModel | None:
@@ -110,7 +146,7 @@ class _BlackjaxKernel(MCMCKernel):
         position: dict[str, Array],
         num_warmup: int,
     ) -> tuple[Any, Any]:
-        """Run adaptation and return ``(initial_inner_state, step_fn)``.
+        """Run adaptation and return ``(initial_inner_state, params)``.
 
         Parameters
         ----------
@@ -127,8 +163,35 @@ class _BlackjaxKernel(MCMCKernel):
         Returns
         -------
         tuple
-            ``(inner_state, step_fn)`` where ``step_fn`` is
-            ``(rng_key, inner_state) -> (inner_state, info)``.
+            ``(inner_state, params)`` where ``params`` is the pytree of arrays that
+            `_step()` receives in every sampling step.
+        """
+        raise NotImplementedError
+
+    def _step(
+        self,
+        rng_key: Array,
+        inner_state: "Any",
+        logdensity_fn: "Any",
+        params: "Any",
+    ) -> tuple[Any, Any]:
+        """Advance ``inner_state`` by one blackjax step.
+
+        Parameters
+        ----------
+        rng_key
+            PRNG key for this step.
+        inner_state
+            The current blackjax algorithm state.
+        logdensity_fn
+            The unnormalized log density under the model arguments of this run.
+        params
+            The tuned parameters that `_build()` returned for this chain.
+
+        Returns
+        -------
+        tuple
+            ``(inner_state, info)``.
         """
         raise NotImplementedError
 
@@ -171,7 +234,8 @@ class _BlackjaxKernel(MCMCKernel):
             If the kernel has no bound model.
         TypeError
             If `_build()` returns a state whose ``position`` key set differs
-            from the initial one (a malformed ``build_fn``).
+            from the initial one, or tuned parameters that are not a pytree of
+            arrays (a malformed ``build_fn``).
         """
         require("blackjax", extra="blackjax")
         if self._model is None:
@@ -191,14 +255,13 @@ class _BlackjaxKernel(MCMCKernel):
             model_kwargs=model_kwargs,
         )
         self._postprocess_fn = postprocess_fn
-        potential_fn = potential_fn_gen(*model_args, **model_kwargs)
-
-        def logdensity_fn(position: dict[str, Array]) -> Array:
-            return -potential_fn(position)
+        # Depends on the model only (the data enter as arguments), so `sample()` can
+        # rebuild the log density of the current run from its `model_args`.
+        self._potential_fn_gen = potential_fn_gen
+        logdensity_fn = self._logdensity_fn(model_args, model_kwargs)
 
         position = param_info.z if init_params is None else init_params
-        inner_state, step_fn = self._build(build_key, logdensity_fn, position, num_warmup)
-        self._step_fn = step_fn
+        inner_state, params = self._build(build_key, logdensity_fn, position, num_warmup)
 
         built_position = inner_state.position
         if set(built_position) != set(position):
@@ -208,7 +271,33 @@ class _BlackjaxKernel(MCMCKernel):
                 f"{sorted(position)}; a build_fn must return a state over the same sites."
             )
             raise TypeError(msg)
-        return _BJState(position=built_position, inner=inner_state, rng_key=rng_key)
+        bad_leaves = [
+            type(leaf).__name__
+            for leaf in jax.tree.leaves(params)
+            if not _is_traceable_param(leaf)
+        ]
+        if bad_leaves:
+            msg = (
+                f"{type(self).__name__} build returned tuned parameters with leaves of "
+                f"type {sorted(set(bad_leaves))}; a build_fn must return "
+                "(inner_state, params) with params a pytree of numeric arrays. The step "
+                "logic goes in step_fn, and so do static settings such as an integer "
+                "max_num_doublings (bind them in step_fn, not in params)."
+            )
+            raise TypeError(msg)
+        return _BJState(position=built_position, inner=inner_state, params=params, rng_key=rng_key)
+
+    def _logdensity_fn(
+        self, model_args: tuple[Any, ...], model_kwargs: dict[str, Any] | None
+    ) -> "Any":
+        """Return the log density over the unconstrained position for these model arguments."""
+        kwargs = {} if model_kwargs is None else model_kwargs
+        potential_fn = self._potential_fn_gen(*model_args, **kwargs)
+
+        def logdensity_fn(position: dict[str, Array]) -> Array:
+            return -potential_fn(position)
+
+        return logdensity_fn
 
     def sample(
         self,
@@ -218,15 +307,19 @@ class _BlackjaxKernel(MCMCKernel):
     ) -> _BJState:
         """Advance the chain by one blackjax step.
 
+        The log density comes from ``model_args`` and ``model_kwargs`` of this call
+        and the tuned parameters from ``state``, so every chain samples with its own
+        adaptation and a new run on new data (for example with
+        ``jit_model_args=True``) samples the new posterior.
+
         Parameters
         ----------
         state
             The current sampler state.
         model_args
-            Positional arguments to the model (unused; the log density is closed
-            over in `init()`).
+            Positional arguments to the model (``(covariates, data)``).
         model_kwargs
-            Keyword arguments to the model (unused).
+            Keyword arguments to the model.
 
         Returns
         -------
@@ -234,8 +327,11 @@ class _BlackjaxKernel(MCMCKernel):
             The next sampler state.
         """
         rng_key, step_key = random.split(state.rng_key)
-        new_inner, _info = self._step_fn(step_key, state.inner)
-        return _BJState(position=new_inner.position, inner=new_inner, rng_key=rng_key)
+        logdensity_fn = self._logdensity_fn(model_args, model_kwargs)
+        new_inner, _info = self._step(step_key, state.inner, logdensity_fn, state.params)
+        return _BJState(
+            position=new_inner.position, inner=new_inner, params=state.params, rng_key=rng_key
+        )
 
     def postprocess_fn(
         self, model_args: tuple[Any, ...], model_kwargs: dict[str, Any] | None
@@ -264,9 +360,9 @@ class _BlackjaxKernel(MCMCKernel):
 class BlackjaxNUTSKernel(_BlackjaxKernel):
     """BlackJAX NUTS with Stan-style window adaptation.
 
-    Adaptation (step size and inverse mass matrix) runs once in
+    Adaptation (step size and inverse mass matrix) runs once per chain in
     `_BlackjaxKernel.init()` via ``blackjax.window_adaptation``; each MCMC step
-    is then a single tuned NUTS step.
+    is then a single NUTS step with the tuned parameters of that chain.
 
     Run configuration
     -----------------
@@ -277,6 +373,13 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
     rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
     ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
     package and shares the same single-key assumption.
+    Each chain of a sequential run calls `_BlackjaxKernel.init()` and runs its own
+    adaptation. The tuned parameters are part of the sampler state and
+    `_BlackjaxKernel.sample()` builds the log density from the model arguments of
+    the current run, so the chains are independent runs and a second ``mcmc.run``
+    on new data (also with ``jit_model_args=True``) samples the new posterior. A run
+    that continues from ``mcmc.post_warmup_state`` keeps the blackjax state of the
+    earlier data, so leave ``post_warmup_state`` unset for a run on new data.
     Also pass **``num_warmup=0``**: adaptation runs once inside `_BlackjaxKernel.init()`
     (via ``blackjax.window_adaptation``), so any NumPyro-driven warmup steps on top
     of that are simply discarded work, not additional tuning.
@@ -316,17 +419,26 @@ class BlackjaxNUTSKernel(_BlackjaxKernel):
             target_acceptance_rate=self.target_acceptance_rate,
         )
         result, _info = adapt.run(rng_key, position, num_steps=self.num_adaptation_steps)
-        kernel = blackjax.nuts(logdensity_fn, **result.parameters)
-        return result.state, kernel.step
+        return result.state, result.parameters
+
+    def _step(
+        self,
+        rng_key: Array,
+        inner_state: "Any",
+        logdensity_fn: "Any",
+        params: "Any",
+    ) -> tuple[Any, Any]:
+        blackjax = require("blackjax", extra="blackjax")
+        return blackjax.nuts(logdensity_fn, **params).step(rng_key, inner_state)
 
 
 class BlackjaxMCLMCKernel(_BlackjaxKernel):
     """BlackJAX Microcanonical Langevin Monte Carlo (MCLMC).
 
     The step size, trajectory length ``L``, and diagonal preconditioner (inverse
-    mass matrix) are tuned once in `_BlackjaxKernel.init()` via
+    mass matrix) are tuned once per chain in `_BlackjaxKernel.init()` via
     ``blackjax.mclmc_find_L_and_step_size``; each MCMC step is then a single
-    tuned MCLMC step.
+    MCLMC step with the tuned parameters of that chain.
 
     Run configuration
     -----------------
@@ -337,6 +449,13 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
     rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
     ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
     package and shares the same single-key assumption.
+    Each chain of a sequential run calls `_BlackjaxKernel.init()` and runs its own
+    tuning. The tuned parameters are part of the sampler state and
+    `_BlackjaxKernel.sample()` builds the log density from the model arguments of
+    the current run, so the chains are independent runs and a second ``mcmc.run``
+    on new data (also with ``jit_model_args=True``) samples the new posterior. A run
+    that continues from ``mcmc.post_warmup_state`` keeps the blackjax state of the
+    earlier data, so leave ``post_warmup_state`` unset for a run on new data.
     Also pass **``num_warmup=0``**: tuning runs once inside `_BlackjaxKernel.init()`
     (via ``blackjax.mclmc_find_L_and_step_size``), so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
@@ -380,6 +499,16 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
             rng_key=tune_key,
             logdensity_fn=logdensity_fn,
         )
+        return tuned_state, params
+
+    def _step(
+        self,
+        rng_key: Array,
+        inner_state: "Any",
+        logdensity_fn: "Any",
+        params: "Any",
+    ) -> tuple[Any, Any]:
+        blackjax = require("blackjax", extra="blackjax")
         # The tuner adapts step_size and L *for* the diagonal preconditioner it
         # estimates; dropping params.inverse_mass_matrix here would run a
         # mistuned identity-mass kernel on anisotropic posteriors.
@@ -390,18 +519,46 @@ class BlackjaxMCLMCKernel(_BlackjaxKernel):
             inverse_mass_matrix=params.inverse_mass_matrix,
             integrator=blackjax.mcmc.integrators.isokinetic_mclachlan,
         )
-        return tuned_state, algorithm.step
+        return algorithm.step(rng_key, inner_state)
 
 
 class BlackjaxCustomKernel(_BlackjaxKernel):
-    """Adapt an arbitrary BlackJAX sampler via a user-supplied ``build_fn``.
+    """Adapt an arbitrary BlackJAX sampler via a user-supplied ``build_fn`` and ``step_fn``.
 
     The escape hatch for kernels without a dedicated wrapper. ``build_fn`` receives
-    ``(rng_key, logdensity_fn, position, num_warmup)`` and must return
-    ``(inner_state, step_fn)``, where ``inner_state`` exposes ``.position`` over the
-    same sites as the model and ``step_fn`` has signature
-    ``(rng_key, inner_state) -> (inner_state, info)``. The base class validates the
-    returned state's key set and raises `TypeError` if it is malformed.
+    ``(rng_key, logdensity_fn, position, num_warmup)``, runs the adaptation, and must
+    return ``(inner_state, params)``, where ``inner_state`` exposes ``.position`` over
+    the same sites as the model and ``params`` is a pytree of numeric arrays with the
+    tuned parameters (use ``None`` for a sampler without tuning). ``step_fn`` receives
+    ``(rng_key, inner_state, logdensity_fn, params)`` and must return
+    ``(inner_state, info)``. The base class validates the returned state's key set
+    and the ``params`` leaves, and raises `TypeError` if either is malformed. The
+    sampling loop traces ``params``, so a static setting that blackjax needs as a
+    Python ``int`` (for example ``max_num_doublings`` of NUTS) goes in ``step_fn``,
+    not in ``params``: `TypeError` reports a Python ``int`` or ``bool`` leaf.
+
+    ``step_fn`` gets the log density and the tuned parameters as arguments in every
+    step, and must not close over the ``logdensity_fn`` or the tuned values of a
+    ``build_fn`` call: NumPyro compiles the sampling loop once and reuses it for all
+    chains (and re-runs with ``jit_model_args=True``), so a closure would keep the
+    values of the first call. For BlackJAX NUTS with window adaptation:
+
+    ```python
+    import blackjax
+
+
+    def build_fn(rng_key, logdensity_fn, position, num_warmup):
+        adapt = blackjax.window_adaptation(blackjax.nuts, logdensity_fn)
+        result, _ = adapt.run(rng_key, position, num_steps=500)
+        return result.state, result.parameters
+
+
+    def step_fn(rng_key, inner_state, logdensity_fn, params):
+        return blackjax.nuts(logdensity_fn, **params).step(rng_key, inner_state)
+
+
+    kernel = BlackjaxCustomKernel(model, build_fn=build_fn, step_fn=step_fn)
+    ```
 
     Run configuration
     -----------------
@@ -412,6 +569,13 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
     rejects a non-scalar key with a ``ValueError`` (pinned by the test suite).
     ``chain_method="parallel"`` is likewise unsupported: it is not exercised by this
     package and shares the same single-key assumption.
+    Each chain of a sequential run calls `_BlackjaxKernel.init()` and so ``build_fn``.
+    The ``params`` it returns are part of the sampler state and
+    `_BlackjaxKernel.sample()` builds the log density from the model arguments of
+    the current run, so the chains are independent runs and a second ``mcmc.run`` on
+    new data (also with ``jit_model_args=True``) samples the new posterior. A run
+    that continues from ``mcmc.post_warmup_state`` keeps the blackjax state of the
+    earlier data, so leave ``post_warmup_state`` unset for a run on new data.
     Also pass **``num_warmup=0``**: whatever adaptation ``build_fn`` performs runs
     once inside `_BlackjaxKernel.init()`, so any NumPyro-driven warmup steps
     on top of that are simply discarded work, not additional tuning.
@@ -422,6 +586,8 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
         The NumPyro model to sample from.
     build_fn
         The blackjax build callable described above.
+    step_fn
+        The blackjax step callable described above.
     """
 
     def __init__(
@@ -429,9 +595,11 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
         model: ForecastModel | None = None,
         *,
         build_fn: BlackjaxBuildFn,
+        step_fn: BlackjaxStepFn,
     ) -> None:
         super().__init__(model)
         self._build_fn = build_fn
+        self._step_fn = step_fn
 
     def _build(
         self,
@@ -441,6 +609,16 @@ class BlackjaxCustomKernel(_BlackjaxKernel):
         num_warmup: int,
     ) -> tuple[Any, Any]:
         result = self._build_fn(rng_key, logdensity_fn, position, num_warmup)
+        return cast("tuple[Any, Any]", result)
+
+    def _step(
+        self,
+        rng_key: Array,
+        inner_state: "Any",
+        logdensity_fn: "Any",
+        params: "Any",
+    ) -> tuple[Any, Any]:
+        result = self._step_fn(rng_key, inner_state, logdensity_fn, params)
         return cast("tuple[Any, Any]", result)
 
 

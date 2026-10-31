@@ -16,9 +16,20 @@ Array = jax.Array
 BlackjaxBuildFn = Callable[..., object]
 """A blackjax sampler build function ``(rng_key, logdensity_fn, position, num_warmup)``.
 
-Returns ``(inner_state, step_fn)``. ``rng_key`` is first, matching the package's
+Runs the adaptation and returns ``(inner_state, params)``, with ``params`` a pytree of
+numeric arrays holding the tuned parameters (static Python ``int`` settings belong in
+the `~~numpyro_forecast.typing.BlackjaxStepFn`). ``rng_key`` is first, matching the package's
 rng-key-first convention. Consumed by
 `~~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
+"""
+
+BlackjaxStepFn = Callable[..., object]
+"""A blackjax step function ``(rng_key, inner_state, logdensity_fn, params)``.
+
+Advances ``inner_state`` by one step and returns ``(inner_state, info)``. It receives
+the log density of the current run and the ``params`` of a
+`~~numpyro_forecast.typing.BlackjaxBuildFn` as arguments and must not close over
+them. Consumed by `~~numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel`.
 """
 
 Metric = Callable[[Array, Array], Array]

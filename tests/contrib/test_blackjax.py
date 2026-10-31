@@ -145,20 +145,26 @@ def test_blackjax_mclmc_forecast_finite_and_competitive() -> None:
 
 
 def _nuts_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
-    """A minimal custom build_fn wrapping BlackJAX window-adapted NUTS."""
+    """A minimal custom build_fn running BlackJAX NUTS window adaptation."""
     import blackjax
 
     adapt = blackjax.window_adaptation(blackjax.nuts, logdensity_fn)
     result, _info = adapt.run(rng_key, position, num_steps=200)  # ty: ignore[unknown-argument]
-    kernel = blackjax.nuts(logdensity_fn, **result.parameters)
-    return result.state, kernel.step
+    return result.state, result.parameters
+
+
+def _nuts_step_fn(rng_key, inner_state, logdensity_fn, params):  # type: ignore[no-untyped-def]
+    """The matching custom step_fn: one BlackJAX NUTS step with the tuned parameters."""
+    import blackjax
+
+    return blackjax.nuts(logdensity_fn, **params).step(rng_key, inner_state)
 
 
 def test_blackjax_custom_kernel_happy_path() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     covariates = _empty_covariates(25)
     mcmc = MCMC(
-        BlackjaxCustomKernel(rw_model, build_fn=_nuts_build_fn),
+        BlackjaxCustomKernel(rw_model, build_fn=_nuts_build_fn, step_fn=_nuts_step_fn),
         num_warmup=0,
         num_samples=100,
         chain_method="sequential",
@@ -173,16 +179,21 @@ def test_blackjax_custom_kernel_happy_path() -> None:
 _BadState = namedtuple("_BadState", ["position"])
 
 
+def _identity_step_fn(rng_key, inner_state, logdensity_fn, params):  # type: ignore[no-untyped-def]
+    """A step_fn that leaves the state unchanged."""
+    return inner_state, None
+
+
 def _malformed_build_fn(rng_key, logdensity_fn, position, num_warmup):  # type: ignore[no-untyped-def]
     """Return a state whose position keys do not match the model's sites."""
-    return _BadState(position={"not_a_real_site": jnp.zeros(())}), (lambda k, s: (s, None))
+    return _BadState(position={"not_a_real_site": jnp.zeros(())}), None
 
 
 def test_blackjax_custom_kernel_malformed_state_raises() -> None:
     data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
     covariates = _empty_covariates(25)
     mcmc = MCMC(
-        BlackjaxCustomKernel(rw_model, build_fn=_malformed_build_fn),
+        BlackjaxCustomKernel(rw_model, build_fn=_malformed_build_fn, step_fn=_identity_step_fn),
         num_warmup=0,
         num_samples=10,
         chain_method="sequential",
@@ -190,6 +201,145 @@ def test_blackjax_custom_kernel_malformed_state_raises() -> None:
     )
     with pytest.raises(TypeError, match="differ from the model"):
         mcmc.run(random.PRNGKey(1), covariates, data)
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param(lambda key, state: (state, None), id="step-function"),
+        pytest.param({"step_size": 0.1, "max_num_doublings": 6}, id="python-int"),
+        pytest.param({"label": np.asarray(["a"])}, id="string-array"),
+    ],
+)
+def test_blackjax_custom_kernel_untraceable_params_raise(params: object) -> None:
+    """``params`` the sampling loop cannot trace fail at init with a clear message.
+
+    A step function in place of the tuned parameters is the old ``build_fn``
+    contract; a Python ``int`` such as ``max_num_doublings`` is a static blackjax
+    setting that would fail as a traced shape deep inside the loop.
+    """
+
+    def build_fn(
+        rng_key: Array, logdensity_fn: object, position: dict[str, Array], num_warmup: int
+    ) -> tuple[_BadState, object]:
+        return _BadState(position=position), params
+
+    data = jnp.cumsum(0.1 * random.normal(random.PRNGKey(0), (25, 1)), axis=-2)
+    mcmc = MCMC(
+        BlackjaxCustomKernel(rw_model, build_fn=build_fn, step_fn=_identity_step_fn),
+        num_warmup=0,
+        num_samples=10,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    with pytest.raises(TypeError, match="pytree of numeric arrays"):
+        mcmc.run(random.PRNGKey(1), _empty_covariates(25), data)
+
+
+def test_blackjax_custom_kernel_chains_step_with_their_own_params() -> None:
+    """Each sequential chain receives the ``params`` of its own ``build_fn`` call (#170).
+
+    The first ``build_fn`` call tunes an increment of ``1.0`` and the second one of
+    ``100.0``; a step adds the increment to every site, so the draws of each chain
+    move by the increment of that chain.
+    """
+    increments = iter([1.0, 100.0])
+
+    def build_fn(
+        rng_key: Array,
+        logdensity_fn: object,
+        position: dict[str, Array],
+        num_warmup: int,
+    ) -> tuple[_BadState, dict[str, Array]]:
+        return _BadState(position=position), {"increment": jnp.asarray(next(increments))}
+
+    def step_fn(
+        rng_key: Array,
+        inner_state: _BadState,
+        logdensity_fn: object,
+        params: dict[str, Array],
+    ) -> tuple[_BadState, None]:
+        moved = {k: v + params["increment"] for k, v in inner_state.position.items()}
+        return _BadState(position=moved), None
+
+    data = random.normal(random.PRNGKey(0), (20, 1))
+    mcmc = MCMC(
+        BlackjaxCustomKernel(mean_model, build_fn=build_fn, step_fn=step_fn),
+        num_warmup=0,
+        num_samples=3,
+        num_chains=2,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    mcmc.run(random.PRNGKey(1), _empty_covariates(20), data)
+    steps = jnp.diff(mcmc.get_samples(group_by_chain=True)["mu"], axis=1)
+    np.testing.assert_allclose(steps, [[1.0, 1.0], [100.0, 100.0]], rtol=1e-5)
+
+
+# --- Per-chain tuning and re-runs on new data (#170) ---------------------------
+
+
+def mean_scale_model(covariates: Array, data: Array | None = None) -> None:
+    """Constant-level model with an unknown noise scale (two sites, as MCLMC needs)."""
+    h = Horizon.from_data(covariates, data)
+    mu = numpyro.sample("mu", dist.Normal(0.0, 10.0))
+    log_sigma = jnp.asarray(numpyro.sample("log_sigma", dist.Normal(0.0, 1.0)))
+    predict(h, dist.Normal(0.0, jnp.exp(log_sigma)), jnp.full((h.duration, 1), mu))
+
+
+_BUILTIN_KERNELS = {
+    "nuts": lambda: BlackjaxNUTSKernel(mean_scale_model, num_adaptation_steps=50),
+    "mclmc": lambda: BlackjaxMCLMCKernel(mean_scale_model, num_tuning_steps=100),
+}
+
+
+@pytest.mark.parametrize("kernel_name", sorted(_BUILTIN_KERNELS))
+def test_blackjax_sequential_chains_equal_solo_runs(kernel_name: str) -> None:
+    """Each sequential chain samples with its own tuning, not with that of chain 0.
+
+    NumPyro splits the run key into one key per chain, so a two-chain run must
+    give, chain by chain, the draws of two one-chain runs with those keys.
+    """
+    make_kernel = _BUILTIN_KERNELS[kernel_name]
+    data = random.normal(random.PRNGKey(0), (20, 1))
+    cov = _empty_covariates(20)
+    joint = MCMC(
+        make_kernel(),
+        num_warmup=0,
+        num_samples=30,
+        num_chains=2,
+        chain_method="sequential",
+        progress_bar=False,
+    )
+    joint.run(random.PRNGKey(2), cov, data)
+    joint_mu = joint.get_samples(group_by_chain=True)["mu"]
+    for chain, chain_key in enumerate(random.split(random.PRNGKey(2), 2)):
+        solo = MCMC(make_kernel(), num_warmup=0, num_samples=30, progress_bar=False)
+        solo.run(chain_key, cov, data)
+        np.testing.assert_allclose(joint_mu[chain], solo.get_samples()["mu"], rtol=1e-5)
+
+
+@pytest.mark.parametrize("kernel_name", sorted(_BUILTIN_KERNELS))
+def test_blackjax_jit_model_args_rerun_samples_new_data(kernel_name: str) -> None:
+    """A second ``mcmc.run`` on new data with ``jit_model_args=True`` samples the new posterior.
+
+    The re-run reuses the compiled sampling loop of the first run, so it must give
+    the draws of a new ``MCMC`` object run on the new data with the same key.
+    """
+    make_kernel = _BUILTIN_KERNELS[kernel_name]
+    data_a = random.normal(random.PRNGKey(0), (20, 1))
+    data_b = 5.0 + data_a
+    cov = _empty_covariates(20)
+    mcmc = MCMC(
+        make_kernel(), num_warmup=0, num_samples=50, progress_bar=False, jit_model_args=True
+    )
+    mcmc.run(random.PRNGKey(1), cov, data_a)
+    mcmc.run(random.PRNGKey(2), cov, data_b)
+    fresh = MCMC(
+        make_kernel(), num_warmup=0, num_samples=50, progress_bar=False, jit_model_args=True
+    )
+    fresh.run(random.PRNGKey(2), cov, data_b)
+    np.testing.assert_allclose(mcmc.get_samples()["mu"], fresh.get_samples()["mu"], rtol=1e-5)
 
 
 # --- Spec-required failure-mode pins (replacing the old fit_mcmc-level checks) ----
