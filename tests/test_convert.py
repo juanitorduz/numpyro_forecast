@@ -2,7 +2,8 @@
 
 import re
 import warnings
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Hashable, Mapping
+from enum import Enum
 from typing import Any, cast
 
 import jax
@@ -529,6 +530,94 @@ def test_add_forecast_groups_rejects_time_labels_of_another_type(case: str, matc
     """Forecast times of another type or zone would give the tree two kinds of ``time``."""
     with pytest.raises(ValueError, match=rf"time_coord {match}"):
         _add_forecast_times(case)
+
+
+_DIMENSION_NAME_ARGUMENTS = {
+    "obs_dims": "obs_dims",
+    "covariate_dims": "covariate_dims",
+    "add_forecast_groups": "covariate_dims",
+    "posterior_dims": "posterior_dims['drift']",
+}
+
+
+def _dims_named_by(argument: str, names: Any) -> tuple[Hashable, ...]:
+    """Pass ``names`` as the dimension names ``argument`` takes; return the dims they name."""
+    if argument == "obs_dims":
+        tree = _two_series_tree(obs_dims=names)
+        group, variable, sample_axes = "predictions", "obs", 2
+    elif argument == "covariate_dims":
+        tree = _two_series_tree(covariate_dims=names)
+        group, variable, sample_axes = "predictions_constant_data", "covariates", 0
+    elif argument == "add_forecast_groups":
+        tree = _two_series_tree(duration=3, covariate_dims=["time", "feature"])
+        tree = add_forecast_groups(
+            tree, jnp.zeros((4, 2, 2)), empty_covariates(2), covariate_dims=names
+        )
+        group, variable, sample_axes = "predictions_constant_data", "covariates", 0
+    else:
+        tree = to_datatree(
+            random.PRNGKey(0),
+            _model(),
+            {"level": jnp.zeros(4), "drift": jnp.zeros((4, 6, 1))},
+            jnp.zeros((6, 1)),
+            empty_covariates(6),
+            posterior_dims={"drift": names},
+        )
+        group, variable, sample_axes = "posterior", "drift", 2
+    return tree.children[group].dataset[variable].dims[sample_axes:]
+
+
+@pytest.mark.parametrize("kind", ["ndarray", "named-index"])
+@pytest.mark.parametrize("argument", list(_DIMENSION_NAME_ARGUMENTS))
+def test_dimension_names_accept_array_and_index(argument: str, kind: str) -> None:
+    """Issue #265: dimension names may be a NumPy array or a pandas index, like labels."""
+    assert _dims_named_by(argument, _labels(kind, ["time", "feature"])) == ("time", "feature")
+
+
+@pytest.mark.parametrize("argument", list(_DIMENSION_NAME_ARGUMENTS))
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        pytest.param({"feature", "time"}, r"got set that converts to shape \(\)", id="set"),
+        pytest.param(
+            {"time": 0, "feature": 1}, r"got dict that converts to shape \(\)", id="dict"
+        ),
+        pytest.param("time", r"got str that converts to shape \(\)", id="str"),
+    ],
+)
+def test_unordered_dimension_names_raise(argument: str, value: Any, match: str) -> None:
+    """A set or a dict of names has no order, and a ``str`` is one name: each raises by name.
+
+    All three pass the ``Collection[str]`` hint. A ``str`` also passed the old
+    ``Sequence[str]`` hint and was split into one name per character.
+    """
+    name = re.escape(_DIMENSION_NAME_ARGUMENTS[argument])
+    with pytest.raises(
+        ValueError,
+        match=rf"{name} must be a one-dimensional collection of dimension names .*{match}",
+    ):
+        _dims_named_by(argument, value)
+
+
+@pytest.mark.parametrize("argument", list(_DIMENSION_NAME_ARGUMENTS))
+def test_non_string_dimension_name_raises(argument: str) -> None:
+    """beartype checks one element of a collection, so the export checks every name."""
+    name = re.escape(_DIMENSION_NAME_ARGUMENTS[argument])
+    with pytest.raises(TypeError, match=rf"{name} must hold str dimension names, got \[0\]"):
+        _dims_named_by(argument, ["time", 0])
+
+
+class _Axis(str, Enum):  # noqa: UP042 (the str and Enum mixin is the case under test)
+    TIME = "time"
+
+
+def test_str_enum_mixin_dimension_name_keeps_its_value() -> None:
+    """A ``(str, Enum)`` member names the axis by its value, as it did before #265.
+
+    ``str()`` of such a member is ``"_Axis.TIME"``, which would silently move
+    the ``drift`` axis off the tree-wide ``time`` coordinate.
+    """
+    assert _dims_named_by("posterior_dims", [_Axis.TIME, "feature"]) == ("time", "feature")
 
 
 def test_to_datatree_rejects_short_covariates() -> None:
