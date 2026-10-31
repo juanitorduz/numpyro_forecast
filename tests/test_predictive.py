@@ -651,6 +651,94 @@ def test_drivers_drop_the_empty_horizon_keys_of_a_training_posterior() -> None:
         assert np.array_equal(np.asarray(draws), np.asarray(reference))
 
 
+def test_predict_in_sample_ignores_an_obs_key_in_the_posterior() -> None:
+    """Issue #260: an ``"obs"`` key in the posterior does not pin the in-sample draws.
+
+    ``Predictive`` substitutes every posterior sample site by name. The ``"obs"``
+    output of a ``Predictive`` call with ``data``, merged into the posterior,
+    made every draw equal to the observed data. The driver now draws ``"obs"``
+    from the posterior latents as if the key were absent.
+    """
+    t = 6
+    covariates = empty_covariates(t)
+    data = 0.1 * random.normal(random.PRNGKey(0), (t, 1))
+    posterior = {
+        "drift_scale": jnp.ones(4),
+        "sigma": jnp.full(4, 0.05),
+        "drift": jnp.zeros((4, t, 1)),
+    }
+    observed = Predictive(rw_model, posterior_samples=posterior)(
+        random.PRNGKey(1), covariates, data
+    )
+    assert set(observed) == {"obs"}
+    draws = predict_in_sample(random.PRNGKey(2), rw_model, {**posterior, **observed}, covariates)
+    reference = predict_in_sample(random.PRNGKey(2), rw_model, posterior, covariates)
+    assert np.array_equal(np.asarray(draws), np.asarray(reference))
+    assert not np.allclose(np.asarray(draws), np.asarray(data))
+
+
+def test_predict_in_sample_rejects_a_posterior_that_holds_only_obs() -> None:
+    """The output of a ``Predictive`` call with ``data``, passed alone, names the dropped key."""
+    observed = {"obs": jnp.zeros((4, 6, 1))}
+    with pytest.raises(ValueError, match=r"posterior holds only the 'obs' site"):
+        predict_in_sample(random.PRNGKey(0), rw_model, observed, empty_covariates(6))
+
+
+def _shared_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A level shared by every series, with a ``(duration, 1)`` predictor and no series plate."""
+    h = Horizon.from_data(covariates, data)
+    level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+    predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 1), level))
+
+
+def _shared_level_plate_model(covariates: Array, data: Array | None = None) -> None:
+    """`_shared_level_model` with `predict()` inside a size-3 series plate at ``dim=-1``."""
+    h = Horizon.from_data(covariates, data)
+    level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+    with numpyro.plate("series", 3, dim=-1):
+        predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 1), level))
+
+
+@pytest.mark.parametrize(
+    ("data_shape", "expected"),
+    [((5, 3), r"\(2, 3\)"), ((2, 5, 1), r"\(2, 2, 1\)")],
+    ids=["series", "batch"],
+)
+def test_forecast_rejects_a_predictor_shared_across_series_without_a_plate(
+    data_shape: tuple[int, ...], expected: str
+) -> None:
+    """Issue #259: a ``(duration, 1)`` predictor over wider data raises.
+
+    The ``"obs"`` density broadcasts the predictor over every series, so the
+    fit scores each series, but ``"obs_future"`` was drawn without the series
+    axis (or the batch axes): the forecast had one column, shared by every
+    series, and no error.
+    """
+    with pytest.raises(
+        ValueError, match=rf"end in the axes {expected} per draw.* but it has shape \(2, 1\)"
+    ):
+        forecast(
+            random.PRNGKey(0),
+            _shared_level_model,
+            {"level": jnp.zeros(4)},
+            jnp.zeros(data_shape),
+            empty_covariates(7),
+        )
+
+
+def test_forecast_draws_each_series_of_a_shared_predictor_inside_a_plate() -> None:
+    """Inside a size-3 series plate the shared predictor forecasts three independent series."""
+    draws = forecast(
+        random.PRNGKey(0),
+        _shared_level_plate_model,
+        {"level": jnp.zeros(4)},
+        jnp.zeros((5, 3)),
+        empty_covariates(7),
+    )
+    assert draws.shape == (4, 2, 3)
+    assert not np.allclose(np.asarray(draws[..., 0]), np.asarray(draws[..., 1]))
+
+
 # --- P6: host offloading (issue #64) ------------------------------------------
 
 

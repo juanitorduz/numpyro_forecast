@@ -22,6 +22,7 @@ from conftest import (
 )
 from jax import Array, random
 from jax.typing import ArrayLike
+from numpyro.infer import Predictive
 
 from numpyro_forecast.convert import (
     _reshape_chains,
@@ -672,6 +673,54 @@ def test_to_datatree_rejects_obs_draws_with_more_axes_than_data() -> None:
             covariates,
             covariate_dims=["batch", "time", "covariate_dim"],
         )
+
+
+def _shared_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A level shared by every series, with a ``(duration, 1)`` predictor and no series plate."""
+    h = Horizon.from_data(covariates, data)
+    level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+    predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 1), level))
+
+
+def test_to_datatree_rejects_in_sample_draws_narrower_than_data() -> None:
+    """Issue #259: one in-sample column for three observed series raises.
+
+    `~~numpyro_forecast.predictive.predict_in_sample()` calls the model with
+    ``data=None``, so a predictor shared across series without a series plate
+    draws one column. The export wrote it next to the three observed columns
+    without an error.
+    """
+    with pytest.raises(
+        ValueError,
+        match=r"the in-sample predictive draws have shape \(5, 1\) per draw, but data has "
+        r"shape \(5, 3\)",
+    ):
+        to_datatree(
+            random.PRNGKey(1),
+            _shared_level_model,
+            {"level": jnp.zeros(4)},
+            jnp.zeros((5, 3)),
+            empty_covariates(5),
+        )
+
+
+def test_to_datatree_drops_an_obs_key_from_the_posterior() -> None:
+    """Issue #260: an ``"obs"`` key is neither a posterior variable nor a pin on the draws.
+
+    Merged from a ``Predictive`` call with ``data``, it used to export the data
+    once per draw in the ``posterior`` group and as every in-sample draw.
+    """
+    t = 6
+    covariates = empty_covariates(t)
+    data = 0.1 * random.normal(random.PRNGKey(0), (t, 1))
+    posterior = {"drift_scale": jnp.ones(4), "sigma": jnp.ones(4), "drift": jnp.zeros((4, t, 1))}
+    observed = Predictive(rw_model, posterior_samples=posterior)(
+        random.PRNGKey(1), covariates, data
+    )
+    tree = to_datatree(random.PRNGKey(2), rw_model, {**posterior, **observed}, data, covariates)
+    assert set(tree["posterior"].data_vars) == set(posterior)
+    in_sample = np.asarray(tree["posterior_predictive"]["obs"])
+    assert not np.allclose(in_sample, np.asarray(data))
 
 
 @pytest.mark.parametrize(

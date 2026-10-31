@@ -17,7 +17,12 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
 ## Conventions
 
 - **Array layout:** time at axis `-2`, observation/event dim at `-1`, batch dims
-  to the left (matches Pyro).
+  to the left (matches Pyro). The `obs` and `forecast` sites, with their
+  enclosing plates, carry every axis of `data`: a predictor shared by `n`
+  series is `(duration, n)` or sits in a size-`n` plate at `dim=-1`. A
+  `(duration, 1)` predictor alone draws one forecast for all series, so
+  `forecast` and `to_datatree` raise (issue #259); `predict_in_sample` gets
+  no data and cannot check.
 - **Train vs forecast:** a single model handles both. In-sample time latents use
   a fixed site name (`drift`); the forecast horizon uses a separate `_future`
   site so `AutoNormal` never resizes and `Predictive` draws the suffix from the
@@ -28,7 +33,10 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   `Predictive` call over a horizon, issue #161); `forecast` and
   `predict_in_sample` drop such a key when its leaf is empty (a site registered
   on every call, as a training run records it), and `to_datatree` still exports
-  it in the posterior group.
+  it in the posterior group. `predict_in_sample` and `to_datatree` also drop
+  an `obs` key (issue #260), so the output of a `Predictive` call with `data`
+  does not pin the in-sample draws to the observed data or land in the
+  posterior group; a posterior that holds only `obs` raises `ValueError`.
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.

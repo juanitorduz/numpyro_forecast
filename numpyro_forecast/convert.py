@@ -28,6 +28,7 @@ from numpyro_forecast.offload import resolve_device
 from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
 from numpyro_forecast.validation import (
+    drop_obs_site,
     require_covariates_cover_data,
     require_no_horizon_sites,
     require_sample_axis,
@@ -145,6 +146,27 @@ def _require_draws_match_obs_dims(
             f"{label} have shape {shape} per draw ({len(shape)} axes), but the obs "
             f"dimension names {list(obs_dims)} name {len(obs_dims)} axes; every obs "
             "draw must have the (*batch, time, obs) layout of data"
+        )
+        raise ValueError(msg)
+
+
+def _require_in_sample_draws_like_data(draws: "Array | np.ndarray", data: Array) -> None:
+    """Raise ``ValueError`` unless every in-sample draw has the shape of ``data``.
+
+    `~~numpyro_forecast.predictive.predict_in_sample()` calls the model with
+    ``data=None``, so a model whose predictor lacks the series axis of the data
+    (a ``(duration, 1)`` predictor over ``(time, n)`` data, without a series
+    plate) draws one column, and the export would store it next to the ``n``
+    observed columns (issue #259).
+    """
+    shape = tuple(draws.shape[1:])
+    if shape != tuple(data.shape):
+        msg = (
+            f"the in-sample predictive draws have shape {shape} per draw, but data has shape "
+            f"{tuple(data.shape)}. The model draws obs without data, so the predictor or the "
+            "plates around predict must carry every axis of data: for a predictor shared by n "
+            "series, call predict inside numpyro.plate('series', n, dim=-1) or broadcast the "
+            "predictor to (duration, n)."
         )
         raise ValueError(msg)
 
@@ -506,7 +528,11 @@ def to_datatree(
         ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
         that the model registers on every call, recorded by the training run
         with a size-0 time axis) is kept in the ``posterior`` group as a
-        size-0 variable, and the predictive drivers drop it.
+        size-0 variable, and the predictive drivers drop it. An ``"obs"``
+        key is dropped, as in
+        `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
+        ``posterior`` group, and the in-sample draws come from the latent
+        sites.
     data
         In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
         the observation dim at axis ``-1`` and any batch axes to the left
@@ -618,7 +644,7 @@ def to_datatree(
         shorter than ``data`` along the time axis, if a ``posterior`` leaf has
         no sample axis, if a forecast-horizon key of ``posterior`` (one that
         ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
-        has a non-empty leaf, if
+        has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
         ``time_coord`` is given but its length does not match the in-sample
         window plus the forecast horizon, if ``num_chains`` is not a positive
         integer (``bool`` included), if ``posterior``'s sample count is not
@@ -630,9 +656,11 @@ def to_datatree(
         `~~numpyro_forecast.predictive.predict_in_sample()` and
         `~~numpyro_forecast.predictive.forecast()`). Also if ``obs_dims`` does
         not name every ``data`` axis, does not name axis ``-2`` ``"time"``,
-        repeats a name or uses ``"chain"`` or ``"draw"``, or if the in-sample
+        repeats a name or uses ``"chain"`` or ``"draw"``, if the in-sample
         or forecast draws do not have one axis per ``obs_dims`` name (the
-        model's ``obs`` site must have the layout of ``data``).
+        model's ``obs`` site must have the layout of ``data``), or if an
+        in-sample draw does not have the shape of ``data`` (a predictor shared
+        by the series of ``data`` without a series plate draws one column).
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError
@@ -692,6 +720,7 @@ def to_datatree(
 
     require_sample_axis(posterior)
     require_no_horizon_sites(posterior)
+    posterior = drop_obs_site(posterior)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
         for name, value in posterior.items()
@@ -715,7 +744,7 @@ def to_datatree(
         batch_size=batch_size,
         device=resolved_device,
     )
-    _require_draws_match_obs_dims("the in-sample predictive draws", predictive, resolved_obs_dims)
+    _require_in_sample_draws_like_data(predictive, data)
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_chains(predictive, num_chains)},
         sample_dims=_SAMPLE_DIMS,
