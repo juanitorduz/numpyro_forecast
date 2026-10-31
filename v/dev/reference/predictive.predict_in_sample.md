@@ -33,7 +33,7 @@ PRNG key.
 The forecasting model callable (the same one that produced `posterior`).
 
 `posterior: Mapping[str, ArrayLike]`  
-Posterior samples of the latent sites, sample axis leading. The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly.
+Posterior samples of the latent sites of the training run, sample axis leading (`mcmc.get_samples()` of the fit, or [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). The output of a `device="host"` stage (CPU-committed jax leaves or NumPy leaves) is accepted directly. Forecast-horizon keys follow the rule of [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast): one with values raises `ValueError`, because it marks the output of a `numpyro.infer.Predictive` call over a horizon, whose `"obs"` key would pin every draw to the observed data, and one with an empty leaf is dropped.
 
 `covariates: Array`  
 Covariates with time at axis `-2` spanning the observed window. Its time length must match the data the `posterior` was fit on, since the in-sample latent sites are sized to that window. An [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site of another length raises `ValueError` however the model slices its `"obs"` site. For other latents the driver checks only that the `"obs"` draws have one step per row, and a [markov_series()](models.markov_series.md#numpyro_forecast.models.markov_series) latent replays a shorter posterior as a prefix and draws the remaining steps from the prior (a longer one raises NumPyro's `RuntimeError`).
@@ -59,7 +59,7 @@ In-sample posterior-predictive draws of the `obs` site (with `device="host"` com
 
 
 `ValueError`  
-If `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if `covariates` has fewer than two axes (time must be at axis `-2`) or no time steps, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have one step per `covariates` row (a posterior drawn for a different training length), or if the `"obs"` draws do not have time at axis `-2` with one step per `covariates` row.
+If `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of `posterior` (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) has a non-empty leaf, if `covariates` has fewer than two axes (time must be at axis `-2`) or no time steps, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have one step per `covariates` row (a posterior drawn for a different training length), or if the `"obs"` draws do not have time at axis `-2` with one step per `covariates` row.
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).
