@@ -903,7 +903,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L786-L1034" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/evaluate.py#L786-L1035" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">evaluate</span><span class="op">.</span><span class="sig-name">backtest</span>(</span>
@@ -1049,7 +1049,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">reuse_model</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">bool</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="va">True</span></span></code></dt>
 <dd>
-When <code>True</code> (default) and the windowing strategy is rolling, the model instance returned by the first <code>model_fn()</code> call is reused for every window, so <code>model_fn</code> runs once. Ignored for expanding windows and when <code>False</code> (<code>model_fn</code> then runs once per window). It does not cache compiled programs: each <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> or <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> call that <code>forecast_fn</code> or <code>in_sample_fn</code> makes compiles once per window, and so does an SVI fit; for a single fused fit and forecast over all windows use <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a>.
+When <code>True</code> (default) and the windowing strategy is rolling, the model instance returned by the first <code>model_fn()</code> call is reused for every window, so <code>model_fn</code> runs once. Ignored for expanding windows and when <code>False</code> (<code>model_fn</code> then runs once per window). It does not cache compiled programs: each <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a> or <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> call that <code>forecast_fn</code> or <code>in_sample_fn</code> makes compiles once per window, and so does an SVI fit; for a single fused fit and forecast over all windows use <a href="evaluate.backtest_vectorized.html#numpyro_forecast.evaluate.backtest_vectorized" class="gdls-link gdls-code">backtest_vectorized()</a>. Kept for API stability: it only matters for a <code>model_fn</code> that is expensive or stateful.
 </dd>
 </dl>
 </div>
