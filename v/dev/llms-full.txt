@@ -1548,29 +1548,30 @@ backtest_vectorized(rng_key: jax.Array, model_fn: collections.abc.Callable[[], n
 
 Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
-Estimator-equivalent to `backtest()` with rolling windows; it differs
-only in PRNG stream layout and float reduction order, so the equivalence is
-statistical, not bitwise. Model, guide, and SVI compile once regardless of
-the number of windows, giving order-of-magnitude wall-clock wins for tens
-of windows on small models.
+Estimator-equivalent to `backtest()` with rolling windows and a fresh
+guide fitted on each window; it differs only in PRNG stream layout and
+float reduction order, so the equivalence is statistical, not bitwise.
+Model, guide, and SVI compile once regardless of the number of windows,
+giving order-of-magnitude wall-clock wins for tens of windows on small
+models.
 
-PRNG: ``fold_in(rng_key, -1)`` keys the eager warm-up ``svi.init`` on
-window 0. An autoguide runs its ``init_loc_fn`` once, at its first init
-(this warm-up for a fresh guide). A location-based autoguide (for example
-``AutoNormal``, ``AutoDelta`` or ``AutoMultivariateNormal``) derives all
-its initial parameters from those locations, so every window starts from
-the warm-up point. ``fold_in(rng_key, i)`` is the window-``i`` parent,
-split into SVI-init, posterior-draw, and forecast subkeys (the parent
-itself is never consumed; see `_window_key_streams()`). The SVI-init
-subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the
-window (``svi.init`` keeps a key split from it in the SVI state), so it
-changes the fit of a stochastic guide such as ``AutoNormal`` even when
-every window starts from the same point. It changes the start of a window
-only for guide parameters whose initializer takes a key: the network
-weights of a flow autoguide (``AutoIAFNormal``, ``AutoBNAFNormal``) or a
-callable initializer in a hand-written guide, such as
-``numpyro.param("loc", lambda key: random.normal(key))``. Those guides
-start each window from a different point.
+Each window fits its own copy of ``guide``. An autoguide sets itself up
+at its first init and keeps state that depends on the data of that init:
+the support transform of every latent site, the deterministic sites, and
+for ``AutoLaplaceApproximation`` the loss whose Hessian gives the
+covariance. The copy of each window sets up on that window's training
+data, so all of this state comes from the window, as with a fresh guide
+per window in `backtest()`.
+
+PRNG: ``fold_in(rng_key, i)`` is the window-``i`` parent, split into
+SVI-init, posterior-draw, and forecast subkeys (the parent itself is
+never consumed; see `_window_key_streams()`). The SVI-init subkey keys
+the setup of the window's guide copy, so a random ``init_loc_fn`` (such
+as the default ``init_to_uniform``) starts each window from its own
+point, and so does a callable initializer in a hand-written guide, such
+as ``numpyro.param("loc", lambda key: random.normal(key))``. It also
+seeds the Monte Carlo ELBO estimate of every SVI step of the window
+(``svi.init`` keeps a key split from it in the SVI state).
 
 Parameters
 ----------
@@ -1594,13 +1595,23 @@ guide
     same object, sampled through its ``sample_posterior``, or a hand-written
     guide function with the model's signature, sampled through
     ``numpyro.infer.Predictive(guide, params=...)`` on each window's
-    training data. Either way one guide is shared by every window:
+    training data:
 
     ```python
     model = make_model()
     backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
     backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
     ```
+
+    An autoguide must be a fresh instance that was never run or fitted:
+    each window fits its own copy of it, and the instance you pass is left
+    unchanged, so it can be passed again to a later call. Its
+    ``init_loc_fn`` runs inside the vmapped fit, so it must be traceable
+    by JAX (no NumPy conversion of the values it receives). The copy per
+    window applies only when ``guide`` itself is an autoguide: an autoguide
+    behind a handler (``handlers.scale(AutoNormal(model), ...)``) or called
+    from a guide function is shared by all windows and set up once, on
+    window 0, so its supports and Laplace covariance come from window 0.
 
 optim
     NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
@@ -1637,12 +1648,19 @@ Raises
 ValueError
     If ``data`` or ``covariates`` has fewer than two axes (time must be at
     axis ``-2``), if their durations differ, if ``num_samples`` is too
-    small (see ``num_samples``), or if ``metrics`` is not empty and the
+    small (see ``num_samples``), if ``guide`` is an autoguide that is
+    already set up (see ``guide``), or if ``metrics`` is not empty and the
     model's ``"forecast"`` site does not have the shape of ``data`` over
     the test window.
 BacktestWindowError
     If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
     there is no room for a single window.
+RuntimeError
+    If the SVI loss of a window is not finite at the first step (no valid
+    start on that window), after the fit and before the forecasts. When an
+    eager init of the first such window gives NumPyro's own error (for
+    example no valid initial parameters), that error is raised instead;
+    an eager init of window 0 before the fit raises it for window 0.
 VectorizedMetricError
     If a metric is not a pure JAX function under ``vmap``: it forces a host
     conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list

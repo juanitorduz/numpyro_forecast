@@ -317,7 +317,7 @@ print(f"DCT fit wall time: {dct_fit_seconds:.1f} s")
 
     AutoNormal            mean of last 200 losses: -422.42
     AutoNormal + DCT      mean of last 200 losses: -460.38
-    DCT fit wall time: 1.2 s
+    DCT fit wall time: 1.3 s
 
 
 <figure class="figure">
@@ -541,10 +541,10 @@ print(f"mean out-of-sample 94% coverage: {np.mean(oos_cov_94):.2f}  (nominal 0.9
 
 
     folds: 7
-    mean in-sample CRPS:     0.0296
-    mean out-of-sample CRPS: 0.0393
-    mean out-of-sample 50% coverage: 0.54  (nominal 0.50)
-    mean out-of-sample 94% coverage: 0.94  (nominal 0.94)
+    mean in-sample CRPS:     0.0291
+    mean out-of-sample CRPS: 0.0392
+    mean out-of-sample 50% coverage: 0.55  (nominal 0.50)
+    mean out-of-sample 94% coverage: 0.95  (nominal 0.94)
 
 
 ## Rolling forecasts
@@ -700,15 +700,15 @@ for wk, exp_c, roll_c in zip(split_weeks, oos_crps, rolling_oos_crps, strict=Tru
 
 
     expanding folds: 7  |  rolling folds: 7
-    expanding mean out-of-sample CRPS: 0.0393
+    expanding mean out-of-sample CRPS: 0.0392
     rolling   mean out-of-sample CRPS: 0.0432
-      split week 104: expanding 0.0726  rolling 0.0737
-      split week 156: expanding 0.0414  rolling 0.0444
-      split week 208: expanding 0.0304  rolling 0.0331
-      split week 260: expanding 0.0280  rolling 0.0300
-      split week 312: expanding 0.0328  rolling 0.0354
-      split week 364: expanding 0.0343  rolling 0.0400
-      split week 416: expanding 0.0353  rolling 0.0461
+      split week 104: expanding 0.0725  rolling 0.0735
+      split week 156: expanding 0.0414  rolling 0.0447
+      split week 208: expanding 0.0305  rolling 0.0333
+      split week 260: expanding 0.0282  rolling 0.0294
+      split week 312: expanding 0.0329  rolling 0.0350
+      split week 364: expanding 0.0340  rolling 0.0405
+      split week 416: expanding 0.0351  rolling 0.0460
 
 
 Both strategies train each fold on the same fixed `104`-week window at the first split, then diverge: the expanding window keeps every additional year while the rolling window always discards all but the most recent two.
@@ -734,7 +734,7 @@ ax.set(
 
 The mechanism behind the two curves is the random-walk level. Each forecast is anchored at the last observed level and fans out at a rate set by the inferred drift volatility `drift_scale`, which every fold estimates from its own training window. The expanding window estimates that volatility from all history and keeps sharpening it as data accumulates, so its out-of-sample CRPS falls steeply after the data-starved first fold and then settles near the in-sample floor. The rolling window only ever sees the most recent two years, so after its own early improvement it plateaus at a higher, noisier level: it keeps discarding the extra history that the expanding window compounds.
 
-Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0376` versus `0.0470`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
+Here the expanding window is the clear winner: it scores a lower out-of-sample CRPS on every fold (mean `0.0392` versus `0.0432`), and the two are closest only at the first split, where they happen to train on the same two years, before the gap opens up. That is what we should expect on this BART series, where the trend and seasonality are stable and old observations stay informative, so throwing them away can only hurt. The rolling window earns its keep on a different kind of series, one with structural breaks or slow regime drift, where distant history is misleading rather than helpful and a fixed recency focus keeps the forecast adapting, at a bounded, constant fitting cost per fold. `window_type` lets you encode whichever assumption matches your data without touching anything else in the backtest.
 
 
 ## Vectorized rolling backtest
@@ -781,8 +781,8 @@ print(f"vectorized mean 94% coverage: {vectorized_cov_94:.2f}  (nominal 0.94)")
 
 
     folds: 7 in one vmapped SVI fit
-    wall-clock: vectorized 2.0s (incl. compile)  |  loop 16.4s
-    vectorized mean out-of-sample CRPS: 0.0444
+    wall-clock: vectorized 8.2s (incl. compile)  |  loop 17.2s
+    vectorized mean out-of-sample CRPS: 0.0466
     loop       mean out-of-sample CRPS: 0.0432
     vectorized mean 50% coverage: 0.47  (nominal 0.50)
     vectorized mean 94% coverage: 0.94  (nominal 0.94)
@@ -806,7 +806,7 @@ ax.set(
 </figure>
 
 
-Both estimators tell the same story fold by fold, and the printed wall-clock numbers show what a single fused fit buys on this model; the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, a single guide shared by every window (an autoguide or a hand-written guide function), and pure JAX metrics, which the coverage partials above already are.
+Both estimators show the same pattern across folds: the highest CRPS at the first split, the lowest in the middle, and a slow rise toward the end. The per-fold numbers differ, most at split week 208, because each fold starts its SVI fit from its own random point and the fit of this model depends on that start; this is the statistical (not bitwise) agreement described above. The printed wall-clock numbers show what a single fused fit buys on this model, and the vectorized advantage grows with the number of folds, since compilation is paid once rather than per fold. The trade-offs are spelled out in the [backtest_vectorized](../../reference/evaluate.backtest_vectorized.md#numpyro_forecast.evaluate.backtest_vectorized) docstring: fixed-size rolling windows only, one shared model instance, one guide for every window (a fresh autoguide instance, of which each window fits its own copy, or a hand-written guide function), and pure JAX metrics, which the coverage partials above already are.
 
 
 # Next steps
