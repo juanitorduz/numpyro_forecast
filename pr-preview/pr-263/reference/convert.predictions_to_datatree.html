@@ -909,7 +909,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L984-L1082" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L1027-L1130" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">predictions_to_datatree</span>(</span>
@@ -934,7 +934,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">series</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Collection[Any]</span></code></dt>
 <dd>
-<p>One label per series, defining the <code>series</code> coordinate. Any collection is accepted (a list, a NumPy array, a pandas index) and stored as <code>np.asarray(series)</code>.</p>
+<p>One label per series, defining the <code>series</code> coordinate. Any ordered one-dimensional collection is accepted (a list, a NumPy array, a pandas index) and stored as <code>np.asarray(series)</code>.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">group</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">str</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default"><span class="st">"posterior_predictive"</span></span></code></dt>
 <dd>
@@ -964,7 +964,7 @@ A tree with the <code>group</code>, <code>observed_data</code>, and <code>consta
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>group</code> is <code>"observed_data"</code> or <code>"constant_data"</code> (reserved names), or if <code>series</code> does not have one label per series in <code>predictions</code>.
+If <code>group</code> is <code>"observed_data"</code> or <code>"constant_data"</code> (reserved names), if <code>series</code> is not an ordered one-dimensional collection (a set, a dict, a scalar, a 2-D array) or is a <code>pd.MultiIndex</code>, or if <code>series</code> does not have one label per series in <code>predictions</code>.
 </dd>
 </dl>
 </div>
