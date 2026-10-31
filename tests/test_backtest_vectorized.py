@@ -7,6 +7,7 @@ and the I6 acceptance check that a subsequent eager plain-NumPyro SVI fit with a
 fresh guide runs without an ``UnexpectedTracerError``.
 """
 
+import threading
 import types
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -18,10 +19,13 @@ import numpyro.distributions as dist
 import pytest
 from conftest import rw_model, svi_forecast_fn
 from jax import Array, random
+from numpyro import handlers
 from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import (
     AutoGuide,
+    AutoGuideList,
     AutoIAFNormal,
+    AutoLaplaceApproximation,
     AutoMultivariateNormal,
     AutoNormal,
 )
@@ -103,10 +107,14 @@ def test_metrics_statistically_close_to_loop() -> None:
     """Per-window MAE and CRPS of the two backtests agree, averaged over seeds.
 
     The two estimators use different PRNG layouts, so one seed compares two
-    random draws. The mean over a few seeds of a well-determined model removes
-    most of that noise: over 6 seeds and all 20 triples of them, the largest
-    per-window relative difference of the 3-seed mean MAE was about 0.26, so
-    a tolerance of 0.5 checks agreement and does not depend on the seeds.
+    random draws. Both start each window from its own ``init_to_uniform``
+    point. From a far start the fit can need about 4,000 steps of
+    ``Adam(0.01)`` to converge (2,000 steps left some windows of both
+    estimators at a 3 to 8 times larger MAE), so the fits run 5,000 steps. The
+    mean over a few seeds of a well-determined model then removes most of the
+    noise: over 6 seeds and all 20 triples of them, the largest per-window
+    relative difference of the 3-seed mean MAE was about 0.35, so a tolerance
+    of 0.5 checks agreement and does not depend on the seeds.
     """
     duration = 50
     time = jnp.linspace(0.0, 1.0, duration)[:, None]
@@ -120,7 +128,7 @@ def test_metrics_statistically_close_to_loop() -> None:
             lambda: model,
             data,
             time,
-            forecast_fn=svi_forecast_fn(num_steps=2_000),
+            forecast_fn=svi_forecast_fn(num_steps=5_000),
             train_window=TRAIN,
             test_window=TEST,
             stride=5,
@@ -135,7 +143,7 @@ def test_metrics_statistically_close_to_loop() -> None:
             test_window=TEST,
             guide=AutoNormal(model),
             stride=5,
-            num_steps=2_000,
+            num_steps=5_000,
             num_samples=200,
         )
         for name in loop_metrics:
@@ -422,35 +430,37 @@ def test_single_svi_compilation(
     assert tally.count <= max(first, 1)
 
 
-def test_no_tracer_leak_on_subsequent_eager_fit() -> None:
-    """I6 acceptance: a fresh eager plain-NumPyro SVI fit after a vectorized run is clean.
+def test_guide_instance_stays_fresh_for_later_calls_and_eager_fits() -> None:
+    """I6 acceptance: the guide passed in is left unset and usable afterwards.
 
-    The mandatory eager warm-up keeps the vectorized run's AutoGuide instance
-    uncontaminated, and a subsequent eager fit uses a fresh guide, so no
-    ``UnexpectedTracerError`` escapes into later inference.
+    Each window sets up its own copy of the guide under ``vmap``, so no tracer
+    reaches the caller's instance: it can be passed to a second vectorized run
+    (which rejects an already set-up guide) and then fitted eagerly without an
+    ``UnexpectedTracerError``.
     """
     duration = TRAIN + TEST + 7
     data, cov = _series(duration)
     model = rw_model
-    backtest_vectorized(
-        random.PRNGKey(1),
-        lambda: model,
-        data,
-        cov,
-        train_window=TRAIN,
-        test_window=TEST,
-        guide=AutoNormal(model),
-        num_steps=30,
-        num_samples=10,
-    )
+    guide = AutoNormal(model)
+    for seed in range(2):
+        backtest_vectorized(
+            random.PRNGKey(seed),
+            lambda: model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=guide,
+            num_steps=30,
+            num_samples=10,
+        )
     train_data = data[:TRAIN]
     train_cov = cov[:TRAIN]
     full_cov = cov[: TRAIN + TEST]
     key_fit, key_draw = random.split(random.PRNGKey(2))
-    fresh_guide = AutoNormal(rw_model)
-    svi = SVI(rw_model, fresh_guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+    svi = SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
     state = svi.run(key_fit, 30, train_cov, train_data, progress_bar=False)
-    posterior = draw_posterior(key_draw, fresh_guide, state.params, 10)
+    posterior = draw_posterior(key_draw, guide, state.params, 10)
     preds = forecast(random.PRNGKey(4), rw_model, posterior, train_data, full_cov)
     assert preds.shape[0] == 10
     assert jnp.all(jnp.isfinite(preds))
@@ -483,8 +493,7 @@ def test_window_streams_are_disjoint() -> None:
     """Per-window init/posterior/forecast keys are pairwise distinct, never a parent.
 
     Guards the PRNG-hygiene rule from round-1 item 1: ``fold_in(rng_key, i)`` is
-    a split parent only, so no stream may reuse it directly, and none may
-    collide with the eager warm-up key ``fold_in(rng_key, -1)``.
+    a split parent only, so no stream may reuse it directly.
     """
     import jax
 
@@ -492,9 +501,8 @@ def test_window_streams_are_disjoint() -> None:
     num_windows = 2
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, num_windows)
     parents = jax.vmap(lambda i: random.fold_in(rng_key, i))(jnp.arange(num_windows))
-    warmup = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
 
-    keys = [warmup]
+    keys = []
     for i in range(num_windows):
         keys += [init_keys[i], post_keys[i], fc_keys[i], parents[i]]
     raw = [tuple(int(x) for x in jnp.ravel(random.key_data(k))) for k in keys]
@@ -556,25 +564,40 @@ def _starting_points(monkeypatch: pytest.MonkeyPatch, rng_key: Array, guide: Gui
     return result.predictions[:, 0, 0, 0]
 
 
-def test_location_autoguide_windows_start_at_the_warmup_init(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    "make_guide",
+    [
+        pytest.param(lambda: AutoNormal(_level_model), id="AutoNormal"),
+        pytest.param(lambda: AutoMultivariateNormal(_level_model), id="AutoMultivariateNormal"),
+        pytest.param(lambda: AutoIAFNormal(_level_model), id="AutoIAFNormal"),
+    ],
+)
+def test_autoguide_windows_start_where_a_fresh_guide_starts(
+    monkeypatch: pytest.MonkeyPatch, make_guide: Callable[[], AutoGuide]
 ) -> None:
-    """A location-based autoguide starts every window at the warm-up init.
+    """Each window starts where a fresh guide initialized with its SVI-init key starts.
 
-    ``AutoNormal`` runs ``init_loc_fn`` once, in the warm-up ``svi.init`` keyed
-    by ``fold_in(rng_key, -1)``, so every window starts from that point and the
-    per-window SVI-init subkeys do not change it.
+    The guide copy of each window runs its setup (``init_loc_fn``, here the
+    default ``init_to_uniform``, and the network weights of a flow) with that
+    window's SVI-init key, as a fresh guide per window in `backtest()` does, so
+    the windows start from different points. With ``num_steps=0`` and the shared
+    posterior key, each window's first draw equals the first draw of a fresh
+    guide initialized with that window's key.
     """
     rng_key = random.PRNGKey(0)
-    auto = _starting_points(monkeypatch, rng_key, AutoNormal(_level_model, init_scale=1e-6))
-    assert bool(jnp.all(auto == auto[0]))
-
-    guide = AutoNormal(_level_model, init_scale=1e-6)
-    svi = SVI(_level_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
-    warmup_key = random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32))
-    state = svi.init(warmup_key, jnp.zeros((10, 0)), jnp.zeros((10, 2)))
-    warmup_loc = svi.get_params(state)["mu_auto_loc"][0]
-    assert jnp.allclose(auto, warmup_loc, atol=1e-4)
+    starts = _starting_points(monkeypatch, rng_key, make_guide())
+    init_keys, post_keys, _ = _window_key_streams(rng_key, starts.shape[0])
+    expected = []
+    for key in init_keys:
+        guide = make_guide()
+        svi = SVI(_level_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO())
+        state = svi.init(key, jnp.zeros((10, 0)), jnp.zeros((10, 2)))
+        params = svi.get_params(state)
+        expected.append(
+            guide.sample_posterior(post_keys[0], params, sample_shape=(2,))["mu"][0, 0]
+        )
+    assert jnp.allclose(starts, jnp.stack(expected), atol=1e-4)
+    assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
 
 
 def test_keyed_param_initializer_uses_the_per_window_init_key(
@@ -583,72 +606,6 @@ def test_keyed_param_initializer_uses_the_per_window_init_key(
     """A callable ``numpyro.param`` initializer starts each window differently."""
     starts = _starting_points(monkeypatch, random.PRNGKey(0), _keyed_level_guide)
     assert len({round(float(x), 4) for x in starts}) == starts.shape[0]
-
-
-@pytest.mark.parametrize(
-    ("make_guide", "same_start"),
-    [
-        pytest.param(lambda: AutoNormal(_level_model), True, id="AutoNormal"),
-        pytest.param(
-            lambda: AutoMultivariateNormal(_level_model), True, id="AutoMultivariateNormal"
-        ),
-        pytest.param(lambda: AutoIAFNormal(_level_model), False, id="AutoIAFNormal"),
-    ],
-)
-def test_autoguide_init_params_across_window_init_keys(
-    make_guide: Callable[[], AutoGuide], same_start: bool
-) -> None:
-    """Which autoguides draw their initial parameters from the SVI-init key.
-
-    Replays the init sequence of `backtest_vectorized()`: one eager warm-up
-    ``svi.init`` keyed by ``fold_in(rng_key, -1)``, then a vmapped ``svi.init``
-    per window with the SVI-init keys of `_window_key_streams()`. The
-    location-based autoguides get the same parameters in every window; the
-    network weights of a flow autoguide come from each window's key.
-    """
-    import jax
-
-    rng_key = random.PRNGKey(0)
-    cov, data = jnp.zeros((10, 0)), jnp.zeros((10, 2))
-    svi = SVI(_level_model, make_guide(), numpyro.optim.Adam(0.01), Trace_ELBO())
-    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), cov, data)
-    init_keys, _, _ = _window_key_streams(rng_key, 2)
-    params = svi.get_params(jax.vmap(lambda key: svi.init(key, cov, data))(init_keys))
-    leaves = jax.tree_util.tree_leaves(params)
-    assert leaves
-    assert all(bool(jnp.array_equal(x[0], x[1])) for x in leaves) == same_start
-
-
-def test_svi_init_key_seeds_the_elbo_steps() -> None:
-    """The SVI-init subkey changes the fit of ``AutoNormal`` even with a shared start.
-
-    ``svi.init`` keeps a key split from its ``rng_key`` in the SVI state and
-    every ``svi.update`` splits it for the ELBO draws, so two windows with the
-    same data and the same warm-up start end at different parameters.
-    """
-    import jax
-
-    rng_key = random.PRNGKey(0)
-    cov, data = jnp.zeros((10, 0)), jnp.zeros((10, 2))
-    svi = SVI(_level_model, AutoNormal(_level_model), numpyro.optim.Adam(0.01), Trace_ELBO())
-    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), cov, data)
-    init_keys, _, _ = _window_key_streams(rng_key, 2)
-    state = jax.vmap(lambda key: svi.init(key, cov, data))(init_keys)
-    start = svi.get_params(state)["mu_auto_loc"]
-    assert bool(jnp.array_equal(start[0], start[1]))
-    for _ in range(20):
-        state, _ = jax.vmap(lambda s: svi.update(s, cov, data))(state)
-    end = svi.get_params(state)["mu_auto_loc"]
-    assert not bool(jnp.allclose(end[0], end[1]))
-
-
-def test_docstring_describes_the_warmup_init_key() -> None:
-    """The PRNG paragraph names ``init_loc_fn`` and does not call the warm-up init discarded."""
-    doc = backtest_vectorized.__doc__
-    assert doc is not None
-    prng = doc.split("PRNG:", 1)[1].split("Parameters\n", 1)[0]
-    assert "discarded" not in prng
-    assert "init_loc_fn" in prng
 
 
 def test_result_schema_and_dataframe_row_shape() -> None:
@@ -843,11 +800,11 @@ def test_vectorized_result_to_dict_does_not_copy_predictions() -> None:
 
 
 def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit ``optim`` is the exact instance ``SVI`` is constructed with.
+    """An explicit ``optim`` is the exact instance every ``SVI`` is constructed with.
 
     ``backtest_vectorized`` resolves ``resolved_optim = Adam(0.01) if optim is None
-    else optim`` and builds ``SVI(model, guide, resolved_optim, Trace_ELBO())``.
-    Monkeypatching `numpyro_forecast.evaluate.SVI` with a thin recording
+    else optim`` and builds each ``SVI(model, guide, resolved_optim, Trace_ELBO())``
+    from it. Monkeypatching `numpyro_forecast.evaluate.SVI` with a thin recording
     subclass pins both branches: an explicit ``optim`` is forwarded unchanged, and
     ``optim=None`` falls back to a fresh ``Adam`` instance rather than the one we
     passed in a previous call.
@@ -889,8 +846,8 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
         num_steps=10,
         num_samples=5,
     )
-    assert len(recorded_optims) == 1
-    assert recorded_optims[0] is explicit_optim
+    assert recorded_optims
+    assert all(optim is explicit_optim for optim in recorded_optims)
     assert result.t0.shape[0] == expected_windows
     assert bool(jnp.all(jnp.isfinite(result.metrics["crps"])))
 
@@ -908,9 +865,9 @@ def test_explicit_optim_is_forwarded_to_svi(monkeypatch: pytest.MonkeyPatch) -> 
         num_steps=10,
         num_samples=5,
     )
-    assert len(recorded_optims) == 1
-    assert isinstance(recorded_optims[0], numpyro.optim.Adam)
-    assert recorded_optims[0] is not explicit_optim
+    assert recorded_optims
+    assert all(isinstance(optim, numpyro.optim.Adam) for optim in recorded_optims)
+    assert all(optim is not explicit_optim for optim in recorded_optims)
 
 
 def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
@@ -977,3 +934,231 @@ def test_forecast_shape_check_is_skipped_without_metrics() -> None:
     assert result.predictions is not None
     assert result.predictions.shape == (3, 10, TEST)
     assert result.metrics == {}
+
+
+def _noise_model(covariates: Array, data: Array | None = None) -> None:
+    """A constant level ``mu`` with an unknown noise scale; the forecast is ``mu`` itself."""
+    h = Horizon.from_data(covariates, data)
+    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 10.0)))
+    log_sigma = jnp.asarray(numpyro.sample("log_sigma", dist.Normal(0.0, 3.0)))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.Normal(mu, jnp.exp(log_sigma)), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), mu))
+
+
+def test_laplace_covariance_comes_from_each_window() -> None:
+    """Each window's Laplace covariance is the inverse Hessian of its own loss (#185).
+
+    Window 1 has 4 times the noise of window 0. At the MAP point the Laplace
+    posterior sd of ``mu`` is ``sigma_hat / sqrt(n)``, with ``sigma_hat`` the
+    (population) sd of the window's training data. A guide set up on window 0
+    only evaluates the window-0 Hessian at the window-1 MAP point, which gives a
+    wrong (here zero) sd for window 1.
+    """
+    train, test = 16, 2
+    stride = train + test
+    z = random.normal(random.PRNGKey(0), (2 * stride, 1))
+    z = (z - z.mean()) / z.std()
+    data = jnp.where(jnp.arange(2 * stride)[:, None] < stride, z, 4.0 * z)
+    cov = jnp.zeros((2 * stride, 0))
+    result = backtest_vectorized(
+        random.PRNGKey(1),
+        lambda: _noise_model,
+        data,
+        cov,
+        train_window=train,
+        test_window=test,
+        stride=stride,
+        guide=AutoLaplaceApproximation(_noise_model),
+        optim=numpyro.optim.Adam(0.05),
+        num_steps=2_000,
+        num_samples=2_000,
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    for w in range(2):
+        t0 = int(result.t0[w])
+        expected = data[t0 : t0 + train].std() / jnp.sqrt(train)
+        actual = result.predictions[w, :, 0, 0].std()
+        assert float(jnp.abs(actual - expected) / expected) < 0.15, (w, actual, expected)
+
+
+def _bounded_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A level whose support is the observed range of the training data."""
+    assert data is not None, "the support of the level needs the training data"
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("level", dist.Uniform(data.min(), data.max())))
+    sigma = jnp.asarray(numpyro.sample("sigma", dist.LogNormal(-1.0, 0.5)))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.Normal(level, sigma), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), level))
+
+
+def _bounded_level_guide_list() -> AutoGuide:
+    """An ``AutoGuideList`` with one part per latent of `_bounded_level_model`."""
+    guide = AutoGuideList(_bounded_level_model)
+    for site in ("level", "sigma"):
+        guide.append(AutoNormal(handlers.block(_bounded_level_model, expose=[site])))
+    return guide
+
+
+@pytest.mark.parametrize(
+    "make_guide",
+    [
+        pytest.param(lambda: AutoNormal(_bounded_level_model), id="AutoNormal"),
+        pytest.param(_bounded_level_guide_list, id="AutoGuideList"),
+    ],
+)
+def test_data_dependent_support_comes_from_each_window(
+    make_guide: Callable[[], AutoGuide],
+) -> None:
+    """A latent's support transform comes from each window's own data (#185).
+
+    The level is ``Uniform(min(data), max(data))`` and window 1 lies 10 units
+    above window 0, so every forecast draw of a window must stay inside that
+    window's training range. Each part of an ``AutoGuideList`` caches its own
+    setup, so the parts are set up per window too, and a second call with the
+    same instance gives the same check.
+    """
+    train, test = 12, 2
+    stride = train + test
+    u = random.uniform(random.PRNGKey(0), (2 * stride, 1))
+    data = jnp.where(jnp.arange(2 * stride)[:, None] < stride, u, u + 10.0)
+    cov = jnp.zeros((2 * stride, 0))
+    guide = make_guide()
+    for seed in range(2):
+        result = backtest_vectorized(
+            random.PRNGKey(seed),
+            lambda: _bounded_level_model,
+            data,
+            cov,
+            train_window=train,
+            test_window=test,
+            stride=stride,
+            guide=guide,
+            num_steps=500,
+            num_samples=100,
+            keep_predictions=True,
+        )
+        assert result.predictions is not None
+        for w in range(2):
+            t0 = int(result.t0[w])
+            window = data[t0 : t0 + train]
+            draws = result.predictions[w, :, 0, 0]
+            assert bool(jnp.all((draws >= window.min()) & (draws <= window.max()))), (seed, w)
+
+
+def _fitted_autonormal(data: Array, cov: Array) -> AutoGuide:
+    guide = AutoNormal(rw_model)
+    SVI(rw_model, guide, numpyro.optim.Adam(0.01), Trace_ELBO()).run(
+        random.PRNGKey(0), 5, cov, data, progress_bar=False
+    )
+    return guide
+
+
+def _list_with_fitted_part(data: Array, cov: Array) -> AutoGuide:
+    guide = AutoGuideList(rw_model)
+    guide.append(_fitted_autonormal(data, cov))
+    return guide
+
+
+@pytest.mark.parametrize(
+    "make_guide",
+    [
+        pytest.param(_fitted_autonormal, id="fitted-AutoNormal"),
+        pytest.param(_list_with_fitted_part, id="AutoGuideList-with-fitted-part"),
+    ],
+)
+def test_guide_already_set_up_is_rejected(
+    make_guide: Callable[[Array, Array], AutoGuide],
+) -> None:
+    """An autoguide set up on other data raises an actionable ``ValueError`` (#185).
+
+    Its cached setup (prototype trace, supports, shapes) belongs to the other
+    data, here the full series, so the driver asks for a fresh instance instead
+    of failing later with a shape mismatch deep inside NumPyro. A part of an
+    ``AutoGuideList`` caches its own setup, so a fitted part is rejected too.
+    """
+    data, cov = _series(TRAIN + TEST + 4)
+    with pytest.raises(ValueError, match="fresh"):
+        backtest_vectorized(
+            random.PRNGKey(1),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=make_guide(data, cov),
+            num_steps=5,
+            num_samples=4,
+        )
+
+
+class _LockedRandomWalk:
+    """Owns a lock, so it cannot be copied; its bound ``model`` method is the model."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+
+    def model(self, covariates: Array, data: Array | None = None) -> None:
+        """Delegate to ``rw_model``."""
+        rw_model(covariates, data)
+
+
+def test_model_bound_to_an_uncopyable_object_runs() -> None:
+    """The per-window guide copies share the model and never copy what it is bound to.
+
+    ``owner.model`` builds a new bound-method object on each access, so the
+    model of the guide is not the object ``model_fn`` returns. A deep copy of
+    the guide would copy the owner and fail on its lock.
+    """
+    data, cov = _series(TRAIN + TEST + 2)
+    owner = _LockedRandomWalk()
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: owner.model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(owner.model),
+        num_steps=5,
+        num_samples=4,
+    )
+    assert bool(jnp.all(jnp.isfinite(result.losses)))
+
+
+def _log_normal_model(covariates: Array, data: Array | None = None) -> None:
+    """A log-normal likelihood, which has no finite density at an observed zero."""
+    h = Horizon.from_data(covariates, data)
+    mu = jnp.asarray(numpyro.sample("mu", dist.Normal(0.0, 1.0)))
+    with numpyro.plate("time", h.t_obs, dim=-2):
+        numpyro.sample("obs", dist.LogNormal(mu, 1.0), obs=data)
+    if h.future:
+        numpyro.deterministic("forecast", jnp.full((h.future, 1), jnp.exp(mu)))
+
+
+def test_invalid_start_on_window_zero_raises() -> None:
+    """A start with no finite density raises NumPyro's error before the vmapped fit.
+
+    NumPyro checks the initial point only on concrete values; under ``vmap`` a
+    window without a valid start would give NaN losses and metrics silently.
+    """
+    data, cov = jnp.ones((TRAIN + TEST, 1)).at[0, 0].set(0.0), jnp.zeros((TRAIN + TEST, 0))
+    with (
+        pytest.warns(UserWarning, match="Out-of-support"),
+        pytest.raises(RuntimeError, match="valid initial parameters"),
+    ):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: _log_normal_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=AutoNormal(_log_normal_model),
+            num_steps=5,
+            num_samples=4,
+        )
