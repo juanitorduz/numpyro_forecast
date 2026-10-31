@@ -453,7 +453,15 @@ obs_dist
     ``prediction``) or a link callable from the full-horizon predictor to
     the observation distribution.
 prediction
-    The deterministic predictor over the full horizon, time at axis ``-2``.
+    The deterministic predictor over the full horizon, shape
+    ``(*batch, duration, obs)``: ``h.duration`` steps at axis ``-2`` and the
+    observation axis at ``-1``, so ``(duration, 1)`` for a univariate series
+    and ``(duration, n)`` for a panel of ``n`` series (or ``(duration, 1)``
+    inside a size-``n`` plate at ``dim=-1``). A 0-d or per-series
+    predictor also works when a parameter of an elementwise ``obs_dist``
+    carries the time axis, for example a constant mean with a
+    ``(duration, 1)`` noise scale; ``MultivariateNormal`` noise over time
+    needs the ``(duration, 1)`` predictor.
 
 Raises
 ------
@@ -463,8 +471,22 @@ TypeError
 RuntimeError
     If forecasting (``future > 0``) but no observed data is available.
 ValueError
-    If the observation distribution has discrete support but ``h.data`` is
-    not integer-dtyped (the usual mistake for count models).
+    If ``prediction`` has shape ``(duration,)`` (for example
+    ``covariates @ beta``, which needs ``[..., None]``); if the observation
+    distribution has fewer than two axes (as a bare ``MultivariateNormal``
+    over time does: its ``(time,)`` event has no observation axis); if
+    ``h.data`` is given and the observation distribution does not broadcast
+    against it or would score each observation more than once (for example
+    a ``(duration,)`` term added to a ``(duration, 1)`` predictor, a
+    ``(duration,)`` noise scale, a second ``[..., None]``, or a predictor
+    built from a posterior drawn for a shorter training window); or if the
+    observation distribution has discrete support but ``h.data`` is not
+    integer-dtyped (the usual mistake for count models). The shape checks
+    cannot tell a ``(duration,)`` term from a per-series one when ``h.data``
+    has ``h.duration`` series (a square panel in training), and they reject
+    a model whose discrete latents are enumerated (for example ``NUTS`` with
+    funsor installed), because the enumeration axes look like repeated
+    observations.
 
 PlateName(*values)
 
