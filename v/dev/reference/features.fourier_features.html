@@ -903,7 +903,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/features.py#L34-L56" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/features.py#L42-L71" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">features</span><span class="op">.</span><span class="sig-name">fourier_features</span>(
@@ -911,6 +911,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <span class="va">period</span>,
     <span class="va">num_terms</span>,
 )</span></code></pre></div>
+</div>
+<div class="doc-text">
+<p>Safe to call inside a model function (for example with <code>h.duration</code> of a <a href="models.Horizon.html#numpyro_forecast.models.Horizon" class="gdls-link gdls-code">Horizon</a>), also under <code>svi.run</code> or the jitted <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>. The matrix is computed in float64 and cached per argument tuple, then returned in the current default float dtype (<code>float64</code> with x64 enabled, <code>float32</code> otherwise).</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

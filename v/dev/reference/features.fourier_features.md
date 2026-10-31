@@ -15,6 +15,9 @@ features.fourier_features(
 ```
 
 
+Safe to call inside a model function (for example with `h.duration` of a [Horizon](models.Horizon.md#numpyro_forecast.models.Horizon)), also under `svi.run` or the jitted [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast). The matrix is computed in float64 and cached per argument tuple, then returned in the current default float dtype (`float64` with x64 enabled, `float32` otherwise).
+
+
 ## Parameters
 
 

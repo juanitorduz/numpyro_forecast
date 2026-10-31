@@ -2984,7 +2984,7 @@
     "href": "reference/features.fourier_features.html",
     "title": "features.fourier_features()",
     "section": "",
-    "text": "Build a Fourier seasonality design matrix.\n\n\nUsage\nSource\n\n\nfeatures.fourier_features(duration, period, num_terms)\n\n\nParameters\n\n\nduration: int\n\nNumber of time steps.\n\nperiod: float\n\nSeasonal period (in time steps).\n\nnum_terms: int\n\nNumber of harmonics; the output has 2 * num_terms columns (sine then cosine).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"duration two_num_terms\"]\n\nThe design matrix of shape (duration, 2 * num_terms).",
+    "text": "Build a Fourier seasonality design matrix.\n\n\nUsage\nSource\n\n\nfeatures.fourier_features(duration, period, num_terms)\n\n\nSafe to call inside a model function (for example with h.duration of a ~~numpyro_forecast.models.Horizon), also under svi.run or the jitted ~~numpyro_forecast.predictive.forecast(). The matrix is computed in float64 and cached per argument tuple, then returned in the current default float dtype (float64 with x64 enabled, float32 otherwise).\n\n\nParameters\n\n\nduration: int\n\nNumber of time steps.\n\nperiod: float\n\nSeasonal period (in time steps).\n\nnum_terms: int\n\nNumber of harmonics; the output has 2 * num_terms columns (sine then cosine).\n\n\n\n\n\nReturns\n\n\n Float[Array, \"duration two_num_terms\"]\n\nThe design matrix of shape (duration, 2 * num_terms).",
     "crumbs": [
       "Reference",
       "Seasonal features",
