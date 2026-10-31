@@ -192,13 +192,25 @@ def _require_block_steps(
     which a model that slices its own sites can hide from the drivers (issue
     #168). The plate axis is ``-2`` counted left of the ``event_rank`` event axes.
     """
+    # An enumerated discrete site (``infer={"enumerate": "parallel"}``) holds its
+    # support as ``(K, 1, ..., 1)``, not the plate length, so it fails this check;
+    # supporting enumeration would mean skipping the check for such sites.
     axis = -2 - event_rank
-    if value.ndim >= -axis and value.shape[axis] == size:
+    shape = tuple(value.shape)
+    if value.ndim < -axis:
+        msg = (
+            f"innovations expects the value of site {site!r} to have at least {-axis} axes, "
+            f"with time at axis {axis} (the {size} steps of the '{plate_name}' plate), but it "
+            f"has shape {shape}. A univariate series keeps a size-1 observation axis: "
+            "(time, 1), not (time,); do not squeeze the posterior leaf."
+        )
+        raise ValueError(msg)
+    if shape[axis] == size:
         return
     if plate_name == PlateName.TIME:
         cause = (
-            "a posterior drawn for a different training length: draw it from a fit on data "
-            f"with {size} rows"
+            f"a posterior drawn for a different training length: fit it on data with {size} "
+            "rows, or pass the data and covariates of the window it was fit on"
         )
     else:
         cause = (
@@ -207,7 +219,7 @@ def _require_block_steps(
         )
     msg = (
         f"innovations expects site {site!r} to have {size} time steps at axis {axis} (the "
-        f"size of the '{plate_name}' plate), but its value has shape {tuple(value.shape)}. "
+        f"size of the '{plate_name}' plate), but its value has shape {shape}. "
         f"The usual cause is {cause}."
     )
     raise ValueError(msg)

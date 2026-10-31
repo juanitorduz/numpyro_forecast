@@ -197,6 +197,14 @@ def _handwritten_rw_model(covariates: Array, data: Array | None = None) -> None:
             r"\(6, 1\)\. The usual cause is a posterior that holds the forecast-horizon site",
             id="future-site",
         ),
+        pytest.param(
+            "predict_in_sample",
+            rw_model,
+            {"drift": jnp.zeros((4, 5))},
+            r"the value of site 'drift' to have at least 2 axes, with time at axis -2 .* "
+            r"has shape \(5,\)\. A univariate series keeps a size-1 observation axis",
+            id="squeezed-posterior-leaf",
+        ),
     ],
 )
 def test_innovations_rejects_posterior_fit_on_another_window(
