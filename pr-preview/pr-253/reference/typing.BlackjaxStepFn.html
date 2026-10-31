@@ -868,7 +868,7 @@ ul.task-list li input[type="checkbox"] {
 <p><code><span class="doc-parameter-name">typing.BlackjaxStepFn</span><span class="doc-parameter-default-sep op">=</span><span class="doc-parameter-default">Callable[…, object]</span></code></p>
 </div>
 <div class="doc-text">
-<p>Advances <code>inner_state</code> by one step and returns <code>(inner_state, info)</code>. It receives the log density of the current run and the <code>params</code> of a <a href="typing.BlackjaxBuildFn.html#numpyro_forecast.typing.BlackjaxBuildFn" class="gdls-link gdls-code">BlackjaxBuildFn</a> as arguments and must not close over them. Consumed by <a href="contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="gdls-link gdls-code">BlackjaxCustomKernel</a>.</p>
+<p>Advances <code>inner_state</code> by one step and returns <code>(inner_state, info)</code>. It receives the log density of the current run and the <code>params</code> of a <a href="typing.BlackjaxBuildFn.html#numpyro_forecast.typing.BlackjaxBuildFn" class="gdls-link gdls-code">BlackjaxBuildFn</a> as arguments and must use those: a closure over the log density or the tuned values of a build call keeps the values of the first call. A closure over static configuration (for example <code>max_num_doublings</code>) is fine. Consumed by <a href="contrib.blackjax.BlackjaxCustomKernel.html#numpyro_forecast.contrib.blackjax.BlackjaxCustomKernel" class="gdls-link gdls-code">BlackjaxCustomKernel</a>.</p>
 </div>
 
 
