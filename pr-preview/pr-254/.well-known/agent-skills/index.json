@@ -1,0 +1,11 @@
+{
+  "skills": [
+    {
+      "name": "numpyro_forecast",
+      "description": "A JAX/NumPyro port of the ideas in Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.",
+      "files": [
+        "SKILL.md"
+      ]
+    }
+  ]
+}
