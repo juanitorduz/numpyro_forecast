@@ -29,6 +29,7 @@ from tests.example_models import make_hierarchical_model
 
 T_OBS = 6
 FUTURE = 2
+N_SERIES = 10
 TRANSFORMS: dict[TimeTransform, Transform] = {
     "haar": HaarTransform(dim=-2),
     "dct": DiscreteCosineTransform(dim=-2),
@@ -101,6 +102,81 @@ def test_plate_axes_from_time_rightward_join_the_auxiliary_event(
     assert tr["drift_dct"]["fn"].event_shape == event_shape
     assert plate_frames(tr["drift_dct"]) == []
     assert tr["drift"]["value"].shape == shape
+
+
+def _panel_model(plate_dim: int, subsample_size: int | None) -> ForecastModel:
+    """One random walk per series under ``plate("series", N_SERIES, dim=plate_dim)``.
+
+    ``plate_dim=-1`` puts the series right of time (data ``(time, series)``) and
+    ``plate_dim=-3`` left of it (data ``(series, time, 1)``).
+    """
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        with numpyro.plate("series", N_SERIES, subsample_size=subsample_size, dim=plate_dim):
+            y = None if data is None else jnp.asarray(numpyro.subsample(data, event_dim=0))
+            h = Horizon.from_data(covariates, y)
+            drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
+            predict(h, dist.Normal(0.0, 1.0), jnp.cumsum(drift, axis=-2))
+
+    return model
+
+
+def _panel_data(plate_dim: int) -> Array:
+    """Zero data for `_panel_model()`, with the series axis at ``plate_dim``."""
+    return jnp.zeros((T_OBS, N_SERIES) if plate_dim == -1 else (N_SERIES, T_OBS, 1))
+
+
+@pytest.mark.parametrize("plate_dim", [-1, -3], ids=["right-of-time", "left-of-time"])
+def test_subsampled_plate_is_rejected(plate_dim: int) -> None:
+    """A time latent under a subsampled plate raises instead of losing the minibatch scale.
+
+    The auxiliary site is sampled outside the enclosing plates, so under a
+    minibatch it would carry no ``size / subsample_size`` scale while ``obs``
+    keeps it, and an ``AutoGuide`` would size its parameters to the minibatch
+    (issue #175). Both sides of the time axis are affected.
+    """
+    model = time_reparam(_panel_model(plate_dim, subsample_size=2), "haar")
+    with pytest.raises(ValueError, match=r"subsampled plate.*'series'"):
+        get_trace(model, empty_covariates(T_OBS), _panel_data(plate_dim))
+
+
+def test_plate_subsampled_by_the_guide_is_rejected() -> None:
+    """A full model plate that the guide subsamples through ``create_plates`` also raises.
+
+    Under ``replay`` the model's plate takes the guide's indices, so it is
+    subsampled even though the model opens it at full size.
+    """
+    model = time_reparam(_panel_model(-1, subsample_size=None), "haar")
+
+    def create_plates(covariates: Array, data: Array | None = None) -> numpyro.plate:
+        return numpyro.plate("series", N_SERIES, subsample_size=2, dim=-1)
+
+    svi = SVI(model, AutoNormal(model, create_plates=create_plates), Adam(0.01), Trace_ELBO())
+    with pytest.raises(ValueError, match=r"subsampled plate.*'series'"):
+        svi.init(random.PRNGKey(0), empty_covariates(T_OBS), _panel_data(-1))
+
+
+def test_global_time_latent_beside_a_subsampled_plate_is_accepted() -> None:
+    """Only targeted sites are checked: a level shared by all series may sit beside a minibatch.
+
+    The time latent is outside the subsampled plate, so it has no plate scale to
+    lose and is reparameterized as usual; only the per-series sites are scaled.
+    """
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        series = numpyro.plate("series", N_SERIES, subsample_size=2, dim=-1)
+        with series:
+            y = None if data is None else jnp.asarray(numpyro.subsample(data, event_dim=0))
+        h = Horizon.from_data(covariates, y)
+        drift = innovations(h, "drift", dist.Normal(0.0, 1.0))
+        with series:
+            sigma = numpyro.sample("sigma", dist.LogNormal(0.0, 1.0))
+            predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+    tr = get_trace(time_reparam(model, "haar"), empty_covariates(T_OBS), _panel_data(-1))
+
+    assert tr["drift"]["type"] == "deterministic"
+    assert tr["drift_haar"]["scale"] is None
 
 
 def test_composes_with_per_block_loc_scale_reparam() -> None:

@@ -14,7 +14,7 @@ This is the port of the ``time_reparam`` option of Pyro's ``Forecaster`` and
 that returns a ``HaarReparam`` / ``DiscreteCosineReparam`` for every non-observed
 site inside the ``time`` plate
 ([source](https://github.com/pyro-ppl/pyro/blob/dev/pyro/contrib/forecast/util.py)).
-Two deliberate differences:
+Three differences:
 
 - Pyro's string mapping is swapped relative to its documentation (its ``"haar"``
   runs a DCT and its ``"dct"`` a Haar transform). Here ``"haar"`` applies
@@ -23,6 +23,11 @@ Two deliberate differences:
   ``biject_to``. The ``smooth`` (DCT) and ``flip`` (Haar) knobs are not exposed:
   on the white increments `~~numpyro_forecast.models.innovations()` samples they
   create the ill-conditioning the transform is meant to remove.
+- A time latent under a subsampled plate raises ``ValueError``. The auxiliary
+  site is sampled outside every enclosing plate, so it would not get the
+  scale of a subsampled plate. Pyro blocks only the ``time`` plate and the
+  plates to its right, and keeps the plates to its left live with inserted
+  size-1 axes, so a subsampled plate left of time works in Pyro.
 """
 
 from collections.abc import Callable, Mapping
@@ -75,8 +80,10 @@ class _TimeReparam(UnitJacobianReparam):
     expands the distribution nor pushes its frame), and ``_wrap`` re-expands the
     base distribution to the full plate shape before the time axis and every
     plate axis to its right become event axes. Plate axes to the left of time
-    stay batch axes without a plate frame: the split of Pyro's
-    ``experimental_allow_batch=True``.
+    stay batch axes without a plate frame: the batch/event split of Pyro's
+    ``experimental_allow_batch=True``, but Pyro keeps those plates live. A
+    blocked plate applies no subsampling scale either, so `_TimeReparamConfig`
+    rejects a site under a subsampled plate.
     """
 
     def __init__(self, transform: Transform, suffix: str, plate_names: frozenset[str]) -> None:
@@ -119,7 +126,10 @@ class _TimeReparamConfig:
     reasons: `numpyro.handlers.scope` renames the frames after a plate has pushed
     them while the plate blocks by its own bare name, and the auxiliary site must
     be hidden from every enclosing plate, not only ``time``. The auxiliary sample
-    carries an ``infer`` marker so it is never targeted a second time.
+    carries an ``infer`` marker so it is never targeted a second time. A targeted
+    site under a subsampled plate raises ``ValueError``: blocking that plate would
+    drop its ``size / subsample_size`` scale and hide its full size from an
+    ``AutoGuide``. Sites the config does not target are not checked.
     """
 
     transform: TimeTransform
@@ -137,6 +147,19 @@ class _TimeReparamConfig:
         time_plate = next((plate for plate in plates if plate.name == PlateName.TIME), None)
         if time_plate is None:
             return None
+        subsampled = [plate for plate in plates if plate.subsample_size < plate.size]
+        if subsampled:
+            names = ", ".join(
+                f"'{plate.name}' ({plate.subsample_size} of {plate.size})" for plate in subsampled
+            )
+            raise ValueError(
+                "time_reparam does not support a time latent under a subsampled plate: site "
+                f"{msg['name']!r} is under {names}. The auxiliary site is sampled outside the "
+                "enclosing plates, so it would not get the size / subsample_size scale, and an "
+                "AutoGuide would size its parameters to the minibatch. Remove subsample_size "
+                "from the plate (also from the plate that create_plates returns), or do not "
+                "apply time_reparam to this model"
+            )
         dim = cast(int, time_plate.dim) - fn.event_dim
         make_transform, suffix = _TRANSFORMS[self.transform]
         return _TimeReparam(make_transform(dim), suffix, frozenset(plate.name for plate in plates))
@@ -248,6 +271,11 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
         (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
         the outer transform does nothing there either.
 
+        Also if an in-sample time latent is under a subsampled plate when the
+        model is traced: a plate opened with ``subsample_size`` smaller than its
+        size, or a full model plate that the guide subsamples through
+        ``create_plates``. See the Notes.
+
     Notes
     -----
     - Hand the wrapped model, not the original, to the guide, the sampler and
@@ -270,6 +298,14 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       unaffected), the scan sites of
       `~~numpyro_forecast.models.markov_series()`, the error sites of
       `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+    - Time latents under a subsampled plate are not supported. The auxiliary
+      site is sampled outside every enclosing plate, so a subsampled plate
+      would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
+      would size its parameters to the minibatch. A time latent under such a
+      plate therefore raises ``ValueError``, also when the guide subsamples the
+      plate through ``create_plates``. Time latents outside the subsampled
+      plate (for example one level shared by all series) and a plate with
+      ``subsample_size`` equal to its size are accepted.
     - Posterior dictionaries from `~~numpyro_forecast.predictive.draw_posterior()`
       and ``mcmc.get_samples()`` contain both ``drift`` (deterministic) and
       ``drift_haar``; ``Predictive`` substitutes only the latter and recomputes
