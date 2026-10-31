@@ -902,13 +902,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L84-L98" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/exceptions.py#L84-L103" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.CLASS">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">exceptions</span><span class="op">.</span><span class="sig-name">MVNLayoutError</span>(<span class="va">message</span><span class="op">=</span><span class="cn-none">None</span>)</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>Raised by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a>, <a href="surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="gdls-link gdls-code">slice_time()</a>, and <a href="surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="gdls-link gdls-code">prefix_condition()</a> on MVN noise whose <code>loc</code>/<code>covariance_matrix</code> shapes do not match the supported time-leading layout.</p>
+<p>Raised by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a>, <a href="surgery.slice_time.html#numpyro_forecast.surgery.slice_time" class="gdls-link gdls-code">slice_time()</a>, and <a href="surgery.prefix_condition.html#numpyro_forecast.surgery.prefix_condition" class="gdls-link gdls-code">prefix_condition()</a> on MVN noise whose <code>loc</code>/<code>covariance_matrix</code> shapes do not match the supported time-leading layout, and by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a> on a predictor that is neither <code>(*batch, time, 1)</code> (time may be <code>1</code>) nor <code>(*batch, time)</code> with no more axes than the noise location.</p>
 </div>
 
 

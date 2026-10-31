@@ -892,7 +892,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L112-L158" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L117-L186" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">shift_loc</span>(
@@ -910,6 +910,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>AsymmetricLaplace</code>: <code>loc</code> is the mode; the mean is <code>loc + scale * (1 / asymmetry - asymmetry)</code>, which is <code>loc</code> only for <code>asymmetry = 1</code> (the symmetric case).</li>
 </ul>
 <p>An <code>Independent</code> wrapper follows its base distribution. When the predictor must be the mean of a <code>Gumbel</code> or <code>AsymmetricLaplace</code> observation, center the noise yourself, for example <code>dist.Gumbel(-np.euler_gamma * scale, scale)</code> or <code>dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)</code>.</p>
+<p>A <code>MultivariateNormal</code> over time is noise correlated across the time steps of one series (<code>obs == 1</code>): a <code>(*batch, time)</code> location such as <code>jnp.zeros(h.duration)</code> with a <code>(*batch, time, time)</code> covariance. Shifted by a predictor with the observation axis, <code>(*batch, time, 1)</code> as <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> supplies it, the result is the same Gaussian with event shape <code>(time, 1)</code>: <code>log_prob</code> of <code>(*batch, time, 1)</code> data is the joint density over time, one value per series, and draws keep the observation axis. The series of a panel go in the batch, <code>(series, time, 1)</code>, and a size-1 time axis, <code>(*batch, 1, 1)</code>, shifts every time step by the same value. A <code>(*batch, time)</code> predictor, with no more axes than the noise location, keeps the <code>(time,)</code> event. A link callable for <a href="models.predict.html#numpyro_forecast.models.predict" class="gdls-link gdls-code">predict()</a> gets the <code>(time, 1)</code> event with <code>lambda mu: shift_loc(dist.MultivariateNormal(jnp.zeros(h.duration), cov), mu)</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
@@ -932,7 +933,7 @@ The deterministic predictor to add to the distribution’s location.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">dist.Distribution</span></code></dt>
 <dd>
-The same family with its location shifted by <code>loc</code> (the mean or the mode, depending on the family, see above).
+The same family with its location shifted by <code>loc</code> (the mean or the mode, depending on the family, see above). For a <code>MultivariateNormal</code> and a <code>(*batch, time, 1)</code> predictor, a distribution with event shape <code>(time, 1)</code>: its <a href="typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> and <code>variance</code> have the observation axis, and its <code>base_dist</code> is the shifted <code>MultivariateNormal</code> (<code>loc</code>, <code>covariance_matrix</code>, <code>entropy()</code>).
 </dd>
 </dl>
 </div>
@@ -943,7 +944,11 @@ The same family with its location shifted by <code>loc</code> (the mean or the m
 <dl>
 <dt><code> <span class="doc-parameter-annotation">NotImplementedError</span></code></dt>
 <dd>
-If <code>noise_dist</code> is of an unsupported type.
+<p>If <code>noise_dist</code> is of an unsupported type.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">MVNLayoutError</span></code></dt>
+<dd>
+If <code>noise_dist</code> is a <code>MultivariateNormal</code> and its location or <code>loc</code> matches neither layout above, for example a <code>(time, obs)</code> predictor with <code>obs &gt; 1</code>.
 </dd>
 </dl>
 </div>

@@ -14,7 +14,7 @@ surgery.prefix_condition(
 ```
 
 
-For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e. a time slice `[t:]`. Only registered elementwise families take this path; correlated families (e.g. `MultivariateNormal`) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix). An `Independent` wrapper (e.g. from `.to_event(1)`) conditions its base distribution and keeps its `reinterpreted_batch_ndims`, so wrapping does not change the conditional.
+For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e. a time slice `[t:]`. Only registered elementwise families take this path; correlated families (e.g. `MultivariateNormal`) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix). An `Independent` wrapper (e.g. from `.to_event(1)`) conditions its base distribution and keeps its `reinterpreted_batch_ndims`, so wrapping does not change the conditional. A `MultivariateNormal` over time keeps its layout: the event `(time, 1)` returned by [shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc) gives a conditional with event `(f, 1)`, and a bare `(time,)` event gives `(f,)`.
 
 
 ## Parameters

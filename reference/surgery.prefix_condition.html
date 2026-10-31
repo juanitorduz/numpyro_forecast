@@ -892,7 +892,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L238-L271" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L269-L305" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">prefix_condition</span>(
@@ -901,7 +901,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e.&nbsp;a time slice <code>[t:]</code>. Only registered elementwise families take this path; correlated families (e.g. <code>MultivariateNormal</code>) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix). An <code>Independent</code> wrapper (e.g.&nbsp;from <code>.to_event(1)</code>) conditions its base distribution and keeps its <code>reinterpreted_batch_ndims</code>, so wrapping does not change the conditional.</p>
+<p>For independent-over-time noise (the elementwise default) the conditional reduces to the forecast-horizon marginal, i.e.&nbsp;a time slice <code>[t:]</code>. Only registered elementwise families take this path; correlated families (e.g. <code>MultivariateNormal</code>) need a dedicated dispatch implementing a genuine Gaussian conditional, which is checked here rather than silently reduced to a slice (the R1 fix). An <code>Independent</code> wrapper (e.g.&nbsp;from <code>.to_event(1)</code>) conditions its base distribution and keeps its <code>reinterpreted_batch_ndims</code>, so wrapping does not change the conditional. A <code>MultivariateNormal</code> over time keeps its layout: the event <code>(time, 1)</code> returned by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a> gives a conditional with event <code>(f, 1)</code>, and a bare <code>(time,)</code> event gives <code>(f,)</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>

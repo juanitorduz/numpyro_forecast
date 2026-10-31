@@ -24,6 +24,8 @@ This converts Pyro's `obs = data - prediction` idiom into an additive shift of t
 
 An `Independent` wrapper follows its base distribution. When the predictor must be the mean of a `Gumbel` or `AsymmetricLaplace` observation, center the noise yourself, for example `dist.Gumbel(-np.euler_gamma * scale, scale)` or `dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)`.
 
+A `MultivariateNormal` over time is noise correlated across the time steps of one series (`obs == 1`): a `(*batch, time)` location such as `jnp.zeros(h.duration)` with a `(*batch, time, time)` covariance. Shifted by a predictor with the observation axis, `(*batch, time, 1)` as [predict()](models.predict.md#numpyro_forecast.models.predict) supplies it, the result is the same Gaussian with event shape `(time, 1)`: `log_prob` of `(*batch, time, 1)` data is the joint density over time, one value per series, and draws keep the observation axis. The series of a panel go in the batch, `(series, time, 1)`, and a size-1 time axis, `(*batch, 1, 1)`, shifts every time step by the same value. A `(*batch, time)` predictor, with no more axes than the noise location, keeps the `(time,)` event. A link callable for [predict()](models.predict.md#numpyro_forecast.models.predict) gets the `(time, 1)` event with `lambda mu: shift_loc(dist.MultivariateNormal(jnp.zeros(h.duration), cov), mu)`.
+
 
 ## Parameters
 
@@ -39,7 +41,7 @@ The deterministic predictor to add to the distribution's location.
 
 
 `dist.Distribution`  
-The same family with its location shifted by `loc` (the mean or the mode, depending on the family, see above).
+The same family with its location shifted by `loc` (the mean or the mode, depending on the family, see above). For a `MultivariateNormal` and a `(*batch, time, 1)` predictor, a distribution with event shape `(time, 1)`: its [mean](typing.Array.md#numpyro_forecast.typing.Array.mean) and `variance` have the observation axis, and its `base_dist` is the shifted `MultivariateNormal` (`loc`, `covariance_matrix`, `entropy()`).
 
 
 ## Raises
@@ -47,3 +49,6 @@ The same family with its location shifted by `loc` (the mean or the mode, depend
 
 `NotImplementedError`  
 If `noise_dist` is of an unsupported type.
+
+`MVNLayoutError`  
+If `noise_dist` is a `MultivariateNormal` and its location or `loc` matches neither layout above, for example a `(time, obs)` predictor with `obs > 1`.
