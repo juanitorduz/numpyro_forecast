@@ -88,7 +88,7 @@ def test_mvn_diagonal_matches_independent_normal_slice() -> None:
 
 
 def test_mvn_near_singular_prefix_still_valid() -> None:
-    """A near-singular ``Sigma_pp`` yields a valid distribution via jitter."""
+    """A near-singular ``Sigma_pp`` still yields a positive definite conditional."""
     time, t = 4, 2
     cov = jnp.ones((time, time)) * 0.99 + jnp.eye(time) * 0.01
     mvn = dist.MultivariateNormal(loc=jnp.zeros(time), covariance_matrix=cov)
@@ -98,6 +98,82 @@ def test_mvn_near_singular_prefix_still_valid() -> None:
     cond_cov = jnp.asarray(cond.covariance_matrix)
     assert jnp.all(jnp.isfinite(cond_cov))
     assert jnp.all(jnp.linalg.eigvalsh(cond_cov) > 0)
+
+
+def test_mvn_prefix_condition_factors_a_kernel_singular_in_float32() -> None:
+    """A smooth kernel whose float32 Cholesky fails still gives a positive definite conditional.
+
+    The construction is traced, as inside a model, because an eager
+    ``MultivariateNormal`` rejects the covariance during argument validation.
+    """
+    x = jnp.arange(12.0)
+    cov = jnp.exp(-0.5 * ((x[:, None] - x[None, :]) / 5.0) ** 2)
+    if jnp.all(jnp.isfinite(jnp.linalg.cholesky(cov))):
+        pytest.skip("this backend factors the kernel without jitter")
+
+    @jax.jit
+    def conditional_cov(cov: Array) -> Array:
+        mvn = dist.MultivariateNormal(jnp.zeros(cov.shape[-1]), cov)
+        cond = prefix_condition(mvn, jnp.zeros((8, 1)))
+        assert isinstance(cond, dist.MultivariateNormal)
+        return jnp.asarray(cond.covariance_matrix)
+
+    cond_cov = np.asarray(conditional_cov(cov), dtype=np.float64)
+    assert np.isfinite(cond_cov).all()
+    assert np.linalg.eigvalsh(cond_cov).min() > 0
+
+
+def test_mvn_prefix_condition_of_a_zero_covariance_is_the_mean() -> None:
+    """A zero noise scale gives a finite point forecast at the future mean."""
+    loc = jnp.arange(5.0)
+
+    @jax.jit
+    def conditional(cov: Array) -> tuple[Array, Array]:
+        cond = prefix_condition(dist.MultivariateNormal(loc, cov), jnp.ones((3, 1)))
+        assert isinstance(cond, dist.MultivariateNormal)
+        return cond.loc, jnp.asarray(cond.covariance_matrix)
+
+    mean, cov = conditional(jnp.zeros((5, 5)))
+    np.testing.assert_array_equal(np.asarray(mean), np.asarray(loc[3:]))
+    assert np.isfinite(np.asarray(cov)).all()
+
+
+@pytest.mark.parametrize(
+    "step_scale",
+    [
+        np.ones(6),
+        np.full(6, 1e-2),
+        np.full(6, 1e-4),
+        np.array([1.0, 1.0, 1.0, 1.0, 1e-3, 1e-3]),
+    ],
+    ids=["unit", "1e-2", "1e-4", "future-1e-3"],
+)
+def test_mvn_prefix_condition_is_exact_at_any_scale(step_scale: np.ndarray) -> None:
+    """The conditional equals the exact Schur complement for any covariance scale (#173).
+
+    An absolute jitter on the covariance dominated the conditional variance of a
+    small-scale series: at a noise scale of ``1e-4`` the forecast variance was
+    about 500 times the exact value. A jitter relative to the mean variance has
+    the same defect for forecast steps whose variance is far below the mean.
+    """
+    time, t = 6, 4
+    s = jnp.asarray(step_scale, dtype=jnp.float32)
+    cov = s[:, None] * _ar_covariance(time, 0.9) * s[None, :]
+    loc = jnp.linspace(-1.0, 1.0, time) * s
+    data = (s[:t] * jnp.array([0.3, -0.2, 0.5, 0.1]))[:, None]
+    cond = prefix_condition(dist.MultivariateNormal(loc=loc, covariance_matrix=cov), data)
+    assert isinstance(cond, dist.MultivariateNormal)
+    c = np.asarray(cov, dtype=np.float64)
+    m = np.asarray(loc, dtype=np.float64)
+    gain = c[t:, :t] @ np.linalg.inv(c[:t, :t])
+    expected_cov = c[t:, t:] - gain @ c[:t, t:]
+    expected_mean = m[t:] + gain @ (np.asarray(data[:, 0], dtype=np.float64) - m[:t])
+    np.testing.assert_allclose(np.asarray(cond.covariance_matrix), expected_cov, rtol=1e-3)
+    # Each future mean is compared in units of its own step scale.
+    future_scale = step_scale[t:]
+    np.testing.assert_allclose(
+        np.asarray(cond.loc) / future_scale, expected_mean / future_scale, rtol=1e-3, atol=1e-4
+    )
 
 
 def test_mvn_shift_loc_adds_to_mean() -> None:
