@@ -15,6 +15,7 @@ The recursive blocks take plain per-step functions: `markov_series()` a
 sample site.
 """
 
+import math
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from enum import StrEnum
@@ -919,7 +920,7 @@ def _require_predictor_axes(h: Horizon, prediction: Array) -> None:
 
 
 def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
-    """Require ``(time, obs)`` axes on ``full_dist`` and a log density shaped like ``h.data``.
+    """Require ``(time, obs)`` axes on ``full_dist`` and no repeated observation of ``h.data``.
 
     The ``"obs"`` site scores ``h.data`` against ``full_dist`` (its first
     ``h.t_obs`` rows while forecasting, as `~~numpyro_forecast.surgery.slice_time()`
@@ -928,13 +929,14 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
     term added to a ``(duration, 1)`` predictor or used as a noise scale gives a
     ``(time, time)`` grid, a second ``[..., None]`` a ``(time, time, 1)`` one,
     and a predictor with more rows than a single observed step repeats it
-    (issue #166). Shapes alone cannot tell a ``(duration,)`` term from a
-    per-series one when the data has ``h.duration`` series. ``MultivariateNormal``
-    noise is skipped: its event is the time axis, without the observation axis
-    (issue #160).
+    (issue #166). A size-1 axis that the data does not have repeats nothing, so
+    it passes. A bare ``MultivariateNormal`` has the time axis as its
+    ``(time,)`` event and no observation axis, so it fails: `shift_loc()` gives
+    MVN noise the ``(time, 1)`` event for a ``(duration, 1)`` predictor (issue
+    #160). Shapes alone cannot tell a ``(duration,)`` term from a per-series one
+    when the data has ``h.duration`` series, and the axes of enumerated discrete
+    latents, left of the data axes, count as repeated observations.
     """
-    if isinstance(full_dist, dist.MultivariateNormal):
-        return
     shape = (*full_dist.batch_shape, *full_dist.event_shape)
     data = h.data
     width = None if data is None else data.shape[-1]
@@ -949,7 +951,8 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
             grid = tuple(jnp.broadcast_shapes((*shape[:-2], rows, shape[-1]), data_shape))
         except ValueError:
             grid = None
-        if grid == data_shape:
+        # Equal sizes: every axis that the broadcast adds or widens has size 1.
+        if grid is not None and math.prod(grid) == math.prod(data_shape):
             return
         problem = f"does not match the data (shape {data_shape}): " + (
             "the two do not broadcast"
@@ -957,7 +960,14 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
             else f"the obs site would score a {grid} grid, counting each observation more "
             "than once"
         )
-    if shape and shape[-1] == h.duration and shape[-1] not in (1, width):
+    if isinstance(full_dist, dist.MultivariateNormal):
+        hint = (
+            "A MultivariateNormal over time has the (time,) event and no observation axis: "
+            "pass MultivariateNormal noise with a (duration, 1) predictor (for example "
+            "jnp.full((h.duration, 1), value) for a constant mean), or return "
+            "shift_loc(noise, mu) from a link, which gives it the (time, 1) event."
+        )
+    elif shape and shape[-1] == h.duration and shape[-1] not in (1, width):
         hint = (
             f"Its last axis has the h.duration = {h.duration} time steps: give a (duration,) "
             "term (for example covariates @ beta in level + covariates @ beta, or a "
@@ -976,7 +986,8 @@ def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
         hint = (
             "The predictor and every parameter of obs_dist need the time axis at -2 over the "
             f"full horizon (h.duration = {h.duration}), an observation axis of size {allowed} "
-            "at -1, and no axis that the data does not have (such as a second [..., None])."
+            "at -1, and no axis above size 1 that the data does not have (such as a second "
+            "[..., None])."
         )
     msg = (
         "predict expects the observation distribution to have shape (*batch, duration, obs), "
@@ -1033,8 +1044,10 @@ def predict(
         observation axis at ``-1``, so ``(duration, 1)`` for a univariate series
         and ``(duration, n)`` for a panel of ``n`` series (or ``(duration, 1)``
         inside a size-``n`` plate at ``dim=-1``). A 0-d or per-series
-        predictor also works when a parameter of ``obs_dist`` carries the time
-        axis, for example a constant mean with a ``(duration, 1)`` noise scale.
+        predictor also works when a parameter of an elementwise ``obs_dist``
+        carries the time axis, for example a constant mean with a
+        ``(duration, 1)`` noise scale; ``MultivariateNormal`` noise over time
+        needs the ``(duration, 1)`` predictor.
 
     Raises
     ------
@@ -1046,15 +1059,18 @@ def predict(
     ValueError
         If ``prediction`` has shape ``(duration,)`` (for example
         ``covariates @ beta``, which needs ``[..., None]``); if the observation
-        distribution has fewer than two axes; if ``h.data`` is given and the
-        observation distribution would score it on a grid larger than
-        ``h.data`` (for example a ``(duration,)`` term added to a
-        ``(duration, 1)`` predictor, a ``(duration,)`` noise scale or a second
+        distribution has fewer than two axes (as a bare ``MultivariateNormal``
+        over time does: its ``(time,)`` event has no observation axis); if
+        ``h.data`` is given and the observation distribution would score each
+        observation more than once (for example a ``(duration,)`` term added to
+        a ``(duration, 1)`` predictor, a ``(duration,)`` noise scale or a second
         ``[..., None]``); or if the observation distribution has discrete
         support but ``h.data`` is not integer-dtyped (the usual mistake for
         count models). The shape checks cannot tell a ``(duration,)`` term
         from a per-series one when ``h.data`` has ``h.duration`` series (a
-        square panel in training).
+        square panel in training), and they reject a model whose discrete
+        latents are enumerated (for example ``NUTS`` with funsor installed),
+        because the enumeration axes look like repeated observations.
     """
     _require_predictor_axes(h, prediction)
     full_dist = (

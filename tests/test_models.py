@@ -10,7 +10,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import as_model, empty_covariates, rw_body, rw_model
 from jax import random
-from numpyro.handlers import seed, trace
+from numpyro.handlers import seed, substitute, trace
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
@@ -301,6 +301,36 @@ def test_predict_forecast_requires_data() -> None:
             1,
             id="repeats-single-observed-step",
         ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros(h.duration), jnp.eye(h.duration)),
+                jnp.zeros(()),
+            ),
+            (6, 1),
+            8,
+            id="mvn-noise-without-obs-axis",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros(h.duration), jnp.eye(h.duration)),
+                jnp.zeros(()),
+            ),
+            None,
+            6,
+            id="mvn-noise-without-obs-axis-prior",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                lambda mu: dist.MultivariateNormal(mu[..., 0], jnp.eye(h.duration)),
+                jnp.zeros((h.duration, 1)),
+            ),
+            (6, 1),
+            6,
+            id="link-returns-bare-mvn",
+        ),
     ],
 )
 def test_predict_rejects_an_observation_distribution_that_does_not_fit_the_data(
@@ -312,9 +342,11 @@ def test_predict_rejects_an_observation_distribution_that_does_not_fit_the_data(
     term inside the distribution broadcasts its time steps onto the
     observation axis, so ``(time, 1)`` data was scored on a ``(time, time)``
     grid without an error; a second ``[..., None]`` or a predictor longer than
-    a single observed step counted each observation more than once, and the
-    other rows failed later without naming the cause. ``data=None`` rows cover
-    prior sampling, where there is no data to compare against.
+    a single observed step counted each observation more than once; a bare
+    ``MultivariateNormal`` over time (no observation axis) scored ``(time, 1)``
+    data as ``time`` broadcast values; and the other rows failed later without
+    naming the cause. ``data=None`` rows cover prior sampling, where there is
+    no data to compare against.
     """
     data = None if data_shape is None else jnp.zeros(data_shape)
     model = as_model(lambda h, covariates: body(h))
@@ -340,6 +372,51 @@ def test_predict_accepts_a_noise_scale_that_carries_the_time_axis(
     )
     assert tr["obs"]["fn"].batch_shape == data_shape
     assert tr["forecast"]["value"].shape == (2, data_shape[-1])
+
+
+def _one_region_body(h: Horizon) -> None:
+    """A level sampled in a size-1 plate at ``dim=-3``: a ``(1, duration, 1)`` predictor."""
+    with numpyro.plate("region", 1, dim=-3):
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+    predict(h, dist.Normal(0.0, 1.0), level + jnp.zeros((h.duration, 1)))
+
+
+@pytest.mark.parametrize("future", [0, 2])
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((1, h.duration, 1))),
+            id="predictor",
+        ),
+        pytest.param(_one_region_body, id="size-one-plate"),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros((1, h.duration)), jnp.eye(h.duration)).to_event(
+                    1
+                ),
+                jnp.zeros((h.duration, 1)),
+            ),
+            id="mvn-size-one-batch",
+        ),
+    ],
+)
+def test_predict_accepts_a_size_one_axis_that_the_data_does_not_have(
+    body: Callable[[Horizon], None], future: int
+) -> None:
+    """A size-1 leading axis repeats no observation, so ``obs`` scores the data once.
+
+    Every row has mean 0 and unit noise (an identity covariance for the MVN
+    row), so the in-sample density is the standard normal density of the data.
+    """
+    data = jnp.linspace(-1.0, 1.0, 6)[:, None]
+    model = substitute(
+        as_model(lambda h, covariates: body(h)), data={"level": jnp.zeros((1, 1, 1))}
+    )
+    tr = trace(seed(model, random.PRNGKey(0))).get_trace(empty_covariates(6 + future), data)
+    obs_log_density = tr["obs"]["fn"].log_prob(tr["obs"]["value"]).sum()
+    assert jnp.allclose(obs_log_density, dist.Normal(0.0, 1.0).log_prob(data).sum())
 
 
 @pytest.mark.parametrize("future", [0, 2])
