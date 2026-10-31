@@ -12,7 +12,7 @@ group is built with `arviz_base.dict_to_dataset()`: it owns dim naming,
 groups are then assembled with `xarray.DataTree.from_dict()`.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any, cast
 
 import arviz_base
@@ -375,14 +375,90 @@ def _reshape_chains(array: "Array | np.ndarray", num_chains: int) -> "np.ndarray
     return reshaped.reshape(num_chains, n // num_chains, *reshaped.shape[1:])
 
 
-def _merge_coords(
-    time: "np.ndarray", coords: Mapping[str, Sequence[Any]] | None
-) -> dict[str, Any]:
+def _coordinate_values(name: str, values: Collection[Any]) -> "np.ndarray":
+    """Convert one user coordinate to a one-dimensional NumPy array.
+
+    A named ``pd.Index`` handed to xarray as is becomes a coordinate on a
+    dimension named after ``Index.name``, which ``arviz_base.dict_to_dataset()``
+    rejects. ``np.asarray`` drops the name and keeps the zone of a
+    timezone-aware index (an object array of aware timestamps), where
+    ``index.values`` would shift the clock to naive UTC.
+
+    A set or a mapping is a ``Collection`` too, but not a sequence of labels:
+    ``np.asarray`` makes it a 0-d object array. A ``pd.MultiIndex`` (also a
+    single-level one) would become one tuple per position and lose its
+    levels, and ragged input cannot become an array at all. All of them raise
+    here, by name, instead of failing later inside NumPy or xarray.
+    """
+    levels = getattr(values, "levels", None)
+    if levels is not None:
+        msg = (
+            f"{name} is a pandas MultiIndex with {len(levels)} level(s), but a coordinate "
+            "holds one label per position: pass one level (index.get_level_values(level)) "
+            "or join the levels into one label per position"
+        )
+        raise ValueError(msg)
+    try:
+        array = np.asarray(values)
+    except ValueError as exc:
+        msg = (
+            f"{name} must be a one-dimensional collection of labels, but NumPy cannot "
+            f"convert it to an array ({exc}); pass one label per position"
+        )
+        raise ValueError(msg) from exc
+    if array.ndim != 1:
+        msg = (
+            f"{name} must be a one-dimensional collection of labels (a list, a tuple, a "
+            f"NumPy array or a pandas index), got {type(values).__name__} that converts to "
+            f"shape {array.shape}; pass one label per position (a set or a mapping is not "
+            "a sequence of labels)"
+        )
+        raise ValueError(msg)
+    return array
+
+
+def _time_label_type(name: str, times: "np.ndarray") -> str:
+    """Classify time labels as ``numeric``, ``datetime64``, ``aware (<zone>)`` or ``other``.
+
+    Object labels are aware when every label carries the same ``tzinfo``;
+    labels without a ``tzinfo`` (strings, Python dates) are ``other``. Raises
+    ``ValueError``, naming ``name``, when object labels mix time zones, or
+    aware and naive times: xarray would store one object coordinate whose
+    labels do not share a clock.
+    """
+    kind = times.dtype.kind
+    if kind in "biuf":
+        return "numeric"
+    if kind == "M":
+        return "datetime64"
+    if kind != "O":
+        return "other"
+    zones = {
+        "naive" if (tz := getattr(label, "tzinfo", None)) is None else str(tz)
+        for label in times.tolist()
+    }
+    if len(zones) > 1:
+        msg = (
+            f"{name} mixes time zones {sorted(zones)} (naive means a time without a zone); "
+            "convert every time to one zone, for example with tz_convert()"
+        )
+        raise ValueError(msg)
+    zone = zones.pop() if zones else "naive"
+    return "other" if zone == "naive" else f"aware ({zone})"
+
+
+def _normalize_coords(coords: Mapping[str, Collection[Any]] | None) -> dict[str, "np.ndarray"]:
+    """Convert every user coordinate with `_coordinate_values()`."""
+    if coords is None:
+        return {}
+    return {
+        name: _coordinate_values(f"coords[{name!r}]", values) for name, values in coords.items()
+    }
+
+
+def _merge_coords(time: "np.ndarray", coords: Mapping[str, "np.ndarray"]) -> dict[str, Any]:
     """Merge coordinates with precedence user ``coords`` > generated ``time``."""
-    merged: dict[str, Any] = {"time": time}
-    if coords is not None:
-        merged.update(coords)
-    return merged
+    return {"time": time, **coords}
 
 
 def _forecast_group_datasets(
@@ -494,8 +570,8 @@ def to_datatree(
     num_chains: int = 1,
     batch_size: int | None = None,
     device: jax.Device | str | None = "host",
-    coords: Mapping[str, Sequence[Any]] | None = None,
-    time_coord: Sequence[Any] | None = None,
+    coords: Mapping[str, Collection[Any]] | None = None,
+    time_coord: Collection[Any] | None = None,
     posterior_dims: Mapping[str, Sequence[str]] | None = None,
     covariate_dims: Sequence[str] | None = None,
     obs_dims: Sequence[str] | None = None,
@@ -587,13 +663,26 @@ def to_datatree(
         ``time`` coordinate. They also propagate to the forecast groups, where
         the generated forecast ``time`` takes precedence instead (a user
         ``time`` entry covers the in-sample window; use ``time_coord`` for
-        explicit forecast time values).
+        explicit forecast time values). Each value is a one-dimensional
+        collection of labels (a list, a NumPy array, a pandas index) and is
+        stored as ``np.asarray(value)``, so the name of a pandas index is
+        dropped.
     time_coord
         Optional explicit time coordinate values. Without a forecast horizon it
         covers the in-sample window (defaults to ``range(n_time)``); with a
         horizon it must cover the full ``covariates`` length and is split into
         the in-sample and forecast time coordinates (the default is the integer
-        continuation).
+        continuation). Any one-dimensional collection is accepted (a list, a
+        NumPy array, a pandas index) and stored as ``np.asarray(time_coord)``.
+        A timezone-aware ``pd.DatetimeIndex`` keeps
+        its zone and clock time, as an object array of aware ``pd.Timestamp``
+        values (``arviz_base.dict_to_dataset()`` cannot store a zoned datetime
+        dtype). xarray does not treat that coordinate as a datetime: ``.dt``,
+        ``resample()`` and selection by a date string fail (select with a
+        ``pd.Timestamp``), and ``to_netcdf()`` cannot write it. For a datetime
+        coordinate pass ``index.tz_convert("UTC").tz_localize(None)`` (UTC
+        times), or ``index.tz_localize(None)`` (local clock times, which
+        repeat an hour when daylight saving time ends).
     posterior_dims
         Optional mapping from a posterior site name to its non-sample dimension
         names, e.g. ``{"drift": ["time"]}``. Sites listed here share the tree-wide
@@ -645,10 +734,14 @@ def to_datatree(
         no sample axis, if a forecast-horizon key of ``posterior`` (one that
         ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
         has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
-        ``time_coord`` is given but its length does not match the in-sample
-        window plus the forecast horizon, if ``num_chains`` is not a positive
-        integer (``bool`` included), if ``posterior``'s sample count is not
-        evenly divisible by ``num_chains``, if a ``posterior`` value of an
+        ``time_coord`` or a ``coords`` value is not a one-dimensional
+        collection of labels (a set, a dict, a scalar, a 2-D array, ragged
+        input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
+        (or aware and naive times), if ``time_coord`` is given but its length
+        does not match the in-sample window plus the forecast horizon, if
+        ``num_chains`` is not a positive integer (``bool`` included), if
+        ``posterior``'s sample count is not evenly divisible by
+        ``num_chains``, if a ``posterior`` value of an
         `~~numpyro_forecast.models.innovations()` site does not have one step
         per ``data`` row (a posterior drawn for a different training length),
         or if the in-sample draws do not have one time step per ``data`` row or
@@ -701,7 +794,8 @@ def to_datatree(
         key_pred, key_forecast = rng_key, None
 
     if time_coord is not None:
-        time_values = np.asarray(time_coord)
+        time_values = _coordinate_values("time_coord", time_coord)
+        _time_label_type("time_coord", time_values)
         expected = n_time + horizon
         if time_values.shape[0] != expected:
             msg = (
@@ -714,9 +808,8 @@ def to_datatree(
     else:
         time = np.arange(n_time)
         future_time = np.arange(n_time, n_time + horizon)
-    merged_coords = _merge_coords(time, coords)
-
-    merged_arg = cast("dict[Any, Any]", merged_coords)
+    user_coords = _normalize_coords(coords)
+    merged_arg = cast("dict[Any, Any]", _merge_coords(time, user_coords))
 
     require_sample_axis(posterior)
     require_no_horizon_sites(posterior)
@@ -787,8 +880,8 @@ def to_datatree(
             covariates[..., n_time:, :],
             future_time,
             obs_dims=resolved_obs_dims,
-            obs_coords=coords,
-            covariate_coords=coords,
+            obs_coords=user_coords,
+            covariate_coords=user_coords,
             covariate_dims=cov_dims,
         )
         groups["predictions"] = predictions_ds
@@ -810,7 +903,7 @@ def add_forecast_groups(
     forecast_samples: Num[ArrayLike, " sample *batch future obs"],
     covariates_future: Array,
     *,
-    time_coord: Sequence[Any] | None = None,
+    time_coord: Collection[Any] | None = None,
     covariate_dims: Sequence[str] | None = None,
 ) -> "xarray.DataTree":
     """Attach out-of-sample forecast groups to a copy of ``tree``.
@@ -862,7 +955,14 @@ def add_forecast_groups(
         Optional explicit forecast time coordinate; defaults to integer
         continuation of the in-sample time. Required when the in-sample time
         coordinate is non-integer (e.g. datetime64): auto-continuing would have
-        to guess the frequency, so explicit values are demanded instead.
+        to guess the frequency, so explicit values are demanded instead. Any
+        one-dimensional collection is accepted (a list, a NumPy array,
+        a pandas index) and stored as ``np.asarray(time_coord)``. A
+        timezone-aware ``pd.DatetimeIndex`` keeps its zone, as an object array
+        of aware timestamps that xarray does not treat as a datetime. The
+        forecast times must be of the same type as the in-sample ones
+        (numbers, ``datetime64``, or aware times in the same zone); see
+        ``time_coord`` of `to_datatree()` for the costs and the alternatives.
     covariate_dims
         Optional dimension names for ``covariates_future``, one per axis. When
         omitted, the names are inherited from the tree's
@@ -889,9 +989,13 @@ def add_forecast_groups(
         axis of ``forecast_samples`` or ``covariates_future`` differs in size
         from the same axis of the tree's in-sample ``obs`` or covariates, if
         ``covariates_future`` does not have one time step per forecast step,
-        if ``time_coord`` is given but its length differs from the forecast
-        horizon, or if it is omitted while the in-sample time coordinate is
-        non-integer.
+        if ``time_coord`` is not a one-dimensional collection of labels (a
+        set, a dict, a scalar, a 2-D array, ragged input) or is a
+        ``pd.MultiIndex``, if it mixes time zones, if its time type (numbers,
+        ``datetime64``, aware times and their zone) differs from that of the
+        in-sample time coordinate, if ``time_coord`` is given but its length
+        differs from the forecast horizon, or if it is omitted while the
+        in-sample time coordinate is non-integer.
     CovariateDimsError
         If the resolved ``covariate_dims`` (explicit or inherited) do not name
         every ``covariates_future`` axis, or if explicit names disagree with
@@ -930,11 +1034,20 @@ def add_forecast_groups(
         )
         raise ValueError(msg)
     if time_coord is not None:
-        future_time = np.asarray(time_coord)
+        future_time = _coordinate_values("time_coord", time_coord)
         if future_time.shape[0] != future_len:
             msg = (
                 f"time_coord has length {future_time.shape[0]} but "
                 f"forecast_samples spans {future_len} future steps"
+            )
+            raise ValueError(msg)
+        future_type = _time_label_type("time_coord", future_time)
+        in_type = _time_label_type("the in-sample time coordinate", in_time)
+        if future_type != in_type:
+            msg = (
+                f"time_coord holds {future_type} times (dtype {future_time.dtype}) but the "
+                f"in-sample time coordinate holds {in_type} times (dtype {in_time.dtype}); "
+                "pass forecast times of the same type and time zone"
             )
             raise ValueError(msg)
     elif np.issubdtype(in_time.dtype, np.integer):
@@ -968,7 +1081,7 @@ def add_forecast_groups(
 def predictions_to_datatree(
     predictions: Float[ArrayLike, " sample time series"],
     x: Num[ArrayLike, " time"],
-    series: Sequence[Any],
+    series: Collection[Any],
     *,
     group: str = "posterior_predictive",
     observed: Float[ArrayLike, " time series"] | None = None,
@@ -1000,7 +1113,9 @@ def predictions_to_datatree(
         `matplotlib.dates.date2num()` floats and re-format the tick labels
         with `matplotlib.dates.ConciseDateFormatter`.
     series
-        One label per series, defining the ``series`` coordinate.
+        One label per series, defining the ``series`` coordinate. Any
+        one-dimensional collection is accepted (a list, a NumPy
+        array, a pandas index) and stored as ``np.asarray(series)``.
     group
         Predictive group to store the draws under (e.g. ``"prior_predictive"``,
         ``"posterior_predictive"``, ``"predictions"``). ``"observed_data"`` and
@@ -1021,8 +1136,10 @@ def predictions_to_datatree(
     ------
     ValueError
         If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
-        names), or if ``series`` does not have one label per series in
-        ``predictions``.
+        names), if ``series`` is not a one-dimensional collection of labels
+        (a set, a dict, a scalar, a 2-D array, ragged input) or is a
+        ``pd.MultiIndex``, or if ``series`` does not have one label per
+        series in ``predictions``.
     """
     if group in _RESERVED_PREDICTION_GROUPS:
         msg = (
@@ -1032,12 +1149,16 @@ def predictions_to_datatree(
         )
         raise ValueError(msg)
     preds = np.asarray(predictions)[None]
-    if len(series) != preds.shape[-1]:
-        msg = f"series has length {len(series)} but predictions carry {preds.shape[-1]} series"
+    series_values = _coordinate_values("series", series)
+    if series_values.shape[0] != preds.shape[-1]:
+        msg = (
+            f"series has length {series_values.shape[0]} but predictions carry "
+            f"{preds.shape[-1]} series"
+        )
         raise ValueError(msg)
     x_values = np.asarray(x)
     x_grid = np.broadcast_to(x_values[:, None], preds.shape[2:])
-    coords = cast("dict[Any, Any]", {"time": x_values, "series": list(series)})
+    coords = cast("dict[Any, Any]", {"time": x_values, "series": series_values})
     predictive_ds = arviz_base.dict_to_dataset(
         {"obs": preds},
         sample_dims=_SAMPLE_DIMS,
