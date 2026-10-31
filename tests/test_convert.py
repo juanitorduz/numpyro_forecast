@@ -433,36 +433,102 @@ def _export_with_coordinate(site: str, value: Any) -> None:
 
 @pytest.mark.parametrize("site", list(_COORDINATE_NAMES))
 @pytest.mark.parametrize(
-    ("value", "match"),
+    "value",
     [
-        pytest.param({"b", "a"}, r"got set that converts to shape \(\)", id="set"),
-        pytest.param({"a": 0, "b": 1}, r"got dict that converts to shape \(\)", id="dict"),
-        pytest.param(np.array(5), r"got ndarray that converts to shape \(\)", id="scalar"),
-        pytest.param(np.zeros((2, 2)), r"converts to shape \(2, 2\)", id="2d-array"),
+        pytest.param({"b", "a"}, id="set"),
+        pytest.param({"a": 0, "b": 1}, id="dict"),
+        pytest.param(np.array(5), id="scalar"),
+        pytest.param(np.zeros((2, 2)), id="2d-array"),
+        pytest.param([("a", 1), ("b",)], id="ragged"),
     ],
 )
-def test_unordered_or_not_one_dimensional_coordinate_raises(
-    site: str, value: Any, match: str
-) -> None:
-    """A set, a dict, a scalar or a 2-D array is no coordinate: it raises by name.
+def test_not_one_dimensional_coordinate_raises(site: str, value: Any) -> None:
+    """A set, a dict, a scalar, a 2-D array or ragged input is no coordinate: it raises by name.
 
-    A set or a dict is a ``Collection`` but has no order, and ``np.asarray``
-    makes it a 0-d array that used to fail inside xarray or with an
-    ``IndexError`` on the length check.
+    ``np.asarray`` makes a set or a dict a 0-d array, which used to fail inside
+    xarray or with an ``IndexError`` on the length check; ragged input used to
+    raise NumPy's own error, which does not name the argument.
     """
     name = re.escape(_COORDINATE_NAMES[site])
-    with pytest.raises(ValueError, match=rf"{name} must be an ordered one-dimensional .*{match}"):
+    with pytest.raises(ValueError, match=rf"{name} must be a one-dimensional collection"):
         _export_with_coordinate(site, value)
 
 
 @pytest.mark.parametrize("site", list(_COORDINATE_NAMES))
-def test_multi_index_coordinate_raises(site: str) -> None:
-    """A ``pd.MultiIndex`` would become one tuple per position and lose its levels."""
+@pytest.mark.parametrize("levels", [1, 2])
+def test_multi_index_coordinate_raises(site: str, levels: int) -> None:
+    """A ``pd.MultiIndex``, also a single-level one, would become tuples and lose its levels."""
     pd = pytest.importorskip("pandas")
-    value = pd.MultiIndex.from_tuples([("a", 1), ("b", 2)])
+    value = pd.MultiIndex.from_arrays([["a", "b"], [1, 2]][:levels])
     name = re.escape(_COORDINATE_NAMES[site])
-    with pytest.raises(ValueError, match=rf"{name} is a pandas MultiIndex with 2 levels"):
+    with pytest.raises(ValueError, match=rf"{name} is a pandas MultiIndex with {levels} level"):
         _export_with_coordinate(site, value)
+
+
+@pytest.mark.parametrize("site", ["time_coord", "add_forecast_groups"])
+@pytest.mark.parametrize(
+    ("zones", "match"),
+    [(["UTC", "Asia/Tokyo"], r"\['Asia/Tokyo', 'UTC'\]"), (["UTC", None], r"\['UTC', 'naive'\]")],
+    ids=["two-zones", "aware-and-naive"],
+)
+def test_time_coord_mixing_time_zones_raises(
+    site: str, zones: list[str | None], match: str
+) -> None:
+    """Times in several zones (or aware and naive times) do not share a clock."""
+    pd = pytest.importorskip("pandas")
+    times = [pd.Timestamp("2020-01-01", tz=zone) for zone in zones]
+    value = times + times[:1] * 3 if site == "time_coord" else times
+    with pytest.raises(ValueError, match=rf"time_coord mixes time zones {match}"):
+        _export_with_coordinate(site, value)
+
+
+def _in_sample_and_forecast_times(case: str) -> tuple[Collection[Any] | None, Collection[Any]]:
+    """The in-sample (``None``: default integers) and forecast time labels that ``case`` names."""
+    if case == "integer-then-float":
+        return None, np.array([3.0, 4.0])
+    if case == "integer-then-datetime64":
+        return None, np.datetime64("2024-01-04") + np.arange(2)
+    if case == "strings-of-other-lengths":
+        return ["d1", "d2", "d3"], ["d10", "d11"]
+    pd = pytest.importorskip("pandas")
+    local = pd.date_range("2020-01-10 22:00", periods=5, freq="h", tz="America/Los_Angeles")
+    if case == "aware-then-naive":
+        return local[:3], local[3:].tz_localize(None)
+    return local[:3], local[3:].tz_convert("Asia/Tokyo")
+
+
+def _add_forecast_times(case: str) -> xarray.DataTree:
+    """Attach two forecast steps with the time labels of ``case`` to a three-step tree."""
+    in_time, future_time = _in_sample_and_forecast_times(case)
+    tree = _two_series_tree(duration=3, time_coord=in_time)
+    return add_forecast_groups(
+        tree, jnp.zeros((4, 2, 2)), empty_covariates(2), time_coord=future_time
+    )
+
+
+@pytest.mark.parametrize("case", ["integer-then-float", "strings-of-other-lengths"])
+def test_add_forecast_groups_accepts_time_labels_of_the_same_type(case: str) -> None:
+    """The type check compares kinds of time, not dtypes: ``<U2`` and ``<U3`` labels match."""
+    _, future_time = _in_sample_and_forecast_times(case)
+    tree = _add_forecast_times(case)
+    assert tree["predictions"].coords["time"].values.tolist() == list(future_time)
+
+
+@pytest.mark.parametrize(
+    ("case", "match"),
+    [
+        ("integer-then-datetime64", r"holds datetime64 times .* holds numeric times"),
+        ("aware-then-naive", r"holds datetime64 times .* holds aware \(America/Los_Angeles\)"),
+        (
+            "aware-then-other-zone",
+            r"holds aware \(Asia/Tokyo\) times .* holds aware \(America/Los_Angeles\)",
+        ),
+    ],
+)
+def test_add_forecast_groups_rejects_time_labels_of_another_type(case: str, match: str) -> None:
+    """Forecast times of another type or zone would give the tree two kinds of ``time``."""
+    with pytest.raises(ValueError, match=rf"time_coord {match}"):
+        _add_forecast_times(case)
 
 
 def test_to_datatree_rejects_short_covariates() -> None:
