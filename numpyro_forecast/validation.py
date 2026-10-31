@@ -169,6 +169,41 @@ def drop_empty_horizon_sites(posterior: Mapping[str, ArrayLike]) -> dict[str, Ar
     return {name: leaf for name, leaf in posterior.items() if not _is_horizon_site(name)}
 
 
+def drop_obs_site(posterior: Mapping[str, ArrayLike]) -> dict[str, ArrayLike]:
+    """Return ``posterior`` without its ``"obs"`` key.
+
+    ``numpyro.infer.Predictive`` substitutes every posterior sample site by
+    name, so an ``"obs"`` key (the output of a ``Predictive`` call with
+    ``data``, merged into the posterior) would make every in-sample draw equal
+    to it (issue #260). A prior predictive dict carries ``"obs"`` too: without
+    the key, ``obs`` is drawn again from the same latents.
+
+    Parameters
+    ----------
+    posterior
+        Posterior samples, sample axis leading.
+
+    Returns
+    -------
+    dict[str, ArrayLike]
+        ``posterior`` without the ``"obs"`` key.
+
+    Raises
+    ------
+    ValueError
+        If ``"obs"`` is the only key, so no latent site is left to draw from.
+    """
+    kept = {name: leaf for name, leaf in posterior.items() if name != "obs"}
+    if not kept and "obs" in posterior:
+        msg = (
+            "posterior holds only the 'obs' site, which the drivers drop because it would pin "
+            "every in-sample draw to its values. Pass the posterior of the training run: "
+            "mcmc.get_samples() or draw_posterior(), which hold the latent sites."
+        )
+        raise ValueError(msg)
+    return kept
+
+
 def require_pred_truth_shapes(pred: ArrayLike, truth: ArrayLike) -> None:
     """Raise when ``truth.shape`` is not ``pred.shape[1:]``.
 

@@ -22,6 +22,7 @@ from conftest import (
 )
 from jax import Array, random
 from jax.typing import ArrayLike
+from numpyro.infer import Predictive
 
 from numpyro_forecast.convert import (
     _reshape_chains,
@@ -701,6 +702,25 @@ def test_to_datatree_rejects_in_sample_draws_narrower_than_data() -> None:
             jnp.zeros((5, 3)),
             empty_covariates(5),
         )
+
+
+def test_to_datatree_drops_an_obs_key_from_the_posterior() -> None:
+    """Issue #260: an ``"obs"`` key is neither a posterior variable nor a pin on the draws.
+
+    Merged from a ``Predictive`` call with ``data``, it used to export the data
+    once per draw in the ``posterior`` group and as every in-sample draw.
+    """
+    t = 6
+    covariates = empty_covariates(t)
+    data = 0.1 * random.normal(random.PRNGKey(0), (t, 1))
+    posterior = {"drift_scale": jnp.ones(4), "sigma": jnp.ones(4), "drift": jnp.zeros((4, t, 1))}
+    observed = Predictive(rw_model, posterior_samples=posterior)(
+        random.PRNGKey(1), covariates, data
+    )
+    tree = to_datatree(random.PRNGKey(2), rw_model, {**posterior, **observed}, data, covariates)
+    assert set(tree["posterior"].data_vars) == set(posterior)
+    in_sample = np.asarray(tree["posterior_predictive"]["obs"])
+    assert not np.allclose(in_sample, np.asarray(data))
 
 
 @pytest.mark.parametrize(

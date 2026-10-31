@@ -53,6 +53,7 @@ from numpyro_forecast.offload import (
 from numpyro_forecast.typing import Array, ForecastModel
 from numpyro_forecast.validation import (
     drop_empty_horizon_sites,
+    drop_obs_site,
     require_covariates_extend_data,
     require_positive_num_samples,
     require_sample_axis,
@@ -490,7 +491,8 @@ def _require_data_axes(shape: tuple[int, ...], data_shape: tuple[int, ...], step
         "the series axis, which draws one forecast for all of them: call predict inside a "
         "size-n plate at dim=-1, numpyro.plate('series', n, dim=-1), or give the predictor "
         "shape (duration, n), for example jnp.broadcast_to(prediction, (h.duration, n)). A "
-        "batch axis of data needs a plate at its dim or that axis on the predictor."
+        "batch axis of data needs a plate at its dim or that axis on the predictor, and a "
+        "size-1 batch axis that the model does not use can be removed from data."
     )
     raise ValueError(msg)
 
@@ -738,7 +740,8 @@ def predict_in_sample(
         If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
         the leaves disagree on the sample-axis length, if a forecast-horizon
         key of ``posterior`` (one that ends in ``"_future"`` or contains
-        ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if
+        ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if ``"obs"``
+        is the only key of ``posterior``, if
         ``covariates`` has fewer than two axes (time must be at axis ``-2``)
         or no time steps, if a ``posterior`` value of an
         `~~numpyro_forecast.models.innovations()` site does not have one step
@@ -766,11 +769,7 @@ def predict_in_sample(
     reflect the model as it is at call time and ``model`` need not be hashable.
     """
     require_time_axis("covariates", covariates)
-    # Predictive substitutes every posterior sample site by name: an "obs" key (the output of a
-    # Predictive call with data) would pin every draw of the site this driver returns (#260).
-    posterior = {
-        name: leaf for name, leaf in drop_empty_horizon_sites(posterior).items() if name != "obs"
-    }
+    posterior = drop_obs_site(drop_empty_horizon_sites(posterior))
     steps = covariates.shape[-2]
     # No data argument: the model must see ``data=None`` to sample ``obs``.
     predictive = _compiled_predictive(model, "obs", parallel=parallel)
