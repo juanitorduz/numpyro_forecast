@@ -2260,18 +2260,18 @@ coords
     ``time`` coordinate. They also propagate to the forecast groups, where
     the generated forecast ``time`` takes precedence instead (a user
     ``time`` entry covers the in-sample window; use ``time_coord`` for
-    explicit forecast time values). Each value is an ordered
-    one-dimensional collection of labels (a list, a NumPy array, a pandas
-    index) and is stored as ``np.asarray(value)``, so the name of a pandas
-    index is dropped.
+    explicit forecast time values). Each value is a one-dimensional
+    collection of labels (a list, a NumPy array, a pandas index) and is
+    stored as ``np.asarray(value)``, so the name of a pandas index is
+    dropped.
 time_coord
     Optional explicit time coordinate values. Without a forecast horizon it
     covers the in-sample window (defaults to ``range(n_time)``); with a
     horizon it must cover the full ``covariates`` length and is split into
     the in-sample and forecast time coordinates (the default is the integer
-    continuation). Any ordered one-dimensional collection is accepted (a
-    list, a NumPy array, a pandas index) and stored as
-    ``np.asarray(time_coord)``. A timezone-aware ``pd.DatetimeIndex`` keeps
+    continuation). Any one-dimensional collection is accepted (a list, a
+    NumPy array, a pandas index) and stored as ``np.asarray(time_coord)``.
+    A timezone-aware ``pd.DatetimeIndex`` keeps
     its zone and clock time, as an object array of aware ``pd.Timestamp``
     values (``arviz_base.dict_to_dataset()`` cannot store a zoned datetime
     dtype). xarray does not treat that coordinate as a datetime: ``.dt``,
@@ -2331,13 +2331,14 @@ ValueError
     no sample axis, if a forecast-horizon key of ``posterior`` (one that
     ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
     has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
-    ``time_coord`` or a ``coords`` value is not an ordered one-dimensional
-    collection (a set, a dict, a scalar, a 2-D array) or is a
-    ``pd.MultiIndex``, if ``time_coord`` is given but its length does not
-    match the in-sample window plus the forecast horizon, if ``num_chains``
-    is not a positive integer (``bool`` included), if ``posterior``'s
-    sample count is not evenly divisible by ``num_chains``, if a
-    ``posterior`` value of an
+    ``time_coord`` or a ``coords`` value is not a one-dimensional
+    collection of labels (a set, a dict, a scalar, a 2-D array, ragged
+    input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
+    (or aware and naive times), if ``time_coord`` is given but its length
+    does not match the in-sample window plus the forecast horizon, if
+    ``num_chains`` is not a positive integer (``bool`` included), if
+    ``posterior``'s sample count is not evenly divisible by
+    ``num_chains``, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have one step
     per ``data`` row (a posterior drawn for a different training length),
     or if the in-sample draws do not have one time step per ``data`` row or
@@ -2430,10 +2431,12 @@ time_coord
     continuation of the in-sample time. Required when the in-sample time
     coordinate is non-integer (e.g. datetime64): auto-continuing would have
     to guess the frequency, so explicit values are demanded instead. Any
-    ordered one-dimensional collection is accepted (a list, a NumPy array,
+    one-dimensional collection is accepted (a list, a NumPy array,
     a pandas index) and stored as ``np.asarray(time_coord)``. A
     timezone-aware ``pd.DatetimeIndex`` keeps its zone, as an object array
-    of aware timestamps that xarray does not treat as a datetime; see
+    of aware timestamps that xarray does not treat as a datetime. The
+    forecast times must be of the same type as the in-sample ones
+    (numbers, ``datetime64``, or aware times in the same zone); see
     ``time_coord`` of `to_datatree()` for the costs and the alternatives.
 covariate_dims
     Optional dimension names for ``covariates_future``, one per axis. When
@@ -2461,11 +2464,13 @@ ValueError
     axis of ``forecast_samples`` or ``covariates_future`` differs in size
     from the same axis of the tree's in-sample ``obs`` or covariates, if
     ``covariates_future`` does not have one time step per forecast step,
-    if ``time_coord`` is not an ordered one-dimensional collection (a set,
-    a dict, a scalar, a 2-D array) or is a ``pd.MultiIndex``, if
-    ``time_coord`` is given but its length differs from the forecast
-    horizon, or if it is omitted while the in-sample time coordinate is
-    non-integer.
+    if ``time_coord`` is not a one-dimensional collection of labels (a
+    set, a dict, a scalar, a 2-D array, ragged input) or is a
+    ``pd.MultiIndex``, if it mixes time zones, if its time type (numbers,
+    ``datetime64``, aware times and their zone) differs from that of the
+    in-sample time coordinate, if ``time_coord`` is given but its length
+    differs from the forecast horizon, or if it is omitted while the
+    in-sample time coordinate is non-integer.
 CovariateDimsError
     If the resolved ``covariate_dims`` (explicit or inherited) do not name
     every ``covariates_future`` axis, or if explicit names disagree with
@@ -2502,7 +2507,7 @@ x
     with `matplotlib.dates.ConciseDateFormatter`.
 series
     One label per series, defining the ``series`` coordinate. Any
-    ordered one-dimensional collection is accepted (a list, a NumPy
+    one-dimensional collection is accepted (a list, a NumPy
     array, a pandas index) and stored as ``np.asarray(series)``.
 group
     Predictive group to store the draws under (e.g. ``"prior_predictive"``,
@@ -2524,9 +2529,10 @@ Raises
 ------
 ValueError
     If ``group`` is ``"observed_data"`` or ``"constant_data"`` (reserved
-    names), if ``series`` is not an ordered one-dimensional collection (a
-    set, a dict, a scalar, a 2-D array) or is a ``pd.MultiIndex``, or if
-    ``series`` does not have one label per series in ``predictions``.
+    names), if ``series`` is not a one-dimensional collection of labels
+    (a set, a dict, a scalar, a 2-D array, ragged input) or is a
+    ``pd.MultiIndex``, or if ``series`` does not have one label per
+    series in ``predictions``.
 
 
 ## Extensions (contrib)
