@@ -232,7 +232,7 @@ def test_chunked_metrics_accept_host_committed_inputs(
 
     `~~numpyro_forecast.evaluate._chunked_cell_metric()` slices ``pred``
     and ``truth`` into cell blocks through
-    `~~numpyro_forecast._offload._leaf_view()` rather than the
+    `~~numpyro_forecast.offload.leaf_view()` rather than the
     fused kernel used by the unchunked path, so it needs its own coverage: any
     mix of host-committed/device-resident inputs must reproduce the
     all-device, unchunked result.
@@ -259,7 +259,7 @@ def test_metrics_accept_cpu_committed_inputs_under_accelerator_default(
 ) -> None:
     """A CPU-committed ``pred`` (the primary ``device="host"`` result) scores unchanged.
 
-    On a CPU-only machine the move in ``_device_view`` is a same-device no-op,
+    On a CPU-only machine the move in ``device_view`` is a same-device no-op,
     so this pins the branch structurally: with the default backend reported as
     an accelerator, the metric kernels must still accept the operand and
     reproduce the plain value (both fused and chunked paths).

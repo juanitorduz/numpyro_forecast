@@ -12,7 +12,6 @@ from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
-from numpyro_forecast._validation import require_pred_truth_shapes
 from numpyro_forecast.evaluate import (
     eval_coverage,
     eval_crps,
@@ -27,6 +26,7 @@ from numpyro_forecast.metrics import (
     make_mase,
 )
 from numpyro_forecast.typing import Metric
+from numpyro_forecast.validation import require_pred_truth_shapes
 
 
 def _brute_force_crps(pred: Array, truth: Array) -> Array:
@@ -202,7 +202,7 @@ def test_crps_accepts_cpu_committed_pred_under_accelerator_default(
 ) -> None:
     """A CPU-committed ``pred`` (the primary ``device="host"`` result) scores unchanged.
 
-    Structural coverage of ``_device_view``'s CPU-committed branch: on a
+    Structural coverage of ``device_view``'s CPU-committed branch: on a
     CPU-only machine the move is a same-device no-op, but the kernel must
     accept the operand under an accelerator default backend.
     """

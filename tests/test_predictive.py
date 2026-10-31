@@ -30,25 +30,25 @@ from numpyro.infer import MCMC, NUTS, Predictive
 from numpyro.infer.autoguide import AutoNormal
 
 import numpyro_forecast
-from numpyro_forecast._offload import (
+from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
+from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.offload import (
     WARNING_SKIP_PREFIXES,
-    _device_view,
     _host_memory_kind,
     _host_sharding,
     _is_cpu_committed,
     _is_host_resident,
-    _leaf_view,
     _memory_budget_line,
-    _oom_advice,
-    _resolve_device,
-    _stitch_chunks,
-    _transfer,
+    chunk_indices,
+    device_view,
     draw_chunked,
+    leaf_view,
+    oom_advice,
+    resolve_device,
+    stitch_chunks,
+    transfer,
 )
-from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
-from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.predictive import (
-    _chunk_indices,
     _chunked_draws,
     _sample_axis_size,
     draw_posterior,
@@ -346,11 +346,11 @@ def test_sample_axis_size_returns_shared_length() -> None:
 
 def test_chunk_indices_rejects_non_positive_batch() -> None:
     with pytest.raises(ValueError, match="batch_size must be positive"):
-        _chunk_indices(5, 0)
+        chunk_indices(5, 0)
 
 
 def test_chunk_indices_wraps_final_block() -> None:
-    blocks = _chunk_indices(10, 4)
+    blocks = chunk_indices(10, 4)
     assert [tuple(int(i) for i in block) for block in blocks] == [
         (0, 1, 2, 3),
         (4, 5, 6, 7),
@@ -359,7 +359,7 @@ def test_chunk_indices_wraps_final_block() -> None:
 
 
 def test_chunk_indices_no_wrap_when_exact_multiple() -> None:
-    blocks = _chunk_indices(8, 4)
+    blocks = chunk_indices(8, 4)
     assert [tuple(int(i) for i in block) for block in blocks] == [(0, 1, 2, 3), (4, 5, 6, 7)]
 
 
@@ -547,13 +547,13 @@ def _cpu() -> jax.Device:
 
 
 def test_resolve_device_none_passthrough() -> None:
-    assert _resolve_device(None) is None
+    assert resolve_device(None) is None
 
 
 def test_resolve_device_accepts_platform_string_and_device() -> None:
     cpu = _cpu()
-    assert _resolve_device("cpu") == cpu
-    assert _resolve_device(cpu) is cpu
+    assert resolve_device("cpu") == cpu
+    assert resolve_device(cpu) is cpu
 
 
 def test_chunked_draws_device_commits_result() -> None:
@@ -686,7 +686,7 @@ def test_resolve_device_host_resolves_to_the_cpu_device(device: str) -> None:
     That device is pageable host memory: it has no pinned-pool cap, which is
     what makes ``device="host"`` viable for a 50K-series posterior on a GPU host.
     """
-    assert _resolve_device(device) == jax.devices("cpu")[0]
+    assert resolve_device(device) == jax.devices("cpu")[0]
 
 
 _FALLBACK_WARNING = r"falls back to device='host'.*NumPy.*set_platform\('cuda,cpu'\)"
@@ -705,9 +705,9 @@ def test_resolve_device_host_without_cpu_backend_is_numpy_and_silent(
     monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        resolved = _resolve_device("host")
+        resolved = resolve_device("host")
     assert resolved == "numpy"
-    assert isinstance(_transfer(jnp.arange(4.0), resolved), np.ndarray)
+    assert isinstance(transfer(jnp.arange(4.0), resolved), np.ndarray)
 
 
 def test_resolve_device_cpu_without_cpu_backend_falls_back_to_numpy_with_warning(
@@ -716,7 +716,7 @@ def test_resolve_device_cpu_without_cpu_backend_falls_back_to_numpy_with_warning
     """An explicit ``"cpu"`` request that cannot be honored warns and takes the NumPy path."""
     monkeypatch.setattr(jax, "devices", fail_devices_for("cpu"))
     with pytest.warns(UserWarning, match=_FALLBACK_WARNING):
-        resolved = _resolve_device("cpu")
+        resolved = resolve_device("cpu")
     assert resolved == "numpy"
 
 
@@ -730,11 +730,11 @@ def test_resolved_sentinels_pass_through_silently(sentinel: str) -> None:
     """
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert _resolve_device(sentinel) == sentinel
+        assert resolve_device(sentinel) == sentinel
 
 
 def test_is_host_resident_predicate(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``_is_host_resident`` is the one switch behind ``_leaf_view``/``_device_view``.
+    """``_is_host_resident`` is the one switch behind ``leaf_view``/``device_view``.
 
     A pinned leaf is host-resident on every backend. A CPU-committed leaf is
     host-resident only when the default backend is an accelerator: on a
@@ -769,10 +769,10 @@ def test_leaf_view_stages_cpu_committed_leaves_as_numpy_under_accelerator_defaul
     """
     x = jnp.arange(6.0).reshape(3, 2)
     on_cpu = commit_host(x, "cpu")
-    assert _leaf_view(on_cpu) is on_cpu  # real CPU backend: untouched
+    assert leaf_view(on_cpu) is on_cpu  # real CPU backend: untouched
 
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
-    viewed = _leaf_view(on_cpu)
+    viewed = leaf_view(on_cpu)
     assert isinstance(viewed, np.ndarray)
     assert np.array_equal(viewed, np.asarray(x))
     assert viewed.__array_interface__["data"][0] == on_cpu.unsafe_buffer_pointer()
@@ -791,7 +791,7 @@ def test_device_view_returns_uncommitted_copy_for_cpu_committed_leaf(
     on_cpu = commit_host(x, "cpu")
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
 
-    viewed = _device_view(on_cpu)
+    viewed = device_view(on_cpu)
     assert isinstance(viewed, jax.Array)
     assert not viewed.committed
     assert jnp.array_equal(viewed, x)
@@ -831,7 +831,7 @@ def test_stitch_chunks_on_cpu_committed_chunks_is_zero_copy_and_stays_on_cpu(
         return real_device_put(x, device, **kwargs)
 
     with mock.patch.object(jax, "device_put", spy_device_put):
-        stitched = _stitch_chunks(chunks, num_samples, cpu)
+        stitched = stitch_chunks(chunks, num_samples, cpu)
 
     assert isinstance(stitched, jax.Array)
     assert stitched.committed
@@ -856,7 +856,7 @@ def test_oom_advice_names_pinned_pool_for_host_memory_errors() -> None:
         "with allocator xla_gpu_host_bfc on device 0."
     )
     with pytest.raises(DeviceMemoryError) as excinfo:
-        with _oom_advice("posterior drawing", 250):
+        with oom_advice("posterior drawing", 250):
             raise RuntimeError(msg)
     text = str(excinfo.value)
     assert "pinned host memory" in text
@@ -904,7 +904,7 @@ def test_resolve_device_missing_platform_raises_actionable_error(
 ) -> None:
     monkeypatch.setattr(jax, "devices", fail_devices_for("tpu"))
     with pytest.raises(DevicePlatformError, match="platform 'tpu' is not initialized"):
-        _resolve_device("tpu")
+        resolve_device("tpu")
 
 
 def test_host_memory_kind_prefers_pinned_host() -> None:
@@ -937,7 +937,7 @@ def test_host_memory_kind_raises_without_a_host_kind() -> None:
 
 
 def test_leaf_view_stages_pinned_leaves_as_numpy() -> None:
-    """``_leaf_view`` is the host-gather switch: a pinned (fallback) leaf becomes NumPy.
+    """``leaf_view`` is the host-gather switch: a pinned (fallback) leaf becomes NumPy.
 
     A device-resident array must come back as the *same object* (no copy, no
     round-trip), a host-committed one as ``np.ndarray`` so downstream indexing
@@ -947,15 +947,15 @@ def test_leaf_view_stages_pinned_leaves_as_numpy() -> None:
     x = jnp.arange(6.0).reshape(3, 2)
     hosted = jax.device_put(x, _host_sharding(x))
 
-    assert _leaf_view(x) is x  # device-resident: untouched, not even copied
-    viewed = _leaf_view(hosted)
+    assert leaf_view(x) is x  # device-resident: untouched, not even copied
+    viewed = leaf_view(hosted)
     assert isinstance(viewed, np.ndarray)
     assert np.array_equal(viewed, np.asarray(x))
-    assert isinstance(_leaf_view(np.asarray(x)), np.ndarray)
+    assert isinstance(leaf_view(np.asarray(x)), np.ndarray)
 
 
 def test_leaf_view_passes_tracers_through() -> None:
-    """A tracer has no ``sharding``; ``_leaf_view`` must not reach for one.
+    """A tracer has no ``sharding``; ``leaf_view`` must not reach for one.
 
     Without the passthrough this raises ``AttributeError`` under ``vmap``,
     which would mask the actionable ``VectorizedMetricError`` that
@@ -964,7 +964,7 @@ def test_leaf_view_passes_tracers_through() -> None:
     seen: list[bool] = []
 
     def probe(row: Array) -> Array:
-        viewed = _leaf_view(row)
+        viewed = leaf_view(row)
         seen.append(viewed is row)
         return jnp.sum(jnp.asarray(viewed))
 
@@ -974,7 +974,7 @@ def test_leaf_view_passes_tracers_through() -> None:
 
 
 def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
-    """``_device_view`` is the metric-kernel-safe counterpart to ``_leaf_view``.
+    """``device_view`` is the metric-kernel-safe counterpart to ``leaf_view``.
 
     A host-committed leaf must come back as a device-resident ``jax.Array``
     with the same values (so a fused metric kernel never mixes memory kinds),
@@ -984,16 +984,16 @@ def test_device_view_moves_host_committed_leaves_to_device_memory() -> None:
     x = jnp.arange(6.0).reshape(3, 2)
     hosted = jax.device_put(x, _host_sharding(x))
 
-    viewed = _device_view(hosted)
+    viewed = device_view(hosted)
     assert isinstance(viewed, jax.Array)
     assert viewed.sharding.memory_kind == "device"
     assert jnp.array_equal(viewed, x)
 
-    same = _device_view(x)
+    same = device_view(x)
     assert isinstance(same, jax.Array)
     assert jnp.array_equal(same, x)
 
-    from_numpy = _device_view(np.asarray(x))
+    from_numpy = device_view(np.asarray(x))
     assert isinstance(from_numpy, jax.Array)
     assert jnp.array_equal(from_numpy, x)
 
@@ -1013,7 +1013,7 @@ def test_device_view_falls_back_to_numpy_when_device_put_rejects_pinned(
     hosted = jax.device_put(x, _host_sharding(x))
 
     with mock.patch.object(jax, "device_put", side_effect=error("no memory-kind move")):
-        viewed = _device_view(hosted)
+        viewed = device_view(hosted)
 
     assert isinstance(viewed, jax.Array)
     assert viewed.sharding.memory_kind == "device"
@@ -1051,11 +1051,11 @@ def test_memory_budget_line_swallows_memory_stats_errors() -> None:
 
 
 def test_device_view_passes_tracers_through() -> None:
-    """A tracer has no ``sharding``; ``_device_view`` must not reach for one."""
+    """A tracer has no ``sharding``; ``device_view`` must not reach for one."""
     seen: list[bool] = []
 
     def probe(row: Array) -> Array:
-        viewed = _device_view(row)
+        viewed = device_view(row)
         seen.append(viewed is row)
         return jnp.sum(jnp.asarray(viewed))
 
@@ -1069,9 +1069,9 @@ def test_chunked_draws_gathers_pinned_posterior_chunks_on_the_host() -> None:
 
     Indexing a pinned ``jax.Array`` with a device-resident index array raises
     (``memory_space of all inputs ... must be the same``), so ``_chunked_draws``
-    stages every leaf through ``_leaf_view`` first, which keeps the gather on
+    stages every leaf through ``leaf_view`` first, which keeps the gather on
     the host. Spying on the chunks actually handed to ``predict_fn`` is what
-    pins that: drop the ``_leaf_view`` call and these leaves come back as
+    pins that: drop the ``leaf_view`` call and these leaves come back as
     ``jax.Array``.
     """
     chunk_types: list[type] = []

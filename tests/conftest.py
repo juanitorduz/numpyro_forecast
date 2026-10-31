@@ -16,8 +16,8 @@ from numpyro.handlers import seed, substitute, trace
 from numpyro.infer import MCMC, NUTS, SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
 
-from numpyro_forecast._offload import _host_sharding
 from numpyro_forecast.models import Horizon, innovations, predict
+from numpyro_forecast.offload import _host_sharding
 from numpyro_forecast.predictive import draw_posterior, forecast, predict_in_sample
 from numpyro_forecast.typing import ForecastFn, ForecastModel, InSampleFn
 

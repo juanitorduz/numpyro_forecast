@@ -1,10 +1,12 @@
 """Smoke tests for package import and metadata."""
 
+import ast
 import importlib
 import inspect
 import pkgutil
 import subprocess
 import sys
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -160,6 +162,50 @@ def test_every_package_function_is_runtime_type_checked() -> None:
             if not hasattr(obj, "__wrapped__"):
                 unchecked.append(f"{info.name}.{name}")
     assert not unchecked, f"not wrapped by the jaxtyping import hook: {unchecked}"
+
+
+def _is_private(name: str) -> bool:
+    return name.startswith("_") and not (name.startswith("__") and name.endswith("__"))
+
+
+def _private_package_imports(path: Path) -> list[str]:
+    """Return ``path:line: statement`` for each import of a private package name in ``path``.
+
+    A name is private when it, or any module on its dotted path, starts with an
+    underscore (dunders excluded). Relative imports always resolve inside the package.
+    """
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if node.level == 0 and module.split(".")[0] != "numpyro_forecast":
+                continue
+            names = [alias.name for alias in node.names]
+            if any(_is_private(part) for part in module.split(".")) or any(
+                map(_is_private, names)
+            ):
+                found.append(
+                    f"{path}:{node.lineno}: from {'.' * node.level}{module} import {names}"
+                )
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                parts = alias.name.split(".")
+                if parts[0] == "numpyro_forecast" and any(map(_is_private, parts)):
+                    found.append(f"{path}:{node.lineno}: import {alias.name}")
+    return found
+
+
+def test_no_private_package_imports() -> None:
+    """Package and script code never imports a private ``numpyro_forecast`` name.
+
+    A helper shared across modules gets a public name instead (see "Conventions"
+    in ``AGENTS.md``). The tests are exempt: a test of a private helper imports it.
+    """
+    root = Path(__file__).resolve().parent.parent
+    paths = sorted([*(root / "numpyro_forecast").rglob("*.py"), *(root / "scripts").rglob("*.py")])
+    assert paths
+    found = [hit for path in paths for hit in _private_package_imports(path)]
+    assert not found, "imports of private numpyro_forecast names:\n" + "\n".join(found)
 
 
 def test_contrib_blackjax_rejects_wrong_argument_types() -> None:

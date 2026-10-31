@@ -9,7 +9,7 @@ It is guide-only on purpose: MCMC users already hold their posterior samples via
 covariates, data)`` call; neither needs this function. The blackjax Pathfinder
 backend has its own analogous entry point,
 `~~numpyro_forecast.contrib.blackjax.pathfinder_samples()`, built on the same
-shared chunk-and-transfer loop, `~~numpyro_forecast._offload.draw_chunked()`.
+shared chunk-and-transfer loop, `~~numpyro_forecast.offload.draw_chunked()`.
 
 `forecast()` samples forecasts over the horizon from posterior draws, and
 `predict_in_sample()` samples the in-sample posterior predictive of the
@@ -40,22 +40,23 @@ from jaxtyping import Num
 from numpyro.infer import Predictive
 from numpyro.infer.autoguide import AutoDelta, AutoGuide
 
-from numpyro_forecast._offload import (
-    _leaf_view,
-    _oom_advice,
-    _resolve_device,
-    _ResolvedDevice,
-    _stitch_chunks,
-    _transfer,
+from numpyro_forecast.offload import (
+    ResolvedDevice,
+    chunk_indices,
     draw_chunked,
+    leaf_view,
+    oom_advice,
+    resolve_device,
+    stitch_chunks,
+    transfer,
 )
-from numpyro_forecast._validation import (
+from numpyro_forecast.typing import Array, ForecastModel
+from numpyro_forecast.validation import (
     require_covariates_extend_data,
     require_positive_num_samples,
     require_sample_axis,
     require_time_axis,
 )
-from numpyro_forecast.typing import Array, ForecastModel
 
 
 def _ensure_sample_axis_for_delta(samples: dict[str, Array], num_samples: int) -> dict[str, Array]:
@@ -210,10 +211,10 @@ def draw_posterior(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -280,49 +281,12 @@ def _sample_axis_size(posterior: Mapping[str, Array | np.ndarray]) -> int:
     return distinct.pop()
 
 
-def _chunk_indices(num_samples: int, batch_size: int) -> list[Array]:
-    """Build wrapped sample-axis index blocks of exactly ``batch_size`` rows each.
-
-    Block ``i`` holds ``arange(i * batch_size, (i + 1) * batch_size) % num_samples``:
-    every block shares one shape, so the jitted predictive compiles exactly
-    once regardless of ``num_samples``, and the final block wraps around to
-    re-use leading draws (when ``num_samples`` is not an exact multiple of
-    ``batch_size``), which `_chunked_draws()` discards with a final
-    ``[:num_samples]`` slice. The blocks reproduce the draws of the former
-    posterior-padding scheme bit for bit without materializing a padded copy of
-    the posterior.
-
-    Parameters
-    ----------
-    num_samples
-        Total number of posterior draws (callers with
-        ``num_samples <= batch_size`` take the unchunked passthrough instead).
-    batch_size
-        Positive chunk size.
-
-    Returns
-    -------
-    list[Array]
-        One integer index block of length ``batch_size`` per chunk.
-
-    Raises
-    ------
-    ValueError
-        If ``batch_size`` is not positive.
-    """
-    if batch_size <= 0:
-        msg = f"batch_size must be positive, got {batch_size}"
-        raise ValueError(msg)
-    starts = range(0, num_samples, batch_size)
-    return [jnp.arange(start, start + batch_size) % num_samples for start in starts]
-
-
 def _chunked_draws(
     rng_key: Array,
     predict_fn: Callable[[Array, Mapping[str, Array | np.ndarray]], Array],
     posterior: Mapping[str, ArrayLike],
     batch_size: int | None,
-    device: _ResolvedDevice = None,
+    device: ResolvedDevice = None,
 ) -> Array | np.ndarray:
     """Run ``predict_fn`` over fixed-size posterior chunks and stitch the draws.
 
@@ -330,21 +294,21 @@ def _chunked_draws(
     With ``batch_size`` ``None`` (or at least the sample count) ``predict_fn``
     is called once on the full posterior with ``rng_key`` itself. Otherwise the
     posterior is gathered into wrapped index blocks of exactly ``batch_size``
-    rows (`_chunk_indices()`) so every chunk shares one shape and the
+    rows (`chunk_indices()`) so every chunk shares one shape and the
     jitted ``predict_fn`` compiles exactly once; one subkey is split per chunk,
     and the wrapped draws are discarded by a final slice (skipped when the
     sample count is an exact multiple of ``batch_size``, since JAX slices copy
     and nothing wrapped). Every leaf of ``posterior`` is first normalized with
-    `~~numpyro_forecast._offload._leaf_view()`, so a
+    `~~numpyro_forecast.offload.leaf_view()`, so a
     host-committed posterior (the output of a previous ``device="host"`` stage)
     is gathered on the host and only the chunk reaches the accelerator. When
-    ``device`` is given, every chunk is moved there (`_transfer()`) before
+    ``device`` is given, every chunk is moved there (`transfer()`) before
     the next one is drawn and the stitched result lives on ``device``, bounding
     accelerator memory by a single chunk; every host target (the CPU device,
     the ``"numpy"`` sentinel, and the ``"pinned_host"`` sentinel) stitches
     through NumPy so the result never touches an accelerator. ``device`` is the
     *resolved* value: the public drivers run ``"host"`` through
-    `~~numpyro_forecast._offload._resolve_device()` first.
+    `~~numpyro_forecast.offload.resolve_device()` first.
 
     Parameters
     ----------
@@ -366,23 +330,23 @@ def _chunked_draws(
         The stitched draws for the original sample count (committed to
         ``device`` when one is given; NumPy for ``"numpy"``).
     """
-    # Before `_leaf_view()`: a Python scalar leaf would fail its type check unnamed.
+    # Before `leaf_view()`: a Python scalar leaf would fail its type check unnamed.
     require_sample_axis(posterior)
     staged = {
-        name: _leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
+        name: leaf_view(cast("Array | np.ndarray", leaf)) for name, leaf in posterior.items()
     }
     num = _sample_axis_size(staged)
     if batch_size is None or batch_size >= num:
-        with _oom_advice("predictive sampling", batch_size):
-            return _transfer(predict_fn(rng_key, staged), device)
-    indices = _chunk_indices(num, batch_size)
+        with oom_advice("predictive sampling", batch_size):
+            return transfer(predict_fn(rng_key, staged), device)
+    indices = chunk_indices(num, batch_size)
     keys = random.split(rng_key, len(indices))
-    with _oom_advice("predictive sampling", batch_size):
+    with oom_advice("predictive sampling", batch_size):
         chunks = [
-            _transfer(predict_fn(keys[i], _index_tree(staged, idx)), device)
+            transfer(predict_fn(keys[i], _index_tree(staged, idx)), device)
             for i, idx in enumerate(indices)
         ]
-        return _stitch_chunks(chunks, num, device)
+        return stitch_chunks(chunks, num, device)
 
 
 def _compiled_predictive(
@@ -574,10 +538,10 @@ def forecast(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -618,7 +582,7 @@ def forecast(
         )
         return predictive(key, post, covariates, data)
 
-    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, resolve_device(device))
 
 
 def predict_in_sample(
@@ -705,10 +669,10 @@ def predict_in_sample(
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
-        `~~numpyro_forecast._offload._host_memory_kind()`).
+        `~~numpyro_forecast.offload._host_memory_kind()`).
     DevicePlatformError
         If ``device`` names a platform whose backend is not initialized (see
-        `~~numpyro_forecast._offload._resolve_device()`).
+        `~~numpyro_forecast.offload.resolve_device()`).
 
     Warns
     -----
@@ -738,4 +702,4 @@ def predict_in_sample(
         )
         return predictive(key, post, covariates)
 
-    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
+    return _chunked_draws(rng_key, predict_fn, posterior, batch_size, resolve_device(device))

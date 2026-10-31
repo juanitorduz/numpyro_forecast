@@ -11,9 +11,9 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
-from numpyro_forecast._offload import _device_view
-from numpyro_forecast._validation import require_pred_truth_shapes
+from numpyro_forecast.offload import device_view
 from numpyro_forecast.typing import Array, Metric
+from numpyro_forecast.validation import require_pred_truth_shapes
 
 
 @jax.jit
@@ -60,7 +60,7 @@ def crps_empirical(
         Forecast samples with the sample axis first, shape ``(sample, *batch)``.
         May be host-committed (e.g. draws sampled with ``device="host"``),
         regardless of whether ``truth`` is: either operand is moved to device
-        memory first (`~~numpyro_forecast._offload._device_view()`).
+        memory first (`~~numpyro_forecast.offload.device_view()`).
     truth
         Ground-truth values with shape ``(*batch)`` (matching ``pred`` without the sample axis).
 
@@ -82,12 +82,12 @@ def crps_empirical(
     Association*.
     """
     require_pred_truth_shapes(pred, truth)
-    pred_arr = _device_view(pred)
+    pred_arr = device_view(pred)
     num_samples = pred_arr.shape[0]
     if num_samples < 2:
         msg = f"crps_empirical needs at least 2 samples, got {num_samples}"
         raise ValueError(msg)
-    return _crps_empirical(pred_arr, _device_view(truth))
+    return _crps_empirical(pred_arr, device_view(truth))
 
 
 @partial(jax.jit, static_argnames=("quantile",))
@@ -117,7 +117,7 @@ def eval_pinball(
     pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`);
     ``quantile`` is static so each level specializes its own branch. ``pred``
     and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so either (or
+    (`~~numpyro_forecast.offload.device_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -144,7 +144,7 @@ def eval_pinball(
     if not 0.0 < quantile < 1.0:
         msg = f"quantile must be in (0, 1), got {quantile}"
         raise ValueError(msg)
-    return _eval_pinball(_device_view(pred), _device_view(truth), quantile=quantile)
+    return _eval_pinball(device_view(pred), device_view(truth), quantile=quantile)
 
 
 @partial(jax.jit, static_argnames=("alpha",))
@@ -179,7 +179,7 @@ def eval_interval_score(
     ground truth falling outside them; lower is better.
     A pure JAX scalar kernel (see `~~numpyro_forecast.typing.Metric`).
     ``pred`` and ``truth`` are moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so either (or
+    (`~~numpyro_forecast.offload.device_view()`), so either (or
     both) may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -206,7 +206,7 @@ def eval_interval_score(
     if not 0.0 < alpha < 1.0:
         msg = f"alpha must be in (0, 1), got {alpha}"
         raise ValueError(msg)
-    return _eval_interval_score(_device_view(pred), _device_view(truth), alpha=alpha)
+    return _eval_interval_score(device_view(pred), device_view(truth), alpha=alpha)
 
 
 @partial(jax.jit, static_argnames=("scale",))
@@ -232,7 +232,7 @@ def make_mase(
     time; the returned metric has the standard scalar-array signature (see
     `~~numpyro_forecast.typing.Metric`). ``train_data`` and the returned
     metric's ``pred``/``truth`` are all moved to device memory first
-    (`~~numpyro_forecast._offload._device_view()`), so any of
+    (`~~numpyro_forecast.offload.device_view()`), so any of
     them may be host-committed, e.g. draws sampled with ``device="host"``.
 
     Parameters
@@ -259,7 +259,7 @@ def make_mase(
     if seasonality < 1:
         msg = f"seasonality must be >= 1, got {seasonality}"
         raise ValueError(msg)
-    train_arr = _device_view(train_data)
+    train_arr = device_view(train_data)
     if train_arr.shape[-2] <= seasonality:
         msg = (
             f"train_data must be longer than seasonality along the time axis "
@@ -281,6 +281,6 @@ def make_mase(
     ) -> Array:
         """MASE for one ``(pred, truth)`` pair, scaled by the enclosing ``train_data``."""
         require_pred_truth_shapes(pred, truth)
-        return _mase(_device_view(pred), _device_view(truth), scale=scale)
+        return _mase(device_view(pred), device_view(truth), scale=scale)
 
     return mase

@@ -121,7 +121,7 @@ class DeviceMemoryError(NumpyroForecastError, RuntimeError):
 class HostMemoryKindError(NumpyroForecastError, RuntimeError):
     """A device exposes no host memory kind for ``device="pinned_host"``.
 
-    Raised by `~~numpyro_forecast._offload._host_memory_kind()`, reached from
+    Raised by `~~numpyro_forecast.offload._host_memory_kind()`, reached from
     `~~numpyro_forecast.predictive.draw_posterior()`, the predictive drivers
     and everything built on them, when an explicit ``device="pinned_host"``
     targets a device whose addressable memories include neither
@@ -134,7 +134,7 @@ class HostMemoryKindError(NumpyroForecastError, RuntimeError):
 class DevicePlatformError(NumpyroForecastError, ValueError):
     """A ``device`` platform name has no initialized JAX backend.
 
-    Raised by `~~numpyro_forecast._offload._resolve_device()` (reached from
+    Raised by `~~numpyro_forecast.offload.resolve_device()` (reached from
     every function with a ``device`` parameter) when ``device`` names a platform,
     e.g. ``"tpu"``, whose backend is not initialized in this process. The
     message lists the available platforms and how to initialize the missing one

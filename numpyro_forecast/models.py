@@ -30,10 +30,10 @@ from numpyro.contrib.control_flow import scan
 from numpyro.infer.reparam import Reparam
 from numpyro.primitives import _PYRO_STACK
 
-from numpyro_forecast._validation import require_time_axis
-from numpyro_forecast.arrays import _zeros_like_data, concat_future
+from numpyro_forecast.arrays import concat_future
 from numpyro_forecast.surgery import prefix_condition, shift_loc, slice_time
 from numpyro_forecast.typing import Array
+from numpyro_forecast.validation import require_time_axis
 
 
 class PlateName(StrEnum):
@@ -104,7 +104,8 @@ class Horizon(eqx.Module):
         """
         if self.data is None:
             return None
-        return _zeros_like_data(self.data, self.duration)
+        shape = (*self.data.shape[:-2], self.duration, self.data.shape[-1])
+        return jnp.zeros(shape, dtype=self.data.dtype)
 
     @classmethod
     def from_data(cls, covariates: Array, data: Array | None) -> "Horizon":

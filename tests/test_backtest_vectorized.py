@@ -747,9 +747,9 @@ def test_chunked_metric_raises_actionable_error() -> None:
     ``eval_crps(..., batch_size=n)`` runs the host-staging chunk loop
     (``_chunked_cell_metric``), which cannot work on a traced window axis. The
     failure must surface as ``VectorizedMetricError`` and not as a raw
-    ``AttributeError`` from ``_leaf_view`` reaching for ``sharding`` on a
+    ``AttributeError`` from ``leaf_view`` reaching for ``sharding`` on a
     tracer: that regression is exactly what the tracer passthrough in
-    ``_leaf_view`` guards.
+    ``leaf_view`` guards.
     """
     duration = TRAIN + TEST + 2
     data, cov = _series(duration)
