@@ -117,6 +117,17 @@ def test_prefix_condition_iid_returns_future_slice() -> None:
     assert jnp.allclose(future.loc, loc[4:])
 
 
+@pytest.mark.parametrize("event_ndims", [1, 2])
+def test_prefix_condition_independent_elementwise_is_future_slice(event_ndims: int) -> None:
+    """An ``Independent`` over an elementwise base still reduces to the horizon slice."""
+    loc = jnp.arange(12.0).reshape(6, 2)
+    noise = dist.Normal(loc=loc, scale=1.0).to_event(event_ndims)
+    future = prefix_condition(noise, jnp.zeros((4, 2)))  # t = 4
+    assert isinstance(future, dist.Independent)
+    assert future.reinterpreted_batch_ndims == event_ndims
+    assert jnp.allclose(future.mean, loc[4:])
+
+
 # --- P6: elementwise registry ------------------------------------------------
 
 _SHIFT_LOC_FAMILIES = [

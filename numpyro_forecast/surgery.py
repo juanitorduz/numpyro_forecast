@@ -244,7 +244,9 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     registered elementwise families take this path; correlated families (e.g.
     ``MultivariateNormal``) need a dedicated dispatch implementing a genuine
     Gaussian conditional, which is checked here rather than silently reduced to
-    a slice (the R1 fix).
+    a slice (the R1 fix). An ``Independent`` wrapper (e.g. from ``.to_event(1)``)
+    conditions its base distribution and keeps its ``reinterpreted_batch_ndims``,
+    so wrapping does not change the conditional.
 
     Parameters
     ----------
@@ -261,8 +263,8 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     Raises
     ------
     NotImplementedError
-        If ``noise_dist`` is not a registered elementwise family (and has no
-        dedicated dispatch).
+        If ``noise_dist`` (or the base of an ``Independent`` wrapper) is not a
+        registered elementwise family (and has no dedicated dispatch).
     """
     _require_elementwise(noise_dist)
     t = data.shape[-2]
@@ -271,9 +273,8 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
 
 @prefix_condition.register
 def _(noise_dist: dist.Independent, data: Array) -> dist.Distribution:
-    # Independent-over-time noise: the conditional is the horizon marginal.
-    t = data.shape[-2]
-    return slice_time(noise_dist, slice(t, None))
+    base = prefix_condition(noise_dist.base_dist, data)
+    return dist.Independent(base, noise_dist.reinterpreted_batch_ndims)
 
 
 def _mvn_time_params(
