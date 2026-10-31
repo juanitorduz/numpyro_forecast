@@ -23,6 +23,15 @@ We proceed in four steps. First, an exploratory analysis of the full 50{,}000-se
 
 
 ``` python
+import warnings
+
+# preliz warns at import time when PyMC is not installed; this example does not use PyMC.
+warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWarning)
+# arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
+
 from typing import cast
 
 import arviz as az
@@ -5223,5 +5232,3 @@ The holiday effect is the one large, consistent promotion signal: about a quarte
 - Orduz, J. [*Hierarchical forecasting with NumPyro (part I)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/).
 - Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
 - Related examples: [hierarchical forecasting I](hierarchical_forecasting_1.md), [inference methods comparison](inference_methods_comparison.md).
-
-[Source: Forecasting retail demand under stockouts](_src/fresh_retail_stockout-preview.html#184a22e1)

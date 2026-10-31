@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/var-preview.html"><i class="bi bi-journal-code"></i>Vector Autoregression (VAR) with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,15 +379,15 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/_great_docs_build/v__dev/docs/examples/_src/var.ipynb" data-notebook-title="Vector Autoregression (VAR) with `numpyro_forecast`" data-notebook-cellid="50138624">
 <p>Vector Autoregression (VAR) with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/var_numpyro/"><strong>Bayesian VAR in NumPyro</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. A vector autoregression (VAR) models several time series jointly: each series is regressed on the past values of all series, and the shocks are correlated across series. We fit a VAR with two lags to the quarterly growth rates of US real GDP, consumption and investment, sample the posterior with NUTS, forecast 30 quarters ahead, and compute impulse response functions (IRFs), the standard tool to read a VAR.</p>
 <p>The package provides the VAR pieces as reusable components. You do not write the lag recursion, the forecast loop or the IRF recursion yourself:</p>
 <ul>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.var_step.html"><code>var_step</code></a> turns sampled coefficients into the <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> and <code>update</code> functions for the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block. The block runs the in-sample recursion and the generative forecast.</li>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.impulse_response.html"><code>impulse_response</code></a> computes the responses for all posterior draws at once, with optional orthogonalization and cumulation.</li>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/var.companion_matrix.html"><code>companion_matrix</code></a> gives the stability check.</li>
-<li><a href="https://juanitorduz.github.io/numpyro_forecast/reference/priors.minnesota_prior.html"><code>minnesota_prior</code></a> returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own <code>numpyro.sample</code> call.</li>
+<li><a href="../../reference/var.var_step.html"><code>var_step</code></a> turns sampled coefficients into the <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> and <code>update</code> functions for the <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block. The block runs the in-sample recursion and the generative forecast.</li>
+<li><a href="../../reference/var.impulse_response.html"><code>impulse_response</code></a> computes the responses for all posterior draws at once, with optional orthogonalization and cumulation.</li>
+<li><a href="../../reference/var.companion_matrix.html"><code>companion_matrix</code></a> gives the stability check.</li>
+<li><a href="../../reference/priors.minnesota_prior.html"><code>minnesota_prior</code></a> returns the moments of the Minnesota shrinkage prior. It lives in a separate module and is independent of the VAR code: the prior is always your own <code>numpyro.sample</code> call.</li>
 </ul>
 <p>The components are deliberately minimal. If you need a complete Bayesian VAR toolkit (identification schemes, variance decompositions, lag selection), see <a href="https://github.com/thomaspinder/impulso">Impulso</a> by Thomas Pinder. Its <code>MinnesotaPrior</code> parameterization and its batched moving-average recursion inspired the two helpers used here.</p>
 <section id="prepare-notebook" class="level1">
@@ -2578,7 +2578,7 @@ m_{l, ij} = m_{\text{own}} \, [l = 1] \, [i = j],
 <li>statsmodels. <a href="https://www.statsmodels.org/stable/datasets/generated/macrodata.html">macrodata</a>: United States macroeconomic data, 1959Q1 to 2009Q3, public domain.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/var-preview.html#50138624">Source: Vector Autoregression (VAR) with `numpyro_forecast`</a></div>
+</div>
 
 
 

@@ -7,13 +7,20 @@ This notebook ports the blog post [**Demand Forecasting with Censored Likelihood
 
 We simulate a demand series from an AR(2) process with weekly seasonality, corrupt it into observed sales through random stockouts and a hard capacity cap, and then fit an AR(2) model with Fourier seasonality **whose likelihood knows about the censoring**: below the cap an observation contributes the usual \text{Normal} density, and at the cap it contributes the *survival mass* P(\text{demand} \geq \text{cap}), the probability that latent demand was at least as large as the recorded bound. Days with the product off the shelf are masked out of the likelihood entirely. Because the data are simulated, the true demand is known and the claim "the censored likelihood recovers demand" can be checked against ground truth rather than asserted.
 
-This example completes a trio of availability mechanisms in this documentation. The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html) freezes its recursion updates when the product is off the shelf, and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) scales the mean by a saturating availability factor; its next-steps list asks for precisely the model built here. The closing section compares the three mechanisms side by side.
+This example completes a trio of availability mechanisms in this documentation. The [availability TSB example](availability_tsb.md) freezes its recursion updates when the product is off the shelf, and the [fresh retail stockout example](fresh_retail_stockout.md) scales the mean by a saturating availability factor; its next-steps list asks for precisely the model built here. The closing section compares the three mechanisms side by side.
 
 
 # Prepare notebook
 
 
 ``` python
+import warnings
+
+# arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
+
 from dataclasses import dataclass
 from functools import partial
 from typing import NamedTuple
@@ -281,7 +288,7 @@ The covariates carry everything the model needs over the **full** duration, in a
 
 - Column `0` is the observed sales history the AR recursion filters. The history has to travel through the covariates rather than the data argument: the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None` (they sample the observation site), while the recursion always needs the observed series. Only the first `t_obs` rows are ever read (the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block below checks this), so the future rows are zeroed out and no information leaks.
 - Column `1` is the availability mask and column `2` the censoring indicator, read only over the training rows. One honest caveat versus the availability TSB and fresh retail examples, whose recursions consume these inputs over the horizon too: here the model pads its own horizon inputs (availability one, censoring zero), so the forecast is *structurally* uncensored demand-scale sales, the number a planner should order against, regardless of what the trailing rows contain. We still pin the trailing 30 rows to the same values so the scenario travels with the forecast into the tree's `predictions_constant_data`, as documentation rather than as a model input.
-- Columns `3:7` are weekly Fourier features (two harmonics, sines then cosines) from the package's [`fourier_features`](https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html) helper, the only columns the model reads over the horizon.
+- Columns `3:7` are weekly Fourier features (two harmonics, sines then cosines) from the package's [`fourier_features`](../../reference/features.fourier_features.md) helper, the only columns the model reads over the horizon.
 
 
 ``` python
@@ -336,10 +343,10 @@ where \Phi is the standard \text{Normal} CDF, and the whole term is masked out o
 
 Clean on-shelf days pass the observation through; capped days floor the lag at the model's own prediction, since the truth is at least the cap; off-shelf days carry the prediction itself, the model's best estimate of the demand nobody could express. This is the same one-step-ahead logic a state space filter applies to missing observations, done with a plug-in mean instead of a full state distribution.
 
-The model is a plain NumPyro function `(covariates, data=None)` that derives its train/forecast split from the shapes with [`Horizon.from_data`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) and hands the recursion to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block, the single-source-of-error recursion shared with the [ARMA](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) and [exponential smoothing](https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html) examples. [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series, an initial carry, a [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution. `mean(carry, x_t)` returns the one-step-ahead mean \hat{y}\_t and `update(carry, y_t, eps_t, x_t)` builds the next carry from the day's value and its error; calling [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) again inside `update` (the same expression on the same inputs, so exactly the filter's prediction) is what lets the lag filter above floor capped days at \hat{y}\_t. Rows carry the observation axis, so the two placeholder lags are `y[0]` with shape `(1,)`, the mean has shape `(1,)`, and a scalar state would emit `mu[None]`; the block checks these shapes. The block owns two scans, neither containing a sample site:
+The model is a plain NumPyro function `(covariates, data=None)` that derives its train/forecast split from the shapes with [`Horizon.from_data`](../../reference/models.Horizon.md) and hands the recursion to the [`ssoe`](../../reference/models.ssoe.md) building block, the single-source-of-error recursion shared with the [ARMA](arma.md) and [exponential smoothing](exponential_smoothing_state_space.md) examples. [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) takes the driving series, an initial carry, a [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution. `mean(carry, x_t)` returns the one-step-ahead mean \hat{y}\_t and `update(carry, y_t, eps_t, x_t)` builds the next carry from the day's value and its error; calling [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) again inside `update` (the same expression on the same inputs, so exactly the filter's prediction) is what lets the lag filter above floor capped days at \hat{y}\_t. Rows carry the observation axis, so the two placeholder lags are `y[0]` with shape `(1,)`, the mean has shape `(1,)`, and a scalar state would emit `mu[None]`; the block checks these shapes. The block owns two scans, neither containing a sample site:
 
 1.  **In sample.** A deterministic `jax.lax.scan` runs [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) over the observed history, feeding each observation and its error \varepsilon_t = y_t - \hat{y}\_t through `update`, and returns the one-step-ahead means as `r.mu` (exposed as the deterministic site `"pred_mean"`); the `"obs"` site conditions the data on them through the censored likelihood. The AR(2) needs two lags, so the first two steps run on placeholder lags and are masked out of the likelihood.
-2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations at the `"eps_future"` site (under its own `time_future` plate), rolls the recursion forward from the final filtered lags with each *sampled* value \hat{y}\_t + \varepsilon_t fed back through `update`, and returns the trajectory as `r.y_future`, which we register (clipped at zero, since demand is nonnegative) as the deterministic `"forecast"` site the package reads. Since `"eps_future"` does not exist during training, `Predictive` draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with [`pad_future`](https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html) (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.
+2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations at the `"eps_future"` site (under its own `time_future` plate), rolls the recursion forward from the final filtered lags with each *sampled* value \hat{y}\_t + \varepsilon_t fed back through `update`, and returns the trajectory as `r.y_future`, which we register (clipped at zero, since demand is nonnegative) as the deterministic `"forecast"` site the package reads. Since `"eps_future"` does not exist during training, `Predictive` draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with [`pad_future`](../../reference/arrays.pad_future.md) (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.
 
 One small difference from the blog post's hand-rolled scans: the same `update` serves both scans, so the clip at zero now applies to the filtered lag in sample as well, which only matters on stockout days whose prediction is negative.
 
@@ -413,7 +420,7 @@ def ar2_seasonal(covariates: Array, data: Array | None = None) -> None:
 
 We fit the model on the training window with plain NumPyro: the No-U-Turn Sampler through `MCMC`, running 4 chains of 1{,}000 warmup and 1{,}000 sampling steps each with `target_accept_prob=0.9` (the survival term gives the likelihood a slightly harder geometry near the cap). A modest budget is plenty because the posterior is tiny: the in-sample filter is deterministic, so the only latents are the eight parameters (\mu, \phi_1, \phi_2, \sigma, and four Fourier coefficients). The small `fit_nuts` helper wraps the call so the naive baseline below fits with exactly the same settings.
 
-We then export the posterior draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html), which restores the `(chain, draw)` structure (we pass `num_chains=4`) and samples the in-sample posterior predictive from the same draws. Because we pass the *extended* covariates, the tree automatically carries `predictions` groups with the out-of-sample draws of the `"forecast"` site, and the trailing scenario rows of the covariates land verbatim in `predictions_constant_data`, so the tree documents that this forecast describes a full-availability, uncensored scenario.
+We then export the posterior draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](../../reference/convert.to_datatree.md), which restores the `(chain, draw)` structure (we pass `num_chains=4`) and samples the in-sample posterior predictive from the same draws. Because we pass the *extended* covariates, the tree automatically carries `predictions` groups with the out-of-sample draws of the `"forecast"` site, and the trailing scenario rows of the covariates land verbatim in `predictions_constant_data`, so the tree documents that this forecast describes a full-availability, uncensored scenario.
 
 
 ``` python
@@ -2226,7 +2233,7 @@ fig.suptitle(
 
 # Evaluation
 
-We score both models on the held-out 30 days with [`evaluate_forecast`](https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html), against two different notions of truth: the **latent demand** (the business quantity, known here because we simulated it) and the **observed sales** (the only truth available in production data, itself gated and capped over the test window). Alongside the point metrics and the CRPS we track the empirical coverage of the central 50\\ and 94\\ intervals.
+We score both models on the held-out 30 days with [`evaluate_forecast`](../../reference/evaluate.evaluate_forecast.md), against two different notions of truth: the **latent demand** (the business quantity, known here because we simulated it) and the **observed sales** (the only truth available in production data, itself gated and capped over the test window). Alongside the point metrics and the CRPS we track the empirical coverage of the central 50\\ and 94\\ intervals.
 
 
 ``` python
@@ -2316,8 +2323,8 @@ This notebook is that item made concrete, on a synthetic process where the recov
 
 | Example | Censoring pattern | Mechanism | Demand forecast |
 |----|----|----|----|
-| [Availability TSB](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html) | Binary: off-shelf days record zero | Freeze the probability-recursion updates where the product is off the shelf | Feed a full-availability scenario input |
-| [Fresh retail stockouts](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) | Fractional: noisy within-day availability | Multiplicative availability factor on the mean, with a learned floor | Pin availability to one over the horizon |
+| [Availability TSB](availability_tsb.md) | Binary: off-shelf days record zero | Freeze the probability-recursion updates where the product is off the shelf | Feed a full-availability scenario input |
+| [Fresh retail stockouts](fresh_retail_stockout.md) | Fractional: noisy within-day availability | Multiplicative availability factor on the mean, with a learned floor | Pin availability to one over the horizon |
 | This notebook | Hard capacity cap plus stockout mask | Censored likelihood: density below the cap, survival mass at it | The generative recursion, unconstrained by the cap |
 
 The choice between them is driven by what the data records and how the censoring operates:
@@ -2334,7 +2341,7 @@ In practice the mechanisms compose: a retailer with hourly stockout labels *and*
 - Replace the capped-day plug-in \max(y_t, \hat{y}\_t) in the lag filter with the censored conditional mean \hat{y}\_t + \sigma \\ \varphi(z_t) / \left(1 - \Phi(z_t)\right) with z_t = (y_t - \hat{y}\_t) / \sigma, the exact expectation of the latent value given that it exceeds the cap.
 - Let the capacity cap vary by day, read from inventory snapshots, instead of a single constant. `RightCensoredDistribution` censors at each *recorded* value, so only the data preparation changes, not the model.
 - Swap the \text{Normal} base for a strictly nonnegative observation model (for example a truncated \text{Normal}), removing the predictive mass on negative sales visible in the in-sample bands.
-- Replace the fixed train-test split with rolling-origin evaluation via the package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper, as in the [Croston example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html).
+- Replace the fixed train-test split with rolling-origin evaluation via the package's [backtest](../../reference/evaluate.backtest.md#numpyro_forecast.evaluate.backtest) helper, as in the [Croston example](croston.md).
 
 
 # References
@@ -2342,7 +2349,5 @@ In practice the mechanisms compose: a retailer with hourly stockout labels *and*
 - Orduz, J. [*Demand Forecasting with Censored Likelihood*](https://juanitorduz.github.io/demand/). The blog post this notebook ports.
 - NumPyro documentation: [Censored distributions](https://num.pyro.ai/en/stable/distributions.html#censored-distributions) (`RightCensoredDistribution` and friends, available from NumPyro `0.20.0`).
 - Tobin, J. (1958). [*Estimation of Relationships for Limited Dependent Variables*](https://doi.org/10.2307/1907382). Econometrica, 26(1), 24-36. The classic censored-regression (Tobit) model.
-- The [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) in this documentation, which introduces the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for AR-on-observations models.
-- The [availability TSB example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html) and the [fresh retail stockout example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html) in this documentation: the sibling availability mechanisms compared above.
-
-[Source: Demand Forecasting with Censored Likelihood with `numpyro_forecast`](_src/censored_demand-preview.html#679c0a19)
+- The [ARMA example](arma.md) in this documentation, which introduces the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) building block for AR-on-observations models.
+- The [availability TSB example](availability_tsb.md) and the [fresh retail stockout example](fresh_retail_stockout.md) in this documentation: the sibling availability mechanisms compared above.

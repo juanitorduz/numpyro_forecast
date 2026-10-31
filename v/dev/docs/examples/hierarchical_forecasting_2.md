@@ -496,5 +496,3 @@ This closes the three-part tour: a single series in the [univariate notebook](fo
 
 - Orduz, J. [*Hierarchical forecasting with NumPyro (part II)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/).
 - Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
-
-[Source: Hierarchical forecasting II with `numpyro_forecast`](_src/hierarchical_forecasting_2-preview.html#d89abc04)

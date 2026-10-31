@@ -2419,5 +2419,3 @@ A single train/test split is only one view of forecasting skill; the [univariate
 - Robnik, J., De Luca, G. B., Silverstein, E., & Seljak, U. (2023). [*Microcanonical Hamiltonian Monte Carlo*](https://jmlr.org/papers/v24/22-1450.html). JMLR.
 - Robnik, J., & Seljak, U. (2024). [*Fluctuation without dissipation: Microcanonical Langevin Monte Carlo*](https://arxiv.org/abs/2303.18221).
 - Smith, L. N., & Topin, N. (2019). [*Super-convergence: Very fast training of neural networks using large learning rates*](https://arxiv.org/abs/1708.07120).
-
-[Source: Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`](_src/inference_methods_comparison-preview.html#4cdaed46)

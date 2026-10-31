@@ -818,5 +818,3 @@ This local level model with seasonality is a solid baseline. From here a few dir
 
 - Orduz, J. [*Univariate time series forecasting with NumPyro*](https://juanitorduz.github.io/numpyro_forecasting-univariate/).
 - Pyro. [*Forecasting I: Univariate, Heavy Tailed*](https://pyro.ai/examples/forecasting_i.html).
-
-[Source: Univariate forecasting with `numpyro_forecast`](_src/forecasting_univariate-preview.html#344608d4)

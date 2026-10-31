@@ -347,9 +347,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/hierarchical_forecasting_2-preview.html"><i class="bi bi-journal-code"></i>Hierarchical forecasting II with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -377,7 +377,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/_great_docs_build/_root/docs/examples/_src/hierarchical_forecasting_2.ipynb" data-notebook-title="Hierarchical forecasting II with `numpyro_forecast`" data-notebook-cellid="d89abc04">
 <p>Hierarchical forecasting II with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/numpyro_hierarchical_forecasting_2/"><strong>Hierarchical forecasting with NumPyro (part II)</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. This example is by itself a port of the second part of the original Pyro example: <a href="https://pyro.ai/examples/forecasting_iii.html"><strong>Forecasting III: hierarchical models</strong></a>. Where <a href="hierarchical_forecasting_1.html">part I</a> fixed a single destination, here we model the <strong>full <code>50x50</code> origin-destination panel</strong> at once. Rides flow between station pairs with clear asymmetries, so we let the local-level dynamic be driven by the destination, build the seasonal effect and the noise scale from both an origin and a destination part, and add a static <strong>pairwise</strong> term for the affinity of each origin-destination pair.</p>
 <blockquote class="blockquote">
@@ -857,7 +857,7 @@ Test CRPS:  0.2759</code></pre>
 <li>Pyro. <a href="https://pyro.ai/examples/forecasting_iii.html"><em>Forecasting III: Hierarchical Models</em></a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/hierarchical_forecasting_2-preview.html#d89abc04">Source: Hierarchical forecasting II with `numpyro_forecast`</a></div>
+</div>
 
 
 

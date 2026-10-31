@@ -347,9 +347,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/forecasting_univariate-preview.html"><i class="bi bi-journal-code"></i>Univariate forecasting with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -377,7 +377,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/_great_docs_build/v__dev/docs/examples/_src/forecasting_univariate.ipynb" data-notebook-title="Univariate forecasting with `numpyro_forecast`" data-notebook-cellid="344608d4">
 <p>Univariate forecasting with <code>numpyro_forecast</code></p>
 <p>Here we present an introduction to the <code>numpyro_forecast</code> package. This notebook ports the blog post <a href="https://juanitorduz.github.io/numpyro_forecasting-univariate/"><strong>Univariate time series forecasting with NumPyro</strong></a> (itself a port of Pyro’s <a href="https://pyro.ai/examples/forecasting_i.html">forecasting tutorial</a>) to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. We forecast <strong>weekly BART ridership</strong> with a random-walk local level, Fourier seasonality and a Student-T likelihood, fit with stochastic variational inference (SVI), and evaluate with the continuous ranked probability score (CRPS).</p>
 <p>Instead of hand-writing a bespoke prediction loop, we write a single plain model function and let <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a> and <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a> handle the <em>fit-once / forecast-any-horizon</em> mechanics (the forecast horizon is drawn from separate <code>_future</code> latent sites, so the variational guide is never resized).</p>
@@ -1145,7 +1145,7 @@ vectorized mean 94% coverage: 0.94  (nominal 0.94)</code></pre>
 <li>Pyro. <a href="https://pyro.ai/examples/forecasting_i.html"><em>Forecasting I: Univariate, Heavy Tailed</em></a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/forecasting_univariate-preview.html#344608d4">Source: Univariate forecasting with `numpyro_forecast`</a></div>
+</div>
 
 
 

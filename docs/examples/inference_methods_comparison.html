@@ -350,9 +350,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/inference_methods_comparison-preview.html"><i class="bi bi-journal-code"></i>Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -380,7 +380,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/_great_docs_build/_root/docs/examples/_src/inference_methods_comparison.ipynb" data-notebook-title="Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`" data-notebook-cellid="4cdaed46">
 <p>Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with <code>numpyro_forecast</code></p>
 <p>One advantage of writing a forecasting model once is that you can fit it with different inference engines without touching the model code. In this notebook we take the weekly BART ridership model from the <a href="forecasting_univariate.html">univariate forecasting example</a> (a random-walk local level, Fourier seasonality, and a Student-T likelihood) and fit it four ways: with <strong>NUTS</strong> (Markov chain Monte Carlo), with <strong>SVI</strong> (stochastic variational inference, using a custom <a href="https://optax.readthedocs.io/en/latest/">optax</a> optimizer), with <strong>multi-path Pathfinder</strong> (quasi-Newton variational inference run over several parallel L-BFGS paths, from <a href="https://blackjax-devs.github.io/blackjax/">BlackJAX</a>), and with <strong>MCLMC</strong> (microcanonical Langevin Monte Carlo, a BlackJAX sampler that plugs into the same MCMC entry point through a kernel adapter).</p>
 <p>Every engine ends in the same shape: a dict of posterior samples with a leading sample axis, either read straight off an <code>MCMC</code> run (<code>mcmc.get_samples()</code>) or drawn from a fitted variational approximation (<a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a>, <a href="../../reference/contrib.blackjax.multipathfinder_samples.html#numpyro_forecast.contrib.blackjax.multipathfinder_samples" class="gdls-link gdls-code">multipathfinder_samples</a>). A single <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> call then turns any of them into an ArviZ <code>DataTree</code> holding both the in-sample posterior predictive and the forecast over the test horizon, which powers the plots and the evaluation alike. We compare the four engines on the continuous ranked probability score (CRPS) over the training and test windows, and on wall-clock time.</p>
@@ -1955,7 +1955,7 @@ Group: /
 <li>Smith, L. N., &amp; Topin, N. (2019). <a href="https://arxiv.org/abs/1708.07120"><em>Super-convergence: Very fast training of neural networks using large learning rates</em></a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/inference_methods_comparison-preview.html#4cdaed46">Source: Comparing inference methods: NUTS, SVI, Pathfinder, and MCLMC with `numpyro_forecast`</a></div>
+</div>
 
 
 

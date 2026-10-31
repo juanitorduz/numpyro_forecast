@@ -350,9 +350,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/availability_tsb-preview.html"><i class="bi bi-journal-code"></i>TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -380,67 +380,76 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/_great_docs_build/v__dev/docs/examples/_src/availability_tsb.ipynb" data-notebook-title="TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`" data-notebook-cellid="9e4fd41f">
 <p>TSB with Availability Constraints for Intermittent Demand with <code>numpyro_forecast</code></p>
-<p>This notebook ports the blog post <a href="https://juanitorduz.github.io/availability_tsb/"><strong>Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It closes the intermittent-demand trilogy started by the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a> and the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html">TSB example</a>, and like those notebooks it focuses on the <em>one</em> structural change the method makes and why that change matters.</p>
+<p>This notebook ports the blog post <a href="https://juanitorduz.github.io/availability_tsb/"><strong>Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. It closes the intermittent-demand trilogy started by the <a href="croston.html">Croston example</a> and the <a href="tsb.html">TSB example</a>, and like those notebooks it focuses on the <em>one</em> structural change the method makes and why that change matters.</p>
 <p>The motivation is a fact of retail life that the classical intermittent-demand methods ignore: a sales series contains <strong>two kinds of zeros</strong>. Some periods are zero because nobody wanted the product (no demand), and some are zero because nobody <em>could</em> buy it (a stock-out, a delisting, a closed store). What we observe is censored demand, <span class="math inline">y_t = a_t \cdot d^{\ast}_t</span>, where <span class="math inline">d^{\ast}_t</span> is the demand that would have materialized and <span class="math inline">a_t \in \{0, 1\}</span> says whether the product was on the shelf.</p>
 <p>Plain TSB cannot tell these zeros apart. Its demand probability decays at <em>every</em> zero, so a stretch of stock-outs is read as demand fading away, and the estimate converges to <span class="math inline">P(\text{available}) \cdot P(\text{demand} \mid \text{available})</span>: biased low by the availability rate, and biased differently for every series depending on its stock-out history. The fix from the blog post is a <strong>one-line change</strong>: gate the probability update with the availability mask, so that off-shelf periods, which carry no demand information whatsoever, leave the estimate frozen instead of decaying it. The estimate then targets the uncensored <span class="math inline">P(\text{demand} \mid \text{available})</span>, and because availability becomes a model <em>input</em>, the forecast turns into a <strong>scenario tool</strong>: feed a full-availability future to forecast unconstrained demand (the number replenishment planning needs), or feed any planned availability path.</p>
 <p>Two practical notes on the port:</p>
 <ul>
-<li>We reuse the sibling notebooks’ reusable level channel (one call to the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block per exponential smoothing recursion, with a boolean gate deciding <em>when</em> the level updates), promoted from a single series to a <code>(time, series)</code> panel. Croston gates on demand events, TSB gates on every period, and the availability-aware variant gates on the availability mask. The entire method is that one argument.</li>
+<li>We reuse the sibling notebooks’ reusable level channel (one call to the package’s <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block per exponential smoothing recursion, with a boolean gate deciding <em>when</em> the level updates), promoted from a single series to a <code>(time, series)</code> panel. Croston gates on demand events, TSB gates on every period, and the availability-aware variant gates on the availability mask. The entire method is that one argument.</li>
 <li>The covariates carry <strong>two stacked inputs</strong> in a <code>(covariate, time, series)</code> tensor: the <strong>sales history</strong> the recursions consume (<a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> takes the driving series as an argument, and the package’s <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a> and <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> call the model with <code>data=None</code>, so the history has to travel through <code>covariates</code>; only the first <code>t_obs</code> rows are read, which the block checks), and the <strong>availability mask</strong>. Because the forecast reads its future availability from the covariates, choosing a scenario is just choosing the trailing rows of the availability input. Everything plugs straight into plain NumPyro SVI, <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a>, <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a>, <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a>, and <a href="../../reference/convert.add_forecast_groups.html#numpyro_forecast.convert.add_forecast_groups" class="gdls-link gdls-code">add_forecast_groups</a>.</li>
 </ul>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
 <div id="ee7e0066" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:17:41.234935Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:17:41.234758Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:17:43.918047Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:17:43.917392Z&quot;}}" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> NamedTuple</span>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.artist <span class="im">import</span> Artist</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.axes <span class="im">import</span> Axes</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.handlers <span class="im">import</span> scope</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> SVI, Predictive, Trace_ELBO</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.autoguide <span class="im">import</span> AutoNormal</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    SSOEResult,</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    add_forecast_groups,</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    draw_posterior,</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    ssoe,</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.arrays <span class="im">import</span> pad_future</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># preliz warns at import time when PyMC is not installed; this example does not use PyMC.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(<span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"PyMC not installed"</span>, category<span class="op">=</span><span class="pp">UserWarning</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"When multiple credible intervals are plotted"</span>, category<span class="op">=</span><span class="pp">UserWarning</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> NamedTuple</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> preliz <span class="im">as</span> pz</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.artist <span class="im">import</span> Artist</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.axes <span class="im">import</span> Axes</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.handlers <span class="im">import</span> scope</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> SVI, Predictive, Trace_ELBO</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer.autoguide <span class="im">import</span> AutoNormal</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.optim <span class="im">import</span> Adam</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    SSOEResult,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    add_forecast_groups,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    draw_posterior,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    forecast,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    ssoe,</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.arrays <span class="im">import</span> pad_future</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array</span>
 <span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 </div>
 </section>
 <section id="generate-data" class="level1">
@@ -673,7 +682,7 @@ share of periods with demand lost to a stock-out: 0.33</code></pre>
 </tr>
 </tbody>
 </table>
-<p><a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston’s method</a> updates both components only at demand events, so a stock-out run simply freezes it, but it also <em>stretches the measured inter-demand intervals</em>: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html">TSB</a> replaces the intervals with the demand indicator <span class="math inline">d_t = \mathbf{1}[y_t &gt; 0]</span> smoothed at every period:</p>
+<p><a href="croston.html">Croston’s method</a> updates both components only at demand events, so a stock-out run simply freezes it, but it also <em>stretches the measured inter-demand intervals</em>: the drought caused by the stock-out is booked as demand slowing down, and there is no natural place in the interval bookkeeping to discount it. <a href="tsb.html">TSB</a> replaces the intervals with the demand indicator <span class="math inline">d_t = \mathbf{1}[y_t &gt; 0]</span> smoothed at every period:</p>
 <p><span class="math display">
 \hat{p}_t =
 \begin{cases}
@@ -718,7 +727,7 @@ share of periods with demand lost to a stock-out: 0.33</code></pre>
 </section>
 <section id="model-specification" class="level1">
 <h1>Model specification</h1>
-<p>The model is the TSB notebook’s two-component construction promoted to a panel, with one structural change. The reusable <code>panel_level_channel</code> runs the gated level recursion for all series at once through the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block: the per-series parameters (sites <code>smoothing</code> and <code>noise</code>) are sampled inside a <code>numpyro.plate</code> over series, the block’s in-sample scan carries the whole <code>(series,)</code> level vector (a panel puts the series on the observation axis, so the driving series is <code>(time, series)</code>, the carry <code>(series,)</code>, and the innovation distribution’s batch shape <code>(series,)</code>, which is exactly what the <code>noise</code> site sampled under the plate provides), and, when forecasting, the block draws the component’s innovations at its <code>eps_future</code> site and rolls the frozen level forward. The gate is an <code>xs</code> input padded with zeros over the horizon by <a href="https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html"><code>pad_future</code></a>, so the levels never update there and the forecast is the final level plus iid noise, the flat forecast of the level model. Composing with NumPyro’s <a href="https://num.pyro.ai/en/stable/handlers.html#scope"><code>scope</code></a> handler under the prefixes <code>z</code> and <code>p</code> yields the parameter names <code>z_smoothing</code>, …, and the innovation sites <code>z_eps_future</code> and <code>p_eps_future</code>, just like the siblings.</p>
+<p>The model is the TSB notebook’s two-component construction promoted to a panel, with one structural change. The reusable <code>panel_level_channel</code> runs the gated level recursion for all series at once through the package’s <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block: the per-series parameters (sites <code>smoothing</code> and <code>noise</code>) are sampled inside a <code>numpyro.plate</code> over series, the block’s in-sample scan carries the whole <code>(series,)</code> level vector (a panel puts the series on the observation axis, so the driving series is <code>(time, series)</code>, the carry <code>(series,)</code>, and the innovation distribution’s batch shape <code>(series,)</code>, which is exactly what the <code>noise</code> site sampled under the plate provides), and, when forecasting, the block draws the component’s innovations at its <code>eps_future</code> site and rolls the frozen level forward. The gate is an <code>xs</code> input padded with zeros over the horizon by <a href="../../reference/arrays.pad_future.html"><code>pad_future</code></a>, so the levels never update there and the forecast is the final level plus iid noise, the flat forecast of the level model. Composing with NumPyro’s <a href="https://num.pyro.ai/en/stable/handlers.html#scope"><code>scope</code></a> handler under the prefixes <code>z</code> and <code>p</code> yields the parameter names <code>z_smoothing</code>, …, and the innovation sites <code>z_eps_future</code> and <code>p_eps_future</code>, just like the siblings.</p>
 <p>The remaining choices, and where their numbers come from:</p>
 <ul>
 <li><strong>Level inits.</strong> Following the blog post, the levels start deterministically rather than sampled as in the sibling notebooks: the demand-size level starts at the first observation, <span class="math inline">\ell^z_0 = y_0</span>, and the demand probability starts at <span class="math inline">\hat{p}_0 = 0.5</span>, the agnostic “no idea whether this period sees demand” value that the data then pull toward each series’ true probability.</li>
@@ -1030,7 +1039,7 @@ Wall time: 14 s</code></pre>
 </div>
 <section id="posterior-draws" class="level2">
 <h2 class="anchored" data-anchor-id="posterior-draws">Posterior draws</h2>
-<p>A variational fit is a guide plus its fitted parameters; the posterior <em>draws</em> every downstream step consumes come from <a href="https://juanitorduz.github.io/numpyro_forecast/reference/predictive.draw_posterior.html"><code>draw_posterior</code></a>, and we draw them once here and reuse them for the tree, the component forecasts, and the scenario forecasts below. Two knobs matter on this panel: <code>batch_size=250</code> bounds how many draws are materialized at once, because every per-timestep site on <span class="math inline">1{,}000</span> series is a <code>(draws, time, series)</code> block, and <code>device="host"</code> moves each chunk into pageable host memory as it is drawn (jax arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized), so the whole ensemble never has to fit on the accelerator at once.</p>
+<p>A variational fit is a guide plus its fitted parameters; the posterior <em>draws</em> every downstream step consumes come from <a href="../../reference/predictive.draw_posterior.html"><code>draw_posterior</code></a>, and we draw them once here and reuse them for the tree, the component forecasts, and the scenario forecasts below. Two knobs matter on this panel: <code>batch_size=250</code> bounds how many draws are materialized at once, because every per-timestep site on <span class="math inline">1{,}000</span> series is a <code>(draws, time, series)</code> block, and <code>device="host"</code> moves each chunk into pageable host memory as it is drawn (jax arrays committed to the CPU device, or NumPy arrays when no CPU backend is initialized), so the whole ensemble never has to fit on the accelerator at once.</p>
 <div id="a72d94df" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:18:02.692222Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:18:02.691862Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:18:03.412641Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:18:03.411839Z&quot;}}" data-execution_count="10">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>post <span class="op">=</span> draw_posterior(rng_subkey, guide, svi_result.params, <span class="dv">1_000</span>, batch_size<span class="op">=</span><span class="dv">250</span>, device<span class="op">=</span><span class="st">"host"</span>)</span></code></pre></div>
@@ -1039,7 +1048,7 @@ Wall time: 14 s</code></pre>
 </section>
 <section id="diagnostics" class="level1">
 <h1>Diagnostics</h1>
-<p>We export the posterior draws into an ArviZ-schema <code>xarray.DataTree</code> with <a href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html"><code>to_datatree</code></a>; the tree shares the draws made above rather than drawing its own, so every number in this notebook comes from one ensemble. Because we pass the <em>extended</em> covariates (whose availability input carries the realized test availability), the tree automatically gains <code>predictions</code> groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide <code>time</code> coordinate, name the covariate axes explicitly (the covariates are <code>3</code>-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with <code>batch_size</code>, since every stored site on this panel is a <code>(draws, time, series)</code> block.</p>
+<p>We export the posterior draws into an ArviZ-schema <code>xarray.DataTree</code> with <a href="../../reference/convert.to_datatree.html"><code>to_datatree</code></a>; the tree shares the draws made above rather than drawing its own, so every number in this notebook comes from one ensemble. Because we pass the <em>extended</em> covariates (whose availability input carries the realized test availability), the tree automatically gains <code>predictions</code> groups holding the out-of-sample forecast draws for that scenario. We register the three per-timestep deterministics so they share the tree-wide <code>time</code> coordinate, name the covariate axes explicitly (the covariates are <code>3</code>-D here, so the default two-name layout does not apply), and bound the accelerator memory of the predictive pass with <code>batch_size</code>, since every stored site on this panel is a <code>(draws, time, series)</code> block.</p>
 <div id="7124e68e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:18:03.417531Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:18:03.417275Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:18:05.218185Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:18:05.216580Z&quot;}}" data-execution_count="11">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>rng_key, rng_subkey <span class="op">=</span> random.split(rng_key)</span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>tree <span class="op">=</span> to_datatree(</span>
@@ -2154,7 +2163,7 @@ empirical 94% coverage: 0.98  (nominal 0.94)</code></pre>
 </section>
 <section id="scenario-planning-full-availability" class="level2">
 <h2 class="anchored" data-anchor-id="scenario-planning-full-availability">Scenario planning: full availability</h2>
-<p>Here is the payoff of modeling availability as an input. The tree above answers “what will we <em>sell</em> given the availability we actually had”; replenishment planning needs “what would we sell <strong>if the product were always on the shelf</strong>”. That is one more <a href="https://juanitorduz.github.io/numpyro_forecast/reference/predictive.forecast.html"><code>forecast</code></a> call on the <em>same</em> posterior draws, feeding covariates whose future availability rows are all ones, and one <a href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.add_forecast_groups.html"><code>add_forecast_groups</code></a> call to package the draws as the <code>predictions</code> group of a sibling tree (the groups it copies from <code>tree</code> are shared, so this costs no memory beyond the new forecast).</p>
+<p>Here is the payoff of modeling availability as an input. The tree above answers “what will we <em>sell</em> given the availability we actually had”; replenishment planning needs “what would we sell <strong>if the product were always on the shelf</strong>”. That is one more <a href="../../reference/predictive.forecast.html"><code>forecast</code></a> call on the <em>same</em> posterior draws, feeding covariates whose future availability rows are all ones, and one <a href="../../reference/convert.add_forecast_groups.html"><code>add_forecast_groups</code></a> call to package the draws as the <code>predictions</code> group of a sibling tree (the groups it copies from <code>tree</code> are shared, so this costs no memory beyond the new forecast).</p>
 <div id="cb6bc49e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T20:18:10.070248Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T20:18:10.069914Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T20:18:10.310545Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T20:18:10.308095Z&quot;}}" data-execution_count="22">
 <div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>covariates_full_ones <span class="op">=</span> jnp.stack(</span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    [</span>
@@ -2474,14 +2483,14 @@ full-availability forecast, plain TSB:                1,479.8 (60% of truth)</co
 <h1>References</h1>
 <ul>
 <li>Orduz, J. <a href="https://juanitorduz.github.io/availability_tsb/"><em>Hacking the TSB Model for Intermittent Time Series to Accommodate for Availability Constraints</em></a>. The blog post this notebook ports.</li>
-<li>The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/tsb.html">TSB example</a> in this documentation, whose two-component level-model construction this notebook promotes to a panel, and the blog post it ports: Orduz, J. <a href="https://juanitorduz.github.io/tsb_numpyro/"><em>TSB Method for Intermittent Time Series Forecasting in NumPyro</em></a>.</li>
-<li>The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a> in this documentation, the first notebook of the intermittent-demand trilogy.</li>
+<li>The <a href="tsb.html">TSB example</a> in this documentation, whose two-component level-model construction this notebook promotes to a panel, and the blog post it ports: Orduz, J. <a href="https://juanitorduz.github.io/tsb_numpyro/"><em>TSB Method for Intermittent Time Series Forecasting in NumPyro</em></a>.</li>
+<li>The <a href="croston.html">Croston example</a> in this documentation, the first notebook of the intermittent-demand trilogy.</li>
 <li>Teunter, R. H., Syntetos, A. A., &amp; Babai, M. Z. (2011). <em>Intermittent demand: Linking forecasting to inventory obsolescence</em>. European Journal of Operational Research, 214(3), 606-615. The paper that introduces the TSB method.</li>
 <li>Croston, J. D. (1972). <em>Forecasting and stock control for intermittent demands</em>. Operational Research Quarterly, 23(3), 289-303.</li>
 <li>statsforecast documentation: <a href="https://nixtlaverse.nixtla.io/statsforecast/docs/models/tsb.html"><code>TSB</code></a>, the classical TSB baseline.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/availability_tsb-preview.html#9e4fd41f">Source: TSB with Availability Constraints for Intermittent Demand with `numpyro_forecast`</a></div>
+</div>
 
 
 

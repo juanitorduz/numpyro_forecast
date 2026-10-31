@@ -28,6 +28,10 @@ Every model is a plain function on the [Horizon.from_data](../../reference/model
 
 ``` python
 import warnings
+
+# preliz warns at import time when PyMC is not installed; this example does not use PyMC.
+warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWarning)
+
 from functools import partial
 from time import perf_counter
 
@@ -80,8 +84,10 @@ rng_key = random.PRNGKey(seed=42)
 # the observed prefix and the forecast suffix). numpyro's model validation warns about the
 # undeclared batch dimension at every trace; the model 2 section explains why it is harmless.
 warnings.filterwarnings("ignore", message="Missing a plate statement for batch dimension -2")
-# The second `plot_lm` call of an overlay reuses the alpha of the first one.
-warnings.filterwarnings("ignore", message="When multiple credible intervals are plotted")
+# arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
 
 %load_ext autoreload
 %autoreload 2
@@ -2474,5 +2480,3 @@ ax.margins(y=0.2);
 - Hyndman, R. J., Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/hierarchical.html), chapter 11 (hierarchical and grouped time series).
 - Nixtla. [*m5-forecasts*](https://github.com/Nixtla/m5-forecasts) (the data mirror).
 - Related examples: [hierarchical forecasting I](hierarchical_forecasting_1.md), [forecasting retail demand under stockouts](fresh_retail_stockout.md), [univariate forecasting](forecasting_univariate.md).
-
-[Source: M5 forecasting: top-down, bottom-up and middle-out with `numpyro_forecast`](_src/m5_forecasting-preview.html#db57b4af)

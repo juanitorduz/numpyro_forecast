@@ -5,15 +5,20 @@ Exponential Smoothing in State Space Form with `numpyro_forecast`
 
 Exponential smoothing is one of the most widely used forecasting techniques. In its classical (component) form it is a set of recursive update equations for a *level*, a *trend*, and a *seasonal* component. A more powerful way to write the same idea is the **innovations state space form** (also known as the single source of error, or SSOE, model), which turns exponential smoothing into a proper generative stochastic process. The key consequence is that forecast uncertainty is propagated correctly: the prediction interval widens with the horizon instead of collapsing to the observation noise.
 
-This notebook ports the blog post [*Exponential Smoothing with NumPyro: State Space Form*](https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/) (with material from its predecessor [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/)) into a `numpyro_forecast` example. We show how to write the damped Holt-Winters model in state space form as a plain NumPyro model on the package's [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block (the single-source-of-error recursion is exactly what the block implements), fit it with the NUTS sampler, and reuse the package's forecasting and evaluation machinery. Along the way we introduce the JAX `scan` operation that rolls the latent state forward.
+This notebook ports the blog post [*Exponential Smoothing with NumPyro: State Space Form*](https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/) (with material from its predecessor [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/)) into a `numpyro_forecast` example. We show how to write the damped Holt-Winters model in state space form as a plain NumPyro model on the package's [`ssoe`](../../reference/models.ssoe.md) building block (the single-source-of-error recursion is exactly what the block implements), fit it with the NUTS sampler, and reuse the package's forecasting and evaluation machinery. Along the way we introduce the JAX `scan` operation that rolls the latent state forward.
 
-A practical note on the design: the [`innovations`](https://juanitorduz.github.io/numpyro_forecast/reference/models.innovations.html) and [`predict`](https://juanitorduz.github.io/numpyro_forecast/reference/models.predict.html) building blocks assume a deterministic mean plus independent per-step noise, which is not how an innovations model behaves: the error of one step drives the state of the next. That error feedback is what [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) provides. It takes the driving series as an argument, and because the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, the observed series has to travel through the `covariates` argument; the model reads only its first `t_obs` rows, which the block checks.
+A practical note on the design: the [`innovations`](../../reference/models.innovations.md) and [`predict`](../../reference/models.predict.md) building blocks assume a deterministic mean plus independent per-step noise, which is not how an innovations model behaves: the error of one step drives the state of the next. That error feedback is what [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) provides. It takes the driving series as an argument, and because the package's [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) call the model with `data=None`, the observed series has to travel through the `covariates` argument; the model reads only its first `t_obs` rows, which the block checks.
 
 
 # Prepare notebook
 
 
 ``` python
+import warnings
+
+# preliz warns at import time when PyMC is not installed; this example does not use PyMC.
+warnings.filterwarnings("ignore", message="PyMC not installed", category=UserWarning)
+
 import arviz as az
 import jax
 import jax.numpy as jnp
@@ -182,7 +187,7 @@ with the coefficient map \beta = \beta^{\*} \alpha and \gamma = \gamma^{\*} (1 -
 
 # The model
 
-The model is a plain NumPyro function `(covariates, data=None)`. Its first line derives the per-call [`Horizon`](https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html) from the shapes (the observed data `h.data`, the number of in-sample steps `h.t_obs`, and the forecast length `h.future`), and the recursion goes to the [`ssoe`](https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html) building block. The block takes the driving series `y` (sliced from the covariates, see the design note above), the initial state, a [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:
+The model is a plain NumPyro function `(covariates, data=None)`. Its first line derives the per-call [`Horizon`](../../reference/models.Horizon.md) from the shapes (the observed data `h.data`, the number of in-sample steps `h.t_obs`, and the forecast length `h.future`), and the recursion goes to the [`ssoe`](../../reference/models.ssoe.md) building block. The block takes the driving series `y` (sliced from the covariates, see the design note above), the initial state, a [mean](../../reference/typing.Array.md#numpyro_forecast.typing.Array.mean) function, an `update` function, and the innovation distribution, and it owns the two scans, neither of which contains a NumPyro sample site:
 
 1.  **In sample.** A deterministic filter consumes the observed series: at each step `mean(carry, x_t)` returns the one-step-ahead mean \mu_t and `update(carry, y_t, eps_t, x_t)` advances the state with the innovation \varepsilon_t = y_t - \mu_t. The means come back as `r.mu`; the whole in-sample likelihood is then a single `Normal` observation site `"obs"` against them, and we also expose \mu_t as the deterministic site `"mu"` for the in-sample fit plot.
 2.  **Out of sample.** When `h.future > 0` the block draws the horizon innovations from the prior at a separate `"eps_future"` site (under its own `time_future` plate), rolls the state forward from the final in-sample state feeding those innovations back through `update`, and returns the trajectory as `r.y_future`, which we register as the deterministic `"forecast"` site the package's [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) driver reads. Because `"eps_future"` does not exist while training, `Predictive` draws it from the prior at forecast time, exactly like the built-in `_future` sites.
@@ -291,7 +296,7 @@ ax_noise.set(
 
 We fit the model with plain NumPyro: the NUTS sampler through `MCMC`, running 4 chains of 2{,}000 warmup and 2{,}000 sampling steps each on the training window. The model is an ordinary NumPyro callable, so nothing package-specific happens here; `mcmc.get_samples()` returns the posterior draws as a plain dictionary with the chains flattened together, which is the format every package driver consumes.
 
-We then export the draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html): a single call restores the `(chain, draw)` structure (we pass `num_chains=4`), samples the in-sample one-step-ahead posterior predictive from the same draws, and, because we hand it the *full-horizon* covariates, also runs the forecast and stores it in the `predictions` group. Everything downstream (diagnostics, trace plots, the in-sample fit, the forecast, the metrics) reads from this one object.
+We then export the draws into an ArviZ-schema `xarray.DataTree` with [`to_datatree`](../../reference/convert.to_datatree.md): a single call restores the `(chain, draw)` structure (we pass `num_chains=4`), samples the in-sample one-step-ahead posterior predictive from the same draws, and, because we hand it the *full-horizon* covariates, also runs the forecast and stores it in the `predictions` group. Everything downstream (diagnostics, trace plots, the in-sample fit, the forecast, the metrics) reads from this one object.
 
 
 ``` python
@@ -2035,7 +2040,7 @@ for name, value in metrics.items():
       coverage (90%): 0.9583
 
 
-The coverage of the central 90\\ interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for `numpyro_forecast.backtest`, which refits the model on a moving window (the [ARMA example](https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html) does exactly that with the same building block); we omit it here because it retrains the full sampler for every window.
+The coverage of the central 90\\ interval sits close to its nominal level, confirming that the forecast is well calibrated. For a systematic assessment over multiple origins you would reach for `numpyro_forecast.backtest`, which refits the model on a moving window (the [ARMA example](arma.md) does exactly that with the same building block); we omit it here because it retrains the full sampler for every window.
 
 
 # References
@@ -2044,5 +2049,3 @@ The coverage of the central 90\\ interval sits close to its nominal level, confi
 - Hyndman, R. J., Koehler, A. B., Ord, J. K., & Snyder, R. D. (2008). *Forecasting with Exponential Smoothing: The State Space Approach*. Springer.
 - Orduz, J. [*Exponential Smoothing with NumPyro: State Space Form*](https://juanitorduz.github.io/exponential_smoothing_numpyro_ssm/).
 - Orduz, J. [*Notes on Exponential Smoothing with NumPyro*](https://juanitorduz.github.io/exponential_smoothing_numpyro/).
-
-[Source: Exponential Smoothing in State Space Form with `numpyro_forecast`](_src/exponential_smoothing_state_space-preview.html#9b8886b7)

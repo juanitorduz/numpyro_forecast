@@ -445,5 +445,3 @@ Here we pooled `50` origins into a single destination. In [part II](hierarchical
 
 - Orduz, J. [*Hierarchical forecasting with NumPyro (part I)*](https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/).
 - Pyro. [*Forecasting III: Hierarchical Models*](https://pyro.ai/examples/forecasting_iii.html).
-
-[Source: Hierarchical forecasting I with `numpyro_forecast`](_src/hierarchical_forecasting_1-preview.html#ab3ec806)
