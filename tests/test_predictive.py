@@ -46,7 +46,7 @@ from numpyro_forecast._offload import (
     draw_chunked,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
-from numpyro_forecast.models import Horizon, predict
+from numpyro_forecast.models import Horizon, innovations, predict
 from numpyro_forecast.predictive import (
     _chunk_indices,
     _chunked_draws,
@@ -151,6 +151,98 @@ def test_forecast_rejects_posterior_leaf_without_sample_axis(level: ArrayLike) -
     post = {"level": level, "drift": jnp.zeros((4, 6, 1))}
     with pytest.raises(ValueError, match=r"posterior sites \['level'\] have no sample axis"):
         forecast(random.PRNGKey(3), rw_model, post, jnp.zeros((6, 1)), empty_covariates(8))
+
+
+def _handwritten_rw_model(covariates: Array, data: Array | None = None) -> None:
+    """A random walk that registers its own ``"obs"`` and ``"forecast"`` sites, no `predict()`."""
+    h = Horizon.from_data(covariates, data)
+    level = jnp.cumsum(innovations(h, "drift", dist.Normal(0.0, 0.1)), axis=-2)
+    numpyro.sample("obs", dist.Normal(level[..., : h.t_obs, :], 0.1), obs=data)
+    if h.future > 0:
+        numpyro.deterministic("forecast", level[..., h.t_obs :, :])
+
+
+@pytest.mark.parametrize(
+    ("model", "posterior_rows", "batch_size"),
+    [
+        (rw_model, 10, None),
+        (rw_model, 14, 3),
+        (_handwritten_rw_model, 10, None),
+    ],
+    ids=["short-posterior", "long-posterior-chunked", "handwritten-sites"],
+)
+def test_forecast_rejects_posterior_fit_on_another_window(
+    model: ForecastModel, posterior_rows: int, batch_size: int | None
+) -> None:
+    """Issue #168: a posterior drawn for another training length raises, naming both lengths.
+
+    ``innovations`` substitutes the posterior's in-sample rows as they are, so a
+    posterior fit on 10 (or 14) steps used to return 2 (or 6) forecast steps
+    for 12 observed steps and a 4-step horizon, without an error.
+    """
+    posterior = {"drift": jnp.zeros((4, posterior_rows, 1))}
+    got = posterior_rows + 4 - 12
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^forecast expects the model's 'forecast' site to have 4 time steps at axis -2 "
+            r"\(covariates\.shape\[-2\] - data\.shape\[-2\]\), but it has shape "
+            rf"\({got}, 1\) per draw\. .*in-sample time sites must have 12 rows"
+        ),
+    ):
+        forecast(
+            random.PRNGKey(0),
+            model,
+            posterior,
+            jnp.zeros((12, 1)),
+            empty_covariates(16),
+            batch_size=batch_size,
+        )
+
+
+def _squeezed_forecast_model(covariates: Array, data: Array | None = None) -> None:
+    """A model whose ``"forecast"`` site drops the observation axis: ``(future,)`` per draw."""
+    h = Horizon.from_data(covariates, data)
+    loc = numpyro.sample("loc", dist.Normal(0.0, 1.0))
+    numpyro.deterministic("forecast", jnp.full((h.future,), loc))
+
+
+def test_forecast_rejects_site_without_observation_axis() -> None:
+    """A ``(future,)`` site raises a layout error; its only axis is not read as time at ``-2``."""
+    with pytest.raises(
+        ValueError,
+        match=r"^forecast expects each draw .* has shape \(3,\) per draw\. A univariate series",
+    ):
+        forecast(
+            random.PRNGKey(0),
+            _squeezed_forecast_model,
+            {"loc": jnp.zeros(4)},
+            jnp.zeros((5, 1)),
+            empty_covariates(8),
+        )
+
+
+@pytest.mark.parametrize(
+    ("model", "batch_size"),
+    [(rw_model, None), (_handwritten_rw_model, 3)],
+    ids=["predict", "handwritten-sites-chunked"],
+)
+def test_predict_in_sample_rejects_posterior_fit_on_another_window(
+    model: ForecastModel, batch_size: int | None
+) -> None:
+    """Issue #168: the ``obs`` draws must span the covariates, not the posterior's rows."""
+    posterior = {"drift": jnp.zeros((4, 10, 1))}
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^predict_in_sample expects the model's 'obs' site to have 12 time steps at axis -2 "
+            r"\(one per row of the in-sample covariates\), but it has shape \(10, 1\) per draw\. "
+            r".*in-sample time sites must have 12 rows"
+        ),
+    ):
+        predict_in_sample(
+            random.PRNGKey(0), model, posterior, empty_covariates(12), batch_size=batch_size
+        )
 
 
 def test_predict_in_sample_shape_and_finite() -> None:

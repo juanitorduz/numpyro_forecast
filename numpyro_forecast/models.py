@@ -326,9 +326,12 @@ def markov_series[Carry](
         ``numpyro.sample`` statement.
     xs
         Optional exogenous inputs over the full horizon: a PyTree of arrays
-        with time at axis ``-2`` (a single array, a tuple, a dict, ...), moved
-        leaf by leaf into scan layout internally; ``None`` for autonomous
-        dynamics.
+        with time at axis ``-2`` and ``duration`` rows (a single array, a
+        tuple, a dict, ...), moved leaf by leaf into scan layout internally;
+        ``None`` for autonomous dynamics. Slice each leaf from ``covariates``,
+        which has ``duration`` rows in every model call (training included),
+        or extend an in-sample input with
+        `~~numpyro_forecast.arrays.pad_future()`.
     advance
         Optional ``(carry, z_t, x_t) -> carry`` (see `Advance`) that builds the
         next carry from the sampled latent; ``None`` means the carry *is* the
@@ -353,14 +356,24 @@ def markov_series[Carry](
     ValueError
         If forecasting without observed data (only reachable with a hand-built
         `Horizon`: `Horizon.from_data()` never sets ``future > 0`` without
-        data), if the per-step shape lacks the observation dimension, if an
-        enclosing plate is detected, or if ``advance`` is omitted and
-        ``init_carry`` is not a single array with the shape and dtype of a draw.
+        data), if an ``xs`` leaf lacks the time or observation axis or does
+        not span ``h.duration`` rows, if the per-step shape lacks the
+        observation dimension, if an enclosing plate is detected, or if
+        ``advance`` is omitted and ``init_carry`` is not a single array with
+        the shape and dtype of a draw.
     """
     if h.future > 0 and h.data is None:
         msg = "markov_series requires observed data when forecasting"
         raise ValueError(msg)
     _reject_enclosing_plates()
+    _validate_xs_leaves(
+        h,
+        xs,
+        "markov_series",
+        "Slice each xs leaf from covariates (h.duration rows in every model call, training "
+        "too) or extend an in-sample input with pad_future(x, h.future); do not pass the "
+        "observed window alone or a longer array.",
+    )
 
     def _body(site_name: str) -> Callable[[Carry, PyTree[Array] | None], tuple[Carry, Array]]:
         def body(carry: Carry, x_t: PyTree[Array] | None) -> tuple[Carry, Array]:
@@ -441,6 +454,33 @@ class SSOEResult(NamedTuple):
     y_future: Float[Array, " *batch future obs"]
 
 
+def _validate_xs_leaves(h: Horizon, xs: PyTree[Array] | None, block: str, hint: str) -> None:
+    """Require every ``xs`` leaf to carry time at axis ``-2`` and span ``h.duration`` rows.
+
+    Shared by `markov_series()` and `ssoe()`, which both split ``xs`` at
+    ``h.t_obs``; in `markov_series()` a leaf of another length silently changes
+    the number of forecast steps. ``block`` names the caller in the message and
+    ``hint`` ends it.
+    """
+    if xs is None:
+        return
+    for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
+        leaf_name = jax.tree_util.keystr(path) or "<root>"
+        if leaf.ndim < 2:
+            msg = (
+                f"{block} expects every xs leaf to carry time at axis -2 and a trailing "
+                f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
+                "with [..., None]."
+            )
+            raise ValueError(msg)
+        if leaf.shape[-2] != h.duration:
+            msg = (
+                f"{block} expects every xs leaf to span the full horizon (duration = "
+                f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. {hint}"
+            )
+            raise ValueError(msg)
+
+
 def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None) -> Array:
     """Check the driving series and the ``xs`` leaves against the horizon."""
     if y is None:
@@ -463,23 +503,9 @@ def _validate_ssoe_inputs(h: Horizon, y: Array | None, xs: PyTree[Array] | None)
             f"but h.t_obs = {h.t_obs}. Slice the driving series as covariates[..., :h.t_obs, :]."
         )
         raise ValueError(msg)
-    if xs is not None:
-        for path, leaf in jax.tree_util.tree_leaves_with_path(xs):
-            leaf_name = jax.tree_util.keystr(path) or "<root>"
-            if leaf.ndim < 2:
-                msg = (
-                    "ssoe expects every xs leaf to carry time at axis -2 and a trailing "
-                    f"observation axis; leaf {leaf_name} has shape {leaf.shape}. Add the axis "
-                    "with [..., None]."
-                )
-                raise ValueError(msg)
-            if leaf.shape[-2] != h.duration:
-                msg = (
-                    "ssoe expects every xs leaf to span the full horizon (duration = "
-                    f"{h.duration} rows at axis -2); leaf {leaf_name} has {leaf.shape[-2]}. "
-                    "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
-                )
-                raise ValueError(msg)
+    _validate_xs_leaves(
+        h, xs, "ssoe", "Freeze an in-sample gate over the horizon with pad_future(gate, h.future)."
+    )
     return y
 
 

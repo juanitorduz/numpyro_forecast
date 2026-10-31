@@ -53,6 +53,7 @@ from numpyro_forecast._validation import (
     require_covariates_extend_data,
     require_positive_num_samples,
     require_sample_axis,
+    require_time_axis,
 )
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -431,6 +432,63 @@ def _compiled_predictive(
     return jax.jit(run)
 
 
+def _require_time_steps(
+    draws: Array, *, driver: str, site: str, steps: int, rule: str, train_rows: int
+) -> Array:
+    """Return ``draws`` if every draw of ``site`` has ``steps`` rows at axis ``-2``, else raise.
+
+    The drivers run it on each chunk of draws (a static shape, so it costs
+    nothing and raises before the next chunk is drawn). A posterior drawn for
+    another training length is substituted as is, and NumPyro does not check a
+    substituted value against its plate, so without this check the draws
+    silently get the posterior's length (issue #168).
+
+    Parameters
+    ----------
+    draws
+        The draws of ``site``, sample axis leading.
+    driver
+        Name of the calling driver, for the message.
+    site
+        Name of the site the draws come from (``"forecast"`` or ``"obs"``).
+    steps
+        The required number of time steps at axis ``-2``.
+    rule
+        How ``steps`` follows from the driver's arguments, for the message.
+    train_rows
+        The training length the posterior must come from, for the message.
+
+    Returns
+    -------
+    Array
+        ``draws``, unchanged.
+
+    Raises
+    ------
+    ValueError
+        If a draw has fewer than two axes or not ``steps`` rows at axis ``-2``.
+    """
+    per_draw = tuple(draws.shape[1:])
+    if len(per_draw) < 2:
+        msg = (
+            f"{driver} expects each draw of the model's {site!r} site to have shape (..., time, "
+            "obs), with time at axis -2 and the observation axis at -1, but it has shape "
+            f"{per_draw} per draw. A univariate series keeps a size-1 observation axis: "
+            "(time, 1), not (time,)."
+        )
+        raise ValueError(msg)
+    if per_draw[-2] != steps:
+        msg = (
+            f"{driver} expects the model's {site!r} site to have {steps} time steps at axis -2 "
+            f"({rule}), but it has shape {per_draw} per draw. The usual cause is a posterior "
+            "drawn for a different training length: its in-sample time sites must have "
+            f"{train_rows} rows. Also check that each exogenous input spans the covariates, "
+            "that the model slices the correct rows, and that time is at axis -2."
+        )
+        raise ValueError(msg)
+    return draws
+
+
 def forecast(
     rng_key: Array,
     model: ForecastModel,
@@ -461,7 +519,10 @@ def forecast(
         of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
         is accepted directly.
     data
-        Observed data with time at axis ``-2`` and length ``t``.
+        Observed data with time at axis ``-2`` and length ``t``. When
+        ``posterior`` holds in-sample time latents (for example from
+        `~~numpyro_forecast.models.innovations()`), ``t`` must be the training
+        length that ``posterior`` was drawn for.
     covariates
         Covariates with time at axis ``-2`` and length ``duration > t``.
     batch_size
@@ -505,9 +566,11 @@ def forecast(
     ValueError
         If ``data`` or ``covariates`` has fewer than two axes (time must be at
         axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
-        extend beyond ``data`` along the time axis, or if ``posterior`` is
+        extend beyond ``data`` along the time axis, if ``posterior`` is
         empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
-        on the sample-axis length.
+        on the sample-axis length, or if the ``"forecast"`` draws do not have
+        time at axis ``-2`` with ``duration - t`` steps (for example because
+        ``posterior`` was drawn for a different training length).
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
@@ -541,10 +604,18 @@ def forecast(
     `~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
     """
     require_covariates_extend_data(data, covariates)
+    steps = covariates.shape[-2] - data.shape[-2]
     predictive = _compiled_predictive(model, "forecast", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
-        return predictive(key, post, covariates, data)
+        return _require_time_steps(
+            predictive(key, post, covariates, data),
+            driver="forecast",
+            site="forecast",
+            steps=steps,
+            rule="covariates.shape[-2] - data.shape[-2]",
+            train_rows=data.shape[-2],
+        )
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
 
@@ -580,7 +651,11 @@ def predict_in_sample(
     covariates
         Covariates with time at axis ``-2`` spanning the observed window. Its time
         length must match the data the ``posterior`` was fit on, since the in-sample
-        latent sites are sized to that window.
+        latent sites are sized to that window. For
+        `~~numpyro_forecast.models.innovations()` latents a mismatch raises
+        ``ValueError``; a `~~numpyro_forecast.models.markov_series()` latent
+        replays a shorter posterior as a prefix and draws the remaining steps
+        from the prior (a longer one raises NumPyro's ``RuntimeError``).
     batch_size
         Optional chunk size for sampling (caps peak memory).
     parallel
@@ -617,8 +692,11 @@ def predict_in_sample(
     ------
     ValueError
         If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
-        the leaves disagree on the sample-axis length, or if ``covariates`` has
-        fewer than two axes (time must be at axis ``-2``) or no time steps.
+        the leaves disagree on the sample-axis length, if ``covariates`` has
+        fewer than two axes (time must be at axis ``-2``) or no time steps, or
+        if the ``"obs"`` draws do not have time at axis ``-2`` with one step
+        per ``covariates`` row (for example because ``posterior`` was drawn for
+        a different training length).
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
@@ -639,10 +717,19 @@ def predict_in_sample(
     ``batch_size`` chunk) and keeps no compiled program afterwards, so the draws
     reflect the model as it is at call time and ``model`` need not be hashable.
     """
+    require_time_axis("covariates", covariates)
+    steps = covariates.shape[-2]
     # No data argument: the model must see ``data=None`` to sample ``obs``.
     predictive = _compiled_predictive(model, "obs", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
-        return predictive(key, post, covariates)
+        return _require_time_steps(
+            predictive(key, post, covariates),
+            driver="predict_in_sample",
+            site="obs",
+            steps=steps,
+            rule="one per row of the in-sample covariates",
+            train_rows=steps,
+        )
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))

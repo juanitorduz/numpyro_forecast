@@ -181,6 +181,34 @@ def test_xs_threading() -> None:
     assert tr["z"]["value"].shape[0] == 8
 
 
+@pytest.mark.parametrize(
+    ("xs", "match"),
+    [
+        (
+            {"temp": jnp.ones((10, 1))},
+            r"span the full horizon \(duration = 13 .*\['temp'\] has 10",
+        ),
+        (jnp.ones((18, 1)), r"span the full horizon \(duration = 13 .*<root> has 18"),
+        (jnp.ones((13,)), r"leaf <root> has shape \(13,\)\. Add the axis"),
+    ],
+    ids=["observed-window", "too-long", "no-obs-axis"],
+)
+def test_xs_must_span_the_horizon(xs: object, match: str) -> None:
+    """Issue #168: every ``xs`` leaf spans ``h.duration`` rows, as ``ssoe`` requires.
+
+    An ``xs`` of ``t_obs`` rows (sliced to the observed window) used to run a
+    zero-step forecast scan, and a longer one a forecast with more steps than
+    the covariates ask for, both without an error.
+    """
+    h = Horizon.from_data(empty_covariates(13), jnp.zeros((10, 1)))
+
+    def body() -> None:
+        markov_series(h, "z", jnp.zeros((1,)), _ar1_transition, xs)
+
+    with pytest.raises(ValueError, match=rf"^markov_series expects every xs leaf.*{match}"):
+        trace(seed(body, random.PRNGKey(0))).get_trace()
+
+
 def test_ar1_model_end_to_end_shape() -> None:
     """The plain-function AR(1) model fits and forecasts with the expected shape."""
     data = jnp.zeros((10, 1))
