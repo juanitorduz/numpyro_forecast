@@ -13,18 +13,22 @@ shared chunk-and-transfer loop, `~~numpyro_forecast._offload.draw_chunked()`.
 
 `forecast()` samples forecasts over the horizon from posterior draws, and
 `predict_in_sample()` samples the in-sample posterior predictive of the
-``obs`` site. Both drive a jitted ``Predictive`` wrapper through the shared
-chunking driver ``_chunked_draws``, which caps peak memory while compiling the
-predictive exactly once. With ``device`` set (e.g. ``"host"``: pageable host
-memory, as jax Arrays on the CPU backend device or as NumPy arrays when that
-backend is not initialized), every chunk is moved off the accelerator before
-the next one is drawn, so accelerator memory is bounded by a single chunk
-instead of the full draw array. The ``device`` contract is documented once, on
+``obs`` site. Each call jit-compiles a ``Predictive`` wrapper of the model once
+(`_compiled_predictive()`) and drives it through the shared chunking driver
+``_chunked_draws``, which caps peak memory while reusing that one program for
+every chunk. Nothing is cached across calls: like ``numpyro.infer.Predictive``,
+a driver call sees the model as it is at call time (including the globals,
+closure cells and attributes it reads), and the model need not be hashable.
+With ``device`` set (e.g. ``"host"``: pageable host memory, as jax Arrays on
+the CPU backend device or as NumPy arrays when that backend is not
+initialized), every chunk is moved off the accelerator before the next one is
+drawn, so accelerator memory is bounded by a single chunk instead of the full
+draw array. The ``device`` contract is documented once, on
 `draw_posterior()`; the predictive drivers share it.
 """
 
 from collections.abc import Callable, Mapping
-from functools import lru_cache, partial
+from functools import lru_cache
 from typing import cast
 
 import jax
@@ -96,8 +100,11 @@ def _jitted_sample_posterior(guide: AutoGuide) -> Callable[..., dict[str, Array]
     which is what blows accelerator memory on wide panels. Under ``jax.jit``
     XLA schedules and reuses those buffers, and caching per guide instance
     means every chunk of a `draw_posterior()` call (and repeated calls
-    with the same fit and sample count) shares one compiled executable, the
-    same single-compile discipline as the predictive drivers.
+    with the same fit and sample count) shares one compiled executable. Unlike
+    the predictive drivers, which compile once per call (`_compiled_predictive()`),
+    this cache outlives the call: an autoguide fixes its prototype trace at
+    initialization, so a later change to the model cannot make the cached
+    program stale, but the guide must be hashable.
 
     Parameters
     ----------
@@ -370,29 +377,51 @@ def _chunked_draws(
         return _stitch_chunks(chunks, num, device)
 
 
-@partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
-def _predict(
-    rng_key: Array,
-    model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
-    data: Array,
-    covariates: Array,
-    *,
-    parallel: bool = True,
-) -> Array:
-    """Run ``Predictive`` over the full horizon and return the ``forecast`` site.
+def _compiled_predictive(
+    model: ForecastModel, site: str, *, parallel: bool
+) -> Callable[..., Array]:
+    """Return a freshly jitted ``Predictive`` of ``model`` that returns the ``site`` draws.
 
-    Jitted with ``model`` (and ``parallel``) static: each
-    ``(model, parallel, shape)`` combination compiles once and is reused, which
-    is what makes the chunked `forecast()` loop cheap (the per-call
-    ``Predictive`` tracing cost is paid a single time). ``parallel`` selects
-    ``Predictive``'s sample-axis mapping (``vmap`` when ``True``, serial
-    ``lax.map`` when ``False``).
+    The returned callable takes ``(rng_key, posterior, *model_args)`` and returns
+    ``Predictive(model, ...)(rng_key, *model_args)[site]``. `forecast()` and
+    `predict_in_sample()` build it once per call and reuse it for every
+    ``batch_size`` chunk, so a call compiles a single program whatever the
+    number of chunks.
+
+    ``model`` is closed over, not a static ``jax.jit`` argument: it is never
+    hashed (any callable model works, for example a plain ``@dataclass`` with
+    ``__call__``), and no compiled program outlives the driver call. A
+    module-level jit with a static model would key its cache on the model
+    object and replay the first trace, so a model that reads a global, a
+    closure cell or a mutable attribute would silently return stale draws after
+    that value changes (issue #167). The model arguments (``data``,
+    ``covariates``) stay traced jit arguments rather than closed-over constants.
+
+    Parameters
+    ----------
+    model
+        The forecasting model callable.
+    site
+        Name of the site to return (``"forecast"`` or ``"obs"``).
+    parallel
+        ``Predictive``'s sample-axis mapping (``vmap`` when ``True``, serial
+        ``lax.map`` when ``False``).
+
+    Returns
+    -------
+    Callable[..., Array]
+        The jitted ``(rng_key, posterior, *model_args) -> draws`` function.
     """
-    predictive = Predictive(
-        model, posterior_samples=dict(posterior), return_sites=["forecast"], parallel=parallel
-    )
-    return predictive(rng_key, covariates, data)["forecast"]
+
+    def run(
+        rng_key: Array, posterior: Mapping[str, Array | np.ndarray], *model_args: Array
+    ) -> Array:
+        predictive = Predictive(
+            model, posterior_samples=dict(posterior), return_sites=[site], parallel=parallel
+        )
+        return predictive(rng_key, *model_args)[site]
+
+    return jax.jit(run)
 
 
 def forecast(
@@ -491,37 +520,26 @@ def forecast(
     Chunking is a memory knob, not a reproducibility knob: reproducibility is
     per ``(rng_key, batch_size)``. Every chunk shares the exact ``batch_size``
     shape (the final chunk wraps around to re-used draws that are discarded),
-    so the underlying ``_predict`` compiles exactly once for a fixed shape, but
-    changing ``batch_size`` changes the PRNG stream layout and therefore the
-    exact draws. ``device`` never changes the draws, only where they live.
+    so each call compiles the predictive exactly once, but changing
+    ``batch_size`` changes the PRNG stream layout and therefore the exact
+    draws. ``device`` never changes the draws, only where they live.
+
+    Each call traces and compiles the model once and keeps no compiled program
+    afterwards. In exchange, like a plain ``numpyro.infer.Predictive`` call
+    (which re-runs the model every time), the draws always reflect the model
+    as it is at call time (a changed global, closure value or attribute it
+    reads takes effect on the next call), and ``model`` can be any callable,
+    hashable or not. A repeated call with the same model and shapes, for
+    example in a scenario loop, therefore compiles again; so does
+    `~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
     """
     require_covariates_extend_data(data, covariates)
+    predictive = _compiled_predictive(model, "forecast", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
-        return _predict(key, model, post, data, covariates, parallel=parallel)
+        return predictive(key, post, covariates, data)
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))
-
-
-@partial(jax.jit, static_argnums=(1,), static_argnames=("parallel",))
-def _predict_obs(
-    rng_key: Array,
-    model: ForecastModel,
-    posterior: Mapping[str, Array | np.ndarray],
-    covariates: Array,
-    *,
-    parallel: bool = True,
-) -> Array:
-    """Run ``Predictive`` over the observed window and return the ``obs`` site.
-
-    Jitted with ``model`` (and ``parallel``) static (see `_predict()`): each
-    ``(model, parallel, shape)`` combination compiles once and is reused, keeping
-    the chunked `predict_in_sample()` loop cheap.
-    """
-    predictive = Predictive(
-        model, posterior_samples=dict(posterior), return_sites=["obs"], parallel=parallel
-    )
-    return predictive(rng_key, covariates)["obs"]
 
 
 def predict_in_sample(
@@ -607,9 +625,17 @@ def predict_in_sample(
     UserWarning
         If ``device="cpu"`` is requested and the JAX CPU backend is not
         initialized, so the draws take the NumPy path of ``"host"`` instead.
+
+    Notes
+    -----
+    Like `forecast()`, each call compiles the predictive once (shared by every
+    ``batch_size`` chunk) and keeps no compiled program afterwards, so the draws
+    reflect the model as it is at call time and ``model`` need not be hashable.
     """
+    # No data argument: the model must see ``data=None`` to sample ``obs``.
+    predictive = _compiled_predictive(model, "obs", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
-        return _predict_obs(key, model, post, covariates, parallel=parallel)
+        return predictive(key, post, covariates)
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, _resolve_device(device))

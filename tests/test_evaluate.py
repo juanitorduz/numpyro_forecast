@@ -28,7 +28,7 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, DeviceMemoryError
-from numpyro_forecast.typing import ForecastFn
+from numpyro_forecast.typing import ForecastFn, ForecastModel
 
 
 def _canned_forecast_fn(
@@ -1264,40 +1264,37 @@ def test_results_to_dataframe_missing_pandas(monkeypatch: pytest.MonkeyPatch) ->
         results_to_dataframe([_make_result(0)])
 
 
-def test_rolling_backtest_reuse_model_predict_cache(
-    count_compilations,
-    rng_key: Array,
+@pytest.mark.parametrize(
+    ("window_type", "reuse_model"),
+    [("rolling", True), ("rolling", False), ("expanding", True)],
+)
+def test_backtest_reuse_model_controls_model_fn_calls(
+    rng_key: Array, window_type: str, reuse_model: bool
 ) -> None:
-    """I3: ``reuse_model=True`` reuses one model so forecast kernels cache across windows."""
-    import jax
-
-    from numpyro_forecast.predictive import _predict
-
-    duration = 80
-    train, test, stride = 25, 5, 5
+    """``reuse_model=True`` builds one model for rolling windows; otherwise one per window."""
+    duration, train, test, stride = 40, 25, 5, 5
     data = jnp.sin(jnp.linspace(0, 6, duration))[:, None]
     cov = jnp.zeros((duration, 0))
-    num_windows = (duration - train - test) // stride + 1
+    calls: list[ForecastModel] = []
 
-    def run(reuse: bool) -> int:
-        _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-        with count_compilations() as tally:  # type: ignore[operator]
-            backtest(
-                rng_key,
-                rw_model_factory,
-                data,
-                cov,
-                forecast_fn=svi_forecast_fn(num_steps=30),
-                train_window=train,
-                test_window=test,
-                stride=stride,
-                num_samples=10,
-                reuse_model=reuse,
-            )
-            jax.block_until_ready(data)
-        return int(tally.count)  # type: ignore[attr-defined]
+    def model_fn() -> ForecastModel:
+        model = rw_model_factory()
+        calls.append(model)
+        return model
 
-    without_reuse = run(False)
-    with_reuse = run(True)
-    assert with_reuse <= without_reuse
-    assert _predict._cache_size() <= num_windows  # ty: ignore[unresolved-attribute]
+    results = backtest(
+        rng_key,
+        model_fn,
+        data,
+        cov,
+        forecast_fn=svi_forecast_fn(num_steps=5),
+        train_window=train if window_type == "rolling" else None,
+        min_train_window=train,
+        test_window=test,
+        stride=stride,
+        num_samples=10,
+        reuse_model=reuse_model,
+    )
+    shared = reuse_model and window_type == "rolling"
+    assert len(calls) == (1 if shared else len(results))
+    assert len(results) == (duration - train - test) // stride + 1
