@@ -911,7 +911,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L465-L773" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L465-L776" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -948,7 +948,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">posterior</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Mapping[str, ArrayLike]</span></code></dt>
 <dd>
-<p>Posterior samples of the latent sites of the training run, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly. Forecast-horizon keys follow the rule of <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>: one with values (a key that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) raises <code>ValueError</code>.</p>
+<p>Posterior samples of the latent sites of the training run, with a single flattened sample axis leading (NumPyro’s <code>mcmc.get_samples()</code> order, or the output of <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a>). Host-committed leaves (the output of <code>draw_posterior(..., device="host")</code>) and NumPy leaves are accepted directly. Forecast-horizon keys follow the rule of <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>: one with values (a key that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) raises <code>ValueError</code>. One with an empty leaf (a site that the model registers on every call, recorded by the training run with a size-0 time axis) is kept in the <code>posterior</code> group as a size-0 variable, and the predictive drivers drop it.</p>
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>

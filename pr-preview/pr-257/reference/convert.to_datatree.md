@@ -39,7 +39,7 @@ PRNG key for the in-sample predictive draws and, when a horizon is present, the 
 The forecasting model that produced `posterior`.
 
 `posterior: Mapping[str, ArrayLike]`  
-Posterior samples of the latent sites of the training run, with a single flattened sample axis leading (NumPyro's `mcmc.get_samples()` order, or the output of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). Host-committed leaves (the output of `draw_posterior(..., device="host")`) and NumPy leaves are accepted directly. Forecast-horizon keys follow the rule of [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast): one with values (a key that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) raises `ValueError`.
+Posterior samples of the latent sites of the training run, with a single flattened sample axis leading (NumPyro's `mcmc.get_samples()` order, or the output of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). Host-committed leaves (the output of `draw_posterior(..., device="host")`) and NumPy leaves are accepted directly. Forecast-horizon keys follow the rule of [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast): one with values (a key that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) raises `ValueError`. One with an empty leaf (a site that the model registers on every call, recorded by the training run with a size-0 time axis) is kept in the `posterior` group as a size-0 variable, and the predictive drivers drop it.
 
 `data: Array`  
 In-sample data shaped `(*batch, time, obs)`: time at axis `-2`, the observation dim at axis `-1` and any batch axes to the left (`obs_dims` names them).

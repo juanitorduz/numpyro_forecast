@@ -246,7 +246,8 @@ such: per-step error scales, if that is what you meant.
 **Composition.** Two channels are two calls sharing the same ``Horizon``;
 each opens its own ``time_future`` plate. Scoping a helper that contains the
 call is fine (``handlers.scope`` prefixes the error site and the plate; use
-``name="eps"`` inside a scoped helper so the site reads ``z_eps_future``);
+``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
+or ``z_eps_future`` with ``divider="_"``);
 register ``"obs"`` and ``"forecast"`` outside any scope and build the
 forecast from the channels' ``y_future``.
 
@@ -421,7 +422,10 @@ axis ``-2``, shape ``(*batch, duration, obs)``). ``obs_dist`` takes one of
 two forms. A `numpyro.distributions.Distribution` is observation noise with
 location ``0`` (e.g. ``dist.StudentT(nu, 0.0, sigma)``) whose location is
 shifted onto the predictor with `~~numpyro_forecast.surgery.shift_loc()`,
-which also owns the multivariate-normal layout check. The predictor is then
+which also owns the multivariate-normal layout: noise correlated over time,
+``dist.MultivariateNormal(jnp.zeros(h.duration), cov)``, gets the event shape
+``(time, 1)``, so ``"obs"`` scores each series jointly and the forecast
+keeps the observation axis. The predictor is then
 the location of the observation distribution: the mean for ``Normal``,
 ``StudentT`` (``df > 1``), ``Laplace`` and ``MultivariateNormal`` noise,
 but the mode for ``Gumbel`` and ``AsymmetricLaplace`` noise, whose mean is
@@ -835,6 +839,21 @@ observation, center the noise yourself, for example
 ``dist.Gumbel(-np.euler_gamma * scale, scale)`` or
 ``dist.AsymmetricLaplace(scale * (asymmetry - 1 / asymmetry), scale, asymmetry)``.
 
+A ``MultivariateNormal`` over time is noise correlated across the time
+steps of one series (``obs == 1``): a ``(*batch, time)`` location such as
+``jnp.zeros(h.duration)`` with a ``(*batch, time, time)`` covariance.
+Shifted by a predictor with the observation axis, ``(*batch, time, 1)`` as
+`~~numpyro_forecast.models.predict()` supplies it, the result is the same
+Gaussian with event shape ``(time, 1)``: ``log_prob`` of
+``(*batch, time, 1)`` data is the joint density over time, one value per
+series, and draws keep the observation axis. The series of a panel go in
+the batch, ``(series, time, 1)``, and a size-1 time axis, ``(*batch, 1, 1)``,
+shifts every time step by the same value. A ``(*batch, time)`` predictor,
+with no more axes than the noise location, keeps the ``(time,)`` event. A link
+callable for `~~numpyro_forecast.models.predict()` gets the
+``(time, 1)`` event with
+``lambda mu: shift_loc(dist.MultivariateNormal(jnp.zeros(h.duration), cov), mu)``.
+
 Parameters
 ----------
 noise_dist
@@ -846,12 +865,20 @@ Returns
 -------
 dist.Distribution
     The same family with its location shifted by ``loc`` (the mean or the
-    mode, depending on the family, see above).
+    mode, depending on the family, see above). For a ``MultivariateNormal``
+    and a ``(*batch, time, 1)`` predictor, a distribution with event shape
+    ``(time, 1)``: its ``mean`` and ``variance`` have the observation axis,
+    and its ``base_dist`` is the shifted ``MultivariateNormal`` (``loc``,
+    ``covariance_matrix``, ``entropy()``).
 
 Raises
 ------
 NotImplementedError
     If ``noise_dist`` is of an unsupported type.
+MVNLayoutError
+    If ``noise_dist`` is a ``MultivariateNormal`` and its location or
+    ``loc`` matches neither layout above, for example a ``(time, obs)``
+    predictor with ``obs > 1``.
 
 slice_time(noise_dist: numpyro.distributions.distribution.Distribution, index: slice) -> numpyro.distributions.distribution.Distribution
 
@@ -860,7 +887,10 @@ Slice an elementwise distribution along the time axis ``-2``.
 The default implementation handles registered elementwise families (empty
 ``event_shape``, ``batch_shape`` ending in ``(time, obs)``; e.g. ``Normal``,
 ``StudentT``, ``Poisson``) by slicing each broadcast parameter. Correlated
-families register a dedicated dispatch instead.
+families register a dedicated dispatch instead: a ``MultivariateNormal``
+over time slices its time axis and keeps its layout, so the event
+``(time, 1)`` returned by `shift_loc()` stays ``(steps, 1)`` and a bare
+``(time,)`` event stays ``(steps,)``.
 
 Parameters
 ----------
@@ -891,7 +921,10 @@ registered elementwise families take this path; correlated families (e.g.
 Gaussian conditional, which is checked here rather than silently reduced to
 a slice (the R1 fix). An ``Independent`` wrapper (e.g. from ``.to_event(1)``)
 conditions its base distribution and keeps its ``reinterpreted_batch_ndims``,
-so wrapping does not change the conditional.
+so wrapping does not change the conditional. A ``MultivariateNormal`` over
+time keeps its layout: the event ``(time, 1)`` returned by `shift_loc()`
+gives a conditional with event ``(f, 1)``, and a bare ``(time,)`` event gives
+``(f,)``.
 
 Parameters
 ----------
@@ -2129,7 +2162,10 @@ posterior
     Forecast-horizon keys follow the rule of
     `~~numpyro_forecast.predictive.forecast()`: one with values (a key
     that ends in ``"_future"`` or contains ``"_future_"``, or
-    ``"forecast"``) raises ``ValueError``.
+    ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
+    that the model registers on every call, recorded by the training run
+    with a size-0 time axis) is kept in the ``posterior`` group as a
+    size-0 variable, and the predictive drivers drop it.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -3527,7 +3563,9 @@ Raised by `~~numpyro_forecast.surgery.shift_loc()`,
 `~~numpyro_forecast.surgery.slice_time()`, and
 `~~numpyro_forecast.surgery.prefix_condition()` on MVN noise whose
 ``loc``/``covariance_matrix`` shapes do not match the supported
-time-leading layout.
+time-leading layout, and by `~~numpyro_forecast.surgery.shift_loc()` on a
+predictor that is neither ``(*batch, time, 1)`` (time may be ``1``) nor
+``(*batch, time)`` with no more axes than the noise location.
 
 DeviceMemoryError(message: str | None = None) -> None
 

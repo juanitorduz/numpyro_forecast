@@ -14,7 +14,7 @@ surgery.slice_time(
 ```
 
 
-The default implementation handles registered elementwise families (empty `event_shape`, `batch_shape` ending in `(time, obs)`; e.g. `Normal`, `StudentT`, `Poisson`) by slicing each broadcast parameter. Correlated families register a dedicated dispatch instead.
+The default implementation handles registered elementwise families (empty `event_shape`, `batch_shape` ending in `(time, obs)`; e.g. `Normal`, `StudentT`, `Poisson`) by slicing each broadcast parameter. Correlated families register a dedicated dispatch instead: a `MultivariateNormal` over time slices its time axis and keeps its layout, so the event `(time, 1)` returned by [shift_loc()](surgery.shift_loc.md#numpyro_forecast.surgery.shift_loc) stays `(steps, 1)` and a bare `(time,)` event stays `(steps,)`.
 
 
 ## Parameters
