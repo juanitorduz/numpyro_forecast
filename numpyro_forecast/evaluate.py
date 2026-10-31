@@ -8,6 +8,7 @@ a user-supplied fit/forecast closure (see `~~numpyro_forecast.typing.ForecastFn`
 ``"rolling"`` window (see `WindowType`), selected via ``window_type``.
 """
 
+import copy
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from functools import partial
@@ -1108,6 +1109,61 @@ def _vmapped_metrics(
         raise VectorizedMetricError() from err
 
 
+def _held_autoguides(value: object) -> Iterator[AutoGuide]:
+    """Yield the autoguides an attribute value is or holds in a list or dict."""
+    if isinstance(value, AutoGuide):
+        yield value
+    elif isinstance(value, list):
+        yield from (v for v in value if isinstance(v, AutoGuide))
+    elif isinstance(value, dict):
+        yield from (v for v in value.values() if isinstance(v, AutoGuide))
+
+
+def _nested_autoguides(guide: AutoGuide) -> Iterator[AutoGuide]:
+    """Yield ``guide`` and every autoguide it holds, recursively.
+
+    Covers the parts of an ``AutoGuideList`` and the global and local guides of
+    an ``AutoSemiDAIS``: each one sets itself up and caches its own state.
+    """
+    yield guide
+    for value in vars(guide).values():
+        for held in _held_autoguides(value):
+            yield from _nested_autoguides(held)
+
+
+def _fresh_copy(guide: AutoGuide) -> AutoGuide:
+    """Copy a fresh autoguide so that setting the copy up leaves ``guide`` unchanged.
+
+    The setup of an autoguide assigns attributes and writes into containers
+    that its ``__init__`` created (``_prototype_frame_full_sizes``, the parts
+    list of an ``AutoGuideList``). So the copy gets its own attribute dict and
+    its own copy of every list, dict and set attribute, and each autoguide it
+    holds is copied in the same way. All other attributes, the model first of
+    all, are shared: a deep copy would also copy whatever object the model is
+    bound to, which can fail (an object that holds a lock, or a PRNG key
+    under ``jit``).
+
+    This relies on NumPyro (0.22) writing in place only into top-level
+    containers of the guide: a setup that wrote into a nested container would
+    leak traced values into ``guide``.
+    """
+    clone = copy.copy(guide)
+    for name, value in list(vars(clone).items()):
+        if isinstance(value, AutoGuide):
+            setattr(clone, name, _fresh_copy(value))
+        elif isinstance(value, list | dict | set):
+            # A shallow copy keeps the container type (an OrderedDict stays one).
+            fresh = copy.copy(value)
+            if isinstance(fresh, list):
+                fresh[:] = [_fresh_copy(v) if isinstance(v, AutoGuide) else v for v in fresh]
+            elif isinstance(fresh, dict):
+                for key, item in fresh.items():
+                    if isinstance(item, AutoGuide):
+                        fresh[key] = _fresh_copy(item)
+            setattr(clone, name, fresh)
+    return clone
+
+
 def _window_key_streams(rng_key: Array, num_windows: int) -> tuple[Array, Array, Array]:
     """Derive disjoint per-window ``(init, posterior, forecast)`` key streams.
 
@@ -1151,29 +1207,30 @@ def backtest_vectorized(
 ) -> VectorizedBacktestResult:
     """Rolling-window backtest with all windows fitted in one vmapped SVI run.
 
-    Estimator-equivalent to `backtest()` with rolling windows; it differs
-    only in PRNG stream layout and float reduction order, so the equivalence is
-    statistical, not bitwise. Model, guide, and SVI compile once regardless of
-    the number of windows, giving order-of-magnitude wall-clock wins for tens
-    of windows on small models.
+    Estimator-equivalent to `backtest()` with rolling windows and a fresh
+    guide fitted on each window; it differs only in PRNG stream layout and
+    float reduction order, so the equivalence is statistical, not bitwise.
+    Model, guide, and SVI compile once regardless of the number of windows,
+    giving order-of-magnitude wall-clock wins for tens of windows on small
+    models.
 
-    PRNG: ``fold_in(rng_key, -1)`` keys the eager warm-up ``svi.init`` on
-    window 0. An autoguide runs its ``init_loc_fn`` once, at its first init
-    (this warm-up for a fresh guide). A location-based autoguide (for example
-    ``AutoNormal``, ``AutoDelta`` or ``AutoMultivariateNormal``) derives all
-    its initial parameters from those locations, so every window starts from
-    the warm-up point. ``fold_in(rng_key, i)`` is the window-``i`` parent,
-    split into SVI-init, posterior-draw, and forecast subkeys (the parent
-    itself is never consumed; see `_window_key_streams()`). The SVI-init
-    subkey also seeds the Monte Carlo ELBO estimate of every SVI step of the
-    window (``svi.init`` keeps a key split from it in the SVI state), so it
-    changes the fit of a stochastic guide such as ``AutoNormal`` even when
-    every window starts from the same point. It changes the start of a window
-    only for guide parameters whose initializer takes a key: the network
-    weights of a flow autoguide (``AutoIAFNormal``, ``AutoBNAFNormal``) or a
-    callable initializer in a hand-written guide, such as
-    ``numpyro.param("loc", lambda key: random.normal(key))``. Those guides
-    start each window from a different point.
+    Each window fits its own copy of ``guide``. An autoguide sets itself up
+    at its first init and keeps state that depends on the data of that init:
+    the support transform of every latent site, the deterministic sites, and
+    for ``AutoLaplaceApproximation`` the loss whose Hessian gives the
+    covariance. The copy of each window sets up on that window's training
+    data, so all of this state comes from the window, as with a fresh guide
+    per window in `backtest()`.
+
+    PRNG: ``fold_in(rng_key, i)`` is the window-``i`` parent, split into
+    SVI-init, posterior-draw, and forecast subkeys (the parent itself is
+    never consumed; see `_window_key_streams()`). The SVI-init subkey keys
+    the setup of the window's guide copy, so a random ``init_loc_fn`` (such
+    as the default ``init_to_uniform``) starts each window from its own
+    point, and so does a callable initializer in a hand-written guide, such
+    as ``numpyro.param("loc", lambda key: random.normal(key))``. It also
+    seeds the Monte Carlo ELBO estimate of every SVI step of the window
+    (``svi.init`` keeps a key split from it in the SVI state).
 
     Parameters
     ----------
@@ -1197,13 +1254,23 @@ def backtest_vectorized(
         same object, sampled through its ``sample_posterior``, or a hand-written
         guide function with the model's signature, sampled through
         ``numpyro.infer.Predictive(guide, params=...)`` on each window's
-        training data. Either way one guide is shared by every window:
+        training data:
 
         ```python
         model = make_model()
         backtest_vectorized(..., model_fn=lambda: model, guide=AutoNormal(model))
         backtest_vectorized(..., model_fn=lambda: model, guide=my_guide_fn)
         ```
+
+        An autoguide must be a fresh instance that was never run or fitted:
+        each window fits its own copy of it, and the instance you pass is left
+        unchanged, so it can be passed again to a later call. Its
+        ``init_loc_fn`` runs inside the vmapped fit, so it must be traceable
+        by JAX (no NumPy conversion of the values it receives). The copy per
+        window applies only when ``guide`` itself is an autoguide: an autoguide
+        behind a handler (``handlers.scale(AutoNormal(model), ...)``) or called
+        from a guide function is shared by all windows and set up once, on
+        window 0, so its supports and Laplace covariance come from window 0.
 
     optim
         NumPyro optimizer; ``None`` uses ``numpyro.optim.Adam(0.01)``. For an
@@ -1240,12 +1307,19 @@ def backtest_vectorized(
     ValueError
         If ``data`` or ``covariates`` has fewer than two axes (time must be at
         axis ``-2``), if their durations differ, if ``num_samples`` is too
-        small (see ``num_samples``), or if ``metrics`` is not empty and the
+        small (see ``num_samples``), if ``guide`` is an autoguide that is
+        already set up (see ``guide``), or if ``metrics`` is not empty and the
         model's ``"forecast"`` site does not have the shape of ``data`` over
         the test window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
+    RuntimeError
+        If the SVI loss of a window is not finite at the first step (no valid
+        start on that window), after the fit and before the forecasts. When an
+        eager init of the first such window gives NumPyro's own error (for
+        example no valid initial parameters), that error is raised instead;
+        an eager init of window 0 before the fit raises it for window 0.
     VectorizedMetricError
         If a metric is not a pure JAX function under ``vmap``: it forces a host
         conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
@@ -1265,6 +1339,17 @@ def backtest_vectorized(
         raise BacktestWindowError("stride must be >= 1")
     resolved_metrics = DEFAULT_METRICS if metrics is None else metrics
     _require_num_samples_for_metrics(num_samples, resolved_metrics)
+    if isinstance(guide, AutoGuide) and any(
+        g.prototype_trace is not None for g in _nested_autoguides(guide)
+    ):
+        msg = (
+            f"backtest_vectorized needs a fresh guide, but the {type(guide).__name__} passed "
+            "(or an autoguide it holds) was already run or fitted, so it keeps the shapes, "
+            "supports and data of that earlier call; pass a fresh instance built the same "
+            "way, for example guide=AutoNormal(model). Each window fits its own copy of the "
+            "guide and the instance you pass stays unchanged"
+        )
+        raise ValueError(msg)
 
     duration = data.shape[-2]
     last_start = duration - train_window - test_window
@@ -1284,41 +1369,60 @@ def backtest_vectorized(
 
     model = model_fn()
     resolved_optim = Adam(0.01) if optim is None else optim
-    svi = SVI(model, guide, resolved_optim, Trace_ELBO())
 
-    # This eager warm-up on concrete window-0 arrays is mandatory: AutoGuide
-    # caches its prototype trace on the instance at first init, so if that
-    # first init happens under vmap tracing the instance retains tracers and
-    # any later eager use raises UnexpectedTracerError. For a fresh autoguide
-    # it is also the only init that runs init_loc_fn, so for a location-based
-    # autoguide its key sets the starting point of every window (the vmapped
-    # inits reuse those locations). A flow autoguide still draws its network
-    # weights from each window's SVI-init key.
-    # (fold_in requires a non-negative uint32 index on this JAX version, so
-    # the ``-1`` warm-up sentinel is passed as an int32 array.)
-    svi.init(random.fold_in(rng_key, jnp.array(-1, dtype=jnp.int32)), train_c[0], train_d[0])
+    def window_svi() -> SVI:
+        # An autoguide sets itself up at its first init and caches the
+        # data-dependent state of that init on the instance (support transforms,
+        # deterministic sites, the Laplace loss). Each window therefore sets up
+        # its own copy, and the caller's guide is never set up, so no tracer of
+        # the vmapped fit leaks into it.
+        window_guide = _fresh_copy(guide) if isinstance(guide, AutoGuide) else guide
+        return SVI(model, window_guide, resolved_optim, Trace_ELBO())
 
-    def fit_one(key: Array, d: Array, c: Array) -> tuple[dict[str, Array], Array]:
-        state = svi.init(key, c, d)
+    def fit_and_draw_one(
+        init_key: Array, post_key: Array, d: Array, c: Array
+    ) -> tuple[dict[str, Array], Array]:
+        svi = window_svi()
+        state = svi.init(init_key, c, d)
 
         def step(carry: object, _: None) -> tuple[object, Array]:
             carry, loss = svi.update(carry, c, d)
             return carry, loss
 
         state, losses = lax.scan(step, state, length=num_steps)
-        return svi.get_params(state), losses
-
-    def sample_one(key: Array, p: dict[str, Array], d: Array, c: Array) -> dict[str, Array]:
+        params = svi.get_params(state)
         # An autoguide samples its own posterior; any other guide is a plain
         # NumPyro program, sampled by replaying it under its learned params on
         # the window's training data (the same args it was fitted with).
-        if isinstance(guide, AutoGuide):
-            return guide.sample_posterior(key, p, sample_shape=(num_samples,))
-        return Predictive(guide, params=p, num_samples=num_samples)(key, c, d)
+        if isinstance(svi.guide, AutoGuide):
+            posterior = svi.guide.sample_posterior(post_key, params, sample_shape=(num_samples,))
+        else:
+            posterior = Predictive(svi.guide, params=params, num_samples=num_samples)(
+                post_key, c, d
+            )
+        return posterior, losses
 
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, int(starts.shape[0]))
-    params, losses = jax.jit(jax.vmap(fit_one))(init_keys, train_d, train_c)
-    posterior = jax.jit(jax.vmap(sample_one))(post_keys, params, train_d, train_c)
+    # NumPyro raises its errors for a bad model or start (no valid initial point,
+    # an unsupported site) only on concrete values; under vmap the fit returns NaN
+    # silently. So one eager init of a throwaway copy on window 0, with the key of
+    # window 0, runs first, and fails fast.
+    window_svi().init(init_keys[0], train_c[0], train_d[0])
+    posterior, losses = jax.jit(jax.vmap(fit_and_draw_one))(init_keys, post_keys, train_d, train_c)
+    # A start can be valid on window 0 and not on a later window (init_loc_fn and
+    # the supports use each window's data). Such a window has a non-finite loss
+    # from the first step on, so its fit and forecasts are NaN.
+    bad = np.flatnonzero(~np.isfinite(np.asarray(losses[:, 0]))) if num_steps > 0 else []
+    if len(bad):
+        # Same key as the vmapped init, so the same start: NumPyro names the cause.
+        window_svi().init(init_keys[bad[0]], train_c[bad[0]], train_d[bad[0]])
+        msg = (
+            f"the SVI loss of the windows with t0 = {[int(starts[w]) for w in bad]} is not "
+            "finite at the first step, so their fits and forecasts are NaN; check the model "
+            "and the guide's init_loc_fn on those windows, or fit them one at a time with "
+            "backtest() to see the error"
+        )
+        raise RuntimeError(msg)
 
     def forecast_one(key: Array, post_w: dict[str, Array], d: Array, hc: Array) -> Array:
         pred = Predictive(model, posterior_samples=post_w, return_sites=["forecast"])
