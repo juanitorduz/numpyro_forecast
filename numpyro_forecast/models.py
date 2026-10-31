@@ -918,7 +918,8 @@ def predict(
     distribution must support time-axis surgery
     (`~~numpyro_forecast.surgery.slice_time()` /
     `~~numpyro_forecast.surgery.prefix_condition()`), i.e. an elementwise
-    family or a registered one.
+    family or a registered one. This also holds for a distribution wrapped in
+    ``Independent`` (e.g. by ``.to_event(1)``).
 
     Parameters
     ----------
