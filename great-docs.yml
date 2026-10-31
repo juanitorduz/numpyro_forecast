@@ -170,6 +170,7 @@ reference:
       - typing.ModelFactory
       - typing.Array
       - typing.BlackjaxBuildFn
+      - typing.BlackjaxStepFn
 
   - title: Autocorrelation
     desc: Batched autocorrelation and partial autocorrelation diagnostics.
