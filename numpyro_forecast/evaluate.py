@@ -958,10 +958,14 @@ def backtest(
     reuse_model
         When ``True`` (default) and the windowing strategy is rolling, the model
         instance returned by the first ``model_fn()`` call is reused for every
-        window so forecast/predict kernels can cache across windows. SVI still
-        recompiles per window; for a single fused fit over all windows use
-        `backtest_vectorized()`. Ignored for expanding windows and when
-        ``False``.
+        window, so ``model_fn`` runs once. Ignored for expanding windows and when
+        ``False`` (``model_fn`` then runs once per window). It does not cache
+        compiled programs: each `~~numpyro_forecast.predictive.forecast()` or
+        `~~numpyro_forecast.predictive.predict_in_sample()` call that
+        ``forecast_fn`` or ``in_sample_fn`` makes compiles once per window, and
+        so does an SVI fit; for a single fused fit and forecast over all
+        windows use `backtest_vectorized()`. Kept for API stability: it only
+        matters for a ``model_fn`` that is expensive or stateful.
 
     Returns
     -------

@@ -7,10 +7,7 @@ to end under SVI and NUTS.
 """
 
 from collections.abc import Callable
-from contextlib import AbstractContextManager
-from types import SimpleNamespace
 
-import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -338,10 +335,12 @@ def test_predictive_reads_the_auxiliary_and_ignores_a_stale_deterministic() -> N
     assert jnp.allclose(predict_in_sample(random.PRNGKey(2), model, stale, train), draws)
 
 
-def test_wrapped_model_is_a_stable_jit_static_argument(
-    count_compilations: Callable[[], AbstractContextManager[SimpleNamespace]],
-) -> None:
-    """One wrapped object compiles ``forecast`` once; rewrapping is a new static arg."""
+def test_forecast_does_not_depend_on_the_wrapper_identity() -> None:
+    """A rewrapped model forecasts the same draws as the original wrapped object.
+
+    The drivers compile per call and key nothing on the model object (issue
+    #167), so wrapping again only costs a compile and never changes the draws.
+    """
     model, data, covariates = _split(time_reparam(rw_model, "dct"))
     num_samples = 2
     posterior = {
@@ -349,16 +348,13 @@ def test_wrapped_model_is_a_stable_jit_static_argument(
         "sigma": jnp.ones((num_samples,)),
         "drift_dct": jnp.zeros((num_samples, T_OBS, 1)),
     }
-    jax.block_until_ready(forecast(random.PRNGKey(0), model, posterior, data, covariates))
-
-    with count_compilations() as tally:
-        jax.block_until_ready(forecast(random.PRNGKey(0), model, posterior, data, covariates))
-    assert tally.count == 0
-
-    with count_compilations() as tally:
-        rewrapped = time_reparam(rw_model, "dct")
-        jax.block_until_ready(forecast(random.PRNGKey(0), rewrapped, posterior, data, covariates))
-    assert tally.count >= 1
+    first = forecast(random.PRNGKey(0), model, posterior, data, covariates)
+    again = forecast(random.PRNGKey(0), model, posterior, data, covariates)
+    rewrapped = forecast(
+        random.PRNGKey(0), time_reparam(rw_model, "dct"), posterior, data, covariates
+    )
+    assert jnp.array_equal(first, again)
+    assert jnp.array_equal(first, rewrapped)
 
 
 @pytest.mark.parametrize("transform", ["haar", "dct"])

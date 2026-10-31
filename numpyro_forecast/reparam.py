@@ -250,8 +250,11 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
 
     Notes
     -----
-    - Create the wrapped model once and reuse it: the drivers jit-compile with
-      the model as a static argument, so wrapping again inside a loop recompiles.
+    - Hand the wrapped model, not the original, to the guide, the sampler and
+      the drivers: only the wrapped model has the auxiliary site that the
+      posterior holds. Creating it once is a convenience, not a requirement:
+      the drivers key nothing on the model object, so a rewrapped model gives
+      the same draws.
     - Apply it innermost. ``scope(time_reparam(model), prefix="a")`` yields
       ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
       ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``

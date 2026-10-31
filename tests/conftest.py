@@ -231,8 +231,8 @@ def rw_model_factory() -> ForecastModel:
     ``rw_model`` itself is a plain module-level function: every ``ModelFactory``
     call would return the exact same object, unlike the former ``RandomWalkModel``
     class (a fresh instance per call). Tests that rely on ``model_fn()`` producing
-    a distinct object each call (e.g. the ``reuse_model=False`` compile-cache
-    invariant in ``evaluate.backtest``) use this instead of ``lambda: rw_model``.
+    a distinct object each call (e.g. the ``reuse_model`` call-count check of
+    ``evaluate.backtest``) use this instead of ``lambda: rw_model``.
     """
 
     def model(covariates: Array, data: Array | None = None) -> None:

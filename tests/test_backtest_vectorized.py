@@ -410,9 +410,9 @@ def test_single_svi_compilation(
         run()
     first = int(tally.count)
     # Warmed, a repeat call with identical shapes measured a stable 3 backend
-    # compiles across repeated fresh-process runs (a fresh AutoNormal instance
-    # each call misses the per-guide draw_posterior jit cache, plus a couple of
-    # residual traces); this is a generous margin above that, and nowhere near
+    # compiles across repeated fresh-process runs (the fresh AutoNormal instance
+    # of each call is traced and compiled again, plus a couple of residual
+    # traces); this is a generous margin above that, and nowhere near
     # the 75-132+ a cold process pays.
     assert first < 10
 

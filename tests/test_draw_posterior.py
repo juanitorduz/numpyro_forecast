@@ -4,14 +4,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
+import numpyro.distributions as dist
 import pytest
 from conftest import assert_host_resident, empty_covariates, rw_model, svi_guide_params
 from jax import random
 from numpyro.infer import SVI, Trace_ELBO
-from numpyro.infer.autoguide import AutoDelta
+from numpyro.infer.autoguide import AutoDelta, AutoNormal
 
 from numpyro_forecast.exceptions import DeviceMemoryError
-from numpyro_forecast.predictive import _jitted_sample_posterior, draw_posterior
+from numpyro_forecast.predictive import draw_posterior
 from numpyro_forecast.typing import Array
 
 
@@ -114,28 +115,57 @@ def test_draw_posterior_chunked_calls_guide_per_fixed_size_chunk(
 
 
 def test_draw_posterior_chunked_single_compile(count_compilations) -> None:
-    """The jitted guide sampling compiles once per (guide, chunk shape) and is reused.
+    """The jitted guide sampling compiles once per call and is reused for every chunk.
 
-    Every chunk shares the fixed ``batch_size`` shape, and the jitted
-    ``sample_posterior`` is cached per guide instance, so a repeat of the same
-    chunked draw (and any later draw with the same batch size, regardless of
-    ``num_samples``) must compile nothing.
+    Every chunk shares the fixed ``batch_size`` shape, so a call builds one
+    jitted ``sample_posterior`` and compiles it once. Nothing is cached across
+    calls (issue #167), so after a warm-up (which compiles the eager chunking
+    helpers) each call costs exactly one compilation: below 3 and 2 chunks.
     """
     guide, params = svi_guide_params(t=30)
-    jax.block_until_ready(
-        draw_posterior(random.PRNGKey(2), guide, params, 10, batch_size=4)
-    )  # warm-up
 
-    with count_compilations() as tally:
-        jax.block_until_ready(draw_posterior(random.PRNGKey(3), guide, params, 10, batch_size=4))
-    assert tally.count == 0
+    def _sweep() -> list[int]:
+        counts = []
+        for n in (10, 7):
+            with count_compilations() as tally:
+                jax.block_until_ready(
+                    draw_posterior(random.PRNGKey(n), guide, params, n, batch_size=4)
+                )
+            counts.append(tally.count)
+        return counts
 
-    # A different num_samples with the same batch size reuses the sampling
-    # executable (the chunk shape, not the total, keys the compilation); only
-    # trivial stitching kernels differ, so the jitted sampler stays at one entry.
-    jax.block_until_ready(draw_posterior(random.PRNGKey(4), guide, params, 7, batch_size=4))
-    sample = _jitted_sample_posterior(guide)
-    assert sample._cache_size() == 1  # ty: ignore[unresolved-attribute]
+    _sweep()  # warm-up
+    assert _sweep() == [1, 1]
+
+
+@pytest.mark.parametrize("batch_size", [None, 3])
+def test_draw_posterior_reads_mutable_model_state_at_call_time(batch_size: int | None) -> None:
+    """Issue #167: a deterministic site recomputed by the guide is not frozen.
+
+    ``AutoNormal.sample_posterior`` re-runs the model to recompute deterministic
+    sites, so a program cached on the guide would replay the first trace of a
+    model that reads mutable state.
+    """
+    settings = {"offset": 0.0}
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+        numpyro.deterministic("shifted", level + settings["offset"])
+        numpyro.sample("obs", dist.Normal(level, 1.0), obs=data)
+
+    guide = AutoNormal(model)
+    svi = SVI(model, guide, numpyro.optim.Adam(0.05), Trace_ELBO())
+    result = svi.run(
+        random.PRNGKey(0), 10, empty_covariates(5), jnp.zeros((5, 1)), progress_bar=False
+    )
+
+    def shift() -> np.ndarray:
+        post = draw_posterior(random.PRNGKey(1), guide, result.params, 4, batch_size=batch_size)
+        return np.asarray(post["shifted"]) - np.asarray(post["level"])
+
+    assert np.allclose(shift(), 0.0, atol=1e-4)
+    settings["offset"] = 100.0
+    assert np.allclose(shift(), 100.0, atol=1e-3)
 
 
 def test_draw_posterior_rejects_non_positive_batch_size() -> None:

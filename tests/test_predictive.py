@@ -5,11 +5,14 @@ import subprocess
 import sys
 import warnings
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from unittest import mock
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro
+import numpyro.distributions as dist
 import pytest
 from conftest import (
     assert_host_resident,
@@ -23,7 +26,7 @@ from conftest import (
 )
 from jax import random
 from jax.typing import ArrayLike
-from numpyro.infer import MCMC, NUTS
+from numpyro.infer import MCMC, NUTS, Predictive
 from numpyro.infer.autoguide import AutoNormal
 
 import numpyro_forecast
@@ -43,10 +46,10 @@ from numpyro_forecast._offload import (
     draw_chunked,
 )
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
+from numpyro_forecast.models import Horizon, predict
 from numpyro_forecast.predictive import (
     _chunk_indices,
     _chunked_draws,
-    _predict,
     _sample_axis_size,
     draw_posterior,
     forecast,
@@ -289,14 +292,14 @@ def test_forecast_chunked_close_to_unchunked() -> None:
 
 
 def test_single_compile_while_chunking(count_compilations) -> None:
-    """Invariant I3: fixed shapes ⇒ fixed compile counts for chunked forecasts.
+    """Invariant I3: one compile per `forecast()` call, whatever the chunk count.
 
-    Padding makes every chunk share the ``(batch_size, future, obs)`` shape, so
-    the forecast kernel (`_predict`) compiles a single variant across the whole
-    ``num_samples`` sweep. The compile-count harness (roadmap §4.5) then proves
-    that replaying the sweep triggers zero further backend compilations once
-    every shape has been seen, and the ``_predict`` cache introspection pins the
-    forecast kernel specifically to one variant.
+    The wrapped index blocks make every chunk share the ``(batch_size, future,
+    obs)`` shape, so the predictive a call builds compiles a single variant and
+    is reused for every chunk. Nothing is cached across calls (issue #167), so
+    after a warm-up sweep (which compiles the eager gather, split and stitch
+    helpers once) every call costs exactly one compilation: the sweep below
+    runs 2, 2 and 3 chunks.
     """
     model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
@@ -304,21 +307,100 @@ def test_single_compile_while_chunking(count_compilations) -> None:
     posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
-    def _sweep() -> None:
+    def _sweep() -> list[int]:
+        counts = []
         for post in posteriors:
-            jax.block_until_ready(
-                forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
-            )
+            with count_compilations() as tally:
+                jax.block_until_ready(
+                    forecast(random.PRNGKey(3), model, post, data, covariates, batch_size=4)
+                )
+            counts.append(tally.count)
+        return counts
 
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+    _sweep()  # warm-up: compiles the eager chunking helpers for every shape
+    assert _sweep() == [1, 1, 1]
 
-    # Replaying the sweep hits every cached shape, so nothing recompiles.
-    with count_compilations() as tally:
-        _sweep()
-    assert tally.count == 0
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+
+# --- Issue #167: the drivers read the model as it is at call time --------------
+
+
+def _offset_level_model(settings: dict[str, float]) -> ForecastModel:
+    """Build a constant-level model whose mean reads ``settings["offset"]`` at trace time."""
+
+    def model(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+        mean = jnp.full((h.duration, 1), level + settings["offset"])
+        predict(h, dist.Normal(0.0, 0.01), mean)
+
+    return model
+
+
+@dataclass
+class _ScaledLevelModel:
+    """A callable model object; ``@dataclass`` sets ``__hash__ = None``, so it is unhashable."""
+
+    scale: float = 0.01
+
+    def __call__(self, covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+        predict(h, dist.Normal(0.0, self.scale), jnp.full((h.duration, 1), level))
+
+
+def _run_driver(
+    driver: str, model: ForecastModel, posterior: Mapping[str, Array], batch_size: int | None
+) -> Array | np.ndarray:
+    """Call `forecast()` (5 observed steps, 3 future) or `predict_in_sample()` (5 steps)."""
+    data, covariates = jnp.zeros((5, 1)), empty_covariates(8)
+    if driver == "forecast":
+        return forecast(
+            random.PRNGKey(0), model, posterior, data, covariates, batch_size=batch_size
+        )
+    return predict_in_sample(
+        random.PRNGKey(0), model, posterior, covariates[:5], batch_size=batch_size
+    )
+
+
+@pytest.mark.parametrize("batch_size", [None, 3])
+@pytest.mark.parametrize("driver", ["forecast", "predict_in_sample"])
+def test_drivers_read_mutable_model_state_at_call_time(
+    driver: str, batch_size: int | None
+) -> None:
+    """Issue #167: a value the model reads is not frozen by an earlier driver call.
+
+    The model reads a mutable mapping (the same mechanism as a notebook global).
+    The second call has the same model object and the same shapes, so a
+    cross-call compile cache keyed on the model would replay the first program.
+    """
+    settings = {"offset": 0.0}
+    model = _offset_level_model(settings)
+    posterior = {"level": jnp.zeros(4)}
+    before = _run_driver(driver, model, posterior, batch_size)
+    settings["offset"] = 100.0
+    after = _run_driver(driver, model, posterior, batch_size)
+    assert np.allclose(np.asarray(after) - np.asarray(before), 100.0, atol=1e-3)
+
+
+@pytest.mark.parametrize("batch_size", [None, 3])
+@pytest.mark.parametrize("driver", ["forecast", "predict_in_sample"])
+def test_drivers_accept_unhashable_callable_models(driver: str, batch_size: int | None) -> None:
+    """Issue #167: a callable model need not be hashable (a plain ``@dataclass``)."""
+    model = _ScaledLevelModel()
+    with pytest.raises(TypeError, match="unhashable"):
+        hash(model)
+    posterior = {"level": jnp.linspace(-1.0, 1.0, 4)}
+    draws = _run_driver(driver, model, posterior, batch_size)
+    site = "forecast" if driver == "forecast" else "obs"
+    reference = _run_driver(driver, _offset_level_model({"offset": 0.0}), posterior, batch_size)
+    assert draws.shape == reference.shape == (4, 3 if site == "forecast" else 5, 1)
+    assert np.allclose(np.asarray(draws), np.asarray(reference), atol=1e-6)
+    plain = Predictive(model, posterior, return_sites=[site])
+    args = (
+        (empty_covariates(8), jnp.zeros((5, 1))) if site == "forecast" else (empty_covariates(5),)
+    )
+    if batch_size is None:
+        assert np.allclose(np.asarray(draws), plain(random.PRNGKey(0), *args)[site], atol=1e-5)
 
 
 # --- P6: host offloading (issue #64) ------------------------------------------
@@ -430,28 +512,32 @@ def test_forecast_unchunked_device_commits_result() -> None:
 
 @pytest.mark.parametrize("device", ["cpu", "host"])
 def test_single_compile_while_chunking_with_device(count_compilations, device: str) -> None:
-    """Off-accelerator transfers must not break the fixed-shape single-compile invariant."""
+    """Off-accelerator transfers keep the one-compile-per-call invariant."""
     model, data, guide, params = _fit_data()
     covariates = empty_covariates(36)
     posteriors = [draw_posterior(random.PRNGKey(2), guide, params, n) for n in (5, 8, 12)]
     jax.block_until_ready(posteriors)
 
-    def _sweep() -> None:
+    def _sweep() -> list[int]:
+        counts = []
         for post in posteriors:
-            jax.block_until_ready(
-                forecast(
-                    random.PRNGKey(3), model, post, data, covariates, batch_size=4, device=device
+            with count_compilations() as tally:
+                jax.block_until_ready(
+                    forecast(
+                        random.PRNGKey(3),
+                        model,
+                        post,
+                        data,
+                        covariates,
+                        batch_size=4,
+                        device=device,
+                    )
                 )
-            )
+            counts.append(tally.count)
+        return counts
 
-    _predict.clear_cache()  # ty: ignore[unresolved-attribute]
-    _sweep()  # warm-up: compiles the single fixed-shape forecast kernel
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
-
-    with count_compilations() as tally:
-        _sweep()
-    assert tally.count == 0
-    assert _predict._cache_size() == 1  # ty: ignore[unresolved-attribute]
+    _sweep()  # warm-up: compiles the eager chunking and transfer helpers
+    assert _sweep() == [1, 1, 1]
 
 
 # --- P7: host offloading (``device="host"``: CPU device, NumPy fallback, explicit pinned)
