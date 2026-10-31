@@ -909,7 +909,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L196-L229" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/surgery.py#L224-L260" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">surgery</span><span class="op">.</span><span class="sig-name">slice_time</span>(
@@ -918,7 +918,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 )</span></code></pre></div>
 </div>
 <div class="doc-text">
-<p>The default implementation handles registered elementwise families (empty <code>event_shape</code>, <code>batch_shape</code> ending in <code>(time, obs)</code>; e.g.&nbsp;<code>Normal</code>, <code>StudentT</code>, <code>Poisson</code>) by slicing each broadcast parameter. Correlated families register a dedicated dispatch instead.</p>
+<p>The default implementation handles registered elementwise families (empty <code>event_shape</code>, <code>batch_shape</code> ending in <code>(time, obs)</code>; e.g.&nbsp;<code>Normal</code>, <code>StudentT</code>, <code>Poisson</code>) by slicing each broadcast parameter. Correlated families register a dedicated dispatch instead: a <code>MultivariateNormal</code> over time slices its time axis and keeps its layout, so the event <code>(time, 1)</code> returned by <a href="surgery.shift_loc.html#numpyro_forecast.surgery.shift_loc" class="gdls-link gdls-code">shift_loc()</a> stays <code>(steps, 1)</code> and a bare <code>(time,)</code> event stays <code>(steps,)</code>.</p>
 </div>
 <section id="parameters" class="level2 doc-parameters">
 <h2 class="doc-parameters">Parameters</h2>
