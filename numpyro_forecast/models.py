@@ -216,7 +216,7 @@ def _require_block_steps(
     else:
         cause = (
             "a posterior that holds the forecast-horizon site: pass the posterior of the "
-            "training run, which has no _future sites"
+            "training run, which holds no values for the _future sites"
         )
     msg = (
         f"innovations expects site {site!r} to have {size} time steps at axis {axis} (the "
