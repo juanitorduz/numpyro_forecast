@@ -503,7 +503,10 @@ def to_datatree(
         Forecast-horizon keys follow the rule of
         `~~numpyro_forecast.predictive.forecast()`: one with values (a key
         that ends in ``"_future"`` or contains ``"_future_"``, or
-        ``"forecast"``) raises ``ValueError``.
+        ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
+        that the model registers on every call, recorded by the training run
+        with a size-0 time axis) is kept in the ``posterior`` group as a
+        size-0 variable, and the predictive drivers drop it.
     data
         In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
         the observation dim at axis ``-1`` and any batch axes to the left
