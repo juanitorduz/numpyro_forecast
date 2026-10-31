@@ -59,7 +59,7 @@ In-sample posterior-predictive draws of the `obs` site (with `device="host"` com
 
 
 `ValueError`  
-If `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of `posterior` (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) has a non-empty leaf, if `covariates` has fewer than two axes (time must be at axis `-2`) or no time steps, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have one step per `covariates` row (a posterior drawn for a different training length), or if the `"obs"` draws do not have time at axis `-2` with one step per `covariates` row.
+If `posterior` is empty, a `posterior` leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of `posterior` (one that ends in `"_future"` or contains `"_future_"`, or `"forecast"`) has a non-empty leaf, if `"obs"` is the only key of `posterior`, if `covariates` has fewer than two axes (time must be at axis `-2`) or no time steps, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have one step per `covariates` row (a posterior drawn for a different training length), or if the `"obs"` draws do not have time at axis `-2` with one step per `covariates` row.
 
 `HostMemoryKindError`  
 If `device="pinned_host"` is requested on a device that exposes no host memory kind (see `_host_memory_kind()`).

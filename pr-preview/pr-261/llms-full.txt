@@ -1396,7 +1396,8 @@ ValueError
     If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
     the leaves disagree on the sample-axis length, if a forecast-horizon
     key of ``posterior`` (one that ends in ``"_future"`` or contains
-    ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if
+    ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if ``"obs"``
+    is the only key of ``posterior``, if
     ``covariates`` has fewer than two axes (time must be at axis ``-2``)
     or no time steps, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have one step
@@ -2178,7 +2179,11 @@ posterior
     ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
     that the model registers on every call, recorded by the training run
     with a size-0 time axis) is kept in the ``posterior`` group as a
-    size-0 variable, and the predictive drivers drop it.
+    size-0 variable, and the predictive drivers drop it. An ``"obs"``
+    key is dropped, as in
+    `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
+    ``posterior`` group, and the in-sample draws come from the latent
+    sites.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -2290,7 +2295,7 @@ ValueError
     shorter than ``data`` along the time axis, if a ``posterior`` leaf has
     no sample axis, if a forecast-horizon key of ``posterior`` (one that
     ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
-    has a non-empty leaf, if
+    has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
     ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon, if ``num_chains`` is not a positive
     integer (``bool`` included), if ``posterior``'s sample count is not
