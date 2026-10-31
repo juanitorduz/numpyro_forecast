@@ -82,6 +82,93 @@ def require_sample_axis(posterior: Mapping[str, ArrayLike]) -> None:
         raise ValueError(msg)
 
 
+def _is_horizon_site(name: str) -> bool:
+    """Whether ``name`` follows the naming of a forecast-horizon site.
+
+    The model building blocks name their horizon sites ``f"{name}_future"``; a
+    reparameterization adds a suffix (``drift_future_decentered``), a scope a
+    prefix (``z/eps_future``), and `~~numpyro_forecast.models.predict()` adds
+    ``obs_future`` and the ``forecast`` deterministic. An in-sample name that
+    only contains the letters (``beta_futures``) does not match.
+    """
+    return name == "forecast" or name.endswith("_future") or "_future_" in name
+
+
+def require_no_horizon_sites(posterior: Mapping[str, ArrayLike]) -> None:
+    """Raise ``ValueError`` naming the ``posterior`` keys that hold forecast-horizon values.
+
+    The predictive drivers hand ``posterior`` to ``numpyro.infer.Predictive``,
+    which substitutes every sample site of the posterior by name. A
+    forecast-horizon key with values (a key that ends in ``"_future"`` or
+    contains ``"_future_"``, or the key ``"forecast"``) comes from a
+    ``Predictive`` call over a horizon, and a posterior mixed with that output
+    pins the draws to its stale values instead of drawing them from the prior,
+    with no error (issue #161). ``Predictive`` does not substitute a
+    deterministic site such as ``"forecast"``, but only such a call returns it
+    with values, so it marks the same mistake. A horizon key with an empty
+    leaf passes (see `drop_empty_horizon_sites()`).
+
+    Parameters
+    ----------
+    posterior
+        Posterior samples, sample axis leading.
+
+    Raises
+    ------
+    ValueError
+        If a forecast-horizon key has a non-empty leaf; the message lists every
+        such key.
+    """
+    horizon = sorted(
+        name for name, leaf in posterior.items() if _is_horizon_site(name) and np.size(leaf) > 0
+    )
+    if horizon:
+        msg = (
+            f"posterior holds values for the forecast-horizon sites {horizon}, which a "
+            "numpyro.infer.Predictive call over a horizon returns. The drivers substitute every "
+            "posterior sample site by name, so a posterior mixed with such an output pins the "
+            "draws to its stale values instead of drawing them from the prior. Pass the "
+            "posterior of the training run: mcmc.get_samples() or draw_posterior() of a fit "
+            "whose covariates are no longer than data (h.future == 0). Keys that end in "
+            "'_future' or contain '_future_', and the key 'forecast', count as forecast-horizon "
+            "sites."
+        )
+        raise ValueError(msg)
+
+
+def drop_empty_horizon_sites(posterior: Mapping[str, ArrayLike]) -> dict[str, ArrayLike]:
+    """Return ``posterior`` without its forecast-horizon keys, which must be empty.
+
+    `require_no_horizon_sites()` rejects a horizon key with values, so every
+    horizon key that remains has an empty leaf: a site that the model
+    registers on every call (for example ``numpyro.deterministic("forecast",
+    r.y_future)`` without the ``h.future > 0`` guard), which a training run
+    records with a size-0 time axis. Substituted, an empty leaf of a sample
+    site puts no steps where the horizon needs ``future`` of them; dropped,
+    ``Predictive`` draws (or, for a deterministic site, computes) the site, as
+    for a model that registers it only when ``h.future > 0``. An empty leaf
+    never comes from a call over a horizon, so dropping it hides no mistake.
+
+    Parameters
+    ----------
+    posterior
+        Posterior samples, sample axis leading.
+
+    Returns
+    -------
+    dict[str, ArrayLike]
+        ``posterior`` without its forecast-horizon keys.
+
+    Raises
+    ------
+    ValueError
+        If a forecast-horizon key has a non-empty leaf (see
+        `require_no_horizon_sites()`).
+    """
+    require_no_horizon_sites(posterior)
+    return {name: leaf for name, leaf in posterior.items() if not _is_horizon_site(name)}
+
+
 def require_pred_truth_shapes(pred: ArrayLike, truth: ArrayLike) -> None:
     """Raise when ``truth.shape`` is not ``pred.shape[1:]``.
 

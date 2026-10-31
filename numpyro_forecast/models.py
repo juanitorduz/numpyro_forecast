@@ -216,7 +216,7 @@ def _require_block_steps(
     else:
         cause = (
             "a posterior that holds the forecast-horizon site: pass the posterior of the "
-            "training run, which has no _future sites"
+            "training run, which holds no values for the _future sites"
         )
     msg = (
         f"innovations expects site {site!r} to have {size} time steps at axis {axis} (the "
@@ -729,7 +729,8 @@ def ssoe[Carry](
     **Composition.** Two channels are two calls sharing the same ``Horizon``;
     each opens its own ``time_future`` plate. Scoping a helper that contains the
     call is fine (``handlers.scope`` prefixes the error site and the plate; use
-    ``name="eps"`` inside a scoped helper so the site reads ``z_eps_future``);
+    ``name="eps"`` inside a scoped helper so the site reads ``z/eps_future``,
+    or ``z_eps_future`` with ``divider="_"``);
     register ``"obs"`` and ``"forecast"`` outside any scope and build the
     forecast from the channels' ``y_future``.
 

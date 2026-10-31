@@ -52,6 +52,7 @@ from numpyro_forecast.offload import (
 )
 from numpyro_forecast.typing import Array, ForecastModel
 from numpyro_forecast.validation import (
+    drop_empty_horizon_sites,
     require_covariates_extend_data,
     require_positive_num_samples,
     require_sample_axis,
@@ -476,9 +477,18 @@ def forecast(
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
-        Posterior samples of the latent sites, sample axis leading. The output
-        of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-        is accepted directly.
+        Posterior samples of the latent sites of the training run, sample axis
+        leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+        output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+        leaves) is accepted directly. A forecast-horizon key with values (one
+        that ends in ``"_future"`` or contains ``"_future_"``, or
+        ``"forecast"``) raises ``ValueError``: it comes from a
+        ``numpyro.infer.Predictive`` call over a horizon, whose sample sites
+        would pin the horizon instead of drawing it from the prior, since the
+        driver substitutes every posterior sample site by name. Such a key with
+        an empty leaf (a site that the model registers on every call, recorded
+        by the training run with a size-0 time axis) is dropped, so the model
+        draws or computes the site as if the key were absent.
     data
         Observed data with time at axis ``-2`` and length ``t``. When
         ``posterior`` holds in-sample time latents, ``t`` must be the training
@@ -530,7 +540,9 @@ def forecast(
         axis ``-2``), if ``data`` has no time steps, if ``covariates`` does not
         extend beyond ``data`` along the time axis, if ``posterior`` is
         empty, a ``posterior`` leaf has no sample axis, or the leaves disagree
-        on the sample-axis length, if a ``posterior`` value of an
+        on the sample-axis length, if a forecast-horizon key of ``posterior``
+        (one that ends in ``"_future"`` or contains ``"_future_"``, or
+        ``"forecast"``) has a non-empty leaf, if a ``posterior`` value of an
         `~~numpyro_forecast.models.innovations()` site does not have ``t``
         steps (a posterior drawn for a different training length), or if the
         ``"forecast"`` draws do not have time at axis ``-2`` with
@@ -568,6 +580,7 @@ def forecast(
     `~~numpyro_forecast.convert.to_datatree()`, which runs the drivers itself.
     """
     require_covariates_extend_data(data, covariates)
+    posterior = drop_empty_horizon_sites(posterior)
     steps = covariates.shape[-2] - data.shape[-2]
     predictive = _compiled_predictive(model, "forecast", parallel=parallel)
 
@@ -610,9 +623,14 @@ def predict_in_sample(
     model
         The forecasting model callable (the same one that produced ``posterior``).
     posterior
-        Posterior samples of the latent sites, sample axis leading. The output
-        of a ``device="host"`` stage (CPU-committed jax leaves or NumPy leaves)
-        is accepted directly.
+        Posterior samples of the latent sites of the training run, sample axis
+        leading (``mcmc.get_samples()`` of the fit, or `draw_posterior()`). The
+        output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
+        leaves) is accepted directly. Forecast-horizon keys follow the rule of
+        `forecast()`: one with values raises ``ValueError``, because it marks
+        the output of a ``numpyro.infer.Predictive`` call over a horizon, whose
+        ``"obs"`` key would pin every draw to the observed data, and one with
+        an empty leaf is dropped.
     covariates
         Covariates with time at axis ``-2`` spanning the observed window. Its time
         length must match the data the ``posterior`` was fit on, since the in-sample
@@ -659,9 +677,11 @@ def predict_in_sample(
     ------
     ValueError
         If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
-        the leaves disagree on the sample-axis length, if ``covariates`` has
-        fewer than two axes (time must be at axis ``-2``) or no time steps,
-        if a ``posterior`` value of an
+        the leaves disagree on the sample-axis length, if a forecast-horizon
+        key of ``posterior`` (one that ends in ``"_future"`` or contains
+        ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if
+        ``covariates`` has fewer than two axes (time must be at axis ``-2``)
+        or no time steps, if a ``posterior`` value of an
         `~~numpyro_forecast.models.innovations()` site does not have one step
         per ``covariates`` row (a posterior drawn for a different training
         length), or if the ``"obs"`` draws do not have time at axis ``-2`` with
@@ -687,6 +707,7 @@ def predict_in_sample(
     reflect the model as it is at call time and ``model`` need not be hashable.
     """
     require_time_axis("covariates", covariates)
+    posterior = drop_empty_horizon_sites(posterior)
     steps = covariates.shape[-2]
     # No data argument: the model must see ``data=None`` to sample ``obs``.
     predictive = _compiled_predictive(model, "obs", parallel=parallel)
