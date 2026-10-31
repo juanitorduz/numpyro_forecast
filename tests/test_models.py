@@ -1,5 +1,7 @@
 """Tests for the model building blocks (``numpyro_forecast.models``)."""
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -8,7 +10,7 @@ import numpyro.distributions as dist
 import pytest
 from conftest import as_model, empty_covariates, rw_body, rw_model
 from jax import random
-from numpyro.handlers import seed, trace
+from numpyro.handlers import seed, substitute, trace
 from numpyro.infer import MCMC, NUTS
 from numpyro.infer.reparam import LocScaleReparam
 
@@ -172,6 +174,295 @@ def test_predict_forecast_requires_data() -> None:
         trace(
             seed(lambda: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((15, 1))), random.PRNGKey(0))
         ).get_trace()
+
+
+@pytest.mark.parametrize(
+    ("body", "data_shape", "duration"),
+    [
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros(h.duration)),
+            (6, 1),
+            6,
+            id="1d-predictor",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros(h.duration)),
+            (6, 1),
+            8,
+            id="1d-predictor-forecast",
+        ),
+        pytest.param(
+            lambda h: predict(h, lambda mu: dist.Normal(mu, 1.0), jnp.zeros(h.duration)),
+            (6, 1),
+            8,
+            id="1d-predictor-link",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros(h.duration)),
+            (4, 4),
+            4,
+            id="1d-predictor-square-panel",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros(h.duration)),
+            (4, 3),
+            4,
+            id="1d-predictor-panel",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h, dist.Normal(0.0, jnp.ones((h.duration, 1))), jnp.zeros(h.duration)
+            ),
+            None,
+            6,
+            id="1d-predictor-time-varying-scale-prior",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h, dist.Normal(0.0, 1.0), jnp.zeros((h.duration, 1)) + jnp.arange(h.duration)
+            ),
+            (6, 1),
+            6,
+            id="mixed-term",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                lambda mu: dist.Normal(mu, 1.0),
+                jnp.zeros((h.duration, 1)) + jnp.arange(h.duration),
+            ),
+            (6, 1),
+            8,
+            id="mixed-term-link",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h, dist.Normal(0.0, jnp.linspace(1.0, 2.0, h.duration)), jnp.zeros((h.duration, 1))
+            ),
+            (6, 1),
+            6,
+            id="1d-time-varying-scale",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((h.duration, 1, 1))),
+            (6, 1),
+            6,
+            id="second-obs-axis",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h, lambda mu: dist.Normal(mu[..., 0], 1.0), jnp.zeros((h.duration, 1))
+            ),
+            (6, 1),
+            8,
+            id="link-drops-obs-axis",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h, lambda mu: dist.Normal(mu[..., 0], 1.0), jnp.zeros((h.duration, 1))
+            ),
+            None,
+            6,
+            id="link-drops-obs-axis-prior",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((3, h.duration))),
+            (6, 3),
+            6,
+            id="series-first",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((3, h.duration))),
+            (3, 6, 1),
+            8,
+            id="series-first-batched-data",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((h.duration, 2))),
+            (6, 3),
+            6,
+            id="wrong-width",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros(())),
+            (6, 1),
+            6,
+            id="constant-without-time-axis",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros(3)),
+            (6, 3),
+            8,
+            id="per-series-without-time-axis",
+        ),
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((5, 1))),
+            (1, 1),
+            1,
+            id="repeats-single-observed-step",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros(h.duration), jnp.eye(h.duration)),
+                jnp.zeros(()),
+            ),
+            (6, 1),
+            8,
+            id="mvn-noise-without-obs-axis",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros(h.duration), jnp.eye(h.duration)),
+                jnp.zeros(()),
+            ),
+            None,
+            6,
+            id="mvn-noise-without-obs-axis-prior",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                lambda mu: dist.MultivariateNormal(mu[..., 0], jnp.eye(h.duration)),
+                jnp.zeros((h.duration, 1)),
+            ),
+            (6, 1),
+            6,
+            id="link-returns-bare-mvn",
+        ),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros((1, h.duration)), jnp.eye(h.duration)).to_event(
+                    1
+                ),
+                jnp.zeros(()),
+            ),
+            (6, 1),
+            8,
+            id="mvn-to-event-without-obs-axis",
+        ),
+    ],
+)
+def test_predict_rejects_an_observation_distribution_that_does_not_fit_the_data(
+    body: Callable[[Horizon], None], data_shape: tuple[int, ...] | None, duration: int
+) -> None:
+    """Issue #166: the obs distribution needs ``(time, obs)`` axes and must not grow the data.
+
+    A ``(duration,)`` predictor (``covariates @ beta``) or a ``(duration,)``
+    term inside the distribution broadcasts its time steps onto the
+    observation axis, so ``(time, 1)`` data was scored on a ``(time, time)``
+    grid without an error; a second ``[..., None]`` or a predictor longer than
+    a single observed step counted each observation more than once; a bare
+    ``MultivariateNormal`` over time (no observation axis) scored ``(time, 1)``
+    data as ``time`` broadcast values; and the other rows failed later without
+    naming the cause. ``data=None`` rows cover prior sampling, where there is
+    no data to compare against.
+    """
+    data = None if data_shape is None else jnp.zeros(data_shape)
+    model = as_model(lambda h, covariates: body(h))
+    with pytest.raises(ValueError, match=r"^predict expects"):
+        trace(seed(model, random.PRNGKey(0))).get_trace(empty_covariates(duration), data)
+
+
+@pytest.mark.parametrize(
+    ("prediction_shape", "data_shape"),
+    [pytest.param((), (6, 1), id="constant-mean"), pytest.param((3,), (6, 3), id="per-series")],
+)
+def test_predict_accepts_a_noise_scale_that_carries_the_time_axis(
+    prediction_shape: tuple[int, ...], data_shape: tuple[int, ...]
+) -> None:
+    """A 0-d or per-series predictor scores and forecasts with a time-varying scale."""
+
+    def body(h: Horizon, covariates: Array) -> None:
+        scale = jnp.linspace(1.0, 2.0, h.duration)[:, None] * jnp.ones(data_shape[-1])
+        predict(h, dist.Normal(0.0, scale), jnp.zeros(prediction_shape))
+
+    tr = trace(seed(as_model(body), random.PRNGKey(0))).get_trace(
+        empty_covariates(8), jnp.zeros(data_shape)
+    )
+    assert tr["obs"]["fn"].batch_shape == data_shape
+    assert tr["forecast"]["value"].shape == (2, data_shape[-1])
+
+
+def _one_region_body(h: Horizon) -> None:
+    """A level sampled in a size-1 plate at ``dim=-3``: a ``(1, duration, 1)`` predictor."""
+    with numpyro.plate("region", 1, dim=-3):
+        level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+    predict(h, dist.Normal(0.0, 1.0), level + jnp.zeros((h.duration, 1)))
+
+
+@pytest.mark.parametrize("future", [0, 2])
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(
+            lambda h: predict(h, dist.Normal(0.0, 1.0), jnp.zeros((1, h.duration, 1))),
+            id="predictor",
+        ),
+        pytest.param(_one_region_body, id="size-one-plate"),
+        pytest.param(
+            lambda h: predict(
+                h,
+                dist.MultivariateNormal(jnp.zeros((1, h.duration)), jnp.eye(h.duration)).to_event(
+                    1
+                ),
+                jnp.zeros((h.duration, 1)),
+            ),
+            id="mvn-size-one-batch",
+        ),
+    ],
+)
+def test_predict_accepts_a_size_one_axis_that_the_data_does_not_have(
+    body: Callable[[Horizon], None], future: int
+) -> None:
+    """A size-1 leading axis repeats no observation, so ``obs`` scores the data once.
+
+    Every row has mean 0 and unit noise (an identity covariance for the MVN
+    row), so the in-sample density is the standard normal density of the data.
+    """
+    data = jnp.linspace(-1.0, 1.0, 6)[:, None]
+    model = substitute(
+        as_model(lambda h, covariates: body(h)), data={"level": jnp.zeros((1, 1, 1))}
+    )
+    tr = trace(seed(model, random.PRNGKey(0))).get_trace(empty_covariates(6 + future), data)
+    obs_log_density = tr["obs"]["fn"].log_prob(tr["obs"]["value"]).sum()
+    assert jnp.allclose(obs_log_density, dist.Normal(0.0, 1.0).log_prob(data).sum())
+
+
+@pytest.mark.parametrize("future", [0, 2])
+@pytest.mark.parametrize(
+    "obs_dist",
+    [
+        pytest.param(dist.Normal(0.0, 1.0), id="noise"),
+        pytest.param(lambda mu: dist.Normal(mu, 1.0), id="link"),
+    ],
+)
+def test_predict_scores_a_shared_predictor_against_every_panel_series(
+    obs_dist: dist.Distribution | Callable[[Array], dist.Distribution], future: int
+) -> None:
+    """A ``(duration, 1)`` predictor in a series plate scores and forecasts every series.
+
+    The checks see the distribution before the plate expands it, so its size-1
+    observation axis must pass them.
+    """
+    t_obs = 4
+    offsets = jnp.array([-1.0, 0.0, 2.0])
+
+    def body(h: Horizon, covariates: Array) -> None:
+        with numpyro.plate("series", 3, dim=-1):
+            predict(h, obs_dist, 10.0 * jnp.arange(h.duration, dtype=jnp.float32)[:, None])
+
+    panel = 10.0 * jnp.arange(t_obs, dtype=jnp.float32)[:, None] + offsets
+    tr = trace(seed(as_model(body), random.PRNGKey(0))).get_trace(
+        empty_covariates(t_obs + future), panel
+    )
+    obs_log_prob = tr["obs"]["fn"].log_prob(tr["obs"]["value"])
+    assert obs_log_prob.shape == (t_obs, 3)
+    assert jnp.allclose(obs_log_prob.sum(), t_obs * dist.Normal(0.0, 1.0).log_prob(offsets).sum())
+    if future:
+        assert tr["forecast"]["value"].shape == (future, 3)
 
 
 def test_rw_model_training_trace() -> None:
