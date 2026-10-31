@@ -2050,7 +2050,7 @@ ValueError
 Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Sequence[Any]] | None = None, time_coord: collections.abc.Sequence[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None, obs_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
 
@@ -2074,7 +2074,9 @@ posterior
     Host-committed leaves (the output of ``draw_posterior(...,
     device="host")``) and NumPy leaves are accepted directly.
 data
-    In-sample data with time at axis ``-2``.
+    In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
+    the observation dim at axis ``-1`` and any batch axes to the left
+    (``obs_dims`` names them).
 covariates
     Covariates with time at axis ``-2``. When ``covariates`` extends beyond
     ``data`` along the time axis (the package-wide shape convention for a
@@ -2147,6 +2149,20 @@ covariate_dims
     "series"]``. The time axis is always ``-2`` (the package-wide
     convention), so its entry should be named ``"time"`` to share the
     tree-wide time coordinate.
+obs_dims
+    Optional dimension names for the ``obs`` variables of
+    ``observed_data``, ``posterior_predictive`` and ``predictions``, one per
+    ``data`` axis. Defaults to ``("time", "obs_dim")`` for 2-D ``data`` and
+    names the leading batch axes of a panel ``obs_batch_0``,
+    ``obs_batch_1``, ..., e.g. ``("obs_batch_0", "time", "obs_dim")`` for
+    ``(batch, time, obs)`` data. Give a batch axis the name of the
+    matching ``covariate_dims`` entry so the groups share it, e.g.
+    ``obs_dims=["origin", "time", "destin"]`` with
+    ``covariate_dims=["origin", "time", "covariate_dim"]``; ``coords``
+    labels and ``posterior_dims`` entries refer to the same names. Axis
+    ``-2`` must be named ``"time"`` (it carries the tree-wide time
+    coordinate), the names must be distinct, and ``"chain"`` and
+    ``"draw"`` are reserved for the sample dims.
 
 Returns
 -------
@@ -2156,7 +2172,9 @@ xarray.DataTree
     ``observed_data``, and ``constant_data`` groups. When ``covariates``
     extends beyond ``data``, also ``predictions`` and
     ``predictions_constant_data`` groups (sharing the same ``num_chains``
-    split).
+    split). The ``obs`` variable has dims ``obs_dims`` in
+    ``observed_data`` and ``(chain, draw, *obs_dims)`` in
+    ``posterior_predictive`` and ``predictions``.
 
 Raises
 ------
@@ -2174,7 +2192,11 @@ ValueError
     or if the in-sample draws do not have one time step per ``data`` row or
     the forecast draws one per ``covariates`` row past ``data`` (see
     `~~numpyro_forecast.predictive.predict_in_sample()` and
-    `~~numpyro_forecast.predictive.forecast()`).
+    `~~numpyro_forecast.predictive.forecast()`). Also if ``obs_dims`` does
+    not name every ``data`` axis, does not name axis ``-2`` ``"time"``,
+    repeats a name or uses ``"chain"`` or ``"draw"``, or if the in-sample
+    or forecast draws do not have one axis per ``obs_dims`` name (the
+    model's ``obs`` site must have the layout of ``data``).
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
@@ -2203,16 +2225,18 @@ manual control over the forecast draws, build the in-sample tree with
 matching-length covariates and attach the horizon with
 `add_forecast_groups()`.
 
-add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample future obs'] | jaxtyping.Num[ndarray, 'sample future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Sequence[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 
 Adds a ``predictions`` group (the forecast ``obs`` draws) and a
 ``predictions_constant_data`` group (the future covariates). The forecast
 ``time`` coordinate continues the in-sample one: integer continuation by
-default, or explicit values via ``time_coord``. This is the step-by-step
-route for draws you produced yourself; `to_datatree()` attaches the same
-groups automatically when its ``covariates`` extend beyond ``data``.
+default, or explicit values via ``time_coord``. Every other axis takes the
+dimension name and the coordinate labels of the same axis of the in-sample
+``obs`` or covariates. This is the step-by-step route for draws you
+produced yourself; `to_datatree()` attaches the same groups automatically
+when its ``covariates`` extend beyond ``data``.
 
 Parameters
 ----------
@@ -2220,8 +2244,15 @@ tree
     A tree from `to_datatree()` (its ``observed_data`` time coordinate is
     continued).
 forecast_samples
-    Forecast draws shaped ``(num_samples, future, obs)`` from
-    `~~numpyro_forecast.predictive.forecast()`.
+    Forecast draws shaped ``(num_samples, *batch, future, obs)`` from
+    `~~numpyro_forecast.predictive.forecast()`, with the layout of the
+    tree's in-sample ``obs``. The ``predictions`` ``obs`` takes the
+    dimension names and the non-time coordinate labels of the tree's
+    ``observed_data["obs"]`` (set by ``to_datatree(obs_dims=...,
+    coords=...)``), so each non-time axis must have the size of the stored
+    one. If the tree's stored ``obs`` is missing or has no ``time`` axis at
+    ``-2`` (an ``observed_data`` squeezed to one series), it takes the
+    default names of `to_datatree()` and no labels instead.
 covariates_future
     Future covariates shaped ``(future, covariate_dim)``, or any layout
     with time at axis ``-2`` when ``covariate_dims`` names the axes.
@@ -2237,7 +2268,8 @@ covariate_dims
     ``("time", "covariate_dim")`` if the tree carries no stored
     covariates), so the forecast covariates always share the in-sample
     axis names. When given explicitly, the names must match the stored
-    ones. See `to_datatree()`.
+    ones. The future covariates also take the non-time coordinate labels
+    of the stored covariates. See `to_datatree()`.
 
 Returns
 -------
@@ -2248,9 +2280,10 @@ xarray.DataTree
 Raises
 ------
 ValueError
-    If ``time_coord`` is given but its length differs from the forecast
-    horizon, or if it is omitted while the in-sample time coordinate is
-    non-integer.
+    If ``forecast_samples`` does not have one axis per inherited ``obs``
+    dimension name after the sample axis, if ``time_coord`` is given but
+    its length differs from the forecast horizon, or if it is omitted
+    while the in-sample time coordinate is non-integer.
 CovariateDimsError
     If the resolved ``covariate_dims`` (explicit or inherited) do not name
     every ``covariates_future`` axis, or if explicit names disagree with

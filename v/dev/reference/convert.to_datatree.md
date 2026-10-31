@@ -20,7 +20,8 @@ convert.to_datatree(
     coords=None,
     time_coord=None,
     posterior_dims=None,
-    covariate_dims=None
+    covariate_dims=None,
+    obs_dims=None
 )
 ```
 
@@ -41,7 +42,7 @@ The forecasting model that produced `posterior`.
 Posterior samples of the latent sites, with a single flattened sample axis leading (NumPyro's `mcmc.get_samples()` order, or the output of [draw_posterior()](predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior)). Host-committed leaves (the output of `draw_posterior(..., device="host")`) and NumPy leaves are accepted directly.
 
 `data: Array`  
-In-sample data with time at axis `-2`.
+In-sample data shaped `(*batch, time, obs)`: time at axis `-2`, the observation dim at axis `-1` and any batch axes to the left (`obs_dims` names them).
 
 `covariates: Array`  
 Covariates with time at axis `-2`. When `covariates` extends beyond `data` along the time axis (the package-wide shape convention for a forecast horizon), the trailing rows are treated as future covariates: the returned tree additionally carries `predictions` (forecast `obs` draws from [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast)) and `predictions_constant_data` groups.
@@ -67,19 +68,22 @@ Optional mapping from a posterior site name to its non-sample dimension names, e
 `covariate_dims: Sequence[str] | None = None`  
 Optional dimension names for the stored covariates, one per axis; defaults to the 2-D `("time", "covariate_dim")` layout. Use this when `covariates` carries extra batch axes, e.g. a panel tensor shaped `(channel, time, series)` with `covariate_dims=["channel", "time", "series"]`. The time axis is always `-2` (the package-wide convention), so its entry should be named `"time"` to share the tree-wide time coordinate.
 
+`obs_dims: Sequence[str] | None = None`  
+Optional dimension names for the `obs` variables of `observed_data`, `posterior_predictive` and `predictions`, one per `data` axis. Defaults to `("time", "obs_dim")` for 2-D `data` and names the leading batch axes of a panel `obs_batch_0`, `obs_batch_1`, …, e.g. `("obs_batch_0", "time", "obs_dim")` for `(batch, time, obs)` data. Give a batch axis the name of the matching `covariate_dims` entry so the groups share it, e.g. `obs_dims=["origin", "time", "destin"]` with `covariate_dims=["origin", "time", "covariate_dim"]`; `coords` labels and `posterior_dims` entries refer to the same names. Axis `-2` must be named `"time"` (it carries the tree-wide time coordinate), the names must be distinct, and `"chain"` and `"draw"` are reserved for the sample dims.
+
 
 ## Returns
 
 
 `xarray.DataTree`  
-A tree with `posterior` (`(chain, draw, ...)`, split per `num_chains`), `posterior_predictive` (in-sample `obs`), `observed_data`, and `constant_data` groups. When `covariates` extends beyond `data`, also `predictions` and `predictions_constant_data` groups (sharing the same `num_chains` split).
+A tree with `posterior` (`(chain, draw, ...)`, split per `num_chains`), `posterior_predictive` (in-sample `obs`), `observed_data`, and `constant_data` groups. When `covariates` extends beyond `data`, also `predictions` and `predictions_constant_data` groups (sharing the same `num_chains` split). The `obs` variable has dims `obs_dims` in `observed_data` and `(chain, draw, *obs_dims)` in `posterior_predictive` and `predictions`.
 
 
 ## Raises
 
 
 `ValueError`  
-If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` is shorter than `data` along the time axis, if a `posterior` leaf has no sample axis, if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon, if `num_chains` is not a positive integer (`bool` included), if `posterior`'s sample count is not evenly divisible by `num_chains`, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have one step per `data` row (a posterior drawn for a different training length), or if the in-sample draws do not have one time step per `data` row or the forecast draws one per `covariates` row past `data` (see [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast)).
+If `data` or `covariates` has fewer than two axes (time must be at axis `-2`), if `data` has no time steps, if `covariates` is shorter than `data` along the time axis, if a `posterior` leaf has no sample axis, if `time_coord` is given but its length does not match the in-sample window plus the forecast horizon, if `num_chains` is not a positive integer (`bool` included), if `posterior`'s sample count is not evenly divisible by `num_chains`, if a `posterior` value of an [innovations()](models.innovations.md#numpyro_forecast.models.innovations) site does not have one step per `data` row (a posterior drawn for a different training length), or if the in-sample draws do not have one time step per `data` row or the forecast draws one per `covariates` row past `data` (see [predict_in_sample()](predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast)). Also if `obs_dims` does not name every `data` axis, does not name axis `-2` `"time"`, repeats a name or uses `"chain"` or `"draw"`, or if the in-sample or forecast draws do not have one axis per `obs_dims` name (the model's `obs` site must have the layout of `data`).
 
 `CovariateDimsError`  
 If `covariate_dims` does not name every `covariates` axis.

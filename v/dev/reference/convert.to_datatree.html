@@ -906,7 +906,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L239-L511" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/convert.py#L367-L666" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">convert</span><span class="op">.</span><span class="sig-name">to_datatree</span>(</span>
@@ -922,8 +922,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">coords</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">time_coord</span><span class="op">=</span><span class="cn-none">None</span>,</span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">posterior_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">covariate_dims</span><span class="op">=</span><span class="cn-none">None</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">obs_dims</span><span class="op">=</span><span class="cn-none">None</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 </div>
 <div class="doc-text">
 <p>Posterior-first: callers draw their own posterior (<code>mcmc.get_samples()</code> for MCMC, <a href="predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior()</a> for a variational fit) and pass it in; <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> never draws a posterior of its own. <code>rng_key</code> is consumed only by the in-sample posterior-predictive draws and, when a forecast horizon is present, the forecast draws.</p>
@@ -946,7 +947,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">data</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
-<p>In-sample data with time at axis <code>-2</code>.</p>
+<p>In-sample data shaped <code>(*batch, time, obs)</code>: time at axis <code>-2</code>, the observation dim at axis <code>-1</code> and any batch axes to the left (<code>obs_dims</code> names them).</p>
 </dd>
 <dt><code><span class="doc-parameter-name">covariates</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Array</span></code></dt>
 <dd>
@@ -978,7 +979,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </dd>
 <dt><code><span class="doc-parameter-name">covariate_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
 <dd>
-Optional dimension names for the stored covariates, one per axis; defaults to the 2-D <code>("time", "covariate_dim")</code> layout. Use this when <code>covariates</code> carries extra batch axes, e.g.&nbsp;a panel tensor shaped <code>(channel, time, series)</code> with <code>covariate_dims=["channel", "time", "series"]</code>. The time axis is always <code>-2</code> (the package-wide convention), so its entry should be named <code>"time"</code> to share the tree-wide time coordinate.
+<p>Optional dimension names for the stored covariates, one per axis; defaults to the 2-D <code>("time", "covariate_dim")</code> layout. Use this when <code>covariates</code> carries extra batch axes, e.g.&nbsp;a panel tensor shaped <code>(channel, time, series)</code> with <code>covariate_dims=["channel", "time", "series"]</code>. The time axis is always <code>-2</code> (the package-wide convention), so its entry should be named <code>"time"</code> to share the tree-wide time coordinate.</p>
+</dd>
+<dt><code><span class="doc-parameter-name">obs_dims</span><span class="doc-parameter-annotation-sep">:</span> <span class="doc-parameter-annotation">Sequence[str] | None</span> <span class="doc-parameter-default-sep op">=</span> <span class="doc-parameter-default">None</span></code></dt>
+<dd>
+Optional dimension names for the <code>obs</code> variables of <code>observed_data</code>, <code>posterior_predictive</code> and <code>predictions</code>, one per <code>data</code> axis. Defaults to <code>("time", "obs_dim")</code> for 2-D <code>data</code> and names the leading batch axes of a panel <code>obs_batch_0</code>, <code>obs_batch_1</code>, …, e.g.&nbsp;<code>("obs_batch_0", "time", "obs_dim")</code> for <code>(batch, time, obs)</code> data. Give a batch axis the name of the matching <code>covariate_dims</code> entry so the groups share it, e.g. <code>obs_dims=["origin", "time", "destin"]</code> with <code>covariate_dims=["origin", "time", "covariate_dim"]</code>; <code>coords</code> labels and <code>posterior_dims</code> entries refer to the same names. Axis <code>-2</code> must be named <code>"time"</code> (it carries the tree-wide time coordinate), the names must be distinct, and <code>"chain"</code> and <code>"draw"</code> are reserved for the sample dims.
 </dd>
 </dl>
 </div>
@@ -989,7 +994,7 @@ Optional dimension names for the stored covariates, one per axis; defaults to th
 <dl>
 <dt><code> <span class="doc-parameter-annotation">xarray.DataTree</span></code></dt>
 <dd>
-A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <code>num_chains</code>), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (sharing the same <code>num_chains</code> split).
+A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <code>num_chains</code>), <code>posterior_predictive</code> (in-sample <code>obs</code>), <code>observed_data</code>, and <code>constant_data</code> groups. When <code>covariates</code> extends beyond <code>data</code>, also <code>predictions</code> and <code>predictions_constant_data</code> groups (sharing the same <code>num_chains</code> split). The <code>obs</code> variable has dims <code>obs_dims</code> in <code>observed_data</code> and <code>(chain, draw, *obs_dims)</code> in <code>posterior_predictive</code> and <code>predictions</code>.
 </dd>
 </dl>
 </div>
@@ -1000,7 +1005,7 @@ A tree with <code>posterior</code> (<code>(chain, draw, ...)</code>, split per <
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> is shorter than <code>data</code> along the time axis, if a <code>posterior</code> leaf has no sample axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, if <code>num_chains</code> is not a positive integer (<code>bool</code> included), if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have one step per <code>data</code> row (a posterior drawn for a different training length), or if the in-sample draws do not have one time step per <code>data</code> row or the forecast draws one per <code>covariates</code> row past <code>data</code> (see <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>).</p>
+<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> is shorter than <code>data</code> along the time axis, if a <code>posterior</code> leaf has no sample axis, if <code>time_coord</code> is given but its length does not match the in-sample window plus the forecast horizon, if <code>num_chains</code> is not a positive integer (<code>bool</code> included), if <code>posterior</code>’s sample count is not evenly divisible by <code>num_chains</code>, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have one step per <code>data</code> row (a posterior drawn for a different training length), or if the in-sample draws do not have one time step per <code>data</code> row or the forecast draws one per <code>covariates</code> row past <code>data</code> (see <a href="predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample()</a> and <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>). Also if <code>obs_dims</code> does not name every <code>data</code> axis, does not name axis <code>-2</code> <code>"time"</code>, repeats a name or uses <code>"chain"</code> or <code>"draw"</code>, or if the in-sample or forecast draws do not have one axis per <code>obs_dims</code> name (the model’s <code>obs</code> site must have the layout of <code>data</code>).</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">CovariateDimsError</span></code></dt>
 <dd>
