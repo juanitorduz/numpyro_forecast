@@ -149,6 +149,27 @@ def _require_draws_match_obs_dims(
         raise ValueError(msg)
 
 
+def _require_in_sample_draws_like_data(draws: "Array | np.ndarray", data: Array) -> None:
+    """Raise ``ValueError`` unless every in-sample draw has the shape of ``data``.
+
+    `~~numpyro_forecast.predictive.predict_in_sample()` calls the model with
+    ``data=None``, so a model whose predictor lacks the series axis of the data
+    (a ``(duration, 1)`` predictor over ``(time, n)`` data, without a series
+    plate) draws one column, and the export would store it next to the ``n``
+    observed columns (issue #259).
+    """
+    shape = tuple(draws.shape[1:])
+    if shape != tuple(data.shape):
+        msg = (
+            f"the in-sample predictive draws have shape {shape} per draw, but data has shape "
+            f"{tuple(data.shape)}. The model draws obs without data, so the predictor or the "
+            "plates around predict must carry every axis of data: for a predictor shared by n "
+            "series, call predict inside numpyro.plate('series', n, dim=-1) or broadcast the "
+            "predictor to (duration, n)."
+        )
+        raise ValueError(msg)
+
+
 def _reconcile_tree_covariate_layout(
     tree: "xarray.DataTree",
     covariates_future: Array,
@@ -630,9 +651,11 @@ def to_datatree(
         `~~numpyro_forecast.predictive.predict_in_sample()` and
         `~~numpyro_forecast.predictive.forecast()`). Also if ``obs_dims`` does
         not name every ``data`` axis, does not name axis ``-2`` ``"time"``,
-        repeats a name or uses ``"chain"`` or ``"draw"``, or if the in-sample
+        repeats a name or uses ``"chain"`` or ``"draw"``, if the in-sample
         or forecast draws do not have one axis per ``obs_dims`` name (the
-        model's ``obs`` site must have the layout of ``data``).
+        model's ``obs`` site must have the layout of ``data``), or if an
+        in-sample draw does not have the shape of ``data`` (a predictor shared
+        by the series of ``data`` without a series plate draws one column).
     CovariateDimsError
         If ``covariate_dims`` does not name every ``covariates`` axis.
     HostMemoryKindError
@@ -716,6 +739,7 @@ def to_datatree(
         device=resolved_device,
     )
     _require_draws_match_obs_dims("the in-sample predictive draws", predictive, resolved_obs_dims)
+    _require_in_sample_draws_like_data(predictive, data)
     pp_ds = arviz_base.dict_to_dataset(
         {"obs": _reshape_chains(predictive, num_chains)},
         sample_dims=_SAMPLE_DIMS,

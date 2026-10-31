@@ -674,6 +674,35 @@ def test_to_datatree_rejects_obs_draws_with_more_axes_than_data() -> None:
         )
 
 
+def _shared_level_model(covariates: Array, data: Array | None = None) -> None:
+    """A level shared by every series, with a ``(duration, 1)`` predictor and no series plate."""
+    h = Horizon.from_data(covariates, data)
+    level = numpyro.sample("level", dist.Normal(0.0, 1.0))
+    predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 1), level))
+
+
+def test_to_datatree_rejects_in_sample_draws_narrower_than_data() -> None:
+    """Issue #259: one in-sample column for three observed series raises.
+
+    `~~numpyro_forecast.predictive.predict_in_sample()` calls the model with
+    ``data=None``, so a predictor shared across series without a series plate
+    draws one column. The export wrote it next to the three observed columns
+    without an error.
+    """
+    with pytest.raises(
+        ValueError,
+        match=r"the in-sample predictive draws have shape \(5, 1\) per draw, but data has "
+        r"shape \(5, 3\)",
+    ):
+        to_datatree(
+            random.PRNGKey(1),
+            _shared_level_model,
+            {"level": jnp.zeros(4)},
+            jnp.zeros((5, 3)),
+            empty_covariates(5),
+        )
+
+
 @pytest.mark.parametrize(
     ("obs_dims", "coords"),
     [(None, None), (["origin", "time", "destin"], {"origin": ["SFO", "OAK", "SJC"]})],

@@ -451,6 +451,50 @@ def _require_time_steps(
         raise ValueError(msg)
 
 
+def _require_data_axes(shape: tuple[int, ...], data_shape: tuple[int, ...], steps: int) -> None:
+    """Raise unless every forecast draw ends in the ``(*batch, steps, obs)`` axes of ``data``.
+
+    Runs after `_require_time_steps()`, so only the axes other than time can
+    differ. The ``"obs"`` log density broadcasts the observation distribution
+    against ``data``, so a model whose predictor lacks the series axis (a
+    ``(duration, 1)`` predictor over ``(time, n)`` data, without a series
+    plate) or a batch axis of ``data`` scores every series in training but
+    draws one forecast for all of them (issue #259). The draw includes the axes
+    of the plates around the site, so a ``(duration, 1)`` predictor inside a
+    size-``n`` plate at ``dim=-1`` passes. Extra leading axes pass too, for
+    example a scenario axis that batched covariates add over unbatched data.
+
+    Parameters
+    ----------
+    shape
+        The shape of the ``"forecast"`` draws, sample axis leading.
+    data_shape
+        The shape of the observed data.
+    steps
+        The number of forecast steps.
+
+    Raises
+    ------
+    ValueError
+        If a draw does not end in the axes
+        ``(*data_shape[:-2], steps, data_shape[-1])``.
+    """
+    per_draw = tuple(shape[1:])
+    expected = (*data_shape[:-2], steps, data_shape[-1])
+    if per_draw[-len(expected) :] == expected:
+        return
+    msg = (
+        f"forecast expects the model's 'forecast' site to end in the axes {expected} per draw, "
+        f"the axes of data (shape {tuple(data_shape)}) over {steps} steps, but it has shape "
+        f"{per_draw}. The usual cause is a predictor shared by the n series of data without "
+        "the series axis, which draws one forecast for all of them: call predict inside a "
+        "size-n plate at dim=-1, numpyro.plate('series', n, dim=-1), or give the predictor "
+        "shape (duration, n), for example jnp.broadcast_to(prediction, (h.duration, n)). A "
+        "batch axis of data needs a plate at its dim or that axis on the predictor."
+    )
+    raise ValueError(msg)
+
+
 def forecast(
     rng_key: Array,
     model: ForecastModel,
@@ -544,9 +588,12 @@ def forecast(
         (one that ends in ``"_future"`` or contains ``"_future_"``, or
         ``"forecast"``) has a non-empty leaf, if a ``posterior`` value of an
         `~~numpyro_forecast.models.innovations()` site does not have ``t``
-        steps (a posterior drawn for a different training length), or if the
+        steps (a posterior drawn for a different training length), if the
         ``"forecast"`` draws do not have time at axis ``-2`` with
-        ``duration - t`` steps.
+        ``duration - t`` steps, or if they do not have the other axes of
+        ``data`` (a predictor shared by the ``n`` series of ``data`` needs a
+        size-``n`` plate at ``dim=-1`` or shape ``(duration, n)``; without
+        either, the model draws one forecast for all series).
     HostMemoryKindError
         If ``device="pinned_host"`` is requested on a device that exposes no
         host memory kind (see
@@ -585,14 +632,16 @@ def forecast(
     predictive = _compiled_predictive(model, "forecast", parallel=parallel)
 
     def predict_fn(key: Array, post: Mapping[str, Array | np.ndarray]) -> Array:
+        shape = jax.eval_shape(predictive, key, post, covariates, data).shape
         _require_time_steps(
-            jax.eval_shape(predictive, key, post, covariates, data).shape,
+            shape,
             driver="forecast",
             site="forecast",
             steps=steps,
             rule="covariates.shape[-2] - data.shape[-2]",
             train_rows=data.shape[-2],
         )
+        _require_data_axes(shape, data.shape, steps)
         return predictive(key, post, covariates, data)
 
     return _chunked_draws(rng_key, predict_fn, posterior, batch_size, resolve_device(device))
@@ -615,6 +664,11 @@ def predict_in_sample(
     span only the observed window, so the model's ``obs`` site is sampled at every
     step. The number of predictive samples equals the leading (sample) axis of
     ``posterior`` (see `~~numpyro_forecast.predictive.draw_posterior()`).
+    The model gets ``data=None``, so the draws have the axes that the model
+    gives ``obs``, and the driver has no data to check them against: a
+    predictor shared by ``n`` series without a size-``n`` plate at ``dim=-1``
+    draws one column. `forecast()` and `~~numpyro_forecast.convert.to_datatree()`
+    get ``data`` and raise ``ValueError`` in that case.
 
     Parameters
     ----------
@@ -628,9 +682,14 @@ def predict_in_sample(
         output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
         leaves) is accepted directly. Forecast-horizon keys follow the rule of
         `forecast()`: one with values raises ``ValueError``, because it marks
-        the output of a ``numpyro.infer.Predictive`` call over a horizon, whose
-        ``"obs"`` key would pin every draw to the observed data, and one with
-        an empty leaf is dropped.
+        the output of a ``numpyro.infer.Predictive`` call over a horizon, and
+        one with an empty leaf is dropped. An ``"obs"`` key is dropped too, so
+        the draws come from the latent sites: ``Predictive`` substitutes every
+        posterior sample site by name, and an ``"obs"`` key (the output of a
+        ``Predictive`` call with ``data``, or of a prior predictive call) would
+        make every draw equal to it. Only ``"obs"`` is dropped: keep the other
+        sites that the model observes when it gets ``data`` (a second
+        likelihood) out of ``posterior``, or they are substituted.
     covariates
         Covariates with time at axis ``-2`` spanning the observed window. Its time
         length must match the data the ``posterior`` was fit on, since the in-sample
@@ -707,7 +766,11 @@ def predict_in_sample(
     reflect the model as it is at call time and ``model`` need not be hashable.
     """
     require_time_axis("covariates", covariates)
-    posterior = drop_empty_horizon_sites(posterior)
+    # Predictive substitutes every posterior sample site by name: an "obs" key (the output of a
+    # Predictive call with data) would pin every draw of the site this driver returns (#260).
+    posterior = {
+        name: leaf for name, leaf in drop_empty_horizon_sites(posterior).items() if name != "obs"
+    }
     steps = covariates.shape[-2]
     # No data argument: the model must see ``data=None`` to sample ``obs``.
     predictive = _compiled_predictive(model, "obs", parallel=parallel)
