@@ -1,6 +1,7 @@
 """Tests for the ArviZ DataTree export (roadmap §5)."""
 
 import warnings
+from collections.abc import Mapping
 from typing import cast
 
 import jax
@@ -9,6 +10,7 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
+import xarray
 import xarray.testing as xarray_testing
 from conftest import (
     as_model,
@@ -19,6 +21,7 @@ from conftest import (
     svi_guide_params,
 )
 from jax import Array, random
+from jax.typing import ArrayLike
 
 from numpyro_forecast.convert import (
     _reshape_chains,
@@ -567,6 +570,43 @@ def test_to_datatree_obs_dims_name_every_data_axis() -> None:
     )
 
 
+_LEVEL_COVARIATE_DIMS = ["covariate", "time", "obs_dim"]
+_LEVEL_COORDS = {"covariate": ["sales", "availability"], "obs_dim": ["s1", "s2"]}
+
+
+def _level_model(covariates: Array, data: Array | None = None) -> None:
+    """``obs = level + covariates[1]`` over two series, for ``(covariate, time, k)`` covariates.
+
+    The near-zero observation noise makes every draw equal its own posterior
+    ``level`` plus the covariate, so a forecast group can be checked against
+    the posterior draw by draw. ``k`` is ``2`` or ``1`` (one column broadcast
+    over both series).
+    """
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+    predict(h, dist.Normal(0.0, 1e-6), level + covariates[1] + jnp.zeros(2))
+
+
+def _level_tree(
+    posterior: Mapping[str, ArrayLike],
+    covariates: Array,
+    covariate_dims: list[str] = _LEVEL_COVARIATE_DIMS,
+    coords: Mapping[str, list[str]] = _LEVEL_COORDS,
+    num_chains: int = 4,
+) -> xarray.DataTree:
+    """Export `_level_model` on ``(4, 2)`` data with the given chains and labels."""
+    return to_datatree(
+        random.PRNGKey(0),
+        _level_model,
+        posterior,
+        jnp.ones((4, 2)),
+        covariates,
+        num_chains=num_chains,
+        covariate_dims=covariate_dims,
+        coords=coords,
+    )
+
+
 @pytest.mark.parametrize(
     ("obs_dims", "match"),
     [
@@ -690,6 +730,91 @@ def test_add_forecast_groups_squeezed_observed_data_takes_default_names() -> Non
     tree["observed_data"] = tree["observed_data"].dataset.isel(obs_dim=0)
     out = add_forecast_groups(tree, fc, future_covariates[n:])
     assert out["predictions"]["obs"].dims == ("chain", "draw", "time", "obs_dim")
+
+
+@pytest.mark.parametrize(
+    ("covariate_dims", "coords", "width"),
+    [
+        pytest.param(_LEVEL_COVARIATE_DIMS, _LEVEL_COORDS, 2, id="named-labels"),
+        # The in-sample labels of a time axis named "step" must not reach the forecast.
+        pytest.param(["covariate", "step", "obs_dim"], _LEVEL_COORDS, 2, id="time-named-step"),
+        # One covariate column for both series: 'obs_dim' has 2 labels on obs, 1 on covariates.
+        pytest.param(
+            _LEVEL_COVARIATE_DIMS, {"covariate": ["sales", "availability"]}, 1, id="broadcast"
+        ),
+    ],
+)
+def test_add_forecast_groups_matches_to_datatree_horizon_route(
+    covariate_dims: list[str], coords: dict[str, list[str]], width: int
+) -> None:
+    """Both forecast routes build the same groups: chain split, draw order and labels.
+
+    Regression for #176: ``add_forecast_groups`` stored the draws as one
+    pseudo-chain and dropped the user coordinates, so arithmetic with the
+    4-chain posterior silently kept 5 of 20 draws and the labels fell back to
+    integers.
+    """
+    posterior = {"level": jnp.arange(20, dtype=jnp.float32)}
+    covariates = jnp.ones((2, 6, width))
+    one_call = _level_tree(posterior, covariates, covariate_dims, coords)
+    fc = forecast(random.PRNGKey(1), _level_model, posterior, jnp.ones((4, 2)), covariates)
+    insample = _level_tree(posterior, covariates[:, :4], covariate_dims, coords)
+    step_by_step = add_forecast_groups(insample, fc, covariates[:, 4:])
+    for group in ("predictions", "predictions_constant_data"):
+        expected = one_call[group].dataset
+        xarray_testing.assert_allclose(step_by_step[group].dataset, expected, atol=1e-4)
+        for name, coord in expected.coords.items():
+            assert step_by_step[group].dataset.coords[name].dtype == coord.dtype, name
+
+
+@pytest.mark.parametrize(
+    ("selection", "sizes"),
+    [
+        pytest.param({"draw": slice(None, None, 2)}, {"chain": 2, "draw": 5}, id="thinned"),
+        pytest.param(
+            {"chain": 1, "draw": slice(None, None, 2)}, {"chain": 1, "draw": 5}, id="one-chain"
+        ),
+    ],
+)
+def test_add_forecast_groups_keeps_the_posterior_draw_labels(
+    selection: dict[str, int | slice], sizes: dict[str, int]
+) -> None:
+    """The forecast draws take the tree's chain and draw labels, so they align with the posterior.
+
+    A tree thinned with ``isel`` keeps the draw labels ``0, 2, 4, ...``, also
+    when one selected chain leaves a posterior with no ``chain`` dimension; a
+    forecast drawn from that subset must line up with it label by label.
+    """
+    posterior = {"level": jnp.arange(20, dtype=jnp.float32)}
+    covariates = jnp.ones((2, 6, 2))
+    subset = _level_tree(posterior, covariates[:, :4], num_chains=2).isel(selection)
+    # A C-order flatten of (chain, draw) is the order of stack(sample=("chain", "draw")).
+    subset_level = np.asarray(subset["posterior"].dataset["level"]).reshape(-1)
+    fc = forecast(
+        random.PRNGKey(1), _level_model, {"level": subset_level}, jnp.ones((4, 2)), covariates
+    )
+    out = add_forecast_groups(subset, fc, covariates[:, 4:])
+    residual = out["predictions"].dataset["obs"] - out["posterior"].dataset["level"]
+    assert residual.sizes == {**sizes, "time": 2, "obs_dim": 2}
+    np.testing.assert_allclose(residual.values, 1.0, atol=1e-4)
+
+
+@pytest.mark.parametrize(
+    ("forecast_shape", "future_steps", "match"),
+    [
+        ((10, 2, 2), 2, r"forecast_samples has 10 draws but the tree's posterior group has 20"),
+        ((20, 2, 2), 1, r"covariates_future has length 1 along the time axis \(-2\) but"),
+        ((20, 2, 3), 2, r"forecast_samples has size 3 along 'obs_dim' but the tree's"),
+    ],
+)
+def test_add_forecast_groups_rejects_draws_off_the_tree_layout(
+    forecast_shape: tuple[int, int, int], future_steps: int, match: str
+) -> None:
+    """Draws that cannot take the tree's sample layout or labels raise by name."""
+    covariates = jnp.ones((2, 4 + future_steps, 2))
+    tree = _level_tree({"level": jnp.arange(20, dtype=jnp.float32)}, covariates[:, :4])
+    with pytest.raises(ValueError, match=match):
+        add_forecast_groups(tree, np.zeros(forecast_shape), covariates[:, 4:])
 
 
 def test_to_datatree_forecast_groups_via_dict_to_dataset(monkeypatch: pytest.MonkeyPatch) -> None:

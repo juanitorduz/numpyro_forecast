@@ -210,12 +210,56 @@ def _reconcile_tree_covariate_layout(
 
 
 def _non_time_labels(variable: "xarray.DataArray") -> dict[str, Any]:
-    """Return the coordinate labels of every non-time axis of ``variable``."""
+    """Return the coordinate labels of every non-time axis of ``variable``.
+
+    The time axis is skipped by position (axis ``-2``, the package-wide
+    convention) and by name, so a time axis named otherwise never hands its
+    in-sample labels to a forecast variable.
+    """
+    time_axis = variable.ndim - 2
     return {
         str(dim): variable.coords[dim].values
-        for dim in variable.dims
-        if dim != "time" and dim in variable.coords
+        for axis, dim in enumerate(variable.dims)
+        if axis != time_axis and dim != "time" and dim in variable.coords
     }
+
+
+def _require_in_sample_sizes(
+    argument: str,
+    source: str,
+    dims: Sequence[str],
+    shape: Sequence[int],
+    labels: Mapping[str, Any],
+) -> None:
+    """Raise ``ValueError`` unless every labeled axis of a forecast variable keeps its size.
+
+    `add_forecast_groups()` attaches the in-sample ``labels`` (from
+    `_non_time_labels()`) to the forecast variable, so an axis of another size
+    than its labels is reported here, by argument and axis name, instead of
+    by xarray when the dataset is built.
+
+    Parameters
+    ----------
+    argument
+        The argument name to report on a mismatch.
+    source
+        The stored in-sample variable to report on a mismatch.
+    dims
+        The dimension names of the non-sample axes of the forecast variable.
+    shape
+        The sizes of those axes.
+    labels
+        The in-sample labels per dimension name.
+    """
+    for dim, size in zip(dims, shape, strict=True):
+        values = labels.get(dim)
+        if values is not None and len(values) != size:
+            msg = (
+                f"{argument} has size {size} along {dim!r} but the tree's {source} has size "
+                f"{len(values)} along it; every non-time axis of {argument} must keep its "
+                "in-sample size"
+            )
+            raise ValueError(msg)
 
 
 def _tree_obs_layout(tree: "xarray.DataTree", ndim: int) -> tuple[list[str], dict[str, Any]]:
@@ -321,7 +365,6 @@ def _forecast_group_datasets(
     future_time: "np.ndarray",
     *,
     obs_dims: Sequence[str],
-    coords: Mapping[str, Sequence[Any]] | None = None,
     obs_coords: Mapping[str, Any] | None = None,
     covariate_coords: Mapping[str, Any] | None = None,
     covariate_dims: Sequence[str] | None = None,
@@ -330,38 +373,89 @@ def _forecast_group_datasets(
 
     ``forecast_draws`` must already carry the ``(chain, draw, *batch, future,
     obs)`` layout; callers own the chain reshape (`to_datatree()` applies the
-    fit's real chain structure, `add_forecast_groups()` a single pseudo-chain).
-    ``obs_dims`` names the non-sample axes of ``forecast_draws``.
+    fit's ``num_chains``, `add_forecast_groups()` the layout of the tree's
+    posterior). ``obs_dims`` names the non-sample axes of ``forecast_draws``.
 
-    ``coords`` are user coordinates to share with the forecast groups, but with
-    the precedence inverted relative to `_merge_coords()`: ``future_time``
-    always wins over a user ``time`` entry, because that entry covers the
-    in-sample window (``time_coord`` is the sanctioned route for explicit
-    forecast time values). ``obs_coords`` and ``covariate_coords`` are
-    coordinates for the forecast ``obs`` and the future covariates only
-    (`add_forecast_groups()` passes the labels of their in-sample
-    counterparts), so the labels of one never reach an axis of the same name
-    in the other. ``covariate_dims`` names the axes of ``covariates_future``
-    (default ``("time", "covariate_dim")``).
+    ``obs_coords`` and ``covariate_coords`` are the coordinates of the two
+    datasets. They are separate because a dimension name that both variables
+    use can carry different labels in each (for example default integer labels
+    of different lengths, or the labels `add_forecast_groups()` copies from
+    the in-sample counterparts). In both, ``future_time`` always wins over a
+    ``time`` entry: `to_datatree()` passes its user ``coords``, whose ``time``
+    entry covers the in-sample window (the precedence of `_merge_coords()` is
+    inverted here; ``time_coord`` is the sanctioned route for explicit
+    forecast time values). ``covariate_dims`` names the axes of
+    ``covariates_future`` (default ``("time", "covariate_dim")``).
     """
     dims = _resolve_covariate_dims(covariates_future, covariate_dims)
-    merged_future: dict[str, Any] = dict(coords) if coords is not None else {}
-    merged_future["time"] = future_time
-    obs_future_coords = cast("dict[Any, Any]", {**(obs_coords or {}), **merged_future})
-    covariate_future_coords = cast("dict[Any, Any]", {**(covariate_coords or {}), **merged_future})
+    obs_future: dict[Any, Any] = {**(obs_coords or {}), "time": future_time}
+    covariates_future_coords: dict[Any, Any] = {**(covariate_coords or {}), "time": future_time}
     predictions_ds = arviz_base.dict_to_dataset(
         {"obs": forecast_draws},
         sample_dims=_SAMPLE_DIMS,
         dims={"obs": list(obs_dims)},
-        coords=obs_future_coords,
+        coords=obs_future,
     )
     predictions_constant_ds = arviz_base.dict_to_dataset(
         {"covariates": np.asarray(covariates_future)},
         sample_dims=[],
         dims={"covariates": dims},
-        coords=covariate_future_coords,
+        coords=covariates_future_coords,
     )
     return predictions_ds, predictions_constant_ds
+
+
+def _tree_sample_layout(
+    tree: "xarray.DataTree", num_samples: int
+) -> tuple[int, dict[str, "np.ndarray"]]:
+    """Read the ``(chain, draw)`` layout and labels that forecast draws must take.
+
+    The reference is the tree's ``posterior`` group or, without one, its
+    ``posterior_predictive`` group: the first of the two that has a ``draw``
+    dimension. `to_datatree()` gives both groups the same layout. A group
+    without a ``chain`` dimension (for example after ``tree.isel(chain=0)``)
+    counts as one chain, labeled by its scalar ``chain`` coordinate if it has
+    one.
+
+    Parameters
+    ----------
+    tree
+        The tree that `add_forecast_groups()` extends.
+    num_samples
+        The length of the flattened sample axis of the forecast draws.
+
+    Returns
+    -------
+    tuple[int, dict[str, numpy.ndarray]]
+        The number of chains and the ``chain`` and ``draw`` labels of the
+        reference group, or ``(1, {})`` (one pseudo-chain with default labels)
+        when the tree has no reference group.
+
+    Raises
+    ------
+    ValueError
+        If ``num_samples`` is not the number of chains times the number of
+        draws of the reference group.
+    """
+    for group in ("posterior", "posterior_predictive"):
+        node = tree.children.get(group)
+        if node is None or "draw" not in node.dataset.sizes:
+            continue
+        num_chains = node.dataset.sizes.get("chain", 1)
+        num_draws = node.dataset.sizes["draw"]
+        if num_samples != num_chains * num_draws:
+            msg = (
+                f"forecast_samples has {num_samples} draws but the tree's {group} group has "
+                f"{num_chains * num_draws} (chain x draw = {num_chains} x {num_draws}); draw "
+                "one forecast per draw of that group, in the order of "
+                f'tree["{group}"].stack(sample=("chain", "draw")), and to attach fewer '
+                "draws, subset the tree first (for example with tree.isel(draw=...))"
+            )
+            raise ValueError(msg)
+        coords = node.dataset.coords
+        labels = {dim: np.atleast_1d(coords[dim].values) for dim in _SAMPLE_DIMS if dim in coords}
+        return num_chains, labels
+    return 1, {}
 
 
 def to_datatree(
@@ -649,7 +743,8 @@ def to_datatree(
             covariates[..., n_time:, :],
             future_time,
             obs_dims=resolved_obs_dims,
-            coords=coords,
+            obs_coords=coords,
+            covariate_coords=coords,
             covariate_dims=cov_dims,
         )
         groups["predictions"] = predictions_ds
@@ -679,30 +774,46 @@ def add_forecast_groups(
     Adds a ``predictions`` group (the forecast ``obs`` draws) and a
     ``predictions_constant_data`` group (the future covariates). The forecast
     ``time`` coordinate continues the in-sample one: integer continuation by
-    default, or explicit values via ``time_coord``. Every other axis takes the
-    dimension name and the coordinate labels of the same axis of the in-sample
-    ``obs`` or covariates. This is the step-by-step route for draws you
-    produced yourself; `to_datatree()` attaches the same groups automatically
-    when its ``covariates`` extend beyond ``data``.
+    default, or explicit values via ``time_coord``. This is the step-by-step
+    route for draws you produced yourself; `to_datatree()` attaches the same
+    groups automatically when its ``covariates`` extend beyond ``data``. Both
+    routes give the forecast groups the ``(chain, draw)`` layout of the
+    posterior and the dimension names and labels of the in-sample ``obs`` and
+    covariates on every non-time axis, so xarray aligns the forecast with the
+    rest of the tree draw by draw and label by label.
 
     Parameters
     ----------
     tree
-        A tree from `to_datatree()` (its ``observed_data`` time coordinate is
-        continued).
+        A tree from `to_datatree()`. The forecast continues its
+        ``observed_data`` time coordinate, takes the ``(chain, draw)`` layout
+        and labels of its ``posterior`` group, and copies the labels of the
+        non-time axes of ``observed_data["obs"]`` and
+        ``constant_data["covariates"]`` to the same axes of ``predictions`` and
+        ``predictions_constant_data``.
     forecast_samples
         Forecast draws shaped ``(num_samples, *batch, future, obs)`` from
         `~~numpyro_forecast.predictive.forecast()`, with the layout of the
-        tree's in-sample ``obs``. The ``predictions`` ``obs`` takes the
-        dimension names and the non-time coordinate labels of the tree's
-        ``observed_data["obs"]`` (set by ``to_datatree(obs_dims=...,
-        coords=...)``), so each non-time axis must have the size of the stored
-        one. If the tree's stored ``obs`` is missing or has no ``time`` axis at
-        ``-2`` (an ``observed_data`` squeezed to one series), it takes the
-        default names of `to_datatree()` and no labels instead.
+        tree's in-sample ``obs``, one per draw of the tree's ``posterior``
+        group as it is now, in the order of
+        ``tree["posterior"].stack(sample=("chain", "draw"))`` (for a tree
+        straight from `to_datatree()`, the order of the flattened posterior it
+        was built from). They are split into the ``(chain, draw)`` layout of
+        that group; a group without a ``chain`` dimension (for example after
+        ``tree.isel(chain=0)``) counts as one chain. A tree with no
+        ``posterior`` group uses its ``posterior_predictive`` group instead,
+        and a tree with neither gets one pseudo-chain. The ``predictions``
+        ``obs`` takes the dimension names and the non-time coordinate labels
+        of the tree's ``observed_data["obs"]`` (set by
+        ``to_datatree(obs_dims=..., coords=...)``), so each non-time axis must
+        have the size of the stored one. If the tree's stored ``obs`` is
+        missing or has no ``time`` axis at ``-2`` (an ``observed_data``
+        squeezed to one series), it takes the default names of
+        `to_datatree()` and no labels instead.
     covariates_future
         Future covariates shaped ``(future, covariate_dim)``, or any layout
-        with time at axis ``-2`` when ``covariate_dims`` names the axes.
+        with time at axis ``-2`` when ``covariate_dims`` names the axes, with
+        one time step per forecast step.
     time_coord
         Optional explicit forecast time coordinate; defaults to integer
         continuation of the in-sample time. Required when the in-sample time
@@ -727,10 +838,16 @@ def add_forecast_groups(
     Raises
     ------
     ValueError
-        If ``forecast_samples`` does not have one axis per inherited ``obs``
-        dimension name after the sample axis, if ``time_coord`` is given but
-        its length differs from the forecast horizon, or if it is omitted
-        while the in-sample time coordinate is non-integer.
+        If ``forecast_samples`` does not have one draw per draw of the tree's
+        posterior (to attach fewer draws, subset the tree first, for example
+        with ``tree.isel(draw=...)``), if it does not have one axis per
+        inherited ``obs`` dimension name after the sample axis, if a non-time
+        axis of ``forecast_samples`` or ``covariates_future`` differs in size
+        from the same axis of the tree's in-sample ``obs`` or covariates, if
+        ``covariates_future`` does not have one time step per forecast step,
+        if ``time_coord`` is given but its length differs from the forecast
+        horizon, or if it is omitted while the in-sample time coordinate is
+        non-integer.
     CovariateDimsError
         If the resolved ``covariate_dims`` (explicit or inherited) do not name
         every ``covariates_future`` axis, or if explicit names disagree with
@@ -740,11 +857,34 @@ def add_forecast_groups(
     covariate_dims, covariate_coords = _reconcile_tree_covariate_layout(
         tree, covariates_future, covariate_dims
     )
+    covariate_dims = _resolve_covariate_dims(covariates_future, covariate_dims)
     in_time = np.asarray(tree["observed_data"].coords["time"].values)
     forecast_samples_arr = np.asarray(forecast_samples)
+    covariates_future_arr = np.asarray(covariates_future)
     obs_dims, obs_coords = _tree_obs_layout(tree, forecast_samples_arr.ndim - 1)
     _require_draws_match_obs_dims("forecast_samples", forecast_samples_arr, obs_dims)
+    _require_in_sample_sizes(
+        "forecast_samples",
+        "observed_data obs",
+        obs_dims,
+        forecast_samples_arr.shape[1:],
+        obs_coords,
+    )
+    _require_in_sample_sizes(
+        "covariates_future",
+        "constant_data covariates",
+        covariate_dims,
+        covariates_future_arr.shape,
+        covariate_coords,
+    )
     future_len = forecast_samples_arr.shape[-2]
+    if covariates_future_arr.shape[-2] != future_len:
+        msg = (
+            f"covariates_future has length {covariates_future_arr.shape[-2]} along the time "
+            f"axis (-2) but forecast_samples has length {future_len} along it; pass the "
+            "covariate rows of the forecast horizon only, e.g. covariates[..., n_time:, :]"
+        )
+        raise ValueError(msg)
     if time_coord is not None:
         future_time = np.asarray(time_coord)
         if future_time.shape[0] != future_len:
@@ -762,12 +902,13 @@ def add_forecast_groups(
             "pass explicit time_coord for the forecast horizon"
         )
         raise ValueError(msg)
+    num_chains, sample_labels = _tree_sample_layout(tree, forecast_samples_arr.shape[0])
     predictions_ds, predictions_constant_ds = _forecast_group_datasets(
-        forecast_samples_arr[None],
+        _reshape_chains(forecast_samples_arr, num_chains),
         covariates_future,
         future_time,
         obs_dims=obs_dims,
-        obs_coords=obs_coords,
+        obs_coords={**sample_labels, **obs_coords},
         covariate_coords=covariate_coords,
         covariate_dims=covariate_dims,
     )
