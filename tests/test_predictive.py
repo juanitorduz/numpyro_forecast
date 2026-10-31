@@ -28,6 +28,7 @@ from jax import random
 from jax.typing import ArrayLike
 from numpyro.infer import MCMC, NUTS, Predictive
 from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer.reparam import LocScaleReparam
 
 import numpyro_forecast
 from numpyro_forecast.exceptions import DeviceMemoryError, DevicePlatformError, HostMemoryKindError
@@ -190,14 +191,6 @@ def _handwritten_rw_model(covariates: Array, data: Array | None = None) -> None:
             id="time-reparam",
         ),
         pytest.param(
-            "forecast",
-            rw_model,
-            {"drift": jnp.zeros((4, 5, 1)), "drift_future": jnp.zeros((4, 6, 1))},
-            r"site 'drift_future' to have 3 time steps .* 'time_future' plate.* has shape "
-            r"\(6, 1\)\. The usual cause is a posterior that holds the forecast-horizon site",
-            id="future-site",
-        ),
-        pytest.param(
             "predict_in_sample",
             rw_model,
             {"drift": jnp.zeros((4, 5))},
@@ -219,6 +212,25 @@ def test_innovations_rejects_posterior_fit_on_another_window(
     """
     with pytest.raises(ValueError, match=rf"^innovations expects {match}"):
         _run_driver(driver, model, posterior, None)
+
+
+def test_innovations_rejects_a_horizon_value_of_another_length() -> None:
+    """A plain ``Predictive`` call reaches the check of a substituted ``_future`` value.
+
+    The drivers reject a posterior that holds a horizon site before the model
+    runs (issue #161), so only a direct NumPyro call gets this far.
+    """
+    posterior = {"drift": jnp.zeros((4, 5, 1)), "drift_future": jnp.zeros((4, 6, 1))}
+    predictive = Predictive(rw_model, posterior_samples=posterior)
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^innovations expects site 'drift_future' to have 3 time steps .* 'time_future' "
+            r"plate.* has shape \(6, 1\)\. The usual cause is a posterior that holds the "
+            r"forecast-horizon site"
+        ),
+    ):
+        predictive(random.PRNGKey(0), empty_covariates(8), jnp.zeros((5, 1)))
 
 
 def _plate_rw_model(covariates: Array, data: Array | None = None) -> None:
@@ -537,6 +549,86 @@ def test_drivers_accept_unhashable_callable_models(driver: str, batch_size: int 
     )
     if batch_size is None:
         assert np.allclose(np.asarray(draws), plain(random.PRNGKey(0), *args)[site], atol=1e-5)
+
+
+# --- posteriors that carry forecast-horizon sites (issue #161) ----------------
+
+
+def _rw_decentered_model(covariates: Array, data: Array | None = None) -> None:
+    """``rw_model`` with a decentered drift: the horizon adds ``drift_future_decentered``."""
+    h = Horizon.from_data(covariates, data)
+    drift_scale = numpyro.sample("drift_scale", dist.LogNormal(-1.0, 1.0))
+    sigma = numpyro.sample("sigma", dist.LogNormal(-1.0, 1.0))
+    drift = innovations(h, "drift", dist.Normal(0.0, drift_scale), reparam=LocScaleReparam(0))
+    predict(h, dist.Normal(0.0, sigma), jnp.cumsum(drift, axis=-2))
+
+
+@pytest.mark.parametrize("driver", ["forecast", "predict_in_sample"])
+def test_drivers_reject_the_output_of_a_predictive_call_over_a_horizon(driver: str) -> None:
+    """Issue #161: a posterior that holds horizon sites raises instead of pinning the draws.
+
+    ``Predictive`` substitutes every posterior sample site by name. Merged into
+    the posterior, its output over a horizon pinned the future path of
+    `forecast()` to the stale ``drift_future_decentered`` (the auxiliary of the
+    decentered horizon drift) and the forecast to ``obs_future``, and its
+    ``obs`` (the observed data) pinned every draw of `predict_in_sample()`, with
+    no error. ``drift_future`` and ``forecast`` are deterministic and only mark
+    the mistake.
+    """
+    posterior = {
+        "drift_scale": jnp.ones(4),
+        "sigma": jnp.full(4, 0.05),
+        "drift_decentered": jnp.zeros((4, 5, 1)),
+    }
+    over_horizon = Predictive(_rw_decentered_model, posterior_samples=posterior)(
+        random.PRNGKey(1), empty_covariates(8), jnp.zeros((5, 1))
+    )
+    with pytest.raises(
+        ValueError,
+        match=r"\['drift_future', 'drift_future_decentered', 'forecast', 'obs_future'\]",
+    ):
+        _run_driver(driver, _rw_decentered_model, {**posterior, **over_horizon}, None)
+
+
+def _always_registered_horizon_model(covariates: Array, data: Array | None = None) -> None:
+    """A level model that registers its horizon sites on every call, also while training.
+
+    The level is named ``beta_futures`` (the weight of a futures price, say):
+    an in-sample site whose name contains ``_future``.
+    """
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("beta_futures", dist.Normal(0.0, 1.0)))
+    shock = numpyro.sample("shock_future", dist.Normal(0.0, 1.0).expand([h.future, 1]).to_event(2))
+    numpyro.sample("obs", dist.Normal(jnp.full((h.t_obs, 1), level), 0.1).to_event(2), obs=data)
+    numpyro.deterministic("forecast", level + jnp.asarray(shock))
+
+
+def test_drivers_drop_the_empty_horizon_keys_of_a_training_posterior() -> None:
+    """Issue #161: a training posterior passes, with its empty horizon keys dropped.
+
+    A site that the model registers on every call lands in the training
+    posterior with a size-0 time axis (MCMC also keeps deterministic sites).
+    Such a key holds nothing to pin, so the drivers drop it and draw the site
+    from the prior, as for a posterior without it. Substituted, the empty
+    ``shock_future`` gave the ``"forecast"`` site no steps (a misleading
+    training-length error) and shifted the in-sample draws. An in-sample name
+    that only contains ``_future`` (``beta_futures``) is no horizon site.
+    """
+    mcmc = MCMC(
+        NUTS(_always_registered_horizon_model), num_warmup=5, num_samples=4, progress_bar=False
+    )
+    mcmc.run(random.PRNGKey(0), empty_covariates(5), jnp.zeros((5, 1)))
+    posterior = mcmc.get_samples()
+    assert {name: leaf.shape for name, leaf in posterior.items()} == {
+        "beta_futures": (4,),
+        "shock_future": (4, 0, 1),
+        "forecast": (4, 0, 1),
+    }
+    without_empty = {"beta_futures": posterior["beta_futures"]}
+    for driver in ("forecast", "predict_in_sample"):
+        draws = _run_driver(driver, _always_registered_horizon_model, posterior, None)
+        reference = _run_driver(driver, _always_registered_horizon_model, without_empty, None)
+        assert np.array_equal(np.asarray(draws), np.asarray(reference))
 
 
 # --- P6: host offloading (issue #64) ------------------------------------------

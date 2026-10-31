@@ -27,7 +27,11 @@ from numpyro_forecast.exceptions import CovariateDimsError
 from numpyro_forecast.offload import resolve_device
 from numpyro_forecast.predictive import forecast, predict_in_sample
 from numpyro_forecast.typing import Array, ForecastModel
-from numpyro_forecast.validation import require_covariates_cover_data, require_sample_axis
+from numpyro_forecast.validation import (
+    require_covariates_cover_data,
+    require_no_horizon_sites,
+    require_sample_axis,
+)
 
 _SAMPLE_DIMS = ["chain", "draw"]
 """The ArviZ sample dimensions shared by the posterior groups."""
@@ -490,11 +494,19 @@ def to_datatree(
     model
         The forecasting model that produced ``posterior``.
     posterior
-        Posterior samples of the latent sites, with a single flattened sample
-        axis leading (NumPyro's ``mcmc.get_samples()`` order, or the output of
+        Posterior samples of the latent sites of the training run, with a
+        single flattened sample axis leading (NumPyro's ``mcmc.get_samples()``
+        order, or the output of
         `~~numpyro_forecast.predictive.draw_posterior()`).
         Host-committed leaves (the output of ``draw_posterior(...,
         device="host")``) and NumPy leaves are accepted directly.
+        Forecast-horizon keys follow the rule of
+        `~~numpyro_forecast.predictive.forecast()`: one with values (a key
+        that ends in ``"_future"`` or contains ``"_future_"``, or
+        ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
+        that the model registers on every call, recorded by the training run
+        with a size-0 time axis) is kept in the ``posterior`` group as a
+        size-0 variable, and the predictive drivers drop it.
     data
         In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
         the observation dim at axis ``-1`` and any batch axes to the left
@@ -604,7 +616,9 @@ def to_datatree(
         If ``data`` or ``covariates`` has fewer than two axes (time must be at
         axis ``-2``), if ``data`` has no time steps, if ``covariates`` is
         shorter than ``data`` along the time axis, if a ``posterior`` leaf has
-        no sample axis, if
+        no sample axis, if a forecast-horizon key of ``posterior`` (one that
+        ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
+        has a non-empty leaf, if
         ``time_coord`` is given but its length does not match the in-sample
         window plus the forecast horizon, if ``num_chains`` is not a positive
         integer (``bool`` included), if ``posterior``'s sample count is not
@@ -677,6 +691,7 @@ def to_datatree(
     merged_arg = cast("dict[Any, Any]", merged_coords)
 
     require_sample_axis(posterior)
+    require_no_horizon_sites(posterior)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
         for name, value in posterior.items()

@@ -88,13 +88,18 @@ class MVNLayoutError(NumpyroForecastError, NotImplementedError):
     `~~numpyro_forecast.surgery.slice_time()`, and
     `~~numpyro_forecast.surgery.prefix_condition()` on MVN noise whose
     ``loc``/``covariance_matrix`` shapes do not match the supported
-    time-leading layout.
+    time-leading layout, and by `~~numpyro_forecast.surgery.shift_loc()` on a
+    predictor that is neither ``(*batch, time, 1)`` (time may be ``1``) nor
+    ``(*batch, time)`` with no more axes than the noise location.
     """
 
     default_message = (
         "MultivariateNormal time-axis surgery requires obs == 1 with time as the "
-        "leading correlation axis (loc shape ``(*batch, time)`` or "
-        "``(*batch, time, 1)`` with matching ``(*batch, time, time)`` covariance)."
+        "leading correlation axis: a noise loc of shape ``(*batch, time)`` (for example "
+        "``jnp.zeros(h.duration)``) or ``(*batch, time, 1)`` with a matching "
+        "``(*batch, time, time)`` covariance, and a predictor of shape "
+        "``(*batch, time, 1)``. The series of a panel go in the batch: "
+        "``(series, time, 1)``."
     )
 
 

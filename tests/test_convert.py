@@ -329,6 +329,30 @@ def test_to_datatree_rejects_posterior_leaf_without_sample_axis() -> None:
         to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
 
 
+def test_to_datatree_rejects_horizon_sites_before_drawing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #161: a posterior with horizon values raises before any predictive draw.
+
+    The drivers check the posterior too, but `to_datatree()` calls them only
+    after it has built the posterior group, and the in-sample draws come first.
+    """
+    import numpyro_forecast.convert as convert_mod
+
+    def fail(*args: object, **kwargs: object) -> object:
+        msg = "to_datatree drew predictive samples before it checked the posterior"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(convert_mod, "predict_in_sample", fail)
+    monkeypatch.setattr(convert_mod, "forecast", fail)
+    posterior = {
+        "drift_scale": jnp.ones(4),
+        "sigma": jnp.ones(4),
+        "drift": jnp.zeros((4, 6, 1)),
+        "drift_future": jnp.zeros((4, 2, 1)),
+    }
+    with pytest.raises(ValueError, match=r"forecast-horizon sites \['drift_future'\]"):
+        to_datatree(random.PRNGKey(2), _model(), posterior, jnp.zeros((6, 1)), empty_covariates(8))
+
+
 def test_to_datatree_rejects_data_without_observations() -> None:
     posterior = {"level": jnp.zeros(4), "drift": jnp.zeros((4, 0, 1))}
     with pytest.raises(ValueError, match=r"data has no observed time steps \(shape \(0, 1\)\)"):

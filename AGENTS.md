@@ -22,6 +22,13 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   a fixed site name (`drift`); the forecast horizon uses a separate `_future`
   site so `AutoNormal` never resizes and `Predictive` draws the suffix from the
   prior. The horizon is derived from shapes (`covariates` longer than `data`).
+  The drivers substitute every posterior sample site by name, so `forecast`,
+  `predict_in_sample` and `to_datatree` reject a posterior key with values that
+  ends in `_future`, contains `_future_` or is `forecast` (the marks of a
+  `Predictive` call over a horizon, issue #161); `forecast` and
+  `predict_in_sample` drop such a key when its leaf is empty (a site registered
+  on every call, as a training run records it), and `to_datatree` still exports
+  it in the posterior group.
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.
