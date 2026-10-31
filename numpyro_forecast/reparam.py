@@ -39,7 +39,7 @@ from numpyro.distributions.transforms import (
     Transform,
 )
 from numpyro.infer.reparam import Reparam, UnitJacobianReparam
-from numpyro.primitives import _PYRO_STACK, Messenger
+from numpyro.primitives import _PYRO_STACK, Message, Messenger
 
 from numpyro_forecast.models import PlateName
 from numpyro_forecast.typing import Array, ForecastModel
@@ -51,6 +51,11 @@ _AUX_INFER_KEY = "numpyro_forecast_time_reparam_aux"
 _NESTING_MSG = (
     "time_reparam cannot be nested: `model` already contains a time_reparam model; "
     "apply time_reparam once, to the innermost model"
+)
+_NO_OP_MSG = (
+    "time_reparam found no in-sample time latent of its own: `model` already contains a "
+    "time_reparam model, so the outer transform does nothing; apply time_reparam once, "
+    "to the innermost model"
 )
 _TRANSFORMS: dict[str, tuple[Callable[[int], Transform], str]] = {
     "haar": (lambda dim: HaarTransform(dim=dim), "haar"),
@@ -96,6 +101,11 @@ class _TimeReparam(UnitJacobianReparam):
         return None, cast(Array, transform.inv(x))
 
 
+def _is_time_reparam_aux(msg: Mapping[str, Any]) -> bool:
+    """Return whether ``msg`` is an auxiliary site emitted by a `time_reparam()` handler."""
+    return bool((msg.get("infer") or {}).get(_AUX_INFER_KEY))
+
+
 @dataclass(frozen=True)
 class _TimeReparamConfig:
     """Callable ``config`` for `numpyro.handlers.reparam`, after Pyro's ``time_reparam_haar``.
@@ -118,7 +128,7 @@ class _TimeReparamConfig:
         """Return the reparameterizer for a sample site under the ``time`` plate, else ``None``."""
         if msg["type"] != "sample" or msg["is_observed"]:
             return None
-        if (msg.get("infer") or {}).get(_AUX_INFER_KEY):
+        if _is_time_reparam_aux(msg):
             return None
         fn = msg["fn"]
         if getattr(fn.support, "is_discrete", False):
@@ -141,9 +151,7 @@ def _contains_time_reparam(model: object) -> bool:
     hidden behind one when the model is traced.
     """
     while isinstance(model, Messenger):
-        if isinstance(model, numpyro.handlers.reparam) and isinstance(
-            model.config, _TimeReparamConfig
-        ):
+        if isinstance(model, _TimeReparamHandler):
             return True
         model = model.fn
     return False
@@ -169,14 +177,14 @@ class _TimeReparamHandler(numpyro.handlers.reparam):
         self.num_targeted = 0
         out = super().__call__(*args, **kwargs)
         if self.num_auxiliary and not self.num_targeted:
-            raise ValueError(_NESTING_MSG)
+            raise ValueError(_NO_OP_MSG)
         return out
 
-    def process_message(self, msg: dict[str, Any]) -> None:
+    def process_message(self, msg: Message) -> None:
         """Reparameterize ``msg`` and count auxiliary and targeted sample sites."""
         if msg["type"] != "sample":
             return
-        if (msg.get("infer") or {}).get(_AUX_INFER_KEY):
+        if _is_time_reparam_aux(msg):
             self.num_auxiliary += 1
         super().process_message(msg)
         if msg["type"] == "deterministic":
@@ -232,9 +240,13 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
         a no-op. The check runs when wrapping and looks through any NumPyro
         handlers around ``model`` (``scope``, ``seed``, ...). A nesting behind a
         plain function or a `functools.partial()` raises when the model is first
-        traced, if the outer transform finds no time latent of its own. A
+        traced (inside ``SVI``, ``MCMC``, `~~numpyro_forecast.predictive.forecast()`,
+        ...), if the outer transform finds no in-sample time latent of its own. A
         composite model whose body calls a `time_reparam()` component next to its
-        own time latents is valid: the outer transform applies to those latents.
+        own ``innovations`` time latents is valid: the outer transform applies to
+        those latents. A composite whose own time latents are never targeted
+        (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
+        the outer transform does nothing there either.
 
     Notes
     -----

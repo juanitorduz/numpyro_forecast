@@ -246,7 +246,30 @@ def test_nesting_behind_a_function_is_rejected_when_traced() -> None:
         inner(covariates, data)
 
     model, data, covariates = _split(time_reparam(wrapper, "dct"))
-    with pytest.raises(ValueError, match="cannot be nested"):
+    with pytest.raises(ValueError, match="no in-sample time latent of its own"):
+        get_trace(model, covariates, data)
+
+
+def test_composite_with_only_untargeted_latents_is_rejected_when_traced() -> None:
+    """A composite whose own time latents are scan sites leaves the outer transform a no-op.
+
+    The ``markov_series`` sites carry no ``time`` plate, so the outer ``"dct"``
+    sees only the component's auxiliary site. The error says that the outer
+    transform found nothing to do, not only that the models are nested.
+    """
+    inner = scope(time_reparam(rw_model, "haar"), prefix="trend")
+
+    def composite(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+
+        def transition(carry: Array, _: object) -> dist.Distribution:
+            return dist.Normal(carry, 1.0).to_event(1)
+
+        markov_series(h, "level", jnp.zeros((1,)), transition)
+        inner(covariates, data)
+
+    model, data, covariates = _split(time_reparam(composite, "dct"))
+    with pytest.raises(ValueError, match="no in-sample time latent of its own"):
         get_trace(model, covariates, data)
 
 
