@@ -272,6 +272,26 @@ def test_forecast_rejects_draws_of_another_length(
         _run_driver("forecast", _plate_rw_model, posterior, batch_size)
 
 
+def test_forecast_names_a_posterior_shorter_than_the_observed_data() -> None:
+    """A posterior too short to cover ``data`` fails in `predict()`, which names the cause.
+
+    A time latent outside `innovations()` takes the posterior's length: a
+    posterior fit on 1 step gives a 4-row predictor (1 step plus the 3-step
+    horizon) for 5 observed steps. That distribution does not broadcast against
+    the data, so `predict()` raises before `forecast()` checks the draws, and
+    its message must name the posterior, as the driver message of issue #168
+    does.
+    """
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"^predict expects .*A posterior drawn for a different training length also causes "
+            r"this when its time latents are not innovations\(\) sites: they must have 5 rows"
+        ),
+    ):
+        _run_driver("forecast", _plate_rw_model, {"drift": jnp.zeros((4, 1, 1))}, None)
+
+
 def test_predict_in_sample_rejects_draws_of_another_length() -> None:
     """Issue #168: the ``obs`` draws must span the covariates, not the posterior's rows."""
     with pytest.raises(

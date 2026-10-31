@@ -15,6 +15,7 @@ The recursive blocks take plain per-step functions: `markov_series()` a
 sample site.
 """
 
+import math
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import ExitStack, contextmanager, nullcontext
 from enum import StrEnum
@@ -892,6 +893,131 @@ def _has_discrete_support(d: dist.Distribution) -> bool:
         return False
 
 
+def _require_predictor_axes(h: Horizon, prediction: Array) -> None:
+    """Reject a 1-D predictor of ``h.duration`` steps: time without the observation axis.
+
+    Distributions broadcast from the right, so the ``(duration,)`` result of
+    ``covariates @ beta`` puts its time steps on the observation axis of the
+    data: ``(time, 1)`` data is scored on a ``(time, time)`` grid and a square
+    panel gets a per-series effect, both without an error (issue #166). It is
+    checked on the predictor because a ``(duration, 1)`` noise scale gives the
+    distribution a valid-looking ``(duration, duration)`` shape and ``data=None``
+    leaves nothing to compare against. Every other shape is checked on the
+    distribution by `_require_obs_layout()`: a 0-d or per-series predictor is
+    fine when a noise parameter carries the time axis.
+    """
+    shape = tuple(prediction.shape)
+    if shape != (h.duration,):
+        return
+    msg = (
+        "predict expects prediction to have shape (*batch, duration, obs), with time at axis "
+        f"-2 and the observation axis at -1, but it has shape {shape}: its time steps would "
+        "broadcast onto the observation axis of the data. Add the observation axis with "
+        "prediction[..., None]: a univariate predictor has shape (duration, 1) and a panel "
+        "predictor (duration, n)."
+    )
+    raise ValueError(msg)
+
+
+def _broadcast_or_none(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...] | None:
+    """Broadcast two shapes, or return ``None`` when they do not broadcast."""
+    try:
+        return tuple(jnp.broadcast_shapes(a, b))
+    except ValueError:
+        return None
+
+
+def _require_obs_layout(h: Horizon, full_dist: dist.Distribution) -> None:
+    """Require ``(time, obs)`` axes on ``full_dist`` and no repeated observation of ``h.data``.
+
+    The ``"obs"`` site scores ``h.data`` against ``full_dist`` (its first
+    ``h.t_obs`` rows while forecasting, as `~~numpyro_forecast.surgery.slice_time()`
+    takes them), and the log density broadcasts the two shapes. A shape that
+    grows the data counts each observation more than once: a ``(duration,)``
+    term added to a ``(duration, 1)`` predictor or used as a noise scale gives a
+    ``(time, time)`` grid, a second ``[..., None]`` a ``(time, time, 1)`` one,
+    and a predictor with more rows than a single observed step repeats it
+    (issue #166). A size-1 axis that the data does not have repeats nothing, so
+    it passes. A bare ``MultivariateNormal`` has the time axis as its
+    ``(time,)`` event and no observation axis, so it fails: `shift_loc()` gives
+    MVN noise the ``(time, 1)`` event for a ``(duration, 1)`` predictor (issue
+    #160). When only the number of rows is wrong, the message also names a
+    posterior drawn for another training length: this check fires before the
+    driver check of issue #168 when such a posterior is shorter than the
+    observed data. Shapes alone cannot tell a ``(duration,)`` term from a
+    per-series one when the data has ``h.duration`` series, and the axes of
+    enumerated discrete latents, left of the data axes, count as repeated
+    observations.
+    """
+    shape = (*full_dist.batch_shape, *full_dist.event_shape)
+    data = h.data
+    width = None if data is None else data.shape[-1]
+    wrong_rows = False
+    if len(shape) < 2:
+        problem = "has fewer than two axes, so it has no time axis at -2"
+    elif data is None:
+        return
+    else:
+        data_shape = tuple(data.shape)
+        rows = min(shape[-2], h.t_obs) if h.future > 0 else shape[-2]
+        grid = _broadcast_or_none((*shape[:-2], rows, shape[-1]), data_shape)
+        # Equal sizes: every axis that the broadcast adds or widens has size 1.
+        if grid is not None and math.prod(grid) == math.prod(data_shape):
+            return
+        problem = f"does not match the data (shape {data_shape}): " + (
+            "the two do not broadcast"
+            if grid is None
+            else f"the obs site would score a {grid} grid, counting each observation more "
+            "than once"
+        )
+        # Only the number of rows is wrong when h.t_obs rows would score each observation once.
+        t_obs_grid = _broadcast_or_none((*shape[:-2], h.t_obs, shape[-1]), data_shape)
+        wrong_rows = t_obs_grid is not None and math.prod(t_obs_grid) == math.prod(data_shape)
+    base = full_dist.base_dist if isinstance(full_dist, dist.Independent) else full_dist
+    if isinstance(base, dist.MultivariateNormal):
+        hint = (
+            "A MultivariateNormal over time has the (time,) event and no observation axis: "
+            "pass MultivariateNormal noise with a (duration, 1) predictor (for example "
+            "jnp.full((h.duration, 1), value) for a constant mean), or return "
+            "numpyro_forecast.surgery.shift_loc(noise, mu) from a link, which gives it the "
+            "(time, 1) event."
+        )
+    elif shape and shape[-1] == h.duration and shape[-1] not in (1, width):
+        hint = (
+            f"Its last axis has the h.duration = {h.duration} time steps: give a (duration,) "
+            "term (for example covariates @ beta in level + covariates @ beta, or a "
+            "time-varying scale) the observation axis with [..., None], and transpose a "
+            "(series, time) predictor to (time, series)."
+        )
+    elif wrong_rows:
+        hint = (
+            f"Its time axis has {shape[-2]} rows for h.duration = {h.duration}: build the "
+            "predictor over the full-horizon covariates. A posterior drawn for a different "
+            "training length also causes this when its time latents are not innovations() "
+            f"sites: they must have {h.t_obs} rows."
+        )
+    elif len(shape) < 2:
+        hint = (
+            "Give the predictor or a parameter of obs_dist the time axis at -2 over the full "
+            f"horizon (h.duration = {h.duration}), for example "
+            f"jnp.broadcast_to(prediction, ({h.duration}, {'obs' if width is None else width})) "
+            "for a constant or per-series predictor."
+        )
+    else:
+        allowed = "1" if width == 1 else f"1 or {width}"
+        hint = (
+            "The predictor and every parameter of obs_dist need the time axis at -2 over the "
+            f"full horizon (h.duration = {h.duration}), an observation axis of size {allowed} "
+            "at -1, and no axis above size 1 that the data does not have (such as a second "
+            "[..., None])."
+        )
+    msg = (
+        "predict expects the observation distribution to have shape (*batch, duration, obs), "
+        f"but its batch_shape + event_shape {shape} {problem}. {hint}"
+    )
+    raise ValueError(msg)
+
+
 def predict(
     h: Horizon,
     obs_dist: dist.Distribution | Callable[[Array], dist.Distribution],
@@ -935,7 +1061,15 @@ def predict(
         ``prediction``) or a link callable from the full-horizon predictor to
         the observation distribution.
     prediction
-        The deterministic predictor over the full horizon, time at axis ``-2``.
+        The deterministic predictor over the full horizon, shape
+        ``(*batch, duration, obs)``: ``h.duration`` steps at axis ``-2`` and the
+        observation axis at ``-1``, so ``(duration, 1)`` for a univariate series
+        and ``(duration, n)`` for a panel of ``n`` series (or ``(duration, 1)``
+        inside a size-``n`` plate at ``dim=-1``). A 0-d or per-series
+        predictor also works when a parameter of an elementwise ``obs_dist``
+        carries the time axis, for example a constant mean with a
+        ``(duration, 1)`` noise scale; ``MultivariateNormal`` noise over time
+        needs the ``(duration, 1)`` predictor.
 
     Raises
     ------
@@ -945,9 +1079,24 @@ def predict(
     RuntimeError
         If forecasting (``future > 0``) but no observed data is available.
     ValueError
-        If the observation distribution has discrete support but ``h.data`` is
-        not integer-dtyped (the usual mistake for count models).
+        If ``prediction`` has shape ``(duration,)`` (for example
+        ``covariates @ beta``, which needs ``[..., None]``); if the observation
+        distribution has fewer than two axes (as a bare ``MultivariateNormal``
+        over time does: its ``(time,)`` event has no observation axis); if
+        ``h.data`` is given and the observation distribution does not broadcast
+        against it or would score each observation more than once (for example
+        a ``(duration,)`` term added to a ``(duration, 1)`` predictor, a
+        ``(duration,)`` noise scale, a second ``[..., None]``, or a predictor
+        built from a posterior drawn for a shorter training window); or if the
+        observation distribution has discrete support but ``h.data`` is not
+        integer-dtyped (the usual mistake for count models). The shape checks
+        cannot tell a ``(duration,)`` term from a per-series one when ``h.data``
+        has ``h.duration`` series (a square panel in training), and they reject
+        a model whose discrete latents are enumerated (for example ``NUTS`` with
+        funsor installed), because the enumeration axes look like repeated
+        observations.
     """
+    _require_predictor_axes(h, prediction)
     full_dist = (
         shift_loc(obs_dist, prediction)
         if isinstance(obs_dist, dist.Distribution)
@@ -961,6 +1110,7 @@ def predict(
             "predict(h, lambda mu: dist.Normal(mu, sigma), mu)."
         )
         raise TypeError(msg)
+    _require_obs_layout(h, full_dist)
     if h.data is not None and _has_discrete_support(full_dist):
         if not jnp.issubdtype(h.data.dtype, jnp.integer):
             msg = (
