@@ -1297,9 +1297,12 @@ ValueError
     (one that ends in ``"_future"`` or contains ``"_future_"``, or
     ``"forecast"``) has a non-empty leaf, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have ``t``
-    steps (a posterior drawn for a different training length), or if the
+    steps (a posterior drawn for a different training length), if the
     ``"forecast"`` draws do not have time at axis ``-2`` with
-    ``duration - t`` steps.
+    ``duration - t`` steps, or if they do not have the other axes of
+    ``data`` (a predictor shared by the ``n`` series of ``data`` needs a
+    size-``n`` plate at ``dim=-1`` or shape ``(duration, n)``; without
+    either, the model draws one forecast for all series).
 HostMemoryKindError
     If ``device="pinned_host"`` is requested on a device that exposes no
     host memory kind (see
@@ -1341,6 +1344,11 @@ latent draws. Unlike `forecast()` there is no forecast horizon: ``covariates``
 span only the observed window, so the model's ``obs`` site is sampled at every
 step. The number of predictive samples equals the leading (sample) axis of
 ``posterior`` (see `~~numpyro_forecast.predictive.draw_posterior()`).
+The model gets ``data=None``, so the draws have the axes that the model
+gives ``obs``, and the driver has no data to check them against: a
+predictor shared by ``n`` series without a size-``n`` plate at ``dim=-1``
+draws one column. `forecast()` and `~~numpyro_forecast.convert.to_datatree()`
+get ``data`` and raise ``ValueError`` in that case.
 
 Parameters
 ----------
@@ -1354,9 +1362,14 @@ posterior
     output of a ``device="host"`` stage (CPU-committed jax leaves or NumPy
     leaves) is accepted directly. Forecast-horizon keys follow the rule of
     `forecast()`: one with values raises ``ValueError``, because it marks
-    the output of a ``numpyro.infer.Predictive`` call over a horizon, whose
-    ``"obs"`` key would pin every draw to the observed data, and one with
-    an empty leaf is dropped.
+    the output of a ``numpyro.infer.Predictive`` call over a horizon, and
+    one with an empty leaf is dropped. An ``"obs"`` key is dropped too, so
+    the draws come from the latent sites: ``Predictive`` substitutes every
+    posterior sample site by name, and an ``"obs"`` key (the output of a
+    ``Predictive`` call with ``data``, or of a prior predictive call) would
+    make every draw equal to it. Only ``"obs"`` is dropped: keep the other
+    sites that the model observes when it gets ``data`` (a second
+    likelihood) out of ``posterior``, or they are substituted.
 covariates
     Covariates with time at axis ``-2`` spanning the observed window. Its time
     length must match the data the ``posterior`` was fit on, since the in-sample
@@ -1405,7 +1418,8 @@ ValueError
     If ``posterior`` is empty, a ``posterior`` leaf has no sample axis, or
     the leaves disagree on the sample-axis length, if a forecast-horizon
     key of ``posterior`` (one that ends in ``"_future"`` or contains
-    ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if
+    ``"_future_"``, or ``"forecast"``) has a non-empty leaf, if ``"obs"``
+    is the only key of ``posterior``, if
     ``covariates`` has fewer than two axes (time must be at axis ``-2``)
     or no time steps, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have one step
@@ -2187,7 +2201,11 @@ posterior
     ``"forecast"``) raises ``ValueError``. One with an empty leaf (a site
     that the model registers on every call, recorded by the training run
     with a size-0 time axis) is kept in the ``posterior`` group as a
-    size-0 variable, and the predictive drivers drop it.
+    size-0 variable, and the predictive drivers drop it. An ``"obs"``
+    key is dropped, as in
+    `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
+    ``posterior`` group, and the in-sample draws come from the latent
+    sites.
 data
     In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
     the observation dim at axis ``-1`` and any batch axes to the left
@@ -2299,7 +2317,7 @@ ValueError
     shorter than ``data`` along the time axis, if a ``posterior`` leaf has
     no sample axis, if a forecast-horizon key of ``posterior`` (one that
     ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
-    has a non-empty leaf, if
+    has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
     ``time_coord`` is given but its length does not match the in-sample
     window plus the forecast horizon, if ``num_chains`` is not a positive
     integer (``bool`` included), if ``posterior``'s sample count is not
@@ -2311,9 +2329,11 @@ ValueError
     `~~numpyro_forecast.predictive.predict_in_sample()` and
     `~~numpyro_forecast.predictive.forecast()`). Also if ``obs_dims`` does
     not name every ``data`` axis, does not name axis ``-2`` ``"time"``,
-    repeats a name or uses ``"chain"`` or ``"draw"``, or if the in-sample
+    repeats a name or uses ``"chain"`` or ``"draw"``, if the in-sample
     or forecast draws do not have one axis per ``obs_dims`` name (the
-    model's ``obs`` site must have the layout of ``data``).
+    model's ``obs`` site must have the layout of ``data``), or if an
+    in-sample draw does not have the shape of ``data`` (a predictor shared
+    by the series of ``data`` without a series plate draws one column).
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError

@@ -912,7 +912,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/predictive.py#L454-L598" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/predictive.py#L500-L649" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">predictive</span><span class="op">.</span><span class="sig-name">forecast</span>(</span>
@@ -986,7 +986,7 @@ Forecast samples over the <code>future = duration - t</code> horizon (floating p
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> does not extend beyond <code>data</code> along the time axis, if <code>posterior</code> is empty, a <code>posterior</code> leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of <code>posterior</code> (one that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) has a non-empty leaf, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have <code>t</code> steps (a posterior drawn for a different training length), or if the <code>"forecast"</code> draws do not have time at axis <code>-2</code> with <code>duration - t</code> steps.</p>
+<p>If <code>data</code> or <code>covariates</code> has fewer than two axes (time must be at axis <code>-2</code>), if <code>data</code> has no time steps, if <code>covariates</code> does not extend beyond <code>data</code> along the time axis, if <code>posterior</code> is empty, a <code>posterior</code> leaf has no sample axis, or the leaves disagree on the sample-axis length, if a forecast-horizon key of <code>posterior</code> (one that ends in <code>"_future"</code> or contains <code>"_future_"</code>, or <code>"forecast"</code>) has a non-empty leaf, if a <code>posterior</code> value of an <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations()</a> site does not have <code>t</code> steps (a posterior drawn for a different training length), if the <code>"forecast"</code> draws do not have time at axis <code>-2</code> with <code>duration - t</code> steps, or if they do not have the other axes of <code>data</code> (a predictor shared by the <code>n</code> series of <code>data</code> needs a size-<code>n</code> plate at <code>dim=-1</code> or shape <code>(duration, n)</code>; without either, the model draws one forecast for all series).</p>
 </dd>
 <dt><code> <span class="doc-parameter-annotation">HostMemoryKindError</span></code></dt>
 <dd>
