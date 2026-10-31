@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.10.20">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-17888a1159294d3eb470f19f6f52f5a5.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../../site_libs/bootstrap/bootstrap-7e9b4f36233c51a331fcd27f7c4ba3a1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -346,9 +346,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/forecasting_univariate-preview.html"><i class="bi bi-journal-code"></i>Univariate forecasting with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -376,7 +376,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/forecasting_univariate.ipynb" data-notebook-title="Univariate forecasting with `numpyro_forecast`" data-notebook-cellid="344608d4">
 <p>Univariate forecasting with <code>numpyro_forecast</code></p>
 <p>Here we present an introduction to the <code>numpyro_forecast</code> package. This notebook ports the blog post <a href="https://juanitorduz.github.io/numpyro_forecasting-univariate/"><strong>Univariate time series forecasting with NumPyro</strong></a> (itself a port of Pyro’s <a href="https://pyro.ai/examples/forecasting_i.html">forecasting tutorial</a>) to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. We forecast <strong>weekly BART ridership</strong> with a random-walk local level, Fourier seasonality and a Student-T likelihood, fit with stochastic variational inference (SVI), and evaluate with the continuous ranked probability score (CRPS).</p>
 <p>Instead of hand-writing a bespoke prediction loop, we write a single plain model function and let <a href="../../reference/predictive.draw_posterior.html#numpyro_forecast.predictive.draw_posterior" class="gdls-link gdls-code">draw_posterior</a> and <a href="../../reference/predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast</a> handle the <em>fit-once / forecast-any-horizon</em> mechanics (the forecast horizon is drawn from separate <code>_future</code> latent sites, so the variational guide is never resized).</p>
@@ -1144,7 +1144,7 @@ vectorized mean 94% coverage: 0.94  (nominal 0.94)</code></pre>
 <li>Pyro. <a href="https://pyro.ai/examples/forecasting_i.html"><em>Forecasting I: Univariate, Heavy Tailed</em></a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/forecasting_univariate-preview.html#344608d4">Source: Univariate forecasting with `numpyro_forecast`</a></div>
+</div>
 
 
 

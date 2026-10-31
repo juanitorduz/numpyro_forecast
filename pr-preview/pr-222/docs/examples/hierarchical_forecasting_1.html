@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.10.20">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-17888a1159294d3eb470f19f6f52f5a5.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../../site_libs/bootstrap/bootstrap-7e9b4f36233c51a331fcd27f7c4ba3a1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -346,9 +346,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/hierarchical_forecasting_1-preview.html"><i class="bi bi-journal-code"></i>Hierarchical forecasting I with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -376,7 +376,7 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/hierarchical_forecasting_1.ipynb" data-notebook-title="Hierarchical forecasting I with `numpyro_forecast`" data-notebook-cellid="ab3ec806">
 <p>Hierarchical forecasting I with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/numpyro_hierarchical_forecasting_1/"><strong>Hierarchical forecasting with NumPyro (part I)</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. This example is by itself a port of the first part of the original Pyro example: <a href="https://pyro.ai/examples/forecasting_iii.html"><strong>Forecasting III: hierarchical models</strong></a>. It generalizes the <a href="forecasting_univariate.html">univariate notebook</a> from a single series to many: we forecast hourly <strong>BART arrivals to one destination</strong> (<code>EMBR</code>, Embarcadero) from all <code>50</code> origin stations at once. Each origin keeps its own random-walk level and weekly seasonality, but they share global hyperparameters and a single observation scale, which lets information pool across the series.</p>
 <blockquote class="blockquote">
@@ -806,7 +806,7 @@ Test CRPS:  0.3675</code></pre>
 <li>Pyro. <a href="https://pyro.ai/examples/forecasting_iii.html"><em>Forecasting III: Hierarchical Models</em></a>.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/hierarchical_forecasting_1-preview.html#ab3ec806">Source: Hierarchical forecasting I with `numpyro_forecast`</a></div>
+</div>
 
 
 

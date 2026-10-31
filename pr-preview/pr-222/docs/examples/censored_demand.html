@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.10.20">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -80,7 +80,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../../site_libs/quarto-html/quarto-syntax-highlighting-17888a1159294d3eb470f19f6f52f5a5.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../../site_libs/bootstrap/bootstrap-7e9b4f36233c51a331fcd27f7c4ba3a1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -349,9 +349,9 @@ window.Quarto = {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
         
-    <div class="quarto-alternate-notebooks"><h2>Notebooks</h2><ul><li><a href="_src/censored_demand-preview.html"><i class="bi bi-journal-code"></i>Demand Forecasting with Censored Likelihood with `numpyro_forecast`</a></li></ul></div></div>
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -379,63 +379,70 @@ window.Quarto = {
 </header>
 
 
-<div class="quarto-embed-nb-cell">
+<div class="quarto-embed-nb-cell" data-notebook="/home/runner/work/numpyro_forecast/numpyro_forecast/great-docs/docs/examples/_src/censored_demand.ipynb" data-notebook-title="Demand Forecasting with Censored Likelihood with `numpyro_forecast`" data-notebook-cellid="679c0a19">
 <p>Demand Forecasting with Censored Likelihood with <code>numpyro_forecast</code></p>
 <p>This notebook ports the blog post <a href="https://juanitorduz.github.io/demand/"><strong>Demand Forecasting with Censored Likelihood</strong></a> to the <a href="https://github.com/juanitorduz/numpyro_forecast"><code>numpyro_forecast</code></a> package. The subject is a fact of retail life: recorded sales understate demand in two distinct ways. When the product is out of stock, a day of genuine demand is recorded as zero sales. And when demand exceeds what the shelf (or the supply) can carry, the register stops counting at the capacity cap, so the recorded number is a <em>lower bound</em> on what customers actually wanted. A model trained naively on such a series learns to forecast <em>sales</em>, but replenishment and capacity planning need a forecast of <em>demand</em>: order against sales and you bake yesterday’s stockouts into tomorrow’s assortment, systematically under-serving your best days.</p>
 <p>We simulate a demand series from an AR(2) process with weekly seasonality, corrupt it into observed sales through random stockouts and a hard capacity cap, and then fit an AR(2) model with Fourier seasonality <strong>whose likelihood knows about the censoring</strong>: below the cap an observation contributes the usual <span class="math inline">\text{Normal}</span> density, and at the cap it contributes the <em>survival mass</em> <span class="math inline">P(\text{demand} \geq \text{cap})</span>, the probability that latent demand was at least as large as the recorded bound. Days with the product off the shelf are masked out of the likelihood entirely. Because the data are simulated, the true demand is known and the claim “the censored likelihood recovers demand” can be checked against ground truth rather than asserted.</p>
-<p>This example completes a trio of availability mechanisms in this documentation. The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html">availability TSB example</a> freezes its recursion updates when the product is off the shelf, and the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html">fresh retail stockout example</a> scales the mean by a saturating availability factor; its next-steps list asks for precisely the model built here. The closing section compares the three mechanisms side by side.</p>
+<p>This example completes a trio of availability mechanisms in this documentation. The <a href="availability_tsb.html">availability TSB example</a> freezes its recursion updates when the product is off the shelf, and the <a href="fresh_retail_stockout.html">fresh retail stockout example</a> scales the mean by a saturating availability factor; its next-steps list asks for precisely the model built here. The closing section compares the three mechanisms side by side.</p>
 <section id="prepare-notebook" class="level1">
 <h1>Prepare notebook</h1>
 <div id="58a455b0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:12.230146Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:12.229945Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:13.764459Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:13.763988Z&quot;}}" data-execution_count="1">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> NamedTuple</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.artist <span class="im">import</span> Artist</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.axes <span class="im">import</span> Axes</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    eval_rmse,</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    evaluate_forecast,</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    ssoe,</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.arrays <span class="im">import</span> pad_future</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> fourier_features</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> warnings</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the plots below do.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>warnings.filterwarnings(</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ignore"</span>, message<span class="op">=</span><span class="st">"When multiple credible intervals are plotted"</span>, category<span class="op">=</span><span class="pp">UserWarning</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> functools <span class="im">import</span> partial</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> NamedTuple</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> arviz <span class="im">as</span> az</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> jax.numpy <span class="im">as</span> jnp</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpyro.distributions <span class="im">as</span> dist</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jax <span class="im">import</span> random</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> jaxtyping <span class="im">import</span> Float</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.artist <span class="im">import</span> Artist</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> matplotlib.axes <span class="im">import</span> Axes</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro.infer <span class="im">import</span> MCMC, NUTS</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast <span class="im">import</span> (</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    Horizon,</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    eval_coverage,</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    eval_crps,</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    eval_mae,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    eval_rmse,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    evaluate_forecast,</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    predictions_to_datatree,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    ssoe,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    to_datatree,</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.arrays <span class="im">import</span> pad_future</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.features <span class="im">import</span> fourier_features</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> numpyro_forecast.typing <span class="im">import</span> Array, ForecastModel</span>
 <span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
-<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
-<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>az.style.use(<span class="st">"arviz-darkgrid"</span>)</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.figsize"</span>] <span class="op">=</span> [<span class="dv">10</span>, <span class="dv">6</span>]</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.dpi"</span>] <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>plt.rcParams[<span class="st">"figure.facecolor"</span>] <span class="op">=</span> <span class="st">"white"</span></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>numpyro.set_host_device_count(n<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>rng_key <span class="op">=</span> random.PRNGKey(seed<span class="op">=</span><span class="dv">42</span>)</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext autoreload</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>autoreload <span class="dv">2</span></span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>load_ext jaxtyping</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>jaxtyping.typechecker beartype.beartype</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a><span class="op">%</span>config InlineBackend.figure_format <span class="op">=</span> <span class="st">"retina"</span></span></code></pre></div>
 </div>
 </section>
 <section id="generate-data" class="level1">
@@ -641,7 +648,7 @@ capacity-censored days: 36 (20%)</code></pre>
 <ul>
 <li>Column <code>0</code> is the observed sales history the AR recursion filters. The history has to travel through the covariates rather than the data argument: the package’s <a href="../../reference/predictive.predict_in_sample.html#numpyro_forecast.predictive.predict_in_sample" class="gdls-link gdls-code">predict_in_sample</a> and <a href="../../reference/convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree</a> call the model with <code>data=None</code> (they sample the observation site), while the recursion always needs the observed series. Only the first <code>t_obs</code> rows are ever read (the <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> building block below checks this), so the future rows are zeroed out and no information leaks.</li>
 <li>Column <code>1</code> is the availability mask and column <code>2</code> the censoring indicator, read only over the training rows. One honest caveat versus the availability TSB and fresh retail examples, whose recursions consume these inputs over the horizon too: here the model pads its own horizon inputs (availability one, censoring zero), so the forecast is <em>structurally</em> uncensored demand-scale sales, the number a planner should order against, regardless of what the trailing rows contain. We still pin the trailing <span class="math inline">30</span> rows to the same values so the scenario travels with the forecast into the tree’s <code>predictions_constant_data</code>, as documentation rather than as a model input.</li>
-<li>Columns <code>3:7</code> are weekly Fourier features (two harmonics, sines then cosines) from the package’s <a href="https://juanitorduz.github.io/numpyro_forecast/reference/features.fourier_features.html"><code>fourier_features</code></a> helper, the only columns the model reads over the horizon.</li>
+<li>Columns <code>3:7</code> are weekly Fourier features (two harmonics, sines then cosines) from the package’s <a href="../../reference/features.fourier_features.html"><code>fourier_features</code></a> helper, the only columns the model reads over the horizon.</li>
 </ul>
 <div id="ff794f8e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.565921Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.565781Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.855247Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.854535Z&quot;}}" data-execution_count="4">
 <div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>forecast_horizon <span class="op">=</span> <span class="dv">30</span></span>
@@ -689,10 +696,10 @@ capacity-censored days: 36 (20%)</code></pre>
 <p><strong>Filtering through the gaps.</strong> Masking the likelihood is only half the treatment of a corrupted day, because an autoregression also consumes every day as a <em>lagged value</em>. A recorded stockout zero fed into the carry masquerades as a demand crash: it drags the next day’s prediction down, attenuates the AR coefficients (post-gap days look like violent rebounds no moderate <span class="math inline">\phi</span> can explain), and inflates <span class="math inline">\sigma</span> to absorb the damage. The recursion therefore carries a filtered series instead of the raw observations:</p>
 <p><span class="math display">\tilde{y}_t = a_t \left[(1 - c_t) \, y_t + c_t \max\left(y_t, \hat{y}_t\right)\right] + (1 - a_t) \, \hat{y}_t.</span></p>
 <p>Clean on-shelf days pass the observation through; capped days floor the lag at the model’s own prediction, since the truth is at least the cap; off-shelf days carry the prediction itself, the model’s best estimate of the demand nobody could express. This is the same one-step-ahead logic a state space filter applies to missing observations, done with a plug-in mean instead of a full state distribution.</p>
-<p>The model is a plain NumPyro function <code>(covariates, data=None)</code> that derives its train/forecast split from the shapes with <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.Horizon.html"><code>Horizon.from_data</code></a> and hands the recursion to the <a href="https://juanitorduz.github.io/numpyro_forecast/reference/models.ssoe.html"><code>ssoe</code></a> building block, the single-source-of-error recursion shared with the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html">ARMA</a> and <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/exponential_smoothing_state_space.html">exponential smoothing</a> examples. <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> takes the driving series, an initial carry, a <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> function, an <code>update</code> function, and the innovation distribution. <code>mean(carry, x_t)</code> returns the one-step-ahead mean <span class="math inline">\hat{y}_t</span> and <code>update(carry, y_t, eps_t, x_t)</code> builds the next carry from the day’s value and its error; calling <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> again inside <code>update</code> (the same expression on the same inputs, so exactly the filter’s prediction) is what lets the lag filter above floor capped days at <span class="math inline">\hat{y}_t</span>. Rows carry the observation axis, so the two placeholder lags are <code>y[0]</code> with shape <code>(1,)</code>, the mean has shape <code>(1,)</code>, and a scalar state would emit <code>mu[None]</code>; the block checks these shapes. The block owns two scans, neither containing a sample site:</p>
+<p>The model is a plain NumPyro function <code>(covariates, data=None)</code> that derives its train/forecast split from the shapes with <a href="../../reference/models.Horizon.html"><code>Horizon.from_data</code></a> and hands the recursion to the <a href="../../reference/models.ssoe.html"><code>ssoe</code></a> building block, the single-source-of-error recursion shared with the <a href="arma.html">ARMA</a> and <a href="exponential_smoothing_state_space.html">exponential smoothing</a> examples. <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> takes the driving series, an initial carry, a <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> function, an <code>update</code> function, and the innovation distribution. <code>mean(carry, x_t)</code> returns the one-step-ahead mean <span class="math inline">\hat{y}_t</span> and <code>update(carry, y_t, eps_t, x_t)</code> builds the next carry from the day’s value and its error; calling <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> again inside <code>update</code> (the same expression on the same inputs, so exactly the filter’s prediction) is what lets the lag filter above floor capped days at <span class="math inline">\hat{y}_t</span>. Rows carry the observation axis, so the two placeholder lags are <code>y[0]</code> with shape <code>(1,)</code>, the mean has shape <code>(1,)</code>, and a scalar state would emit <code>mu[None]</code>; the block checks these shapes. The block owns two scans, neither containing a sample site:</p>
 <ol type="1">
 <li><strong>In sample.</strong> A deterministic <code>jax.lax.scan</code> runs <a href="../../reference/typing.Array.html#numpyro_forecast.typing.Array.mean" class="gdls-link gdls-code">mean</a> over the observed history, feeding each observation and its error <span class="math inline">\varepsilon_t = y_t - \hat{y}_t</span> through <code>update</code>, and returns the one-step-ahead means as <code>r.mu</code> (exposed as the deterministic site <code>"pred_mean"</code>); the <code>"obs"</code> site conditions the data on them through the censored likelihood. The AR(2) needs two lags, so the first two steps run on placeholder lags and are masked out of the likelihood.</li>
-<li><strong>Out of sample.</strong> When <code>h.future &gt; 0</code> the block draws the horizon innovations at the <code>"eps_future"</code> site (under its own <code>time_future</code> plate), rolls the recursion forward from the final filtered lags with each <em>sampled</em> value <span class="math inline">\hat{y}_t + \varepsilon_t</span> fed back through <code>update</code>, and returns the trajectory as <code>r.y_future</code>, which we register (clipped at zero, since demand is nonnegative) as the deterministic <code>"forecast"</code> site the package reads. Since <code>"eps_future"</code> does not exist during training, <code>Predictive</code> draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with <a href="https://juanitorduz.github.io/numpyro_forecast/reference/arrays.pad_future.html"><code>pad_future</code></a> (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.</li>
+<li><strong>Out of sample.</strong> When <code>h.future &gt; 0</code> the block draws the horizon innovations at the <code>"eps_future"</code> site (under its own <code>time_future</code> plate), rolls the recursion forward from the final filtered lags with each <em>sampled</em> value <span class="math inline">\hat{y}_t + \varepsilon_t</span> fed back through <code>update</code>, and returns the trajectory as <code>r.y_future</code>, which we register (clipped at zero, since demand is nonnegative) as the deterministic <code>"forecast"</code> site the package reads. Since <code>"eps_future"</code> does not exist during training, <code>Predictive</code> draws it from the prior at forecast time and the uncertainty compounds over the horizon exactly as the generative process says it should. The availability and censoring inputs are padded over the horizon with <a href="../../reference/arrays.pad_future.html"><code>pad_future</code></a> (available, uncensored), so no gate or cap applies there: the forecast is of latent demand-scale sales, unconstrained by the cap.</li>
 </ol>
 <p>One small difference from the blog post’s hand-rolled scans: the same <code>update</code> serves both scans, so the clip at zero now applies to the filtered lag in sample as well, which only matters on stockout days whose prediction is negative.</p>
 <div id="a1b0974e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.857290Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.857153Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:14.879423Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:14.878787Z&quot;}}" data-execution_count="5">
@@ -762,7 +769,7 @@ capacity-censored days: 36 (20%)</code></pre>
 <section id="inference-with-nuts" class="level1">
 <h1>Inference with NUTS</h1>
 <p>We fit the model on the training window with plain NumPyro: the No-U-Turn Sampler through <code>MCMC</code>, running <span class="math inline">4</span> chains of <span class="math inline">1{,}000</span> warmup and <span class="math inline">1{,}000</span> sampling steps each with <code>target_accept_prob=0.9</code> (the survival term gives the likelihood a slightly harder geometry near the cap). A modest budget is plenty because the posterior is tiny: the in-sample filter is deterministic, so the only latents are the eight parameters (<span class="math inline">\mu</span>, <span class="math inline">\phi_1</span>, <span class="math inline">\phi_2</span>, <span class="math inline">\sigma</span>, and four Fourier coefficients). The small <code>fit_nuts</code> helper wraps the call so the naive baseline below fits with exactly the same settings.</p>
-<p>We then export the posterior draws into an ArviZ-schema <code>xarray.DataTree</code> with <a href="https://juanitorduz.github.io/numpyro_forecast/reference/convert.to_datatree.html"><code>to_datatree</code></a>, which restores the <code>(chain, draw)</code> structure (we pass <code>num_chains=4</code>) and samples the in-sample posterior predictive from the same draws. Because we pass the <em>extended</em> covariates, the tree automatically carries <code>predictions</code> groups with the out-of-sample draws of the <code>"forecast"</code> site, and the trailing scenario rows of the covariates land verbatim in <code>predictions_constant_data</code>, so the tree documents that this forecast describes a full-availability, uncensored scenario.</p>
+<p>We then export the posterior draws into an ArviZ-schema <code>xarray.DataTree</code> with <a href="../../reference/convert.to_datatree.html"><code>to_datatree</code></a>, which restores the <code>(chain, draw)</code> structure (we pass <code>num_chains=4</code>) and samples the in-sample posterior predictive from the same draws. Because we pass the <em>extended</em> covariates, the tree automatically carries <code>predictions</code> groups with the out-of-sample draws of the <code>"forecast"</code> site, and the trailing scenario rows of the covariates land verbatim in <code>predictions_constant_data</code>, so the tree documents that this forecast describes a full-availability, uncensored scenario.</p>
 <div id="9b9d69bd" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:14.881080Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:14.880963Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:25.094917Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:25.094389Z&quot;}}" data-execution_count="6">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fit_nuts(</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    rng_key: Array, model: ForecastModel, data: Array, covariates: Array</span>
@@ -1958,7 +1965,7 @@ Group: /
 </section>
 <section id="evaluation" class="level1">
 <h1>Evaluation</h1>
-<p>We score both models on the held-out <span class="math inline">30</span> days with <a href="https://juanitorduz.github.io/numpyro_forecast/reference/evaluate.evaluate_forecast.html"><code>evaluate_forecast</code></a>, against two different notions of truth: the <strong>latent demand</strong> (the business quantity, known here because we simulated it) and the <strong>observed sales</strong> (the only truth available in production data, itself gated and capped over the test window). Alongside the point metrics and the CRPS we track the empirical coverage of the central <span class="math inline">50\%</span> and <span class="math inline">94\%</span> intervals.</p>
+<p>We score both models on the held-out <span class="math inline">30</span> days with <a href="../../reference/evaluate.evaluate_forecast.html"><code>evaluate_forecast</code></a>, against two different notions of truth: the <strong>latent demand</strong> (the business quantity, known here because we simulated it) and the <strong>observed sales</strong> (the only truth available in production data, itself gated and capped over the test window). Alongside the point metrics and the CRPS we track the empirical coverage of the central <span class="math inline">50\%</span> and <span class="math inline">94\%</span> intervals.</p>
 <div id="14992c19" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-29T18:38:32.848266Z&quot;,&quot;iopub.status.busy&quot;:&quot;2026-09-29T18:38:32.848186Z&quot;,&quot;iopub.status.idle&quot;:&quot;2026-09-29T18:38:33.288671Z&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-29T18:38:33.288126Z&quot;}}" data-execution_count="13">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>metrics <span class="op">=</span> {</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"mae"</span>: eval_mae,</span>
@@ -2139,13 +2146,13 @@ Group: /
 </thead>
 <tbody>
 <tr class="odd">
-<td><a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html">Availability TSB</a></td>
+<td><a href="availability_tsb.html">Availability TSB</a></td>
 <td>Binary: off-shelf days record zero</td>
 <td>Freeze the probability-recursion updates where the product is off the shelf</td>
 <td>Feed a full-availability scenario input</td>
 </tr>
 <tr class="even">
-<td><a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html">Fresh retail stockouts</a></td>
+<td><a href="fresh_retail_stockout.html">Fresh retail stockouts</a></td>
 <td>Fractional: noisy within-day availability</td>
 <td>Multiplicative availability factor on the mean, with a learned floor</td>
 <td>Pin availability to one over the horizon</td>
@@ -2172,7 +2179,7 @@ Group: /
 <li>Replace the capped-day plug-in <span class="math inline">\max(y_t, \hat{y}_t)</span> in the lag filter with the censored conditional mean <span class="math inline">\hat{y}_t + \sigma \, \varphi(z_t) / \left(1 - \Phi(z_t)\right)</span> with <span class="math inline">z_t = (y_t - \hat{y}_t) / \sigma</span>, the exact expectation of the latent value given that it exceeds the cap.</li>
 <li>Let the capacity cap vary by day, read from inventory snapshots, instead of a single constant. <code>RightCensoredDistribution</code> censors at each <em>recorded</em> value, so only the data preparation changes, not the model.</li>
 <li>Swap the <span class="math inline">\text{Normal}</span> base for a strictly nonnegative observation model (for example a truncated <span class="math inline">\text{Normal}</span>), removing the predictive mass on negative sales visible in the in-sample bands.</li>
-<li>Replace the fixed train-test split with rolling-origin evaluation via the package’s <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> helper, as in the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/croston.html">Croston example</a>.</li>
+<li>Replace the fixed train-test split with rolling-origin evaluation via the package’s <a href="../../reference/evaluate.backtest.html#numpyro_forecast.evaluate.backtest" class="gdls-link gdls-code">backtest</a> helper, as in the <a href="croston.html">Croston example</a>.</li>
 </ul>
 </section>
 <section id="references" class="level1">
@@ -2181,11 +2188,11 @@ Group: /
 <li>Orduz, J. <a href="https://juanitorduz.github.io/demand/"><em>Demand Forecasting with Censored Likelihood</em></a>. The blog post this notebook ports.</li>
 <li>NumPyro documentation: <a href="https://num.pyro.ai/en/stable/distributions.html#censored-distributions">Censored distributions</a> (<code>RightCensoredDistribution</code> and friends, available from NumPyro <code>0.20.0</code>).</li>
 <li>Tobin, J. (1958). <a href="https://doi.org/10.2307/1907382"><em>Estimation of Relationships for Limited Dependent Variables</em></a>. Econometrica, 26(1), 24-36. The classic censored-regression (Tobit) model.</li>
-<li>The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/arma.html">ARMA example</a> in this documentation, which introduces the <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> building block for AR-on-observations models.</li>
-<li>The <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/availability_tsb.html">availability TSB example</a> and the <a href="https://juanitorduz.github.io/numpyro_forecast/docs/examples/fresh_retail_stockout.html">fresh retail stockout example</a> in this documentation: the sibling availability mechanisms compared above.</li>
+<li>The <a href="arma.html">ARMA example</a> in this documentation, which introduces the <a href="../../reference/models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> building block for AR-on-observations models.</li>
+<li>The <a href="availability_tsb.html">availability TSB example</a> and the <a href="fresh_retail_stockout.html">fresh retail stockout example</a> in this documentation: the sibling availability mechanisms compared above.</li>
 </ul>
 </section>
-<a class="quarto-notebook-link" id="nblink-1" href="_src/censored_demand-preview.html#679c0a19">Source: Demand Forecasting with Censored Likelihood with `numpyro_forecast`</a></div>
+</div>
 
 
 

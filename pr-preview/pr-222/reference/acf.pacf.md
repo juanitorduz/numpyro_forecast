@@ -35,7 +35,7 @@ Largest lag to evaluate; must satisfy `1 <= max_lag < time`.
 
 
 `Float[Array, ``"*batch lags"]`  
-Partial autocorrelations for lags `0, 1, ..., max_lag` (`max_lag + 1` values; lag `0` is identically `1.0`).
+Partial autocorrelations for lags `0, 1, ..., max_lag` (`max_lag + 1` values; lag `0` is identically `1.0`; all NaN for a constant series).
 
 
 ## Raises
@@ -47,7 +47,7 @@ If `max_lag` is not in `[1, time)`.
 
 ## Notes
 
-A constant series has zero variance, so the result is meaningless (see [acf()](acf.acf.md#numpyro_forecast.acf.acf)); a near-deterministic series can likewise overflow the recursion (the denominator above approaches zero) and produce infinities or NaNs.
+A constant series gives NaN at every lag, as in [acf()](acf.acf.md#numpyro_forecast.acf.acf); a near-deterministic series can overflow the recursion (the denominator above approaches zero) and produce infinities or NaNs.
 
 
 ## References

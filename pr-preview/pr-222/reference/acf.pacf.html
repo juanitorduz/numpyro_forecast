@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.10.19">
+<meta name="generator" content="quarto-1.10.20">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -77,7 +77,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-17888a1159294d3eb470f19f6f52f5a5.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../site_libs/bootstrap/bootstrap-7e9b4f36233c51a331fcd27f7c4ba3a1.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -948,7 +948,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L134-L189" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/acf.py#L149-L204" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">acf</span><span class="op">.</span><span class="sig-name">pacf</span>(
@@ -986,7 +986,7 @@ Largest lag to evaluate; must satisfy <code>1 &lt;= max_lag &lt; time</code>.
 <dl>
 <dt><code> <span class="doc-parameter-annotation">Float[Array, <span class="st">"*batch lags"</span>]</span></code></dt>
 <dd>
-Partial autocorrelations for lags <code>0, 1, ..., max_lag</code> (<code>max_lag + 1</code> values; lag <code>0</code> is identically <code>1.0</code>).
+Partial autocorrelations for lags <code>0, 1, ..., max_lag</code> (<code>max_lag + 1</code> values; lag <code>0</code> is identically <code>1.0</code>; all NaN for a constant series).
 </dd>
 </dl>
 </div>
@@ -1004,7 +1004,7 @@ If <code>max_lag</code> is not in <code>[1, time)</code>.
 </section>
 <section id="notes" class="level2 doc-notes">
 <h2 class="doc-notes">Notes</h2>
-<p>A constant series has zero variance, so the result is meaningless (see <a href="acf.acf.html#numpyro_forecast.acf.acf" class="gdls-link gdls-code">acf()</a>); a near-deterministic series can likewise overflow the recursion (the denominator above approaches zero) and produce infinities or NaNs.</p>
+<p>A constant series gives NaN at every lag, as in <a href="acf.acf.html#numpyro_forecast.acf.acf" class="gdls-link gdls-code">acf()</a>; a near-deterministic series can overflow the recursion (the denominator above approaches zero) and produce infinities or NaNs.</p>
 </section>
 <section id="references" class="level2 doc-references">
 <h2 class="doc-references">References</h2>

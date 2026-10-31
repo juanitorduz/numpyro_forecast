@@ -965,10 +965,19 @@ ForecastModel
 Raises
 ------
 ValueError
-    If ``model`` is already the result of `time_reparam()`. Nesting is not
-    supported: the inner handler would turn the site into a deterministic
+    If ``model`` already contains the result of `time_reparam()`. Nesting is
+    not supported: the inner handler would turn the site into a deterministic
     before the outer one sees it, so the outer transform would silently be
-    a no-op.
+    a no-op. The check runs when wrapping and looks through any NumPyro
+    handlers around ``model`` (``scope``, ``seed``, ...). A nesting behind a
+    plain function or a `functools.partial()` raises when the model is first
+    traced (inside ``SVI``, ``MCMC``, `~~numpyro_forecast.predictive.forecast()`,
+    ...), if the outer transform finds no in-sample time latent of its own. A
+    composite model whose body calls a `time_reparam()` component next to its
+    own ``innovations`` time latents is valid: the outer transform applies to
+    those latents. A composite whose own time latents are never targeted
+    (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
+    the outer transform does nothing there either.
 
 Notes
 -----
@@ -2841,7 +2850,8 @@ Returns
 -------
 Float[Array, "*batch lags"]
     Autocorrelations for lags ``0, 1, ..., max_lag`` (``max_lag + 1``
-    values; lag ``0`` is identically ``1.0``).
+    values; lag ``0`` is identically ``1.0``; all NaN for a constant
+    series).
 
 Raises
 ------
@@ -2850,9 +2860,13 @@ ValueError
 
 Notes
 -----
-A constant series has zero variance, so the result is meaningless: all NaN
-in eager execution (a ``0 / 0``), while under `jax.jit()` the rounding
-of the mean can instead yield arbitrary finite values.
+A constant series has zero variance and no autocorrelation, so every lag,
+lag ``0`` included, is NaN (a ``0 / 0``), with or without `jax.jit()`.
+The series is shifted by its first sample before centering, which makes a
+constant series exactly zero in floating point. NaN does not imply a
+constant series: a NaN or infinite sample also gives NaN at every lag,
+and in float32 a series whose deviations from the mean are near the
+underflow threshold (about ``1e-19``) can give NaN or inaccurate values.
 
 References
 ----------
@@ -2891,7 +2905,8 @@ Returns
 -------
 Float[Array, "*batch lags"]
     Partial autocorrelations for lags ``0, 1, ..., max_lag``
-    (``max_lag + 1`` values; lag ``0`` is identically ``1.0``).
+    (``max_lag + 1`` values; lag ``0`` is identically ``1.0``; all NaN
+    for a constant series).
 
 Raises
 ------
@@ -2900,10 +2915,9 @@ ValueError
 
 Notes
 -----
-A constant series has zero variance, so the result is meaningless (see
-`acf()`); a near-deterministic series can likewise overflow the
-recursion (the denominator above approaches zero) and produce infinities
-or NaNs.
+A constant series gives NaN at every lag, as in `acf()`; a
+near-deterministic series can overflow the recursion (the denominator
+above approaches zero) and produce infinities or NaNs.
 
 References
 ----------
