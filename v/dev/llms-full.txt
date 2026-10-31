@@ -965,10 +965,19 @@ ForecastModel
 Raises
 ------
 ValueError
-    If ``model`` is already the result of `time_reparam()`. Nesting is not
-    supported: the inner handler would turn the site into a deterministic
+    If ``model`` already contains the result of `time_reparam()`. Nesting is
+    not supported: the inner handler would turn the site into a deterministic
     before the outer one sees it, so the outer transform would silently be
-    a no-op.
+    a no-op. The check runs when wrapping and looks through any NumPyro
+    handlers around ``model`` (``scope``, ``seed``, ...). A nesting behind a
+    plain function or a `functools.partial()` raises when the model is first
+    traced (inside ``SVI``, ``MCMC``, `~~numpyro_forecast.predictive.forecast()`,
+    ...), if the outer transform finds no in-sample time latent of its own. A
+    composite model whose body calls a `time_reparam()` component next to its
+    own ``innovations`` time latents is valid: the outer transform applies to
+    those latents. A composite whose own time latents are never targeted
+    (``markov_series`` or ``ssoe`` sites, observed sites) also raises, because
+    the outer transform does nothing there either.
 
 Notes
 -----

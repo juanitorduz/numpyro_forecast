@@ -38,7 +38,7 @@ The wrapped model. It is a `numpyro.handlers.reparam` handler and is the single 
 
 
 `ValueError`  
-If `model` is already the result of [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam). Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op.
+If `model` already contains the result of [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam). Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op. The check runs when wrapping and looks through any NumPyro handlers around `model` (`scope`, `seed`, …). A nesting behind a plain function or a `functools.partial()` raises when the model is first traced (inside `SVI`, `MCMC`, [forecast()](predictive.forecast.md#numpyro_forecast.predictive.forecast), …), if the outer transform finds no in-sample time latent of its own. A composite model whose body calls a [time_reparam()](reparam.time_reparam.md#numpyro_forecast.reparam.time_reparam) component next to its own [innovations](models.innovations.md#numpyro_forecast.models.innovations) time latents is valid: the outer transform applies to those latents. A composite whose own time latents are never targeted ([markov_series](models.markov_series.md#numpyro_forecast.models.markov_series) or [ssoe](models.ssoe.md#numpyro_forecast.models.ssoe) sites, observed sites) also raises, because the outer transform does nothing there either.
 
 
 ## Notes

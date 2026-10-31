@@ -894,7 +894,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L131-L228" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/reparam.py#L194-L297" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="sig-class">reparam</span><span class="op">.</span><span class="sig-name">time_reparam</span>(
@@ -937,7 +937,7 @@ The wrapped model. It is a <code>numpyro.handlers.reparam</code> handler and is 
 <dl>
 <dt><code> <span class="doc-parameter-annotation">ValueError</span></code></dt>
 <dd>
-If <code>model</code> is already the result of <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a>. Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op.
+If <code>model</code> already contains the result of <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a>. Nesting is not supported: the inner handler would turn the site into a deterministic before the outer one sees it, so the outer transform would silently be a no-op. The check runs when wrapping and looks through any NumPyro handlers around <code>model</code> (<code>scope</code>, <code>seed</code>, …). A nesting behind a plain function or a <code>functools.partial()</code> raises when the model is first traced (inside <code>SVI</code>, <code>MCMC</code>, <a href="predictive.forecast.html#numpyro_forecast.predictive.forecast" class="gdls-link gdls-code">forecast()</a>, …), if the outer transform finds no in-sample time latent of its own. A composite model whose body calls a <a href="reparam.time_reparam.html#numpyro_forecast.reparam.time_reparam" class="gdls-link gdls-code">time_reparam()</a> component next to its own <a href="models.innovations.html#numpyro_forecast.models.innovations" class="gdls-link gdls-code">innovations</a> time latents is valid: the outer transform applies to those latents. A composite whose own time latents are never targeted (<a href="models.markov_series.html#numpyro_forecast.models.markov_series" class="gdls-link gdls-code">markov_series</a> or <a href="models.ssoe.html#numpyro_forecast.models.ssoe" class="gdls-link gdls-code">ssoe</a> sites, observed sites) also raises, because the outer transform does nothing there either.
 </dd>
 </dl>
 </div>
