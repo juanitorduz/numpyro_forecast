@@ -100,16 +100,17 @@ def test_mvn_near_singular_prefix_still_valid() -> None:
     assert jnp.all(jnp.linalg.eigvalsh(cond_cov) > 0)
 
 
-def test_mvn_prefix_condition_factors_a_kernel_singular_in_float32() -> None:
-    """A smooth kernel whose float32 Cholesky fails still gives a positive definite conditional.
+def test_mvn_prefix_condition_factors_a_singular_covariance() -> None:
+    """A covariance with a repeated time step still gives a positive definite conditional.
 
-    The construction is traced, as inside a model, because an eager
-    ``MultivariateNormal`` rejects the covariance during argument validation.
+    Steps 4 and 5 share the time index of an AR(1) kernel, so the plain Cholesky
+    meets an exact zero pivot and fails on every backend. The construction is
+    traced, as inside a model, because an eager ``MultivariateNormal`` rejects
+    the covariance during argument validation.
     """
-    x = jnp.arange(12.0)
-    cov = jnp.exp(-0.5 * ((x[:, None] - x[None, :]) / 5.0) ** 2)
-    if jnp.all(jnp.isfinite(jnp.linalg.cholesky(cov))):
-        pytest.skip("this backend factors the kernel without jitter")
+    idx = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
+    cov = 0.9 ** jnp.abs(idx[:, None] - idx[None, :])
+    assert not jnp.all(jnp.isfinite(jnp.linalg.cholesky(cov)))
 
     @jax.jit
     def conditional_cov(cov: Array) -> Array:
