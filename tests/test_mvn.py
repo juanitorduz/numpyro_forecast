@@ -176,6 +176,28 @@ def test_mvn_prefix_condition_is_exact_at_any_scale(step_scale: np.ndarray) -> N
     )
 
 
+def test_mvn_prefix_condition_float64_uses_a_smaller_jitter() -> None:
+    """A float64 covariance gets a jitter of ``1e-8``, so a long random walk keeps its variance.
+
+    The one-step conditional variance of a random walk is the innovation
+    variance, ``1``, while the marginal variance grows with time, so the jitter
+    error is about ``2 * jitter * t_obs``: ``2e-3`` with the float32 jitter of
+    ``1e-6`` and ``2e-5`` with ``1e-8``.
+    """
+    time, t = 1_000, 999
+    with jax.enable_x64(True):
+        idx = jnp.arange(1, time + 1, dtype=jnp.float64)
+        cov = jnp.minimum(idx[:, None], idx[None, :])
+        mvn = dist.MultivariateNormal(
+            loc=jnp.zeros(time, dtype=jnp.float64), covariance_matrix=cov
+        )
+        cond = prefix_condition(mvn, jnp.zeros((t, 1), dtype=jnp.float64))
+        assert isinstance(cond, dist.MultivariateNormal)
+        cond_cov = np.asarray(cond.covariance_matrix)
+    assert cond_cov.dtype == np.float64
+    np.testing.assert_allclose(cond_cov, [[1.0]], rtol=1e-4)
+
+
 def test_mvn_shift_loc_adds_to_mean() -> None:
     """A ``(time, 1)`` predictor becomes the mean and keeps its observation axis (#160)."""
     loc = jnp.zeros(4)
