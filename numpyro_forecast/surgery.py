@@ -282,10 +282,12 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     time keeps its layout: the event ``(time, 1)`` returned by `shift_loc()`
     gives a conditional with event ``(f, 1)``, and a bare ``(time,)`` event gives
     ``(f,)``. Its conditional factors the full covariance once, after adding
-    $10^{-6}$ times the variance of each time step to the diagonal. The jitter
-    is relative, so the result does not depend on the scale of the covariance,
-    overall or per time step: the relative error of a forecast variance is about
-    $10^{-6}$ times the ratio of its marginal to its conditional variance.
+    $10^{-6}$ (float32) or $10^{-8}$ (float64) times the variance of each time
+    step to the diagonal. The jitter is relative, so the result does not depend
+    on the scale of the covariance, overall or per time step, but it still
+    inflates a forecast variance that is far below the marginal variance: for a
+    smooth kernel, the jitter rather than the kernel can set the one-step
+    forecast variance.
 
     Parameters
     ----------
@@ -333,7 +335,7 @@ def _mvn_time_params(
     "the trailing axis is time" (kept unchanged), pinned by
     ``test_mvn_time_params_time_one_tiebreak``. The resolved loc batch must
     broadcast against the cov batch, so a mismatched construction fails here
-    rather than deep in ``cho_solve``.
+    rather than deep in ``solve_triangular``.
 
     Raises
     ------

@@ -124,7 +124,7 @@ def test_mvn_prefix_condition_factors_a_kernel_singular_in_float32() -> None:
 
 
 def test_mvn_prefix_condition_of_a_zero_covariance_is_the_mean() -> None:
-    """A zero noise scale gives a finite point forecast at the future mean."""
+    """A zero noise scale gives a finite forecast at the future mean (sd ``1e-3``, the jitter)."""
     loc = jnp.arange(5.0)
 
     @jax.jit
@@ -449,7 +449,7 @@ def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
     """A loc batch incompatible with the cov batch raises at the boundary.
 
     Without the guard, a mismatched user construction flows downstream and dies
-    deep in ``cho_solve`` with a shape error that never names the layout rule.
+    deep in ``solve_triangular`` with a shape error that never names the layout rule.
     """
     loc = jnp.zeros((3, 6))
     cov = jnp.broadcast_to(jnp.eye(6), (4, 6, 6))
