@@ -1,8 +1,9 @@
 """Tests for the ArviZ DataTree export (roadmap §5)."""
 
+import re
 import warnings
-from collections.abc import Mapping
-from typing import cast
+from collections.abc import Collection, Mapping
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
@@ -216,12 +217,12 @@ def test_add_forecast_groups_noninteger_time_requires_explicit_coord() -> None:
         data,
         covariates,
         num_chains=2,
-        time_coord=list(days),
+        time_coord=days,
     )
     with pytest.raises(ValueError, match="pass explicit time_coord"):
         add_forecast_groups(tree, fc, future_covariates[n:])
-    future_days = days[-1] + 1 + np.arange(3)
-    out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=list(future_days))
+    future_days = days[-1] + np.arange(1, 4)
+    out = add_forecast_groups(tree, fc, future_covariates[n:], time_coord=future_days)
     np.testing.assert_array_equal(out["predictions"].coords["time"].values, future_days)
 
 
@@ -297,6 +298,237 @@ def test_to_datatree_forecast_rejects_insample_length_time_coord() -> None:
             num_chains=2,
             time_coord=list(range(n)),
         )
+
+
+def _two_series_model(covariates: Array, data: Array | None = None) -> None:
+    """A level shared by two series, broadcast to a ``(duration, 2)`` predictor."""
+    h = Horizon.from_data(covariates, data)
+    level = jnp.asarray(numpyro.sample("level", dist.Normal(0.0, 1.0)))
+    predict(h, dist.Normal(0.0, 1.0), jnp.full((h.duration, 2), level))
+
+
+def _two_series_tree(duration: int = 5, **kwargs: Any) -> xarray.DataTree:
+    """Export `_two_series_model` on 3 in-sample steps, with a horizon when ``duration > 3``."""
+    return to_datatree(
+        random.PRNGKey(0),
+        _two_series_model,
+        {"level": jnp.zeros(4)},
+        jnp.ones((3, 2)),
+        empty_covariates(duration),
+        **kwargs,
+    )
+
+
+def _time_coord(kind: str) -> Collection[Any]:
+    """Five time labels in the container that ``kind`` names."""
+    if kind == "ndarray-int":
+        return np.arange(100, 105)
+    if kind == "ndarray-datetime64":
+        return np.datetime64("2024-01-01") + np.arange(5)
+    pd = pytest.importorskip("pandas")
+    if kind == "range-index":
+        return pd.RangeIndex(100, 105)
+    if kind == "naive-datetime-index":
+        return pd.date_range("2024-01-01", periods=5, freq="D", name="date")
+    return pd.date_range("2020-01-10 22:00", periods=5, freq="h", tz="America/Los_Angeles")
+
+
+def _labels(kind: str, labels: list[str]) -> Collection[Any]:
+    """``labels`` as a NumPy array or as a named pandas index."""
+    if kind == "ndarray":
+        return np.array(labels)
+    return pytest.importorskip("pandas").Index(labels, name="store")
+
+
+@pytest.mark.parametrize(
+    ("kind", "dtype_kind"),
+    [
+        ("ndarray-int", "i"),
+        ("ndarray-datetime64", "M"),
+        ("range-index", "i"),
+        ("naive-datetime-index", "M"),
+        ("aware-datetime-index", "O"),
+    ],
+)
+def test_to_datatree_accepts_array_and_index_time_coord(kind: str, dtype_kind: str) -> None:
+    """Issue #164: a NumPy array or pandas index is a ``time_coord``, split like a list.
+
+    The dtype check matters: ``assert_array_equal`` treats ``datetime64`` values
+    and ``pd.Timestamp`` objects as equal, so only the dtype shows that naive
+    times stay a datetime coordinate. Only an aware index is an object array.
+    """
+    time_coord = _time_coord(kind)
+    expected = np.asarray(list(time_coord))
+    tree = _two_series_tree(time_coord=time_coord)
+    for group in ("posterior_predictive", "observed_data", "constant_data"):
+        np.testing.assert_array_equal(tree[group].coords["time"].values, expected[:3])
+    for group in ("predictions", "predictions_constant_data"):
+        np.testing.assert_array_equal(tree[group].coords["time"].values, expected[3:])
+    for group in set(tree.children) - {"posterior"}:
+        assert tree[group].coords["time"].dtype.kind == dtype_kind
+
+
+@pytest.mark.parametrize("route", ["to_datatree", "add_forecast_groups"])
+def test_aware_time_coord_keeps_its_zone(route: str) -> None:
+    """A timezone-aware index keeps its zone and clock time, never naive UTC values."""
+    pd = pytest.importorskip("pandas")
+    local = pd.date_range("2020-01-10 22:00", periods=5, freq="h", tz="America/Los_Angeles")
+    if route == "to_datatree":
+        tree = _two_series_tree(time_coord=local)
+    else:
+        tree = add_forecast_groups(
+            _two_series_tree(duration=3, time_coord=local[:3]),
+            jnp.zeros((4, 2, 2)),
+            empty_covariates(2),
+            time_coord=local[3:],
+        )
+    stored = [
+        str(t)
+        for group in ("observed_data", "predictions")
+        for t in tree[group].coords["time"].values
+    ]
+    assert stored == [
+        "2020-01-10 22:00:00-08:00",
+        "2020-01-10 23:00:00-08:00",
+        "2020-01-11 00:00:00-08:00",
+        "2020-01-11 01:00:00-08:00",
+        "2020-01-11 02:00:00-08:00",
+    ]
+
+
+@pytest.mark.parametrize("kind", ["ndarray", "named-index"])
+def test_to_datatree_coords_accept_array_and_index(kind: str) -> None:
+    """Issue #164: array and index labels reach every ``obs`` group.
+
+    A named ``pd.Index`` handed to xarray as is labels a dimension named after
+    the index (``store``), which ``dict_to_dataset`` rejects.
+    """
+    tree = _two_series_tree(coords={"obs_dim": _labels(kind, ["a", "b"])})
+    for group in ("posterior_predictive", "observed_data", "predictions"):
+        assert tree[group]["obs"].dims[-2:] == ("time", "obs_dim")
+        assert tree[group].coords["obs_dim"].values.tolist() == ["a", "b"]
+
+
+_COORDINATE_NAMES = {
+    "time_coord": "time_coord",
+    "coords": "coords['obs_dim']",
+    "add_forecast_groups": "time_coord",
+    "series": "series",
+}
+
+
+def _export_with_coordinate(site: str, value: Any) -> None:
+    """Pass ``value`` as the coordinate that ``site`` names, to the function that takes it."""
+    if site == "time_coord":
+        _two_series_tree(time_coord=value)
+    elif site == "coords":
+        _two_series_tree(coords={"obs_dim": value})
+    elif site == "add_forecast_groups":
+        tree = _two_series_tree(duration=3)
+        add_forecast_groups(tree, jnp.zeros((4, 2, 2)), empty_covariates(2), time_coord=value)
+    else:
+        predictions, x, _ = _prediction_draws(series=2)
+        predictions_to_datatree(predictions, x, value)
+
+
+@pytest.mark.parametrize("site", list(_COORDINATE_NAMES))
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({"b", "a"}, id="set"),
+        pytest.param({"a": 0, "b": 1}, id="dict"),
+        pytest.param(np.array(5), id="scalar"),
+        pytest.param(np.zeros((2, 2)), id="2d-array"),
+        pytest.param([("a", 1), ("b",)], id="ragged"),
+    ],
+)
+def test_not_one_dimensional_coordinate_raises(site: str, value: Any) -> None:
+    """A set, a dict, a scalar, a 2-D array or ragged input is no coordinate: it raises by name.
+
+    ``np.asarray`` makes a set or a dict a 0-d array, which used to fail inside
+    xarray or with an ``IndexError`` on the length check; ragged input used to
+    raise NumPy's own error, which does not name the argument.
+    """
+    name = re.escape(_COORDINATE_NAMES[site])
+    with pytest.raises(ValueError, match=rf"{name} must be a one-dimensional collection"):
+        _export_with_coordinate(site, value)
+
+
+@pytest.mark.parametrize("site", list(_COORDINATE_NAMES))
+@pytest.mark.parametrize("levels", [1, 2])
+def test_multi_index_coordinate_raises(site: str, levels: int) -> None:
+    """A ``pd.MultiIndex``, also a single-level one, would become tuples and lose its levels."""
+    pd = pytest.importorskip("pandas")
+    value = pd.MultiIndex.from_arrays([["a", "b"], [1, 2]][:levels])
+    name = re.escape(_COORDINATE_NAMES[site])
+    with pytest.raises(ValueError, match=rf"{name} is a pandas MultiIndex with {levels} level"):
+        _export_with_coordinate(site, value)
+
+
+@pytest.mark.parametrize("site", ["time_coord", "add_forecast_groups"])
+@pytest.mark.parametrize(
+    ("zones", "match"),
+    [(["UTC", "Asia/Tokyo"], r"\['Asia/Tokyo', 'UTC'\]"), (["UTC", None], r"\['UTC', 'naive'\]")],
+    ids=["two-zones", "aware-and-naive"],
+)
+def test_time_coord_mixing_time_zones_raises(
+    site: str, zones: list[str | None], match: str
+) -> None:
+    """Times in several zones (or aware and naive times) do not share a clock."""
+    pd = pytest.importorskip("pandas")
+    times = [pd.Timestamp("2020-01-01", tz=zone) for zone in zones]
+    value = times + times[:1] * 3 if site == "time_coord" else times
+    with pytest.raises(ValueError, match=rf"time_coord mixes time zones {match}"):
+        _export_with_coordinate(site, value)
+
+
+def _in_sample_and_forecast_times(case: str) -> tuple[Collection[Any] | None, Collection[Any]]:
+    """The in-sample (``None``: default integers) and forecast time labels that ``case`` names."""
+    if case == "integer-then-float":
+        return None, np.array([3.0, 4.0])
+    if case == "integer-then-datetime64":
+        return None, np.datetime64("2024-01-04") + np.arange(2)
+    if case == "strings-of-other-lengths":
+        return ["d1", "d2", "d3"], ["d10", "d11"]
+    pd = pytest.importorskip("pandas")
+    local = pd.date_range("2020-01-10 22:00", periods=5, freq="h", tz="America/Los_Angeles")
+    if case == "aware-then-naive":
+        return local[:3], local[3:].tz_localize(None)
+    return local[:3], local[3:].tz_convert("Asia/Tokyo")
+
+
+def _add_forecast_times(case: str) -> xarray.DataTree:
+    """Attach two forecast steps with the time labels of ``case`` to a three-step tree."""
+    in_time, future_time = _in_sample_and_forecast_times(case)
+    tree = _two_series_tree(duration=3, time_coord=in_time)
+    return add_forecast_groups(
+        tree, jnp.zeros((4, 2, 2)), empty_covariates(2), time_coord=future_time
+    )
+
+
+@pytest.mark.parametrize("case", ["integer-then-float", "strings-of-other-lengths"])
+def test_add_forecast_groups_accepts_time_labels_of_the_same_type(case: str) -> None:
+    """The type check compares kinds of time, not dtypes: ``<U2`` and ``<U3`` labels match."""
+    _, future_time = _in_sample_and_forecast_times(case)
+    tree = _add_forecast_times(case)
+    assert tree["predictions"].coords["time"].values.tolist() == list(future_time)
+
+
+@pytest.mark.parametrize(
+    ("case", "match"),
+    [
+        ("integer-then-datetime64", r"holds datetime64 times .* holds numeric times"),
+        ("aware-then-naive", r"holds datetime64 times .* holds aware \(America/Los_Angeles\)"),
+        (
+            "aware-then-other-zone",
+            r"holds aware \(Asia/Tokyo\) times .* holds aware \(America/Los_Angeles\)",
+        ),
+    ],
+)
+def test_add_forecast_groups_rejects_time_labels_of_another_type(case: str, match: str) -> None:
+    """Forecast times of another type or zone would give the tree two kinds of ``time``."""
+    with pytest.raises(ValueError, match=rf"time_coord {match}"):
+        _add_forecast_times(case)
 
 
 def test_to_datatree_rejects_short_covariates() -> None:
@@ -1334,6 +1566,16 @@ def test_predictions_to_datatree_x_grid_broadcast() -> None:
     grid = np.asarray(tree["constant_data"]["t"])
     for column in range(len(labels)):
         np.testing.assert_array_equal(grid[:, column], x)
+
+
+@pytest.mark.parametrize("kind", ["ndarray", "named-index"])
+def test_predictions_to_datatree_accepts_array_and_index_series(kind: str) -> None:
+    """Issue #164: ``series`` labels may be a NumPy array or a named pandas index."""
+    predictions, x, labels = _prediction_draws()
+    tree = predictions_to_datatree(predictions, x, _labels(kind, labels))
+    assert tree["posterior_predictive"]["obs"].dims == ("chain", "draw", "time", "series")
+    assert tree["constant_data"]["t"].dims == ("time", "series")
+    assert tree["observed_data"].coords["series"].values.tolist() == labels
 
 
 def test_predictions_to_datatree_label_length_mismatch_raises() -> None:
