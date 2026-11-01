@@ -947,10 +947,12 @@ so wrapping does not change the conditional. A ``MultivariateNormal`` over
 time keeps its layout: the event ``(time, 1)`` returned by `shift_loc()`
 gives a conditional with event ``(f, 1)``, and a bare ``(time,)`` event gives
 ``(f,)``. Its conditional factors the full covariance once, after adding
-$10^{-6}$ times the variance of each time step to the diagonal. The jitter
-is relative, so the result does not depend on the scale of the covariance,
-overall or per time step: the relative error of a forecast variance is about
-$10^{-6}$ times the ratio of its marginal to its conditional variance.
+$10^{-6}$ (float32) or $10^{-8}$ (float64) times the variance of each time
+step to the diagonal. The jitter is relative, so the result does not depend
+on the scale of the covariance, overall or per time step, but it still
+inflates a forecast variance that is far below the marginal variance: for a
+smooth kernel, the jitter rather than the kernel can set the one-step
+forecast variance.
 
 Parameters
 ----------
