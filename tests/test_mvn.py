@@ -88,7 +88,7 @@ def test_mvn_diagonal_matches_independent_normal_slice() -> None:
 
 
 def test_mvn_near_singular_prefix_still_valid() -> None:
-    """A near-singular ``Sigma_pp`` yields a valid distribution via jitter."""
+    """A near-singular ``Sigma_pp`` still yields a positive definite conditional."""
     time, t = 4, 2
     cov = jnp.ones((time, time)) * 0.99 + jnp.eye(time) * 0.01
     mvn = dist.MultivariateNormal(loc=jnp.zeros(time), covariance_matrix=cov)
@@ -98,6 +98,105 @@ def test_mvn_near_singular_prefix_still_valid() -> None:
     cond_cov = jnp.asarray(cond.covariance_matrix)
     assert jnp.all(jnp.isfinite(cond_cov))
     assert jnp.all(jnp.linalg.eigvalsh(cond_cov) > 0)
+
+
+def test_mvn_prefix_condition_factors_a_singular_covariance() -> None:
+    """A covariance with a repeated time step still gives a positive definite conditional.
+
+    Steps 4 and 5 share the time index of an AR(1) kernel, so the plain Cholesky
+    meets an exact zero pivot and fails on every backend. The construction is
+    traced, as inside a model, because an eager ``MultivariateNormal`` rejects
+    the covariance during argument validation.
+    """
+    idx = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
+    cov = 0.9 ** jnp.abs(idx[:, None] - idx[None, :])
+    assert not jnp.all(jnp.isfinite(jnp.linalg.cholesky(cov)))
+
+    @jax.jit
+    def conditional_cov(cov: Array) -> Array:
+        mvn = dist.MultivariateNormal(jnp.zeros(cov.shape[-1]), cov)
+        cond = prefix_condition(mvn, jnp.zeros((8, 1)))
+        assert isinstance(cond, dist.MultivariateNormal)
+        return jnp.asarray(cond.covariance_matrix)
+
+    cond_cov = np.asarray(conditional_cov(cov), dtype=np.float64)
+    assert np.isfinite(cond_cov).all()
+    assert np.linalg.eigvalsh(cond_cov).min() > 0
+
+
+def test_mvn_prefix_condition_of_a_zero_covariance_is_the_mean() -> None:
+    """A zero noise scale gives a finite forecast at the future mean (sd ``1e-3``, the jitter)."""
+    loc = jnp.arange(5.0)
+
+    @jax.jit
+    def conditional(cov: Array) -> tuple[Array, Array]:
+        cond = prefix_condition(dist.MultivariateNormal(loc, cov), jnp.ones((3, 1)))
+        assert isinstance(cond, dist.MultivariateNormal)
+        return cond.loc, jnp.asarray(cond.covariance_matrix)
+
+    mean, cov = conditional(jnp.zeros((5, 5)))
+    np.testing.assert_array_equal(np.asarray(mean), np.asarray(loc[3:]))
+    assert np.isfinite(np.asarray(cov)).all()
+
+
+@pytest.mark.parametrize(
+    "step_scale",
+    [
+        np.ones(6),
+        np.full(6, 1e-2),
+        np.full(6, 1e-4),
+        np.array([1.0, 1.0, 1.0, 1.0, 1e-3, 1e-3]),
+    ],
+    ids=["unit", "1e-2", "1e-4", "future-1e-3"],
+)
+def test_mvn_prefix_condition_is_exact_at_any_scale(step_scale: np.ndarray) -> None:
+    """The conditional equals the exact Schur complement for any covariance scale (#173).
+
+    An absolute jitter on the covariance dominated the conditional variance of a
+    small-scale series: at a noise scale of ``1e-4`` the forecast variance was
+    about 500 times the exact value. A jitter relative to the mean variance has
+    the same defect for forecast steps whose variance is far below the mean.
+    """
+    time, t = 6, 4
+    s = jnp.asarray(step_scale, dtype=jnp.float32)
+    cov = s[:, None] * _ar_covariance(time, 0.9) * s[None, :]
+    loc = jnp.linspace(-1.0, 1.0, time) * s
+    data = (s[:t] * jnp.array([0.3, -0.2, 0.5, 0.1]))[:, None]
+    cond = prefix_condition(dist.MultivariateNormal(loc=loc, covariance_matrix=cov), data)
+    assert isinstance(cond, dist.MultivariateNormal)
+    c = np.asarray(cov, dtype=np.float64)
+    m = np.asarray(loc, dtype=np.float64)
+    gain = c[t:, :t] @ np.linalg.inv(c[:t, :t])
+    expected_cov = c[t:, t:] - gain @ c[:t, t:]
+    expected_mean = m[t:] + gain @ (np.asarray(data[:, 0], dtype=np.float64) - m[:t])
+    np.testing.assert_allclose(np.asarray(cond.covariance_matrix), expected_cov, rtol=1e-3)
+    # Each future mean is compared in units of its own step scale.
+    future_scale = step_scale[t:]
+    np.testing.assert_allclose(
+        np.asarray(cond.loc) / future_scale, expected_mean / future_scale, rtol=1e-3, atol=1e-4
+    )
+
+
+def test_mvn_prefix_condition_float64_uses_a_smaller_jitter() -> None:
+    """A float64 covariance gets a jitter of ``1e-8``, so a long random walk keeps its variance.
+
+    The one-step conditional variance of a random walk is the innovation
+    variance, ``1``, while the marginal variance grows with time, so the jitter
+    error is about ``2 * jitter * t_obs``: ``2e-3`` with the float32 jitter of
+    ``1e-6`` and ``2e-5`` with ``1e-8``.
+    """
+    time, t = 1_000, 999
+    with jax.enable_x64(True):
+        idx = jnp.arange(1, time + 1, dtype=jnp.float64)
+        cov = jnp.minimum(idx[:, None], idx[None, :])
+        mvn = dist.MultivariateNormal(
+            loc=jnp.zeros(time, dtype=jnp.float64), covariance_matrix=cov
+        )
+        cond = prefix_condition(mvn, jnp.zeros((t, 1), dtype=jnp.float64))
+        assert isinstance(cond, dist.MultivariateNormal)
+        cond_cov = np.asarray(cond.covariance_matrix)
+    assert cond_cov.dtype == np.float64
+    np.testing.assert_allclose(cond_cov, [[1.0]], rtol=1e-4)
 
 
 def test_mvn_shift_loc_adds_to_mean() -> None:
@@ -351,7 +450,7 @@ def test_mvn_time_params_batch_cov_mismatch_raises() -> None:
     """A loc batch incompatible with the cov batch raises at the boundary.
 
     Without the guard, a mismatched user construction flows downstream and dies
-    deep in ``cho_solve`` with a shape error that never names the layout rule.
+    deep in ``solve_triangular`` with a shape error that never names the layout rule.
     """
     loc = jnp.zeros((3, 6))
     cov = jnp.broadcast_to(jnp.eye(6), (4, 6, 6))

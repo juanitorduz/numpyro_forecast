@@ -18,6 +18,7 @@ from typing import cast
 import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
+from jax.typing import DTypeLike
 from numpyro.distributions.transforms import ReshapeTransform
 
 from numpyro_forecast.exceptions import MVNLayoutError
@@ -280,7 +281,13 @@ def prefix_condition(noise_dist: dist.Distribution, data: Array) -> dist.Distrib
     so wrapping does not change the conditional. A ``MultivariateNormal`` over
     time keeps its layout: the event ``(time, 1)`` returned by `shift_loc()`
     gives a conditional with event ``(f, 1)``, and a bare ``(time,)`` event gives
-    ``(f,)``.
+    ``(f,)``. Its conditional factors the full covariance once, after adding
+    $10^{-6}$ (float32) or $10^{-8}$ (float64) times the variance of each time
+    step to the diagonal. The jitter is relative, so the result does not depend
+    on the scale of the covariance, overall or per time step, but it still
+    inflates a forecast variance that is far below the marginal variance: for a
+    smooth kernel, the jitter rather than the kernel can set the one-step
+    forecast variance.
 
     Parameters
     ----------
@@ -328,7 +335,7 @@ def _mvn_time_params(
     "the trailing axis is time" (kept unchanged), pinned by
     ``test_mvn_time_params_time_one_tiebreak``. The resolved loc batch must
     broadcast against the cov batch, so a mismatched construction fails here
-    rather than deep in ``cho_solve``.
+    rather than deep in ``solve_triangular``.
 
     Raises
     ------
@@ -354,37 +361,51 @@ def _mvn_time_params(
     return resolved, cov
 
 
-def _symmetrize(cov: Array) -> Array:
-    return 0.5 * (cov + jnp.swapaxes(cov, -1, -2))
+def _mvn_relative_jitter(dtype: DTypeLike) -> float:
+    """Jitter added to each MVN variance, relative to that variance, for a float ``dtype``.
 
-
-def _mvn_jitter(cov: Array, floor: float = 1e-6) -> Array:
-    dim = cov.shape[-1]
-    eye = jnp.eye(dim, dtype=cov.dtype)
-    return _symmetrize(cov) + floor * eye
+    ``1e-6`` for a 32-bit float and ``1e-8`` for a 64-bit one (the convention of
+    GPyTorch): a smooth kernel is singular to working precision in both, and the
+    smaller float64 jitter keeps the error of a long random walk's forecast
+    variance near ``2e-5`` instead of ``2e-3``. An integer ``dtype`` resolves to
+    the float that ``jnp.linalg.cholesky`` promotes it to.
+    """
+    return 1e-8 if jnp.finfo(jnp.result_type(dtype, float)).bits >= 64 else 1e-6
 
 
 def _mvn_prefix_condition(loc: Array, cov: Array, data: Array) -> dist.MultivariateNormal:
-    """Gaussian conditional of an MVN over time given a prefix observation."""
-    t = data.shape[-2]
-    x = data[..., 0]
-    mu_p = loc[..., :t]
-    mu_f = loc[..., t:]
-    sigma_pp = cov[..., :t, :t]
-    sigma_pf = cov[..., :t, t:]
-    sigma_fp = cov[..., t:, :t]
-    sigma_ff = cov[..., t:, t:]
+    """Gaussian conditional of an MVN over time given a prefix observation.
 
-    sigma_pp = _mvn_jitter(sigma_pp)
-    chol = jnp.linalg.cholesky(sigma_pp)
-    diff = (x - mu_p)[..., None]
-    # solve sigma_pp @ v = diff
-    v = jax.scipy.linalg.cho_solve((chol, True), diff)
-    cond_mean = mu_f + (sigma_fp @ v)[..., 0]
-    # cond cov: sigma_ff - sigma_fp @ inv(sigma_pp) @ sigma_pf
-    w = jax.scipy.linalg.cho_solve((chol, True), sigma_pf)
-    cond_cov = _mvn_jitter(sigma_ff - sigma_fp @ w)
-    return dist.MultivariateNormal(loc=cond_mean, covariance_matrix=cond_cov)
+    With the lower Cholesky factor ``L`` of the full covariance split into the
+    prefix (``p``) and future (``f``) blocks, the conditional mean is
+    ``loc_f + L_fp @ solve(L_pp, x - loc_p)`` and the conditional covariance is
+    ``L_ff @ L_ff.T``. This needs one factorization and never forms the Schur
+    complement by subtraction, so the result stays positive definite. Before the
+    factorization each variance grows by the factor ``1 + _mvn_relative_jitter()``
+    (the jitter of the correlation matrix), so the conditional is invariant to
+    the scale of each time step and a covariance that is positive semidefinite
+    to working precision still factors. A step with zero variance gets the
+    jitter of the mean variance, and an all-zero covariance the jitter of a unit
+    variance, so a zero noise scale gives a finite forecast at the mean whose
+    standard deviation is the square root of the jitter (``1e-3`` in float32).
+    """
+    t = data.shape[-2]
+    variance = jnp.diagonal(cov, axis1=-2, axis2=-1)
+    mean_variance = jnp.mean(variance, axis=-1, keepdims=True)
+    reference = jnp.where(variance > 0, variance, jnp.where(mean_variance > 0, mean_variance, 1.0))
+    eye = jnp.eye(cov.shape[-1], dtype=cov.dtype)
+    jitter = _mvn_relative_jitter(cov.dtype)
+    scale_tril = jnp.linalg.cholesky(cov + jitter * reference[..., None] * eye)
+    diff = (data[..., 0] - loc[..., :t])[..., None]
+    chol_pp = scale_tril[..., :t, :t]
+    batch = jnp.broadcast_shapes(chol_pp.shape[:-2], diff.shape[:-2])
+    white = jax.scipy.linalg.solve_triangular(
+        jnp.broadcast_to(chol_pp, (*batch, t, t)),
+        jnp.broadcast_to(diff, (*batch, t, 1)),
+        lower=True,
+    )
+    cond_mean = loc[..., t:] + (scale_tril[..., t:, :t] @ white)[..., 0]
+    return dist.MultivariateNormal(loc=cond_mean, scale_tril=scale_tril[..., t:, t:])
 
 
 class _MVNWithObsAxis(dist.TransformedDistribution):
