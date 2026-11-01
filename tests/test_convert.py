@@ -586,7 +586,7 @@ def test_dimension_names_accept_array_and_index(argument: str, kind: str) -> Non
     ],
 )
 def test_unordered_dimension_names_raise(argument: str, value: Any, match: str) -> None:
-    """A set or a dict of names has no order, and a ``str`` is one name: each raises by name.
+    """A set or a dict is not a sequence of names, and a ``str`` is one name: each raises by name.
 
     All three pass the ``Collection[str]`` hint. A ``str`` also passed the old
     ``Sequence[str]`` hint and was split into one name per character.
@@ -612,12 +612,17 @@ class _Axis(str, Enum):  # noqa: UP042 (the str and Enum mixin is the case under
 
 
 def test_str_enum_mixin_dimension_name_keeps_its_value() -> None:
-    """A ``(str, Enum)`` member names the axis by its value, as it did before #265.
+    """A ``(str, Enum)`` member names the axis by its value, as a plain ``str``.
 
     ``str()`` of such a member is ``"_Axis.TIME"``, which would silently move
-    the ``drift`` axis off the tree-wide ``time`` coordinate.
+    the ``drift`` axis off the tree-wide ``time`` coordinate. The member also
+    compares and hashes equal to ``"time"``, so the equality alone would pass
+    with the member stored as the dimension name; the type check is what
+    pins the conversion.
     """
-    assert _dims_named_by("posterior_dims", [_Axis.TIME, "feature"]) == ("time", "feature")
+    dims = _dims_named_by("posterior_dims", [_Axis.TIME, "feature"])
+    assert dims == ("time", "feature")
+    assert all(type(dim) is str for dim in dims)
 
 
 def test_to_datatree_rejects_short_covariates() -> None:

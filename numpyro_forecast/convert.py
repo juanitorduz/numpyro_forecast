@@ -451,10 +451,12 @@ def _dimension_names(argument: str, names: Collection[str]) -> list[str]:
     """Convert user dimension names to a list of Python ``str``.
 
     A NumPy array or a pandas index of names passes the ``Collection[str]``
-    hint, but beartype checks only one element of a collection, so every name
-    is checked here. The conversion uses ``dtype=object`` so that NumPy cannot
-    turn a non-string name into a string. A set or a dict has no order and a
-    ``str`` is one name, so each converts to a 0-d array and raises.
+    hint, but the beartype hook checks only the first item of a collection:
+    a non-``str`` first name raises ``jaxtyping.TypeCheckError`` before this
+    function runs, and every later name is checked here. The conversion uses
+    ``dtype=object`` so that NumPy cannot turn a non-string name into a
+    string. A set, a mapping or one of its views, and a ``str`` are not
+    sequences of names: each converts to a 0-d array and raises.
     ``str.__str__`` (not ``str()``) gives the string value of a ``str``
     subclass: ``str()`` of a ``(str, Enum)`` member is ``"Axis.TIME"``.
     """
@@ -463,8 +465,8 @@ def _dimension_names(argument: str, names: Collection[str]) -> list[str]:
         msg = (
             f"{argument} must be a one-dimensional collection of dimension names (a list, a "
             f"tuple, a NumPy array or a pandas index), got {type(names).__name__} that converts "
-            f"to shape {array.shape}; pass one name per axis (a set or a mapping has no order, "
-            "and a str is one name)"
+            f"to shape {array.shape}; pass one name per axis (a set or a mapping is not a "
+            "sequence of names, and a str is one name)"
         )
         raise ValueError(msg)
     values = array.tolist()
