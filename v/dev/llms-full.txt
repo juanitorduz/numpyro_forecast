@@ -2171,7 +2171,7 @@ ValueError
 Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
 
 
-to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Collection[Any]] | None = None, time_coord: collections.abc.Collection[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Sequence[str]] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None, obs_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+to_datatree(rng_key: jax.Array, model: numpyro_forecast.typing.ForecastModel, posterior: collections.abc.Mapping[str, jax.Array | numpy.ndarray | numpy.bool | numpy.number | bool | int | float | complex], data: jax.Array, covariates: jax.Array, *, num_chains: int = 1, batch_size: int | None = None, device: jaxlib._jax.Device | str | None = 'host', coords: collections.abc.Mapping[str, collections.abc.Collection[Any]] | None = None, time_coord: collections.abc.Collection[Any] | None = None, posterior_dims: collections.abc.Mapping[str, collections.abc.Collection[str]] | None = None, covariate_dims: collections.abc.Collection[str] | None = None, obs_dims: collections.abc.Collection[str] | None = None) -> 'xarray.DataTree'
 
 Convert an already-drawn posterior into an ArviZ-schema `xarray.DataTree`.
 
@@ -2286,10 +2286,13 @@ posterior_dims
     ``time`` coordinate; unlisted sites keep ArviZ's auto-named dims. This is
     an explicit opt-in on purpose: inferring time-indexed sites from trace
     shapes is fragile (a coincidental ``n_params == n_time`` would misattribute
-    the axis).
+    the axis). Each value, like ``covariate_dims`` and ``obs_dims``, is any
+    ordered one-dimensional collection of ``str`` (a list, a tuple, a NumPy
+    array, a pandas index).
 covariate_dims
-    Optional dimension names for the stored covariates, one per axis;
-    defaults to the 2-D ``("time", "covariate_dim")`` layout. Use this when
+    Optional dimension names for the stored covariates, one per axis, as
+    any ordered one-dimensional collection of ``str``; defaults to the 2-D
+    ``("time", "covariate_dim")`` layout. Use this when
     ``covariates`` carries extra batch axes, e.g. a panel tensor shaped
     ``(channel, time, series)`` with ``covariate_dims=["channel", "time",
     "series"]``. The time axis is always ``-2`` (the package-wide
@@ -2298,7 +2301,8 @@ covariate_dims
 obs_dims
     Optional dimension names for the ``obs`` variables of
     ``observed_data``, ``posterior_predictive`` and ``predictions``, one per
-    ``data`` axis. Defaults to ``("time", "obs_dim")`` for 2-D ``data`` and
+    ``data`` axis, as any ordered one-dimensional collection of ``str``.
+    Defaults to ``("time", "obs_dim")`` for 2-D ``data`` and
     names the leading batch axes of a panel ``obs_batch_0``,
     ``obs_batch_1``, ..., e.g. ``("obs_batch_0", "time", "obs_dim")`` for
     ``(batch, time, obs)`` data. Give a batch axis the name of the
@@ -2334,9 +2338,11 @@ ValueError
     ``time_coord`` or a ``coords`` value is not a one-dimensional
     collection of labels (a set, a dict, a scalar, a 2-D array, ragged
     input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
-    (or aware and naive times), if ``time_coord`` is given but its length
-    does not match the in-sample window plus the forecast horizon, if
-    ``num_chains`` is not a positive integer (``bool`` included), if
+    (or aware and naive times), if ``obs_dims``, ``covariate_dims`` or a
+    ``posterior_dims`` value is not an ordered one-dimensional collection
+    (a set, a dict, a single ``str``), if ``time_coord`` is given but its
+    length does not match the in-sample window plus the forecast horizon,
+    if ``num_chains`` is not a positive integer (``bool`` included), if
     ``posterior``'s sample count is not evenly divisible by
     ``num_chains``, if a ``posterior`` value of an
     `~~numpyro_forecast.models.innovations()` site does not have one step
@@ -2351,6 +2357,9 @@ ValueError
     model's ``obs`` site must have the layout of ``data``), or if an
     in-sample draw does not have the shape of ``data`` (a predictor shared
     by the series of ``data`` without a series plate draws one column).
+TypeError
+    If a name in ``obs_dims``, ``covariate_dims`` or a ``posterior_dims``
+    value is not a ``str``.
 CovariateDimsError
     If ``covariate_dims`` does not name every ``covariates`` axis.
 HostMemoryKindError
@@ -2379,7 +2388,7 @@ manual control over the forecast draws, build the in-sample tree with
 matching-length covariates and attach the horizon with
 `add_forecast_groups()`.
 
-add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Collection[Any] | None = None, covariate_dims: collections.abc.Sequence[str] | None = None) -> 'xarray.DataTree'
+add_forecast_groups(tree: 'xarray.DataTree', forecast_samples: jaxtyping.Num[Array, 'sample *batch future obs'] | jaxtyping.Num[ndarray, 'sample *batch future obs'], covariates_future: jax.Array, *, time_coord: collections.abc.Collection[Any] | None = None, covariate_dims: collections.abc.Collection[str] | None = None) -> 'xarray.DataTree'
 
 Attach out-of-sample forecast groups to a copy of ``tree``.
 
@@ -2439,9 +2448,10 @@ time_coord
     (numbers, ``datetime64``, or aware times in the same zone); see
     ``time_coord`` of `to_datatree()` for the costs and the alternatives.
 covariate_dims
-    Optional dimension names for ``covariates_future``, one per axis. When
-    omitted, the names are inherited from the tree's
-    ``constant_data["covariates"]`` variable (falling back to
+    Optional dimension names for ``covariates_future``, one per axis, as
+    any ordered one-dimensional collection of ``str`` (a list, a tuple, a
+    NumPy array, a pandas index). When omitted, the names are inherited
+    from the tree's ``constant_data["covariates"]`` variable (falling back to
     ``("time", "covariate_dim")`` if the tree carries no stored
     covariates), so the forecast covariates always share the in-sample
     axis names. When given explicitly, the names must match the stored
@@ -2468,9 +2478,13 @@ ValueError
     set, a dict, a scalar, a 2-D array, ragged input) or is a
     ``pd.MultiIndex``, if it mixes time zones, if its time type (numbers,
     ``datetime64``, aware times and their zone) differs from that of the
-    in-sample time coordinate, if ``time_coord`` is given but its length
-    differs from the forecast horizon, or if it is omitted while the
-    in-sample time coordinate is non-integer.
+    in-sample time coordinate, if ``covariate_dims`` is not an ordered
+    one-dimensional collection (a set, a dict, a single ``str``), if
+    ``time_coord`` is given but its length differs from the forecast
+    horizon, or if it is omitted while the in-sample time coordinate is
+    non-integer.
+TypeError
+    If a name in ``covariate_dims`` is not a ``str``.
 CovariateDimsError
     If the resolved ``covariate_dims`` (explicit or inherited) do not name
     every ``covariates_future`` axis, or if explicit names disagree with
