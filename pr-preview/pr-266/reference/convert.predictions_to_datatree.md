@@ -27,8 +27,8 @@ Prediction draws with the sample axis first, shape `(sample, time, series)`.
 `x: Num[ArrayLike, ``" time"]`  
 Independent-variable values, shape `(time,)`. Must be numeric: `plot_lm` cannot draw `datetime64` values (it concatenates `x` with the float predictions internally), so pass `matplotlib.dates.date2num()` floats and re-format the tick labels with `matplotlib.dates.ConciseDateFormatter`.
 
-`series: Sequence[Any]`  
-One label per series, defining the `series` coordinate.
+`series: Collection[Any]`  
+One label per series, defining the `series` coordinate. Any one-dimensional collection is accepted (a list, a NumPy array, a pandas index) and stored as `np.asarray(series)`.
 
 `group: str = ``"posterior_predictive"`  
 Predictive group to store the draws under (e.g. `"prior_predictive"`, `"posterior_predictive"`, `"predictions"`). `"observed_data"` and `"constant_data"` are reserved: the function always writes those two groups.
@@ -48,4 +48,4 @@ A tree with the `group`, `observed_data`, and `constant_data` groups; `obs` has 
 
 
 `ValueError`  
-If `group` is `"observed_data"` or `"constant_data"` (reserved names), or if `series` does not have one label per series in `predictions`.
+If `group` is `"observed_data"` or `"constant_data"` (reserved names), if `series` is not a one-dimensional collection of labels (a set, a dict, a scalar, a 2-D array, ragged input) or is a `pd.MultiIndex`, or if `series` does not have one label per series in `predictions`.
