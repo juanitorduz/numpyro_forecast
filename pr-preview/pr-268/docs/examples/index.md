@@ -43,7 +43,7 @@ Bayesian Croston method for intermittent demand, with masked exponential smoothi
 Getting Started with `dynestyx` State Space Models
 
 
-Write dynestyx state space models with the state_space building block, reproduce the ARMA and BART weekly ridership examples, integrate the level out with a Kalman filter, export the in-sample predictive with to_datatree, and fit through a gap of missing observations.
+Write dynestyx state space models with the state_space building block, integrate a local level out with a Kalman filter, export the in-sample predictive with to_datatree, sample the level explicitly for Student-T noise, fit through a gap of missing observations, and write ARMA(1,1) as a state space model.
 
 
 <a href="../../docs/examples/dynestyx_integration.html" class="section-card" style="display: block; padding: 1.25rem 1.5rem; border: 1px solid #dee2e6; border-radius: 0.5rem; color: inherit; text-decoration: none;"><img src="thumbnails/dynestyx_integration.png" class="section-card-img" style="width: 100%; border-radius: 0.375rem; margin-bottom: 0.75rem;" /></a>
