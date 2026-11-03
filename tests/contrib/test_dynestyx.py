@@ -1,7 +1,10 @@
 """Tests for the dynestyx state space building block (``numpyro_forecast.contrib.dynestyx``)."""
 
 import warnings
+from types import SimpleNamespace
+from typing import Literal
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -21,7 +24,7 @@ from numpyro_forecast import (
     predict_in_sample,
     to_datatree,
 )
-from numpyro_forecast.contrib.dynestyx import StateSpaceResult, state_space
+from numpyro_forecast.contrib.dynestyx import StateSpaceResult, _in_sample_states, state_space
 from numpyro_forecast.optional import _api_canary
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -585,15 +588,23 @@ def test_an_untested_dynestyx_version_warns(monkeypatch: pytest.MonkeyPatch) -> 
         log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
 
 
-def test_scope_gives_a_clear_error() -> None:
-    """Under ``handlers.scope`` the dynestyx sites are prefixed, which the block reports."""
+@pytest.mark.parametrize("call", ["training", "forecast", "predict_in_sample"])
+def test_scope_gives_a_clear_error(call: str) -> None:
+    """Under ``handlers.scope`` the dynestyx sites are prefixed, which the block reports in
+    every mode (training would otherwise pass and the drivers fail with a bare ``KeyError``).
+    """
     scoped = numpyro.handlers.scope(local_level, prefix="a")
     with (
         DiscreteTimeSimulator(n_simulations=1),
         smoother,
         pytest.raises(ValueError, match=r"handlers\.scope"),
     ):
-        forecast(random.PRNGKey(21), scoped, _repeat(PARAMS, 2), TRAIN, COVARIATES)
+        if call == "training":
+            log_density(scoped, (TRAIN, TRAIN), {}, {f"a/{k}": v for k, v in PARAMS.items()})
+        elif call == "forecast":
+            forecast(random.PRNGKey(21), scoped, _repeat(PARAMS, 2), TRAIN, COVARIATES)
+        else:
+            predict_in_sample(random.PRNGKey(21), scoped, _repeat(PARAMS, 2), TRAIN)
 
 
 def test_numpy_controls_are_rejected_by_the_annotation() -> None:
@@ -615,40 +626,52 @@ def test_numpy_controls_are_rejected_by_the_annotation() -> None:
 
 
 def test_a_scalar_state_path_is_rejected_with_a_clear_message() -> None:
-    """A scalar state gives a ``(time,)`` path, which breaks the ``(t_obs, state)`` contract."""
-    dynamics = DynamicalModel(
-        initial_condition=dist.Normal(0.0, jnp.sqrt(P0)),
-        state_evolution=lambda x, u, t_now, t_next: dist.Normal(x, Q_TRUE),
-        observation_model=lambda x, u, t: dist.Normal(x, R_TRUE),
-    )
-    h = Horizon.from_data(TRAIN, None)
-    with (
-        warnings.catch_warnings(),
-        LatentPathBuilder(),
-        pytest.raises(ValueError, match="one state vector per observed step"),
-    ):
-        warnings.simplefilter("ignore")  # dynestyx warns about the scalar initial condition
-        numpyro.handlers.seed(state_space, random.PRNGKey(23))(h, "f", TRAIN, dynamics)
+    """A scalar state gives a ``(time,)`` path, which breaks the ``(t_obs, state)`` contract.
 
-
-def test_filter_and_smoother_add_the_same_log_density() -> None:
-    """The Kalman filter and smoother add the same marginal likelihood: a Filter fit's draws
-    can be exported under the Smoother without a refit.
+    dynestyx deprecates scalar initial conditions, so this path may close upstream; the
+    block's check also covers other state paths that are not ``(t_obs, state)``.
     """
-    filter_ = Filter(filter_config=KFConfig(filter_source="cuthbert"))
-    with filter_:
+    h = Horizon.from_data(TRAIN, None)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # dynestyx warns about the scalar initial condition
+        dynamics = DynamicalModel(
+            initial_condition=dist.Normal(0.0, jnp.sqrt(P0)),
+            state_evolution=lambda x, u, t_now, t_next: dist.Normal(x, Q_TRUE),
+            observation_model=lambda x, u, t: dist.Normal(x, R_TRUE),
+        )
+        with (
+            LatentPathBuilder(),
+            pytest.raises(ValueError, match="one state vector per observed step"),
+        ):
+            numpyro.handlers.seed(state_space, random.PRNGKey(23))(h, "f", TRAIN, dynamics)
+
+
+@pytest.mark.parametrize("filter_source", ["cuthbert", "cd_dynamax"])
+def test_filter_and_smoother_add_the_same_log_density(
+    filter_source: Literal["cuthbert", "cd_dynamax"],
+) -> None:
+    """The Kalman filter and smoother of one backend add the same marginal likelihood: a
+    Filter fit's draws can be exported under the Smoother without a refit.
+    """
+    with Filter(filter_config=KFConfig(filter_source=filter_source)):
         filtered, _ = log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
-    with smoother:
+    with Smoother(smoother_config=KFSmootherConfig(filter_source=filter_source)):
         smoothed, _ = log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
     assert jnp.allclose(filtered, smoothed, rtol=1e-5)
 
 
 def test_svi_fit_and_draw_posterior_run_through_the_block() -> None:
-    """SVI with an AutoGuide fits through the block, and ``draw_posterior`` runs under it too."""
+    """SVI with an AutoGuide fits through the block, and ``draw_posterior`` needs the handler.
+
+    ``AutoNormal`` re-runs the model in its postprocess function to compute deterministic
+    sites, so ``draw_posterior`` without the handler hits the block's guard.
+    """
     guide = AutoNormal(local_level)
     svi = SVI(local_level, guide, Adam(0.05), Trace_ELBO())
     with smoother:
         result = svi.run(random.PRNGKey(24), 300, TRAIN, TRAIN, progress_bar=False)
+    with pytest.raises(ValueError, match="needs a dynestyx Filter, Smoother or"):
+        draw_posterior(random.PRNGKey(25), guide, result.params, 200)
     with DiscreteTimeSimulator(n_simulations=1), smoother:
         posterior = draw_posterior(random.PRNGKey(25), guide, result.params, 200)
         ahead = forecast(random.PRNGKey(26), local_level, posterior, TRAIN, COVARIATES)
@@ -673,3 +696,43 @@ def test_to_datatree_under_the_latent_path_builder() -> None:
         )
     assert tree["posterior_predictive"]["obs"].shape == (2, 4, T_OBS, 1)
     assert tree["predictions"]["obs"].shape == (2, 4, FUTURE, 1)
+
+
+def test_an_unparsable_dynestyx_version_does_not_warn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A version string that is not ``major.minor...`` skips the version check silently."""
+    import dynestyx
+
+    monkeypatch.setattr(dynestyx, "__version__", "unknown")
+    with warnings.catch_warnings(), smoother:
+        warnings.simplefilter("error")
+        log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
+
+
+def test_a_smoother_result_without_marginals_is_rejected() -> None:
+    """A Smoother result with no per-step marginals gives a clear error, not an index error."""
+    with pytest.raises(ValueError, match="no per-step marginals"):
+        _in_sample_states(random.PRNGKey(28), SimpleNamespace(dists=[]), "SMOOTHER", T_OBS)
+
+
+def test_a_later_fit_with_another_missingness_pattern_breaks_the_earlier_likelihood() -> None:
+    """One builder, two fits with different NaN patterns: a traced likelihood of the first fails.
+
+    The builder caches one missingness layout per site name and shape. After the second fit
+    overwrites it, a traced call that evaluates the likelihood of the first model raises
+    dynestyx's runtime layout check, as the Notes of ``state_space`` describe.
+    """
+    gap = TRAIN.at[5:8].set(jnp.nan)
+    builder = LatentPathBuilder()
+    with builder:
+        for data in (TRAIN, gap):  # the eager runs that two fits would make
+            numpyro.handlers.trace(
+                numpyro.handlers.seed(local_level, random.PRNGKey(0))
+            ).get_trace(data, data)
+
+        def log_joint(path: Array, data: Array) -> Array:
+            return log_density(
+                local_level, (data, data), {}, {**PARAMS, "f_state_path_params": path}
+            )[0]
+
+        with pytest.raises(jax.errors.JaxRuntimeError):
+            jax.block_until_ready(jax.jit(log_joint)(TRAIN, TRAIN))

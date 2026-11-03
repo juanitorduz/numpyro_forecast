@@ -140,7 +140,7 @@ def _check_version(dsx: Any) -> None:
             f"{'.'.join(map(str, _TESTED_DYNESTYX))}, found {version}; dynestyx changes its "
             "handler semantics between minor releases"
         )
-        warnings.warn(msg, UserWarning, stacklevel=3)
+        warnings.warn(msg, UserWarning)  # noqa: B028 - wrapper frames make stacklevel misleading
 
 
 def _conditioning_kind() -> str:
@@ -156,8 +156,9 @@ def _conditioning_kind() -> str:
         msg = (
             "state_space needs a dynestyx Filter, Smoother or LatentPathBuilder around the call "
             f"(active dynestyx handlers: {kinds or 'none'}); without one dynestyx picks a default "
-            "inference method itself, so pass the handler of the fit explicitly, e.g. "
-            "`with Smoother(smoother_config=KFSmootherConfig()): forecast(...)`"
+            "inference method itself, so pass the handler of the fit explicitly: a Smoother of "
+            "the fit's configuration for a Filter or Smoother fit, or the LatentPathBuilder "
+            "instance that fitted the model"
         )
         raise ValueError(msg)
     return conditioning[0]
@@ -245,15 +246,20 @@ def _observe(rng_key: Array, dynamics: Any, x: Array, u: Array | None, times: Ar
     return jax.vmap(sample_step, in_axes=(0, None if u is None else 0, 0, 0))(x, u, times, keys)
 
 
-def _site_value(trace: dict[str, Any], site: str) -> Array:
-    """Read a dynestyx site from the inner trace, with a clear error when it is missing."""
-    if site not in trace:
+def _check_site_names(trace: dict[str, Any], name: str) -> None:
+    """Raise when dynestyx's sites do not carry the bare ``f"{name}_"`` prefix.
+
+    dynestyx registers at least one such site in every mode (the likelihood factor,
+    ``_marginal_loglik`` or ``_state_path_params``); under ``numpyro.handlers.scope``
+    they are renamed, and so are the ``"obs"`` and ``"forecast"`` sites the drivers read.
+    """
+    if not any(site.startswith(f"{name}_") for site in trace):
         msg = (
-            f"dynestyx registered no {site!r} site: state_space reads dynestyx's sites by name, "
-            "so it cannot run under numpyro.handlers.scope (which prefixes them)"
+            f"dynestyx registered no {name!r} sites under their bare names: state_space reads "
+            "them by name and owns the bare 'obs' and 'forecast' sites, so it cannot run under "
+            "numpyro.handlers.scope (which prefixes them)"
         )
         raise ValueError(msg)
-    return jnp.asarray(trace[site]["value"])
 
 
 def state_space(
@@ -353,6 +359,10 @@ def state_space(
         driver raises dynestyx's own ``ValueError`` about the missingness pattern.
     RuntimeError
         If the in-sample predictive runs without a seed handler.
+    jax.errors.JaxRuntimeError
+        From dynestyx's layout check, when a traced call evaluates the likelihood
+        under a ``LatentPathBuilder`` whose cached missingness layout comes from a
+        later fit with another missingness pattern (see Notes).
 
     Notes
     -----
@@ -376,10 +386,12 @@ def state_space(
       fitted the model: it caches the observation missingness layout per site
       name and shape from the concrete observations of the fit, and the jitted
       drivers hand it traced arrays. A later fit with the same site name and
-      shape and a different missingness pattern overwrites that layout, and the
-      drivers of the earlier model then fail at run time with dynestyx's error
-      about the layout; use one builder per fitted model when the patterns
-      differ. A fresh builder needs its first model run eager.
+      shape and a different missingness pattern overwrites that layout. A traced
+      call for the earlier model that evaluates the likelihood (a fit,
+      ``log_density``) then raises dynestyx's ``JaxRuntimeError``; the predictive
+      drivers do not evaluate it and ran without error in our tests. Use one
+      builder per fitted model when the patterns differ. A fresh builder needs
+      its first model run eager.
     - ``mcmc.get_samples()`` also holds the deterministic sites dynestyx records
       (``f"{name}_filtered_states_mean"`` and similar). The drivers ignore
       deterministic sites, but `~~numpyro_forecast.convert.to_datatree()` stores
@@ -416,7 +428,6 @@ def state_space(
     dsx = require("dynestyx", extra="dynestyx")
     _check_version(dsx)
     kind = _conditioning_kind()
-    controls = None if controls is None else jnp.asarray(controls)
     _validate_window(h, y, controls)
     # obs_times is a jax array, because the LatentPathBuilder indexes it inside a scan, and a
     # concrete one even under the jitted drivers, because a Filter's rollout reads it on the
@@ -442,9 +453,10 @@ def state_space(
             predict_times=predict_times,
             **ctrl,
         )
+    _check_site_names(trace, name)
     x_in_sample, x_future = None, None
     if h.future > 0:
-        predicted = _site_value(trace, f"{name}{_PREDICTED_OBSERVATIONS}")
+        predicted = jnp.asarray(trace[f"{name}{_PREDICTED_OBSERVATIONS}"]["value"])
         if predicted.shape[0] != 1:
             msg = (
                 "state_space needs Simulator(n_simulations=1), "
@@ -452,7 +464,7 @@ def state_space(
             )
             raise ValueError(msg)
         numpyro.deterministic("forecast", predicted[0, 1:])  # drop the anchor row
-        x_future = _site_value(trace, f"{name}{_PREDICTED_STATES}")[0, 1:]
+        x_future = jnp.asarray(trace[f"{name}{_PREDICTED_STATES}"]["value"])[0, 1:]
     if h.data is None:
         key_states, key_obs = random.split(_rng_key())
         x_in_sample = _in_sample_states(key_states, result, kind, h.t_obs)
