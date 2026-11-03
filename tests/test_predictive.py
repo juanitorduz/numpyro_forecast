@@ -571,6 +571,24 @@ def test_drivers_accept_unhashable_callable_models(driver: str, batch_size: int 
         assert np.allclose(np.asarray(draws), plain(random.PRNGKey(0), *args)[site], atol=1e-5)
 
 
+def test_handlers_around_a_driver_call_apply_after_an_earlier_compile() -> None:
+    """A handler around `forecast()` is honored even if the same model compiled without it.
+
+    The predictive is compiled per call, so it never replays a trace compiled
+    under different (or no) effect handlers. This is what lets
+    ``numpyro.handlers`` and dynestyx's ``Filter``/``Smoother``/``Simulator``
+    wrap a driver call (`numpyro_forecast.contrib.dynestyx`).
+    """
+    model, data, guide, params = _fit_data()
+    covariates = empty_covariates(36)
+    post = draw_posterior(random.PRNGKey(2), guide, params, 8)
+    plain = forecast(random.PRNGKey(3), model, post, data, covariates)
+    shift = {"drift_future": jnp.full((covariates.shape[-2] - data.shape[-2], 1), 100.0)}
+    with numpyro.handlers.substitute(data=shift):
+        shifted = forecast(random.PRNGKey(3), model, post, data, covariates)
+    assert float(shifted.mean()) > float(plain.mean()) + 50.0
+
+
 # --- posteriors that carry forecast-horizon sites (issue #161) ----------------
 
 
