@@ -1,15 +1,26 @@
 """Tests for the dynestyx state space building block (``numpyro_forecast.contrib.dynestyx``)."""
 
+import warnings
+
 import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
 from jax import random
-from numpyro.infer import Predictive
+from numpyro.infer import SVI, Predictive, Trace_ELBO
+from numpyro.infer.autoguide import AutoNormal
 from numpyro.infer.util import log_density
+from numpyro.optim import Adam
 
-from numpyro_forecast import Horizon, backtest, forecast, predict_in_sample, to_datatree
+from numpyro_forecast import (
+    Horizon,
+    backtest,
+    draw_posterior,
+    forecast,
+    predict_in_sample,
+    to_datatree,
+)
 from numpyro_forecast.contrib.dynestyx import StateSpaceResult, state_space
 from numpyro_forecast.optional import _api_canary
 from numpyro_forecast.typing import Array, ForecastModel
@@ -255,9 +266,9 @@ def test_window_shapes_are_validated() -> None:
     """The time axes must match the horizon; a batch dim fails the jaxtyping rank check."""
     h = Horizon.from_data(COVARIATES, TRAIN)
     dynamics = local_level_dynamics(jnp.asarray(Q_TRUE), jnp.asarray(R_TRUE))
-    with pytest.raises(ValueError, match="t_obs"):
+    with smoother, pytest.raises(ValueError, match="t_obs"):
         state_space(h, "f", TRAIN[:-1], dynamics)
-    with pytest.raises(ValueError, match="duration"):
+    with smoother, pytest.raises(ValueError, match="duration"):
         state_space(h, "f", TRAIN, dynamics, controls=jnp.zeros((T_OBS, 2)))
     with pytest.raises(TypeError):  # jaxtyping.TypeCheckError: " time obs" is exactly 2-D
         state_space(h, "f", TRAIN[None], dynamics)
@@ -312,7 +323,23 @@ def test_backtest_scores_in_sample_under_one_handler_stack() -> None:
 
 def test_dynestyx_surface_canary() -> None:
     """The attribute and site-name surface the block depends on, pinned against drift."""
-    _api_canary("dynestyx", ["sample", "LatentStateResult", "DiscreteTimeSimulator"])
+    _api_canary(
+        "dynestyx",
+        [
+            "sample",
+            "LatentStateResult",
+            "DiscreteTimeSimulator",
+            "handlers._dynestyx_stack_kind",
+            "handlers._DynestyxStackKind",
+        ],
+    )
+    from dynestyx import handlers
+
+    kinds = {kind.name for kind in handlers._DynestyxStackKind}
+    assert {"FILTER", "SMOOTHER", "LATENT_PATH_BUILDER"} <= kinds
+    with smoother:
+        active = [kind.name for kind in handlers._dynestyx_stack_kind()]
+    assert active == ["SMOOTHER"]
     with DiscreteTimeSimulator(n_simulations=1), smoother:
         tr = numpyro.handlers.trace(
             numpyro.handlers.substitute(
@@ -407,17 +434,22 @@ def test_latent_path_builder_reads_the_controls() -> None:
     assert jnp.abs(ahead.mean(axis=0) - covariates[T_OBS:, :1]).max() < 3.0
 
 
-def test_a_driver_call_without_a_handler_fails() -> None:
-    """With no dynestyx handler, dynestyx picks a default, which fails inside a jitted driver.
+@pytest.mark.parametrize("call", ["training", "forecast", "predict_in_sample"])
+def test_the_block_refuses_to_run_without_a_conditioning_handler(call: str) -> None:
+    """Without a Filter, Smoother or LatentPathBuilder the block raises, in every mode.
 
-    dynestyx 0.8 selects a fresh ``LatentPathBuilder`` for this short series, and a
-    fresh builder cannot read traced observations. The test pins that a forgotten
-    handler is an error rather than a silent default, as the module docstring states.
+    dynestyx 0.8 would pick a default handler itself and only log the choice, so a
+    forgotten handler would fit or forecast under an inference method nobody chose. A
+    Simulator alone is not a conditioning handler.
     """
-    with pytest.raises(ValueError, match="missingness"):
-        forecast(random.PRNGKey(14), local_level, _repeat(PARAMS, 2), TRAIN, COVARIATES)
-    with pytest.raises(ValueError, match="missingness"):
-        predict_in_sample(random.PRNGKey(15), local_level, _repeat(PARAMS, 2), TRAIN)
+    with pytest.raises(ValueError, match="needs a dynestyx Filter, Smoother or"):
+        if call == "training":
+            log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
+        elif call == "forecast":
+            with DiscreteTimeSimulator(n_simulations=1):
+                forecast(random.PRNGKey(14), local_level, _repeat(PARAMS, 2), TRAIN, COVARIATES)
+        else:
+            predict_in_sample(random.PRNGKey(15), local_level, _repeat(PARAMS, 2), TRAIN)
 
 
 def test_forecast_chunks_keep_the_law() -> None:
@@ -538,5 +570,106 @@ def test_in_sample_predictive_needs_a_seed_handler() -> None:
     """The in-sample draws consume the seed handler's key; without one the block says so."""
     h = Horizon.from_data(TRAIN, None)
     dynamics = local_level_dynamics(jnp.asarray(Q_TRUE), jnp.asarray(R_TRUE))
-    with smoother, pytest.raises(RuntimeError, match="seed handler"):
-        state_space(h, "f", TRAIN, dynamics)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # numpyro's "Cannot generate JAX PRNG key" stays silent
+        with smoother, pytest.raises(RuntimeError, match="seed handler"):
+            state_space(h, "f", TRAIN, dynamics)
+
+
+def test_an_untested_dynestyx_version_warns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The extra is capped at the tested minor version; another installed version warns."""
+    import dynestyx
+
+    monkeypatch.setattr(dynestyx, "__version__", "0.9.0")
+    with smoother, pytest.warns(UserWarning, match="tested with dynestyx 0.8"):
+        log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
+
+
+def test_scope_gives_a_clear_error() -> None:
+    """Under ``handlers.scope`` the dynestyx sites are prefixed, which the block reports."""
+    scoped = numpyro.handlers.scope(local_level, prefix="a")
+    with (
+        DiscreteTimeSimulator(n_simulations=1),
+        smoother,
+        pytest.raises(ValueError, match=r"handlers\.scope"),
+    ):
+        forecast(random.PRNGKey(21), scoped, _repeat(PARAMS, 2), TRAIN, COVARIATES)
+
+
+def test_numpy_controls_are_rejected_by_the_annotation() -> None:
+    """``controls`` is annotated as a jax array, so NumPy controls fail at the call, clearly.
+
+    Without the check they would reach dynestyx's eager simulator scan and fail there with
+    a ``TracerArrayConversionError``.
+    """
+    h = Horizon.from_data(COVARIATES, TRAIN)
+    dynamics = local_level_dynamics(jnp.asarray(Q_TRUE), jnp.asarray(R_TRUE))
+    with smoother, pytest.raises(TypeError):  # jaxtyping.TypeCheckError
+        state_space(
+            h,
+            "f",
+            TRAIN,
+            dynamics,
+            controls=np.zeros((T_OBS + FUTURE, 1)),  # ty: ignore[invalid-argument-type]
+        )
+
+
+def test_a_scalar_state_path_is_rejected_with_a_clear_message() -> None:
+    """A scalar state gives a ``(time,)`` path, which breaks the ``(t_obs, state)`` contract."""
+    dynamics = DynamicalModel(
+        initial_condition=dist.Normal(0.0, jnp.sqrt(P0)),
+        state_evolution=lambda x, u, t_now, t_next: dist.Normal(x, Q_TRUE),
+        observation_model=lambda x, u, t: dist.Normal(x, R_TRUE),
+    )
+    h = Horizon.from_data(TRAIN, None)
+    with (
+        warnings.catch_warnings(),
+        LatentPathBuilder(),
+        pytest.raises(ValueError, match="one state vector per observed step"),
+    ):
+        warnings.simplefilter("ignore")  # dynestyx warns about the scalar initial condition
+        numpyro.handlers.seed(state_space, random.PRNGKey(23))(h, "f", TRAIN, dynamics)
+
+
+def test_filter_and_smoother_add_the_same_log_density() -> None:
+    """The Kalman filter and smoother add the same marginal likelihood: a Filter fit's draws
+    can be exported under the Smoother without a refit.
+    """
+    filter_ = Filter(filter_config=KFConfig(filter_source="cuthbert"))
+    with filter_:
+        filtered, _ = log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
+    with smoother:
+        smoothed, _ = log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
+    assert jnp.allclose(filtered, smoothed, rtol=1e-5)
+
+
+def test_svi_fit_and_draw_posterior_run_through_the_block() -> None:
+    """SVI with an AutoGuide fits through the block, and ``draw_posterior`` runs under it too."""
+    guide = AutoNormal(local_level)
+    svi = SVI(local_level, guide, Adam(0.05), Trace_ELBO())
+    with smoother:
+        result = svi.run(random.PRNGKey(24), 300, TRAIN, TRAIN, progress_bar=False)
+    with DiscreteTimeSimulator(n_simulations=1), smoother:
+        posterior = draw_posterior(random.PRNGKey(25), guide, result.params, 200)
+        ahead = forecast(random.PRNGKey(26), local_level, posterior, TRAIN, COVARIATES)
+    assert jnp.isfinite(result.losses[-1])
+    assert result.losses[-1] < result.losses[0]
+    assert ahead.shape == (200, FUTURE, 1)
+    assert jnp.isfinite(ahead).all()
+
+
+def test_to_datatree_under_the_latent_path_builder() -> None:
+    """The builder that fitted the model serves both predictive groups of ``to_datatree``."""
+    path = jnp.linspace(-1.0, 1.0, T_OBS)[:, None]
+    posterior = _repeat({**PARAMS, "f_state_path_params": path}, 8)
+    builder = LatentPathBuilder()
+    with builder:
+        numpyro.handlers.trace(numpyro.handlers.seed(local_level, random.PRNGKey(0))).get_trace(
+            TRAIN, TRAIN
+        )
+    with DiscreteTimeSimulator(n_simulations=1), builder:
+        tree = to_datatree(
+            random.PRNGKey(27), local_level, posterior, TRAIN, COVARIATES, num_chains=2
+        )
+    assert tree["posterior_predictive"]["obs"].shape == (2, 4, T_OBS, 1)
+    assert tree["predictions"]["obs"].shape == (2, 4, FUTURE, 1)

@@ -42,14 +42,12 @@ with DiscreteTimeSimulator(n_simulations=1), Smoother(smoother_config=...):
     tree = to_datatree(rng_key, model, posterior, data, covariates)
 ```
 
-Without a handler, dynestyx (0.8 and later) picks one itself and only logs the
-choice: an explicit path when the series is short, the state and observation
-dimensions match and the transition density is known, otherwise a filter that
-fits the model (Kalman, ensemble, particle, or an HMM filter for discrete
-states). A training run then fits under that choice, and a driver call without
-the handler of the fit runs under a default that may differ from it (a default
-``LatentPathBuilder`` fails inside the jitted drivers, because it cannot read
-traced observations). Pass the handler explicitly on every call.
+The block raises when no ``Filter``, ``Smoother`` or ``LatentPathBuilder`` is
+active. Without one, dynestyx 0.8 would pick a default itself and only log the
+choice, so a forgotten handler would fit or forecast under an inference method
+nobody chose. The check reads dynestyx's handler stack through a private
+dynestyx query (``dynestyx.handlers._dynestyx_stack_kind``), which a canary test
+pins.
 
 Two dynestyx conventions shape the block. The observed window travels in the
 covariates (the drivers call the model with ``data=None`` for the in-sample
@@ -61,18 +59,20 @@ drops it: the first forecast step is a transition of the final state, not a copy
 of it.
 
 The coupling to dynestyx is confined to this module: ``dynestyx.sample``, the
-result types ``LatentStateResult`` (``state_path``) and the ``dists`` of a
-smoother's result, the site suffixes ``_predicted_observations``,
-``_predicted_states`` and ``_smoothed_states_mean``, and
+handler-stack query above, the result types ``LatentStateResult``
+(``state_path``) and the ``dists`` of a smoother's result, the site suffixes
+``_predicted_observations`` and ``_predicted_states``, and
 ``DynamicalModel.observation_model(x, u, t)``. dynestyx is an optional
 dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.8.0,<0.9``)
 imported lazily through `~~numpyro_forecast.optional.require()` at the first
-call. The block models one series per model function: it has no batch dims
-(``dsx.plate`` registers no state sites) and it owns the ``"obs"`` and
-``"forecast"`` sites, which the drivers read by their bare names, so it cannot
-run under ``handlers.scope`` or be called twice in one model.
+call, which warns when the installed minor version is not the tested one. The
+block models one series per model function: it has no batch dims (``dsx.plate``
+registers no state sites) and it owns the ``"obs"`` and ``"forecast"`` sites,
+which the drivers read by their bare names, so it cannot run under
+``handlers.scope`` or be called twice in one model.
 """
 
+import importlib
 import warnings
 from typing import Any, NamedTuple
 
@@ -87,14 +87,17 @@ from numpyro_forecast.models import Horizon
 from numpyro_forecast.optional import require
 from numpyro_forecast.typing import Array
 
+_TESTED_DYNESTYX = (0, 8)
+"""The dynestyx minor version the block is tested with; other versions warn."""
+
 _PREDICTED_OBSERVATIONS = "_predicted_observations"
 """Suffix of the site a dynestyx Simulator registers with the observation rollout."""
 
 _PREDICTED_STATES = "_predicted_states"
 """Suffix of the site a dynestyx Simulator registers with the state rollout."""
 
-_SMOOTHED_MEAN = "_smoothed_states_mean"
-"""Suffix of the site a dynestyx Smoother registers; it tells a Smoother from a Filter."""
+_CONDITIONING_KINDS = ("FILTER", "SMOOTHER", "LATENT_PATH_BUILDER")
+"""dynestyx handler kinds that condition ``dsx.sample`` on the observed window."""
 
 _IDLE_SIMULATOR_WARNING = "Simulator has no predict_times to simulate at."
 """dynestyx's warning on the in-sample legs of the one-stack recipe; silenced when future == 0."""
@@ -124,6 +127,42 @@ class StateSpaceResult(NamedTuple):
     x_future: Float[Array, " future state"] | None
 
 
+def _check_version(dsx: Any) -> None:
+    """Warn when the installed dynestyx minor version is not the tested one."""
+    version = str(getattr(dsx, "__version__", ""))
+    try:
+        minor = tuple(int(part) for part in version.split(".")[:2])
+    except ValueError:
+        return
+    if minor != _TESTED_DYNESTYX:
+        msg = (
+            f"numpyro_forecast.contrib.dynestyx is tested with dynestyx "
+            f"{'.'.join(map(str, _TESTED_DYNESTYX))}, found {version}; dynestyx changes its "
+            "handler semantics between minor releases"
+        )
+        warnings.warn(msg, UserWarning, stacklevel=3)
+
+
+def _conditioning_kind() -> str:
+    """Return the active conditioning handler kind, or raise when none is active.
+
+    Reads dynestyx's handler stack (a private dynestyx query, pinned by the canary
+    test); it works at trace time, so also inside the jitted drivers.
+    """
+    handlers = importlib.import_module("dynestyx.handlers")
+    kinds = [kind.name for kind in handlers._dynestyx_stack_kind()]
+    conditioning = [kind for kind in kinds if kind in _CONDITIONING_KINDS]
+    if not conditioning:
+        msg = (
+            "state_space needs a dynestyx Filter, Smoother or LatentPathBuilder around the call "
+            f"(active dynestyx handlers: {kinds or 'none'}); without one dynestyx picks a default "
+            "inference method itself, so pass the handler of the fit explicitly, e.g. "
+            "`with Smoother(smoother_config=KFSmootherConfig()): forecast(...)`"
+        )
+        raise ValueError(msg)
+    return conditioning[0]
+
+
 def _validate_window(h: Horizon, y: Array, controls: Array | None) -> None:
     """Check the time axes against the horizon (rank is enforced by the jaxtyping annotations)."""
     if y.shape[-2] != h.t_obs:
@@ -136,7 +175,9 @@ def _validate_window(h: Horizon, y: Array, controls: Array | None) -> None:
 
 def _rng_key() -> Array:
     """Return the active seed handler's key, which the in-sample draws consume."""
-    key = numpyro.prng_key()
+    with warnings.catch_warnings():  # numpyro warns before returning None; the error says it all
+        warnings.simplefilter("ignore")
+        key = numpyro.prng_key()
     if key is None:
         msg = (
             "the in-sample predictive of state_space draws the states and observations, so the "
@@ -146,9 +187,7 @@ def _rng_key() -> Array:
     return key
 
 
-def _in_sample_states(
-    rng_key: Array, result: Any, trace: dict[str, Any], name: str, dsx: Any
-) -> Array:
+def _in_sample_states(rng_key: Array, result: Any, kind: str, t_obs: int) -> Array:
     """One in-sample state draw ``(t_obs, state)``: the posterior path, or the smoothing marginals.
 
     Every step's marginal is a numpyro ``Distribution`` whose pytree aux data
@@ -156,29 +195,39 @@ def _in_sample_states(
     batched distribution; instead the leaves are stacked and each step is
     unflattened and sampled under ``jax.vmap``.
     """
-    if isinstance(result, dsx.LatentStateResult):
-        return jnp.asarray(result.state_path)
-    if f"{name}{_SMOOTHED_MEAN}" not in trace:
+    if kind == "FILTER":
         msg = (
             "the in-sample predictive needs the smoothing distribution: run predict_in_sample / "
             "to_datatree under a dynestyx Smoother or a LatentPathBuilder (a Filter only has the "
             "filtering marginals; the draws of a Filter fit are valid under the Smoother that "
-            "runs the same forward filter, which adds the same marginal likelihood), and keep "
-            "the smoothed mean recorded (record_smoothed_states_mean=True, or record_max_elems "
-            "above its size)"
+            "runs the same forward filter, which adds the same marginal likelihood)"
         )
         raise ValueError(msg)
-    dists = result.dists
-    if not dists:
-        msg = "the dynestyx Smoother returned no per-step marginals to draw from"
+    if kind == "LATENT_PATH_BUILDER":
+        x = jnp.asarray(result.state_path)
+    else:
+        dists = getattr(result, "dists", None)
+        if not dists:
+            msg = "the dynestyx Smoother returned no per-step marginals to draw from"
+            raise ValueError(msg)
+        treedef = jax.tree.structure(dists[0])
+        leaves = [
+            jnp.stack(step) for step in zip(*(jax.tree.leaves(d) for d in dists), strict=True)
+        ]
+
+        def sample_step(step_leaves: list[Array], key: Array) -> Array:
+            return jnp.asarray(jax.tree.unflatten(treedef, step_leaves).sample(key))
+
+        x = jax.vmap(sample_step)(leaves, random.split(rng_key, len(dists)))
+    if x.ndim != 2 or x.shape[0] != t_obs:
+        msg = (
+            f"state_space needs one state vector per observed step, shape (t_obs={t_obs}, state), "
+            f"got a state path of shape {x.shape}: write a scalar state as a length-1 vector "
+            "(e.g. dist.Normal(...).expand([1]).to_event(1)); continuous-time paths with an "
+            "extra initial row are not supported"
+        )
         raise ValueError(msg)
-    treedef = jax.tree.structure(dists[0])
-    leaves = [jnp.stack(step) for step in zip(*(jax.tree.leaves(d) for d in dists), strict=True)]
-
-    def sample_step(step_leaves: list[Array], key: Array) -> Array:
-        return jnp.asarray(jax.tree.unflatten(treedef, step_leaves).sample(key))
-
-    return jax.vmap(sample_step)(leaves, random.split(rng_key, len(dists)))
+    return x
 
 
 def _observe(rng_key: Array, dynamics: Any, x: Array, u: Array | None, times: Array) -> Array:
@@ -194,6 +243,17 @@ def _observe(rng_key: Array, dynamics: Any, x: Array, u: Array | None, times: Ar
 
     keys = random.split(rng_key, x.shape[0])
     return jax.vmap(sample_step, in_axes=(0, None if u is None else 0, 0, 0))(x, u, times, keys)
+
+
+def _site_value(trace: dict[str, Any], site: str) -> Array:
+    """Read a dynestyx site from the inner trace, with a clear error when it is missing."""
+    if site not in trace:
+        msg = (
+            f"dynestyx registered no {site!r} site: state_space reads dynestyx's sites by name, "
+            "so it cannot run under numpyro.handlers.scope (which prefixes them)"
+        )
+        raise ValueError(msg)
+    return jnp.asarray(trace[site]["value"])
 
 
 def state_space(
@@ -220,19 +280,25 @@ def state_space(
       ``DiscreteTimeSimulator(n_simulations=1)`` placed outside the ``Filter``,
       ``Smoother`` or ``LatentPathBuilder`` (the explicit simulator is the
       recommended form; dynestyx 0.8 adds one itself when none is active). The
-      rollout starts from the conditioned state at the last observation, where
-      the filtering and smoothing distributions coincide, so the three handlers
-      give the same forecast law. The block asks the simulator for
-      ``predict_times`` starting at the last observation and drops that first
-      row, because dynestyx places the rollout's initial state at the first
-      predict time without a transition.
+      rollout starts from the conditioned state at the last observation: the
+      filtering or smoothing distribution at the parameters of each posterior
+      draw (the two coincide there), or the sampled final state of the path
+      under a ``LatentPathBuilder``, which therefore inherits the mixing of the
+      path. The block asks the simulator for ``predict_times`` starting at the
+      last observation and drops that first row, because dynestyx places the
+      rollout's initial state at the first predict time without a transition.
     - ``h.data is None`` (the in-sample predictive of
       `~~numpyro_forecast.predictive.predict_in_sample()` and
       `~~numpyro_forecast.convert.to_datatree()`): the site ``"obs"``, shape
       ``(t_obs, obs)``, one observation draw per step from
       ``dynamics.observation_model(x_t, u_t, t)`` at a draw of the in-sample
       states: step-wise from the smoothing marginals under a ``Smoother``, the
-      posterior path itself under a ``LatentPathBuilder``.
+      posterior path itself under a ``LatentPathBuilder``. This is not a prior
+      predictive: the block still conditions on ``y`` from the covariates, so
+      ``Predictive(model, num_samples=...)(rng_key, covariates)`` returns draws
+      conditioned on the observed window at prior parameters. Simulate a prior
+      predictive with ``dsx.sample`` and ``predict_times`` under a
+      ``Simulator``, without ``obs_values``.
 
     Parameters
     ----------
@@ -246,18 +312,23 @@ def state_space(
         by the caller (``covariates[..., : h.t_obs, :1]`` for a series stored in
         column 0) so that it is present when the drivers call the model with
         ``data=None``. NaN entries are missing observations and must be in ``y``
-        (the likelihood never reads ``h.data``). The ``LatentPathBuilder`` and the
-        Kalman and ensemble Kalman filters and smoothers of the cuthbert backend
-        (``KFConfig``, ``EnKFConfig``, ``KFSmootherConfig``,
-        ``EnRTSSmootherConfig`` with ``filter_source="cuthbert"``) skip them. The
-        other configurations reject them, including the cd_dynamax backend (the
-        default of ``KFConfig``) and the default ``Smoother()``, and the particle
-        filter returns a NaN log likelihood.
+        (the likelihood never reads ``h.data``). The ``LatentPathBuilder`` and
+        the Kalman and ensemble Kalman filters and smoothers of the cuthbert
+        backend (``KFConfig``, ``EnKFConfig``, ``KFSmootherConfig``,
+        ``EnRTSSmootherConfig`` with ``filter_source="cuthbert"``, and the
+        default ``Filter()``, an ensemble Kalman filter) skip them. The other
+        configurations reject them, including the cd_dynamax backend (the default
+        of ``KFConfig``) and the default ``Smoother()``. The particle filter
+        returns a NaN log likelihood (its warning disappears inside the jitted
+        drivers), and dynestyx does not check the HMM filters. Under a
+        ``LatentPathBuilder``, a partly missing row of an observation family the
+        builder cannot marginalize adds a latent ``f"{name}_missing_obs_values"``
+        site.
     dynamics
-        A ``dynestyx.DynamicalModel``. Its ``observation_model(x, u, t)`` must
-        return a NumPyro distribution for one time step (dynestyx's
-        ``LinearGaussianObservation`` or any callable), which the in-sample
-        predictive samples.
+        A ``dynestyx.DynamicalModel`` with a vector state (one row of the path per
+        observed step). Its ``observation_model(x, u, t)`` must return a NumPyro
+        distribution for one time step (dynestyx's ``LinearGaussianObservation``
+        or any callable), which the in-sample predictive samples.
     controls
         Optional control inputs over the whole horizon, shape
         ``(h.duration, control)``; passed as ``ctrl_values`` with ``ctrl_times``
@@ -273,12 +344,13 @@ def state_space(
     Raises
     ------
     ValueError
-        If ``y`` or ``controls`` do not span the horizon; if the forecast runs
-        with ``n_simulations != 1``; if the in-sample predictive runs under a
-        ``Filter`` (or a ``Smoother`` that does not record its smoothed mean) or
-        receives no per-step marginals. A fresh ``LatentPathBuilder`` inside a
-        jitted driver raises dynestyx's own ``ValueError`` about the
-        missingness pattern.
+        If no ``Filter``, ``Smoother`` or ``LatentPathBuilder`` is active; if
+        ``y`` or ``controls`` do not span the horizon; if the forecast runs with
+        ``n_simulations != 1``; if the in-sample predictive runs under a
+        ``Filter``, receives no per-step marginals, or gets a state path that is
+        not ``(t_obs, state)``; if a dynestyx site is missing (for example under
+        ``numpyro.handlers.scope``). A fresh ``LatentPathBuilder`` inside a jitted
+        driver raises dynestyx's own ``ValueError`` about the missingness pattern.
     RuntimeError
         If the in-sample predictive runs without a seed handler.
 
@@ -287,24 +359,32 @@ def state_space(
     - The ``Smoother`` in-sample draws are per-step marginals
       $p(x_t \mid y_{1:T})$, independent across steps: exact for per-step bands
       and metrics, not a joint path. The ``LatentPathBuilder`` draws are joint.
+      The smoother's marginals arrive as a Python list, so building the draws
+      costs trace time that grows with the length of the window.
     - A ``Filter`` and a ``Smoother`` that run the same forward filter add the
       same marginal likelihood, so the draws of a ``Filter`` fit can be exported
       under that ``Smoother`` without a refit: the Kalman filter with the Kalman
       (Rauch-Tung-Striebel) smoother, and an approximate filter with the smoother
       of the same configuration and seed. With an approximate filter, the
       posterior is only as good as that filter's likelihood estimate.
+    - Under a ``LatentPathBuilder`` the drivers need the posterior draws of
+      ``f"{name}_state_path_params"``, which only a fit under a builder has. A
+      posterior from a ``Filter`` or ``Smoother`` fit has no path, and the
+      builder then draws the path from its prior without an error: export such
+      fits under a ``Smoother``.
     - The ``LatentPathBuilder`` around a driver call must be the instance that
       fitted the model: it caches the observation missingness layout per site
       name and shape from the concrete observations of the fit, and the jitted
-      drivers hand it traced arrays. Use one builder per fitted model: a later
-      fit with the same site name and shape (for example the same series with a
-      gap) overwrites the cached layout, and the driver calls for the earlier
-      model would then read the wrong one. For the same reason a fresh builder
-      needs its first model run eager.
-    - With dynestyx 0.8.0 on Python 3.14, ``MCMC`` with
-      ``chain_method="parallel"`` under a ``LatentPathBuilder`` crashed the
-      process in our tests; ``"vectorized"`` and ``"sequential"`` work, and the
-      ``Filter`` and ``Smoother`` run parallel chains.
+      drivers hand it traced arrays. A later fit with the same site name and
+      shape and a different missingness pattern overwrites that layout, and the
+      drivers of the earlier model then fail at run time with dynestyx's error
+      about the layout; use one builder per fitted model when the patterns
+      differ. A fresh builder needs its first model run eager.
+    - ``mcmc.get_samples()`` also holds the deterministic sites dynestyx records
+      (``f"{name}_filtered_states_mean"`` and similar). The drivers ignore
+      deterministic sites, but `~~numpyro_forecast.convert.to_datatree()` stores
+      them in the posterior group; drop them for a smaller tree, and keep
+      ``f"{name}_state_path_params"`` under a ``LatentPathBuilder``.
 
     Examples
     --------
@@ -334,6 +414,9 @@ def state_space(
     ```
     """
     dsx = require("dynestyx", extra="dynestyx")
+    _check_version(dsx)
+    kind = _conditioning_kind()
+    controls = None if controls is None else jnp.asarray(controls)
     _validate_window(h, y, controls)
     # obs_times is a jax array, because the LatentPathBuilder indexes it inside a scan, and a
     # concrete one even under the jitted drivers, because a Filter's rollout reads it on the
@@ -361,7 +444,7 @@ def state_space(
         )
     x_in_sample, x_future = None, None
     if h.future > 0:
-        predicted = jnp.asarray(trace[f"{name}{_PREDICTED_OBSERVATIONS}"]["value"])
+        predicted = _site_value(trace, f"{name}{_PREDICTED_OBSERVATIONS}")
         if predicted.shape[0] != 1:
             msg = (
                 "state_space needs Simulator(n_simulations=1), "
@@ -369,10 +452,10 @@ def state_space(
             )
             raise ValueError(msg)
         numpyro.deterministic("forecast", predicted[0, 1:])  # drop the anchor row
-        x_future = jnp.asarray(trace[f"{name}{_PREDICTED_STATES}"]["value"])[0, 1:]
+        x_future = _site_value(trace, f"{name}{_PREDICTED_STATES}")[0, 1:]
     if h.data is None:
         key_states, key_obs = random.split(_rng_key())
-        x_in_sample = _in_sample_states(key_states, result, trace, name, dsx)
+        x_in_sample = _in_sample_states(key_states, result, kind, h.t_obs)
         u = None if controls is None else controls[: h.t_obs]
         numpyro.deterministic("obs", _observe(key_obs, dynamics, x_in_sample, u, obs_times))
     return StateSpaceResult(x_in_sample=x_in_sample, x_future=x_future)

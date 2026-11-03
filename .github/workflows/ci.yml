@@ -40,6 +40,19 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # dynestyx declares Requires-Python <3.14. uv installs it on 3.14 anyway (the test job
+  # above runs its tests there); this leg runs them on a Python version dynestyx supports.
+  dynestyx-supported-python:
+    runs-on: ubuntu-latest
+    needs: prek
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - run: uv sync --extra all
+      - run: uv run pytest tests/contrib/test_dynestyx.py tests/test_package.py
+
   # Base leg (no optional extras): importing the package must not pull in
   # optax/blackjax/pandas (invariant I8). Kept separate from the full suite so a
   # regression that eagerly imports an extra fails even when extras are absent.
@@ -59,6 +72,6 @@ jobs:
         # pandas is deliberately absent from the leak list: it is a hard
         # transitive dependency of arviz/xarray (imported at module top by
         # convert.py), so it is always present and always imported. Only
-        # optax, blackjax, polars, and dynestyx are meaningful extras-leak signals.
+        # optax, blackjax, and polars are meaningful extras-leak signals.
         run: |
-          uv run python -c "import sys, numpyro_forecast; leaked=[m for m in ('optax','blackjax','polars','dynestyx') if m in sys.modules]; assert not leaked, leaked; print('base import OK')"
+          uv run python -c "import sys, numpyro_forecast; leaked=[m for m in ('optax','blackjax','polars') if m in sys.modules]; assert not leaked, leaked; print('base import OK')"
