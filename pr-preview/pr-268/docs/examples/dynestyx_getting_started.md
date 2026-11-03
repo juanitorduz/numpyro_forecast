@@ -5,7 +5,7 @@ Getting Started with `dynestyx` State Space Models
 
 *This example fits the BART weekly ridership model of the [comparing inference methods](inference_methods_comparison.md) example and the ARMA model of the [ARMA](arma.md) example as [`dynestyx`](https://github.com/BasisResearch/dynestyx) state space models. It is the entry point to `dynestyx` in `numpyro_forecast`. The [advanced example](dynestyx_integration.md) continues with filtering versus smoothing, the cost of a gradient, variational inference and backtesting.*
 
-`dynestyx` is a probabilistic programming library for dynamical systems, built on NumPyro. A `DynamicalModel` holds an initial condition, a state evolution and an observation model. Effect handlers decide what `dynestyx.sample` does with it: a `Filter` or a `Smoother` integrates the latent path out and adds the marginal log likelihood to the NumPyro trace, a `LatentPathBuilder` samples the path, and a `Simulator` rolls the state forward in time.
+`dynestyx` is a probabilistic programming library for dynamical systems, built on NumPyro. A `DynamicalModel` holds an initial condition, a state evolution and an observation model. Effect handlers decide what `dynestyx.sample` does with it. A `Filter` or a `Smoother` integrates the latent path out and adds the marginal log likelihood to the NumPyro trace. A `LatentPathBuilder` samples the path, and a `Simulator` rolls the state forward in time.
 
 The [`state_space`](../../reference/contrib.dynestyx.state_space.md) building block of `numpyro_forecast.contrib.dynestyx` (extra `dynestyx`) connects a `DynamicalModel` to the drivers of the package: [`forecast`](../../reference/predictive.forecast.md), [`predict_in_sample`](../../reference/predictive.predict_in_sample.md), [`to_datatree`](../../reference/convert.to_datatree.md) and [`backtest`](../../reference/evaluate.backtest.md).
 
@@ -87,7 +87,7 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 Every fit runs NUTS with 4 chains and a target acceptance probability of 0.9. The fits with an explicit path run longer chains than the others, because they mix more slowly (the Student-T section shows why). The helpers below run a fit and collect its diagnostics.
 
 - `fit_nuts` returns the sampler and its wall time, which includes the warmup and the compilation.
-- `diagnostics` checks every sample site of the fit, the vectors and the latent path included: it reports the number of scalar parameters, the smallest bulk effective sample size (ESS), the largest \hat{R} and the number of divergent transitions, next to the wall time and the leapfrog steps per draw.
+- `diagnostics` checks every sample site of the fit, the vectors and the latent path included. It reports the number of scalar parameters, the smallest bulk effective sample size (ESS), the largest \hat{R} and the number of divergent transitions. It adds the wall time and the leapfrog steps per draw.
 
 
 ``` python
@@ -129,8 +129,8 @@ def diagnostics(mcmc: MCMC, seconds: float) -> dict[str, float]:
     extra = mcmc.get_extra_fields()
     return {
         "parameters": float(len(summary)),
-        "min bulk ESS": float(summary["ess_bulk"].min()),
-        "max R-hat": float(summary["r_hat"].max()),
+        "min bulk ESS": float(summary["ess_bulk"].min(skipna=False)),  # a NaN shows as NaN
+        "max R-hat": float(summary["r_hat"].max(skipna=False)),
         "divergences": float(np.asarray(extra["diverging"]).sum()),
         "leapfrog steps per draw": float(np.asarray(extra["num_steps"]).mean()),
         "wall time (s)": seconds,
@@ -200,7 +200,7 @@ def hdi_label(prob: float, prefix: str = "") -> str:
 
 - **Training** (`data` given, no horizon): the handler adds its likelihood to the trace, which is what NUTS or SVI fits.
 - **Forecasting** (`covariates` longer than `data`): a `Simulator` rolls the conditioned state at the last observation forward, and the block registers the draws as the `"forecast"` site.
-- **In-sample predictive** (`data=None`): the block draws the in-sample states (from the smoothing distribution under a `Smoother`, or the sampled path under a `LatentPathBuilder`), draws one observation per step from the observation model, and registers them as the `"obs"` site. This is not a prior predictive, because the block still conditions on the observed window.
+- **In-sample predictive** (`data=None`): the block draws the in-sample states, from the smoothing distribution under a `Smoother` or the sampled path under a `LatentPathBuilder`. It draws one observation per step from the observation model and registers them as the `"obs"` site. This is not a prior predictive, because the block still conditions on the observed window.
 
 The block reads the observed window `y` from the covariates, as [`ssoe`](../../reference/models.ssoe.md) does, because the drivers call the model without data for the in-sample predictive.
 
@@ -208,10 +208,12 @@ The `dynestyx` handler goes around each call that runs the model, as in the `dyn
 
 ``` python
 with Filter(filter_config=KFConfig()):
-    mcmc.run(rng_key, covariates_train, data_train)
+    mcmc.run(key_fit, covariates_train, data_train)
 
+# the parameters only, without the filtered states that the filter fit recorded
+posterior = {k: v for k, v in mcmc.get_samples().items() if not k.startswith("f_")}
 with DiscreteTimeSimulator(n_simulations=1), Smoother(smoother_config=KFSmootherConfig()):
-    tree = to_datatree(rng_key, model, mcmc.get_samples(), data_train, covariates)
+    tree = to_datatree(key_export, model, posterior, data_train, covariates)
 ```
 
 The block raises an error when no `Filter`, `Smoother` or `LatentPathBuilder` is around the call. Without one, `dynestyx` would pick an inference method itself and only log the choice.
@@ -332,11 +334,11 @@ diagnostics_table(gaussian_fits)
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx Kalman filter | 55 | 4245 | 1.004 | 0 | 11.5 | 91.0 |
-| innovations | 472 | 1684 | 1.008 | 0 | 127.0 | 13.6 |
+| dynestyx Kalman filter | 55 | 4245 | 1.004 | 0 | 11.5 | 106.9 |
+| innovations | 472 | 1684 | 1.008 | 0 | 127.0 | 16.2 |
 
 
-Both fits converge over all their parameters: the largest \hat{R} is 1.008, the smallest bulk ESS is 1{,}684, and there are no divergent transitions. NUTS explores 55 parameters with the Kalman filter and 472 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), the 417 weekly steps of the level included, and it takes about ten times fewer leapfrog steps per draw with the filter (11.5 against 127.0). Each of those steps runs the filter over the 417 weeks, and on the CPU that executed this notebook the Kalman fit took longer in wall time (the last column includes the warmup and the compilation).
+Both fits converge over all their parameters: the largest \hat{R} is 1.008, the smallest bulk ESS is 1{,}684, and there are no divergent transitions. NUTS explores 55 parameters with the Kalman filter and 472 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), the 417 weekly steps of the level included. It takes 11.5 leapfrog steps per draw with the filter, against 127.0 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter over the 417 weeks. On the CPU that executed this notebook, the Kalman fit took longer in wall time (the last column includes the warmup and the compilation).
 
 
 ``` python
@@ -358,7 +360,7 @@ The posteriors of the intercept, of the scale of the weekly steps and of the noi
 
 # In-Sample Predictive and Forecast
 
-[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) draws the in-sample predictive by calling the model without data, and the forecast by calling it with the full-horizon covariates. For the in-sample predictive the block needs the distribution of the states given the whole window, p(x_t \mid y\_{1:T}, \theta), which a `Filter` does not have: it carries the filtering distribution p(x_t \mid y\_{1:t}, \theta) only. A Kalman smoother has the smoothing distribution, and it adds the same marginal likelihood to the trace as the Kalman filter. The draws of the filter fit are therefore draws of the posterior under the smoother too, so we export them under the smoother, with the `Simulator` outside it for the forecast, and do not refit.
+[to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) draws the in-sample predictive by calling the model without data, and the forecast by calling it with the full-horizon covariates. For the in-sample predictive the block needs the distribution of the states given the whole window, p(x_t \mid y\_{1:T}, \theta). A `Filter` does not have it: it carries the filtering distribution p(x_t \mid y\_{1:t}, \theta) only. A Kalman smoother has the smoothing distribution, and it adds the same marginal likelihood to the trace as the Kalman filter. The draws of the filter fit are therefore draws of the posterior under the smoother too, so we export them under the smoother, with the `Simulator` outside it for the forecast, and do not refit.
 
 The block draws every in-sample state from its smoothing distribution and pushes it through the observation model. These draws are exact for every week, so the bands and the CRPS below are correct, but they are independent across weeks, not a joint path. [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) replays a joint posterior path instead.
 
@@ -947,7 +949,7 @@ Group: /
 │           sigma         (chain, draw) float32 16kB 0.07794 0.07916 ... 0.07391 0.07532
 │           weight        (chain, draw, weight_dim_0) float32 832kB -0.01708 ... -0.0102
 │       Attributes:
-│           created_at:                 2026-11-03T13:24:22.790919+00:00
+│           created_at:                 2026-11-03T14:28:30.441454+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -962,7 +964,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.96
 │       Attributes:
-│           created_at:                 2026-11-03T13:24:26.016745+00:00
+│           created_at:                 2026-11-03T14:28:34.328288+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -975,7 +977,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 14.41 14.45 14.42 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-11-03T13:24:26.017005+00:00
+│           created_at:                 2026-11-03T14:28:34.328619+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -988,7 +990,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 88kB 14.41 0.0 ... -0.2375
 │       Attributes:
-│           created_at:                 2026-11-03T13:24:26.017202+00:00
+│           created_at:                 2026-11-03T14:28:34.328892+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1003,7 +1005,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.29
 │       Attributes:
-│           created_at:                 2026-11-03T13:24:27.135948+00:00
+│           created_at:                 2026-11-03T14:28:35.603603+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1016,7 +1018,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 11kB 14.27 -0.05158 ... 0.3139
         Attributes:
-            created_at:                 2026-11-03T13:24:27.136198+00:00
+            created_at:                 2026-11-03T14:28:35.603876+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1187,7 +1189,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T13:24:22.790919+00:00
+2026-11-03T14:28:30.441454+00:00
 
 creation_library :  
 ArviZ
@@ -1323,7 +1325,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T13:24:26.016745+00:00
+2026-11-03T14:28:34.328288+00:00
 
 creation_library :  
 ArviZ
@@ -1417,7 +1419,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T13:24:26.017005+00:00
+2026-11-03T14:28:34.328619+00:00
 
 creation_library :  
 ArviZ
@@ -1511,7 +1513,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T13:24:26.017202+00:00
+2026-11-03T14:28:34.328892+00:00
 
 creation_library :  
 ArviZ
@@ -1647,7 +1649,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T13:24:27.135948+00:00
+2026-11-03T14:28:35.603603+00:00
 
 creation_library :  
 ArviZ
@@ -1741,7 +1743,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T13:24:27.136198+00:00
+2026-11-03T14:28:35.603876+00:00
 
 creation_library :  
 ArviZ
@@ -1847,7 +1849,7 @@ ax.set(
 </figure>
 
 
-The in-sample band is the observation noise around the smoothed level. The forecast band is about as wide: the weekly steps of the level are small, so one year of them adds little to the observation noise. A few of the sharpest dips, such as the last week of the test year, fall outside the 94\\ bands. The Student-T noise of the next section allows for them.
+The in-sample band is the observation noise around the smoothed level. The forecast band is about as wide: the weekly steps of the level are small, so one year of them adds little to the observation noise. A few of the sharpest dips, such as the last week of the test year, fall outside the 94\\ bands. The next section replaces the Normal noise with Student-T noise.
 
 
 # Student-T Noise with an Explicit Path
@@ -1907,7 +1909,7 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
 ```
 
 
-Both fits run their chains one after the other (`chain_method="sequential"`): parallel chains under a `LatentPathBuilder` crashed the Python process with `dynestyx` 0.8.0 on the machine that executed this notebook. The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations): with the shorter chains its slowest parameters did not converge. We keep the `LatentPathBuilder` instance of the fit. The builder records the pattern of missing observations from the concrete data of the fit, and the drivers later run the model under `jax.jit`, where the data are traced, so every later call must use the same instance.
+Both fits run their chains one after the other (`chain_method="sequential"`). Parallel chains under a `LatentPathBuilder` crashed the Python process with `dynestyx` 0.8.0 and Python 3.14 on the machine that executed this notebook (`dynestyx` declares support for Python 3.12 and 3.13). The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly (the per-parameter table below shows the slowest parameter). We keep the `LatentPathBuilder` instance of the fit. The builder records the pattern of missing observations from the concrete data of the fit. The drivers later run the model under `jax.jit`, where the data are traced, so every later call must use the same instance.
 
 
 ``` python
@@ -1943,11 +1945,11 @@ diagnostics_table(student_fits)
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx latent path | 472 | 439 | 1.005 | 0 | 135.2 | 56.4 |
-| innovations | 473 | 946 | 1.006 | 0 | 255.0 | 82.0 |
+| dynestyx latent path | 472 | 439 | 1.005 | 0 | 135.2 | 65.9 |
+| innovations | 473 | 946 | 1.006 | 0 | 255.0 | 81.5 |
 
 
-With these chain lengths both fits converge over all their parameters: the largest \hat{R} is 1.006, the smallest bulk ESS is 439, and there are no divergent transitions. Because the two fits ran chains of different lengths, the table does not compare their cost. The diagnostics of the three scalar parameters that both models share:
+With these chain lengths both fits converge over all their parameters: the largest \hat{R} is 1.006, the smallest bulk ESS is 439, and there are no divergent transitions. The two fits ran chains of different lengths, so their wall times do not compare their cost. Per draw, the explicit path takes 135.2 leapfrog steps and [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) 255.0, the length of a NUTS tree of depth 8. The diagnostics of the three scalar parameters that both models share:
 
 
 ``` python
@@ -2132,7 +2134,7 @@ ax.set(
 </figure>
 
 
-The test CRPS is 0.0302 for the explicit path and 0.0303 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), and the medians and HDI bounds of the two forecasts lie on top of each other over the test year.
+The test CRPS is 0.0302 for the explicit path and 0.0303 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), and the medians and HDI bounds of the two forecasts lie on top of each other over the test year. Both score better than the Normal models of the previous section (test CRPS 0.0361 and 0.0360).
 
 
 # Missing Data
@@ -2166,10 +2168,10 @@ diagnostics_table({"gap fit": diagnostics(mcmc_gap, seconds)})
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| gap fit | 472 | 355 | 1.013 | 0 | 163.6 | 63.0 |
+| gap fit | 472 | 355 | 1.013 | 0 | 163.6 | 61.8 |
 
 
-The gap fit converges, with the largest \hat{R} at 1.013, just above the usual threshold of 1.01, the smallest bulk ESS at 355 and no divergent transitions.
+The gap fit nearly converges: the largest \hat{R} is 1.013, just above the usual threshold of 1.01, the smallest bulk ESS is 355, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
 
 We draw the in-sample predictive of the gap fit, which covers the gap weeks, under the builder of that fit. As a reference we draw the in-sample predictive of the fit on all weeks from the previous section. That fit has seen the weeks of the gap, so we expect it to score better there.
 
@@ -2253,7 +2255,7 @@ ax.set(
 </figure>
 
 
-The band of the gap fit follows the Fourier regression through the gap, including the two dips of the yearly cycle inside it, and the median of the fit on all weeks stays inside the band.
+The band of the gap fit follows the Fourier regression through the gap, including the two dips of the yearly cycle inside it. The median of the fit on all weeks stays inside the band.
 
 
 # A Two-Dimensional State: ARMA(1,1)
@@ -2268,7 +2270,7 @@ with [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe), which 
 
 so the state covariance is Q = \sigma^2 g g^\top, and the observation is y_t = H x_t + c with H = (1, 0). The initial state has the stationary covariance P_0, the solution of P_0 = A P_0 A^\top + Q. The state noise has rank one, so we add a small jitter \delta = 10^{-4} \sigma^2 to Q, to P_0 and as the observation variance, which keeps the Cholesky factors defined in single precision.
 
-We simulate 100 steps with \phi = 0.4, \theta = 0.7 and \sigma = 0.5. The priors are those of the ARMA example, which also checks them with prior predictive samples.
+We simulate 100 steps with \phi = 0.4, \theta = 0.7 and \sigma = 0.5. The priors are those of the ARMA example.
 
 
 ``` python
@@ -2377,8 +2379,8 @@ diagnostics_table(arma_fits)
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx Kalman filter | 4 | 3633 | 1.003 | 0 | 6.2 | 10.9 |
-| ssoe | 4 | 3476 | 1.000 | 0 | 6.0 | 0.9 |
+| dynestyx Kalman filter | 4 | 3633 | 1.003 | 0 | 6.2 | 10.7 |
+| ssoe | 4 | 3476 | 1.000 | 0 | 6.0 | 1.0 |
 
 
 Both fits converge (largest \hat{R} 1.003, smallest bulk ESS 3{,}476, no divergent transitions), with about six leapfrog steps per draw each: neither model samples a path.
@@ -2399,7 +2401,7 @@ plot_posteriors(
 </figure>
 
 
-The two posteriors are close, and the true values lie inside the bulk of both. The small shifts in \theta and \sigma come from the two likelihoods: the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) likelihood conditions on y\_{-1} = \mu and \varepsilon\_{-1} = 0, and the Kalman filter likelihood is exact up to the small jitter.
+The two posteriors are close, and the true values lie inside the bulk of both. The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) likelihood conditions on y\_{-1} = \mu and \varepsilon\_{-1} = 0, and the Kalman filter likelihood is exact up to the small jitter. The small differences between the two posteriors can come from these two likelihoods or from Monte Carlo error; this run does not separate the two.
 
 
 # Conclusion
@@ -2409,17 +2411,17 @@ The two posteriors are close, and the true values lie inside the bulk of both. T
 
 - **One model function, any handler.** [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) turns a `DynamicalModel` into a `numpyro_forecast` model. The handler around each call selects the inference: a Kalman filter or smoother integrates the level out, a `LatentPathBuilder` samples it. [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast), [predict_in_sample](../../reference/predictive.predict_in_sample.md#numpyro_forecast.predictive.predict_in_sample) and [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) work unchanged with the handler around the call, and the block raises an error when the handler is missing.
 - **The Kalman filter integrates the level out.** For the Normal model it gives the same posteriors and the same in-sample and test CRPS as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), with 55 parameters for NUTS instead of 472. A Kalman smoother exports the filter fit with [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree), without a refit.
-- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains to converge.
-- **The Kalman filter gives the exact ARMA(1,1) likelihood.** Its posteriors match the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) model of the ARMA example.
+- **The explicit path covers Student-T noise and gaps.** Its posteriors and forecast match [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), but it samples the states in centered form and needs longer chains. The fit through the gap nearly converges.
+- **The Kalman filter gives the exact ARMA(1,1) likelihood**, up to a small jitter. Its posteriors are close to those of the [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) model of the ARMA example.
 
 
 ## Limitations
 
 - The in-sample draws under a smoother are independent across weeks. For joint paths, use [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) or a `LatentPathBuilder`.
-- The `LatentPathBuilder` has no reparameterization option, every later call must use the builder instance of the fit, and parallel chains under it crashed the process on the machine that executed this notebook.
+- The `LatentPathBuilder` has no reparameterization option, and every later call must use the builder instance of the fit. Parallel chains under it crashed the process with Python 3.14 on the machine that executed this notebook.
 - The block models one series per model function, with the step index as its time grid.
 
 
 ## Next Steps
 
-The [advanced `dynestyx` example](dynestyx_integration.md) compares filtering and smoothing on a local level model, measures the cost of a full evaluation against a gradient, fits a seasonal model with SVI, and backtests a `dynestyx` model with expanding windows.
+The [advanced `dynestyx` example](dynestyx_integration.md) compares filtering and smoothing on a local level model and measures the cost of a full evaluation against a gradient. It also fits a seasonal model with SVI and backtests a `dynestyx` model with expanding windows.

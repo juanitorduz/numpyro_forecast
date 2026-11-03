@@ -11,7 +11,7 @@ In this notebook we write a [`dynestyx`](https://github.com/BasisResearch/dynest
 
 `numpyro_forecast` is a forecasting workflow layer. A model is a plain function `(covariates, data=None)` built from model building blocks that register the `"obs"` and `"forecast"` sites. The drivers ([`forecast`](../../reference/predictive.forecast.md), [`predict_in_sample`](../../reference/predictive.predict_in_sample.md), [`to_datatree`](../../reference/convert.to_datatree.md), [`backtest`](../../reference/evaluate.backtest.md) and the metrics) read those sites by name.
 
-The two libraries compose at the trace level. The [`state_space`](../../reference/contrib.dynestyx.state_space.md) building block of `numpyro_forecast.contrib.dynestyx` connects them. The `dynestyx` handler goes around each call that runs the model, so the same model function serves every inference strategy: integrating the latent path out (a `Smoother`) or sampling it explicitly (a `LatentPathBuilder`) is a change of the handler around the call.
+The two libraries compose at the trace level. The [`state_space`](../../reference/contrib.dynestyx.state_space.md) building block of `numpyro_forecast.contrib.dynestyx` connects them. The `dynestyx` handler goes around each call that runs the model, so the same model function serves every inference strategy. Integrating the latent path out (a `Smoother`) or sampling it explicitly (a `LatentPathBuilder`) is a change of the handler around the call.
 
 We proceed as follows:
 
@@ -114,7 +114,7 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 The block has three modes, and `h.data` selects them. The observations themselves come from the `y` argument, which the model slices from `covariates` (the series doubles as a covariate, the same contract as [`ssoe`](../../reference/models.ssoe.md)). This is what lets a model call without data still reach the observed window.
 
 1.  **Training** (`data` present, no horizon): the block runs `dsx.sample` under the active handler. The factor (and the path site, for the builder) enters the trace.
-2.  **Forecasting** (`covariates` longer than `data`): the `Simulator` around the call starts from the conditioned distribution of the state at the last observed step (the filtering or smoothing distribution, or the sampled path, which coincide there) and rolls it forward. The block registers the horizon draws as the `"forecast"` site.
+2.  **Forecasting** (`covariates` longer than `data`): the `Simulator` around the call starts from the conditioned distribution of the state at the last observed step and rolls it forward. Under a `Filter` or a `Smoother` that is the filtering or smoothing distribution at the parameters of each posterior draw (the two coincide at the last step). Under a `LatentPathBuilder` it is the sampled final state, which inherits the mixing of the path. The block registers the horizon draws as the `"forecast"` site.
 3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` is a mode switch, not an absence of data. The in-sample predictive is a smoothing task, which is why a `Filter` raises in this mode.
 
 The block owns the likelihood, so it also owns the two sites, like [`predict`](../../reference/models.predict.md). It returns a [`StateSpaceResult`](../../reference/contrib.dynestyx.StateSpaceResult.md) with the state draws of the current mode, `x_future` over the horizon and `x_in_sample` over the window, so that a model can register its latent level.
@@ -122,10 +122,10 @@ The block owns the likelihood, so it also owns the two sites, like [`predict`](.
 Three details of the implementation matter for correctness:
 
 - **The anchor.** The prediction grid starts at the last observed step, `t_obs - 1`, and the block drops the first returned row. The simulator's first predicted state is the conditioned draw at the first prediction time without a transition, so this anchor gives exactly one transition per horizon step.
-- **Time grids.** The block passes the observation times as a jax array, because the `LatentPathBuilder` indexes them inside a `lax.scan`, and the prediction and control times as NumPy arrays, because the `Simulator` splits its grid into segments on the host. The drivers run the model under `jax.jit`, so the block computes the observation times at trace time, where they stay concrete for the host-side rollout of a `Filter`. A grid derived from a traced covariate column would fail.
+- **Time grids.** The block passes the observation times as a jax array, because the `LatentPathBuilder` indexes them inside a `lax.scan`. It passes the prediction and control times as NumPy arrays, because the `Simulator` splits its grid into segments on the host. The drivers run the model under `jax.jit`, so the block computes the observation times at trace time, where they stay concrete for the host-side rollout of a `Filter`. A grid derived from a traced covariate column would fail.
 - **One handler instance per fitted model.** Create the handlers once, outside the model. The `LatentPathBuilder` records the pattern of missing observations from the concrete data of the fit, and the drivers later call the model with traced data, so they need the instance that fitted the model.
 
-Without any handler, `dynestyx` picks one itself and does not warn, so we always pass the handler and its configuration explicitly.
+Without a `Filter`, `Smoother` or `LatentPathBuilder` around the call, [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) raises an error, so we always pass the handler and its configuration explicitly.
 
 
 # Local Level Model
@@ -2363,7 +2363,7 @@ axes[-1].set(xlabel="time");
 </figure>
 
 
-In the top panel the filtered band is wider at every step but the last, where filtering and smoothing condition on the same observations, and it is widest at the start of the window, where few observations have entered it. Its mean reacts to each new observation and lags the level. The smoothed band conditions on the whole window at every step, so it is narrower and closer to the truth, and the table above confirms it with the lower RMSE and CRPS against the true level. The two bands are two different distributions over the state, not two views of one distribution.
+In the top panel the filtered band is wider at every step but the last, where filtering and smoothing condition on the same observations. It is widest at the start of the window, where few observations have entered it. Its mean reacts to each new observation and lags the level. The smoothed band conditions on the whole window at every step, so it is narrower and closer to the truth, and the table above confirms it with the lower RMSE and CRPS against the true level. The two bands are two different distributions over the state, not two views of one distribution.
 
 In the bottom panel the three reconstructions coincide. The direct model, the explicit path built by `dynestyx` and the smoother recover the same level from the same posterior, and the two `dynestyx` models did so through the same `x_in_sample` field.
 
@@ -2814,11 +2814,11 @@ The empirical coverage of the central 50\\ interval moves around the nominal lev
 
 ## Model Limitations
 
-- A `Smoother` or a `LatentPathBuilder` predicts at or after the end of the window only (a `Filter` also predicts inside the window, from the filtering distribution), so the in-sample predictive comes from the conditioned distributions and not from a rollout. Under a `Smoother` it is a per-step marginal, so a functional of the whole path would need backward simulation; the `LatentPathBuilder` gives joint paths.
+- A `Smoother` or a `LatentPathBuilder` predicts at or after the end of the window only. (A `Filter` also predicts inside the window, from the filtering distribution.) The in-sample predictive therefore comes from the conditioned distributions and not from a rollout. Under a `Smoother` it is a per-step marginal, so a functional of the whole path would need backward simulation; the `LatentPathBuilder` gives joint paths.
 - Under a `Filter` the block has no in-sample predictive. Use a `Smoother` instead: it reports the same marginal log likelihood, so the two handlers share the parameter posterior. They do not share the distribution over the states. The filtering distribution uses the observations up to step t, the smoothing distribution uses the whole window, and the smoothed level is the better reconstruction of the true state.
 - The block uses the step index as its time grid, so it does not cover irregularly spaced observations or continuous-time dynamics. It models one series per model function, with no batch dimensions.
-- Every call that runs the model needs the handler around it, including `svi.run` and [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior). Without a handler, `dynestyx` picks one itself and does not warn, and a `LatentPathBuilder` around a driver must be the instance that fitted the model.
-- The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) family of the package (exponential smoothing in innovations form) has no stochastic latent to integrate out: with a single source of error its state is a deterministic function of the past observations, so its likelihood is exact given the parameters and the initial values. A linear member of the family can still be written as a linear-Gaussian state space model, where the Kalman filter also integrates out the initial values: the [getting started example](dynestyx_getting_started.md) does this for ARMA(1,1). Its members that are Markov in the observations (autoregressions) can also be written with `DiracIdentityObservation` under a `LatentPathBuilder`, see the design document.
+- Every call that runs the model needs the handler around it, including `svi.run` and [draw_posterior](../../reference/predictive.draw_posterior.md#numpyro_forecast.predictive.draw_posterior), and the block raises an error without one. A `LatentPathBuilder` around a driver must be the instance that fitted the model.
+- The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) family of the package (exponential smoothing in innovations form) has no stochastic latent to integrate out. With a single source of error, its state is a deterministic function of the past observations, so its likelihood is exact given the parameters and the initial values. A linear member of the family can still be written as a linear-Gaussian state space model, where the Kalman filter also integrates out the initial values: the [getting started example](dynestyx_getting_started.md) does this for ARMA(1,1). Its members that are Markov in the observations (autoregressions) can also be written with `DiracIdentityObservation` under a `LatentPathBuilder`, see the design document.
 
 
 ## Recommendations
@@ -2826,7 +2826,7 @@ The empirical coverage of the central 50\\ interval moves around the nominal lev
 1.  Use a `Smoother` with `KFSmootherConfig(filter_source="cd_dynamax")` on linear-Gaussian models, and switch to `filter_source="cuthbert"` when you need missing observations, time-varying parameters or a GPU on long series.
 2.  Use a `LatentPathBuilder` when the path itself is the object of interest, the observation model is non-Gaussian, or the window has missing observations.
 3.  Put `LocScaleReparam` on the direct model in any comparison, as we did here.
-4.  Create the `dynestyx` handlers once, outside the model, use one `LatentPathBuilder` per fitted model, and pass the KF configurations explicitly: `Filter()` defaults to an ensemble Kalman filter and `Smoother()` to an extended Kalman smoother on the `cuthbert` backend, which are approximate or needlessly expensive on a linear-Gaussian model.
+4.  Create the `dynestyx` handlers once, outside the model, and use one `LatentPathBuilder` per fitted model. Pass the KF configurations explicitly: `Filter()` defaults to an ensemble Kalman filter and `Smoother()` to an extended Kalman smoother on the `cuthbert` backend. These are approximate or needlessly expensive on a linear-Gaussian model.
 
 
 # Next Steps

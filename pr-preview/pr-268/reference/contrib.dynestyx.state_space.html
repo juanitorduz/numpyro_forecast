@@ -967,7 +967,7 @@ window.Quarto = {
 </div>
 <div class="doc-usage-source">
 <p>Usage</p>
-<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/dynestyx.py#L259-L461" target="_blank" rel="noopener">Source</a></p>
+<p><a href="https://github.com/juanitorduz/numpyro_forecast/blob/main/numpyro_forecast/contrib/dynestyx.py#L265-L473" target="_blank" rel="noopener">Source</a></p>
 </div>
 <div class="doc-signature doc-Kind.FUNCTION">
 <div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">contrib</span><span class="op">.</span><span class="va">dynestyx</span><span class="op">.</span><span class="va">state_space</span>(
@@ -1035,7 +1035,11 @@ Optional control inputs over the whole horizon, shape <code>(h.duration, control
 </dd>
 <dt><code> <span class="doc-parameter-annotation">RuntimeError</span></code></dt>
 <dd>
-If the in-sample predictive runs without a seed handler.
+<p>If the in-sample predictive runs without a seed handler.</p>
+</dd>
+<dt><code> <span class="doc-parameter-annotation">jax.errors.JaxRuntimeError</span></code></dt>
+<dd>
+From dynestyx’s layout check, when a traced call evaluates the likelihood under a <code>LatentPathBuilder</code> whose cached missingness layout comes from a later fit with another missingness pattern (see Notes).
 </dd>
 </dl>
 </div>
@@ -1046,7 +1050,7 @@ If the in-sample predictive runs without a seed handler.
 <li>The <code>Smoother</code> in-sample draws are per-step marginals <span class="math inline">p(x_t \mid y_{1:T})</span>, independent across steps: exact for per-step bands and metrics, not a joint path. The <code>LatentPathBuilder</code> draws are joint. The smoother’s marginals arrive as a Python list, so building the draws costs trace time that grows with the length of the window.</li>
 <li>A <code>Filter</code> and a <code>Smoother</code> that run the same forward filter add the same marginal likelihood, so the draws of a <code>Filter</code> fit can be exported under that <code>Smoother</code> without a refit: the Kalman filter with the Kalman (Rauch-Tung-Striebel) smoother, and an approximate filter with the smoother of the same configuration and seed. With an approximate filter, the posterior is only as good as that filter’s likelihood estimate.</li>
 <li>Under a <code>LatentPathBuilder</code> the drivers need the posterior draws of <code>f"{name}_state_path_params"</code>, which only a fit under a builder has. A posterior from a <code>Filter</code> or <code>Smoother</code> fit has no path, and the builder then draws the path from its prior without an error: export such fits under a <code>Smoother</code>.</li>
-<li>The <code>LatentPathBuilder</code> around a driver call must be the instance that fitted the model: it caches the observation missingness layout per site name and shape from the concrete observations of the fit, and the jitted drivers hand it traced arrays. A later fit with the same site name and shape and a different missingness pattern overwrites that layout, and the drivers of the earlier model then fail at run time with dynestyx’s error about the layout; use one builder per fitted model when the patterns differ. A fresh builder needs its first model run eager.</li>
+<li>The <code>LatentPathBuilder</code> around a driver call must be the instance that fitted the model: it caches the observation missingness layout per site name and shape from the concrete observations of the fit, and the jitted drivers hand it traced arrays. A later fit with the same site name and shape and a different missingness pattern overwrites that layout. A traced call for the earlier model that evaluates the likelihood (a fit, <code>log_density</code>) then raises dynestyx’s <code>JaxRuntimeError</code>; the predictive drivers do not evaluate it and ran without error in our tests. Use one builder per fitted model when the patterns differ. A fresh builder needs its first model run eager.</li>
 <li><code>mcmc.get_samples()</code> also holds the deterministic sites dynestyx records (<code>f"{name}_filtered_states_mean"</code> and similar). The drivers ignore deterministic sites, but <a href="convert.to_datatree.html#numpyro_forecast.convert.to_datatree" class="gdls-link gdls-code">to_datatree()</a> stores them in the posterior group; drop them for a smaller tree, and keep <code>f"{name}_state_path_params"</code> under a <code>LatentPathBuilder</code>.</li>
 </ul>
 </section>

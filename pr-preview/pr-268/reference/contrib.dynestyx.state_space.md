@@ -60,13 +60,16 @@ If no `Filter`, `Smoother` or `LatentPathBuilder` is active; if `y` or `controls
 `RuntimeError`  
 If the in-sample predictive runs without a seed handler.
 
+`jax.errors.JaxRuntimeError`  
+From dynestyx's layout check, when a traced call evaluates the likelihood under a `LatentPathBuilder` whose cached missingness layout comes from a later fit with another missingness pattern (see Notes).
+
 
 ## Notes
 
 - The `Smoother` in-sample draws are per-step marginals p(x_t \mid y\_{1:T}), independent across steps: exact for per-step bands and metrics, not a joint path. The `LatentPathBuilder` draws are joint. The smoother's marginals arrive as a Python list, so building the draws costs trace time that grows with the length of the window.
 - A `Filter` and a `Smoother` that run the same forward filter add the same marginal likelihood, so the draws of a `Filter` fit can be exported under that `Smoother` without a refit: the Kalman filter with the Kalman (Rauch-Tung-Striebel) smoother, and an approximate filter with the smoother of the same configuration and seed. With an approximate filter, the posterior is only as good as that filter's likelihood estimate.
 - Under a `LatentPathBuilder` the drivers need the posterior draws of `f"{name}_state_path_params"`, which only a fit under a builder has. A posterior from a `Filter` or `Smoother` fit has no path, and the builder then draws the path from its prior without an error: export such fits under a `Smoother`.
-- The `LatentPathBuilder` around a driver call must be the instance that fitted the model: it caches the observation missingness layout per site name and shape from the concrete observations of the fit, and the jitted drivers hand it traced arrays. A later fit with the same site name and shape and a different missingness pattern overwrites that layout, and the drivers of the earlier model then fail at run time with dynestyx's error about the layout; use one builder per fitted model when the patterns differ. A fresh builder needs its first model run eager.
+- The `LatentPathBuilder` around a driver call must be the instance that fitted the model: it caches the observation missingness layout per site name and shape from the concrete observations of the fit, and the jitted drivers hand it traced arrays. A later fit with the same site name and shape and a different missingness pattern overwrites that layout. A traced call for the earlier model that evaluates the likelihood (a fit, `log_density`) then raises dynestyx's `JaxRuntimeError`; the predictive drivers do not evaluate it and ran without error in our tests. Use one builder per fitted model when the patterns differ. A fresh builder needs its first model run eager.
 - `mcmc.get_samples()` also holds the deterministic sites dynestyx records (`f"{name}_filtered_states_mean"` and similar). The drivers ignore deterministic sites, but [to_datatree()](convert.to_datatree.md#numpyro_forecast.convert.to_datatree) stores them in the posterior group; drop them for a smaller tree, and keep `f"{name}_state_path_params"` under a `LatentPathBuilder`.
 
 
