@@ -7,7 +7,7 @@ State Space Models with `dynestyx` and `numpyro_forecast`
 
 In this notebook we write a [`dynestyx`](https://github.com/BasisResearch/dynestyx) state space model as a `numpyro_forecast` model. We then fit it, forecast with it and backtest it with the drivers of the package, without changing them.
 
-`dynestyx` is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a `DynamicalModel`, which bundles an initial condition, a state evolution and an observation model. Its primitive, `dsx.sample`, is interpreted by effect handlers. A `Filter` or a `Smoother` integrates the latent path out with a filtering algorithm (exactly with the Kalman filter for linear-Gaussian models, approximately with the ensemble, extended and unscented Kalman filters and with particle filters) and adds the marginal log likelihood, or its estimate, to the NumPyro trace. A `LatentPathBuilder` samples the path explicitly. A `Simulator` rolls the model forward in time.
+`dynestyx` is a probabilistic programming library for dynamical systems built on NumPyro. Its central object is a `DynamicalModel`, which bundles an initial condition, a state evolution and an observation model. Its primitive, `dsx.sample`, is interpreted by effect handlers. A `Filter` or a `Smoother` integrates the latent path out with a filtering algorithm and adds the marginal log likelihood, or its estimate, to the NumPyro trace. The Kalman filter does this exactly for linear-Gaussian models. The ensemble, extended and unscented Kalman filters and the particle filters do it approximately. A `LatentPathBuilder` samples the path explicitly. A `Simulator` rolls the model forward in time.
 
 `numpyro_forecast` is a forecasting workflow layer. A model is a plain function `(covariates, data=None)` built from model building blocks that register the `"obs"` and `"forecast"` sites. The drivers ([`forecast`](../../reference/predictive.forecast.md), [`predict_in_sample`](../../reference/predictive.predict_in_sample.md), [`to_datatree`](../../reference/convert.to_datatree.md), [`backtest`](../../reference/evaluate.backtest.md) and the metrics) read those sites by name.
 
@@ -29,6 +29,7 @@ We load the necessary libraries and set the notebook's configuration.
 
 ``` python
 import time
+import warnings
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from functools import partial
@@ -39,6 +40,7 @@ import dynestyx as dsx
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
@@ -81,6 +83,11 @@ from numpyro_forecast.contrib.dynestyx import state_space
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.typing import Array, ForecastModel
 
+# arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the band plots below do
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
+
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [10, 6]
 plt.rcParams["figure.dpi"] = 100
@@ -115,7 +122,7 @@ The block has three modes, and `h.data` selects them. The observations themselve
 
 1.  **Training** (`data` present, no horizon): the block runs `dsx.sample` under the active handler. The factor (and the path site, for the builder) enters the trace.
 2.  **Forecasting** (`covariates` longer than `data`): the `Simulator` around the call starts from the conditioned distribution of the state at the last observed step and rolls it forward. Under a `Filter` or a `Smoother` that is the filtering or smoothing distribution at the parameters of each posterior draw (the two coincide at the last step). Under a `LatentPathBuilder` it is the sampled final state, which inherits the mixing of the path. The block registers the horizon draws as the `"forecast"` site.
-3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` is a mode switch, not an absence of data. The in-sample predictive is a smoothing task, which is why a `Filter` raises in this mode.
+3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` selects this mode; the observed window still reaches the model through the covariates. The in-sample predictive is a smoothing task, which is why a `Filter` raises in this mode.
 
 The block owns the likelihood, so it also owns the two sites, like [`predict`](../../reference/models.predict.md). It returns a [`StateSpaceResult`](../../reference/contrib.dynestyx.StateSpaceResult.md) with the state draws of the current mode, `x_future` over the horizon and `x_in_sample` over the window, so that a model can register its latent level.
 
@@ -326,74 +333,47 @@ for label, (model, handler) in strategies.items():
     rng_key, rng_subkey = random.split(rng_key)
     with handler:
         fits[label] = fit_nuts(rng_subkey, model, train_data, covariates_train)
-    print(f"{label:>26}: {fits[label][1]:6.1f} s")
 
 posteriors = {label: mcmc.get_samples() for label, (mcmc, _) in fits.items()}
 ```
-
-
-          direct (innovations):   10.2 s
-       dynestyx, explicit path:    9.0 s
-     dynestyx, Kalman smoother:   12.3 s
 
 
 ## Model Diagnostics
 
 Before looking at the results, we check some diagnostics. The posteriors of the two scales must agree with each other, because the three models describe the same process and the smoother integrates the level out exactly. What differs is the work the sampler has to do.
 
-We collect the effective sample sizes and \hat{R} with ArviZ (the `(chain, draw)` layout comes from `get_samples(group_by_chain=True)`) next to the wall time and the number of gradient evaluations.
+For every fit we collect the posterior mean and standard deviation, the bulk effective sample size and \hat{R} of the two scales with ArviZ, next to the number of gradient evaluations and the wall time. ArviZ needs the `(chain, draw)` layout, which `get_samples(group_by_chain=True)` returns. The true values are q = 0.3 and r = 0.5.
 
 
 ``` python
-def summarize_fit(mcmc: MCMC, label: str, wall: float) -> pd.DataFrame:
-    """One-row table of posterior means, diagnostics and sampler cost for ``q`` and ``r``."""
+def summarize_fit(mcmc: MCMC, seconds: float) -> dict[str, int | float]:
+    """Posterior means, diagnostics and sampler cost of ``q`` and ``r`` for one fit."""
     grouped = mcmc.get_samples(group_by_chain=True)
     tree = az.from_dict({"posterior": {name: np.asarray(grouped[name]) for name in ("q", "r")}})
-    summary = az.summary(tree, var_names=["q", "r"], round_to="none")
-    num_steps = int(np.asarray(mcmc.get_extra_fields(group_by_chain=True)["num_steps"]).sum())
-    return pd.DataFrame(
-        {
-            "q mean": [summary.loc["q", "mean"]],
-            "q sd": [summary.loc["q", "sd"]],
-            "r mean": [summary.loc["r", "mean"]],
-            "r sd": [summary.loc["r", "sd"]],
-            "ess_bulk q": [summary.loc["q", "ess_bulk"]],
-            "ess_bulk r": [summary.loc["r", "ess_bulk"]],
-            "r_hat q": [summary.loc["q", "r_hat"]],
-            "r_hat r": [summary.loc["r", "r_hat"]],
-            "leapfrog steps": [num_steps],
-            "wall time (s)": [wall],
-        },
-        index=[label],
-    )
-
-
-comparison = pd.concat([summarize_fit(mcmc, label, wall) for label, (mcmc, wall) in fits.items()])
-print(f"truth: q = {q_true}, r = {r_true}")
-comparison.round(
-    {
-        "q mean": 3,
-        "q sd": 3,
-        "r mean": 3,
-        "r sd": 3,
-        "ess_bulk q": 0,
-        "ess_bulk r": 0,
-        "r_hat q": 3,
-        "r_hat r": 3,
-        "wall time (s)": 1,
+    summary = az.summary(tree, round_to="none")
+    stats = {"mean": 3, "sd": 3, "ess_bulk": 0, "r_hat": 3}
+    return {
+        f"{stat} {name}": round(float(summary.loc[name, stat]), digits)
+        for name in ("q", "r")
+        for stat, digits in stats.items()
+    } | {
+        "leapfrog steps": int(np.asarray(mcmc.get_extra_fields()["num_steps"]).sum()),
+        "wall time (s)": round(seconds, 1),
     }
+
+
+pd.DataFrame.from_dict(
+    {label: summarize_fit(mcmc, seconds) for label, (mcmc, seconds) in fits.items()},
+    orient="index",
 )
 ```
 
 
-    truth: q = 0.3, r = 0.5
-
-
-|  | q mean | q sd | r mean | r sd | ess_bulk q | ess_bulk r | r_hat q | r_hat r | leapfrog steps | wall time (s) |
+|  | mean q | sd q | ess_bulk q | r_hat q | mean r | sd r | ess_bulk r | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.389 | 0.061 | 0.441 | 0.051 | 726.0 | 763.0 | 1.009 | 1.008 | 1013890 | 10.2 |
-| dynestyx, explicit path | 0.389 | 0.063 | 0.440 | 0.053 | 630.0 | 985.0 | 1.011 | 1.005 | 66512 | 9.0 |
-| dynestyx, Kalman smoother | 0.387 | 0.061 | 0.440 | 0.051 | 1590.0 | 1694.0 | 1.003 | 1.004 | 17992 | 12.3 |
+| direct (innovations) | 0.389 | 0.061 | 726.0 | 1.009 | 0.441 | 0.051 | 763.0 | 1.008 | 1013890 | 13.4 |
+| dynestyx, explicit path | 0.389 | 0.063 | 630.0 | 1.011 | 0.440 | 0.053 | 985.0 | 1.005 | 66512 | 9.7 |
+| dynestyx, Kalman smoother | 0.387 | 0.061 | 1590.0 | 1.003 | 0.440 | 0.051 | 1694.0 | 1.004 | 17992 | 13.4 |
 
 
 The three posterior means agree closely. The \hat{R} values are between 1.003 and 1.011: the explicit path is slightly above the usual threshold of 1.01 for q. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
@@ -402,12 +382,23 @@ The smoothed model reaches the largest effective sample size with a small fracti
 
 The explicit path built by `dynestyx` sits between the two. It needs fewer gradients than the direct model but mixes less well on q. A plausible reason is that the builder samples the path in centered form and has no reparameterization option, but we did not test this.
 
-Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times are similar. The advantage grows with the length of the series: the dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2 and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
+Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times are similar. The advantage grows with the length of the series. The dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2, and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
 
-We now measure the two costs that the building block section refers to: a full model evaluation, which returns the marginal log likelihood and the state estimates, and the gradient of the log density, which is what NUTS and SVI evaluate. Both are compiled with `jax.jit` on the training window.
+We now measure the two costs that the building block section refers to. The first is a full model evaluation, which returns the marginal log likelihood and the state estimates. The second is the gradient of the log density, which is what NUTS and SVI evaluate. Both are compiled with `jax.jit` on the training window and timed at the true scales, after the compilation.
 
 
 ``` python
+def timed(fn: Callable[[dict[str, Array]], Any], num_evals: int) -> float:
+    """Average wall time in milliseconds of ``fn`` at the true scales, after compilation."""
+    params = {"q": jnp.asarray(q_true), "r": jnp.asarray(r_true)}
+    jax.block_until_ready(fn(params))
+    start = time.perf_counter()
+    for _ in range(num_evals):
+        out = fn(params)
+    jax.block_until_ready(out)
+    return (time.perf_counter() - start) / num_evals * 1e3
+
+
 def evaluation_cost(handler: Filter | Smoother, site: str, num_evals: int = 1_000) -> float:
     """Milliseconds per compiled model evaluation, returning the log likelihood and ``site``."""
 
@@ -417,7 +408,7 @@ def evaluation_cost(handler: Filter | Smoother, site: str, num_evals: int = 1_00
         return tr["f_marginal_loglik"]["value"], tr[site]["value"]
 
     with handler:  # the handler must be active when jax.jit traces the model
-        return _timed(jax.jit(run), num_evals)
+        return timed(jax.jit(run), num_evals)
 
 
 def gradient_cost(handler: Filter | Smoother, num_evals: int = 1_000) -> float:
@@ -427,18 +418,7 @@ def gradient_cost(handler: Filter | Smoother, num_evals: int = 1_000) -> float:
         return log_density(local_level_ssm, (covariates_train, train_data), {}, params)[0]
 
     with handler:
-        return _timed(jax.jit(jax.value_and_grad(log_joint)), num_evals)
-
-
-def _timed(fn: Callable[[dict[str, Array]], Any], num_evals: int) -> float:
-    """Average wall time in milliseconds of ``fn`` at the true scales, after compilation."""
-    params = {"q": jnp.asarray(q_true), "r": jnp.asarray(r_true)}
-    jax.block_until_ready(fn(params))
-    start = time.perf_counter()
-    for _ in range(num_evals):
-        out = fn(params)
-    jax.block_until_ready(out)
-    return (time.perf_counter() - start) / num_evals * 1e3
+        return timed(jax.jit(jax.value_and_grad(log_joint)), num_evals)
 
 
 pd.DataFrame(
@@ -458,8 +438,8 @@ pd.DataFrame(
 
 |          | evaluation (ms) | gradient (ms) |
 |----------|-----------------|---------------|
-| Filter   | 0.049           | 0.156         |
-| Smoother | 0.076           | 0.156         |
+| Filter   | 0.053           | 0.164         |
+| Smoother | 0.083           | 0.165         |
 
 
 The full evaluation is more expensive under the `Smoother`, which is the backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient.
@@ -499,30 +479,14 @@ The three histograms lie on top of each other, and the truth sits inside the bul
 
 Forecasting uses the package's [`forecast`](../../reference/predictive.forecast.md) driver in all three cases. It runs `Predictive` over the full-horizon covariates and returns the `"forecast"` site with one path per posterior draw.
 
-For the direct model the in-sample innovations are replayed from the posterior and the future ones are drawn from the prior. For the `dynestyx` models every draw conditions again on the training window with its own (q, r) (the smoother recomputes the smoothing distribution, the builder reconstructs the posterior path), and the simulator rolls the conditioned state forward.
+For the direct model the in-sample innovations are replayed from the posterior and the future ones are drawn from the prior. For the `dynestyx` models every draw conditions again on the training window with its own (q, r): the smoother recomputes the smoothing distribution and the builder reconstructs the posterior path. The simulator then rolls the conditioned state forward.
 
 This re-conditioning is one vectorized pass over the window per draw, which is cheap here. For long windows or particle filters, the design document records a cached-anchor rollout as the alternative.
 
-For the `dynestyx` models a `DiscreteTimeSimulator` goes around the call, outside the handler of the fit. The driver compiles once per call, so the handlers that are active at the call apply to it, and they run under the `jit` and `vmap` of the driver without special treatment. We define two small helpers for the HDI bands and their labels, then forecast with the three posteriors.
+For the `dynestyx` models a `DiscreteTimeSimulator` goes around the call, outside the handler of the fit. The driver compiles once per call, so the handlers that are active at the call apply to it, and they run under the `jit` and `vmap` of the driver without special treatment.
 
 
 ``` python
-def hdi_over_draws(draws: Array | np.ndarray, prob: float) -> tuple[np.ndarray, np.ndarray]:
-    """Lower and upper HDI bounds over the sample axis of ``(sample, time, 1)`` draws."""
-    da = xr.DataArray(np.asarray(draws)[..., 0], dims=["sample", "time"])
-    hdi = az.hdi(da, prob=prob, dim="sample")  # (time, ci_bound)
-    return hdi.sel(ci_bound="lower").to_numpy(), hdi.sel(ci_bound="upper").to_numpy()
-
-
-def hdi_label(prob: float, prefix: str = "") -> str:
-    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
-    percent = f"{prob:.0%}".replace("%", r"\%")
-    return f"{prefix}${percent}$ HDI"
-
-
-hdi_probs = (0.5, 0.94)
-hdi_alphas = {0.5: 0.6, 0.94: 0.3}  # 50% band darker, 94% band lighter
-
 forecasts: dict[str, Array | np.ndarray] = {}
 
 for label, (model, handler) in strategies.items():
@@ -531,42 +495,61 @@ for label, (model, handler) in strategies.items():
         forecasts[label] = forecast(
             rng_subkey, model, posteriors[label], train_data, covariates_full
         )
-    print(f"{label:>26}: forecast draws {forecasts[label].shape}")
 ```
 
 
-          direct (innovations): forecast draws (4000, 24, 1)
-       dynestyx, explicit path: forecast draws (4000, 24, 1)
-     dynestyx, Kalman smoother: forecast draws (4000, 24, 1)
-
-
-We plot the three forecast fans with their 50\\ and 94\\ HDI bands.
+We plot the three forecasts one above the other, with their 50\\ and 94\\ HDI bands and the test CRPS of each in the panel title.
 
 
 ``` python
-fig, axes = plt.subplots(
-    nrows=3, ncols=1, figsize=(12, 12), sharex=True, sharey=True, layout="constrained"
-)
+def hdi_label(prob: float, prefix: str = "") -> str:
+    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
+    percent = f"{prob:.0%}".replace("%", r"\%")
+    return f"{prefix}${percent}$ HDI"
+
+
+hdi_probs = (0.5, 0.94)
+hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
 future_index = time_index[t_obs:]
-for ax, (label, draws) in zip(axes, forecasts.items(), strict=True):
-    color = colors[label]
-    for prob in sorted(hdi_probs, reverse=True):
-        lower, upper = hdi_over_draws(draws, prob)
-        ax.fill_between(
-            future_index, lower, upper, color=color, alpha=hdi_alphas[prob], label=hdi_label(prob)
-        )
-    ax.plot(
-        future_index, np.asarray(draws).mean(axis=0)[:, 0], color=color, label="posterior mean"
-    )
+
+pc = az.plot_lm(
+    predictions_to_datatree(
+        np.concatenate([np.asarray(draws) for draws in forecasts.values()], axis=-1),
+        future_index,
+        list(forecasts),
+    ),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    point_estimate="mean",
+    col_wrap=1,
+    aes={"color": ["series"], "alpha": ["prob"]},
+    alpha=hdi_alphas,
+    aes_by_visuals={"pe_line": ["color"]},
+    visuals={
+        "observed_scatter": False,
+        "pe_line": {"alpha": 1.0, "width": 1.5},
+        "xlabel": False,
+        "ylabel": False,
+    },
+    figure_kwargs={"figsize": (12, 12), "sharex": True, "sharey": True},
+)
+for label, draws in forecasts.items():
+    ax = pc.get_target("t", {"series": label})
     ax.plot(
         time_index[t_obs - 40 :], y_full[t_obs - 40 :, 0], color="black", lw=1, label="observed"
     )
     ax.axvline(t_obs, color="gray", linestyle="--", label="train/test split")
-    crps = eval_crps(draws, test_data)
-    ax.set(title=f"{label}: test CRPS {crps:.3f}", ylabel="y")
+    for prob in hdi_probs:
+        pc.viz["ci_band"]["t"].sel(series=label, prob=prob).item().set_label(hdi_label(prob))
+    pc.viz["pe_line"]["t"].sel(series=label).item().set_label("posterior mean")
     ax.legend(loc="upper left", ncol=2)
-axes[-1].set(xlabel="time")
-fig.suptitle(
+    ax.set(title=f"{label}: test CRPS {eval_crps(draws, test_data):.3f}", ylabel="y")
+ax.set(xlabel="time")
+pc.viz["figure"].item().suptitle(
     "Local level forecasts from the three inference strategies", fontsize=14, fontweight="bold"
 );
 ```
@@ -577,7 +560,7 @@ fig.suptitle(
 </figure>
 
 
-The three fans are the same forecast up to Monte Carlo error. The `dynestyx` models are not approximations of the direct one: they are the same model with a different parameterization for the sampler.
+The three fans are the same forecast up to Monte Carlo error. The `dynestyx` models are the same model as the direct one, with a different parameterization for the sampler.
 
 The same comparison in tabular form: point accuracy through MAE and RMSE, the CRPS as a proper score for the whole predictive distribution, and the empirical coverage of the central 50\\ and 94\\ intervals.
 
@@ -608,14 +591,14 @@ pd.DataFrame(
 | coverage (94%) | 1.000 | 1.000 | 1.000 |
 
 
-The metrics on the held-out window agree as well. The agreement is the point of this table, not the calibration: all three strategies put 20 of the 24 test points (0.833) inside the central 50\\ interval and every point inside the 94\\ interval. One test window is not enough to check calibration. The 24 forecast errors share the level error at the split and the random walk after it, so they are strongly correlated, and 24 correlated points say little about the coverage of the intervals.
+The metrics on the held-out window agree as well, which is the point of this table. It says little about calibration. All three strategies put 20 of the 24 test points (0.833) inside the central 50\\ interval and every point inside the 94\\ interval, but one test window is not enough to check it. The 24 forecast errors share the level error at the split and the random walk after it, so they are strongly correlated, and 24 correlated points say little about the coverage of the intervals.
 
 
 ## Posterior Predictive Checks
 
 We now look at the in-sample posterior predictive. Because the observed window travels in the covariates, the package's [`to_datatree`](../../reference/convert.to_datatree.md) applies to the `dynestyx` models as it does to any other. It restores the `(chain, draw)` structure, samples the in-sample posterior predictive by calling the model without data, and, because we pass the full-horizon covariates, writes the forecast into the `predictions` group.
 
-Recall that `data=None` is a mode switch. The window still reaches the model through the covariates, so the in-sample predictive is the smoothing predictive p(y_t^{\text{rep}} \mid y\_{1:T}, \theta) and not a prior predictive.
+Recall that `data=None` selects the in-sample mode. The window still reaches the model through the covariates, so the in-sample predictive is the smoothing predictive p(y_t^{\text{rep}} \mid y\_{1:T}, \theta) and not a prior predictive.
 
 The three models produce it in three ways. The direct model replays its sampled path and adds observation noise. Under the `LatentPathBuilder` the block takes the posterior path that `dynestyx` reconstructs and adds the same noise. Under the `Smoother` the block draws every in-window state from the smoothing distribution p(x_t \mid y\_{1:T}, \theta) and adds the noise. The first two are joint draws of the whole path, the third is a set of per-step marginal draws. At every single step the three are the same distribution, which is all the bands below show.
 
@@ -1197,7 +1180,7 @@ Group: /
 │           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
 │           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
 │       Attributes:
-│           created_at:                 2026-11-03T11:42:44.773445+00:00
+│           created_at:                 2026-11-05T13:14:59.438989+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1212,7 +1195,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -12.31 -12.32 ... -9.626
 │       Attributes:
-│           created_at:                 2026-11-03T11:42:45.340443+00:00
+│           created_at:                 2026-11-05T13:15:00.048384+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1225,7 +1208,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-11-03T11:42:45.340689+00:00
+│           created_at:                 2026-11-05T13:15:00.048626+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1238,7 +1221,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-11-03T11:42:45.340872+00:00
+│           created_at:                 2026-11-05T13:15:00.048806+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1253,7 +1236,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
 │       Attributes:
-│           created_at:                 2026-11-03T11:42:45.753876+00:00
+│           created_at:                 2026-11-05T13:15:00.498920+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1266,7 +1249,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-11-03T11:42:45.754120+00:00
+            created_at:                 2026-11-05T13:15:00.499178+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1603,7 +1586,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T11:42:44.773445+00:00
+2026-11-05T13:14:59.438989+00:00
 
 creation_library :  
 ArviZ
@@ -1739,7 +1722,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T11:42:45.340443+00:00
+2026-11-05T13:15:00.048384+00:00
 
 creation_library :  
 ArviZ
@@ -1833,7 +1816,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T11:42:45.340689+00:00
+2026-11-05T13:15:00.048626+00:00
 
 creation_library :  
 ArviZ
@@ -1927,7 +1910,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T11:42:45.340872+00:00
+2026-11-05T13:15:00.048806+00:00
 
 creation_library :  
 ArviZ
@@ -2063,7 +2046,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T11:42:45.753876+00:00
+2026-11-05T13:15:00.498920+00:00
 
 creation_library :  
 ArviZ
@@ -2157,7 +2140,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T11:42:45.754120+00:00
+2026-11-05T13:15:00.499178+00:00
 
 creation_library :  
 ArviZ
@@ -2185,7 +2168,7 @@ sample_dims :
 \['chain', 'draw'\]
 
 
-The tree carries the `posterior`, `posterior_predictive`, `observed_data` and `constant_data` groups and, because the covariates extend past the data, the `predictions` and `predictions_constant_data` groups, as for any other model of the package. We plot the three in-sample bands.
+The tree carries the `posterior`, `posterior_predictive`, `observed_data` and `constant_data` groups and, because the covariates extend past the data, the `predictions` and `predictions_constant_data` groups, as for any other model of the package. To plot the three in-sample bands we merge the `(chain, draw)` dimensions of the `obs` draws into one sample axis.
 
 
 ``` python
@@ -2200,29 +2183,45 @@ def stacked_draws(tree: xr.DataTree, group: str, var: str) -> np.ndarray:
     )
 
 
-fig, axes = plt.subplots(
-    nrows=3, ncols=1, figsize=(12, 12), sharex=True, sharey=True, layout="constrained"
+in_sample = {
+    label: stacked_draws(tree, "posterior_predictive", "obs") for label, tree in trees.items()
+}
+
+pc = az.plot_lm(
+    predictions_to_datatree(
+        np.concatenate(list(in_sample.values()), axis=-1), time_index[:t_obs], list(in_sample)
+    ),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    point_estimate="mean",
+    col_wrap=1,
+    aes={"color": ["series"], "alpha": ["prob"]},
+    alpha=hdi_alphas,
+    aes_by_visuals={"pe_line": ["color"]},
+    visuals={
+        "observed_scatter": False,
+        "pe_line": {"alpha": 1.0, "width": 1.5},
+        "xlabel": False,
+        "ylabel": False,
+    },
+    figure_kwargs={"figsize": (12, 12), "sharex": True, "sharey": True},
 )
-for ax, (label, tree) in zip(axes, trees.items(), strict=True):
-    in_sample = stacked_draws(tree, "posterior_predictive", "obs")
-    color = colors[label]
-    for prob in sorted(hdi_probs, reverse=True):
-        lower, upper = hdi_over_draws(in_sample, prob)
-        ax.fill_between(
-            time_index[:t_obs],
-            lower,
-            upper,
-            color=color,
-            alpha=hdi_alphas[prob],
-            label=hdi_label(prob),
-        )
-    ax.plot(time_index[:t_obs], in_sample.mean(axis=0)[:, 0], color=color, label="posterior mean")
+for label, draws in in_sample.items():
+    ax = pc.get_target("t", {"series": label})
     ax.plot(time_index[:t_obs], train_data[:, 0], ".", color="black", ms=4, label="observed")
-    crps = eval_crps(in_sample, train_data)
-    ax.set(title=f"{label}: in-sample CRPS {crps:.3f}", ylabel="y")
-    ax.legend(loc="lower right", ncol=2)
-axes[-1].set(xlabel="time")
-fig.suptitle("In-sample posterior predictive from to_datatree", fontsize=14, fontweight="bold");
+    for prob in hdi_probs:
+        pc.viz["ci_band"]["t"].sel(series=label, prob=prob).item().set_label(hdi_label(prob))
+    pc.viz["pe_line"]["t"].sel(series=label).item().set_label("posterior mean")
+    ax.legend(loc="lower center", ncol=2)
+    ax.set(title=f"{label}: in-sample CRPS {eval_crps(draws, train_data):.3f}", ylabel="y")
+ax.set(xlabel="time")
+pc.viz["figure"].item().suptitle(
+    "In-sample posterior predictive from to_datatree", fontsize=14, fontweight="bold"
+);
 ```
 
 
@@ -2236,32 +2235,34 @@ The three bands coincide and the in-sample CRPS values agree closely. The `Laten
 
 ## Latent Level Reconstruction
 
-This section separates two claims that are easy to mix up.
+Two claims are easy to mix up here, so we take them one at a time.
 
-**The parameter posterior is the same under a `Filter` and a `Smoother`.** Both handlers put the same number in the trace, the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window, because the Kalman smoother reads it from its forward filtering pass. The posterior p(\theta \mid y\_{1:T}) is therefore the same under both handlers. We confirm this on the fitted model with `numpyro.infer.util.log_density`, at one parameter value.
+**The parameter posterior is the same under a `Filter` and a `Smoother`.** Both handlers put the same number in the trace, the marginal log likelihood \log p(y\_{1:T} \mid \theta) of the window, because the Kalman smoother reads it from its forward filtering pass. The posterior p(\theta \mid y\_{1:T}) is therefore the same under both handlers. We confirm this on the fitted model with `numpyro.infer.util.log_density`, at the posterior mean of the smoothed fit.
 
 
 ``` python
 smoothed_posterior = posteriors["dynestyx, Kalman smoother"]
 posterior_mean = {name: smoothed_posterior[name].mean() for name in ("q", "r")}
+log_joint = {}
 for name, handler in {"Filter": kalman_filter, "Smoother": smoother}.items():
     with handler:
-        log_joint, _ = log_density(
-            local_level_ssm, (covariates_train, train_data), {}, posterior_mean
+        log_joint[name] = float(
+            log_density(local_level_ssm, (covariates_train, train_data), {}, posterior_mean)[0]
         )
-    print(f"{name:>8} handler: log joint density at the posterior mean {float(log_joint):.6f}")
+pd.Series(log_joint, name="log joint density at the posterior mean").round(6)
 ```
 
 
-      Filter handler: log joint density at the posterior mean -125.142899
-    Smoother handler: log joint density at the posterior mean -125.142899
+    Filter     -125.142899
+    Smoother   -125.142899
+    Name: log joint density at the posterior mean, dtype: float64
 
 
 The two values agree. The draws we already have are draws from the posterior of either model, and we can read them under the other handler without refitting.
 
 **The distributions over the states are different.** The filtering distribution p(x_t \mid y\_{1:t}, \theta) conditions on the observations up to step t only. The smoothing distribution p(x_t \mid y\_{1:T}, \theta) conditions on the whole window at every step. They answer different questions about the state, and only the second one gives the in-sample predictive of the section above.
 
-Every model registers a `level` site when it is called without data. Calling `Predictive` with the posterior draws and the training covariates only, and asking for that site, gives one level path per posterior draw. The direct model replays `x0` plus the cumulative sum of the sampled `drift`, the builder returns its posterior path, and the smoother draws from the smoothing distribution, the last two through the same `x_in_sample` field of the block's result. All three condition on the whole window, so all three are smoothing reconstructions.
+Every model registers a `level` site when it is called without data. Calling `Predictive` with the posterior draws and the training covariates only, and asking for that site, gives one level path per posterior draw. The direct model replays `x0` plus the cumulative sum of the sampled `drift`. The builder returns its posterior path and the smoother draws from the smoothing distribution, both through the same `x_in_sample` field of the block's result. All three condition on the whole window, so all three are smoothing reconstructions.
 
 The filtered level needs one more step, because the block has no in-sample mode under a `Filter`. Instead, we record the `f_filtered_states_*` sites with `Predictive` under the `Filter` created above, using the draws of the smoothed fit. Drawing one level per posterior draw from those per-step Gaussians mixes the state uncertainty and the parameter uncertainty into a single band, as the `level` site does for the other three.
 
@@ -2274,7 +2275,6 @@ for label, (model, handler) in strategies.items():
     level_site = Predictive(model, posterior_samples=posteriors[label], return_sites=["level"])
     with handler:
         levels[label] = np.asarray(level_site(rng_subkey, covariates_train)["level"])
-    print(f"{label:>26}: level draws {levels[label].shape}")
 
 rng_key, key_sites, key_draw = random.split(rng_key, 3)
 
@@ -2290,11 +2290,6 @@ filtered_level = filtered_mean + filtered_sd * np.asarray(
     random.normal(key_draw, filtered_mean.shape)
 )
 ```
-
-
-          direct (innovations): level draws (4000, 120, 1)
-       dynestyx, explicit path: level draws (4000, 120, 1)
-     dynestyx, Kalman smoother: level draws (4000, 120, 1)
 
 
 The simulation gives us the true level, so we can score the four reconstructions against it. The smoother conditions on more data than the filter, so it should reconstruct the state better, both as a point estimate (RMSE) and as a distribution (CRPS).
@@ -2319,53 +2314,109 @@ pd.DataFrame(
 | CRPS | 0.184 | 0.156 | 0.156 | 0.156 |
 
 
-We plot the filtered and smoothed levels in the top panel, and the three `level` sites in the bottom panel.
+We overlay the filtered and the smoothed level of the same posterior, with their 94\\ HDI bands and posterior means, on the true level.
 
 
 ``` python
-panels = {
-    "Filtering versus smoothing: one parameter posterior, two state distributions": {
-        "filtered level": ("C3", filtered_level),
-        "smoothed level": (
-            colors["dynestyx, Kalman smoother"],
-            levels["dynestyx, Kalman smoother"],
-        ),
-    },
-    "Three reconstructions of the level from the three posteriors": {
-        label: (colors[label], draws) for label, draws in levels.items()
-    },
+level_bands = {
+    "filtered level": ("C3", filtered_level),
+    "smoothed level": (colors["dynestyx, Kalman smoother"], levels["dynestyx, Kalman smoother"]),
 }
-fig, axes = plt.subplots(
-    nrows=2, ncols=1, figsize=(12, 10), sharex=True, sharey=True, layout="constrained"
+pc = None
+handles = []
+for label, (color, draws) in level_bands.items():
+    pc = az.plot_lm(
+        predictions_to_datatree(draws, time_index[:t_obs], ["level"]),
+        y="obs",
+        x="t",
+        plot_dim="time",
+        plot_collection=pc,
+        ci_kind="hdi",
+        ci_prob=0.94,
+        smooth=False,
+        point_estimate="mean",
+        visuals={
+            "ci_band": {"color": color, "alpha": 0.3},
+            "observed_scatter": False,
+            "pe_line": {"color": color, "alpha": 1.0, "width": 1.5},
+        },
+        figure_kwargs={"figsize": (12, 6)},
+    )
+    band = pc.viz["ci_band"]["t"].item()
+    band.set_label(hdi_label(0.94, prefix=f"{label} "))
+    handles.append(band)
+ax = pc.viz["figure"].item().axes[0]
+(truth_line,) = ax.plot(
+    time_index[:t_obs], x_true[:t_obs], color="black", lw=1, ls=":", label="true level"
 )
-for ax, (title, bands) in zip(axes, panels.items(), strict=True):
-    for label, (color, draws) in bands.items():
-        lower, upper = hdi_over_draws(draws, 0.94)
-        ax.fill_between(
-            time_index[:t_obs],
-            lower,
-            upper,
-            color=color,
-            alpha=0.3,
-            label=hdi_label(0.94, prefix=f"{label} "),
-        )
-        ax.plot(time_index[:t_obs], draws.mean(axis=0)[:, 0], color=color, lw=1.5)
-    ax.plot(time_index[:t_obs], x_true[:t_obs], color="black", lw=1, ls=":", label="true level")
-    ax.plot(time_index[:t_obs], train_data[:, 0], ".", color="gray", ms=4, label="observed")
-    ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
-    ax.set(title=title, ylabel="level")
-axes[-1].set(xlabel="time");
+(obs_points,) = ax.plot(
+    time_index[:t_obs], train_data[:, 0], ".", color="gray", ms=4, label="observed"
+)
+handles += [truth_line, obs_points]
+ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=4)
+ax.set(
+    title="Filtering versus smoothing: one parameter posterior, two state distributions",
+    xlabel="time",
+    ylabel="level",
+);
 ```
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-19-output-1.png" class="figure-img" width="1227" height="1011" /></p>
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-19-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
-In the top panel the filtered band is wider at every step but the last, where filtering and smoothing condition on the same observations. It is widest at the start of the window, where few observations have entered it. Its mean reacts to each new observation and lags the level. The smoothed band conditions on the whole window at every step, so it is narrower and closer to the truth, and the table above confirms it with the lower RMSE and CRPS against the true level. The two bands are two different distributions over the state, not two views of one distribution.
+The filtered band is wider at every step but the last, where filtering and smoothing condition on the same observations. It is widest at the start of the window, where few observations have entered it. Its mean reacts to each new observation and lags the level. The smoothed band conditions on the whole window at every step, so it is narrower and closer to the truth. The table above confirms it with the lower RMSE and CRPS against the true level.
 
-In the bottom panel the three reconstructions coincide. The direct model, the explicit path built by `dynestyx` and the smoother recover the same level from the same posterior, and the two `dynestyx` models did so through the same `x_in_sample` field.
+The three `level` sites, one per inference strategy, are all smoothing reconstructions, so we expect them to coincide.
+
+
+``` python
+pc = az.plot_lm(
+    predictions_to_datatree(
+        np.concatenate(list(levels.values()), axis=-1), time_index[:t_obs], list(levels)
+    ),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=0.94,
+    smooth=False,
+    point_estimate="mean",
+    col_wrap=1,
+    aes={"color": ["series"]},
+    aes_by_visuals={"pe_line": ["color"]},
+    visuals={
+        "ci_band": {"alpha": 0.3},
+        "observed_scatter": False,
+        "pe_line": {"alpha": 1.0, "width": 1.5},
+        "xlabel": False,
+        "ylabel": False,
+    },
+    figure_kwargs={"figsize": (12, 12), "sharex": True, "sharey": True},
+)
+for label in levels:
+    ax = pc.get_target("t", {"series": label})
+    ax.plot(time_index[:t_obs], x_true[:t_obs], color="black", lw=1, ls=":", label="true level")
+    ax.plot(time_index[:t_obs], train_data[:, 0], ".", color="gray", ms=4, label="observed")
+    pc.viz["ci_band"]["t"].sel(series=label).item().set_label(hdi_label(0.94))
+    pc.viz["pe_line"]["t"].sel(series=label).item().set_label("posterior mean")
+    ax.legend(loc="lower center", ncol=2)
+    ax.set(title=label, ylabel="level")
+ax.set(xlabel="time")
+pc.viz["figure"].item().suptitle(
+    "Three reconstructions of the level from the three posteriors", fontsize=14, fontweight="bold"
+);
+```
+
+
+<figure class="figure">
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-20-output-1.png" class="figure-img" width="1211" height="1211" /></p>
+</figure>
+
+
+The three reconstructions coincide. The direct model, the explicit path built by `dynestyx` and the smoother recover the same level from the same posterior, and the two `dynestyx` models did so through the same `x_in_sample` field.
 
 
 # Seasonal Regression Model
@@ -2427,7 +2478,7 @@ ax.set(title="Simulated local level series with seasonality", xlabel="time", yla
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-20-output-1.png" class="figure-img" width="1011" height="611" /></p>
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-21-output-1.png" class="figure-img" width="1011" height="611" /></p>
 </figure>
 
 
@@ -2467,14 +2518,11 @@ guide = AutoNormal(seasonal_level_ssm)
 svi = SVI(seasonal_level_ssm, guide, Adam(step_size=0.01), Trace_ELBO())
 
 rng_key, rng_subkey = random.split(rng_key)
-start = time.perf_counter()
 
 with seasonal_smoother:
     svi_result = svi.run(
         rng_subkey, 3_000, covariates_seasonal_train, train_seasonal, progress_bar=False
     )
-
-wall_svi = time.perf_counter() - start
 
 rng_key, key_post, key_pred = random.split(rng_key, 3)
 
@@ -2483,9 +2531,6 @@ with DiscreteTimeSimulator(n_simulations=1), seasonal_smoother:
     forecast_svi = forecast(
         key_pred, seasonal_level_ssm, posterior_svi, train_seasonal, covariates_seasonal
     )
-print(f"SVI: {wall_svi:.1f} s, final loss {float(svi_result.losses[-1]):.2f}")
-print(f"posterior mean of beta: {np.asarray(posterior_svi['beta']).mean(axis=0).round(2)}")
-print(f"truth:                  {np.asarray(beta_true)}")
 
 fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(np.asarray(svi_result.losses), color="C0")
@@ -2493,22 +2538,39 @@ ax.set(title="SVI loss (negative ELBO)", xlabel="step", ylabel="loss");
 ```
 
 
-    SVI: 2.9 s, final loss 147.32
-    posterior mean of beta: [ 1.68  0.54 -0.38  0.23]
-    truth:                  [ 1.5  0.5 -0.4  0.3]
-
-
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-22-output-2.png" class="figure-img" width="1011" height="411" /></p>
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-23-output-1.png" class="figure-img" width="1011" height="411" /></p>
 </figure>
 
 
-The loss flattens well before the 3{,}000 steps, and the posterior mean of `beta` is close to the truth.
+The loss flattens well before the 3{,}000 steps. We compare the posterior mean of `beta` with the true coefficients.
+
+
+``` python
+pd.DataFrame(
+    {
+        "posterior mean": np.asarray(posterior_svi["beta"]).mean(axis=0),
+        "truth": np.asarray(beta_true),
+    },
+    index=[f"beta[{i}]" for i in range(beta_true.shape[0])],
+).round(2)
+```
+
+
+|           | posterior mean | truth |
+|-----------|----------------|-------|
+| beta\[0\] | 1.68           | 1.5   |
+| beta\[1\] | 0.54           | 0.5   |
+| beta\[2\] | -0.38          | -0.4  |
+| beta\[3\] | 0.23           | 0.3   |
+
+
+The posterior means are close to the truth.
 
 
 ## Forecast
 
-We plot the SVI forecast with `az.plot_lm`.
+The SVI forecast of the test window, with its 50\\ and 94\\ HDI bands:
 
 
 ``` python
@@ -2523,6 +2585,8 @@ pc = az.plot_lm(
     ci_kind="hdi",
     ci_prob=hdi_probs,
     smooth=False,
+    aes={"alpha": ["prob"]},
+    alpha=hdi_alphas,
     point_estimate="mean",
     visuals={
         "ci_band": {"color": "C1"},
@@ -2558,7 +2622,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-23-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-25-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -2627,7 +2691,6 @@ backtest_metrics = {
 }
 
 rng_key, rng_subkey = random.split(rng_key)
-start = time.perf_counter()
 with DiscreteTimeSimulator(n_simulations=1), seasonal_smoother:
     results = backtest(
         rng_subkey,
@@ -2644,22 +2707,18 @@ with DiscreteTimeSimulator(n_simulations=1), seasonal_smoother:
         eval_train=True,
         keep_predictions=True,
     )
-print(f"backtest: {len(results)} folds in {time.perf_counter() - start:.1f} s")
 results_to_dataframe(results).round(3)
 ```
 
 
-    backtest: 6 folds in 82.4 s
-
-
 |  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 6.223 | 0.678 | 0.250 | 1.000 | 0.214 | 0.722 | 1.0 |
-| 1 | 0 | 84 | 96 | 1000 | 6.303 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
-| 2 | 0 | 96 | 108 | 1000 | 6.808 | 0.400 | 0.917 | 1.000 | 0.209 | 0.740 | 1.0 |
-| 3 | 0 | 108 | 120 | 1000 | 7.245 | 0.426 | 0.667 | 1.000 | 0.209 | 0.741 | 1.0 |
-| 4 | 0 | 120 | 132 | 1000 | 7.348 | 0.660 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
-| 5 | 0 | 132 | 144 | 1000 | 8.293 | 0.766 | 0.250 | 1.000 | 0.241 | 0.720 | 1.0 |
+| 0 | 0 | 72 | 84 | 1000 | 6.727 | 0.678 | 0.250 | 1.000 | 0.214 | 0.722 | 1.0 |
+| 1 | 0 | 84 | 96 | 1000 | 6.931 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
+| 2 | 0 | 96 | 108 | 1000 | 7.542 | 0.400 | 0.917 | 1.000 | 0.209 | 0.740 | 1.0 |
+| 3 | 0 | 108 | 120 | 1000 | 8.006 | 0.426 | 0.667 | 1.000 | 0.209 | 0.741 | 1.0 |
+| 4 | 0 | 120 | 132 | 1000 | 8.231 | 0.660 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
+| 5 | 0 | 132 | 144 | 1000 | 9.093 | 0.766 | 0.250 | 1.000 | 0.241 | 0.720 | 1.0 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.
@@ -2684,6 +2743,8 @@ for r in results:
             ci_kind="hdi",
             ci_prob=hdi_probs,
             smooth=False,
+            aes={"alpha": ["prob"]},
+            alpha=hdi_alphas,
             point_estimate="mean",
             visuals={
                 "ci_band": {"color": "C1"},
@@ -2737,7 +2798,7 @@ ax.set(title="Expanding-window backtest of the dynestyx model", xlabel="time", y
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-25-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-27-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -2779,6 +2840,7 @@ axes[1].plot(
 )
 axes[1].axhline(0.5, color="C0", ls="--", lw=1, label=r"nominal $50\%$")
 axes[1].axhline(0.94, color="C1", ls="--", lw=1, label=r"nominal $94\%$")
+axes[1].yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1, decimals=0))
 axes[1].legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
 axes[1].set(
     xlabel="train/test split point",
@@ -2790,7 +2852,7 @@ axes[1].set(
 
 
 <figure class="figure">
-<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-26-output-1.png" class="figure-img" width="1211" height="411" /></p>
+<p><img src="dynestyx_integration_files/figure-html/_src-dynestyx_integration-cell-28-output-1.png" class="figure-img" width="1211" height="411" /></p>
 </figure>
 
 

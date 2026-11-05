@@ -56,6 +56,7 @@ from numpyro_forecast import (
     innovations,
     predict,
     predict_in_sample,
+    predictions_to_datatree,
     ssoe,
     to_datatree,
 )
@@ -63,6 +64,11 @@ from numpyro_forecast.contrib.dynestyx import state_space
 from numpyro_forecast.datasets import load_bart_weekly
 from numpyro_forecast.features import fourier_features
 from numpyro_forecast.typing import Array, ForecastModel
+
+# arviz-plots warns whenever `aes` maps `alpha`, even to `["prob"]` as the band plots below do
+warnings.filterwarnings(
+    "ignore", message="When multiple credible intervals are plotted", category=UserWarning
+)
 
 az.style.use("arviz-darkgrid")
 plt.rcParams["figure.figsize"] = [10, 6]
@@ -82,116 +88,6 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 
 
     dynestyx 0.8.0, numpyro 0.22.0, jax 0.11.2
-
-
-Every fit runs NUTS with 4 chains and a target acceptance probability of 0.9. The fits with an explicit path run longer chains than the others, because they mix more slowly (the Student-T section shows why). The helpers below run a fit and collect its diagnostics.
-
-- `fit_nuts` returns the sampler and its wall time, which includes the warmup and the compilation.
-- `diagnostics` checks every sample site of the fit, the vectors and the latent path included. It reports the number of scalar parameters, the smallest bulk effective sample size (ESS), the largest \hat{R} and the number of divergent transitions. It adds the wall time and the leapfrog steps per draw.
-
-
-``` python
-def fit_nuts(
-    rng_key: Array,
-    model: ForecastModel,
-    covariates: Array,
-    data: Array,
-    *,
-    num_warmup: int,
-    chain_method: Literal["parallel", "sequential", "vectorized"],
-    num_samples: int = 1_000,
-) -> tuple[MCMC, float]:
-    """Fit ``model`` with NUTS (4 chains) and return the sampler and the wall time in seconds."""
-    mcmc = MCMC(
-        NUTS(model, target_accept_prob=0.9),
-        num_warmup=num_warmup,
-        num_samples=num_samples,
-        num_chains=4,
-        chain_method=chain_method,
-        progress_bar=False,
-    )
-    start = perf_counter()
-    mcmc.run(rng_key, covariates, data, extra_fields=("num_steps", "diverging"))
-    jax.block_until_ready(mcmc.get_samples())
-    return mcmc, perf_counter() - start
-
-
-def posterior_tree(mcmc: MCMC, names: list[str]) -> xr.DataTree:
-    """Return the ``(chain, draw)`` posterior of the sites ``names`` as a DataTree."""
-    grouped = mcmc.get_samples(group_by_chain=True)
-    return az.from_dict({"posterior": {name: np.asarray(grouped[name]) for name in names}})
-
-
-def diagnostics(mcmc: MCMC, seconds: float) -> dict[str, float]:
-    """Convergence over every sample site of the fit, and its sampler cost."""
-    sites = sorted(mcmc.last_state.z)  # the sample sites NUTS explores, deterministic ones out
-    summary = az.summary(posterior_tree(mcmc, sites), round_to="none")
-    extra = mcmc.get_extra_fields()
-    return {
-        "parameters": float(len(summary)),
-        "min bulk ESS": float(summary["ess_bulk"].min(skipna=False)),  # a NaN shows as NaN
-        "max R-hat": float(summary["r_hat"].max(skipna=False)),
-        "divergences": float(np.asarray(extra["diverging"]).sum()),
-        "leapfrog steps per draw": float(np.asarray(extra["num_steps"]).mean()),
-        "wall time (s)": seconds,
-    }
-
-
-def diagnostics_table(fits: dict[str, dict[str, float]]) -> pd.DataFrame:
-    """One row per fit, rounded per column, with the counts as integers."""
-    counts = {"parameters": int, "min bulk ESS": int, "divergences": int}
-    digits = {"max R-hat": 3, "leapfrog steps per draw": 1, "wall time (s)": 1}
-    return pd.DataFrame(fits).T.round(digits | dict.fromkeys(counts, 0)).astype(counts)
-```
-
-
-Three plotting helpers: one overlays the posteriors of two fits, one parameter per panel, one computes the HDI bounds of draws over time, and one writes the legend label of an HDI band.
-
-
-``` python
-def plot_posteriors(
-    fits: dict[str, MCMC], names: list[str], title: str, truth: dict[str, float] | None = None
-) -> None:
-    """Overlay the posterior densities of ``names`` for every fit, one panel per parameter."""
-    trees = {label: posterior_tree(mcmc, names) for label, mcmc in fits.items()}
-    with warnings.catch_warnings():
-        # fits with different numbers of draws: arviz-plots pads the shorter one with NaN
-        # (which the KDE drops), and xarray warns about the padding join
-        warnings.filterwarnings("ignore", message="In a future version of xarray")
-        pc = az.plot_dist(
-            trees,
-            var_names=names,
-            kind="kde",
-            visuals={
-                "credible_interval": False,
-                "point_estimate": False,
-                "point_estimate_text": False,
-            },
-            figure_kwargs={"figsize": (12, 3.5)},
-        )
-    pc.add_legend("model")
-    for name in names:
-        ax = pc.get_target(name, {})
-        ax.set(xlabel=name, ylabel="density")
-        if truth is not None:
-            ax.axvline(truth[name], color="black", ls="--", lw=1)
-    pc.viz["figure"].item().suptitle(title, fontsize=14, fontweight="bold")
-
-
-def hdi_bounds(
-    draws: Float[Array | np.ndarray, " sample time 1"], prob: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Lower and upper HDI bounds over the sample axis of ``(sample, time, 1)`` draws."""
-    da = xr.DataArray(np.asarray(draws)[..., 0], dims=["sample", "time"])
-    bounds = az.hdi(da, prob=prob, dim="sample")
-    return bounds.sel(ci_bound="lower").to_numpy(), bounds.sel(ci_bound="upper").to_numpy()
-
-
-def hdi_label(prob: float, prefix: str = "") -> str:
-    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
-    percent = f"{prob:.0%}".replace("%", r"\%")
-    return f"{prefix}${percent}$ HDI"
-```
 
 
 # How [state_space](../../reference/contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space) Works
@@ -239,12 +135,7 @@ week = np.arange(duration)
 
 fourier = fourier_features(duration, period=365.25 / 7, num_terms=26)
 bart_covariates = jnp.concatenate([bart, fourier], axis=-1)  # (duration, 53)
-
-print(f"covariates {bart_covariates.shape}, train {bart_train.shape}, test {bart_test.shape}")
 ```
-
-
-    covariates (469, 53), train (417, 1), test (52, 1)
 
 
 The model is linear and Gaussian, so the Kalman filter integrates the level out exactly, and NUTS explores the 55 parameters only. In `dynestyx` terms, the regression is the control matrix `D` of the observation model and the intercept is its `bias`. The Fourier terms enter as controls over the whole horizon, so the forecast reads their future rows from the covariates.
@@ -299,7 +190,60 @@ def gaussian_model(covariates: Array, data: Array | None = None) -> None:
 ```
 
 
-The `dynestyx` fit runs under a Kalman filter on the `cd_dynamax` backend. We pass `KFConfig` explicitly: without a configuration, `Filter()` uses an ensemble Kalman filter, which is approximate. Both fits run parallel chains.
+We fit both models with NUTS: 4 chains, a target acceptance probability of 0.9 and, in this section, parallel chains. Every fit in this notebook goes through `fit_nuts`, which also returns the wall time of the run, warmup and compilation included.
+
+For every fit we check the convergence over every sample site, the vectors and the latent path included. `diagnostics` reports the number of scalar parameters NUTS explores, the smallest bulk effective sample size (ESS), the largest \hat{R}, the number of divergent transitions, the leapfrog steps per draw and the wall time. `posterior_tree` collects the draws of a list of sites into an ArviZ tree, which is where the diagnostics and the posterior plots below start.
+
+
+``` python
+def fit_nuts(
+    rng_key: Array,
+    model: ForecastModel,
+    covariates: Array,
+    data: Array,
+    *,
+    num_warmup: int,
+    chain_method: Literal["parallel", "sequential", "vectorized"],
+    num_samples: int = 1_000,
+) -> tuple[MCMC, float]:
+    """Fit ``model`` with NUTS (4 chains) and return the sampler and the wall time in seconds."""
+    mcmc = MCMC(
+        NUTS(model, target_accept_prob=0.9),
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=4,
+        chain_method=chain_method,
+        progress_bar=False,
+    )
+    start = perf_counter()
+    mcmc.run(rng_key, covariates, data, extra_fields=("num_steps", "diverging"))
+    jax.block_until_ready(mcmc.get_samples())
+    return mcmc, perf_counter() - start
+
+
+def posterior_tree(mcmc: MCMC, names: list[str]) -> xr.DataTree:
+    """Return the ``(chain, draw)`` posterior of the sites ``names`` as a DataTree."""
+    grouped = mcmc.get_samples(group_by_chain=True)
+    return az.from_dict({"posterior": {name: np.asarray(grouped[name]) for name in names}})
+
+
+def diagnostics(mcmc: MCMC, seconds: float) -> dict[str, int | float]:
+    """Convergence over every sample site of the fit, and its sampler cost."""
+    sites = sorted(mcmc.last_state.z)  # the sample sites NUTS explores, deterministic ones out
+    summary = az.summary(posterior_tree(mcmc, sites), round_to="none")
+    extra = mcmc.get_extra_fields()
+    return {
+        "parameters": len(summary),
+        "min bulk ESS": int(summary["ess_bulk"].min(skipna=False)),  # a NaN raises
+        "max R-hat": round(float(summary["r_hat"].max(skipna=False)), 3),
+        "divergences": int(np.asarray(extra["diverging"]).sum()),
+        "leapfrog steps per draw": round(float(np.asarray(extra["num_steps"]).mean()), 1),
+        "wall time (s)": round(seconds, 1),
+    }
+```
+
+
+The `dynestyx` fit runs under a Kalman filter on the `cd_dynamax` backend. We pass `KFConfig` explicitly: without a configuration, `Filter()` uses an ensemble Kalman filter, which is approximate.
 
 
 ``` python
@@ -328,20 +272,55 @@ mcmc_innovations, seconds = fit_nuts(
 )
 gaussian_fits["innovations"] = diagnostics(mcmc_innovations, seconds)
 
-diagnostics_table(gaussian_fits)
+pd.DataFrame.from_dict(gaussian_fits, orient="index")
 ```
 
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx Kalman filter | 55 | 4245 | 1.004 | 0 | 11.5 | 106.9 |
-| innovations | 472 | 1684 | 1.008 | 0 | 127.0 | 16.2 |
+| dynestyx Kalman filter | 55 | 4245 | 1.004 | 0 | 11.5 | 79.0 |
+| innovations | 472 | 1684 | 1.008 | 0 | 127.0 | 12.5 |
 
 
-Both fits converge over all their parameters: the largest \hat{R} is 1.008, the smallest bulk ESS is 1{,}684, and there are no divergent transitions. NUTS explores 55 parameters with the Kalman filter and 472 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), the 417 weekly steps of the level included. It takes 11.5 leapfrog steps per draw with the filter, against 127.0 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter over the 417 weeks. On the CPU that executed this notebook, the Kalman fit took longer in wall time (the last column includes the warmup and the compilation).
+Both fits converge over all their parameters:
+
+- The largest \hat{R} is 1.008 and the smallest bulk ESS is 1{,}684. There are no divergent transitions.
+- NUTS explores 55 parameters with the Kalman filter and 472 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), the 417 weekly steps of the level included.
+- The filter takes 11.5 leapfrog steps per draw, against 127.0 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter over the 417 weeks, so on the CPU that executed this notebook the Kalman fit took longer in wall time.
+
+We overlay the posteriors of the three scalar parameters that both models share, one parameter per panel.
 
 
 ``` python
+def plot_posteriors(
+    fits: dict[str, MCMC], names: list[str], title: str, truth: dict[str, float] | None = None
+) -> None:
+    """Overlay the posterior densities of ``names`` for every fit, one panel per parameter."""
+    trees = {label: posterior_tree(mcmc, names) for label, mcmc in fits.items()}
+    with warnings.catch_warnings():
+        # fits with different numbers of draws: arviz-plots pads the shorter one with NaN
+        # (which the KDE drops), and xarray warns about the padding join
+        warnings.filterwarnings("ignore", message="In a future version of xarray")
+        pc = az.plot_dist(
+            trees,
+            var_names=names,
+            kind="kde",
+            visuals={
+                "credible_interval": False,
+                "point_estimate": False,
+                "point_estimate_text": False,
+            },
+            figure_kwargs={"figsize": (12, 3.5)},
+        )
+    pc.add_legend("model")
+    for name in names:
+        ax = pc.get_target(name, {})
+        ax.set(xlabel=name, ylabel="density")
+        if truth is not None:
+            ax.axvline(truth[name], color="black", ls="--", lw=1)
+    pc.viz["figure"].item().suptitle(title, fontsize=14, fontweight="bold")
+
+
 plot_posteriors(
     {"dynestyx Kalman filter": mcmc_kalman, "innovations": mcmc_innovations},
     ["bias", "drift_scale", "sigma"],
@@ -351,7 +330,7 @@ plot_posteriors(
 
 
 <figure class="figure">
-<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-9-output-1.png" class="figure-img" width="1206" height="361" /></p>
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-8-output-1.png" class="figure-img" width="1206" height="361" /></p>
 </figure>
 
 
@@ -362,7 +341,7 @@ The posteriors of the intercept, of the scale of the weekly steps and of the noi
 
 [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) draws the in-sample predictive by calling the model without data, and the forecast by calling it with the full-horizon covariates. For the in-sample predictive the block needs the distribution of the states given the whole window, p(x_t \mid y\_{1:T}, \theta). A `Filter` does not have it: it carries the filtering distribution p(x_t \mid y\_{1:t}, \theta) only. A Kalman smoother has the smoothing distribution, and it adds the same marginal likelihood to the trace as the Kalman filter. The draws of the filter fit are therefore draws of the posterior under the smoother too, so we export them under the smoother, with the `Simulator` outside it for the forecast, and do not refit.
 
-The block draws every in-sample state from its smoothing distribution and pushes it through the observation model. These draws are exact for every week, so the bands and the CRPS below are correct, but they are independent across weeks, not a joint path. [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) replays a joint posterior path instead.
+The block draws every in-sample state from its smoothing distribution and pushes it through the observation model. These draws are exact for every week, so the bands and the CRPS below are correct. They are independent across weeks, while [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) replays a joint posterior path.
 
 
 ``` python
@@ -949,7 +928,7 @@ Group: /
 │           sigma         (chain, draw) float32 16kB 0.07794 0.07916 ... 0.07391 0.07532
 │           weight        (chain, draw, weight_dim_0) float32 832kB -0.01708 ... -0.0102
 │       Attributes:
-│           created_at:                 2026-11-03T14:28:30.441454+00:00
+│           created_at:                 2026-11-05T13:06:56.869860+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -964,7 +943,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.96
 │       Attributes:
-│           created_at:                 2026-11-03T14:28:34.328288+00:00
+│           created_at:                 2026-11-05T13:06:59.991074+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -977,7 +956,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 14.41 14.45 14.42 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-11-03T14:28:34.328619+00:00
+│           created_at:                 2026-11-05T13:06:59.991338+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -990,7 +969,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 88kB 14.41 0.0 ... -0.2375
 │       Attributes:
-│           created_at:                 2026-11-03T14:28:34.328892+00:00
+│           created_at:                 2026-11-05T13:06:59.991531+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1005,7 +984,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.29
 │       Attributes:
-│           created_at:                 2026-11-03T14:28:35.603603+00:00
+│           created_at:                 2026-11-05T13:07:01.109972+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1018,7 +997,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 11kB 14.27 -0.05158 ... 0.3139
         Attributes:
-            created_at:                 2026-11-03T14:28:35.603876+00:00
+            created_at:                 2026-11-05T13:07:01.110227+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1189,7 +1168,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T14:28:30.441454+00:00
+2026-11-05T13:06:56.869860+00:00
 
 creation_library :  
 ArviZ
@@ -1325,7 +1304,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T14:28:34.328288+00:00
+2026-11-05T13:06:59.991074+00:00
 
 creation_library :  
 ArviZ
@@ -1419,7 +1398,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T14:28:34.328619+00:00
+2026-11-05T13:06:59.991338+00:00
 
 creation_library :  
 ArviZ
@@ -1513,7 +1492,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T14:28:34.328892+00:00
+2026-11-05T13:06:59.991531+00:00
 
 creation_library :  
 ArviZ
@@ -1649,7 +1628,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T14:28:35.603603+00:00
+2026-11-05T13:07:01.109972+00:00
 
 creation_library :  
 ArviZ
@@ -1743,7 +1722,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-03T14:28:35.603876+00:00
+2026-11-05T13:07:01.110227+00:00
 
 creation_library :  
 ArviZ
@@ -1771,7 +1750,7 @@ sample_dims :
 \['chain', 'draw'\]
 
 
-Both trees carry the `posterior_predictive` group (the in-sample draws) and the `predictions` group (the forecast). We merge the `(chain, draw)` dimensions into one sample axis to score and plot them.
+Both trees carry the `posterior_predictive` group (the in-sample draws) and the `predictions` group (the forecast). To score them we merge the `(chain, draw)` dimensions into one sample axis.
 
 
 ``` python
@@ -1807,35 +1786,64 @@ pd.DataFrame(
 | innovations              | 0.0316         | 0.0360    |
 
 
-The two models give the same in-sample CRPS (0.0315 and 0.0316) and the same test CRPS (0.0361 and 0.0360). We plot the in-sample predictive and the forecast of the `dynestyx` model.
+The two models give the same in-sample CRPS (0.0315 and 0.0316) and the same test CRPS (0.0361 and 0.0360). Next we look at the in-sample predictive and the forecast of the `dynestyx` model over the last two years of the training window and the test year.
 
 
 ``` python
-fig, ax = plt.subplots(figsize=(12, 6))
-start = t_obs - 104  # the last two years of the training window, then the test year
+def hdi_label(prob: float, prefix: str = "") -> str:
+    r"""Legend label for an HDI band, e.g. ``$94\%$ HDI``."""
+    percent = f"{prob:.0%}".replace("%", r"\%")
+    return f"{prefix}${percent}$ HDI"
+
+
+hdi_probs = (0.5, 0.94)
+hdi_alphas = [0.6, 0.3]  # 50% band darker, 94% band lighter
+start = t_obs - 104  # the last two years of the training window
 tree = trees["dynestyx Kalman smoother"]
 
-for group, color, weeks in (
-    ("posterior_predictive", "C0", week[start:t_obs]),
-    ("predictions", "C1", week[t_obs:]),
-):
-    draws = stacked(tree, group)
-    span = slice(start, None) if group == "posterior_predictive" else slice(None)
-    name = "in-sample" if group == "posterior_predictive" else "forecast"
-    for prob, alpha in ((0.94, 0.3), (0.5, 0.5)):
-        lower, upper = hdi_bounds(draws, prob)
-        ax.fill_between(
-            weeks,
-            lower[span],
-            upper[span],
-            color=color,
-            alpha=alpha,
-            label=hdi_label(prob, prefix=f"{name} "),
-        )
+pc = az.plot_lm(
+    predictions_to_datatree(
+        stacked(tree, "posterior_predictive")[:, start:], week[start:t_obs], ["bart"]
+    ),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    aes={"alpha": ["prob"]},
+    alpha=hdi_alphas,
+    visuals={"ci_band": {"color": "C0"}, "observed_scatter": False, "pe_line": False},
+    figure_kwargs={"figsize": (12, 6)},
+)
+in_sample_bands = {prob: pc.viz["ci_band"]["t"].sel(prob=prob).item() for prob in hdi_probs}
+az.plot_lm(
+    predictions_to_datatree(stacked(tree, "predictions"), week[t_obs:], ["bart"]),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    plot_collection=pc,
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    aes={"alpha": ["prob"]},
+    alpha=hdi_alphas,
+    visuals={"ci_band": {"color": "C1"}, "observed_scatter": False, "pe_line": False},
+)
+forecast_bands = {prob: pc.viz["ci_band"]["t"].sel(prob=prob).item() for prob in hdi_probs}
+for prob in hdi_probs:
+    in_sample_bands[prob].set_label(hdi_label(prob, prefix="in-sample "))
+    forecast_bands[prob].set_label(hdi_label(prob, prefix="forecast "))
 
-ax.plot(week[start:], bart[start:, 0], color="black", lw=1, label="observed")
-ax.axvline(t_obs, color="gray", ls="--", label="train/test split")
-ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncols=3)
+ax = pc.viz["figure"].item().axes[0]
+(obs_line,) = ax.plot(week[start:], bart[start:, 0], color="black", lw=1, label="observed")
+split_line = ax.axvline(t_obs, color="gray", ls="--", label="train/test split")
+ax.legend(
+    handles=[*in_sample_bands.values(), *forecast_bands.values(), obs_line, split_line],
+    loc="upper center",
+    bbox_to_anchor=(0.5, -0.1),
+    ncol=3,
+)
 ax.set(
     title="BART weekly ridership: Kalman smoother in-sample predictive and forecast",
     xlabel="week",
@@ -1845,7 +1853,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-12-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-11-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -1860,7 +1868,7 @@ The comparing inference methods example uses Student-T noise, whose heavy tails 
 
 Student-T noise rules out an exact Kalman filter. A particle filter does not combine well with NUTS here: with resampling, the likelihood estimate is not continuous in the parameters, and without it the weights collapse over 417 weeks. The `dynestyx` model therefore samples the level with a `LatentPathBuilder`, as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) does. The observation model is a function of the state x_t, the controls u_t and the time t.
 
-The builder samples the states x_t = b + \ell_t directly (the centered form), not their steps. With the intercept b as a separate parameter, a change of b must move all 417 states the other way. In this form the intercept is the initial state, so the `dynestyx` model has no `bias` site and gives the initial state the \text{Normal}(0, 10) prior of the intercept. The two models differ only in the variance s^2 that the first step adds to this prior, which is negligible.
+The builder samples the states x_t = b + \ell_t directly (the centered form) rather than their steps. With the intercept b as a separate parameter, a change of b must move all 417 states the other way. In this form the intercept is the initial state, so the `dynestyx` model has no `bias` site and gives the initial state the \text{Normal}(0, 10) prior of the intercept. The two models differ only in the variance s^2 that the first step adds to this prior, which is negligible.
 
 
 ``` python
@@ -1909,7 +1917,9 @@ def univariate_model(covariates: Array, data: Array | None = None) -> None:
 ```
 
 
-Both fits run their chains one after the other (`chain_method="sequential"`). Parallel chains under a `LatentPathBuilder` crashed the Python process with `dynestyx` 0.8.0 and Python 3.14 on the machine that executed this notebook (`dynestyx` declares support for Python 3.12 and 3.13). The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly (the per-parameter table below shows the slowest parameter). We keep the `LatentPathBuilder` instance of the fit. The builder records the pattern of missing observations from the concrete data of the fit. The drivers later run the model under `jax.jit`, where the data are traced, so every later call must use the same instance.
+Both fits run their chains one after the other (`chain_method="sequential"`). Parallel chains under a `LatentPathBuilder` crashed the Python process with `dynestyx` 0.8.0 and Python 3.14 on the machine that executed this notebook (`dynestyx` declares support for Python 3.12 and 3.13). The explicit path runs 4{,}000 warmup steps and 4{,}000 draws per chain, against 2{,}000 and 1{,}000 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), because it mixes more slowly. The per-parameter table below shows its slowest parameter.
+
+We keep the `LatentPathBuilder` instance of the fit. The builder records the pattern of missing observations from the concrete data of the fit. The drivers later run the model under `jax.jit`, where the data are traced, so every later call must use the same instance.
 
 
 ``` python
@@ -1939,17 +1949,23 @@ mcmc_univariate, seconds = fit_nuts(
 )
 student_fits["innovations"] = diagnostics(mcmc_univariate, seconds)
 
-diagnostics_table(student_fits)
+pd.DataFrame.from_dict(student_fits, orient="index")
 ```
 
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx latent path | 472 | 439 | 1.005 | 0 | 135.2 | 65.9 |
-| innovations | 473 | 946 | 1.006 | 0 | 255.0 | 81.5 |
+| dynestyx latent path | 472 | 439 | 1.005 | 0 | 135.2 | 56.0 |
+| innovations | 473 | 945 | 1.006 | 0 | 255.0 | 77.8 |
 
 
-With these chain lengths both fits converge over all their parameters: the largest \hat{R} is 1.006, the smallest bulk ESS is 439, and there are no divergent transitions. The two fits ran chains of different lengths, so their wall times do not compare their cost. Per draw, the explicit path takes 135.2 leapfrog steps and [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) 255.0, the length of a NUTS tree of depth 8. The diagnostics of the three scalar parameters that both models share:
+With these chain lengths both fits converge over all their parameters:
+
+- The largest \hat{R} is 1.006 and the smallest bulk ESS is 439. There are no divergent transitions.
+- The two fits ran chains of different lengths, so their wall times do not compare their cost.
+- Per draw, the explicit path takes 135.2 leapfrog steps and [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations) 255.0, the length of a NUTS tree of depth 8.
+
+The diagnostics of the three scalar parameters that both models share:
 
 
 ``` python
@@ -2048,13 +2064,13 @@ plot_posteriors(
 
 
 <figure class="figure">
-<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-16-output-1.png" class="figure-img" width="1206" height="361" /></p>
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-15-output-1.png" class="figure-img" width="1206" height="361" /></p>
 </figure>
 
 
 The posteriors of the three shared parameters coincide.
 
-Both models forecast through [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast). The `LatentPathBuilder` around the call is the instance that fitted the model. We plot medians, not means: with \nu near 1.6 the Student-T noise has no finite variance, so the mean of the draws moves with a few extreme draws.
+Both models forecast through [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast). The `LatentPathBuilder` around the call is the instance that fitted the model.
 
 
 ``` python
@@ -2081,10 +2097,11 @@ student_forecasts["innovations"] = forecast(
     batch_size=500,
 )
 
-pd.Series(
+student_crps = pd.Series(
     {label: float(eval_crps(draws, bart_test)) for label, draws in student_forecasts.items()},
     name="test CRPS",
-).round(4)
+)
+student_crps.round(4)
 ```
 
 
@@ -2093,53 +2110,68 @@ pd.Series(
     Name: test CRPS, dtype: float64
 
 
+The test CRPS is 0.0302 for the explicit path and 0.0303 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Both score better than the Normal models of the previous section (test CRPS 0.0361 and 0.0360). We plot the two forecasts one above the other. The point estimate is the median of the draws: with \nu near 1.6 the Student-T noise has no finite variance, so a few extreme draws move the mean. The explicit path has four times as many draws as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so we thin them to the same number for the figure.
+
+
 ``` python
-fig, ax = plt.subplots(figsize=(12, 6))
-history = slice(t_obs - 104, t_obs)
-
-for prob, alpha, ls in ((0.94, 0.3, ":"), (0.5, 0.5, "-.")):
-    lower, upper = hdi_bounds(student_forecasts["dynestyx latent path"], prob)
-    ax.fill_between(
+num_draws = min(len(draws) for draws in student_forecasts.values())
+thinned = [np.asarray(draws)[:: len(draws) // num_draws] for draws in student_forecasts.values()]
+pc = az.plot_lm(
+    predictions_to_datatree(
+        np.concatenate(thinned, axis=-1),
         week[t_obs:],
-        lower,
-        upper,
-        color="C1",
-        alpha=alpha,
-        label=hdi_label(prob, prefix="dynestyx latent path "),
-    )
-    lower, upper = hdi_bounds(student_forecasts["innovations"], prob)
-    ax.plot(
-        week[t_obs:], lower, color="C0", ls=ls, label=hdi_label(prob, "innovations ") + " bounds"
-    )
-    ax.plot(week[t_obs:], upper, color="C0", ls=ls)
-
-for label, color, ls in (("dynestyx latent path", "C1", "-"), ("innovations", "C0", "--")):
-    median = np.median(np.asarray(student_forecasts[label]), axis=0)[:, 0]
-    ax.plot(week[t_obs:], median, color=color, ls=ls, label=f"{label} median")
-
-ax.plot(week[history], bart_train[history, 0], color="black", lw=1, label="train")
-ax.plot(week[t_obs:], bart_test[:, 0], color="black", lw=1, ls="--", label="test")
-ax.axvline(t_obs, color="gray", ls="--", lw=1)
-ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncols=3)
-ax.set(
-    title="BART weekly ridership: Student-T forecast of the last 52 weeks",
-    xlabel="week",
-    ylabel="log(# rides)",
+        list(student_forecasts),
+    ),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    point_estimate="median",
+    col_wrap=1,
+    aes={"color": ["series"], "alpha": ["prob"]},
+    alpha=hdi_alphas,
+    aes_by_visuals={"pe_line": ["color"]},
+    visuals={
+        "observed_scatter": False,
+        "pe_line": {"alpha": 1.0, "width": 1.5},
+        "xlabel": False,
+        "ylabel": False,
+    },
+    figure_kwargs={"figsize": (12, 10), "sharex": True, "sharey": True},
+)
+history = slice(t_obs - 104, t_obs)
+for label in student_forecasts:
+    ax = pc.get_target("t", {"series": label})
+    ax.plot(week[history], bart_train[history, 0], color="black", lw=1, label="train")
+    ax.plot(week[t_obs:], bart_test[:, 0], color="black", lw=1, ls="--", label="test")
+    ax.axvline(t_obs, color="gray", ls="--", lw=1)
+    ax.set(title=f"{label} (test CRPS: {student_crps[label]:.4f})", ylabel="log(# rides)")
+    for prob in hdi_probs:
+        pc.viz["ci_band"]["t"].sel(series=label, prob=prob).item().set_label(hdi_label(prob))
+    pc.viz["pe_line"]["t"].sel(series=label).item().set_label("forecast median")
+    ax.legend(loc="lower left", ncol=5)
+ax.set(xlabel="week")
+pc.viz["figure"].item().suptitle(
+    "BART weekly ridership: Student-T forecasts of the last 52 weeks",
+    fontsize=14,
+    fontweight="bold",
 );
 ```
 
 
 <figure class="figure">
-<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-18-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-17-output-1.png" class="figure-img" width="1211" height="1011" /></p>
 </figure>
 
 
-The test CRPS is 0.0302 for the explicit path and 0.0303 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), and the medians and HDI bounds of the two forecasts lie on top of each other over the test year. Both score better than the Normal models of the previous section (test CRPS 0.0361 and 0.0360).
+The medians and the HDI bands of the two forecasts lie on top of each other over the test year.
 
 
 # Missing Data
 
-The `LatentPathBuilder` skips missing observations, so the Student-T model fits through a gap with no change to the model function. (The Kalman filter and smoother of the `cuthbert` backend skip them too, while the `cd_dynamax` backend rejects them.) We remove 20 weeks of the training window. The block reads the observed window from column 0 of the covariates, so the gap goes there as `NaN`. A `NaN` in `data` alone would not reach the likelihood. We also put the gap into `data`, which [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) would store as the observed data.
+The `LatentPathBuilder` skips missing observations, so the Student-T model fits through a gap with no change to the model function. (The Kalman filter and smoother of the `cuthbert` backend skip them too, while the `cd_dynamax` backend rejects them.) We remove 20 weeks of the training window by setting them to `NaN` in two places. The block reads the observed window from column 0 of the covariates, so the gap has to go there to reach the likelihood. A `NaN` in `data` alone would not reach it. We also put the gap into `data`, which [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) would store as the observed data.
 
 The gap fit gets its own `LatentPathBuilder` and the longer chains of the explicit path. A builder keeps one pattern of missing observations per site name and shape, so after a second fit with the same builder and a different pattern, the drivers of the first fit would fail.
 
@@ -2162,13 +2194,13 @@ with gap_builder:
         chain_method="sequential",
     )
 
-diagnostics_table({"gap fit": diagnostics(mcmc_gap, seconds)})
+pd.DataFrame.from_dict({"gap fit": diagnostics(mcmc_gap, seconds)}, orient="index")
 ```
 
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| gap fit | 472 | 355 | 1.013 | 0 | 163.6 | 61.8 |
+| gap fit | 472 | 355 | 1.013 | 0 | 163.6 | 58.7 |
 
 
 The gap fit nearly converges: the largest \hat{R} is 1.013, just above the usual threshold of 1.01, the smallest bulk ESS is 355, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
@@ -2213,24 +2245,35 @@ pd.Series(
     Name: CRPS on the gap weeks, dtype: float64
 
 
-On the 20 held-out weeks the CRPS of the gap fit is 0.0265, against 0.0229 for the fit that saw them.
+On the 20 held-out weeks the CRPS of the gap fit is 0.0265, against 0.0229 for the fit that saw them. We plot the in-sample predictive of the gap fit around the gap, with the median of the fit on all weeks as a reference.
 
 
 ``` python
-fig, ax = plt.subplots(figsize=(12, 6))
 window = slice(250, t_obs)
-
-for prob, alpha in ((0.94, 0.3), (0.5, 0.5)):
-    lower, upper = hdi_bounds(in_sample["fit with the gap"], prob)
-    ax.fill_between(
-        week[window],
-        lower[window],
-        upper[window],
-        color="C1",
-        alpha=alpha,
-        label=hdi_label(prob, prefix="fit with the gap "),
-    )
-
+pc = az.plot_lm(
+    predictions_to_datatree(
+        np.asarray(in_sample["fit with the gap"])[:, window], week[window], ["bart"]
+    ),
+    y="obs",
+    x="t",
+    plot_dim="time",
+    ci_kind="hdi",
+    ci_prob=hdi_probs,
+    smooth=False,
+    aes={"alpha": ["prob"]},
+    alpha=hdi_alphas,
+    point_estimate="median",
+    visuals={
+        "ci_band": {"color": "C1"},
+        "observed_scatter": False,
+        "pe_line": {"color": "C1", "alpha": 1.0, "width": 1.5},
+    },
+    figure_kwargs={"figsize": (12, 6)},
+)
+for prob in hdi_probs:
+    pc.viz["ci_band"]["t"].sel(prob=prob).item().set_label(hdi_label(prob, "fit with the gap "))
+pc.viz["pe_line"]["t"].item().set_label("fit with the gap, median")
+ax = pc.viz["figure"].item().axes[0]
 ax.plot(
     week[window],
     np.median(np.asarray(in_sample["fit on all weeks"]), axis=0)[window, 0],
@@ -2241,7 +2284,7 @@ ax.plot(
 ax.plot(week[window], bart_gap[window, 0], "o", color="black", ms=3, label="observed")
 ax.plot(week[gap], bart_train[gap, 0], "o", color="gray", ms=4, mfc="none", label="held out")
 ax.axvspan(gap.start, gap.stop - 1, color="gray", alpha=0.15, label="gap")
-ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0))
+ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=4)
 ax.set(
     title="In-sample posterior predictive through a 20-week gap",
     xlabel="week",
@@ -2251,7 +2294,7 @@ ax.set(
 
 
 <figure class="figure">
-<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-21-output-1.png" class="figure-img" width="1211" height="611" /></p>
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-20-output-1.png" class="figure-img" width="1211" height="611" /></p>
 </figure>
 
 
@@ -2270,7 +2313,7 @@ with [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe), which 
 
 so the state covariance is Q = \sigma^2 g g^\top, and the observation is y_t = H x_t + c with H = (1, 0). The initial state has the stationary covariance P_0, the solution of P_0 = A P_0 A^\top + Q. The state noise has rank one, so we add a small jitter \delta = 10^{-4} \sigma^2 to Q, to P_0 and as the observation variance, which keeps the Cholesky factors defined in single precision.
 
-We simulate 100 steps with \phi = 0.4, \theta = 0.7 and \sigma = 0.5. The priors are those of the ARMA example.
+We simulate 100 steps with \phi = 0.4, \theta = 0.7 and \sigma = 0.5, as the ARMA example does.
 
 
 ``` python
@@ -2297,7 +2340,7 @@ arma_covariates = arma_data  # both models read the observed series from the cov
 ```
 
 
-`arma_dynamics` builds the matrices above, and both model functions read the series from the covariates. `arma_ssoe` is the model of the ARMA example.
+`arma_dynamics` builds the matrices above. The two model functions share the priors of the ARMA example and read the series from the covariates: `arma_ssm` passes the dynamics to the block, and `arma_ssoe` is the model of the ARMA example.
 
 
 ``` python
@@ -2353,6 +2396,9 @@ def arma_ssoe(covariates: Array, data: Array | None = None) -> None:
 ```
 
 
+The `dynestyx` fit runs under the Kalman filter of the local level section.
+
+
 ``` python
 rng_key, key_arma_kalman, key_arma_ssoe = random.split(rng_key, 3)
 
@@ -2373,14 +2419,14 @@ mcmc_arma_ssoe, seconds = fit_nuts(
 )
 arma_fits["ssoe"] = diagnostics(mcmc_arma_ssoe, seconds)
 
-diagnostics_table(arma_fits)
+pd.DataFrame.from_dict(arma_fits, orient="index")
 ```
 
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx Kalman filter | 4 | 3633 | 1.003 | 0 | 6.2 | 10.7 |
-| ssoe | 4 | 3476 | 1.000 | 0 | 6.0 | 1.0 |
+| dynestyx Kalman filter | 4 | 3632 | 1.003 | 0 | 6.2 | 9.3 |
+| ssoe | 4 | 3476 | 1.000 | 0 | 6.0 | 0.9 |
 
 
 Both fits converge (largest \hat{R} 1.003, smallest bulk ESS 3{,}476, no divergent transitions), with about six leapfrog steps per draw each: neither model samples a path.
@@ -2397,11 +2443,11 @@ plot_posteriors(
 
 
 <figure class="figure">
-<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-25-output-1.png" class="figure-img" width="1206" height="361" /></p>
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-24-output-1.png" class="figure-img" width="1206" height="361" /></p>
 </figure>
 
 
-The two posteriors are close, and the true values lie inside the bulk of both. The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) likelihood conditions on y\_{-1} = \mu and \varepsilon\_{-1} = 0, and the Kalman filter likelihood is exact up to the small jitter. The small differences between the two posteriors can come from these two likelihoods or from Monte Carlo error; this run does not separate the two.
+The two posteriors are close, and the true values lie inside the bulk of both. The [ssoe](../../reference/models.ssoe.md#numpyro_forecast.models.ssoe) likelihood conditions on y\_{-1} = \mu and \varepsilon\_{-1} = 0, and the Kalman filter likelihood is exact up to the small jitter. The small differences between the two posteriors can come from these two likelihoods or from Monte Carlo error, and this run does not separate the two.
 
 
 # Conclusion
