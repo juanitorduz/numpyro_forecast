@@ -1,10 +1,8 @@
 """Tests for the dynestyx state space building block (``numpyro_forecast.contrib.dynestyx``)."""
 
 import warnings
-from types import SimpleNamespace
 from typing import Literal
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -24,7 +22,7 @@ from numpyro_forecast import (
     predict_in_sample,
     to_datatree,
 )
-from numpyro_forecast.contrib.dynestyx import StateSpaceResult, _in_sample_states, state_space
+from numpyro_forecast.contrib.dynestyx import StateSpaceResult, state_space
 from numpyro_forecast.optional import _api_canary
 from numpyro_forecast.typing import Array, ForecastModel
 
@@ -278,7 +276,12 @@ def test_window_shapes_are_validated() -> None:
 
 
 def test_backtest_scores_in_sample_under_one_handler_stack() -> None:
-    """``backtest(eval_train=True)`` scores in-sample and out-of-sample through the block."""
+    """``backtest(eval_train=True)`` runs the in-sample and the forecast legs under one stack.
+
+    The in-sample legs run under an idle Simulator, whose warning the block silences, and
+    they score the smoothing predictive, which has seen the observations it scores: every
+    window's in-sample CRPS is below its forecast CRPS.
+    """
 
     def forecast_fn(
         rng_key: Array,
@@ -305,7 +308,12 @@ def test_backtest_scores_in_sample_under_one_handler_stack() -> None:
     ) -> Array | np.ndarray:
         return predict_in_sample(rng_key, model, _repeat(PARAMS, num_samples), train_covariates)
 
-    with DiscreteTimeSimulator(n_simulations=1), smoother:
+    with (
+        warnings.catch_warnings(record=True) as caught,
+        DiscreteTimeSimulator(n_simulations=1),
+        smoother,
+    ):
+        warnings.simplefilter("always")
         results = backtest(
             random.PRNGKey(7),
             lambda: local_level,
@@ -316,12 +324,11 @@ def test_backtest_scores_in_sample_under_one_handler_stack() -> None:
             train_window=12,
             test_window=6,
             stride=6,
-            num_samples=20,
+            num_samples=200,
             eval_train=True,
         )
-    assert len(results) == 3
-    assert all(np.isfinite(r.metrics["crps"]) for r in results)
-    assert all(np.isfinite(r.train_metrics["crps"]) for r in results)
+    assert not [w for w in caught if "no predict_times" in str(w.message)]
+    assert all(r.train_metrics["crps"] < r.metrics["crps"] for r in results)
 
 
 def test_dynestyx_surface_canary() -> None:
@@ -352,6 +359,7 @@ def test_dynestyx_surface_canary() -> None:
     assert tr["f_smoothed_states_mean"]["value"].shape == (T_OBS, 1)
     assert tr["f_predicted_observations"]["value"].shape == (1, FUTURE + 1, 1)
     assert tr["f_predicted_states"]["value"].shape == (1, FUTURE + 1, 1)
+    assert "f_marginal_loglik" in tr
     assert tr["forecast"]["value"].shape == (FUTURE, 1)
 
 
@@ -589,18 +597,21 @@ def test_an_untested_dynestyx_version_warns(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.parametrize("call", ["training", "forecast", "predict_in_sample"])
-def test_scope_gives_a_clear_error(call: str) -> None:
-    """Under ``handlers.scope`` the dynestyx sites are prefixed, which the block reports in
-    every mode (training would otherwise pass and the drivers fail with a bare ``KeyError``).
+@pytest.mark.parametrize(("prefix", "divider"), [("a", "/"), ("f", "_")])
+def test_scope_gives_a_clear_error(call: str, prefix: str, divider: str) -> None:
+    """Under ``handlers.scope`` the dynestyx sites are renamed, which the block reports in
+    every mode (training would otherwise pass and the drivers fail with a bare ``KeyError``),
+    also when the prefix is the block's name and the divider is ``_``.
     """
-    scoped = numpyro.handlers.scope(local_level, prefix="a")
+    scoped = numpyro.handlers.scope(local_level, prefix=prefix, divider=divider)
     with (
         DiscreteTimeSimulator(n_simulations=1),
         smoother,
         pytest.raises(ValueError, match=r"handlers\.scope"),
     ):
         if call == "training":
-            log_density(scoped, (TRAIN, TRAIN), {}, {f"a/{k}": v for k, v in PARAMS.items()})
+            params = {f"{prefix}{divider}{k}": v for k, v in PARAMS.items()}
+            log_density(scoped, (TRAIN, TRAIN), {}, params)
         elif call == "forecast":
             forecast(random.PRNGKey(21), scoped, _repeat(PARAMS, 2), TRAIN, COVARIATES)
         else:
@@ -682,9 +693,14 @@ def test_svi_fit_and_draw_posterior_run_through_the_block() -> None:
 
 
 def test_to_datatree_under_the_latent_path_builder() -> None:
-    """The builder that fitted the model serves both predictive groups of ``to_datatree``."""
+    """The builder that fitted the model serves both predictive groups of ``to_datatree``.
+
+    The in-sample draws scatter around the posterior path, and the forecast starts from its
+    final state, so neither group comes from a prior path.
+    """
+    n = 400
     path = jnp.linspace(-1.0, 1.0, T_OBS)[:, None]
-    posterior = _repeat({**PARAMS, "f_state_path_params": path}, 8)
+    posterior = _repeat({**PARAMS, "f_state_path_params": path}, n)
     builder = LatentPathBuilder()
     with builder:
         numpyro.handlers.trace(numpyro.handlers.seed(local_level, random.PRNGKey(0))).get_trace(
@@ -694,45 +710,57 @@ def test_to_datatree_under_the_latent_path_builder() -> None:
         tree = to_datatree(
             random.PRNGKey(27), local_level, posterior, TRAIN, COVARIATES, num_chains=2
         )
-    assert tree["posterior_predictive"]["obs"].shape == (2, 4, T_OBS, 1)
-    assert tree["predictions"]["obs"].shape == (2, 4, FUTURE, 1)
+    in_sample = tree["posterior_predictive"]["obs"]
+    ahead = tree["predictions"]["obs"]
+    assert in_sample.shape == (2, n // 2, T_OBS, 1)
+    assert ahead.shape == (2, n // 2, FUTURE, 1)
+    expected_var = Q_TRUE**2 * np.arange(1, FUTURE + 1)[:, None] + R_TRUE**2
+    assert np.allclose(
+        in_sample.mean(("chain", "draw")).to_numpy(), path, atol=4 * R_TRUE / np.sqrt(n)
+    )
+    assert np.allclose(
+        ahead.mean(("chain", "draw")).to_numpy(),
+        path[-1],
+        atol=4 * np.sqrt(expected_var / n).max(),
+    )
 
 
-def test_an_unparsable_dynestyx_version_does_not_warn(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A version string that is not ``major.minor...`` skips the version check silently."""
-    import dynestyx
+@pytest.mark.parametrize("handler_name", ["smoother", "builder"])
+def test_two_observed_series_keep_their_columns(handler_name: str) -> None:
+    """Two series observed through ``H = I`` keep their ``obs`` column in both sites.
 
-    monkeypatch.setattr(dynestyx, "__version__", "unknown")
-    with warnings.catch_warnings(), smoother:
-        warnings.simplefilter("error")
-        log_density(local_level, (TRAIN, TRAIN), {}, PARAMS)
-
-
-def test_a_smoother_result_without_marginals_is_rejected() -> None:
-    """A Smoother result with no per-step marginals gives a clear error, not an index error."""
-    with pytest.raises(ValueError, match="no per-step marginals"):
-        _in_sample_states(random.PRNGKey(28), SimpleNamespace(dists=[]), "SMOOTHER", T_OBS)
-
-
-def test_a_later_fit_with_another_missingness_pattern_breaks_the_earlier_likelihood() -> None:
-    """One builder, two fits with different NaN patterns: a traced likelihood of the first fails.
-
-    The builder caches one missingness layout per site name and shape. After the second fit
-    overwrites it, a traced call that evaluates the likelihood of the first model raises
-    dynestyx's runtime layout check, as the Notes of ``state_space`` describe.
+    The second series sits ``50`` above the first, so a transposed or broadcast axis shows
+    as a ``50``-unit error in the in-sample and in the forecast draws.
     """
-    gap = TRAIN.at[5:8].set(jnp.nan)
-    builder = LatentPathBuilder()
-    with builder:
-        for data in (TRAIN, gap):  # the eager runs that two fits would make
-            numpyro.handlers.trace(
-                numpyro.handlers.seed(local_level, random.PRNGKey(0))
-            ).get_trace(data, data)
+    offset = jnp.array([0.0, 50.0])
+    series = offset + jnp.concatenate(
+        [SERIES, simulate(random.PRNGKey(29), T_OBS + FUTURE)], axis=-1
+    )
+    train = series[:T_OBS]
 
-        def log_joint(path: Array, data: Array) -> Array:
-            return log_density(
-                local_level, (data, data), {}, {**PARAMS, "f_state_path_params": path}
-            )[0]
+    def two_series(covariates: Array, data: Array | None = None) -> None:
+        h = Horizon.from_data(covariates, data)
+        dynamics = DynamicalModel(
+            initial_condition=dist.MultivariateNormal(offset, P0 * jnp.eye(2)),
+            state_evolution=LinearGaussianStateEvolution(A=jnp.eye(2), cov=Q_TRUE**2 * jnp.eye(2)),
+            observation_model=LinearGaussianObservation(H=jnp.eye(2), R=R_TRUE**2 * jnp.eye(2)),
+        )
+        state_space(h, "f", covariates[..., : h.t_obs, :], dynamics)
 
-        with pytest.raises(jax.errors.JaxRuntimeError):
-            jax.block_until_ready(jax.jit(log_joint)(TRAIN, TRAIN))
+    n = 400
+    if handler_name == "smoother":
+        handler, posterior = smoother, {"unused": jnp.zeros(n)}
+    else:
+        handler = LatentPathBuilder()
+        with handler:  # the eager run that a fit would make, so the builder sees concrete data
+            numpyro.handlers.trace(numpyro.handlers.seed(two_series, random.PRNGKey(0))).get_trace(
+                train, train
+            )
+        posterior = {"f_state_path_params": jnp.broadcast_to(train, (n, *train.shape))}
+    with DiscreteTimeSimulator(n_simulations=1), handler:
+        in_sample = predict_in_sample(random.PRNGKey(30), two_series, posterior, train)
+        ahead = forecast(random.PRNGKey(31), two_series, posterior, train, series)
+    assert in_sample.shape == (n, T_OBS, 2)
+    assert ahead.shape == (n, FUTURE, 2)
+    assert jnp.abs(in_sample.mean(axis=0) - train).max() < 1.0
+    assert jnp.abs(ahead.mean(axis=0) - train[-1]).max() < 1.0

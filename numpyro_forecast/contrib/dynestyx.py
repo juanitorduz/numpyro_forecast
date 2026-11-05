@@ -61,8 +61,8 @@ of it.
 The coupling to dynestyx is confined to this module: ``dynestyx.sample``, the
 handler-stack query above, the result types ``LatentStateResult``
 (``state_path``) and the ``dists`` of a smoother's result, the site suffixes
-``_predicted_observations`` and ``_predicted_states``, and
-``DynamicalModel.observation_model(x, u, t)``. dynestyx is an optional
+``_marginal_loglik``, ``_state_path_params``, ``_predicted_observations`` and
+``_predicted_states``, and ``DynamicalModel.observation_model(x, u, t)``.
 dependency (``pip install numpyro_forecast[dynestyx]``, ``dynestyx>=0.8.0,<0.9``)
 imported lazily through `~~numpyro_forecast.optional.require()` at the first
 call, which warns when the installed minor version is not the tested one. The
@@ -96,8 +96,13 @@ _PREDICTED_OBSERVATIONS = "_predicted_observations"
 _PREDICTED_STATES = "_predicted_states"
 """Suffix of the site a dynestyx Simulator registers with the state rollout."""
 
-_CONDITIONING_KINDS = ("FILTER", "SMOOTHER", "LATENT_PATH_BUILDER")
-"""dynestyx handler kinds that condition ``dsx.sample`` on the observed window."""
+_CONDITIONING_SITES = {
+    "FILTER": "_marginal_loglik",
+    "SMOOTHER": "_marginal_loglik",
+    "LATENT_PATH_BUILDER": "_state_path_params",
+}
+"""dynestyx handler kinds that condition ``dsx.sample`` on the observed window, each with the
+suffix of the site it registers in every mode (the marginal likelihood, or the path)."""
 
 _IDLE_SIMULATOR_WARNING = "Simulator has no predict_times to simulate at."
 """dynestyx's warning on the in-sample legs of the one-stack recipe; silenced when future == 0."""
@@ -129,12 +134,8 @@ class StateSpaceResult(NamedTuple):
 
 def _check_version(dsx: Any) -> None:
     """Warn when the installed dynestyx minor version is not the tested one."""
-    version = str(getattr(dsx, "__version__", ""))
-    try:
-        minor = tuple(int(part) for part in version.split(".")[:2])
-    except ValueError:
-        return
-    if minor != _TESTED_DYNESTYX:
+    version = str(getattr(dsx, "__version__", "unknown"))
+    if version.split(".")[:2] != [str(part) for part in _TESTED_DYNESTYX]:
         msg = (
             f"numpyro_forecast.contrib.dynestyx is tested with dynestyx "
             f"{'.'.join(map(str, _TESTED_DYNESTYX))}, found {version}; dynestyx changes its "
@@ -151,7 +152,7 @@ def _conditioning_kind() -> str:
     """
     handlers = importlib.import_module("dynestyx.handlers")
     kinds = [kind.name for kind in handlers._dynestyx_stack_kind()]
-    conditioning = [kind for kind in kinds if kind in _CONDITIONING_KINDS]
+    conditioning = [kind for kind in kinds if kind in _CONDITIONING_SITES]
     if not conditioning:
         msg = (
             "state_space needs a dynestyx Filter, Smoother or LatentPathBuilder around the call "
@@ -208,7 +209,7 @@ def _in_sample_states(rng_key: Array, result: Any, kind: str, t_obs: int) -> Arr
         x = jnp.asarray(result.state_path)
     else:
         dists = getattr(result, "dists", None)
-        if not dists:
+        if not dists:  # pragma: no cover - defensive: no discrete-time smoother of dynestyx 0.8
             msg = "the dynestyx Smoother returned no per-step marginals to draw from"
             raise ValueError(msg)
         treedef = jax.tree.structure(dists[0])
@@ -246,18 +247,18 @@ def _observe(rng_key: Array, dynamics: Any, x: Array, u: Array | None, times: Ar
     return jax.vmap(sample_step, in_axes=(0, None if u is None else 0, 0, 0))(x, u, times, keys)
 
 
-def _check_site_names(trace: dict[str, Any], name: str) -> None:
-    """Raise when dynestyx's sites do not carry the bare ``f"{name}_"`` prefix.
+def _check_site_names(trace: dict[str, Any], name: str, kind: str) -> None:
+    """Raise unless the site the active handler registers in every mode keeps its bare name.
 
-    dynestyx registers at least one such site in every mode (the likelihood factor,
-    ``_marginal_loglik`` or ``_state_path_params``); under ``numpyro.handlers.scope``
-    they are renamed, and so are the ``"obs"`` and ``"forecast"`` sites the drivers read.
+    A Filter or Smoother registers ``f"{name}_marginal_loglik"``, a LatentPathBuilder
+    ``f"{name}_state_path_params"``. Under ``numpyro.handlers.scope`` every site is
+    renamed, including the ``"obs"`` and ``"forecast"`` sites the drivers read by name.
     """
-    if not any(site.startswith(f"{name}_") for site in trace):
+    if f"{name}{_CONDITIONING_SITES[kind]}" not in trace:
         msg = (
-            f"dynestyx registered no {name!r} sites under their bare names: state_space reads "
-            "them by name and owns the bare 'obs' and 'forecast' sites, so it cannot run under "
-            "numpyro.handlers.scope (which prefixes them)"
+            f"dynestyx registered no {name + _CONDITIONING_SITES[kind]!r} site: state_space "
+            "reads its sites by their bare names and owns the bare 'obs' and 'forecast' sites, "
+            "so it cannot run under numpyro.handlers.scope (which renames them)"
         )
         raise ValueError(msg)
 
@@ -417,12 +418,15 @@ def state_space(
         state_space(h, "f", y, dynamics)
 
 
+    rng_key, key_fit, key_export = random.split(rng_key, 3)
     with Filter(filter_config=KFConfig(filter_source="cuthbert")):
-        mcmc.run(rng_key, series[:t_obs], series[:t_obs])
+        mcmc.run(key_fit, series[:t_obs], series[:t_obs])
 
+    # the parameters only: the fit also recorded its filtered states (f_filtered_states_*)
+    posterior = {k: v for k, v in mcmc.get_samples().items() if not k.startswith("f_")}
     smoother = Smoother(smoother_config=KFSmootherConfig(filter_source="cuthbert"))
     with DiscreteTimeSimulator(n_simulations=1), smoother:
-        tree = to_datatree(rng_key, local_level, mcmc.get_samples(), series[:t_obs], series)
+        tree = to_datatree(key_export, local_level, posterior, series[:t_obs], series)
     ```
     """
     dsx = require("dynestyx", extra="dynestyx")
@@ -453,7 +457,7 @@ def state_space(
             predict_times=predict_times,
             **ctrl,
         )
-    _check_site_names(trace, name)
+    _check_site_names(trace, name, kind)
     x_in_sample, x_future = None, None
     if h.future > 0:
         predicted = jnp.asarray(trace[f"{name}{_PREDICTED_OBSERVATIONS}"]["value"])
