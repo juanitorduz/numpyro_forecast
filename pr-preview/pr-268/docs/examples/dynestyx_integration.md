@@ -118,11 +118,11 @@ print(f"dynestyx {dsx.__version__}, numpyro {numpyro.__version__}, jax {jax.__ve
 - **`LatentPathBuilder`**: it creates one sample site for the whole path and registers the joint density of states and observations as a factor. The sampler explores the path explicitly, as it does with the package's own [`innovations`](../../reference/models.innovations.md). The difference is that `dynestyx` builds the path, so non-Gaussian observation models and observations with missing values are available.
 - **`Simulator`**: it rolls the conditioned state forward over the forecast horizon. We place it outside the handler of the fit when we call [forecast](../../reference/predictive.forecast.md#numpyro_forecast.predictive.forecast) or [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree).
 
-The block has three modes, and `h.data` selects them. The observations themselves come from the `y` argument, which the model slices from `covariates` (the series doubles as a covariate, the same contract as [`ssoe`](../../reference/models.ssoe.md)). This is what lets a model call without data still reach the observed window.
+The block has three modes, and `h.data` and `h.future` select them. The observations themselves come from the `y` argument, which the model slices from `covariates` (the series doubles as a covariate, the same contract as [`ssoe`](../../reference/models.ssoe.md)). This is what lets a model call without data still reach the observed window.
 
 1.  **Training** (`data` present, no horizon): the block runs `dsx.sample` under the active handler. The factor (and the path site, for the builder) enters the trace.
 2.  **Forecasting** (`covariates` longer than `data`): the `Simulator` around the call starts from the conditioned distribution of the state at the last observed step and rolls it forward. Under a `Filter` or a `Smoother` that is the filtering or smoothing distribution at the parameters of each posterior draw (the two coincide at the last step). Under a `LatentPathBuilder` it is the sampled final state, which inherits the mixing of the path. The block registers the horizon draws as the `"forecast"` site.
-3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the posterior over the path (the smoothing distribution, or the explicit path), samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` selects this mode; the observed window still reaches the model through the covariates. The in-sample predictive is a smoothing task, which is why a `Filter` raises in this mode.
+3.  **In-sample predictive** (`data=None`): the block draws the in-window states from the posterior over the path (the smoothing distribution, or the explicit path). It samples one observation per step from the observation model and registers them as the `"obs"` site. `data=None` selects this mode; the observed window still reaches the model through the covariates. The in-sample predictive is a smoothing task, which is why a `Filter` raises in this mode.
 
 The block owns the likelihood, so it also owns the two sites, like [`predict`](../../reference/models.predict.md). It returns a [`StateSpaceResult`](../../reference/contrib.dynestyx.StateSpaceResult.md) with the state draws of the current mode, `x_future` over the horizon and `x_in_sample` over the window, so that a model can register its latent level.
 
@@ -289,7 +289,7 @@ kalman_filter = Filter(filter_config=KFConfig())
 
 ## Model Fitting
 
-We run the same sampler budget on the three models: 4 chains of 1{,}000 warmup and 1{,}000 sampling steps. The `num_steps` extra field records the number of leapfrog steps of the sampling phase, one gradient evaluation each, which is where NUTS spends its time. Warmup steps are not counted, but they are part of the wall time.
+We run the same sampler budget on the three models: 4 chains of 1{,}000 warmup and 1{,}000 sampling steps. The `num_steps` extra field records the number of leapfrog steps of the sampling phase, one gradient evaluation each, which is where NUTS spends its time. Warmup steps and the compilation are not counted, but they are part of the wall time.
 
 Each strategy is a model and the handler around its calls. The direct model needs no handler, so `nullcontext()` stands in for it. We keep the `LatentPathBuilder` instance of the fit for every later call of that model.
 
@@ -371,32 +371,41 @@ pd.DataFrame.from_dict(
 
 |  | mean q | sd q | ess_bulk q | r_hat q | mean r | sd r | ess_bulk r | r_hat r | leapfrog steps | wall time (s) |
 |----|----|----|----|----|----|----|----|----|----|----|
-| direct (innovations) | 0.389 | 0.061 | 726.0 | 1.009 | 0.441 | 0.051 | 763.0 | 1.008 | 1013890 | 13.4 |
-| dynestyx, explicit path | 0.389 | 0.063 | 630.0 | 1.011 | 0.440 | 0.053 | 985.0 | 1.005 | 66512 | 9.7 |
-| dynestyx, Kalman smoother | 0.387 | 0.061 | 1590.0 | 1.003 | 0.440 | 0.051 | 1694.0 | 1.004 | 17992 | 13.4 |
+| direct (innovations) | 0.389 | 0.061 | 726.0 | 1.009 | 0.441 | 0.051 | 763.0 | 1.008 | 1013890 | 13.0 |
+| dynestyx, explicit path | 0.389 | 0.063 | 630.0 | 1.011 | 0.440 | 0.053 | 985.0 | 1.005 | 66512 | 9.1 |
+| dynestyx, Kalman smoother | 0.387 | 0.061 | 1590.0 | 1.003 | 0.440 | 0.051 | 1694.0 | 1.004 | 17992 | 12.8 |
 
 
-The three posterior means agree closely. The \hat{R} values are between 1.003 and 1.011: the explicit path is slightly above the usual threshold of 1.01 for q. All three fits place the true values inside their bulk. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
+The three posterior means agree closely. The \hat{R} values are between 1.003 and 1.011: the explicit path is slightly above the usual threshold of 1.01 for q. With 120 observations the scales are only moderately well identified, so a posterior mean one to one and a half standard deviations away from the truth is not surprising.
 
 The smoothed model reaches the largest effective sample size with a small fraction of the gradient evaluations. It moves in a 2-dimensional posterior instead of a 123-dimensional one, where the likelihood still couples q to every innovation after the non-centered reparameterization.
 
 The explicit path built by `dynestyx` sits between the two. It needs fewer gradients than the direct model but mixes less well on q. A plausible reason is that the builder samples the path in centered form and has no reparameterization option, but we did not test this.
 
-Each smoother gradient is more expensive (a Kalman pass over the window instead of a sum of Gaussian log densities), so on a short series on the CPU the wall times are similar. The advantage grows with the length of the series. The dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2, and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
+Each smoother gradient costs more than a gradient of the direct model: it runs a Kalman pass over the window instead of a sum of Gaussian log densities. So on a short series on the CPU the wall times are similar. The advantage grows with the length of the series. The dimension of the direct posterior grows with it, while the dimension the smoother's sampler explores stays 2, and the cost of a Kalman pass is linear in the length. On accelerators the `cuthbert` backend can also use its associative (parallel-in-time) scan, which we do not measure here.
 
-We now measure the two costs that the building block section refers to. The first is a full model evaluation, which returns the marginal log likelihood and the state estimates. The second is the gradient of the log density, which is what NUTS and SVI evaluate. Both are compiled with `jax.jit` on the training window and timed at the true scales, after the compilation.
+We now measure the two costs that the building block section refers to. The first is a full model evaluation, which returns the marginal log likelihood and the state estimates. The second is the gradient of the log density, which is what NUTS and SVI evaluate; we also measure it for the direct model. Both are compiled with `jax.jit` on the training window and timed at the true scales, after the compilation. The direct model also needs its innovations, which we take from one posterior draw.
 
 
 ``` python
-def timed(fn: Callable[[dict[str, Array]], Any], num_evals: int) -> float:
-    """Average wall time in milliseconds of ``fn`` at the true scales, after compilation."""
-    params = {"q": jnp.asarray(q_true), "r": jnp.asarray(r_true)}
+def timed(
+    fn: Callable[[dict[str, Array]], Any], params: dict[str, Array], num_evals: int
+) -> float:
+    """Average wall time in milliseconds of ``fn`` at ``params``, after compilation."""
     jax.block_until_ready(fn(params))
     start = time.perf_counter()
     for _ in range(num_evals):
         out = fn(params)
     jax.block_until_ready(out)
     return (time.perf_counter() - start) / num_evals * 1e3
+
+
+true_scales = {"q": jnp.asarray(q_true), "r": jnp.asarray(r_true)}
+direct_mcmc = fits["direct (innovations)"][0]
+direct_params = {  # one posterior draw of every sample site, at the true scales
+    **{name: posteriors["direct (innovations)"][name][0] for name in direct_mcmc.last_state.z},
+    **true_scales,
+}
 
 
 def evaluation_cost(handler: Filter | Smoother, site: str, num_evals: int = 1_000) -> float:
@@ -408,17 +417,22 @@ def evaluation_cost(handler: Filter | Smoother, site: str, num_evals: int = 1_00
         return tr["f_marginal_loglik"]["value"], tr[site]["value"]
 
     with handler:  # the handler must be active when jax.jit traces the model
-        return timed(jax.jit(run), num_evals)
+        return timed(jax.jit(run), true_scales, num_evals)
 
 
-def gradient_cost(handler: Filter | Smoother, num_evals: int = 1_000) -> float:
-    """Milliseconds per compiled ``value_and_grad`` of the log density under ``handler``."""
+def gradient_cost(
+    model: ForecastModel,
+    handler: AbstractContextManager,
+    params: dict[str, Array],
+    num_evals: int = 1_000,
+) -> float:
+    """Milliseconds per compiled ``value_and_grad`` of the log density of ``model``."""
 
     def log_joint(params: dict[str, Array]) -> Array:
-        return log_density(local_level_ssm, (covariates_train, train_data), {}, params)[0]
+        return log_density(model, (covariates_train, train_data), {}, params)[0]
 
     with handler:
-        return timed(jax.jit(jax.value_and_grad(log_joint)), num_evals)
+        return timed(jax.jit(jax.value_and_grad(log_joint)), params, num_evals)
 
 
 pd.DataFrame(
@@ -428,21 +442,25 @@ pd.DataFrame(
             "Smoother": evaluation_cost(smoother, "f_smoothed_states_mean"),
         },
         "gradient (ms)": {
-            "Filter": gradient_cost(kalman_filter),
-            "Smoother": gradient_cost(smoother),
+            "Filter": gradient_cost(local_level_ssm, kalman_filter, true_scales),
+            "Smoother": gradient_cost(local_level_ssm, smoother, true_scales),
+            "direct (innovations)": gradient_cost(
+                local_level_direct, nullcontext(), direct_params
+            ),
         },
     }
 ).round(3)
 ```
 
 
-|          | evaluation (ms) | gradient (ms) |
-|----------|-----------------|---------------|
-| Filter   | 0.053           | 0.164         |
-| Smoother | 0.083           | 0.165         |
+|                      | evaluation (ms) | gradient (ms) |
+|----------------------|-----------------|---------------|
+| Filter               | 0.052           | 0.159         |
+| Smoother             | 0.079           | 0.157         |
+| direct (innovations) | NaN             | 0.008         |
 
 
-The full evaluation is more expensive under the `Smoother`, which is the backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient.
+A full evaluation costs more under the `Smoother` because of its backward pass. The gradient costs the same under both handlers, because the marginal log likelihood depends on the forward pass only and JAX drops the unused backward pass from the compiled gradient. A gradient of the direct model costs much less than either. The smoother needs far fewer gradients, but each one costs more, which is why the wall times of the fits are similar.
 
 Next, we overlay the three posteriors of the two scales.
 
@@ -472,7 +490,7 @@ fig.suptitle(
 </figure>
 
 
-The three histograms lie on top of each other, and the truth sits inside the bulk of each posterior.
+The three histograms lie on top of each other. The truth falls in the left tail of the posterior of q and in the right tail of the posterior of r, as the means and standard deviations of the table above show.
 
 
 ## Forecast
@@ -560,7 +578,7 @@ pc.viz["figure"].item().suptitle(
 </figure>
 
 
-The three fans are the same forecast up to Monte Carlo error. The `dynestyx` models are the same model as the direct one, with a different parameterization for the sampler.
+The three fans are the same forecast up to Monte Carlo error. The `dynestyx` models are the same model as the direct one, up to the initial-state convention of the model specification, with a different parameterization for the sampler.
 
 The same comparison in tabular form: point accuracy through MAE and RMSE, the CRPS as a proper score for the whole predictive distribution, and the empirical coverage of the central 50\\ and 94\\ intervals.
 
@@ -591,7 +609,7 @@ pd.DataFrame(
 | coverage (94%) | 1.000 | 1.000 | 1.000 |
 
 
-The metrics on the held-out window agree as well, which is the point of this table. It says little about calibration. All three strategies put 20 of the 24 test points (0.833) inside the central 50\\ interval and every point inside the 94\\ interval, but one test window is not enough to check it. The 24 forecast errors share the level error at the split and the random walk after it, so they are strongly correlated, and 24 correlated points say little about the coverage of the intervals.
+The metrics on the held-out window agree as well, which is the point of this table. The table does not test calibration. All three strategies put 20 of the 24 test points (0.833) inside the central 50\\ interval and every point inside the 94\\ interval. The 24 forecast errors share the level error at the split and the random walk after it, so they are strongly correlated. One window of 24 correlated points is too small to check the coverage of the intervals.
 
 
 ## Posterior Predictive Checks
@@ -1180,7 +1198,7 @@ Group: /
 │           q                                 (chain, draw) float32 16kB 0.3207 ... 0...
 │           r                                 (chain, draw) float32 16kB 0.4482 ... 0...
 │       Attributes:
-│           created_at:                 2026-11-05T13:14:59.438989+00:00
+│           created_at:                 2026-11-05T18:14:10.289618+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1195,7 +1213,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 2MB -12.31 -12.32 ... -9.626
 │       Attributes:
-│           created_at:                 2026-11-05T13:15:00.048384+00:00
+│           created_at:                 2026-11-05T18:14:10.863311+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1208,7 +1226,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 480B -12.66 -12.45 -11.69 ... -9.059 -9.236
 │       Attributes:
-│           created_at:                 2026-11-05T13:15:00.048626+00:00
+│           created_at:                 2026-11-05T18:14:10.863554+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1221,7 +1239,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 480B -12.66 -12.45 ... -9.236
 │       Attributes:
-│           created_at:                 2026-11-05T13:15:00.048806+00:00
+│           created_at:                 2026-11-05T18:14:10.863733+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1236,7 +1254,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 384kB -10.23 -9.461 ... -6.908
 │       Attributes:
-│           created_at:                 2026-11-05T13:15:00.498920+00:00
+│           created_at:                 2026-11-05T18:14:11.304483+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1249,7 +1267,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 96B -9.941 -9.607 ... -8.9 -8.8
         Attributes:
-            created_at:                 2026-11-05T13:15:00.499178+00:00
+            created_at:                 2026-11-05T18:14:11.304731+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1586,7 +1604,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:14:59.438989+00:00
+2026-11-05T18:14:10.289618+00:00
 
 creation_library :  
 ArviZ
@@ -1722,7 +1740,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:15:00.048384+00:00
+2026-11-05T18:14:10.863311+00:00
 
 creation_library :  
 ArviZ
@@ -1816,7 +1834,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:15:00.048626+00:00
+2026-11-05T18:14:10.863554+00:00
 
 creation_library :  
 ArviZ
@@ -1910,7 +1928,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:15:00.048806+00:00
+2026-11-05T18:14:10.863733+00:00
 
 creation_library :  
 ArviZ
@@ -2046,7 +2064,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:15:00.498920+00:00
+2026-11-05T18:14:11.304483+00:00
 
 creation_library :  
 ArviZ
@@ -2140,7 +2158,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:15:00.499178+00:00
+2026-11-05T18:14:11.304731+00:00
 
 creation_library :  
 ArviZ
@@ -2550,6 +2568,7 @@ The loss flattens well before the 3{,}000 steps. We compare the posterior mean o
 pd.DataFrame(
     {
         "posterior mean": np.asarray(posterior_svi["beta"]).mean(axis=0),
+        "posterior sd": np.asarray(posterior_svi["beta"]).std(axis=0),
         "truth": np.asarray(beta_true),
     },
     index=[f"beta[{i}]" for i in range(beta_true.shape[0])],
@@ -2557,15 +2576,15 @@ pd.DataFrame(
 ```
 
 
-|           | posterior mean | truth |
-|-----------|----------------|-------|
-| beta\[0\] | 1.68           | 1.5   |
-| beta\[1\] | 0.54           | 0.5   |
-| beta\[2\] | -0.38          | -0.4  |
-| beta\[3\] | 0.23           | 0.3   |
+|           | posterior mean | posterior sd | truth |
+|-----------|----------------|--------------|-------|
+| beta\[0\] | 1.68           | 0.13         | 1.5   |
+| beta\[1\] | 0.54           | 0.09         | 0.5   |
+| beta\[2\] | -0.38          | 0.13         | -0.4  |
+| beta\[3\] | 0.23           | 0.08         | 0.3   |
 
 
-The posterior means are close to the truth.
+The truth lies within about two posterior standard deviations of each posterior mean.
 
 
 ## Forecast
@@ -2713,12 +2732,12 @@ results_to_dataframe(results).round(3)
 
 |  | t0 | t1 | t2 | num_samples | walltime | metric_crps | metric_coverage_50 | metric_coverage_94 | train_metric_crps | train_metric_coverage_50 | train_metric_coverage_94 |
 |----|----|----|----|----|----|----|----|----|----|----|----|
-| 0 | 0 | 72 | 84 | 1000 | 6.727 | 0.678 | 0.250 | 1.000 | 0.214 | 0.722 | 1.0 |
-| 1 | 0 | 84 | 96 | 1000 | 6.931 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
-| 2 | 0 | 96 | 108 | 1000 | 7.542 | 0.400 | 0.917 | 1.000 | 0.209 | 0.740 | 1.0 |
-| 3 | 0 | 108 | 120 | 1000 | 8.006 | 0.426 | 0.667 | 1.000 | 0.209 | 0.741 | 1.0 |
-| 4 | 0 | 120 | 132 | 1000 | 8.231 | 0.660 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
-| 5 | 0 | 132 | 144 | 1000 | 9.093 | 0.766 | 0.250 | 1.000 | 0.241 | 0.720 | 1.0 |
+| 0 | 0 | 72 | 84 | 1000 | 6.401 | 0.678 | 0.250 | 1.000 | 0.214 | 0.722 | 1.0 |
+| 1 | 0 | 84 | 96 | 1000 | 6.746 | 0.925 | 0.417 | 0.833 | 0.205 | 0.726 | 1.0 |
+| 2 | 0 | 96 | 108 | 1000 | 7.120 | 0.400 | 0.917 | 1.000 | 0.209 | 0.740 | 1.0 |
+| 3 | 0 | 108 | 120 | 1000 | 7.497 | 0.426 | 0.667 | 1.000 | 0.209 | 0.741 | 1.0 |
+| 4 | 0 | 120 | 132 | 1000 | 7.782 | 0.660 | 0.583 | 0.917 | 0.201 | 0.758 | 1.0 |
+| 5 | 0 | 132 | 144 | 1000 | 8.738 | 0.766 | 0.250 | 1.000 | 0.241 | 0.720 | 1.0 |
 
 
 Every fold reports its window, its out-of-sample scores and, with `eval_train=True`, its in-sample scores. Overlaying the out-of-sample forecast of every fold on the series gives the rolling-origin view. Each band starts where its training window ends, and the dashed lines mark the successive splits.
@@ -2813,17 +2832,17 @@ axes[0].plot(
     [r.train_metrics["crps"] for r in results],
     "o-",
     color="C0",
-    label="in-sample CRPS",
+    label="in-sample",
 )
 axes[0].plot(
     split_points,
     [r.metrics["crps"] for r in results],
     "o-",
     color="C1",
-    label="out-of-sample CRPS",
+    label="out-of-sample",
 )
-axes[0].legend()
-axes[0].set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per fold")
+axes[0].legend(loc="lower center", ncol=2, fontsize="medium")
+axes[0].set(xlabel="train/test split point", ylabel="CRPS", title="CRPS per fold", ylim=(0, None))
 axes[1].plot(
     split_points,
     [r.metrics["coverage_50"] for r in results],
@@ -2860,7 +2879,7 @@ The in-sample CRPS is stable across folds and well below the out-of-sample CRPS,
 
 The out-of-sample CRPS varies more from fold to fold, because each fold scores only 12 observations and the level of the series can drift away from the forecast within a window.
 
-The empirical coverage of the central 50\\ interval moves around the nominal level from fold to fold, and the 94\\ interval covers at least 10 of the 12 observations in every fold. With 12 observations per fold each observation moves the coverage by about 0.08, so this variation is expected.
+The empirical coverage of the central 50\\ interval moves around the nominal level from fold to fold, and the 94\\ interval covers at least 10 of the 12 observations in every fold. With 12 observations per fold each observation moves the coverage by about 8 percentage points (1/12), so this variation is expected.
 
 
 # Conclusion

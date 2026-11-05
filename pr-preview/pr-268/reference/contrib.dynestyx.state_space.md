@@ -91,10 +91,13 @@ def local_level(covariates, data=None):
     state_space(h, "f", y, dynamics)
 
 
+rng_key, key_fit, key_export = random.split(rng_key, 3)
 with Filter(filter_config=KFConfig(filter_source="cuthbert")):
-    mcmc.run(rng_key, series[:t_obs], series[:t_obs])
+    mcmc.run(key_fit, series[:t_obs], series[:t_obs])
 
+# the parameters only: the fit also recorded its filtered states (f_filtered_states_*)
+posterior = {k: v for k, v in mcmc.get_samples().items() if not k.startswith("f_")}
 smoother = Smoother(smoother_config=KFSmootherConfig(filter_source="cuthbert"))
 with DiscreteTimeSimulator(n_simulations=1), smoother:
-    tree = to_datatree(rng_key, local_level, mcmc.get_samples(), series[:t_obs], series)
+    tree = to_datatree(key_export, local_level, posterior, series[:t_obs], series)
 ```

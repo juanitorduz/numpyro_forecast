@@ -135,7 +135,12 @@ week = np.arange(duration)
 
 fourier = fourier_features(duration, period=365.25 / 7, num_terms=26)
 bart_covariates = jnp.concatenate([bart, fourier], axis=-1)  # (duration, 53)
+
+print(f"covariates {bart_covariates.shape}, train {bart_train.shape}, test {bart_test.shape}")
 ```
+
+
+    covariates (469, 53), train (417, 1), test (52, 1)
 
 
 The model is linear and Gaussian, so the Kalman filter integrates the level out exactly, and NUTS explores the 55 parameters only. In `dynestyx` terms, the regression is the control matrix `D` of the observation model and the intercept is its `bias`. The Fourier terms enter as controls over the whole horizon, so the forecast reads their future rows from the covariates.
@@ -190,7 +195,7 @@ def gaussian_model(covariates: Array, data: Array | None = None) -> None:
 ```
 
 
-We fit both models with NUTS: 4 chains, a target acceptance probability of 0.9 and, in this section, parallel chains. Every fit in this notebook goes through `fit_nuts`, which also returns the wall time of the run, warmup and compilation included.
+We fit both models with NUTS: 4 chains, a target acceptance probability of 0.9 and parallel chains. The fits under a `LatentPathBuilder` below are the exception: they run their chains one after the other. Every fit in this notebook goes through `fit_nuts`, which also returns the wall time of the run, warmup and compilation included.
 
 For every fit we check the convergence over every sample site, the vectors and the latent path included. `diagnostics` reports the number of scalar parameters NUTS explores, the smallest bulk effective sample size (ESS), the largest \hat{R}, the number of divergent transitions, the leapfrog steps per draw and the wall time. `posterior_tree` collects the draws of a list of sites into an ArviZ tree, which is where the diagnostics and the posterior plots below start.
 
@@ -234,7 +239,7 @@ def diagnostics(mcmc: MCMC, seconds: float) -> dict[str, int | float]:
     extra = mcmc.get_extra_fields()
     return {
         "parameters": len(summary),
-        "min bulk ESS": int(summary["ess_bulk"].min(skipna=False)),  # a NaN raises
+        "min bulk ESS": round(float(summary["ess_bulk"].min(skipna=False))),  # a NaN raises
         "max R-hat": round(float(summary["r_hat"].max(skipna=False)), 3),
         "divergences": int(np.asarray(extra["diverging"]).sum()),
         "leapfrog steps per draw": round(float(np.asarray(extra["num_steps"]).mean()), 1),
@@ -278,15 +283,15 @@ pd.DataFrame.from_dict(gaussian_fits, orient="index")
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx Kalman filter | 55 | 4245 | 1.004 | 0 | 11.5 | 79.0 |
-| innovations | 472 | 1684 | 1.008 | 0 | 127.0 | 12.5 |
+| dynestyx Kalman filter | 55 | 4245 | 1.004 | 0 | 11.5 | 68.6 |
+| innovations | 472 | 1684 | 1.008 | 0 | 127.0 | 12.2 |
 
 
 Both fits converge over all their parameters:
 
 - The largest \hat{R} is 1.008 and the smallest bulk ESS is 1{,}684. There are no divergent transitions.
 - NUTS explores 55 parameters with the Kalman filter and 472 with [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), the 417 weekly steps of the level included.
-- The filter takes 11.5 leapfrog steps per draw, against 127.0 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter over the 417 weeks, so on the CPU that executed this notebook the Kalman fit took longer in wall time.
+- The filter takes 11.5 leapfrog steps per draw, against 127.0 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Each of those steps runs the filter as a sequential scan over the 417 weeks. That costs much more than the cumulative sum of [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so on the CPU that executed this notebook the Kalman fit took longer in wall time.
 
 We overlay the posteriors of the three scalar parameters that both models share, one parameter per panel.
 
@@ -928,7 +933,7 @@ Group: /
 │           sigma         (chain, draw) float32 16kB 0.07794 0.07916 ... 0.07391 0.07532
 │           weight        (chain, draw, weight_dim_0) float32 832kB -0.01708 ... -0.0102
 │       Attributes:
-│           created_at:                 2026-11-05T13:06:56.869860+00:00
+│           created_at:                 2026-11-05T18:01:43.856334+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -943,7 +948,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.96
 │       Attributes:
-│           created_at:                 2026-11-05T13:06:59.991074+00:00
+│           created_at:                 2026-11-05T18:01:46.611121+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -956,7 +961,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 14.41 14.45 14.42 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-11-05T13:06:59.991338+00:00
+│           created_at:                 2026-11-05T18:01:46.611377+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -969,7 +974,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 88kB 14.41 0.0 ... -0.2375
 │       Attributes:
-│           created_at:                 2026-11-05T13:06:59.991531+00:00
+│           created_at:                 2026-11-05T18:01:46.611572+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -984,7 +989,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.29
 │       Attributes:
-│           created_at:                 2026-11-05T13:07:01.109972+00:00
+│           created_at:                 2026-11-05T18:01:47.678280+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -997,7 +1002,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 11kB 14.27 -0.05158 ... 0.3139
         Attributes:
-            created_at:                 2026-11-05T13:07:01.110227+00:00
+            created_at:                 2026-11-05T18:01:47.678525+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1168,7 +1173,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:06:56.869860+00:00
+2026-11-05T18:01:43.856334+00:00
 
 creation_library :  
 ArviZ
@@ -1304,7 +1309,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:06:59.991074+00:00
+2026-11-05T18:01:46.611121+00:00
 
 creation_library :  
 ArviZ
@@ -1398,7 +1403,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:06:59.991338+00:00
+2026-11-05T18:01:46.611377+00:00
 
 creation_library :  
 ArviZ
@@ -1492,7 +1497,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:06:59.991531+00:00
+2026-11-05T18:01:46.611572+00:00
 
 creation_library :  
 ArviZ
@@ -1628,7 +1633,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:07:01.109972+00:00
+2026-11-05T18:01:47.678280+00:00
 
 creation_library :  
 ArviZ
@@ -1722,7 +1727,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-05T13:07:01.110227+00:00
+2026-11-05T18:01:47.678525+00:00
 
 creation_library :  
 ArviZ
@@ -1955,8 +1960,8 @@ pd.DataFrame.from_dict(student_fits, orient="index")
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx latent path | 472 | 439 | 1.005 | 0 | 135.2 | 56.0 |
-| innovations | 473 | 945 | 1.006 | 0 | 255.0 | 77.8 |
+| dynestyx latent path | 472 | 439 | 1.005 | 0 | 135.2 | 54.8 |
+| innovations | 473 | 946 | 1.006 | 0 | 255.0 | 75.3 |
 
 
 With these chain lengths both fits converge over all their parameters:
@@ -2166,14 +2171,14 @@ pc.viz["figure"].item().suptitle(
 </figure>
 
 
-The medians and the HDI bands of the two forecasts lie on top of each other over the test year.
+The two panels show the same forecast: over the test year the medians and the HDI bands of the two models agree closely.
 
 
 # Missing Data
 
 The `LatentPathBuilder` skips missing observations, so the Student-T model fits through a gap with no change to the model function. (The Kalman filter and smoother of the `cuthbert` backend skip them too, while the `cd_dynamax` backend rejects them.) We remove 20 weeks of the training window by setting them to `NaN` in two places. The block reads the observed window from column 0 of the covariates, so the gap has to go there to reach the likelihood. A `NaN` in `data` alone would not reach it. We also put the gap into `data`, which [to_datatree](../../reference/convert.to_datatree.md#numpyro_forecast.convert.to_datatree) would store as the observed data.
 
-The gap fit gets its own `LatentPathBuilder` and the longer chains of the explicit path. A builder keeps one pattern of missing observations per site name and shape, so after a second fit with the same builder and a different pattern, the drivers of the first fit would fail.
+The gap fit gets its own `LatentPathBuilder` and the longer chains of the explicit path. A builder keeps one pattern of missing observations per site name and shape. A second fit with the same builder and a different pattern replaces it, and a later call that evaluates the likelihood of the first model (a refit or `log_density`) then fails.
 
 
 ``` python
@@ -2200,7 +2205,7 @@ pd.DataFrame.from_dict({"gap fit": diagnostics(mcmc_gap, seconds)}, orient="inde
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| gap fit | 472 | 355 | 1.013 | 0 | 163.6 | 58.7 |
+| gap fit | 472 | 355 | 1.013 | 0 | 163.6 | 57.9 |
 
 
 The gap fit nearly converges: the largest \hat{R} is 1.013, just above the usual threshold of 1.01, the smallest bulk ESS is 355, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
@@ -2425,8 +2430,8 @@ pd.DataFrame.from_dict(arma_fits, orient="index")
 
 |  | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
-| dynestyx Kalman filter | 4 | 3632 | 1.003 | 0 | 6.2 | 9.3 |
-| ssoe | 4 | 3476 | 1.000 | 0 | 6.0 | 0.9 |
+| dynestyx Kalman filter | 4 | 3633 | 1.003 | 0 | 6.2 | 8.4 |
+| ssoe | 4 | 3476 | 1.000 | 0 | 6.0 | 0.8 |
 
 
 Both fits converge (largest \hat{R} 1.003, smallest bulk ESS 3{,}476, no divergent transitions), with about six leapfrog steps per draw each: neither model samples a path.
