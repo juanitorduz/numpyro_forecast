@@ -1,11 +1,13 @@
 """Tests for the batched ACF/PACF diagnostics."""
 
 import contextlib
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from conftest import commit_host
 from jax import Array, random
 from jaxtyping import TypeCheckError
 
@@ -190,11 +192,70 @@ def test_near_constant_series_is_finite(level: float, bump: float) -> None:
 def test_wrong_input_typecheck_error() -> None:
     with pytest.raises(TypeCheckError):
         acf(jnp.array(1.0), max_lag=1)
+    # Integer counts are accepted (#163); a boolean series is still rejected.
     with pytest.raises(TypeCheckError):
-        pacf(jnp.arange(10), max_lag=3)
+        pacf(jnp.arange(10) > 4, max_lag=3)
+
+
+_COUNTS = np.array([200, 3, 0, 2, 5, 1, 0, 4, 2, 1, 3, 7, 0, 2, 6])
+"""A count series whose first sample is far above the rest.
+
+`_acf` shifts the series by its first sample, so in ``uint8`` the shift
+``y - y[..., :1]`` wraps for every later sample.
+"""
+
+
+@pytest.mark.parametrize(
+    ("dtype", "container"),
+    [
+        (np.uint8, "jax"),
+        (np.int16, "jax"),
+        (np.int32, "jax"),
+        (np.uint32, "jax"),
+        (np.int64, "numpy"),
+    ],
+    ids=["uint8", "int16", "int32", "uint32", "numpy-int64"],
+)
+@pytest.mark.parametrize(("fn", "oracle"), [(acf, _np_acf), (pacf, _np_pacf)], ids=["acf", "pacf"])
+def test_integer_counts_match_float_oracle(
+    fn: Callable[..., Array],
+    oracle: Callable[[np.ndarray, int], np.ndarray],
+    dtype: type[np.integer],
+    container: str,
+) -> None:
+    """Integer counts (a Poisson ``predict()`` draw) give the float spectrum (#163)."""
+    counts = _COUNTS.astype(dtype)
+    y = jnp.asarray(counts) if container == "jax" else counts
+    got = fn(y, max_lag=4)
+    assert got.dtype == jnp.result_type(float)
+    expected = fn(jnp.asarray(_COUNTS, jnp.float32), max_lag=4)
+    np.testing.assert_allclose(got, expected, rtol=1e-6)
+    np.testing.assert_allclose(got, oracle(_COUNTS, 4), atol=1e-4)
+
+
+def test_integer_batch_is_vmappable_and_jittable() -> None:
+    panel = jnp.stack([jnp.asarray(_COUNTS, jnp.int32), jnp.asarray(_COUNTS[::-1], jnp.int32)])
+    for fn in (acf, pacf):
+        expected = fn(panel.astype(jnp.float32), max_lag=3)
+        mapped = jax.vmap(lambda s, fn=fn: fn(s, max_lag=3))(panel)
+        jitted = jax.jit(fn, static_argnames=("max_lag",))(panel, max_lag=3)
+        np.testing.assert_allclose(mapped, expected, atol=1e-6)
+        np.testing.assert_allclose(jitted, expected, atol=1e-6)
 
 
 def test_dtype_preserved(rng_key: Array) -> None:
     y = random.normal(rng_key, (50,), dtype=jnp.float32)
     assert acf(y, max_lag=5).dtype == jnp.float32
     assert pacf(y, max_lag=5).dtype == jnp.float32
+
+
+@pytest.mark.parametrize("kind", ["pinned", "cpu"])
+def test_host_committed_series_matches_device_series(rng_key: Array, kind: str) -> None:
+    """A host-committed series (``device="host"`` draws) is moved to device memory first."""
+    y = random.normal(rng_key, (2, 40))
+    for fn in (acf, pacf):
+        np.testing.assert_allclose(fn(commit_host(y, kind), max_lag=4), fn(y, max_lag=4))
+        counts = jnp.asarray(_COUNTS, jnp.int32)
+        np.testing.assert_allclose(
+            fn(commit_host(counts, kind), max_lag=4), fn(counts.astype(jnp.float32), max_lag=4)
+        )

@@ -13,11 +13,13 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from functools import partial
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
-from conftest import rw_model, svi_forecast_fn
+from conftest import poisson_counts, poisson_model, rw_model, svi_forecast_fn
 from jax import Array, random
 from numpyro import handlers
 from numpyro.infer import SVI, Trace_ELBO
@@ -1214,4 +1216,49 @@ def test_non_finite_first_loss_raises() -> None:
             guide=AutoNormal(_level_model, init_scale=1e25),
             num_steps=5,
             num_samples=4,
+        )
+
+
+def test_count_model_scores_like_its_float_cast() -> None:
+    """A Poisson ``predict()`` model scores its integer draws like their float cast (#163).
+
+    Before the fix the vmapped ``eval_mae`` raised ``TypeCheckError`` on the
+    ``int32`` forecasts. The oracle vmaps every metric over the kept integer
+    predictions and the integer truth windows cast to float; a custom metric
+    sees floating arrays, and ``predictions`` keeps the integer dtype.
+    """
+    duration, stride = TRAIN + TEST + 6, 3
+    data, cov = poisson_counts(duration)
+    seen: list[jnp.dtype] = []
+
+    def max_abs_error(pred: Array, truth: Array) -> Array:
+        seen.extend((pred.dtype, truth.dtype))
+        return jnp.abs(pred - truth).max()
+
+    metrics = {**DEFAULT_METRICS, "max_abs_error": max_abs_error}
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: poisson_model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(poisson_model),
+        stride=stride,
+        num_steps=20,
+        num_samples=15,
+        metrics=metrics,
+        keep_predictions=True,
+    )
+    assert result.predictions is not None
+    assert jnp.issubdtype(result.predictions.dtype, jnp.integer)
+    assert set(seen) == {jnp.result_type(float)}
+
+    truth = jnp.stack(
+        [data[int(t1) : int(t2)] for t1, t2 in zip(result.t1, result.t2, strict=True)]
+    )
+    pred_f, truth_f = result.predictions.astype(jnp.float32), truth.astype(jnp.float32)
+    for name, metric in metrics.items():
+        np.testing.assert_allclose(
+            result.metrics[name], jax.vmap(metric)(pred_f, truth_f), rtol=1e-6, err_msg=name
         )

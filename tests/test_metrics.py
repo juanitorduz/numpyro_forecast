@@ -25,6 +25,7 @@ from numpyro_forecast.metrics import (
     eval_pinball,
     make_mase,
 )
+from numpyro_forecast.offload import float_view
 from numpyro_forecast.typing import Metric
 from numpyro_forecast.validation import require_pred_truth_shapes
 
@@ -467,3 +468,262 @@ def test_require_pred_truth_shapes_reads_static_shapes_of_tracers() -> None:
     assert jax.jit(jax.vmap(checked))(pred, truth).shape == (3, 4, 1)
     with pytest.raises(ValueError, match="truth must have shape"):
         jax.jit(jax.vmap(checked))(pred, truth[..., 0])
+
+
+# --- Integer (count) operands (#163) -----------------------------------------
+#
+# ``predict()`` requires integer data for a discrete observation family, so the
+# draws of a count model are integers. Every metric casts them to the default
+# float dtype (``float_view``) instead of rejecting them or computing in the
+# integer dtype, where ``uint8``/``int16`` differences wrap and the CRPS rank
+# weights truncate to zero.
+
+_COUNT_BOUNDS: dict[str, tuple[type[np.integer], int, int]] = {
+    # dtype, low, high: pred sits near ``low`` and half of truth near ``high``, so
+    # ``pred - truth`` overflows the dtype and wraps if computed in it.
+    "uint8": (np.uint8, 0, 200),
+    "int16": (np.int16, -32_768, 32_700),
+    "int32": (np.int32, -(2**31), 2**31 - 100),
+    # A NumPy int64 above 2 ** 31: jnp.asarray would wrap it to int32 before a cast.
+    "numpy-int64": (np.int64, 0, 2**33),
+}
+
+
+def _count_inputs(kind: str) -> tuple[np.ndarray, np.ndarray]:
+    """Integer ``(pred, truth)`` of shape ``(40, 3, 2)``/``(3, 2)`` that wrap if subtracted."""
+    dtype, low, high = _COUNT_BOUNDS[kind]
+    rng = np.random.default_rng(0)
+    pred = low + rng.integers(0, 50, size=(40, 3, 2))
+    truth = low + rng.integers(0, 50, size=(3, 2))
+    truth[0] += high - low  # one row far above the draws, the other inside them
+    return pred.astype(dtype), truth.astype(dtype)
+
+
+def _as_operand(x: np.ndarray, kind: str) -> Array | np.ndarray:
+    """Pass the small dtypes as jax arrays (like predict() draws); int64 stays NumPy."""
+    return x if kind == "numpy-int64" else jnp.asarray(x)
+
+
+def _scores(metric: Callable[..., object], pred: object, truth: object) -> np.ndarray:
+    """Call ``metric`` and return its value(s) as a float64 NumPy array."""
+    value = metric(pred, truth)
+    if isinstance(value, dict):
+        return np.asarray(list(value.values()), dtype=np.float64)
+    return np.asarray(value, dtype=np.float64)
+
+
+_MASE_FLOAT_TRAIN = make_mase(jnp.arange(10.0)[:, None] ** 1.5)
+
+_INTEGER_METRICS = [
+    pytest.param(crps_empirical, id="crps_empirical"),
+    pytest.param(eval_mae, id="eval_mae"),
+    pytest.param(eval_rmse, id="eval_rmse"),
+    pytest.param(eval_crps, id="eval_crps"),
+    pytest.param(partial(eval_crps, batch_size=4), id="eval_crps batch_size=4"),
+    pytest.param(eval_coverage, id="eval_coverage"),
+    pytest.param(partial(eval_coverage, batch_size=4), id="eval_coverage batch_size=4"),
+    pytest.param(eval_pinball, id="eval_pinball"),
+    pytest.param(eval_interval_score, id="eval_interval_score"),
+    pytest.param(_MASE_FLOAT_TRAIN, id="make_mase"),
+    pytest.param(evaluate_forecast, id="evaluate_forecast"),
+]
+
+
+@pytest.mark.parametrize("operands", ["both", "pred", "truth"])
+@pytest.mark.parametrize("kind", list(_COUNT_BOUNDS))
+@pytest.mark.parametrize("metric", _INTEGER_METRICS)
+def test_metric_scores_integer_counts_like_their_float_cast(
+    metric: Callable[..., object], kind: str, operands: str
+) -> None:
+    """Integer draws or truth score like their ``float32`` cast, never wrapped (#163)."""
+    pred_int, truth_int = _count_inputs(kind)
+    pred_f32, truth_f32 = jnp.asarray(pred_int, jnp.float32), jnp.asarray(truth_int, jnp.float32)
+    pred = _as_operand(pred_int, kind) if operands in {"both", "pred"} else pred_f32
+    truth = _as_operand(truth_int, kind) if operands in {"both", "truth"} else truth_f32
+
+    expected = _scores(metric, pred_f32, truth_f32)
+    np.testing.assert_allclose(_scores(metric, pred, truth), expected, rtol=1e-6)
+
+
+@pytest.mark.usefixtures("no_type_hook")
+@pytest.mark.parametrize("metric", _INTEGER_METRICS)
+def test_metric_casts_integer_counts_without_type_hook(metric: Callable[..., object]) -> None:
+    """The cast does not depend on the ``Real`` hint: with the hook off, uint8 is not wrapped."""
+    pred_int, truth_int = _count_inputs("uint8")
+    expected = _scores(metric, pred_int.astype(np.float32), truth_int.astype(np.float32))
+    np.testing.assert_allclose(_scores(metric, pred_int, truth_int), expected, rtol=1e-6)
+
+
+def test_crps_of_uint8_counts_matches_float64_brute_force() -> None:
+    """The CRPS kernel itself: no ``|pred - truth|`` wrap and no integer rank weights."""
+    pred_int, truth_int = _count_inputs("uint8")
+    got = crps_empirical(jnp.asarray(pred_int), jnp.asarray(truth_int))
+    pred64, truth64 = pred_int.astype(np.float64), truth_int.astype(np.float64)
+    term1 = np.abs(pred64 - truth64).mean(axis=0)
+    pairwise = np.abs(pred64[:, None] - pred64[None, :]).mean(axis=(0, 1))
+    np.testing.assert_allclose(got, term1 - 0.5 * pairwise, rtol=1e-5)
+    assert bool(jnp.all(got[0] > 100.0))  # the far row: a wrapped |pred - truth| is small
+
+
+@pytest.mark.parametrize("metric", [eval_mae, eval_crps, eval_pinball, _MASE_FLOAT_TRAIN])
+def test_metric_of_integer_counts_returns_the_default_float_dtype(
+    metric: Callable[[Array, Array], Array],
+) -> None:
+    pred_int, truth_int = _count_inputs("int32")
+    assert metric(jnp.asarray(pred_int), jnp.asarray(truth_int)).dtype == jnp.result_type(float)
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        pytest.param(eval_mae, id="eval_mae"),
+        pytest.param(eval_rmse, id="eval_rmse"),
+        pytest.param(eval_crps, id="eval_crps"),
+        pytest.param(eval_coverage, id="eval_coverage"),
+        pytest.param(partial(eval_pinball, quantile=0.3), id="eval_pinball"),
+        pytest.param(partial(eval_interval_score, alpha=0.8), id="eval_interval_score"),
+        pytest.param(_MASE_FLOAT_TRAIN, id="make_mase"),
+    ],
+)
+def test_metric_vmaps_over_integer_counts(metric: Callable[[Array, Array], Array]) -> None:
+    """The cast is traceable: a vmapped metric scores integer windows like float ones."""
+    pred_int, truth_int = _count_inputs("int16")
+    pred = jnp.stack([jnp.asarray(pred_int), jnp.asarray(pred_int[::-1])])
+    truth = jnp.stack([jnp.asarray(truth_int), jnp.asarray(truth_int)])
+    np.testing.assert_allclose(
+        jax.vmap(metric)(pred, truth),
+        jax.vmap(metric)(pred.astype(jnp.float32), truth.astype(jnp.float32)),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.parametrize("batch_size", [None, 4], ids=["single_pass", "chunked"])
+@pytest.mark.parametrize("kind", ["pinned", "cpu"])
+def test_metrics_accept_host_committed_integer_draws(kind: str, batch_size: int | None) -> None:
+    """Host-offloaded count draws (``device="host"``) are moved and cast in either path."""
+    pred_int, truth_int = _count_inputs("int16")
+    pred, truth = jnp.asarray(pred_int), jnp.asarray(truth_int)
+    pred_host = commit_host(pred, kind)
+    for metric in (partial(eval_crps, batch_size=batch_size), eval_mae, eval_pinball):
+        np.testing.assert_allclose(
+            metric(pred_host, truth),
+            metric(pred.astype(jnp.float32), truth.astype(jnp.float32)),
+            rtol=1e-6,
+        )
+
+
+@pytest.mark.parametrize("seasonality", [1, 2])
+@pytest.mark.parametrize(
+    "train",
+    [
+        # The two arrays of the issue: uint8 differences wrap, abs(int16 min) < 0.
+        pytest.param(np.array([[5], [3], [8], [1], [0], [9]], dtype=np.uint8), id="uint8"),
+        pytest.param(np.array([[32_767], [-32_768], [0], [5]], dtype=np.int16), id="int16"),
+        pytest.param(np.array([[2**31 - 1], [-(2**31)], [7], [0]], dtype=np.int32), id="int32"),
+        pytest.param(np.array([[0], [2**33], [3], [2**32]], dtype=np.int64), id="numpy-int64"),
+    ],
+)
+@pytest.mark.parametrize("container", ["numpy", "jax"])
+def test_make_mase_integer_train_matches_float64_oracle(
+    train: np.ndarray, seasonality: int, container: str
+) -> None:
+    """The seasonal-naive scale of integer training counts is computed in floating point."""
+    if container == "jax" and train.dtype == np.int64:
+        pytest.skip("jnp.asarray wraps int64 to int32 before make_mase sees it (x64 disabled)")
+    t64 = train.astype(np.float64)
+    expected = np.abs(t64[seasonality:] - t64[:-seasonality]).mean()
+    train_in = jnp.asarray(train) if container == "jax" else train
+    assert _mase_scale(make_mase(train_in, seasonality=seasonality)) == pytest.approx(
+        expected, rel=1e-6
+    )
+
+
+def test_make_mase_issue_example_values() -> None:
+    """The reproduction of #163: uint8 ``[5, 3, 8, 1]`` has scale 14 / 3, MASE 0.428571."""
+    mase = make_mase(np.array([[5], [3], [8], [1]], dtype=np.uint8))
+    assert float(mase(jnp.zeros((3, 1, 1)), jnp.full((1, 1), 2.0))) == pytest.approx(
+        2.0 / (14.0 / 3.0), rel=1e-6
+    )
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(lambda x: eval_mae(x, x[0]), id="eval_mae"),
+        pytest.param(lambda x: crps_empirical(x, x[0]), id="crps_empirical"),
+        pytest.param(lambda x: evaluate_forecast(x, x[0]), id="evaluate_forecast"),
+        pytest.param(lambda x: make_mase(x[0]), id="make_mase"),
+    ],
+)
+def test_metrics_still_reject_boolean_arrays(call: Callable[[Array], object]) -> None:
+    """``Real`` covers the signed and unsigned integers and the floats, not ``bool``."""
+    with pytest.raises(TypeCheckError):
+        call(jnp.zeros((5, 4, 1), dtype=bool))
+
+
+# --- float_view: the metric operand view -------------------------------------
+
+
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.bfloat16, jnp.float32])
+def test_float_view_keeps_a_floating_array_without_a_copy(dtype: jnp.dtype) -> None:
+    x = jnp.arange(4.0, dtype=dtype)
+    assert float_view(x) is x
+
+
+def test_float_view_canonicalizes_floating_numpy_like_device_view() -> None:
+    x = np.arange(4.0)  # float64
+    viewed = float_view(x)
+    assert viewed.dtype == jnp.result_type(float)
+    np.testing.assert_array_equal(viewed, x)
+
+
+@pytest.mark.parametrize("dtype", [jnp.uint8, jnp.int8, jnp.int16, jnp.int32, jnp.uint32])
+def test_float_view_casts_integer_arrays_to_the_default_float(dtype: jnp.dtype) -> None:
+    x = jnp.arange(5, dtype=dtype)
+    viewed = float_view(x)
+    assert viewed.dtype == jnp.result_type(float)
+    np.testing.assert_array_equal(viewed, np.arange(5.0))
+
+
+def test_float_view_converts_numpy_int64_without_int32_wrap() -> None:
+    """``jnp.asarray`` would wrap ``2 ** 33`` to ``0``; the direct float cast keeps it."""
+    viewed = float_view(np.array([2**33, 3], dtype=np.int64))
+    assert viewed.dtype == jnp.result_type(float)
+    np.testing.assert_array_equal(viewed, np.array([2.0**33, 3.0]))
+
+
+def test_float_view_casts_python_scalars() -> None:
+    assert float_view(3).dtype == jnp.result_type(float)
+    assert float(float_view(3)) == 3.0
+
+
+def test_float_view_casts_tracers_under_jit() -> None:
+    out = jax.jit(float_view)(jnp.arange(3, dtype=jnp.int32))
+    assert out.dtype == jnp.result_type(float)
+    np.testing.assert_array_equal(out, np.arange(3.0))
+
+
+def test_float_view_moves_and_casts_a_pinned_integer_leaf() -> None:
+    hosted = commit_host(jnp.arange(4, dtype=jnp.int32), "pinned")
+    viewed = float_view(hosted)
+    assert viewed.dtype == jnp.result_type(float)
+    assert viewed.sharding.memory_kind not in {"pinned_host", "unpinned_host"}
+    np.testing.assert_array_equal(viewed, np.arange(4.0))
+
+
+def test_float_view_rejects_boolean_arrays() -> None:
+    with pytest.raises(TypeCheckError):
+        float_view(jnp.array([True, False]))
+
+
+def test_float_view_follows_the_x64_flag() -> None:
+    """The cast target is ``jnp.result_type(float)``: ``float64`` once x64 is enabled."""
+    with jax.enable_x64(True):
+        counts = jnp.array([2**40, 3], dtype=jnp.int64)
+        viewed = float_view(counts)
+        assert viewed.dtype == jnp.float64
+        np.testing.assert_array_equal(viewed, np.array([2.0**40, 3.0]))
+        pred = jnp.zeros((5, 2), dtype=jnp.int64)
+        assert eval_mae(pred, counts).dtype == jnp.float64
+    with jax.enable_x64(False):
+        assert float_view(jnp.arange(3)).dtype == jnp.float32
