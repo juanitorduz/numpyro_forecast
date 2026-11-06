@@ -1,0 +1,249 @@
+---
+name: numpyro_forecast
+description: >
+  A JAX/NumPyro port of the ideas in Pyro's forecasting module. Use when writing Python code that uses the numpyro_forecast package.
+license: Apache-2.0
+compatibility: Requires Python >=3.12.
+---
+
+# numpyro_forecast
+
+A JAX/NumPyro port of the ideas in Pyro's forecasting module.
+
+## Installation
+
+```bash
+pip install numpyro_forecast
+```
+
+## When to use what
+
+| Need | Use |
+|------|-----|
+| Derive the train/forecast split inside a model | `Horizon.from_data(covariates, data)` |
+| Per-step iid latent innovations (random-walk level, local trend) | `innovations(h, name, prior); build the series with jnp.cumsum(drift, axis=-2)` |
+| Latent whose per-step distribution depends on the previous state | `markov_series(h, name, init_carry, transition, advance=...)` |
+| Single-source-of-error recursion (ARMA, exponential smoothing, Croston, TSB) | `ssoe(h, name, y, init_carry, mean, update, noise_dist)` |
+| Register the likelihood over the training window and the forecast site | `predict(h, obs_dist, prediction)` |
+| Vector autoregression | `var.var_step(...) as the mean/update pair of ssoe; priors.minnesota_prior for shrinkage` |
+| Posterior draws from a fitted SVI guide | `draw_posterior(rng_key, guide, params, num_samples)` |
+| Forecast over the horizon | `forecast(rng_key, model, posterior, data, covariates)` |
+| In-sample posterior predictive | `predict_in_sample(rng_key, model, posterior, covariates)` |
+| ArviZ DataTree with posterior, in-sample predictive, forecasts and observed data | `to_datatree(rng_key, model, posterior, data, covariates)` |
+| Rolling or expanding window backtest with scores per window | `backtest(rng_key, model_fn, data, covariates, forecast_fn=...); backtest_vectorized for one vmapped SVI fit` |
+| Better SVI or NUTS geometry for a random-walk level | `time_reparam(model, "dct") or time_reparam(model, "haar"), created once and reused` |
+| BlackJAX samplers or Pathfinder | `contrib.blackjax.BlackjaxNUTSKernel / BlackjaxMCLMCKernel with MCMC; fit_multipathfinder + multipathfinder_samples` |
+| A dynestyx DynamicalModel as the series model (Kalman filter or smoother, explicit latent path, missing observations) | `contrib.dynestyx.state_space(h, name, y, dynamics, controls=...) with y read from the covariates; the dynestyx handler goes around every call that runs the model` |
+
+## API overview
+
+### Model building blocks
+
+Plain model functions that register the train/forecast sites for you.
+
+- `models.Horizon`
+- `models.Transition`
+- `models.Advance`
+- `models.innovations`
+- `models.markov_series`
+- `models.ssoe`
+- `models.SSOEMean`
+- `models.SSOEUpdate`
+- `models.SSOEResult`
+- `models.predict`
+- `models.PlateName`
+
+### Vector autoregression
+
+VAR components that compose with `ssoe` and `markov_series`: conditional mean, step factory, companion matrix, impulse responses.
+
+- `var.var_mean`
+- `var.var_step`
+- `var.companion_matrix`
+- `var.impulse_response`
+
+### Priors
+
+Shrinkage prior moments for coefficient arrays.
+
+- `priors.minnesota_prior`
+
+### Distribution surgery
+
+Time-axis operations on observation distributions, extensible via singledispatch.
+
+- `surgery.shift_loc`
+- `surgery.slice_time`
+- `surgery.prefix_condition`
+- `surgery.register_elementwise`
+
+### Reparameterization
+
+Time-axis reparameterization of in-sample latents (Haar / DCT), after Pyro's `time_reparam`.
+
+- `reparam.time_reparam`
+- `reparam.TimeTransform`
+
+### Producing draws
+
+Drawing posterior samples and generating forecasts and in-sample predictions.
+
+- `predictive.draw_posterior`
+- `predictive.forecast`
+- `predictive.predict_in_sample`
+
+### Backtesting & evaluation
+
+Rolling-window backtesting and forecast metrics.
+
+- `evaluate.backtest`
+- `evaluate.backtest_vectorized`
+- `evaluate.BacktestResult`
+- `evaluate.VectorizedBacktestResult`
+- `evaluate.WindowType`
+- `evaluate.DEFAULT_METRICS`
+- `evaluate.evaluate_forecast`
+- `evaluate.results_to_dataframe`
+- `evaluate.eval_crps`
+- `evaluate.eval_mae`
+- `evaluate.eval_rmse`
+- `evaluate.eval_coverage`
+- `metrics.crps_empirical`
+- `metrics.eval_pinball`
+- `metrics.eval_interval_score`
+- `metrics.make_mase`
+
+### ArviZ export
+
+Convert posteriors into ArviZ-schema xarray DataTrees for diagnostics and plotting.
+
+- `convert.to_datatree`
+- `convert.add_forecast_groups`
+- `convert.predictions_to_datatree`
+
+### Extensions (contrib)
+
+Optional backends behind pyproject extras (the backend library loads only on first use).
+
+- `contrib.blackjax.BlackjaxNUTSKernel`
+- `contrib.blackjax.BlackjaxMCLMCKernel`
+- `contrib.blackjax.BlackjaxCustomKernel`
+- `contrib.blackjax.PathfinderFit`
+- `contrib.blackjax.fit_pathfinder`
+- `contrib.blackjax.pathfinder_samples`
+- `contrib.blackjax.MultiPathfinderFit`
+- `contrib.blackjax.fit_multipathfinder`
+- `contrib.blackjax.multipathfinder_samples`
+- `contrib.dynestyx.state_space`
+- `contrib.dynestyx.StateSpaceResult`
+
+### Typing
+
+Public type contracts.
+
+- `typing.ForecastModel`
+- `typing.ForecastFn`
+- `typing.Guide`
+- `typing.InSampleFn`
+- `typing.Metric`
+- `typing.ModelFactory`
+- `typing.Array`
+- `typing.BlackjaxBuildFn`
+- `typing.BlackjaxStepFn`
+
+### Autocorrelation
+
+Batched autocorrelation and partial autocorrelation diagnostics.
+
+- `acf.acf`
+- `acf.pacf`
+
+### Seasonal features
+
+Fourier design matrices and seasonal tiling.
+
+- `features.fourier_features`
+- `features.periodic_repeat`
+
+### Array helpers
+
+Time-axis array shaping for the train/forecast split.
+
+- `arrays.zero_data_like`
+- `arrays.concat_future`
+- `arrays.pad_future`
+
+### Datasets
+
+Example datasets used in the tutorials.
+
+- `datasets.load_bart_weekly`
+- `datasets.load_bart_hierarchical`
+- `datasets.load_victoria_electricity`
+- `datasets.bart_available`
+- `datasets.load_m5`
+- `datasets.M5Data`
+
+### Optional dependencies
+
+Lazy imports behind pyproject extras.
+
+- `optional.require`
+
+### Exceptions
+
+Package exception hierarchy raised at validation boundaries.
+
+- `exceptions.NumpyroForecastError`
+- `exceptions.BacktestWindowError`
+- `exceptions.VectorizedMetricError`
+- `exceptions.KernelConfigError`
+- `exceptions.CovariateDimsError`
+- `exceptions.MVNLayoutError`
+- `exceptions.DeviceMemoryError`
+- `exceptions.HostMemoryKindError`
+- `exceptions.DevicePlatformError`
+
+## Gotchas
+
+1. Array layout is time at axis -2 and the observation dim at -1, batch dims to the left: a univariate series is shape (time, 1), not (time,). The predictor passed to predict follows the same layout over the full horizon: (duration, 1) for a univariate series and (duration, n) for a panel of n series, or (duration, 1) inside a size-n plate at dim=-1 (forecast and to_datatree raise ValueError on a shared (duration, 1) predictor without the plate). predict raises ValueError on a (duration,) predictor (covariates @ beta needs [..., None]), on an observation distribution with fewer than two axes and, when data is given, on one that would score an observation more than once, such as level + covariates @ beta, a time-varying scale without [..., None], or a second [..., None] (a size-1 axis that the data does not have is fine). A model without covariates still takes covariates of shape (duration, 0), and data needs at least one time step: for a series with no history, call the model with data=None (predict_in_sample with only the global sites in the posterior, or numpyro.infer.Predictive for the prior).
+2. There is no horizon argument. The forecast horizon is covariates.shape[-2] - data.shape[-2]: fit with covariates[:t_obs] and forecast with the full-horizon covariates, using the same model function.
+3. Every xs leaf of markov_series and ssoe has h.duration rows in every model call: slice it from the full-horizon covariates, or extend an in-sample input (an update gate) with pad_future(x, h.future); never pass the observed window alone or a longer array.
+4. A posterior with in-sample time latents serves only the training length it was drawn for. innovations raises ValueError when a posterior value of its site does not have h.t_obs rows, and forecast and predict_in_sample raise when the forecast or obs draws do not have one step per covariate row past data or per in-sample covariate row. When such a posterior is too short to cover data, predict raises first and names the same cause. A markov_series posterior is replayed as a prefix instead: a longer window draws the extra in-sample steps from the prior without an error, so always pass the training window.
+5. Pass the posterior of the training run (mcmc.get_samples() or draw_posterior()) to forecast, predict_in_sample and to_datatree, never the output of a numpyro.infer.Predictive call over a horizon: the drivers substitute every posterior sample site by name, so its horizon sites would pin the draws instead of drawing them from the prior. They raise ValueError for a key with values that ends in _future or contains _future_, or is forecast; forecast and predict_in_sample drop such a key when its leaf is empty (a site registered on every call, as a training run records it). Give a hand-written horizon sample site the _future suffix so the check covers it. predict_in_sample and to_datatree also drop an obs key (and raise when it is the only key), but they substitute any other observed site (a second likelihood), so keep those out of the posterior.
+6. Every function that consumes randomness takes rng_key as its first positional argument (draw_posterior, forecast, predict_in_sample, to_datatree, backtest).
+7. The drivers read the sites "obs" and "forecast" by name. Never put predict (or hand-written obs/forecast sites) inside handlers.scope; scope only the latent building blocks.
+8. innovations is called inside plates you open yourself; markov_series rejects an enclosing plate and takes plates=[(name, size)] instead.
+9. ssoe registers only the <name>_future error site: write the likelihood against result.mu yourself and register numpyro.deterministic("forecast", result.y_future) when h.future > 0. Its mean and update functions must not call numpyro.sample.
+10. innovations, ssoe and predict take distribution instances (dist.Normal(0.0, scale)), not distribution classes or thunks.
+11. predict shifts the location of a loc=0 noise instance onto the predictor, and ssoe adds its draws to the step mean: the predictor is the mean for Normal, StudentT (df > 1), Laplace and MultivariateNormal noise, but the mode for Gumbel and AsymmetricLaplace, whose mean is offset (for AsymmetricLaplace unless asymmetry = 1; Cauchy has no mean). Center that noise yourself when the predictor must be the mean, e.g. dist.Gumbel(-np.euler_gamma * scale, scale).
+12. Noise correlated over time is a MultivariateNormal over the time axis of one series (obs == 1): predict(h, dist.MultivariateNormal(jnp.zeros(h.duration), cov), prediction) with a (duration, 1) predictor; a panel puts the series in the batch, a (series, duration, 1) predictor for (series, t_obs, 1) data. Write the zero location as jnp.zeros(h.duration), not 0.0. obs then has event shape (t_obs, 1) and obs_future (future, 1): log_prob of the data is the joint density of each series, and forecast draws keep the observation axis. A bare MultivariateNormal with the (time,) event raises ValueError in predict (a 0-d predictor, or a link that returns one): a link returns numpyro_forecast.surgery.shift_loc(noise, mu) instead.
+13. predict_in_sample and to_datatree call the model with data=None, so anything the model needs at prediction time must travel through covariates, never through h.data.
+14. A predictor shared by the n series of (time, n) data needs a size-n plate at dim=-1 around predict, or shape (duration, n) (jnp.broadcast_to(prediction, (h.duration, n))); the same holds for a batch axis of data. A (duration, 1) predictor alone scores every series but draws one forecast for all of them: forecast and to_datatree raise ValueError, but predict_in_sample has no data to check against and returns one column.
+15. to_datatree names the obs axes of (*batch, time, obs) data obs_batch_0, ..., time, obs_dim by default. Pass obs_dims (one name per data axis, "time" at axis -2) to name them, reuse the covariate_dims name of a shared batch axis, and refer to these names in coords and posterior_dims; covariates with batch axes need covariate_dims.
+16. add_forecast_groups lays the forecast out like the tree it extends: it splits forecast_samples into the (chain, draw) layout and labels of the tree's posterior and takes the axis names and non-time labels of observed_data obs and constant_data covariates, so the forecast needs one draw per posterior draw in tree["posterior"].stack(sample=("chain", "draw")) order (forecast() with the posterior that built the tree) and the in-sample size on every non-time axis; it raises ValueError otherwise, and to attach fewer draws, subset the tree with isel first.
+17. time_reparam returns a wrapped model: hand the wrapped model, not the original, to the guide, SVI/MCMC, forecast, predict_in_sample, to_datatree and backtest, because only it has the <name>_haar or <name>_dct site that the posterior holds; nesting two time_reparam calls raises ValueError, and so does an innovations latent under a subsampled plate (a minibatched panel, also when the guide subsamples the plate through create_plates).
+18. draw_posterior, forecast and predict_in_sample compile once per call (shared by every batch_size chunk) and cache nothing across calls (to_datatree runs the two drivers, so it compiles too): as with numpyro.infer.Predictive, a changed global or attribute the model reads takes effect on the next call and the model can be any callable, hashable or not, but each repeated call with the same model compiles again.
+19. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
+20. backtest_vectorized takes a fresh, unfitted autoguide (guide=AutoNormal(model)) and fits its own copy of it on the training data of each window, so supports, deterministic sites and the AutoLaplaceApproximation covariance come from that window; it leaves the instance unchanged and raises ValueError for an autoguide that was already run or fitted (for example on the full series).
+21. A metric (evaluate_forecast, backtest, backtest_vectorized) maps (pred, truth) to one 0-d value: a bool or integer result becomes float, and anything else raises ValueError naming the metric (backtest_vectorized raises it before the fit). crps_empirical returns one value per cell and is not a metric: use eval_crps, its mean.
+22. A dynestyx model is a model function that calls state_space(h, name, y, dynamics, controls=...) from numpyro_forecast.contrib.dynestyx (extra dynestyx), with the observed window y read from the covariates (y = covariates[..., : h.t_obs, :1] for a series in column 0), never from h.data. The dynestyx handler goes around every call that runs the model: mcmc.run, svi.run, draw_posterior, forecast, predict_in_sample, to_datatree, backtest and plain Predictive or log_density calls. Fit under `with Filter(...)`, `with Smoother(...)` or `with LatentPathBuilder()`, and call the drivers under `with DiscreteTimeSimulator(n_simulations=1), Smoother(...): ...` (or with the LatentPathBuilder instance that fitted the model). The block registers "forecast" and "obs" itself and returns StateSpaceResult(x_in_sample, x_future) for a latent level site.
+23. state_space raises ValueError when no dynestyx Filter, Smoother or LatentPathBuilder is around the call: dynestyx 0.8 would otherwise pick a default inference method itself and only log the choice. Pass the handler and its config explicitly (KFConfig / KFSmootherConfig for linear-Gaussian models). A model call with data=None is not a prior predictive for a dynestyx model: the block still conditions on y from the covariates.
+24. A Filter cannot serve the in-sample predictive (predict_in_sample, to_datatree): read the draws of a Filter fit under the Smoother that runs the same forward filter (the Kalman filter with the Kalman smoother; same marginal likelihood) instead. Filter, Smoother and LatentPathBuilder all forecast. Reuse the LatentPathBuilder instance of the fit around the drivers: a fresh one fails on traced observations, and a later fit with the same site name and shape and a different missingness pattern overwrites the cached layout, after which a traced call that evaluates the earlier model's likelihood (a refit, log_density) raises jax.errors.JaxRuntimeError; use one builder per fitted model when the patterns differ. Under a LatentPathBuilder the posterior must hold <name>_state_path_params from a builder fit; a Filter or Smoother posterior gives prior paths without an error, so export those fits under a Smoother.
+25. Missing observations for a dynestyx model are NaN entries of y, the window the block reads from the covariates (NaN in data alone is ignored). LatentPathBuilder and the cuthbert Kalman and ensemble Kalman configs (KFConfig, EnKFConfig, KFSmootherConfig, EnRTSSmootherConfig with filter_source="cuthbert", and the default Filter()) skip them; the other configs reject them (including KFConfig's default cd_dynamax backend and the default Smoother()), and the particle filter returns a NaN log likelihood. The package's own building blocks have no missing-data support.
+26. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
+
+## Best practices
+
+- Keep inference plain NumPyro: SVI with an autoguide or MCMC with any kernel; nothing in the package wraps svi.run or mcmc.run.
+- Use LocScaleReparam(0) on innovations priors for SVI, and time_reparam(model, "dct") when the latent is a random-walk level.
+- On a GPU, call numpyro.set_platform("cuda") before building the model and pass batch_size and device="host" to draw_posterior, forecast, predict_in_sample and to_datatree so the draws never sit on the accelerator at once; draws come back as jax Arrays on the CPU device or NumPy arrays.
+- Score forecasts with eval_crps and eval_coverage on held-out data, and backtest over rolling origins rather than trusting a single split.
+- Write integers with four or more digits with underscores (1_000, 10_000) and thread PRNG keys explicitly with jax.random.split.
+
+## Resources
+
+- [Full documentation](https://juanitorduz.github.io/numpyro_forecast/)
+- [llms.txt](llms.txt) — Indexed API reference for LLMs
+- [llms-full.txt](llms-full.txt) — Comprehensive documentation for LLMs
+- [Source code](https://github.com/juanitorduz/numpyro_forecast)
