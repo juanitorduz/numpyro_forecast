@@ -222,6 +222,12 @@ Fit a forecasting model with multi-path BlackJAX Pathfinder and PSIS resampling.
 [contrib.blackjax.multipathfinder_samples()](contrib.blackjax.multipathfinder_samples.md#numpyro_forecast.contrib.blackjax.multipathfinder_samples)  
 Draw `num_samples` posterior samples from a fitted multipath Pathfinder fit.
 
+[contrib.dynestyx.state_space()](contrib.dynestyx.state_space.md#numpyro_forecast.contrib.dynestyx.state_space)  
+Condition, forecast or predict in-sample a dynestyx model over the horizon.
+
+[contrib.dynestyx.StateSpaceResult](contrib.dynestyx.StateSpaceResult.md#numpyro_forecast.contrib.dynestyx.StateSpaceResult)  
+Latent state draws of one `state_space()` call, `None` outside their mode.
+
 
 ## Typing
 

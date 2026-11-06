@@ -33,6 +33,7 @@ pip install numpyro_forecast
 | Rolling or expanding window backtest with scores per window | `backtest(rng_key, model_fn, data, covariates, forecast_fn=...); backtest_vectorized for one vmapped SVI fit` |
 | Better SVI or NUTS geometry for a random-walk level | `time_reparam(model, "dct") or time_reparam(model, "haar"), created once and reused` |
 | BlackJAX samplers or Pathfinder | `contrib.blackjax.BlackjaxNUTSKernel / BlackjaxMCLMCKernel with MCMC; fit_multipathfinder + multipathfinder_samples` |
+| A dynestyx DynamicalModel as the series model (Kalman filter or smoother, explicit latent path, missing observations) | `contrib.dynestyx.state_space(h, name, y, dynamics, controls=...) with y read from the covariates; the dynestyx handler goes around every call that runs the model` |
 
 ## API overview
 
@@ -133,6 +134,8 @@ Optional backends behind pyproject extras (the backend library loads only on fir
 - `contrib.blackjax.MultiPathfinderFit`
 - `contrib.blackjax.fit_multipathfinder`
 - `contrib.blackjax.multipathfinder_samples`
+- `contrib.dynestyx.state_space`
+- `contrib.dynestyx.StateSpaceResult`
 
 ### Typing
 
@@ -223,7 +226,11 @@ Package exception hierarchy raised at validation boundaries.
 18. draw_posterior, forecast and predict_in_sample compile once per call (shared by every batch_size chunk) and cache nothing across calls (to_datatree runs the two drivers, so it compiles too): as with numpyro.infer.Predictive, a changed global or attribute the model reads takes effect on the next call and the model can be any callable, hashable or not, but each repeated call with the same model compiles again.
 19. draw_posterior is for variational guides only; MCMC users pass mcmc.get_samples() and Pathfinder users multipathfinder_samples(...) to the same drivers.
 20. backtest_vectorized takes a fresh, unfitted autoguide (guide=AutoNormal(model)) and fits its own copy of it on the training data of each window, so supports, deterministic sites and the AutoLaplaceApproximation covariance come from that window; it leaves the instance unchanged and raises ValueError for an autoguide that was already run or fitted (for example on the full series).
-21. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
+21. A dynestyx model is a model function that calls state_space(h, name, y, dynamics, controls=...) from numpyro_forecast.contrib.dynestyx (extra dynestyx), with the observed window y read from the covariates (y = covariates[..., : h.t_obs, :1] for a series in column 0), never from h.data. The dynestyx handler goes around every call that runs the model: mcmc.run, svi.run, draw_posterior, forecast, predict_in_sample, to_datatree, backtest and plain Predictive or log_density calls. Fit under `with Filter(...)`, `with Smoother(...)` or `with LatentPathBuilder()`, and call the drivers under `with DiscreteTimeSimulator(n_simulations=1), Smoother(...): ...` (or with the LatentPathBuilder instance that fitted the model). The block registers "forecast" and "obs" itself and returns StateSpaceResult(x_in_sample, x_future) for a latent level site.
+22. state_space raises ValueError when no dynestyx Filter, Smoother or LatentPathBuilder is around the call: dynestyx 0.8 would otherwise pick a default inference method itself and only log the choice. Pass the handler and its config explicitly (KFConfig / KFSmootherConfig for linear-Gaussian models). A model call with data=None is not a prior predictive for a dynestyx model: the block still conditions on y from the covariates.
+23. A Filter cannot serve the in-sample predictive (predict_in_sample, to_datatree): read the draws of a Filter fit under the Smoother that runs the same forward filter (the Kalman filter with the Kalman smoother; same marginal likelihood) instead. Filter, Smoother and LatentPathBuilder all forecast. Reuse the LatentPathBuilder instance of the fit around the drivers: a fresh one fails on traced observations, and a later fit with the same site name and shape and a different missingness pattern overwrites the cached layout, after which a traced call that evaluates the earlier model's likelihood (a refit, log_density) raises jax.errors.JaxRuntimeError; use one builder per fitted model when the patterns differ. Under a LatentPathBuilder the posterior must hold <name>_state_path_params from a builder fit; a Filter or Smoother posterior gives prior paths without an error, so export those fits under a Smoother.
+24. Missing observations for a dynestyx model are NaN entries of y, the window the block reads from the covariates (NaN in data alone is ignored). LatentPathBuilder and the cuthbert Kalman and ensemble Kalman configs (KFConfig, EnKFConfig, KFSmootherConfig, EnRTSSmootherConfig with filter_source="cuthbert", and the default Filter()) skip them; the other configs reject them (including KFConfig's default cd_dynamax backend and the default Smoother()), and the particle filter returns a NaN log likelihood. The package's own building blocks have no missing-data support.
+25. numpyro_forecast.contrib.blackjax is bound at package import, but it loads the blackjax library only when a kernel initializes or a Pathfinder fit or draw runs, and that needs the blackjax extra (pip install "numpyro_forecast[blackjax]"); optax optimizers need the optax extra and numpyro.optim.optax_to_numpyro.
 
 ## Best practices
 

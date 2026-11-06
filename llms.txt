@@ -94,6 +94,8 @@
 - [contrib.blackjax.MultiPathfinderFit](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.MultiPathfinderFit.html)
 - [contrib.blackjax.fit_multipathfinder](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.fit_multipathfinder.html)
 - [contrib.blackjax.multipathfinder_samples](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.blackjax.multipathfinder_samples.html)
+- [contrib.dynestyx.state_space](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.dynestyx.state_space.html)
+- [contrib.dynestyx.StateSpaceResult](https://juanitorduz.github.io/numpyro_forecast/reference/contrib.dynestyx.StateSpaceResult.html)
 
 #### Typing
 > Public type contracts.
