@@ -42,6 +42,7 @@ from numpyro_forecast.validation import (
     require_positive_num_samples,
     require_pred_truth_shapes,
     require_time_axis,
+    scalar_metric_value,
 )
 
 if TYPE_CHECKING:
@@ -350,20 +351,25 @@ def evaluate_forecast(
     metrics
         Mapping of metric name to function; when ``None`` defaults to
         `DEFAULT_METRICS` (``mae``, ``rmse``, ``crps`` and ``coverage``).
-        Each function takes ``(pred, truth)`` and returns a scalar array (see
+        Each function takes ``(pred, truth)`` and returns a 0-d array (see
         `~~numpyro_forecast.typing.Metric`); bind any extra parameters
-        with `functools.partial()` (see above).
+        with `functools.partial()` (see above). A per-cell function such as
+        `~~numpyro_forecast.metrics.crps_empirical()` is not a metric: use
+        `eval_crps()`, its mean over the cells.
 
     Returns
     -------
     dict[str, float]
-        Each metric name mapped to its value.
+        Each metric name mapped to its value. A bool or integer metric result
+        is converted to ``float``, whatever the other metrics are.
 
     Raises
     ------
     ValueError
         If ``truth.shape`` is not ``pred.shape[1:]`` (see `~~numpyro_forecast.typing.Metric`). The
-        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair.
+        check runs here once, so a custom metric in ``metrics`` never sees a mismatched pair. Also
+        if a metric returns a value that is not 0-d or does not have a bool, integer or floating
+        dtype; the message names the metric and gives the shape and dtype it returned.
     """
     require_pred_truth_shapes(pred, truth)
     metrics = DEFAULT_METRICS if metrics is None else metrics
@@ -375,10 +381,11 @@ def evaluate_forecast(
     # host/device memory-kind mismatch, whichever of pred/truth (or both) was
     # host-committed.
     pred_arr, truth_arr = device_view(pred), device_view(truth)
-    # Evaluate every metric kernel, then pull the whole batch across the device
-    # boundary in a single host transfer instead of one sync per metric.
-    stacked = jnp.stack([fn(pred_arr, truth_arr) for fn in metrics.values()])
-    return dict(zip(metrics, stacked.tolist(), strict=True))
+    # Check each result on its own (shape and dtype are static, so no device sync), so
+    # the outcome for one metric never depends on the others, then pull the whole batch
+    # across the device boundary in a single host transfer instead of one per metric.
+    values = [scalar_metric_value(name, fn(pred_arr, truth_arr)) for name, fn in metrics.items()]
+    return dict(zip(metrics, jnp.stack(values).tolist(), strict=True))
 
 
 @dataclass(frozen=True)
@@ -657,8 +664,10 @@ def _require_num_samples_for_metrics(num_samples: int, metrics: Mapping[str, Met
 
     ``num_samples`` must be positive, and at least 2 when a metric is (or is a
     `functools.partial()` of) one of `_TWO_SAMPLE_METRICS`. Without this
-    check the error comes from the metric itself, after the first window has
-    been fitted and forecast.
+    check the error comes from the metric itself: in `backtest()` after the
+    first window has been fitted and forecast, and in `backtest_vectorized()`
+    from the trace of its scoring (see `_require_scorable_metrics()`), with a
+    message that does not name ``num_samples``.
     """
     require_positive_num_samples(num_samples)
     if num_samples >= 2:
@@ -978,7 +987,11 @@ def backtest(
         If ``data`` or ``covariates`` has fewer than two axes (time must be at
         axis ``-2``), if their durations differ, if ``eval_train=True`` but
         ``in_sample_fn`` is ``None``, or if ``num_samples`` is too small (see
-        ``num_samples``).
+        ``num_samples``). Also if a metric returns a value that is not 0-d or
+        does not have a bool, integer or floating dtype (see
+        `evaluate_forecast()`): the error names the metric and comes when the
+        first window is scored, after its fit, because a metric may run on the
+        host here and so is not traced before the fit.
     BacktestWindowError
         If ``window_type`` and ``train_window`` disagree (``"rolling"`` without a
         ``train_window``, or ``"expanding"`` with one).
@@ -1088,6 +1101,11 @@ class VectorizedBacktestResult:
         return _fields_view(self)
 
 
+def _checked_metric(name: str, fn: Metric, pred: Array, truth: Array) -> Array:
+    """Score one window with ``fn`` and check the result (see `scalar_metric_value()`)."""
+    return scalar_metric_value(name, fn(pred, truth))
+
+
 def _vmapped_metrics(
     metrics: Mapping[str, Metric], predictions: Array, truth: Array
 ) -> dict[str, Array]:
@@ -1096,10 +1114,17 @@ def _vmapped_metrics(
     Metrics are pure JAX scalar kernels (see
     `~~numpyro_forecast.typing.Metric`), so any mapping, default or
     custom, is scored by one ``vmap`` per metric over the leading window axis;
-    the single device-to-host transfer is deferred to the caller.
+    the single device-to-host transfer is deferred to the caller. The result
+    of each metric is checked inside the ``vmap``, where it is the value of one
+    window, so a metric that does not return a 0-d value raises a
+    ``ValueError`` that names it, and a bool or integer result is cast to
+    float inside the vmapped computation.
     """
     try:
-        return {name: jax.vmap(fn)(predictions, truth) for name, fn in metrics.items()}
+        return {
+            name: jax.vmap(partial(_checked_metric, name, fn))(predictions, truth)
+            for name, fn in metrics.items()
+        }
     except (
         jax.errors.ConcretizationTypeError,
         jax.errors.TracerArrayConversionError,
@@ -1107,6 +1132,43 @@ def _vmapped_metrics(
         jax.errors.NonConcreteBooleanIndexError,
     ) as err:
         raise VectorizedMetricError() from err
+
+
+def _require_scorable_metrics(
+    metrics: Mapping[str, Metric], num_samples: int, truth: Array
+) -> None:
+    """Trace the vectorized scoring of ``metrics`` on the window shapes, before any fit.
+
+    ``jax.eval_shape`` runs `_vmapped_metrics()` on abstract values only: it
+    does no computation and no backend compile, so a metric that would fail
+    the scoring after the fit (a result that is not 0-d or not real, a host
+    conversion, a CRPS wrapped in a ``lambda`` with ``num_samples=1``) fails
+    here first, with the same error. The forecast dtype is known only after
+    the fit, so the draws are traced with the floating dtype of ``truth`` (the
+    dtype the built-in metrics require); the scoring after the fit checks the
+    real forecasts again through the same `_vmapped_metrics()`.
+
+    Parameters
+    ----------
+    metrics
+        Mapping of metric name to function.
+    num_samples
+        Number of forecast samples drawn per window.
+    truth
+        Stacked test windows of ``data``, shape ``(num_windows, *batch, test_window, obs)``.
+
+    Raises
+    ------
+    ValueError
+        If a metric result is not 0-d or does not have a real dtype (see
+        `scalar_metric_value()`), or a metric raises it for these shapes.
+    VectorizedMetricError
+        If a metric is not a pure JAX function under ``vmap``.
+    """
+    pred_spec = jax.ShapeDtypeStruct(
+        (truth.shape[0], num_samples, *truth.shape[1:]), jnp.result_type(truth.dtype, float)
+    )
+    jax.eval_shape(partial(_vmapped_metrics, metrics), pred_spec, truth)
 
 
 def _held_autoguides(value: object) -> Iterator[AutoGuide]:
@@ -1284,8 +1346,9 @@ def backtest_vectorized(
         least 2 when ``metrics`` contains `eval_crps()` (as
         `DEFAULT_METRICS` does) or a `functools.partial()` of it. Both rules
         are checked before the fit. A CRPS inside another wrapper (a
-        ``lambda`` or a ``jax.jit`` function) is not checked up front: it
-        fails only after the fit.
+        ``lambda`` or a ``jax.jit`` function) raises the error of
+        `~~numpyro_forecast.metrics.crps_empirical()` instead, also before the
+        fit (see ``metrics``).
     metrics
         Mapping of metric name to function; defaults to `DEFAULT_METRICS`.
         Each metric is vmapped over the window axis, so any pure-JAX mapping,
@@ -1293,7 +1356,12 @@ def backtest_vectorized(
         ``{**DEFAULT_METRICS, "coverage": partial(eval_coverage, alpha=0.5)}``,
         is scored inside the single fused computation. Host-side metrics are
         unsupported here; use `backtest()`, or ``keep_predictions=True``
-        and score on the host.
+        and score on the host. Before the fit, the scoring is traced with
+        ``jax.eval_shape`` on the shapes of the windows (no computation), so a
+        metric that breaks the `~~numpyro_forecast.typing.Metric` contract
+        fails before any window is fitted. A bool or integer metric result is
+        cast to float, so every entry of ``VectorizedBacktestResult.metrics``
+        has a floating dtype.
     keep_predictions
         If ``True``, retain the stacked forecast samples on the result.
 
@@ -1310,7 +1378,10 @@ def backtest_vectorized(
         small (see ``num_samples``), if ``guide`` is an autoguide that is
         already set up (see ``guide``), or if ``metrics`` is not empty and the
         model's ``"forecast"`` site does not have the shape of ``data`` over
-        the test window.
+        the test window. Also, before the fit, if a metric returns a value that
+        is not 0-d or does not have a bool, integer or floating dtype for one
+        window: the message names the metric and gives the shape and dtype it
+        returned for one window.
     BacktestWindowError
         If ``train_window``, ``test_window``, or ``stride`` is ``< 1``, or
         there is no room for a single window.
@@ -1324,7 +1395,8 @@ def backtest_vectorized(
         If a metric is not a pure JAX function under ``vmap``: it forces a host
         conversion (``float(...)``, ``int(...)``, ``range(...)``, Python list
         indexing or a NumPy call on a traced value) or builds a value-dependent
-        shape (a boolean mask index such as ``x[x > 0]``).
+        shape (a boolean mask index such as ``x[x > 0]``). Raised before the
+        fit, from the trace of the scoring (see ``metrics``).
     """
     require_time_axis("data", data)
     require_time_axis("covariates", covariates)
@@ -1366,6 +1438,9 @@ def backtest_vectorized(
         return train_d, train_c, hor_c, truth
 
     train_d, train_c, hor_c, truth = jax.vmap(slice_one)(starts)
+    # The fit is the expensive part, so a metric that breaks the Metric contract fails
+    # here, from a trace of the scoring on the window shapes (no compute, no compile).
+    _require_scorable_metrics(resolved_metrics, num_samples, truth)
 
     model = model_fn()
     resolved_optim = Adam(0.01) if optim is None else optim
