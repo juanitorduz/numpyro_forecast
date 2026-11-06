@@ -49,6 +49,18 @@ the window axis. Parametrize by closure: ``functools.partial`` for keywords
 (e.g. ``partial(eval_coverage, alpha=0.5)``) or a factory like
 `~~numpyro_forecast.metrics.make_mase()`.
 
+Every driver checks each result on its own, so the outcome for one metric
+never depends on the other metrics in the mapping: a 0-d bool or integer
+result is converted to float, and any other shape or dtype (for example the
+per-cell values of `~~numpyro_forecast.metrics.crps_empirical()`, whose
+metric counterpart is `~~numpyro_forecast.evaluate.eval_crps()`) raises
+``ValueError`` with the name, shape and dtype of the metric.
+`~~numpyro_forecast.evaluate.evaluate_forecast()` and
+`~~numpyro_forecast.evaluate.backtest()` check the value they score;
+`~~numpyro_forecast.evaluate.backtest_vectorized()` checks the value of one
+window inside its ``vmap``, and traces the scoring on the window shapes
+before the fit, so the error comes before any window is fitted.
+
 The built-in metrics and `~~numpyro_forecast.evaluate.evaluate_forecast()`
 check that ``truth.shape`` is ``pred.shape[1:]`` and raise ``ValueError``
 otherwise. With the runtime type hook on (the default), the jaxtyping

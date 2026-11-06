@@ -13,7 +13,9 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from functools import partial
 
+import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
@@ -35,13 +37,16 @@ from numpyro_forecast import Horizon, predict
 from numpyro_forecast.evaluate import (
     DEFAULT_METRICS,
     VectorizedBacktestResult,
+    _require_scorable_metrics,
     _window_key_streams,
     backtest,
     backtest_vectorized,
     eval_coverage,
     eval_crps,
+    results_to_dataframe,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, VectorizedMetricError
+from numpyro_forecast.metrics import crps_empirical
 from numpyro_forecast.predictive import draw_posterior, forecast
 from numpyro_forecast.typing import Guide
 
@@ -390,8 +395,6 @@ def test_single_svi_compilation(
     first to prime those caches; only the *counted* calls below measure this
     call's own (repeat) compilation behavior, which is what I3 actually claims.
     """
-    import jax
-
     duration = TRAIN + TEST + 9  # exactly 10 windows at stride 1
     data, cov = _series(duration)
     model = rw_model
@@ -496,8 +499,6 @@ def test_window_streams_are_disjoint() -> None:
     Guards the PRNG-hygiene rule from round-1 item 1: ``fold_in(rng_key, i)`` is
     a split parent only, so no stream may reuse it directly.
     """
-    import jax
-
     rng_key = random.PRNGKey(0)
     num_windows = 2
     init_keys, post_keys, fc_keys = _window_key_streams(rng_key, num_windows)
@@ -611,8 +612,6 @@ def test_keyed_param_initializer_uses_the_per_window_init_key(
 
 def test_result_schema_and_dataframe_row_shape() -> None:
     """Result fields are per-window and results_to_dataframe is one row per window."""
-    from numpyro_forecast.evaluate import results_to_dataframe
-
     duration = TRAIN + TEST + 8
     data, cov = _series(duration)
     model = rw_model
@@ -778,6 +777,123 @@ def test_host_metric_raises_actionable_error(host_mae: Callable[[Array, Array], 
             num_samples=10,
             metrics={"host_mae": host_mae},
         )
+
+
+# --- Metric result contract (issue #194) -----------------------------------------------
+
+
+def _count_inside(pred: Array, truth: Array) -> Array:
+    """An integer-valued metric: the number of cells inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).sum()
+
+
+def _all_inside(pred: Array, truth: Array) -> Array:
+    """A boolean-valued metric: whether every cell is inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).all()
+
+
+def _complex_mae(pred: Array, truth: Array) -> Array:
+    """A 0-d metric with a complex dtype, which is not a real score."""
+    return jnp.abs(pred - truth).mean() + 0j
+
+
+@pytest.mark.parametrize(
+    ("metrics", "num_samples", "error", "match"),
+    [
+        (
+            {"bad": crps_empirical},
+            10,
+            ValueError,
+            r"metric 'bad' returned shape \(5, 1\) and dtype float32",
+        ),
+        (
+            {**DEFAULT_METRICS, "bad": crps_empirical},
+            10,
+            ValueError,
+            r"metric 'bad' returned shape \(5, 1\) and dtype float32",
+        ),
+        ({"bad": _complex_mae}, 10, ValueError, r"metric 'bad' returned shape \(\) and dtype "),
+        ({"host_mae": _host_float_mae}, 10, VectorizedMetricError, "pure JAX functions"),
+        (
+            {"crps": jax.jit(lambda p, t: eval_crps(p, t))},
+            1,
+            ValueError,
+            "crps_empirical needs at least 2 samples, got 1",
+        ),
+    ],
+    ids=["per_cell", "per_cell_with_defaults", "complex", "host_float", "jit_wrapped_crps"],
+)
+def test_metric_errors_raise_before_the_fit(
+    metrics: dict[str, Callable[..., Array]],
+    num_samples: int,
+    error: type[Exception],
+    match: str,
+) -> None:
+    """A metric that breaks the ``Metric`` contract fails from the trace, before any fit.
+
+    The guide fails the test if it is called, so the error must come before
+    the eager init and the vmapped SVI fit. The shape in the message is the
+    shape of one window, ``(test_window, obs)``, which is what the metric
+    returns.
+    """
+    data, cov = _series(TRAIN + TEST + 4)
+    with pytest.raises(error, match=match):
+        backtest_vectorized(
+            random.PRNGKey(0),
+            lambda: rw_model,
+            data,
+            cov,
+            train_window=TRAIN,
+            test_window=TEST,
+            guide=_never_called_guide,
+            num_steps=10,
+            num_samples=num_samples,
+            metrics=metrics,
+        )
+
+
+def test_metric_trace_before_the_fit_compiles_nothing(
+    count_compilations: Callable[[], AbstractContextManager[types.SimpleNamespace]],
+) -> None:
+    """``_require_scorable_metrics`` runs ``jax.eval_shape``: no computation, no compile."""
+    truth = jnp.zeros((4, TEST, 1))
+    with count_compilations() as tally:
+        _require_scorable_metrics(DEFAULT_METRICS, 10, truth)
+    assert tally.count == 0
+
+
+def test_bool_and_integer_metrics_are_cast_to_float() -> None:
+    """A bool or integer metric gives a float ``(num_windows,)`` array that matches each window."""
+    data, cov = _series(TRAIN + TEST + 4)
+    model = rw_model
+    result = backtest_vectorized(
+        random.PRNGKey(0),
+        lambda: model,
+        data,
+        cov,
+        train_window=TRAIN,
+        test_window=TEST,
+        guide=AutoNormal(model),
+        stride=2,
+        num_steps=5,
+        num_samples=10,
+        metrics={**DEFAULT_METRICS, "count_inside": _count_inside, "all_inside": _all_inside},
+        keep_predictions=True,
+    )
+    num_windows = int(result.t0.shape[0])
+    assert result.predictions is not None
+    for name, values in result.metrics.items():
+        assert values.shape == (num_windows,), name
+        assert jnp.issubdtype(values.dtype, jnp.floating), name
+    for i in range(num_windows):
+        truth = data[int(result.t1[i]) : int(result.t2[i])]
+        pred = result.predictions[i]
+        assert float(result.metrics["count_inside"][i]) == float(_count_inside(pred, truth))
+        assert float(result.metrics["all_inside"][i]) == float(_all_inside(pred, truth))
+    df = results_to_dataframe(result)
+    assert len(df) == num_windows
+    assert df["metric_count_inside"].dtype == np.float64
+    assert df["metric_all_inside"].dtype == np.float64
 
 
 def test_vectorized_result_to_dict_does_not_copy_predictions() -> None:

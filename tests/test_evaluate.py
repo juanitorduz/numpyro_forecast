@@ -28,7 +28,9 @@ from numpyro_forecast.evaluate import (
     evaluate_forecast,
 )
 from numpyro_forecast.exceptions import BacktestWindowError, DeviceMemoryError
-from numpyro_forecast.typing import ForecastFn, ForecastModel
+from numpyro_forecast.metrics import crps_empirical
+from numpyro_forecast.typing import ForecastFn, ForecastModel, Metric
+from numpyro_forecast.validation import scalar_metric_value
 
 
 def _canned_forecast_fn(
@@ -387,6 +389,190 @@ def test_evaluate_forecast_multidim_batch() -> None:
     report = evaluate_forecast(pred, truth)
     assert set(report) == set(DEFAULT_METRICS)
     assert all(isinstance(value, float) for value in report.values())
+
+
+# --- Metric result contract (issue #194) -----------------------------------------------
+
+
+def _n_inside(pred: Array, truth: Array) -> Array:
+    """An integer-valued metric: the number of cells inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).sum()
+
+
+def _all_inside(pred: Array, truth: Array) -> Array:
+    """A boolean-valued metric: whether every cell is inside the range of the samples."""
+    return ((truth >= pred.min(axis=0)) & (truth <= pred.max(axis=0))).all()
+
+
+def _complex_mae(pred: Array, truth: Array) -> Array:
+    """A 0-d metric with a complex dtype, which is not a real score."""
+    return jnp.abs(pred - truth).mean() + 0j
+
+
+@pytest.mark.parametrize(
+    "value",
+    [jnp.asarray(0.25), jnp.asarray(0.25, jnp.bfloat16), np.float64(0.25), 0.25],
+    ids=["jax_float32", "jax_bfloat16", "numpy_float64", "python_float"],
+)
+def test_scalar_metric_value_keeps_floating_values(value: object) -> None:
+    """A 0-d floating value keeps its value and, for a jax Array, its dtype and identity."""
+    out = scalar_metric_value("m", value)
+    assert out.shape == ()
+    assert jnp.issubdtype(out.dtype, jnp.floating)
+    assert float(out) == 0.25
+    if isinstance(value, jax.Array):
+        assert out is value  # no device op for a valid float metric
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(jnp.asarray(3), 3.0), (jnp.asarray(True), 1.0), (np.int64(2), 2.0), (True, 1.0), (7, 7.0)],
+    ids=["jax_int", "jax_bool", "numpy_int", "python_bool", "python_int"],
+)
+def test_scalar_metric_value_casts_bool_and_integer_to_default_float(
+    value: object, expected: float
+) -> None:
+    out = scalar_metric_value("m", value)
+    assert out.shape == ()
+    assert out.dtype == jnp.result_type(float)
+    assert float(out) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "shape", "dtype"),
+    [
+        (jnp.zeros((4, 1)), r"\(4, 1\)", "float32"),
+        (jnp.zeros(1), r"\(1,\)", "float32"),
+        (jnp.asarray(1.0 + 2.0j), r"\(\)", "complex64"),
+        (random.key(0), r"\(\)", r"key<\w+>"),
+        (None, r"\(\)", "object"),
+        ("0.5", r"\(\)", "<U3"),
+    ],
+    ids=["per_cell", "length_one", "complex", "prng_key", "none", "string"],
+)
+def test_scalar_metric_value_rejects_non_scalar_or_non_real(
+    value: object, shape: str, dtype: str
+) -> None:
+    """The error names the metric, its shape and dtype, and points at the Metric contract."""
+    match = rf"metric 'bad' returned shape {shape} and dtype {dtype};.*typing\.Metric"
+    with pytest.raises(ValueError, match=match):
+        scalar_metric_value("bad", value)
+
+
+def test_scalar_metric_value_reads_static_shapes_of_tracers() -> None:
+    """Under ``jit`` and ``vmap`` the check sees the value of one window and needs no host value."""
+
+    def score(fn: Metric, pred: Array, truth: Array) -> Array:
+        return scalar_metric_value("score", fn(pred, truth))
+
+    pred = random.normal(random.PRNGKey(0), (3, 20, 4, 1))
+    truth = jnp.zeros((3, 4, 1))
+    counts = jax.jit(jax.vmap(partial(score, _n_inside)))(pred, truth)
+    assert counts.shape == (3,)
+    assert counts.dtype == jnp.result_type(float)
+    with pytest.raises(ValueError, match=r"metric 'score' returned shape \(4, 1\)"):
+        jax.jit(jax.vmap(partial(score, crps_empirical)))(pred, truth)
+
+
+@pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])
+@pytest.mark.parametrize(
+    ("metric", "expected"), [(_n_inside, 4.0), (_all_inside, 1.0)], ids=["integer", "bool"]
+)
+def test_evaluate_forecast_converts_bool_and_integer_metrics_to_float(
+    metric: Metric, expected: float, with_defaults: bool
+) -> None:
+    """A bool or integer metric gives a Python float, whatever the other metrics are."""
+    pred = random.normal(random.PRNGKey(0), (50, 4, 1))
+    truth = jnp.zeros((4, 1))
+    metrics = {**DEFAULT_METRICS, "custom": metric} if with_defaults else {"custom": metric}
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert set(report) == set(metrics)
+    assert all(type(value) is float for value in report.values())
+    assert report["custom"] == expected
+    if with_defaults:  # the other metrics are not changed by the cast
+        assert report["crps"] == float(eval_crps(pred, truth))
+
+
+@pytest.mark.parametrize("with_defaults", [False, True], ids=["alone", "with_defaults"])
+@pytest.mark.parametrize(
+    ("metric", "shape", "dtype"),
+    [(crps_empirical, r"\(4, 1\)", "float32"), (_complex_mae, r"\(\)", "complex64")],
+    ids=["per_cell", "complex"],
+)
+def test_evaluate_forecast_rejects_a_metric_that_breaks_the_contract(
+    metric: Metric, shape: str, dtype: str, with_defaults: bool
+) -> None:
+    """The same metric raises the same ``ValueError``, alone or next to the defaults."""
+    pred = random.normal(random.PRNGKey(0), (50, 4, 1))
+    truth = jnp.zeros((4, 1))
+    metrics = {**DEFAULT_METRICS, "bad": metric} if with_defaults else {"bad": metric}
+    match = rf"metric 'bad' returned shape {shape} and dtype {dtype}"
+    with pytest.raises(ValueError, match=match):
+        evaluate_forecast(pred, truth, metrics=metrics)
+
+
+def test_evaluate_forecast_accepts_host_metric_values() -> None:
+    """``backtest`` allows host-side metrics, so Python and NumPy scalars still pass."""
+    pred = random.normal(random.PRNGKey(0), (50, 4, 1))
+    truth = jnp.zeros((4, 1))
+    metrics: dict[str, Any] = {
+        "py_float": lambda p, t: float(jnp.abs(p - t).mean()),
+        "np_int": lambda p, t: np.int64(np.asarray(t).size),
+    }
+    report = evaluate_forecast(pred, truth, metrics=metrics)
+    assert report["py_float"] == pytest.approx(float(jnp.abs(pred - truth).mean()))
+    assert report["np_int"] == 4.0
+    assert all(type(value) is float for value in report.values())
+
+
+@pytest.mark.parametrize("eval_train", [False, True], ids=["test_metrics", "train_metrics"])
+def test_backtest_rejects_a_per_cell_metric_with_its_name(
+    rng_key: Array, eval_train: bool
+) -> None:
+    """``backtest`` scores each window through ``evaluate_forecast``, so it raises the same error."""
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    # With eval_train=True the in-sample window is scored first, so its shape is reported.
+    shape = r"\(12, 1\)" if eval_train else r"\(4, 1\)"
+    with pytest.raises(ValueError, match=rf"metric 'crps_cells' returned shape {shape}"):
+        backtest(
+            rng_key,
+            rw_model_factory,
+            data,
+            covariates,
+            forecast_fn=_canned_forecast_fn,
+            in_sample_fn=_canned_in_sample_fn,
+            metrics={**DEFAULT_METRICS, "crps_cells": crps_empirical},
+            test_window=4,
+            min_train_window=12,
+            stride=4,
+            num_samples=10,
+            eval_train=eval_train,
+        )
+
+
+def test_backtest_converts_integer_metric_to_float(rng_key: Array) -> None:
+    data = jnp.cumsum(0.1 * random.normal(rng_key, (24, 1)), axis=-2)
+    covariates = jnp.zeros((24, 0))
+    results = backtest(
+        rng_key,
+        rw_model_factory,
+        data,
+        covariates,
+        forecast_fn=_canned_forecast_fn,
+        in_sample_fn=_canned_in_sample_fn,
+        metrics={"n_inside": _n_inside},
+        test_window=4,
+        min_train_window=12,
+        stride=4,
+        num_samples=10,
+        eval_train=True,
+    )
+    assert results
+    for result in results:
+        assert type(result.metrics["n_inside"]) is float
+        assert type(result.train_metrics["n_inside"]) is float
+        assert 0.0 <= result.metrics["n_inside"] <= 4.0
 
 
 def test_backtest_expanding_window(rng_key: Array) -> None:

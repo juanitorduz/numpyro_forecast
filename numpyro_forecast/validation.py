@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
 
@@ -242,3 +243,52 @@ def require_pred_truth_shapes(pred: ArrayLike, truth: ArrayLike) -> None:
             "truth[..., None] for a missing obs axis)"
         )
         raise ValueError(msg)
+
+
+def scalar_metric_value(name: str, value: object) -> Array:
+    """Return the result of the metric ``name`` as a 0-d array with a floating dtype.
+
+    The drivers call this on every metric result, so the
+    `~~numpyro_forecast.typing.Metric` contract (a 0-d result) holds whatever the
+    other metrics are. A bool or integer result is cast to the default float
+    dtype; a floating result is returned as is, so its value and dtype do not
+    change. The check reads the static shape and dtype only, so it costs nothing
+    and also works on tracers under ``jit``, ``vmap`` and ``jax.eval_shape``,
+    where it sees the value of one window.
+
+    Parameters
+    ----------
+    name
+        Name of the metric in the ``metrics`` mapping, used in the error message.
+    value
+        What the metric returned.
+
+    Returns
+    -------
+    Array
+        ``value`` as a 0-d array with a floating dtype.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not 0-d, or its dtype is not bool, integer or floating
+        (for example complex, a PRNG key, or the object dtype of ``None``).
+    """
+    # A jax Array (also a tracer) or a NumPy value is read as is, without a device
+    # sync. Anything else (a Python scalar or None from a host-side metric in
+    # backtest()) has no dtype of its own: NumPy gives it one, the object dtype for
+    # None. jnp.result_type is not used because it maps None to float32.
+    arr = value if isinstance(value, Array | np.ndarray | np.generic) else np.asarray(value)
+    shape, dtype = arr.shape, arr.dtype
+    is_float = jnp.issubdtype(dtype, jnp.floating)
+    is_real = is_float or jnp.issubdtype(dtype, jnp.integer) or jnp.issubdtype(dtype, jnp.bool_)
+    if shape != () or not is_real:
+        msg = (
+            f"metric {name!r} returned shape {shape} and dtype {dtype}; a Metric must return "
+            "a 0-d array with a bool, integer or floating dtype (see "
+            "numpyro_forecast.typing.Metric). Reduce a per-cell function such as "
+            "crps_empirical() to one value, or use its metric counterpart, for example "
+            "eval_crps()"
+        )
+        raise ValueError(msg)
+    return jnp.asarray(arr) if is_float else jnp.asarray(arr, dtype=float)
