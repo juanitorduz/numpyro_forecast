@@ -1,6 +1,9 @@
 """Tests for the time-axis array shaping helpers."""
 
 import jax.numpy as jnp
+import numpy as np
+import pytest
+from jaxtyping import TypeCheckError
 
 from numpyro_forecast.arrays import concat_future, pad_future, zero_data_like
 
@@ -30,3 +33,18 @@ def test_pad_future_appends_rows_with_value() -> None:
     ones = pad_future(jnp.zeros((4, 1)), 2, value=1.0)
     assert bool(jnp.all(ones[4:] == 1.0))
     assert pad_future(gate, 0).shape == gate.shape
+
+
+def test_pad_future_accepts_an_int_fill_value() -> None:
+    # The runtime checks follow the PEP 484 numeric tower (issue #165): an int satisfies
+    # the float hint of ``value``, which is cast to ``x.dtype`` either way.
+    x = jnp.zeros((4, 1))
+    np.testing.assert_array_equal(pad_future(x, 3, value=1), pad_future(x, 3, value=1.0))
+    gate = jnp.zeros((2, 4, 3), dtype=bool)
+    assert bool(jnp.all(pad_future(gate, 2, value=1)[:, 4:]))
+
+
+def test_pad_future_rejects_a_float_row_count() -> None:
+    # The tower is one-way: a float row count fails the int hint instead of truncating.
+    with pytest.raises(TypeCheckError):
+        pad_future(jnp.zeros((4, 1)), 3.0)  # ty: ignore[invalid-argument-type]

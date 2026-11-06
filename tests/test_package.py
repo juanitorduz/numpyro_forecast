@@ -37,7 +37,9 @@ from numpyro_forecast import (
     predict_in_sample,
     ssoe,
 )
+from numpyro_forecast.arrays import pad_future
 from numpyro_forecast.contrib.blackjax import BlackjaxNUTSKernel, PathfinderFit
+from numpyro_forecast.metrics import eval_pinball
 
 
 def test_version() -> None:
@@ -162,6 +164,27 @@ def test_every_package_function_is_runtime_type_checked() -> None:
             if not hasattr(obj, "__wrapped__"):
                 unchecked.append(f"{info.name}.{name}")
     assert not unchecked, f"not wrapped by the jaxtyping import hook: {unchecked}"
+
+
+def test_import_hook_follows_the_pep484_numeric_tower() -> None:
+    """The hook checks with ``numpyro_forecast.typecheck.typechecker`` (issue #165).
+
+    beartype's default configuration rejects a Python ``int`` for a ``float``
+    hint. The package configuration turns on the PEP 484 numeric tower, which
+    ``ty`` applies statically, so the runtime checks of every module agree with
+    it. Each call below crosses a ``float`` hint of a different module: an
+    ``int`` passes the hint and reaches the body (and its value checks), and a
+    ``str`` still fails the hint.
+    """
+    x = jnp.zeros((4, 1))
+    assert pad_future(x, 2, value=1).tolist() == pad_future(x, 2, value=1.0).tolist()
+    pred, truth = jnp.zeros((20, 3)), jnp.zeros(3)
+    with pytest.raises(ValueError, match="alpha must be in"):
+        eval_coverage(pred, truth, alpha=1)
+    with pytest.raises(ValueError, match="quantile must be in"):
+        eval_pinball(pred, truth, quantile=0)
+    with pytest.raises(TypeCheckError):
+        eval_coverage(pred, truth, alpha="0.9")  # ty: ignore[invalid-argument-type]
 
 
 def _is_private(name: str) -> bool:
