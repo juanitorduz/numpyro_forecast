@@ -433,19 +433,17 @@ def state_space(
     _check_version(dsx)
     kind = _conditioning_kind()
     _validate_window(h, y, controls)
-    # obs_times is a jax array, because the LatentPathBuilder indexes it inside a scan, and a
-    # concrete one even under the jitted drivers, because a Filter's rollout reads it on the
-    # host. predict_times and ctrl_times stay NumPy: the Simulator segments them on the host.
+    # obs_times and ctrl_times are jax arrays, because the LatentPathBuilder indexes them inside
+    # traced code, and concrete ones even under the jitted drivers, because a Filter's rollout
+    # and the Simulator read them on the host. predict_times stays NumPy: the Simulator segments
+    # it on the host.
     with jax.ensure_compile_time_eval():
         obs_times = jnp.arange(h.t_obs, dtype=jnp.float32)
+        ctrl_times = jnp.arange(h.duration, dtype=jnp.float32)
     predict_times = (  # anchor-inclusive: the rollout's initial state sits at its first time
         np.arange(h.t_obs - 1, h.duration, dtype=np.float32) if h.future > 0 else None
     )
-    ctrl = (
-        {}
-        if controls is None
-        else {"ctrl_times": np.arange(h.duration, dtype=np.float32), "ctrl_values": controls}
-    )
+    ctrl = {} if controls is None else {"ctrl_times": ctrl_times, "ctrl_values": controls}
     with warnings.catch_warnings(), numpyro.handlers.trace() as trace:
         if h.future == 0:  # an idle Simulator around an in-sample call is the recipe
             warnings.filterwarnings("ignore", message=_IDLE_SIMULATOR_WARNING)

@@ -11,6 +11,7 @@ import pytest
 from jax import random
 from numpyro.infer import SVI, Predictive, Trace_ELBO
 from numpyro.infer.autoguide import AutoNormal
+from numpyro.infer.inspect import get_model_relations
 from numpyro.infer.util import log_density
 from numpyro.optim import Adam
 
@@ -65,6 +66,23 @@ SERIES = simulate(random.PRNGKey(0), T_OBS + FUTURE)
 TRAIN, COVARIATES = SERIES[:T_OBS], SERIES
 PARAMS = {"q": jnp.asarray(Q_TRUE), "r": jnp.asarray(R_TRUE)}
 smoother = Smoother(smoother_config=KFSmootherConfig(filter_source="cuthbert"))
+# u_t = 100 t enters through D = 1, so any misalignment of the controls is a 100-unit error
+CONTROL = 100.0 * jnp.arange(T_OBS + FUTURE, dtype=jnp.float32)[:, None]
+CONTROLLED = jnp.concatenate([SERIES + CONTROL, CONTROL], axis=-1)  # column 0 series, 1 control
+
+
+def level_with_controls(covariates: Array, data: Array | None = None) -> None:
+    """The local level at the true scales, observed through ``D = 1`` of covariate column 1."""
+    h = Horizon.from_data(covariates, data)
+    dynamics = DynamicalModel(
+        initial_condition=dist.MultivariateNormal(jnp.zeros(1), P0 * jnp.eye(1)),
+        state_evolution=LinearGaussianStateEvolution(A=jnp.eye(1), cov=Q_TRUE**2 * jnp.eye(1)),
+        observation_model=LinearGaussianObservation(
+            H=jnp.eye(1), R=R_TRUE**2 * jnp.eye(1), D=jnp.eye(1)
+        ),
+        control_dim=1,
+    )
+    state_space(h, "f", covariates[..., : h.t_obs, :1], dynamics, controls=covariates[..., 1:])
 
 
 def closed_form_loglik(y: Array, q: float, r: float) -> Array:
@@ -236,31 +254,16 @@ def test_forecast_rolls_the_latent_path_forward() -> None:
 
 def test_controls_are_aligned_with_their_time_steps() -> None:
     """``u_t = 100 t`` enters through ``D = 1``: any misalignment is a 100-unit error."""
-    u = 100.0 * jnp.arange(T_OBS + FUTURE, dtype=jnp.float32)[:, None]
-    covariates = jnp.concatenate([SERIES + u, u], axis=-1)  # column 0 series, column 1 control
-
-    def with_controls(covariates: Array, data: Array | None = None) -> None:
-        h = Horizon.from_data(covariates, data)
-        dynamics = DynamicalModel(
-            initial_condition=dist.MultivariateNormal(jnp.zeros(1), P0 * jnp.eye(1)),
-            state_evolution=LinearGaussianStateEvolution(A=jnp.eye(1), cov=Q_TRUE**2 * jnp.eye(1)),
-            observation_model=LinearGaussianObservation(
-                H=jnp.eye(1), R=R_TRUE**2 * jnp.eye(1), D=jnp.eye(1)
-            ),
-            control_dim=1,
-        )
-        state_space(h, "f", covariates[..., : h.t_obs, :1], dynamics, controls=covariates[..., 1:])
-
     posterior = {"unused": jnp.zeros(400)}
     with DiscreteTimeSimulator(n_simulations=1), smoother:
         in_sample = predict_in_sample(
-            random.PRNGKey(8), with_controls, posterior, covariates[:T_OBS]
+            random.PRNGKey(8), level_with_controls, posterior, CONTROLLED[:T_OBS]
         )
         ahead = forecast(
-            random.PRNGKey(9), with_controls, posterior, covariates[:T_OBS, :1], covariates
+            random.PRNGKey(9), level_with_controls, posterior, CONTROLLED[:T_OBS, :1], CONTROLLED
         )
-    assert jnp.abs(in_sample.mean(axis=0) - covariates[:T_OBS, :1]).max() < 1.0
-    assert jnp.abs(ahead.mean(axis=0) - covariates[T_OBS:, :1]).max() < 3.0
+    assert jnp.abs(in_sample.mean(axis=0) - CONTROLLED[:T_OBS, :1]).max() < 1.0
+    assert jnp.abs(ahead.mean(axis=0) - CONTROLLED[T_OBS:, :1]).max() < 3.0
 
 
 def test_window_shapes_are_validated() -> None:
@@ -411,38 +414,40 @@ def test_result_returns_the_states_of_the_current_mode() -> None:
 
 def test_latent_path_builder_reads_the_controls() -> None:
     """The explicit path also aligns ``u_t = 100 t`` (through ``D = 1``) with its time step."""
-    u = 100.0 * jnp.arange(T_OBS + FUTURE, dtype=jnp.float32)[:, None]
-    covariates = jnp.concatenate([SERIES + u, u], axis=-1)
-
-    def with_controls(covariates: Array, data: Array | None = None) -> None:
-        h = Horizon.from_data(covariates, data)
-        dynamics = DynamicalModel(
-            initial_condition=dist.MultivariateNormal(jnp.zeros(1), P0 * jnp.eye(1)),
-            state_evolution=LinearGaussianStateEvolution(A=jnp.eye(1), cov=Q_TRUE**2 * jnp.eye(1)),
-            observation_model=LinearGaussianObservation(
-                H=jnp.eye(1), R=R_TRUE**2 * jnp.eye(1), D=jnp.eye(1)
-            ),
-            control_dim=1,
-        )
-        state_space(h, "f", covariates[..., : h.t_obs, :1], dynamics, controls=covariates[..., 1:])
-
     n = 400
     path = SERIES[:T_OBS]  # the level path that generated the series, up to observation noise
     posterior = {"f_state_path_params": jnp.broadcast_to(path, (n, *path.shape))}
     builder = LatentPathBuilder()
     with builder:  # the eager run that a fit would make, so the builder sees concrete data
-        numpyro.handlers.trace(numpyro.handlers.seed(with_controls, random.PRNGKey(0))).get_trace(
-            covariates[:T_OBS], covariates[:T_OBS, :1]
-        )
+        numpyro.handlers.trace(
+            numpyro.handlers.seed(level_with_controls, random.PRNGKey(0))
+        ).get_trace(CONTROLLED[:T_OBS], CONTROLLED[:T_OBS, :1])
     with DiscreteTimeSimulator(n_simulations=1), builder:
         in_sample = predict_in_sample(
-            random.PRNGKey(12), with_controls, posterior, covariates[:T_OBS]
+            random.PRNGKey(12), level_with_controls, posterior, CONTROLLED[:T_OBS]
         )
         ahead = forecast(
-            random.PRNGKey(13), with_controls, posterior, covariates[:T_OBS, :1], covariates
+            random.PRNGKey(13), level_with_controls, posterior, CONTROLLED[:T_OBS, :1], CONTROLLED
         )
-    assert jnp.abs(in_sample.mean(axis=0) - covariates[:T_OBS, :1]).max() < 1.0
-    assert jnp.abs(ahead.mean(axis=0) - covariates[T_OBS:, :1]).max() < 3.0
+    assert jnp.abs(in_sample.mean(axis=0) - CONTROLLED[:T_OBS, :1]).max() < 1.0
+    assert jnp.abs(ahead.mean(axis=0) - CONTROLLED[T_OBS:, :1]).max() < 3.0
+
+
+def test_model_relations_trace_a_latent_path_with_controls() -> None:
+    """``numpyro.render_model`` traces the model under ``jax.eval_shape``, where the builder
+    samples the path from its prior and dynestyx indexes the control grid with traced
+    indices; a NumPy control grid fails there with ``TracerArrayConversionError``.
+    """
+    builder = LatentPathBuilder()
+    with builder:  # the eager run that a fit would make, so the builder sees concrete data
+        numpyro.handlers.trace(
+            numpyro.handlers.seed(level_with_controls, random.PRNGKey(0))
+        ).get_trace(CONTROLLED[:T_OBS], CONTROLLED[:T_OBS, :1])
+        relations = get_model_relations(
+            level_with_controls, model_args=(CONTROLLED[:T_OBS], CONTROLLED[:T_OBS, :1])
+        )
+    assert relations["sample_sample"]["f_joint_log_prob_factor"] == ["f_state_path_params"]
+    assert "f_joint_log_prob_factor" in relations["observed"]
 
 
 @pytest.mark.parametrize("call", ["training", "forecast", "predict_in_sample"])
