@@ -5,9 +5,16 @@ is a long thin ellipse that a mean-field guide cannot represent and a diagonal
 mass matrix explores slowly. `time_reparam()` rotates the time axis of every
 in-sample latent into a wavelet (`numpyro.distributions.transforms.HaarTransform`)
 or frequency (`numpyro.distributions.transforms.DiscreteCosineTransform`) basis
-where that posterior is closer to diagonal. The rotation is orthonormal, so the
-model's log density is unchanged: only the coordinates the guide or sampler sees
-change.
+where that posterior is closer to diagonal. The rotation acts on the unconstrained
+value ``biject_to(support).inv(x)`` of each site and is orthonormal, so it has unit
+Jacobian in the unconstrained space. The posterior is unchanged, and so is the
+potential energy that NUTS and the guides that work in the unconstrained space see:
+only the coordinates the guide or sampler sees change. The constrained-space log density is unchanged only for
+a site with real support. For a site with a constrained support (a ``LogNormal``
+growth factor, a ``Beta`` share), it gains the log absolute Jacobian determinant of
+``biject_to(support)``, so `numpyro.infer.util.log_density` values and ``AutoDelta``
+MAP estimates differ from those of the plain model (see the Notes of
+`time_reparam()`). Pyro's and NumPyro's ``UnitJacobianReparam`` behave the same way.
 
 This is the port of the ``time_reparam`` option of Pyro's ``Forecaster`` and
 ``HMCForecaster``, which wrap the model with ``poutine.reparam`` and a config
@@ -98,6 +105,8 @@ class _TimeReparam(UnitJacobianReparam):
             msg = "time_reparam does not support observed sites"
             raise ValueError(msg)
         fn, expand_shape, event_dim = self._unwrap(fn)
+        # Rotate the unconstrained value: unit Jacobian there, but the constrained-space
+        # density of a positive or bounded site gains log|det J| of biject_to (issue #206).
         transform = ComposeTransform([biject_to(fn.support).inv, self.transform])
         base_event_dim = max(event_dim, self.transform.domain.event_dim)
         x = numpyro.sample(
@@ -228,8 +237,11 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
     same shape, computed from a new sample site ``f"{name}_haar"`` or
     ``f"{name}_dct"`` whose event shape owns the time axis and every plate axis
     to its right (plate axes to the left of time stay batch axes). The
-    transform is orthonormal, so the model's log density is unchanged; only the
-    geometry inference sees changes.
+    transform is orthonormal and acts on the unconstrained value of each site,
+    so the posterior and the unconstrained potential energy are unchanged; only
+    the geometry inference sees changes. For a site with a constrained support
+    (positive or bounded), the constrained-space log density changes: see the
+    Notes.
 
     Parameters
     ----------
@@ -298,6 +310,25 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       unaffected), the scan sites of
       `~~numpyro_forecast.models.markov_series()`, the error sites of
       `~~numpyro_forecast.models.ssoe()`, observed sites and discrete sites.
+    - Constrained supports. The rotation acts on the unconstrained value
+      ``u = biject_to(support).inv(x)`` of a targeted site ``x``, so the
+      auxiliary site holds the rotated ``u``. The potential energy in the
+      unconstrained space, which NUTS and the guides that work in that space
+      (``AutoNormal``, for example) use, is unchanged for every support. For a
+      site with real support, ``u`` is ``x`` and the constrained-space log
+      density is unchanged too. For a site with a constrained support, the
+      constrained-space log density of the wrapped model is that of the plain
+      model plus the log absolute Jacobian determinant of
+      ``biject_to(support)`` at ``u``: ``sum(log(x))`` for a ``LogNormal``
+      site and ``sum(log(x) + log(1 - x))`` for a ``Beta`` site. Values of
+      `numpyro.infer.util.log_density` and ``AutoDelta`` MAP estimates (the
+      mode in the coordinates of ``u``, not of ``x``) are therefore not
+      comparable with those of the plain model. To keep them comparable,
+      sample the innovation on the real line, for example
+      ``innovations(h, "log_growth", dist.Normal(0.0, 0.5))``, and apply
+      ``jnp.exp`` to it (to its cumulative sum for a multiplicative random
+      walk). Pyro's ``time_reparam`` and NumPyro's ``UnitJacobianReparam``
+      behave the same way.
     - Time latents under a subsampled plate are not supported. The auxiliary
       site is sampled outside every enclosing plate, so a subsampled plate
       would apply no ``size / subsample_size`` scale to it and an ``AutoGuide``
