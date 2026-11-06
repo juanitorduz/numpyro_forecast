@@ -4,7 +4,11 @@ from importlib.metadata import PackageNotFoundError, version
 
 from jaxtyping import install_import_hook
 
-with install_import_hook("numpyro_forecast", "beartype.beartype"):
+# Imported before the hook: the hook resolves its typechecker by attribute access on the
+# package, and the module holds only the beartype configuration (see its docstring).
+import numpyro_forecast.typecheck
+
+with install_import_hook("numpyro_forecast", "numpyro_forecast.typecheck.typechecker"):
     # Bound here so great-docs can resolve the `contrib.blackjax.*` and `contrib.dynestyx.*`
     # reference entries by attribute walk (API reference, llms-full.txt); the modules import
     # no optional extra. They stay inside the hook so they are runtime type-checked like the

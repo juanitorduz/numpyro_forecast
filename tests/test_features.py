@@ -1,15 +1,21 @@
 """Tests for the seasonal feature builders."""
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+import pytest
 from conftest import svi_forecast_fn
 from jax import Array, random
+from jaxtyping import TypeCheckError
 
 from numpyro_forecast import Horizon, backtest, predict
 from numpyro_forecast.features import fourier_features, periodic_repeat
+from numpyro_forecast.typing import IntScalar, RealScalar
 
 
 def _expected_fourier(duration: int, period: float, num_terms: int) -> np.ndarray:
@@ -24,6 +30,81 @@ def test_fourier_features_shape_and_values() -> None:
     # First column is sin(2*pi*1*t/12); at t=0 it is 0, at t=3 it is 1.
     assert jnp.allclose(feats[0, 0], 0.0, atol=1e-6)
     assert jnp.allclose(feats[3, 0], 1.0, atol=1e-6)
+
+
+@pytest.mark.parametrize("duration", [10, np.int64(10), np.int32(10)], ids=repr)
+@pytest.mark.parametrize(
+    "period", [7, 7.0, np.int64(7), np.float64(7.0), np.float32(7.0)], ids=repr
+)
+@pytest.mark.parametrize("num_terms", [2, np.int64(2)], ids=repr)
+def test_fourier_features_accepts_python_and_numpy_scalars(
+    duration: IntScalar, period: RealScalar, num_terms: IntScalar
+) -> None:
+    # An integer period is the normal case (7 for daily data with a weekly season), and a
+    # count read from NumPy or a DataFrame is a NumPy scalar (issue #165). Every spelling
+    # gives the matrix of the float reference call.
+    reference = fourier_features(10, 7.0, 2)
+    np.testing.assert_array_equal(fourier_features(duration, period, num_terms), reference)
+    np.testing.assert_allclose(reference, _expected_fourier(10, 7.0, 2), atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("duration", "period", "num_terms"),
+    [
+        pytest.param(10.0, 7.0, 2, id="float-duration"),
+        pytest.param(np.float64(10.0), 7.0, 2, id="numpy-float-duration"),
+        pytest.param(10, 7.0, 2.5, id="float-num-terms"),
+        pytest.param(10, "7", 2, id="str-period"),
+        pytest.param(jnp.asarray(10), 7.0, 2, id="jax-duration"),
+        pytest.param(10, jnp.asarray(7.0), 2, id="jax-period"),
+    ],
+)
+def test_fourier_features_rejects_non_integral_counts_and_non_scalars(
+    duration: object, period: object, num_terms: object
+) -> None:
+    # The hints accept concrete Python or NumPy scalars only: a float count is never
+    # truncated, and a JAX array (a tracer under a trace) never reaches the memo.
+    with pytest.raises(TypeCheckError):
+        fourier_features(duration, period, num_terms)  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.parametrize(
+    ("fn", "args"),
+    [
+        pytest.param(fourier_features, (10.7, 7.0, 2), id="fourier-duration"),
+        pytest.param(fourier_features, (10, 7.0, 2.0), id="fourier-num-terms"),
+        pytest.param(periodic_repeat, (jnp.arange(3.0), 7.5), id="periodic-duration"),
+    ],
+)
+def test_float_counts_raise_with_the_runtime_checks_off(
+    monkeypatch: pytest.MonkeyPatch, fn: Callable[..., Array], args: tuple[object, ...]
+) -> None:
+    # With JAXTYPING_DISABLE=1 no hint is checked, so the boundary conversion is the guard:
+    # operator.index raises where int() would truncate (np.arange(10.7) has 11 steps).
+    monkeypatch.setattr(jaxtyping.config, "jaxtyping_disable", True)
+    with pytest.raises(TypeError, match="cannot be interpreted as an integer"):
+        fn(*args)
+
+
+def test_fourier_features_rejects_a_traced_duration() -> None:
+    with pytest.raises(TypeCheckError):
+        jax.jit(lambda d: fourier_features(d, 7.0, 2))(10)
+
+
+def test_fourier_features_with_numpy_scalars_under_jit_and_vmap() -> None:
+    # A model function runs under jit (svi.run, forecast) and vmap (backtest_vectorized).
+    # NumPy scalar arguments stay concrete there; the argument tuple is unique to this test,
+    # so the first call of the memo entry happens inside the trace.
+    coefs = jnp.arange(12.0).reshape(3, 4)
+
+    @jax.jit
+    @jax.vmap
+    def seasonal(beta: Array) -> Array:
+        return fourier_features(np.int64(29), np.int64(9), np.int64(2)) @ beta
+
+    expected = (_expected_fourier(29, 9.0, 2) @ np.asarray(coefs).T).T
+    # The tolerance covers the float32 cast of the result, not a numerical claim.
+    np.testing.assert_allclose(seasonal(coefs), expected, rtol=1e-5, atol=1e-5)
 
 
 def test_fourier_features_first_called_inside_jit_stays_usable() -> None:
@@ -102,3 +183,21 @@ def test_periodic_repeat_accepts_array_like() -> None:
     repeated = periodic_repeat(np.array([1.0, 2.0, 3.0]), 7)
     assert repeated.shape == (7,)
     assert jnp.allclose(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
+
+
+@pytest.mark.parametrize("duration", [7, np.int64(7), np.uint8(7)], ids=repr)
+def test_periodic_repeat_accepts_python_and_numpy_integers(duration: IntScalar) -> None:
+    repeated = periodic_repeat(jnp.array([1.0, 2.0, 3.0]), duration)
+    np.testing.assert_array_equal(repeated, jnp.array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0]))
+
+
+@pytest.mark.parametrize("duration", [7.0, np.float64(7.0), jnp.asarray(7)], ids=repr)
+def test_periodic_repeat_rejects_a_non_integral_or_array_duration(duration: object) -> None:
+    with pytest.raises(TypeCheckError):
+        periodic_repeat(jnp.array([1.0, 2.0, 3.0]), duration)  # ty: ignore[invalid-argument-type]
+
+
+def test_periodic_repeat_with_a_numpy_duration_under_jit_and_vmap() -> None:
+    seasons = jnp.arange(6.0).reshape(2, 3)
+    repeated = jax.jit(jax.vmap(lambda season: periodic_repeat(season, np.int64(5))))(seasons)
+    np.testing.assert_array_equal(repeated, periodic_repeat(seasons, 5, axis=-1))
