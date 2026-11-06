@@ -287,6 +287,13 @@ def time_reparam(model: ForecastModel, transform: TimeTransform) -> ForecastMode
       ``a/drift_haar``; ``time_reparam(scope(model, "a"))`` yields
       ``a/a/drift_haar`` because the auxiliary sample passes through ``scope``
       a second time (generic NumPyro reparam-under-scope behavior).
+      `~~numpyro_forecast.convert.to_datatree()` raises ``ValueError`` for a
+      posterior key that contains ``"/"``, because `xarray.DataTree` rejects
+      such a variable name: to export the fit, pass ``divider="_"``, so that
+      ``scope(time_reparam(model), prefix="a", divider="_")`` yields
+      ``a_drift_haar`` and ``a_drift``. The transform finds the ``time``
+      plate by its own name, so the divider does not change which sites it
+      targets.
     - It composes with the per-block ``reparam=`` hook: after
       ``innovations(..., reparam=LocScaleReparam(0))`` the site under the plate
       is ``drift_decentered``, so the auxiliary site is

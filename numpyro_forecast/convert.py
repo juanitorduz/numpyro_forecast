@@ -131,6 +131,47 @@ def _resolve_obs_dims(ndim: int, obs_dims: Sequence[str] | None) -> list[str]:
     return dims
 
 
+def _require_no_slash_in_site_names(posterior: Mapping[str, ArrayLike]) -> None:
+    """Raise ``ValueError`` naming the ``posterior`` keys that contain ``"/"`` (issue #238).
+
+    Every key becomes a variable of the ``posterior`` group, and
+    `xarray.DataTree` rejects a variable name that contains its path separator
+    ``"/"``. `numpyro.handlers.scope` joins its prefix and the site name with
+    ``"/"`` by default, so a scoped latent (``trend/drift``) has such a name.
+    xarray raises only when the groups are assembled, after the host transfer
+    of the posterior and the in-sample and forecast draws, and its message does
+    not name the cause. This check reads the keys only (no array is touched),
+    so `to_datatree()` runs it before any of that work. It applies xarray's
+    rule exactly: a ``str`` name that contains ``"/"``.
+
+    Parameters
+    ----------
+    posterior
+        Posterior samples, sample axis leading, with the keys that become the
+        ``posterior`` variables.
+
+    Raises
+    ------
+    ValueError
+        If a key contains ``"/"``; the message lists every such key and says
+        how to rename the sites.
+    """
+    offending = sorted(name for name in posterior if isinstance(name, str) and "/" in name)
+    if offending:
+        example = offending[0]
+        msg = (
+            f"posterior sites {offending} have names that contain '/', which xarray.DataTree "
+            "uses as its path separator, so to_datatree() cannot store them as variables. "
+            "numpyro.handlers.scope joins its prefix and the site name with '/' by default: "
+            f"pass divider='_' to scope, which names the site {example.replace('/', '_')!r} "
+            f"instead of {example!r}. The divider changes only the site names, so you do not "
+            "have to fit the model again: pass the model with divider='_' and the posterior "
+            "with renamed keys, for example "
+            "{name.replace('/', '_'): value for name, value in posterior.items()}."
+        )
+        raise ValueError(msg)
+
+
 def _require_draws_match_obs_dims(
     label: str, draws: "Array | np.ndarray", obs_dims: Sequence[str]
 ) -> None:
@@ -638,7 +679,12 @@ def to_datatree(
         key is dropped, as in
         `~~numpyro_forecast.predictive.predict_in_sample()`: it is not in the
         ``posterior`` group, and the in-sample draws come from the latent
-        sites.
+        sites. Every other key becomes a ``posterior`` variable, and
+        `xarray.DataTree` rejects a variable name that contains ``"/"``, so a
+        key that contains ``"/"`` raises ``ValueError`` before any draw.
+        `numpyro.handlers.scope` joins its prefix and the site name with
+        ``"/"`` by default (``trend/drift``): scope the latent building
+        blocks with ``divider="_"`` (``trend_drift``) to export the fit.
     data
         In-sample data shaped ``(*batch, time, obs)``: time at axis ``-2``,
         the observation dim at axis ``-1`` and any batch axes to the left
@@ -768,6 +814,8 @@ def to_datatree(
         no sample axis, if a forecast-horizon key of ``posterior`` (one that
         ends in ``"_future"`` or contains ``"_future_"``, or ``"forecast"``)
         has a non-empty leaf, if ``"obs"`` is the only key of ``posterior``, if
+        a ``posterior`` key contains ``"/"`` (a site scoped with the default
+        divider of `numpyro.handlers.scope`; pass ``divider="_"``), if
         ``time_coord`` or a ``coords`` value is not a one-dimensional
         collection of labels (a set, a dict, a scalar, a 2-D array, ragged
         input) or is a ``pd.MultiIndex``, if ``time_coord`` mixes time zones
@@ -866,6 +914,9 @@ def to_datatree(
     require_sample_axis(posterior)
     require_no_horizon_sites(posterior)
     posterior = drop_obs_site(posterior)
+    # Before the host transfer and the predictive draws: xarray would raise only
+    # when the groups are assembled at the end (issue #238).
+    _require_no_slash_in_site_names(posterior)
     posterior_reshaped = {
         name: _reshape_chains(cast("Array | np.ndarray", value), num_chains)
         for name, value in posterior.items()

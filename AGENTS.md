@@ -39,6 +39,10 @@ Dependencies: `arviz` is a core dependency (the ArviZ export is part of the pack
   an `obs` key (issue #260), so the output of a `Predictive` call with `data`
   does not pin the in-sample draws to the observed data or land in the
   posterior group; a posterior that holds only `obs` raises `ValueError`.
+  `to_datatree` also raises `ValueError` before any draw for a posterior key
+  that contains `/` (issue #238): `xarray.DataTree` rejects `/` in a variable
+  name, and `numpyro.handlers.scope` joins prefix and site with `/` by
+  default, so scope latent building blocks with `divider="_"` to export.
 - **Functional style:** pure model functions, explicit `PRNGKey` threading,
   vectorized latent levels (a random walk is the `jnp.cumsum` of its per-step
   drift), no global parameter store.
