@@ -7,10 +7,18 @@ link to another example or to the API reference must be relative: an absolute li
 site always lands on the stable root, whose reference is pruned to the last release. The
 prose rules (percentages in LaTeX, no claim that ``SVI`` needs ``optax_to_numpyro``) were
 broken in more than one notebook, so they are checked here for all of them.
+
+The preliz checks make sure that a prior elicited with ``maxent`` is the prior the model uses.
+The default ``mass`` of ``maxent`` is ``rcParams["stats.ci_prob"]``, which went from 0.94
+(preliz 0.20) to 0.89 (preliz 0.24), and two notebooks plotted the default-mass fit while
+their models hard-coded the 0.94 fit (issue #198). So every call passes ``mass``, and the
+fitted distribution is read after the call instead of copied by hand.
 """
 
+import ast
 import re
 from pathlib import Path
+from typing import TypeGuard
 
 import pytest
 import yaml
@@ -27,6 +35,8 @@ ENVIRONMENT_WARNINGS = (
 # anchors contain dots (``#numpyro_forecast.models.ssoe``).
 RELATIVE_LINK = re.compile(r"\]\((?!https?://)(?P<path>[\w./]+\.html)(?:#[^)\s]*)?\)")
 NOTEBOOK_IDS = [path.stem for path in NOTEBOOKS]
+# IPython magics (``%load_ext``, ``%%time``) and shell escapes are not Python.
+MAGIC_LINE = re.compile(r"^\s*[%!]")
 
 
 def _reference_entries() -> set[str]:
@@ -37,6 +47,96 @@ def _reference_entries() -> set[str]:
         for section in config["reference"]
         for entry in section["contents"]
     }
+
+
+def _code_trees(path: Path) -> list[tuple[int, ast.Module]]:
+    """Parse every code cell, with magic lines blanked so that line numbers stay the same."""
+    trees = []
+    for index, cell in enumerate(read_cells(path)):
+        if cell["cell_type"] != "code":
+            continue
+        lines = ["" if MAGIC_LINE.match(line) else line for line in source(cell).splitlines()]
+        trees.append((index, ast.parse("\n".join(lines), filename=f"{path.name}, cell {index}")))
+    return trees
+
+
+def _is_maxent(node: ast.AST | None) -> TypeGuard[ast.Call]:
+    """Whether ``node`` calls preliz's ``maxent``, as ``pz.maxent(...)`` or ``maxent(...)``."""
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    return (isinstance(func, ast.Attribute) and func.attr == "maxent") or (
+        isinstance(func, ast.Name) and func.id == "maxent"
+    )
+
+
+def _maxent_calls(path: Path) -> list[tuple[int, ast.Call, set[str]]]:
+    """Return ``(cell index, call, names that hold the fit)`` for every ``maxent`` call.
+
+    ``maxent`` fits its distribution argument in place and returns it (as ``(distribution,
+    axes)`` when it plots, the default), so the fit is in the argument when it is a name and
+    in the first assignment target.
+    """
+    calls = []
+    for index, tree in _code_trees(path):
+        assigned: dict[int, set[str]] = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign | ast.AnnAssign) or not _is_maxent(node.value):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            firsts = [t.elts[0] if isinstance(t, ast.Tuple | ast.List) else t for t in targets]
+            assigned[id(node.value)] = {t.id for t in firsts if isinstance(t, ast.Name)}
+        for node in ast.walk(tree):
+            if not _is_maxent(node):
+                continue
+            argument = node.args[0] if node.args else None
+            for keyword in node.keywords:
+                if keyword.arg == "distribution":
+                    argument = keyword.value
+            names = assigned.get(id(node), set())
+            if isinstance(argument, ast.Name):
+                names = names | {argument.id}
+            calls.append((index, node, names - {"_"}))
+    return calls
+
+
+@pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
+def test_maxent_calls_pass_mass(path: Path) -> None:
+    """Every preliz ``maxent`` call passes ``mass``: its default changed between releases."""
+    found = [
+        f"cell {index}, line {call.lineno}"
+        for index, call, _ in _maxent_calls(path)
+        # ``mass`` is the fourth positional parameter; ``**kwargs`` (``arg is None``) may hold it.
+        if len(call.args) < 4 and not any(k.arg in {"mass", None} for k in call.keywords)
+    ]
+    assert not found, (
+        f"{path.name} calls maxent without mass; its default follows "
+        'rcParams["stats.ci_prob"], which differs between preliz releases:\n' + "\n".join(found)
+    )
+
+
+@pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
+def test_maxent_fits_are_used(path: Path) -> None:
+    """The distribution that ``maxent`` fits is read after the call, not copied by hand."""
+    loads = [
+        (index, node.lineno, node.id)
+        for index, tree in _code_trees(path)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    ]
+    found = [
+        f"cell {index}, line {call.lineno}"
+        for index, call, names in _maxent_calls(path)
+        if not any(
+            name in names and (cell, line) > (index, call.end_lineno or call.lineno)
+            for cell, line, name in loads
+        )
+    ]
+    assert not found, (
+        f"{path.name} discards a maxent fit; build the model's prior from the fitted "
+        "distribution (for example dist.InverseGamma(concentration=fit.alpha, rate=fit.beta)) "
+        "instead of copying its parameters:\n" + "\n".join(found)
+    )
 
 
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=NOTEBOOK_IDS)
