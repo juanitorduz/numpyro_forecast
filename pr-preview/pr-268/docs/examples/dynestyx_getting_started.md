@@ -350,8 +350,8 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx Kalman filter" | 55 | 4245 | 1.004 | 0 | 11.5 | 71.0 |
-| "innovations" | 472 | 1684 | 1.008 | 0 | 127.0 | 12.1 |
+| "dynestyx Kalman filter" | 55 | 4245 | 1.004 | 0 | 11.5 | 72.5 |
+| "innovations" | 472 | 1684 | 1.008 | 0 | 127.0 | 11.9 |
 
 
 Both fits converge over all their parameters:
@@ -1000,7 +1000,7 @@ Group: /
 │           sigma         (chain, draw) float32 16kB 0.07794 0.07916 ... 0.07391 0.07532
 │           weight        (chain, draw, weight_dim_0) float32 832kB -0.01708 ... -0.0102
 │       Attributes:
-│           created_at:                 2026-11-06T09:24:34.860428+00:00
+│           created_at:                 2026-11-06T09:49:05.462838+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1015,7 +1015,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 7MB 14.36 14.41 ... 13.96
 │       Attributes:
-│           created_at:                 2026-11-06T09:24:37.490314+00:00
+│           created_at:                 2026-11-06T09:49:08.284511+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1028,7 +1028,7 @@ Group: /
 │       Data variables:
 │           obs      (time, obs_dim) float32 2kB 14.41 14.45 14.42 ... 14.71 14.65 14.04
 │       Attributes:
-│           created_at:                 2026-11-06T09:24:37.490566+00:00
+│           created_at:                 2026-11-06T09:49:08.284769+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1041,7 +1041,7 @@ Group: /
 │       Data variables:
 │           covariates     (time, covariate_dim) float32 88kB 14.41 0.0 ... -0.2375
 │       Attributes:
-│           created_at:                 2026-11-06T09:24:37.490753+00:00
+│           created_at:                 2026-11-06T09:49:08.284956+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1056,7 +1056,7 @@ Group: /
 │       Data variables:
 │           obs      (chain, draw, time, obs_dim) float32 832kB 14.41 14.6 ... 14.29
 │       Attributes:
-│           created_at:                 2026-11-06T09:24:38.520402+00:00
+│           created_at:                 2026-11-06T09:49:09.363806+00:00
 │           creation_library:           ArviZ
 │           creation_library_version:   1.3.1
 │           creation_library_language:  Python
@@ -1069,7 +1069,7 @@ Group: /
         Data variables:
             covariates     (time, covariate_dim) float32 11kB 14.27 -0.05158 ... 0.3139
         Attributes:
-            created_at:                 2026-11-06T09:24:38.520652+00:00
+            created_at:                 2026-11-06T09:49:09.364051+00:00
             creation_library:           ArviZ
             creation_library_version:   1.3.1
             creation_library_language:  Python
@@ -1240,7 +1240,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:24:34.860428+00:00
+2026-11-06T09:49:05.462838+00:00
 
 creation_library :  
 ArviZ
@@ -1376,7 +1376,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:24:37.490314+00:00
+2026-11-06T09:49:08.284511+00:00
 
 creation_library :  
 ArviZ
@@ -1470,7 +1470,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:24:37.490566+00:00
+2026-11-06T09:49:08.284769+00:00
 
 creation_library :  
 ArviZ
@@ -1564,7 +1564,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:24:37.490753+00:00
+2026-11-06T09:49:08.284956+00:00
 
 creation_library :  
 ArviZ
@@ -1700,7 +1700,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:24:38.520402+00:00
+2026-11-06T09:49:09.363806+00:00
 
 creation_library :  
 ArviZ
@@ -1794,7 +1794,7 @@ Attributes: (5)
 
 
 created_at :  
-2026-11-06T09:24:38.520652+00:00
+2026-11-06T09:49:09.364051+00:00
 
 creation_library :  
 ArviZ
@@ -2071,8 +2071,8 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx latent path" | 472 | 439 | 1.005 | 0 | 135.2 | 52.8 |
-| "innovations" | 473 | 946 | 1.006 | 0 | 255.0 | 73.8 |
+| "dynestyx latent path" | 472 | 439 | 1.005 | 0 | 135.2 | 54.8 |
+| "innovations" | 473 | 946 | 1.006 | 0 | 255.0 | 73.5 |
 
 
 With these chain lengths both fits converge over all their parameters:
@@ -2192,19 +2192,16 @@ student_forecasts["innovations"] = forecast(
 student_crps = {
     label: float(eval_crps(draws, bart_test)) for label, draws in student_forecasts.items()
 }
-pl.DataFrame({"model": list(student_crps), "test CRPS": list(student_crps.values())}).with_columns(
-    pl.col("test CRPS").round(4)
-)
+plot_crps(
+    {"test year": student_crps},
+    title="BART weekly ridership: test CRPS of the Student-T noise models",
+);
 ```
 
 
-shape: (2, 2)
-
-| model                  | test CRPS |
-|------------------------|-----------|
-| str                    | f64       |
-| "dynestyx latent path" | 0.0302    |
-| "innovations"          | 0.0303    |
+<figure class="figure">
+<p><img src="dynestyx_getting_started_files/figure-html/_src-dynestyx_getting_started-cell-21-output-1.png" class="figure-img" width="1011" height="511" /></p>
+</figure>
 
 
 The test CRPS is 0.0302 for the explicit path and 0.0303 for [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations). Both score better than the Normal models of the previous section (test CRPS 0.0361 and 0.0360). We plot the two forecasts one above the other. The point estimate is the median of the draws: with \nu near 1.6 the Student-T noise has no finite variance, so a few extreme draws move the mean. The explicit path has four times as many draws as [innovations](../../reference/models.innovations.md#numpyro_forecast.models.innovations), so we thin them to the same number for the figure.
@@ -2300,7 +2297,7 @@ shape: (1, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "gap fit" | 472 | 355 | 1.013 | 0 | 163.6 | 55.8 |
+| "gap fit" | 472 | 355 | 1.013 | 0 | 163.6 | 55.5 |
 
 
 The gap fit nearly converges: the largest \hat{R} is 1.013, just above the usual threshold of 1.01, the smallest bulk ESS is 355, and there are no divergent transitions. The conclusions below are qualitative and unlikely to change with longer chains.
@@ -2572,7 +2569,7 @@ shape: (2, 7)
 | fit | parameters | min bulk ESS | max R-hat | divergences | leapfrog steps per draw | wall time (s) |
 |----|----|----|----|----|----|----|
 | str | i64 | i64 | f64 | i64 | f64 | f64 |
-| "dynestyx Kalman filter" | 4 | 3633 | 1.003 | 0 | 6.2 | 8.4 |
+| "dynestyx Kalman filter" | 4 | 3633 | 1.003 | 0 | 6.2 | 7.8 |
 | "ssoe" | 4 | 3476 | 1.0 | 0 | 6.0 | 0.8 |
 
 
